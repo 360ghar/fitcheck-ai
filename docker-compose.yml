@@ -1,0 +1,61 @@
+# FitCheck AI - Docker Compose Configuration
+# Run the entire application with: docker-compose up --build
+
+version: '3.9'
+
+services:
+  # ============================================================================
+  # Backend Service - FastAPI
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fitcheck-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - PORT=8000
+      - FRONTEND_URL=http://localhost:3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - fitcheck-network
+
+  # ============================================================================
+  # Frontend Service - React + Vite + Nginx
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fitcheck-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - fitcheck-network
+
+networks:
+  fitcheck-network:
+    driver: bridge
+
+volumes:
+  # Persist backend data if needed in the future
+  backend-data:

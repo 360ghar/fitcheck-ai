@@ -1,0 +1,35 @@
+# FitCheck AI - Netlify Deployment Configuration
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# SPA routing - redirect all routes to index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# API proxy - forward API requests to backend (Railway)
+[[redirects]]
+  from = "/api/*"
+  to = "https://fitcheck-backend.railway.app/api/:splat"
+  status = 200
+  force = true
+
+[build.environment]
+  NODE_VERSION = "18"
+
+# Headers for security and caching
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    X-XSS-Protection = "1; mode=block"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

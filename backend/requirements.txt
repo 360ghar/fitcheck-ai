@@ -1,0 +1,15 @@
+fastapi[all]
+uvicorn
+pydantic[email]
+pydantic-settings
+python-multipart
+python-jose[cryptography]
+passlib[bcrypt]
+httpx
+supabase
+pinecone-client
+google-generativeai
+pydantic-ai
+python-dotenv
+pytest
+pytest-asyncio

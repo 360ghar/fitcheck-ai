@@ -1,0 +1,697 @@
+# Feature: AI-Powered Outfit Generation & Visualization
+
+## Overview
+
+This feature enables users to select clothing items from their wardrobe and generate realistic images showing them wearing the selected combination. It leverages advanced AI models to create high-quality, photorealistic visualizations of outfits.
+
+## User Value
+
+- **Realistic Preview:** See exactly how outfits will look before wearing
+- **Experimentation:** Try unlimited combinations without physical effort
+- **Confidence:** Make outfit decisions with certainty
+- **Time Savings:** Reduce trial-and-error dressing time
+- **Fun & Creative:** Enjoy exploring style possibilities
+
+## Functional Requirements
+
+### 1. Select Items for Outfit
+
+**Priority:** P0 (MVP)
+
+**Description:** Users can select multiple clothing items from their wardrobe to create an outfit combination.
+
+**Requirements:**
+
+**Selection Interface:**
+- Tap/click items to select (toggle selection)
+- Visual feedback for selected items (checkmark, border highlight, etc.)
+- Selected items summary panel showing count and types
+- Maximum of 10 items per outfit
+- Minimum of 1 item required
+
+**Smart Constraints:**
+- Prevent selecting multiple items of same type (e.g., 2 pairs of shoes)
+- Alert user if constraint violated
+- Allow user to override constraint (for layering scenarios)
+
+**Selection Suggestions:**
+- "Complete the Look" suggestions
+- Suggest items that match selected items based on color, style
+- Highlight recommended items in wardrobe
+
+**Selection Persistence:**
+- Save current selection in session state
+- Resume selection after navigating away
+- Clear selection button
+
+**API Endpoints:**
+```
+POST /api/v1/outfits/create
+- Create outfit from selected items
+- Request: JSON
+  - item_ids: List<string> (1-10 items)
+  - name?: string
+  - tags?: List<string>
+- Response: 201 Created
+  - outfit: outfit_object
+    - id: string
+    - item_ids: List<string>
+    - name: string
+    - items: List<item_summary_objects>
+    - status: "draft"
+```
+
+**Acceptance Criteria:**
+- [ ] Users can select 1-10 items
+- [ ] Selection is visually indicated
+- [ ] Prevents multiple items of same type
+- [ ] Selection summary updates in real-time
+- [ ] Suggestions appear for complementary items
+- [ ] Selection is persisted during session
+
+**Error Handling:**
+- `400 Bad Request`: Invalid selection (too many items, conflicting types)
+- `404 Not Found`: One or more items do not exist
+- `422 Unprocessable Entity`: Invalid item IDs
+
+---
+
+### 2. Generate AI Outfit Image
+
+**Priority:** P0 (MVP)
+
+**Description:** Use Gemini 3 Pro to generate a realistic image showing the user wearing the selected outfit.
+
+**Requirements:**
+
+**Generation Process:**
+- Send selected item images to AI model
+- Generate high-quality image (1080x1080 or higher)
+- Include realistic lighting, shadows, and natural positioning
+- Maintain accurate representation of each item's appearance
+- Generation time target: <30 seconds
+
+**Body Representation:**
+- Use user's body profile (if set)
+- Default to average body type if no profile set
+- Maintain realistic proportions
+- Natural pose and stance
+
+**Image Quality:**
+- High resolution (minimum 1080x1080)
+- Photorealistic rendering
+- Accurate colors and textures
+- Natural lighting and shadows
+- No obvious AI artifacts
+
+**Generation Options:**
+- Single generation
+- Multiple variations (generates 2-3 options)
+- Regenerate button to try again
+
+**Progress Tracking:**
+- Show progress indicator
+- Display estimated time remaining
+- Allow cancellation mid-generation
+
+**API Endpoints:**
+```
+POST /api/v1/outfits/{outfit_id}/generate
+- Generate outfit image
+- Request: JSON
+  - pose: "front"|"left"|"right"|"back" (default: "front")
+  - variations: number (default: 1, max: 3)
+  - body_profile_id?: string
+  - lighting?: "natural"|"studio"|"outdoor"|"indoor" (default: "natural")
+- Response: 202 Accepted
+  - generation_id: string
+  - estimated_time: number (seconds)
+```
+
+```
+GET /api/v1/outfits/generation/{generation_id}
+- Check generation status
+- Response: 200 OK
+  - status: "pending"|"processing"|"completed"|"failed"
+  - progress: number (0-100)
+  - images: List<image_urls> (if completed)
+  - error?: string (if failed)
+```
+
+```
+POST /api/v1/outfits/{outfit_id}/regenerate
+- Regenerate outfit image with new parameters
+- Request: JSON (same as generate)
+- Response: 202 Accepted
+```
+
+**Acceptance Criteria:**
+- [ ] Image generation completes in <30 seconds
+- [ ] Generated image accurately represents all items
+- [ ] Image quality is high resolution (1080x1080+)
+- [ ] Progress indicator is shown
+- [ ] User can regenerate with different options
+- [ ] Multiple variations can be generated
+- [ ] Generation can be cancelled
+
+**Error Handling:**
+- `400 Bad Request`: Invalid generation parameters
+- `404 Not Found`: Outfit does not exist
+- `422 Unprocessable Entity`: Items cannot be combined (conflicting)
+- `503 AI Service Unavailable`: AI model temporarily down
+- `429 Too Many Requests`: Rate limit exceeded
+
+---
+
+### 3. Multiple Pose Generation
+
+**Priority:** P1
+
+**Description:** Generate outfit images from multiple angles (front, side, back) for complete visualization.
+
+**Requirements:**
+
+**Pose Options:**
+- Front view
+- Left side view
+- Right side view
+- Back view
+- Select individually or generate all at once
+
+**Consistency:**
+- Maintain consistent outfit across all poses
+- Same body profile used for all poses
+- Consistent lighting and style
+
+**View Options:**
+- Generate single pose
+- Generate all 4 poses
+- Custom selection of poses
+- Save generated pose combination
+
+**Cost Considerations:**
+- Each pose counts as 1 AI generation
+- Show estimated cost (if paid plan limits)
+- Free tier: limited generations per month
+
+**API Endpoints:**
+```
+POST /api/v1/outfits/{outfit_id}/generate/poses
+- Generate multiple poses
+- Request: JSON
+  - poses: List<"front"|"left"|"right"|"back">
+  - body_profile_id?: string
+- Response: 202 Accepted
+  - generation_id: string
+  - poses: List<pose_generation_id>
+```
+
+**Acceptance Criteria:**
+- [ ] Users can select multiple poses
+- [ ] All poses maintain outfit consistency
+- [ ] Generation time scales with number of poses
+- [ ] Each pose can be viewed independently
+- [ ] Carousel/slideshow view for all poses
+- [ ] Cost is clearly indicated
+
+**Error Handling:**
+- `400 Bad Request`: Invalid pose selection
+- `402 Payment Required`: Insufficient generation credits
+
+---
+
+### 4. Body Type Customization
+
+**Priority:** P1
+
+**Description:** Allow users to input their body measurements and body type for more accurate fit visualization.
+
+**Requirements:**
+
+**Body Profile Form:**
+- Height (ft/in or cm)
+- Weight (lbs or kg)
+- Body shape: Hourglass, Pear, Rectangle, Apple, Inverted Triangle
+- Skin tone (for realistic rendering)
+
+**Body Shape Options:**
+- Hourglass: Balanced bust and hips, defined waist
+- Pear: Wider hips, smaller bust
+- Rectangle: Balanced measurements, less defined waist
+- Apple: Wider midsection, slimmer hips
+- Inverted Triangle: Broader shoulders, narrower hips
+
+**Profile Management:**
+- Create and save body profile
+- Edit existing profile
+- Delete profile
+- Set as default profile
+
+**Application to Generations:**
+- Use default profile for all generations
+- Override per-generation if needed
+- Preview profile changes with sample generation
+
+**Privacy:**
+- Body measurements are encrypted
+- Not used for any other purpose
+- User can delete profile anytime
+
+**API Endpoints:**
+```
+POST /api/v1/user/body-profile
+- Create body profile
+- Request: JSON
+  - name: string
+  - height_cm: number
+  - weight_kg: number
+  - body_shape: string
+  - skin_tone: string
+  - is_default: boolean
+- Response: 201 Created
+  - body_profile: body_profile_object
+```
+
+```
+GET /api/v1/user/body-profiles
+- List user's body profiles
+- Response: 200 OK
+  - body_profiles: List<body_profile_objects>
+```
+
+```
+PUT /api/v1/user/body-profiles/{id}
+- Update body profile
+- Request: JSON (same as create)
+- Response: 200 OK
+  - body_profile: updated_body_profile_object
+```
+
+```
+DELETE /api/v1/user/body-profiles/{id}
+- Delete body profile
+- Response: 204 No Content
+```
+
+**Acceptance Criteria:**
+- [ ] Users can create body profiles
+- [ ] Multiple profiles can be saved
+- [ ] Default profile is used for generations
+- [ ] Profile data is encrypted
+- [ ] Generated images reflect body type accurately
+
+**Error Handling:**
+- `400 Bad Request`: Invalid measurements or body shape
+- `404 Not Found`: Body profile does not exist
+
+---
+
+### 5. Lighting Scenarios
+
+**Priority:** P2
+
+**Description:** Generate outfit images in different lighting conditions to see how the outfit will look in various settings.
+
+**Requirements:**
+
+**Lighting Options:**
+- Natural daylight (outdoor)
+- Studio lighting (even, professional)
+- Indoor warm light (home, restaurant)
+- Indoor cool light (office, retail)
+- Evening/night (low light)
+- Backlit (sun behind)
+
+**Scenario Description:**
+- Brief description of each scenario
+- When to use each (e.g., "office" for indoor cool)
+- Preview thumbnails showing lighting effect
+
+**Quick Switching:**
+- Toggle between lighting scenarios
+- Quick-switch buttons
+- No need to regenerate entire image
+
+**Cost:**
+- Lighting changes included in base generation
+- No extra cost for switching scenarios
+
+**API Endpoints:**
+```
+POST /api/v1/outfits/{outfit_id}/regenerate/lighting
+- Regenerate with different lighting
+- Request: JSON
+  - lighting: "natural"|"studio"|"indoor_warm"|"indoor_cool"|"evening"|"backlit"
+- Response: 202 Accepted
+```
+
+**Acceptance Criteria:**
+- [ ] Users can select from multiple lighting scenarios
+- [ ] Scenarios have accurate lighting effects
+- [ ] Quick switching between scenarios
+- [ ] Scenario descriptions are clear
+- [ ] No extra cost for lighting changes
+
+**Error Handling:**
+- `400 Bad Request`: Invalid lighting option
+
+---
+
+### 6. Seasonal Overlays
+
+**Priority:** P2
+
+**Description:** Add or remove seasonal layers (coats, accessories) to visualize outfits for different weather conditions.
+
+**Requirements:**
+
+**Add Seasonal Layers:**
+- Add coat/jacket for winter
+- Add sunglasses/hat for summer
+- Add scarf for cool weather
+- Remove layers for warm weather
+
+**Layer Management:**
+- Select seasonal item from wardrobe
+- Preview overlay before confirming
+- Remove layer anytime
+- Combine multiple layers (coat + scarf)
+
+**Weather Integration:**
+- Suggest layers based on current weather
+- Auto-suggest coat if temperature < 50°F
+- Auto-suggest sunglasses if sunny and > 70°F
+
+**Save Variations:**
+- Save outfit with seasonal overlay as separate variation
+- Link to base outfit
+- Easy to view all variations
+
+**API Endpoints:**
+```
+POST /api/v1/outfits/{outfit_id}/add-layer
+- Add seasonal layer to outfit
+- Request: JSON
+  - item_id: string
+  - variation_name?: string
+- Response: 201 Created
+  - variation: outfit_variation_object
+```
+
+```
+DELETE /api/v1/outfits/{outfit_id}/variations/{variation_id}/layer/{item_id}
+- Remove layer from variation
+- Response: 200 OK
+  - variation: updated_variation_object
+```
+
+**Acceptance Criteria:**
+- [ ] Users can add seasonal layers to outfits
+- [ ] Layers can be previewed before saving
+- [ ] Weather-based suggestions appear
+- [ ] Variations are linked to base outfit
+- [ ] Layers can be removed anytime
+
+**Error Handling:**
+- `400 Bad Request`: Invalid item (not a seasonal item)
+- `404 Not Found`: Outfit or variation does not exist
+
+---
+
+### 7. Save and Organize Outfits
+
+**Priority:** P0 (MVP)
+
+**Description:** Allow users to save generated outfits, add metadata, and organize them into collections.
+
+**Requirements:**
+
+**Save Outfit:**
+- Save outfit with auto-generated name (e.g., "Outfit - Jan 6, 2026")
+- Allow custom naming
+- Save all generated image variations
+- Save generation settings (pose, lighting, etc.)
+
+**Tagging:**
+- Add tags to outfit (occasions, style, season)
+- Auto-tag based on items in outfit
+- Suggest tags based on common usage
+- Edit tags anytime
+
+**Collections:**
+- Create collections (folders) for outfits
+- Add multiple outfits to collection
+- Collections: "Summer Casual", "Work Essentials", "Date Night", etc.
+- Rename and delete collections
+
+**Mark as Favorite:**
+- Star or heart icon to mark favorite outfits
+- Quick access to favorites
+- Filter by favorites
+
+**Outfit History:**
+- Chronological list of all created outfits
+- Search and filter history
+- Delete outfits
+- Duplicate outfits
+
+**API Endpoints:**
+```
+POST /api/v1/outfits/{outfit_id}/save
+- Save outfit
+- Request: JSON
+  - name: string
+  - tags?: List<string>
+  - collection_ids?: List<string>
+  - is_favorite: boolean
+- Response: 200 OK
+  - outfit: updated_outfit_object
+```
+
+```
+POST /api/v1/outfits/collections
+- Create collection
+- Request: JSON
+  - name: string
+  - description?: string
+- Response: 201 Created
+  - collection: collection_object
+```
+
+```
+PUT /api/v1/outfits/collections/{collection_id}/outfits
+- Add outfits to collection
+- Request: JSON
+  - outfit_ids: List<string>
+- Response: 200 OK
+  - collection: updated_collection_object
+```
+
+```
+DELETE /api/v1/outfits/{outfit_id}
+- Delete outfit
+- Response: 204 No Content
+```
+
+```
+POST /api/v1/outfits/{outfit_id}/duplicate
+- Duplicate outfit
+- Response: 201 Created
+  - outfit: duplicated_outfit_object
+```
+
+**Acceptance Criteria:**
+- [ ] Outfits can be saved with custom names
+- [ ] Tags can be added and edited
+- [ ] Collections can be created and managed
+- [ ] Favorites can be marked and filtered
+- [ ] Outfit history is maintained
+- [ ] Outfits can be deleted or duplicated
+
+**Error Handling:**
+- `400 Bad Request`: Invalid data or duplicate name
+- `404 Not Found`: Outfit or collection does not exist
+
+---
+
+## Database Schema
+
+### Outfits Table
+
+```sql
+CREATE TABLE outfits (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    item_ids UUID[] NOT NULL,
+    tags JSONB DEFAULT '[]'::jsonb,
+    is_favorite BOOLEAN DEFAULT FALSE,
+    is_draft BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_outfits_user_id ON outfits(user_id);
+CREATE INDEX idx_outfits_tags ON outfits USING GIN(tags);
+CREATE INDEX idx_outfits_is_favorite ON outfits(is_favorite);
+```
+
+### Outfit Images Table
+
+```sql
+CREATE TABLE outfit_images (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    outfit_id UUID NOT NULL REFERENCES outfits(id) ON DELETE CASCADE,
+    image_url VARCHAR(500) NOT NULL,
+    pose VARCHAR(20) NOT NULL, -- front, left, right, back
+    lighting VARCHAR(50),
+    body_profile_id UUID REFERENCES body_profiles(id),
+    generation_metadata JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_outfit_images_outfit_id ON outfit_images(outfit_id);
+CREATE INDEX idx_outfit_images_pose ON outfit_images(pose);
+```
+
+### Outfit Collections Table
+
+```sql
+CREATE TABLE outfit_collections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_outfit_collections_user_id ON outfit_collections(user_id);
+```
+
+### Outfit Collection Junction Table
+
+```sql
+CREATE TABLE outfit_collection_items (
+    collection_id UUID REFERENCES outfit_collections(id) ON DELETE CASCADE,
+    outfit_id UUID REFERENCES outfits(id) ON DELETE CASCADE,
+    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (collection_id, outfit_id)
+);
+
+CREATE INDEX idx_outfit_collection_items_collection_id ON outfit_collection_items(collection_id);
+CREATE INDEX idx_outfit_collection_items_outfit_id ON outfit_collection_items(outfit_id);
+```
+
+### Body Profiles Table
+
+```sql
+CREATE TABLE body_profiles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    height_cm DECIMAL(5, 2) NOT NULL,
+    weight_kg DECIMAL(5, 2) NOT NULL,
+    body_shape VARCHAR(50) NOT NULL,
+    skin_tone VARCHAR(50) NOT NULL,
+    is_default BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    encrypted_data BYTEA -- For future use with PII
+);
+
+CREATE INDEX idx_body_profiles_user_id ON body_profiles(user_id);
+CREATE INDEX idx_body_profiles_is_default ON body_profiles(is_default);
+```
+
+---
+
+## Frontend Components
+
+### OutfitBuilder.tsx
+Main interface for selecting items and building outfit
+
+### OutfitPreview.tsx
+Display generated outfit image with controls
+
+### PoseSelector.tsx
+Select pose options for generation
+
+### LightingSelector.tsx
+Select lighting scenarios
+
+### BodyProfileForm.tsx
+Form for creating/editing body profiles
+
+### OutfitGallery.tsx
+Grid view of saved outfits
+
+### CollectionManager.tsx
+Manage outfit collections
+
+---
+
+## AI Integration Details
+
+### Gemini 3 Pro Configuration
+
+```python
+from pydantic_ai import Agent, RunContext
+from google import genai
+
+class OutfitGenerationAgent(Agent):
+    def __init__(self):
+        super().__init__(
+            name="outfit_generator",
+            model="gemini-3-pro",
+            system_prompt="You are an AI fashion model generator..."
+        )
+
+    async def generate_outfit(
+        self,
+        items: List[Item],
+        body_profile: BodyProfile,
+        pose: str = "front",
+        lighting: str = "natural"
+    ) -> GeneratedImage:
+        """Generate realistic outfit image"""
+        # Implementation details
+        pass
+```
+
+### Image Generation Parameters
+
+```python
+class GenerationConfig:
+    resolution: Tuple[int, int] = (1080, 1080)
+    quality: str = "high"
+    style: str = "photorealistic"
+    lighting: str = "natural"
+    pose: str = "front"
+    body_type: str = "hourglass"
+    skin_tone: str = "#8B7355"
+    enhance_details: bool = True
+    realistic_shadows: bool = True
+```
+
+---
+
+## Success Metrics
+
+- **Generation Success Rate:** >95%
+- **Generation Speed:** <30 seconds average
+- **Image Quality Score:** User rating >4.0/5
+- **User Satisfaction:** 4.5/5 stars
+- **Repeat Generation Rate:** 60% of users regenerate at least once
+
+---
+
+## Future Enhancements
+
+- Video generation (outfit animation)
+- AR try-on using phone camera
+- 3D model generation
+- User photo face replacement
+- Custom background integration
+- Motion capture for realistic posing
+- Integration with fashion retailers for try-before-buy

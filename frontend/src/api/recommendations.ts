@@ -1,0 +1,248 @@
+/**
+ * Recommendations API endpoints
+ */
+
+import { apiClient, getApiError } from './client';
+import type {
+  MatchResult,
+  CompleteLookSuggestion,
+  WeatherRecommendation,
+  SimilarItemResult,
+  SuggestedItem,
+} from '../types';
+
+// ============================================================================
+// RECOMMENDATIONS API FUNCTIONS
+// ============================================================================
+
+/**
+ * Find matching items for a given item
+ */
+export async function findMatchingItems(
+  itemId: string,
+  options?: {
+    category?: string;
+    limit?: number;
+    min_score?: number;
+  }
+): Promise<MatchResult[]> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.category) params.append('category', options.category);
+    if (options?.limit) params.append('limit', String(options.limit));
+    if (options?.min_score) params.append('min_score', String(options.min_score));
+
+    const response = await apiClient.post<MatchResult[]>(
+      `/api/v1/recommendations/match?${params.toString()}`,
+      { item_id: itemId }
+    );
+    return response.data;
+  } catch (error) {
+    throw getApiError(error);
+  }
+}
+
+/**
+ * Get complete outfit suggestions based on selected items
+ */
+export async function getCompleteLookSuggestions(
+  itemIds: string[],
+  options?: {
+    style?: string;
+    occasion?: string;
+    limit?: number;
+  }
+): Promise<CompleteLookSuggestion[]> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.style) params.append('style', options.style);
+    if (options?.occasion) params.append('occasion', options.occasion);
+    if (options?.limit) params.append('limit', String(options.limit));
+
+    const response = await apiClient.post<CompleteLookSuggestion[]>(
+      `/api/v1/recommendations/complete-look?${params.toString()}`,
+      { item_ids: itemIds }
+    );
+    return response.data;
+  } catch (error) {
+    throw getApiError(error);
+  }
+}
+
+/**
+ * Get weather-based outfit recommendations
+ */
+export async function getWeatherRecommendations(
+  location?: string
+): Promise<WeatherRecommendation> {
+  try {
+    const params = location ? `?location=${encodeURIComponent(location)}` : '';
+    const response = await apiClient.get<WeatherRecommendation>(
+      `/api/v1/recommendations/weather${params}`
+    );
+    return response.data;
+  } catch (error) {
+    throw getApiError(error);
+  }
+}
+
+/**
+ * Find similar items to a given item
+ */
+export async function findSimilarItems(
+  itemId: string,
+  options?: {
+    category?: string;
+    limit?: number;
+  }
+): Promise<SimilarItemResult[]> {
+  try {
+    const params = new URLSearchParams();
+    params.append('item_id', itemId);
+    if (options?.category) params.append('category', options.category);
+    if (options?.limit) params.append('limit', String(options.limit));
+
+    const response = await apiClient.get<SimilarItemResult[]>(
+      `/api/v1/recommendations/similar?${params.toString()}`
+    );
+    return response.data;
+  } catch (error) {
+    throw getApiError(error);
+  }
+}
+
+/**
+ * Get style analysis for an item
+ */
+export async function getItemStyleAnalysis(itemId: string): Promise<{
+  style: string;
+  confidence: number;
+  alternative_styles: Array<{ style: string; confidence: number }>;
+  color_palette: string[];
+  suggested_occasions: string[];
+  suggested_companions: Array<{
+    item_id: string;
+    item_name: string;
+    category: string;
+    confidence: number;
+  }>;
+}> {
+  try {
+    const response = await apiClient.get<{
+      style: string;
+      confidence: number;
+      alternative_styles: Array<{ style: string; confidence: number }>;
+      color_palette: string[];
+      suggested_occasions: string[];
+      suggested_companions: Array<{
+        item_id: string;
+        item_name: string;
+        category: string;
+        confidence: number;
+      }>;
+    }>(`/api/v1/recommendations/style/${itemId}`);
+    return response.data;
+  } catch (error) {
+    throw getApiError(error);
+  }
+}
+
+/**
+ * Get shopping recommendations based on wardrobe
+ */
+export async function getShoppingRecommendations(options?: {
+  category?: string;
+  budget?: number;
+  style?: string;
+}): Promise<Array<{
+  category: string;
+  description: string;
+  priority: 'high' | 'medium' | 'low';
+  suggested_brands?: string[];
+  price_range?: { min: number; max: number };
+}>> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.category) params.append('category', options.category);
+    if (options?.budget) params.append('budget', String(options.budget));
+    if (options?.style) params.append('style', options.style);
+
+    const response = await apiClient.get<
+      Array<{
+        category: string;
+        description: string;
+        priority: 'high' | 'medium' | 'low';
+        suggested_brands?: string[];
+        price_range?: { min: number; max: number };
+      }>
+    >(`/api/v1/recommendations/shopping?${params.toString()}`);
+    return response.data;
+  } catch (error) {
+    throw getApiError(error);
+  }
+}
+
+/**
+ * Get capsule wardrobe recommendations
+ */
+export async function getCapsuleWardrobe(options?: {
+  season?: string;
+  style?: string;
+  item_count?: number;
+}): Promise<{
+  name: string;
+  description: string;
+  items: SuggestedItem[];
+  outfits: Array<{
+    name: string;
+    items: SuggestedItem[];
+  }>;
+  statistics: {
+    total_outfits_possible: number;
+    cost_per_wear_estimate: number;
+    versatility_score: number;
+  };
+}> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.season) params.append('season', options.season);
+    if (options?.style) params.append('style', options.style);
+    if (options?.item_count) params.append('item_count', String(options.item_count));
+
+    const response = await apiClient.get<{
+      name: string;
+      description: string;
+      items: SuggestedItem[];
+      outfits: Array<{
+        name: string;
+        items: SuggestedItem[];
+      }>;
+      statistics: {
+        total_outfits_possible: number;
+        cost_per_wear_estimate: number;
+        versatility_score: number;
+      };
+    }>(`/api/v1/recommendations/capsule?${params.toString()}`);
+    return response.data;
+  } catch (error) {
+    throw getApiError(error);
+  }
+}
+
+/**
+ * Rate a recommendation to improve future suggestions
+ */
+export async function rateRecommendation(
+  recommendationId: string,
+  rating: 'thumbs_up' | 'thumbs_down' | 'neutral'
+): Promise<{ message: string }> {
+  try {
+    const response = await apiClient.post<{ message: string }>(
+      `/api/v1/recommendations/${recommendationId}/rate`,
+      { rating }
+    );
+    return response.data;
+  } catch (error) {
+    throw getApiError(error);
+  }
+}
