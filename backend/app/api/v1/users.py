@@ -1,563 +1,708 @@
 """
 User API routes.
-Handles user profile, preferences, and settings management.
+
+Implements:
+- GET/PUT /api/v1/users/me
+- GET/PUT /api/v1/users/preferences
+- GET/PUT /api/v1/users/settings
+- GET/PUT /api/v1/users/body-profile
+- POST /api/v1/users/me/avatar (upload)
+- GET /api/v1/users/dashboard (MVP aggregate)
 """
 
 import uuid
-import logging
-from typing import Optional, List
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Depends, status
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from supabase import Client
 
+from app.core.exceptions import (
+    BodyProfileNotFoundError,
+    DatabaseError,
+    StorageServiceError,
+    UnsupportedMediaTypeError,
+    UserNotFoundError,
+    ValidationError,
+)
+from app.core.logging_config import get_context_logger
+from app.core.security import get_current_user_id
 from app.db.connection import get_db
-from app.core.security import get_current_user_id, TokenData, verify_token
 from app.models.user import (
-    UserUpdate, UserResponse, UserPreferencesUpdate, UserPreferences,
-    UserSettingsUpdate, UserSettings, UserStats, UserDashboard,
-    BodyProfileCreate, BodyProfileUpdate, BodyProfile
+    BodyProfile,
+    BodyProfileCreate,
+    BodyProfileUpdate,
+    UserPreferences,
+    UserPreferencesUpdate,
+    UserResponse,
+    UserSettings,
+    UserSettingsUpdate,
+    UserUpdate,
 )
 from app.services.storage_service import StorageService
+from app.services.weather_service import get_weather_service
 
-logger = logging.getLogger(__name__)
+logger = get_context_logger(__name__)
 
 router = APIRouter()
 
 
-# ============================================================================
-# REQUEST MODELS
-# ============================================================================
-
-
-class AvatarUpload(BaseModel):
-    """Avatar upload request."""
-    avatar_url: str
+def _now() -> str:
+    return datetime.utcnow().isoformat()
 
 
 # ============================================================================
-# USER PROFILE ENDPOINTS
+# PROFILE
 # ============================================================================
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=Dict[str, Any])
 async def get_current_user(
     user_id: str = Depends(get_current_user_id),
-    db: Client = Depends(get_db)
+    db: Client = Depends(get_db),
 ):
-    """Get the current user's profile."""
     try:
-        result = db.table("users").select("*").eq("id", user_id).single().execute()
-
+        result = db.table("users").select("*").eq("id", user_id).execute()
         if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-
-        return result.data
-
-    except HTTPException:
+            raise UserNotFoundError(user_id=user_id)
+        # Let Pydantic validate/normalize
+        user = UserResponse.model_validate(result.data[0])
+        return {"data": user.model_dump(mode="json"), "message": "OK"}
+    except (UserNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
-        logger.error(f"Error getting user: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
+        logger.error("Failed to fetch user", user_id=user_id, error=str(e))
+        raise DatabaseError("Failed to fetch user")
 
 
-@router.put("/me", response_model=UserResponse)
+@router.put("/me", response_model=Dict[str, Any])
 async def update_current_user(
     update_data: UserUpdate,
     user_id: str = Depends(get_current_user_id),
-    db: Client = Depends(get_db)
+    db: Client = Depends(get_db),
 ):
-    """Update the current user's profile."""
     try:
-        # Verify user exists
-        existing = db.table("users").select("id").eq("id", user_id).single().execute()
-
-        if not existing.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-
-        # Prepare update data
         update_dict = update_data.model_dump(exclude_unset=True)
-        update_dict["updated_at"] = datetime.now().isoformat()
-
-        # Update user
+        if not update_dict:
+            # No-op
+            return await get_current_user(user_id=user_id, db=db)
+        update_dict["updated_at"] = _now()
         result = db.table("users").update(update_dict).eq("id", user_id).execute()
-
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to update user"
-            )
-
-        return result.data[0]
-
-    except HTTPException:
+        row = (result.data or [None])[0]
+        if not row:
+            raise DatabaseError("Failed to update user")
+        user = UserResponse.model_validate(row)
+        return {"data": user.model_dump(mode="json"), "message": "Updated"}
+    except (UserNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
-        logger.error(f"Error updating user: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while updating the user"
-        )
+        logger.error("Failed to update user", user_id=user_id, error=str(e))
+        raise DatabaseError("Failed to update user")
 
 
-@router.post("/me/avatar", response_model=UserResponse)
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_current_user(
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """Delete the current user's account and data (best-effort)."""
+    try:
+        # Best-effort: delete auth user (requires service role)
+        try:
+            admin = getattr(db.auth, "admin", None)
+            if admin and hasattr(admin, "delete_user"):
+                admin.delete_user(user_id)
+        except Exception as e:
+            logger.warning("Auth user deletion failed", user_id=user_id, error=str(e))
+
+        # Ensure public data is deleted even if auth deletion isn't available
+        try:
+            db.table("users").delete().eq("id", user_id).execute()
+        except Exception:
+            pass
+
+        return None
+    except (UserNotFoundError, ValidationError, DatabaseError):
+        raise
+    except Exception as e:
+        logger.error("Failed to delete account", user_id=user_id, error=str(e))
+        raise DatabaseError("Failed to delete account")
+
+
+@router.post("/me/avatar", response_model=Dict[str, Any])
 async def upload_avatar(
-    avatar_url: str,
+    file: UploadFile = File(...),
     user_id: str = Depends(get_current_user_id),
-    db: Client = Depends(get_db)
+    db: Client = Depends(get_db),
 ):
-    """Update user avatar URL."""
     try:
-        result = db.table("users").update({
-            "avatar_url": avatar_url,
-            "updated_at": datetime.now().isoformat()
-        }).eq("id", user_id).execute()
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise UnsupportedMediaTypeError(message="Avatar must be an image file")
 
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to update avatar"
-            )
+        file_bytes = await file.read()
+        avatar_url = await StorageService.upload_avatar(
+            db=db, user_id=user_id, filename=file.filename or "avatar.png", file_data=file_bytes
+        )
 
-        return result.data[0]
-
-    except HTTPException:
+        db.table("users").update({"avatar_url": avatar_url, "updated_at": _now()}).eq("id", user_id).execute()
+        return {"data": {"avatar_url": avatar_url}, "message": "OK"}
+    except (UserNotFoundError, ValidationError, DatabaseError, UnsupportedMediaTypeError, StorageServiceError):
         raise
     except Exception as e:
-        logger.error(f"Error updating avatar: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while updating the avatar"
-        )
-
-
-@router.get("/me/dashboard", response_model=UserDashboard)
-async def get_user_dashboard(
-    user_id: str = Depends(get_current_user_id),
-    db: Client = Depends(get_db)
-):
-    """Get dashboard data for the current user."""
-    try:
-        # Get user profile
-        user_result = db.table("users").select("*").eq("id", user_id).single().execute()
-
-        if not user_result.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-
-        user = user_result.data
-
-        # Get stats
-        stats = await _get_user_stats(user_id, db)
-
-        # Get recent items
-        recent_items_result = db.table("items").select("*").eq("user_id", user_id).order("created_at", desc=True).limit(5).execute()
-        recent_items = recent_items_result.data
-
-        # Get recent outfits
-        recent_outfits_result = db.table("outfits").select("*").eq("user_id", user_id).order("created_at", desc=True).limit(5).execute()
-        recent_outfits = recent_outfits_result.data
-
-        # Get basic recommendations (favorites, least worn)
-        recommendations_result = db.table("items").select("*").eq("user_id", user_id).eq("is_favorite", True).limit(3).execute()
-        recommendations = recommendations_result.data
-
-        return UserDashboard(
-            user=user,
-            stats=stats,
-            recent_items=recent_items,
-            recent_outfits=recent_outfits,
-            recommendations=recommendations
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting dashboard: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while fetching dashboard data"
-        )
+        logger.error("Failed to upload avatar", user_id=user_id, filename=file.filename, error=str(e))
+        raise StorageServiceError("Failed to upload avatar")
 
 
 # ============================================================================
-# USER PREFERENCES ENDPOINTS
+# PREFERENCES
 # ============================================================================
 
 
-@router.get("/me/preferences", response_model=UserPreferences)
+@router.get("/preferences", response_model=Dict[str, Any])
+@router.get("/me/preferences", response_model=Dict[str, Any])  # backwards compatibility
 async def get_user_preferences(
     user_id: str = Depends(get_current_user_id),
-    db: Client = Depends(get_db)
+    db: Client = Depends(get_db),
 ):
-    """Get the current user's preferences."""
     try:
-        result = db.table("user_preferences").select("*").eq("user_id", user_id).single().execute()
-
+        result = db.table("user_preferences").select("*").eq("user_id", user_id).execute()
         if not result.data:
-            # Create default preferences
-            default_prefs = {
-                "id": str(uuid.uuid4()),
+            # Create defaults
+            defaults = {
                 "user_id": user_id,
                 "favorite_colors": [],
                 "preferred_styles": [],
                 "liked_brands": [],
                 "disliked_patterns": [],
-                "style_notes": None,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat()
+                "preferred_occasions": [],
+                "color_temperature": None,
+                "style_personality": None,
+                "data_points_collected": 0,
+                "last_updated": _now(),
             }
+            insert = db.table("user_preferences").insert(defaults).execute()
+            row = (insert.data or [None])[0]
+            if not row:
+                raise DatabaseError("Failed to create preferences")
+            prefs = UserPreferences.model_validate(row)
+            return {"data": prefs.model_dump(mode="json"), "message": "OK"}
 
-            insert_result = db.table("user_preferences").insert(default_prefs).execute()
-
-            if insert_result.data:
-                return insert_result.data[0]
-
-        return result.data
-
-    except HTTPException:
+        prefs = UserPreferences.model_validate(result.data[0])
+        return {"data": prefs.model_dump(mode="json"), "message": "OK"}
+    except (UserNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
-        logger.error(f"Error getting preferences: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while fetching preferences"
-        )
+        logger.error("Failed to fetch preferences", user_id=user_id, error=str(e))
+        raise DatabaseError("Failed to fetch preferences")
 
 
-@router.put("/me/preferences", response_model=UserPreferences)
+@router.put("/preferences", response_model=Dict[str, Any])
+@router.put("/me/preferences", response_model=Dict[str, Any])  # backwards compatibility
 async def update_user_preferences(
     update_data: UserPreferencesUpdate,
     user_id: str = Depends(get_current_user_id),
-    db: Client = Depends(get_db)
+    db: Client = Depends(get_db),
 ):
-    """Update the current user's preferences."""
     try:
-        # Check if preferences exist
-        existing = db.table("user_preferences").select("id").eq("user_id", user_id).single().execute()
-
         update_dict = update_data.model_dump(exclude_unset=True)
-        update_dict["updated_at"] = datetime.now().isoformat()
+        update_dict["last_updated"] = _now()
 
+        existing = db.table("user_preferences").select("user_id").eq("user_id", user_id).execute()
         if existing.data:
             result = db.table("user_preferences").update(update_dict).eq("user_id", user_id).execute()
         else:
-            # Create new preferences
-            new_prefs = {
-                "id": str(uuid.uuid4()),
-                "user_id": user_id,
-                **update_dict,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat()
-            }
-            result = db.table("user_preferences").insert(new_prefs).execute()
+            result = db.table("user_preferences").insert({"user_id": user_id, **update_dict}).execute()
 
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to update preferences"
-            )
-
-        return result.data[0]
-
-    except HTTPException:
+        row = (result.data or [None])[0]
+        if not row:
+            raise DatabaseError("Failed to update preferences")
+        prefs = UserPreferences.model_validate(row)
+        return {"data": prefs.model_dump(mode="json"), "message": "Updated"}
+    except (UserNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
-        logger.error(f"Error updating preferences: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while updating preferences"
-        )
+        logger.error("Failed to update preferences", user_id=user_id, error=str(e))
+        raise DatabaseError("Failed to update preferences")
 
 
 # ============================================================================
-# USER SETTINGS ENDPOINTS
+# SETTINGS
 # ============================================================================
 
 
-@router.get("/me/settings", response_model=UserSettings)
+@router.get("/settings", response_model=Dict[str, Any])
+@router.get("/me/settings", response_model=Dict[str, Any])  # backwards compatibility
 async def get_user_settings(
     user_id: str = Depends(get_current_user_id),
-    db: Client = Depends(get_db)
+    db: Client = Depends(get_db),
 ):
-    """Get the current user's settings."""
     try:
-        result = db.table("user_settings").select("*").eq("user_id", user_id).single().execute()
-
+        result = db.table("user_settings").select("*").eq("user_id", user_id).execute()
         if not result.data:
-            # Create default settings
-            default_settings = {
-                "id": str(uuid.uuid4()),
+            defaults = {
                 "user_id": user_id,
+                "default_location": None,
+                "timezone": None,
                 "language": "en",
                 "measurement_units": "imperial",
                 "notifications_enabled": True,
                 "email_marketing": False,
                 "dark_mode": False,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat()
+                "created_at": _now(),
+                "updated_at": _now(),
             }
+            insert = db.table("user_settings").insert(defaults).execute()
+            row = (insert.data or [None])[0]
+            if not row:
+                raise DatabaseError("Failed to create settings")
+            settings = UserSettings.model_validate(row)
+            return {"data": settings.model_dump(mode="json"), "message": "OK"}
 
-            insert_result = db.table("user_settings").insert(default_settings).execute()
-
-            if insert_result.data:
-                return insert_result.data[0]
-
-        return result.data
-
-    except HTTPException:
+        settings = UserSettings.model_validate(result.data[0])
+        return {"data": settings.model_dump(mode="json"), "message": "OK"}
+    except (UserNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
-        logger.error(f"Error getting settings: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while fetching settings"
-        )
+        logger.error("Failed to fetch settings", user_id=user_id, error=str(e))
+        raise DatabaseError("Failed to fetch settings")
 
 
-@router.put("/me/settings", response_model=UserSettings)
+@router.put("/settings", response_model=Dict[str, Any])
+@router.put("/me/settings", response_model=Dict[str, Any])  # backwards compatibility
 async def update_user_settings(
     update_data: UserSettingsUpdate,
     user_id: str = Depends(get_current_user_id),
-    db: Client = Depends(get_db)
+    db: Client = Depends(get_db),
 ):
-    """Update the current user's settings."""
     try:
-        # Check if settings exist
-        existing = db.table("user_settings").select("id").eq("user_id", user_id).single().execute()
-
         update_dict = update_data.model_dump(exclude_unset=True)
-        update_dict["updated_at"] = datetime.now().isoformat()
+        update_dict["updated_at"] = _now()
 
+        existing = db.table("user_settings").select("user_id").eq("user_id", user_id).execute()
         if existing.data:
             result = db.table("user_settings").update(update_dict).eq("user_id", user_id).execute()
         else:
-            # Create new settings
-            new_settings = {
-                "id": str(uuid.uuid4()),
+            insert = {
                 "user_id": user_id,
+                "created_at": _now(),
+                "updated_at": _now(),
                 **update_dict,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat()
             }
-            result = db.table("user_settings").insert(new_settings).execute()
+            result = db.table("user_settings").insert(insert).execute()
 
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to update settings"
-            )
-
-        return result.data[0]
-
-    except HTTPException:
+        row = (result.data or [None])[0]
+        if not row:
+            raise DatabaseError("Failed to update settings")
+        settings = UserSettings.model_validate(row)
+        return {"data": settings.model_dump(mode="json"), "message": "Updated"}
+    except (UserNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
-        logger.error(f"Error updating settings: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while updating settings"
-        )
+        logger.error("Failed to update settings", user_id=user_id, error=str(e))
+        raise DatabaseError("Failed to update settings")
 
 
 # ============================================================================
-# BODY PROFILE ENDPOINTS
+# BODY PROFILE
 # ============================================================================
 
 
-@router.get("/me/body-profile", response_model=BodyProfile)
-async def get_body_profile(
+@router.get("/body-profiles", response_model=Dict[str, Any])
+async def list_body_profiles(
     user_id: str = Depends(get_current_user_id),
-    db: Client = Depends(get_db)
+    db: Client = Depends(get_db),
 ):
-    """Get the current user's body profile."""
+    """List all body profiles for the user."""
     try:
-        result = db.table("body_profiles").select("*").eq("user_id", user_id).order("created_at", desc=True).limit(1).single().execute()
-
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Body profile not found"
-            )
-
-        return result.data
-
-    except HTTPException:
+        res = (
+            db.table("body_profiles")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("is_default", desc=True)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        profiles = [BodyProfile.model_validate(r).model_dump(mode="json") for r in (res.data or [])]
+        return {"data": {"body_profiles": profiles}, "message": "OK"}
+    except (UserNotFoundError, ValidationError, DatabaseError, BodyProfileNotFoundError):
         raise
     except Exception as e:
-        logger.error(f"Error getting body profile: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Body profile not found"
-        )
+        logger.error("Failed to fetch body profiles", user_id=user_id, error=str(e))
+        raise DatabaseError("Failed to fetch body profiles")
 
 
-@router.post("/me/body-profile", response_model=BodyProfile, status_code=status.HTTP_201_CREATED)
+@router.post("/body-profiles", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 async def create_body_profile(
-    profile_data: BodyProfileCreate,
+    request: BodyProfileCreate,
     user_id: str = Depends(get_current_user_id),
-    db: Client = Depends(get_db)
+    db: Client = Depends(get_db),
 ):
-    """Create a new body profile for the user."""
+    """Create a new body profile."""
     try:
+        now = _now()
+        existing_count = db.table("body_profiles").select("id", count="exact").eq("user_id", user_id).execute()
+        count = getattr(existing_count, "count", len(existing_count.data or []))
+
+        payload = request.model_dump()
+        if count == 0:
+            payload["is_default"] = True
+
+        if payload.get("is_default"):
+            db.table("body_profiles").update({"is_default": False}).eq("user_id", user_id).execute()
+
         profile_id = str(uuid.uuid4())
+        insert = {"id": profile_id, "user_id": user_id, **payload, "created_at": now, "updated_at": now}
+        res = db.table("body_profiles").insert(insert).execute()
+        row = (res.data or [None])[0]
+        if not row:
+            raise DatabaseError("Failed to create body profile")
 
-        new_profile = {
-            "id": profile_id,
-            "user_id": user_id,
-            "height": profile_data.height,
-            "weight": profile_data.weight,
-            "body_type": profile_data.body_type,
-            "skin_tone": profile_data.skin_tone,
-            "hair_color": profile_data.hair_color,
-            "eye_color": profile_data.eye_color,
-            "notes": profile_data.notes,
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
-        }
+        if payload.get("is_default"):
+            db.table("users").update({"body_profile_id": profile_id}).eq("id", user_id).execute()
 
-        result = db.table("body_profiles").insert(new_profile).execute()
-
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create body profile"
-            )
-
-        # Link to user
-        db.table("users").update({"body_profile_id": profile_id}).eq("id", user_id).execute()
-
-        return result.data[0]
-
-    except HTTPException:
+        profile = BodyProfile.model_validate(row)
+        return {"data": profile.model_dump(mode="json"), "message": "Created"}
+    except (UserNotFoundError, ValidationError, DatabaseError, BodyProfileNotFoundError):
         raise
     except Exception as e:
-        logger.error(f"Error creating body profile: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while creating the body profile"
-        )
+        logger.error("Failed to create body profile", user_id=user_id, error=str(e))
+        raise DatabaseError("Failed to create body profile")
 
 
-@router.put("/me/body-profile", response_model=BodyProfile)
+@router.put("/body-profiles/{profile_id}", response_model=Dict[str, Any])
 async def update_body_profile(
+    profile_id: UUID,
     update_data: BodyProfileUpdate,
     user_id: str = Depends(get_current_user_id),
-    db: Client = Depends(get_db)
+    db: Client = Depends(get_db),
 ):
-    """Update the current user's body profile."""
+    """Update an existing body profile."""
     try:
-        # Get existing profile
-        existing = db.table("body_profiles").select("id").eq("user_id", user_id).order("created_at", desc=True).limit(1).single().execute()
-
+        profile_id_str = str(profile_id)
+        existing = db.table("body_profiles").select("*").eq("id", profile_id_str).eq("user_id", user_id).execute()
         if not existing.data:
-            # Create if doesn't exist
-            return await create_body_profile(
-                BodyProfileCreate(**update_data.model_dump()),
-                user_id,
-                db
-            )
+            raise BodyProfileNotFoundError(profile_id=profile_id_str)
 
-        profile_id = existing.data["id"]
+        update = update_data.model_dump(exclude_unset=True)
+        update["updated_at"] = _now()
 
-        update_dict = update_data.model_dump(exclude_unset=True)
-        update_dict["updated_at"] = datetime.now().isoformat()
+        if update.get("is_default") is True:
+            db.table("body_profiles").update({"is_default": False}).eq("user_id", user_id).execute()
 
-        result = db.table("body_profiles").update(update_dict).eq("id", profile_id).execute()
+        res = db.table("body_profiles").update(update).eq("id", profile_id_str).eq("user_id", user_id).execute()
+        row = (res.data or [None])[0]
+        if not row:
+            raise DatabaseError("Failed to update body profile")
 
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to update body profile"
-            )
+        if update.get("is_default") is True:
+            db.table("users").update({"body_profile_id": profile_id_str}).eq("id", user_id).execute()
 
-        return result.data[0]
-
-    except HTTPException:
+        profile = BodyProfile.model_validate(row)
+        return {"data": profile.model_dump(mode="json"), "message": "Updated"}
+    except (UserNotFoundError, ValidationError, DatabaseError, BodyProfileNotFoundError):
         raise
     except Exception as e:
-        logger.error(f"Error updating body profile: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while updating the body profile"
+        logger.error("Failed to update body profile", user_id=user_id, profile_id=str(profile_id), error=str(e))
+        raise DatabaseError("Failed to update body profile")
+
+
+@router.delete("/body-profiles/{profile_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_body_profile(
+    profile_id: UUID,
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """Delete a body profile."""
+    try:
+        profile_id_str = str(profile_id)
+        existing = db.table("body_profiles").select("id,is_default").eq("id", profile_id_str).eq("user_id", user_id).execute()
+        if not existing.data:
+            raise BodyProfileNotFoundError(profile_id=profile_id_str)
+
+        db.table("body_profiles").delete().eq("id", profile_id_str).eq("user_id", user_id).execute()
+
+        # If deleting the default profile, promote the newest remaining profile (if any)
+        if existing.data.get("is_default"):
+            remaining = (
+                db.table("body_profiles")
+                .select("id")
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if remaining.data:
+                new_default_id = remaining.data[0]["id"]
+                db.table("body_profiles").update({"is_default": True, "updated_at": _now()}).eq("id", new_default_id).execute()
+                db.table("users").update({"body_profile_id": new_default_id}).eq("id", user_id).execute()
+            else:
+                db.table("users").update({"body_profile_id": None}).eq("id", user_id).execute()
+
+        return None
+    except (UserNotFoundError, ValidationError, DatabaseError, BodyProfileNotFoundError):
+        raise
+    except Exception as e:
+        logger.error("Failed to delete body profile", user_id=user_id, profile_id=str(profile_id), error=str(e))
+        raise DatabaseError("Failed to delete body profile")
+
+
+@router.get("/body-profile", response_model=Dict[str, Any])
+@router.get("/me/body-profile", response_model=Dict[str, Any])  # backwards compatibility
+async def get_body_profile(
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    try:
+        result = (
+            db.table("body_profiles")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("is_default", desc=True)
+            .order("created_at", desc=True)
+            .limit(1)
+            .single()
+            .execute()
+        )
+        if not result.data:
+            raise BodyProfileNotFoundError()
+
+        profile = BodyProfile.model_validate(result.data)
+        return {"data": profile.model_dump(mode="json"), "message": "OK"}
+    except (UserNotFoundError, ValidationError, DatabaseError, BodyProfileNotFoundError):
+        raise
+    except Exception as e:
+        logger.error("Failed to fetch body profile", user_id=user_id, error=str(e))
+        raise DatabaseError("Failed to fetch body profile")
+
+
+@router.put("/body-profile", response_model=Dict[str, Any])
+@router.put("/me/body-profile", response_model=Dict[str, Any])  # backwards compatibility
+async def upsert_body_profile(
+    update_data: BodyProfileUpdate,
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    try:
+        existing = (
+            db.table("body_profiles")
+            .select("id, is_default")
+            .eq("user_id", user_id)
+            .order("is_default", desc=True)
+            .order("created_at", desc=True)
+            .limit(1)
+            .single()
+            .execute()
         )
 
+        now = _now()
+        if not existing.data:
+            # Creating requires full payload; validate via BodyProfileCreate
+            create = BodyProfileCreate(**update_data.model_dump(exclude_unset=True))
+            insert = {
+                "user_id": user_id,
+                **create.model_dump(),
+                "is_default": True,
+                "created_at": now,
+                "updated_at": now,
+            }
+            result = db.table("body_profiles").insert(insert).execute()
+            row = (result.data or [None])[0]
+            if not row:
+                raise DatabaseError("Failed to create body profile")
+            profile_id = row["id"]
+            # Link default profile
+            db.table("users").update({"body_profile_id": profile_id}).eq("id", user_id).execute()
+            profile = BodyProfile.model_validate(row)
+            return {"data": profile.model_dump(mode="json"), "message": "Created"}
+
+        profile_id = existing.data["id"]
+        update_dict = update_data.model_dump(exclude_unset=True)
+        update_dict["updated_at"] = now
+
+        if update_dict.get("is_default") is True:
+            db.table("body_profiles").update({"is_default": False}).eq("user_id", user_id).execute()
+
+        result = db.table("body_profiles").update(update_dict).eq("id", profile_id).execute()
+        row = (result.data or [None])[0]
+        if not row:
+            raise DatabaseError("Failed to update body profile")
+
+        # If user toggles is_default, keep users.body_profile_id updated
+        if update_dict.get("is_default") is True:
+            db.table("users").update({"body_profile_id": profile_id}).eq("id", user_id).execute()
+
+        profile = BodyProfile.model_validate(row)
+        return {"data": profile.model_dump(mode="json"), "message": "Updated"}
+
+    except (UserNotFoundError, ValidationError, DatabaseError, BodyProfileNotFoundError):
+        raise
+    except Exception as e:
+        logger.error("Failed to save body profile", user_id=user_id, error=str(e))
+        raise DatabaseError("Failed to save body profile")
+
 
 # ============================================================================
-# UTILITY FUNCTIONS
+# DASHBOARD (MVP)
 # ============================================================================
 
 
-async def _get_user_stats(user_id: str, db: Client) -> UserStats:
-    """Get statistics about user's wardrobe and usage."""
-    # Total items
-    items_result = db.table("items").select("id", count="exact").eq("user_id", user_id).execute()
-    total_items = items_result.count if hasattr(items_result, 'count') else len(items_result.data)
+@router.get("/dashboard", response_model=Dict[str, Any])
+async def get_dashboard(
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """Aggregate endpoint for the dashboard UI."""
+    try:
+        user_row = db.table("users").select("*").eq("id", user_id).execute()
+        if not user_row.data:
+            raise UserNotFoundError(user_id=user_id)
 
-    # Total outfits
-    outfits_result = db.table("outfits").select("id", count="exact").eq("user_id", user_id).execute()
-    total_outfits = outfits_result.count if hasattr(outfits_result, 'count') else len(outfits_result.data)
+        now_dt = datetime.utcnow()
+        month_start = now_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
 
-    # Items by category
-    category_items = db.table("items").select("category").eq("user_id", user_id).execute()
-    items_by_category = {}
-    for item in category_items.data:
-        cat = item.get("category", "other")
-        items_by_category[cat] = items_by_category.get(cat, 0) + 1
+        items_count = db.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_deleted", False).execute()
+        outfits_count = db.table("outfits").select("id", count="exact").eq("user_id", user_id).execute()
 
-    # Items by condition
-    condition_items = db.table("items").select("condition").eq("user_id", user_id).execute()
-    items_by_condition = {}
-    for item in condition_items.data:
-        cond = item.get("condition", "clean")
-        items_by_condition[cond] = items_by_condition.get(cond, 0) + 1
+        items_added_month = (
+            db.table("items")
+            .select("id", count="exact")
+            .eq("user_id", user_id)
+            .eq("is_deleted", False)
+            .gte("created_at", month_start)
+            .execute()
+        )
+        outfits_created_month = (
+            db.table("outfits")
+            .select("id", count="exact")
+            .eq("user_id", user_id)
+            .gte("created_at", month_start)
+            .execute()
+        )
 
-    # Most worn items
-    most_worn_result = db.table("items").select("*").eq("user_id", user_id).order("usage_times_worn", desc=True).limit(5).execute()
-    most_worn_items = most_worn_result.data
+        most_worn_item = (
+            db.table("items")
+            .select("name,usage_times_worn")
+            .eq("user_id", user_id)
+            .eq("is_deleted", False)
+            .order("usage_times_worn", desc=True)
+            .limit(1)
+            .execute()
+        ).data or []
 
-    # Least worn items
-    least_worn_result = db.table("items").select("*").eq("user_id", user_id).order("usage_times_worn", asc=True).limit(5).execute()
-    least_worn_items = least_worn_result.data
+        fav_items = db.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).eq("is_deleted", False).execute()
+        fav_outfits = db.table("outfits").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).execute()
 
-    # Calculate cost
-    price_result = db.table("items").select("price").eq("user_id", user_id).not_.is_("price").execute()
-    total_cost = sum(item.get("price", 0) for item in price_result.data)
+        # Recent activity (best-effort)
+        recent_activity: List[Dict[str, Any]] = []
 
-    # Calculate cost per wear
-    usage_result = db.table("items").select("price, usage_times_worn").eq("user_id", user_id).not_.is_("price").execute()
+        recent_items = (
+            db.table("items")
+            .select("id,name,created_at")
+            .eq("user_id", user_id)
+            .eq("is_deleted", False)
+            .order("created_at", desc=True)
+            .limit(5)
+            .execute()
+        ).data or []
+        for it in recent_items:
+            recent_activity.append(
+                {
+                    "type": "item_created",
+                    "description": f"Added {it.get('name')}",
+                    "timestamp": it.get("created_at"),
+                }
+            )
 
-    total_wear_cost = 0
-    total_wears = 0
+        recent_outfits = (
+            db.table("outfits")
+            .select("id,name,created_at")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(5)
+            .execute()
+        ).data or []
+        for o in recent_outfits:
+            recent_activity.append(
+                {
+                    "type": "outfit_created",
+                    "description": f"Created {o.get('name')}",
+                    "timestamp": o.get("created_at"),
+                }
+            )
 
-    for item in usage_result.data:
-        price = item.get("price", 0)
-        wears = item.get("usage_times_worn", 0)
-        total_wear_cost += price
-        total_wears += wears
+        # Sort recent activity by timestamp desc and keep top 10
+        recent_activity = sorted(recent_activity, key=lambda a: a.get("timestamp") or "", reverse=True)[:10]
 
-    avg_cost_per_wear = total_wear_cost / total_wears if total_wears > 0 else 0
+        # Weather-based suggestion (optional)
+        weather_based = None
+        try:
+            settings_row = db.table("user_settings").select("default_location").eq("user_id", user_id).execute()
+            location = settings_row.data[0].get("default_location") if settings_row.data else None
+            if location:
+                service = get_weather_service()
+                weather = await service.get_weather(location=str(location), units="imperial")
+                if weather:
+                    temp_f = float(weather.get("temperature", 0))
+                    temp_c = round((temp_f - 32.0) * 5.0 / 9.0, 1)
+                    recommendation = "Consider light layers."
+                    if temp_c < 5:
+                        recommendation = "Wear a warm coat and layered outfit."
+                    elif temp_c > 27:
+                        recommendation = "Choose breathable fabrics and lighter colors."
+                    weather_based = {"temperature": temp_c, "recommendation": recommendation}
+        except Exception:
+            weather_based = None
 
-    return UserStats(
-        total_items=total_items,
-        total_outfits=total_outfits,
-        items_by_category=items_by_category,
-        items_by_condition=items_by_condition,
-        most_worn_items=most_worn_items,
-        least_worn_items=least_worn_items,
-        total_cost=total_cost,
-        avg_cost_per_wear=avg_cost_per_wear,
-        storage_used_bytes=None
-    )
+        # Outfit of the day (most recently updated)
+        outfit_of_the_day = None
+        try:
+            outfit = (
+                db.table("outfits")
+                .select("id,name,outfit_images(image_url,thumbnail_url,is_primary)")
+                .eq("user_id", user_id)
+                .order("updated_at", desc=True)
+                .limit(1)
+                .execute()
+            ).data or []
+            if outfit:
+                o = outfit[0]
+                images = o.get("outfit_images") or []
+                primary = next((i for i in images if i.get("is_primary")), images[0] if images else None)
+                outfit_of_the_day = {
+                    "id": o.get("id"),
+                    "name": o.get("name"),
+                    "image_url": (primary or {}).get("thumbnail_url") or (primary or {}).get("image_url"),
+                }
+        except Exception:
+            outfit_of_the_day = None
+
+        return {
+            "data": {
+                "user": user_row.data,
+                "statistics": {
+                    "total_items": getattr(items_count, "count", len(items_count.data or [])),
+                    "total_outfits": getattr(outfits_count, "count", len(outfits_count.data or [])),
+                    "items_added_this_month": getattr(items_added_month, "count", len(items_added_month.data or [])),
+                    "outfits_created_this_month": getattr(outfits_created_month, "count", len(outfits_created_month.data or [])),
+                    "most_worn_item": (
+                        {"name": most_worn_item[0].get("name"), "times_worn": int(most_worn_item[0].get("usage_times_worn") or 0)}
+                        if most_worn_item
+                        else None
+                    ),
+                    "favorite_items_count": getattr(fav_items, "count", len(fav_items.data or [])),
+                    "favorite_outfits_count": getattr(fav_outfits, "count", len(fav_outfits.data or [])),
+                },
+                "recent_activity": recent_activity,
+                "suggestions": {
+                    "weather_based": weather_based,
+                    "outfit_of_the_day": outfit_of_the_day,
+                },
+            },
+            "message": "OK",
+        }
+    except (UserNotFoundError, ValidationError, DatabaseError):
+        raise
+    except Exception as e:
+        logger.error("Failed to fetch dashboard", user_id=user_id, error=str(e))
+        raise DatabaseError("Failed to fetch dashboard")

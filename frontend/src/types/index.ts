@@ -8,14 +8,28 @@
 
 export type UUID = string;
 
-export interface ApiResponse<T> {
-  data?: T;
-  error?: string;
+export interface ApiEnvelope<T> {
+  data: T;
   message?: string;
 }
 
-export interface PaginatedResponse<T> {
+export interface ApiErrorEnvelope {
+  error: string;
+  code?: string;
+  details?: unknown;
+}
+
+export interface PaginatedItemsResponse<T> {
   items: T[];
+  total: number;
+  page: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
+export interface PaginatedOutfitsResponse<T> {
+  outfits: T[];
   total: number;
   page: number;
   total_pages: number;
@@ -61,6 +75,7 @@ export interface ItemImage {
   item_id: UUID;
   image_url: string;
   thumbnail_url?: string;
+  storage_path?: string;
   is_primary: boolean;
   width?: number;
   height?: number;
@@ -75,6 +90,12 @@ export interface Item {
   sub_category?: string;
   brand?: string;
   colors: string[];
+  style?: string;
+  material?: string;
+  materials: string[];
+  pattern?: string;
+  seasonal_tags: string[];
+  occasion_tags: string[];
   size?: string;
   price?: number;
   purchase_date?: string;
@@ -97,6 +118,12 @@ export interface ItemCreate {
   sub_category?: string;
   brand?: string;
   colors: string[];
+  style?: string;
+  material?: string;
+  materials?: string[];
+  pattern?: string;
+  seasonal_tags?: string[];
+  occasion_tags?: string[];
   size?: string;
   price?: number;
   purchase_date?: string;
@@ -111,7 +138,10 @@ export interface ItemCreate {
 export interface ItemImageBase {
   image_url: string;
   thumbnail_url?: string;
+  storage_path?: string;
   is_primary?: boolean;
+  width?: number;
+  height?: number;
 }
 
 export interface ExtractedItem {
@@ -128,22 +158,20 @@ export interface ExtractedItem {
 // OUTFIT TYPES
 // ============================================================================
 
-export interface OutfitItem {
-  item_id: UUID;
-  position?: string;
-  notes?: string;
-}
-
 export interface OutfitImage {
   id: UUID;
   outfit_id: UUID;
   image_url: string;
   thumbnail_url?: string;
-  generation_type: 'ai' | 'manual';
+  storage_path?: string;
+  pose: string;
+  lighting?: string;
+  body_profile_id?: UUID;
+  generation_type: 'ai' | 'manual' | string;
   is_primary: boolean;
   width?: number;
   height?: number;
-  metadata?: Record<string, unknown>;
+  generation_metadata?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -152,16 +180,16 @@ export interface Outfit {
   user_id: UUID;
   name: string;
   description?: string;
-  items: OutfitItem[];
-  style?: Style;
-  season?: Season;
+  item_ids: UUID[];
+  style?: string;
+  season?: string;
   occasion?: string;
   tags: string[];
   is_favorite: boolean;
+  is_draft: boolean;
   is_public: boolean;
-  image_url?: string;
-  times_worn: number;
-  last_worn?: string;
+  worn_count: number;
+  last_worn_at?: string;
   created_at: string;
   updated_at: string;
   images: OutfitImage[];
@@ -170,35 +198,30 @@ export interface Outfit {
 export type GenerationStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
 export interface GenerationRequest {
-  outfit_id: UUID;
-  prompt?: string;
-  style?: string;
-  background?: string;
-  include_model?: boolean;
-  model_gender?: string;
-  model_body_type?: string;
+  pose?: string;
+  variations?: number;
   lighting?: string;
-  view_angle?: string;
+  body_profile_id?: UUID;
 }
 
 export interface GenerationResponse {
   generation_id: string;
-  outfit_id: UUID;
-  status: GenerationStatus;
-  image_url?: string;
+  status: GenerationStatus | string;
   estimated_time?: number;
-  created_at: string;
 }
 
 // ============================================================================
 // USER TYPES
 // ============================================================================
 
+export type Gender = 'male' | 'female' | 'non_binary' | 'prefer_not_to_say';
+
 export interface User {
   id: UUID;
   email: string;
   full_name?: string;
   avatar_url?: string;
+  gender?: Gender | null;
   is_active: boolean;
   email_verified: boolean;
   created_at: string;
@@ -207,20 +230,22 @@ export interface User {
 }
 
 export interface UserPreferences {
-  id: UUID;
   user_id: UUID;
   favorite_colors: string[];
   preferred_styles: string[];
   liked_brands: string[];
   disliked_patterns: string[];
-  style_notes?: string;
-  created_at: string;
-  updated_at: string;
+  preferred_occasions: string[];
+  color_temperature?: string;
+  style_personality?: string;
+  data_points_collected: number;
+  last_updated: string;
 }
 
 export interface UserSettings {
-  id: UUID;
   user_id: UUID;
+  default_location?: string;
+  timezone?: string;
   language: string;
   measurement_units: 'imperial' | 'metric';
   notifications_enabled: boolean;
@@ -233,13 +258,12 @@ export interface UserSettings {
 export interface BodyProfile {
   id: UUID;
   user_id: UUID;
-  height?: number;
-  weight?: number;
-  body_type?: string;
-  skin_tone?: string;
-  hair_color?: string;
-  eye_color?: string;
-  notes?: string;
+  name: string;
+  height_cm: number;
+  weight_kg: number;
+  body_shape: string;
+  skin_tone: string;
+  is_default: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -268,6 +292,7 @@ export interface AuthResponse {
   access_token: string;
   refresh_token: string;
   user: User;
+  requires_email_confirmation?: boolean;
 }
 
 // ============================================================================
@@ -275,18 +300,9 @@ export interface AuthResponse {
 // ============================================================================
 
 export interface MatchResult {
-  item_id: UUID;
-  item_name: string;
-  image_url?: string;
-  category: Category;
+  item: Item;
   score: number;
-  reasons: MatchReason[];
-}
-
-export interface MatchReason {
-  type: string;
-  description: string;
-  confidence: number;
+  reasons: string[];
 }
 
 export interface SuggestedItem {
@@ -299,12 +315,11 @@ export interface SuggestedItem {
 }
 
 export interface CompleteLookSuggestion {
-  name: string;
-  description?: string;
-  items: SuggestedItem[];
+  items: Item[];
+  match_score: number;
+  description: string;
   style?: string;
   occasion?: string;
-  confidence: number;
 }
 
 export interface SimilarItemResult {
@@ -341,6 +356,7 @@ export interface ItemFilters {
   category?: Category;
   color?: string;
   condition?: Condition;
+  brand?: string;
   search?: string;
   is_favorite?: boolean;
   page?: number;
@@ -348,8 +364,8 @@ export interface ItemFilters {
 }
 
 export interface OutfitFilters {
-  style?: Style;
-  season?: Season;
+  style?: string;
+  season?: string;
   is_favorite?: boolean;
   search?: string;
   page?: number;
@@ -386,4 +402,128 @@ export interface OutfitFormData {
   tags: string[];
   is_favorite: boolean;
   generate_ai_image?: boolean;
+}
+
+export interface OutfitCreate {
+  name: string;
+  description?: string;
+  item_ids: UUID[];
+  style?: string;
+  season?: string;
+  occasion?: string;
+  tags: string[];
+  is_favorite?: boolean;
+  is_public?: boolean;
+}
+
+// ============================================================================
+// MULTI-ITEM EXTRACTION TYPES
+// ============================================================================
+
+/**
+ * Bounding box coordinates as percentages (0-100) of image dimensions
+ */
+export interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Status of a detected item during the extraction flow
+ */
+export type DetectedItemStatus =
+  | 'detected'
+  | 'generating'
+  | 'generated'
+  | 'failed'
+  | 'deleted';
+
+/**
+ * Individual item detected during multi-item extraction
+ */
+export interface DetectedItem {
+  /** Temporary ID for tracking during review */
+  tempId: string;
+  /** Category of the item */
+  category: Category;
+  /** Sub-category (e.g., "t-shirt", "jeans") */
+  sub_category?: string;
+  /** Detected colors */
+  colors: string[];
+  /** Material type */
+  material?: string;
+  /** Pattern type */
+  pattern?: string;
+  /** Brand if visible */
+  brand?: string;
+  /** Detection confidence 0-1 */
+  confidence: number;
+  /** Approximate location in original image */
+  boundingBox?: BoundingBox;
+  /** Detailed description for image generation */
+  detailedDescription: string;
+  /** Status of this item in the extraction flow */
+  status: DetectedItemStatus;
+  /** Generated product image URL (data URL or blob URL) */
+  generatedImageUrl?: string;
+  /** Generation error message if failed */
+  generationError?: string;
+  /** User-editable name for the item */
+  name?: string;
+  /** User-editable tags */
+  tags?: string[];
+}
+
+/**
+ * Result from multi-item detection step
+ */
+export interface MultiItemDetectionResult {
+  /** All detected items */
+  items: DetectedItem[];
+  /** Overall analysis confidence */
+  overallConfidence: number;
+  /** Description of the full image */
+  imageDescription: string;
+  /** Total items detected */
+  itemCount: number;
+  /** Whether any items need manual review (low confidence) */
+  requiresReview: boolean;
+}
+
+/**
+ * State for the multi-item extraction flow
+ */
+export interface MultiItemExtractionState {
+  /** Current step in the flow */
+  step: 'upload' | 'detecting' | 'generating' | 'review' | 'saving';
+  /** Original uploaded file */
+  originalFile: File | null;
+  /** Original image preview URL */
+  originalPreviewUrl: string | null;
+  /** All detected items */
+  detectedItems: DetectedItem[];
+  /** Detection progress (0-100) */
+  detectionProgress: number;
+  /** Image generation progress (0-100) */
+  generationProgress: number;
+  /** Saving progress (0-100) */
+  savingProgress: number;
+  /** Error message if any step fails */
+  error: string | null;
+}
+
+/**
+ * Options for product image generation
+ */
+export interface ProductImageGenerationOptions {
+  /** Background style */
+  background?: 'white' | 'gray' | 'gradient' | 'transparent';
+  /** View angle */
+  viewAngle?: 'front' | 'side' | 'flat-lay';
+  /** Include shadows */
+  includeShadows?: boolean;
+  /** Image size */
+  size?: { width: number; height: number };
 }

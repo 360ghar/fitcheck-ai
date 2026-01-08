@@ -3,7 +3,7 @@
  */
 
 import { apiClient, getTokens, setTokens, clearTokens, getApiError } from './client';
-import type { AuthTokens, LoginRequest, RegisterRequest, AuthResponse, User } from '../types';
+import type { ApiEnvelope, AuthTokens, LoginRequest, RegisterRequest, AuthResponse, User } from '../types';
 
 // ============================================================================
 // AUTH API FUNCTIONS
@@ -14,12 +14,17 @@ import type { AuthTokens, LoginRequest, RegisterRequest, AuthResponse, User } fr
  */
 export async function register(data: RegisterRequest): Promise<AuthResponse> {
   try {
-    const response = await apiClient.post<AuthResponse>('/api/v1/auth/register', data);
-    setTokens({
-      access_token: response.data.access_token,
-      refresh_token: response.data.refresh_token,
-    });
-    return response.data;
+    const response = await apiClient.post<ApiEnvelope<AuthResponse>>('/api/v1/auth/register', data);
+    const payload = response.data.data;
+    if (payload.access_token && payload.refresh_token) {
+      setTokens({
+        access_token: payload.access_token,
+        refresh_token: payload.refresh_token,
+      });
+    } else {
+      clearTokens();
+    }
+    return payload;
   } catch (error) {
     throw getApiError(error);
   }
@@ -30,12 +35,17 @@ export async function register(data: RegisterRequest): Promise<AuthResponse> {
  */
 export async function login(data: LoginRequest): Promise<AuthResponse> {
   try {
-    const response = await apiClient.post<AuthResponse>('/api/v1/auth/login', data);
-    setTokens({
-      access_token: response.data.access_token,
-      refresh_token: response.data.refresh_token,
-    });
-    return response.data;
+    const response = await apiClient.post<ApiEnvelope<AuthResponse>>('/api/v1/auth/login', data);
+    const payload = response.data.data;
+    if (payload.access_token && payload.refresh_token) {
+      setTokens({
+        access_token: payload.access_token,
+        refresh_token: payload.refresh_token,
+      });
+    } else {
+      clearTokens();
+    }
+    return payload;
   } catch (error) {
     throw getApiError(error);
   }
@@ -59,14 +69,14 @@ export async function logout(): Promise<void> {
  */
 export async function refreshAccessToken(refreshToken: string): Promise<AuthTokens> {
   try {
-    const response = await apiClient.post<{ access_token: string; refresh_token: string }>(
+    const response = await apiClient.post<ApiEnvelope<{ access_token: string; refresh_token: string }>>(
       '/api/v1/auth/refresh',
       { refresh_token: refreshToken }
     );
 
     const tokens: AuthTokens = {
-      access_token: response.data.access_token,
-      refresh_token: response.data.refresh_token,
+      access_token: response.data.data.access_token,
+      refresh_token: response.data.data.refresh_token,
     };
 
     setTokens(tokens);
@@ -92,12 +102,14 @@ export async function requestPasswordReset(email: string): Promise<{ message: st
 /**
  * Confirm password reset with token
  */
-export async function confirmPasswordReset(token: string, newPassword: string): Promise<{ message: string }> {
+export async function confirmPasswordReset(data: {
+  access_token?: string;
+  refresh_token?: string;
+  token?: string;
+  new_password: string;
+}): Promise<{ message: string }> {
   try {
-    const response = await apiClient.post<{ message: string }>('/api/v1/auth/confirm-reset-password', {
-      token,
-      new_password: newPassword,
-    });
+    const response = await apiClient.post<{ message: string }>('/api/v1/auth/confirm-reset-password', data);
     return response.data;
   } catch (error) {
     throw getApiError(error);

@@ -60,7 +60,7 @@ Outfit Planning & Organization features help users plan their wardrobe usage in 
 **API Endpoints:**
 
 ```
-POST /api/v1/user/calendar/connect
+POST /api/v1/calendar/connect
 - Connect calendar provider
 - Request: JSON
   - provider: "google"|"apple"|"outlook"
@@ -75,20 +75,20 @@ POST /api/v1/user/calendar/connect
 ```
 
 ```
-GET /api/v1/user/calendars
+GET /api/v1/calendar/connections
 - List connected calendars
 - Response: 200 OK
   - calendars: List<calendar_connection>
 ```
 
 ```
-DELETE /api/v1/user/calendars/{id}
+DELETE /api/v1/calendar/connections/{id}
 - Disconnect calendar
 - Response: 204 No Content
 ```
 
 ```
-GET /api/v1/user/calendar/events
+GET /api/v1/calendar/events
 - Fetch calendar events
 - Query Parameters:
   - start_date: ISO8601 date
@@ -107,7 +107,7 @@ GET /api/v1/user/calendar/events
 ```
 
 ```
-POST /api/v1/user/calendar/events/{event_id}/outfit
+POST /api/v1/calendar/events/{event_id}/outfit
 - Assign outfit to event
 - Request: JSON
   - outfit_id: string
@@ -116,7 +116,7 @@ POST /api/v1/user/calendar/events/{event_id}/outfit
 ```
 
 ```
-DELETE /api/v1/user/calendar/events/{event_id}/outfit
+DELETE /api/v1/calendar/events/{event_id}/outfit
 - Remove outfit assignment
 - Response: 200 OK
   - event: updated_event_object

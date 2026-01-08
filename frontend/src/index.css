@@ -2,10 +2,63 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom base styles */
+/* shadcn/ui CSS variables */
 @layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 238.7 83.5% 66.7%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 238.7 83.5% 66.7%;
+    --radius: 0.5rem;
+
+    /* Sidebar */
+    --sidebar-width: 240px;
+    --sidebar-width-collapsed: 64px;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 238.7 83.5% 66.7%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 238.7 83.5% 66.7%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-background text-foreground;
   }
 
   /* Focus styles */
@@ -29,6 +82,39 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+}
+
+/* Prose styling for legal pages */
+.prose {
+  @apply text-gray-600 dark:text-gray-300 leading-relaxed;
+}
+
+.prose h2 {
+  @apply text-2xl font-bold text-gray-900 dark:text-white mt-8 mb-4;
+}
+
+.prose h3 {
+  @apply text-xl font-semibold text-gray-900 dark:text-white mt-6 mb-3;
+}
+
+.prose p {
+  @apply mb-4;
+}
+
+.prose ul {
+  @apply list-disc pl-6 mb-4 space-y-2;
+}
+
+.prose li {
+  @apply text-gray-600 dark:text-gray-300;
+}
+
+.prose a {
+  @apply text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300;
+}
+
+.prose strong {
+  @apply font-semibold text-gray-900 dark:text-white;
 }
 
 /* Custom animations */

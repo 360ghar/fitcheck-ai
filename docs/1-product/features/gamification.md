@@ -57,32 +57,30 @@ Gamification features add engagement and motivation through streaks, achievement
 **API Endpoints:**
 
 ```
-GET /api/v1/user/streak
+GET /api/v1/gamification/streak
 - View current streak
 - Response: 200 OK
-  - streak: {
-        current_streak: number
-        longest_streak: number
-        last_planned: ISO8601 date
-        streak_freezes_remaining: number
-        streak_skips_remaining: number
-        next_milestone: {
-            days: number
-            badge: string
-            name: string
-        }
-      }
+  - current_streak: number
+  - longest_streak: number
+  - last_planned: ISO8601 date|null
+  - streak_freezes_remaining: number
+  - streak_skips_remaining: number
+  - next_milestone: {
+        days: number
+        badge: string
+        name: string
+    }|null
 ```
 
 ```
-POST /api/v1/user/streak/freeze
+POST /api/v1/gamification/streak/freeze (planned)
 - Use streak freeze
 - Response: 200 OK
   - streak: updated_streak_object
 ```
 
 ```
-POST /api/v1/user/streak/vacation
+POST /api/v1/gamification/streak/vacation (planned)
 - Set vacation mode
 - Request: JSON
   - start_date: ISO8601 date
@@ -166,32 +164,19 @@ POST /api/v1/user/streak/vacation
 **API Endpoints:**
 
 ```
-GET /api/v1/user/achievements
+GET /api/v1/gamification/achievements
 - View all achievements
 - Response: 200 OK
-  - achievements: {
-        earned: List<achievement_object>
-        available: List<achievement_object>
-          - id: string
-          - name: string
-          - description: string
-          - icon: string
-          - category: string
-          - rarity: "common"|"rare"|"legendary"
-          - requirement: {
-              type: string
-              target: number
-              current: number
-            }
-          - reward: {
-              type: string
-              amount: number
-            }
-      }
+  - earned: List<user_achievement_row>
+  - available: List<achievement_definition>
+    - id: string
+    - name: string
+    - description: string
+    - xp_reward?: number
 ```
 
 ```
-GET /api/v1/user/achievements/{id}
+GET /api/v1/gamification/achievements/{id} (planned)
 - View achievement details
 - Response: 200 OK
   - achievement: achievement_detail_object
@@ -202,7 +187,7 @@ GET /api/v1/user/achievements/{id}
 ```
 
 ```
-POST /api/v1/user/achievements/{id}/claim-reward
+POST /api/v1/gamification/achievements/{id}/claim-reward (planned)
 - Claim achievement reward
 - Response: 200 OK
   - reward: reward_object
@@ -283,7 +268,7 @@ POST /api/v1/user/achievements/{id}/claim-reward
 **API Endpoints:**
 
 ```
-GET /api/v1/user/stats
+GET /api/v1/gamification/stats (planned)
 - View overall statistics
 - Response: 200 OK
   - stats: {
@@ -339,7 +324,7 @@ GET /api/v1/user/stats
 ```
 
 ```
-GET /api/v1/user/stats/trends
+GET /api/v1/gamification/stats/trends (planned)
 - View trends over time
 - Query Parameters:
   - period: "week"|"month"|"quarter"|"year"
@@ -363,7 +348,7 @@ GET /api/v1/user/stats/trends
 ```
 
 ```
-GET /api/v1/user/stats/export
+GET /api/v1/gamification/stats/export (planned)
 - Export statistics
 - Query Parameters:
   - format: "pdf"|"csv"|"json"
@@ -451,7 +436,7 @@ GET /api/v1/user/stats/export
 **API Endpoints:**
 
 ```
-GET /api/v1/user/sustainability
+GET /api/v1/gamification/sustainability (planned)
 - View sustainability metrics
 - Response: 200 OK
   - sustainability: {
@@ -486,7 +471,7 @@ GET /api/v1/user/sustainability
 ```
 
 ```
-POST /api/v1/user/sustainability/goals
+POST /api/v1/gamification/sustainability/goals (planned)
 - Set sustainability goal
 - Request: JSON
   - type: string
@@ -497,7 +482,7 @@ POST /api/v1/user/sustainability/goals
 ```
 
 ```
-GET /api/v1/user/sustainability/goals
+GET /api/v1/gamification/sustainability/goals (planned)
 - View sustainability goals
 - Response: 200 OK
   - goals: List<sustainability_goal_object>
@@ -511,7 +496,7 @@ GET /api/v1/user/sustainability/goals
 ```
 
 ```
-POST /api/v1/user/sustainability/log-purchase
+POST /api/v1/gamification/sustainability/log-purchase (planned)
 - Log purchase (reduces sustainability score)
 - Request: JSON
   - item_name: string

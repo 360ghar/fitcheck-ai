@@ -185,14 +185,14 @@ graph TD
 
 ### 1. Best-in-Class AI
 
-- **Gemini 3 Pro** for high-quality outfit generation
-- **Nano Banana Pro** for real-time item extraction
-- **Gemini Embeddings** for semantic wardrobe analysis
+- **Item Extraction Agent:** Backend AI API (`POST /api/v1/ai/extract-items`) using server-side AI processing with multi-provider support (Gemini, OpenAI, or custom proxy).
+- **Outfit Generation Agent:** Backend AI API (`POST /api/v1/ai/generate-outfit`) using server-side image generation.
+- **Gemini Embeddings** (`gemini-embedding-001`) for semantic wardrobe analysis and matching (server-side).
 
 ### 2. User Experience
 
 - Mobile-first responsive design
-- Fast image uploads with Putter.js optimization
+- Fast image uploads with server-side optimization
 - Intuitive drag-and-drop interface
 - Minimal cognitive load
 

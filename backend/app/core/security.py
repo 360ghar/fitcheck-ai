@@ -4,12 +4,12 @@ Security module for JWT token verification and user authentication.
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import jwt
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Optional
 import logging
 
 from app.core.config import settings
+from app.db.connection import SupabaseDB
 
 logger = logging.getLogger(__name__)
 
@@ -51,62 +51,35 @@ async def verify_token(
     token = credentials.credentials
 
     try:
-        # Decode the JWT token
-        payload = jwt.decode(
-            token,
-            settings.SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
-            audience="authenticated",
-            options={
-                "verify_aud": True,
-                "verify_exp": True,
-            }
-        )
+        # Use Supabase client to verify the token
+        # The service client can validate any user's JWT
+        client = SupabaseDB.get_service_client()
+        user_response = client.auth.get_user(token)
 
-        # Extract user ID from subject claim
-        user_id = payload.get("sub")
-        if not user_id:
+        if not user_response or not user_response.user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token: missing user ID"
+                detail="Invalid token",
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
-        # Check expiration
-        exp = payload.get("exp")
-        if exp and exp < datetime.now().timestamp():
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token expired"
-            )
-
-        # Create token data object
+        user = user_response.user
         token_data = TokenData(
-            sub=user_id,
-            exp=exp,
-            aud=payload.get("aud")
+            sub=user.id,
+            exp=None,  # Supabase handles expiration
+            aud="authenticated"
         )
-        token_data.email = payload.get("email")
+        token_data.email = user.email
 
         return token_data
 
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expired",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    except jwt.InvalidTokenError as e:
-        logger.warning(f"Invalid token: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Token verification failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    except Exception as e:
-        logger.error(f"Token verification error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication failed",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -139,6 +112,19 @@ async def get_current_user_email(
         User email string or None
     """
     return token_data.email
+
+
+async def get_optional_user_id(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> Optional[str]:
+    """Best-effort user ID extraction without requiring auth."""
+    if not credentials:
+        return None
+    try:
+        token_data = await verify_token(credentials)
+        return token_data.sub
+    except HTTPException:
+        return None
 
 
 def verify_password_strength(password: str) -> tuple[bool, Optional[str]]:

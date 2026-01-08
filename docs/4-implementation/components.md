@@ -1,68 +1,55 @@
- # Implementation: UI Components
- 
- ## Overview
- 
- High-level guide to UI components and business logic modules.
- 
- ## 1. Layout Components
- 
- ### AppLayout.tsx
- - Top navigation bar
- - Responsive sidebar (collapsible on mobile)
- - Main content area with breadcrumbs
- - Toast notification container
- 
- ### AuthLayout.tsx
- - Centered card for login/register
- - Product logo and tagline
- - Background illustration/image
- 
- ## 2. Core Feature Components
- 
- ### WardrobeGrid.tsx
- - Displays items in a responsive grid
- - Virtualized for performance
- - Multi-select mode
- 
- ### ItemCard.tsx
- - Image preview
- - Status badges (clean, dirty, favorite)
- - Quick actions (edit, delete, wear)
- 
- ### OutfitCanvas.tsx
- - Visual representation of selected items
- - Layering controls
- - Background selection
- 
- ### GenerationPreview.tsx
- - Loading state with AI tips
- - Comparison slider for variations
- - Download and share buttons
- 
- ## 3. Shared/Common Components
- 
- ### ImageWithFallback.tsx
- - Skeleton loader while image is loading
- - Default placeholder on error
- 
- ### LoadingSpinner.tsx
- - Branded spinner for full-page or section loading
- 
- ### ConfirmationModal.tsx
- - Standardized dialog for destructive actions
- 
- ## Business Logic Modules
- 
- ### 1. AI Orchestration Service (Backend)
- - Manages agent handoffs
- - Handles retries for transient AI failures
- - Image post-processing (cropping, resizing)
- 
- ### 2. Recommendation Engine (Backend)
- - Vector similarity calculations
- - Preference weighting logic
- - Occasion-based filtering
- 
- ### 3. Sync Service (Frontend)
- - Synchronizes local storage with Supabase
- - Handles offline conflict resolution
+# Implementation: UI Components
+
+## Overview
+
+This document highlights the key UI components and where core logic lives (frontend vs backend).
+
+## Layout
+
+- **Auth layout:** `frontend/src/components/layout/AuthLayout.tsx`
+- **App layout:** `frontend/src/components/layout/AppLayout.tsx`
+
+## Wardrobe
+
+- **Page:** `frontend/src/pages/wardrobe/WardrobePage.tsx`
+- **Upload:** `frontend/src/components/wardrobe/ItemUpload.tsx`
+- **Filters:** `frontend/src/components/wardrobe/FilterPanel.tsx`
+- **Item details:** `frontend/src/components/wardrobe/ItemDetailModal.tsx`
+
+## Outfits
+
+- **Page:** `frontend/src/pages/outfits/OutfitsPage.tsx`
+- **Create dialog:** `frontend/src/components/outfits/OutfitCreateDialog.tsx`
+- **Share dialog:** `frontend/src/components/social/ShareOutfitDialog.tsx`
+- **Public share page:** `frontend/src/pages/shared/SharedOutfitPage.tsx`
+
+## Planning (Calendar)
+
+- **Page:** `frontend/src/pages/calendar/CalendarPage.tsx`
+- **Components:** `frontend/src/components/calendar/*`
+
+## Gamification
+
+- **Page:** `frontend/src/pages/gamification/GamificationPage.tsx`
+- **Leaderboard:** `frontend/src/components/gamification/Leaderboard.tsx`
+
+## AI Integration (Server-Side)
+
+AI processing is handled server-side via the Backend AI API:
+- Item extraction (`POST /api/v1/ai/extract-items`)
+- Outfit visualization (`POST /api/v1/ai/generate-outfit`)
+- Product image generation (`POST /api/v1/ai/generate-product-image`)
+
+Implementation:
+- Backend Agents: `backend/app/agents/item_extraction_agent.py`, `backend/app/agents/image_generation_agent.py`
+- AI Provider Service: `backend/app/services/ai_provider_service.py`
+- AI Settings Service: `backend/app/services/ai_settings_service.py`
+- Frontend API Client: `frontend/src/api/ai.ts`
+- AI Settings UI: `frontend/src/components/settings/AISettingsPanel.tsx`
+
+## Backend Services
+
+- **Storage:** `backend/app/services/storage_service.py` (Supabase Storage uploads)
+- **Embeddings:** `backend/app/services/ai_service.py` (Gemini embeddings)
+- **Vectors:** `backend/app/services/vector_service.py` (Pinecone)
+- **Weather:** `backend/app/services/weather_service.py`

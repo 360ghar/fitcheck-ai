@@ -1,0 +1,529 @@
+"""
+Image Generation Agent - Backend AI agent for outfit and product image generation.
+
+This agent replaces the frontend outfitGenerationAgent that used Puter.js txt2img.
+
+Features:
+- Generate outfit visualization
+- Generate product images for individual items
+- Generate flat lay compositions
+- Generate variations
+"""
+
+import base64
+import uuid
+from typing import Any, Dict, List, Optional
+
+from app.core.logging_config import get_context_logger
+from app.core.exceptions import AIServiceError
+from app.services.ai_provider_service import AIProviderService
+from app.services.ai_settings_service import AISettingsService
+from app.services.storage_service import StorageService
+from app.utils.parallel import parallel_with_retry
+
+logger = get_context_logger(__name__)
+
+
+# =============================================================================
+# DATA CLASSES
+# =============================================================================
+
+
+class GeneratedImage:
+    """Result of an image generation operation."""
+
+    def __init__(
+        self,
+        image_base64: str,
+        prompt: str,
+        model: str,
+        provider: str,
+        image_url: Optional[str] = None,
+        storage_path: Optional[str] = None,
+    ):
+        self.image_base64 = image_base64
+        self.prompt = prompt
+        self.model = model
+        self.provider = provider
+        self.image_url = image_url
+        self.storage_path = storage_path
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "image_base64": self.image_base64,
+            "image_url": self.image_url,
+            "storage_path": self.storage_path,
+            "prompt": self.prompt,
+            "model": self.model,
+            "provider": self.provider,
+        }
+
+
+# =============================================================================
+# IMAGE GENERATION AGENT
+# =============================================================================
+
+
+class ImageGenerationAgent:
+    """Agent for generating outfit and product images."""
+
+    def __init__(self, ai_service: AIProviderService):
+        """Initialize with an AI service instance."""
+        self.ai_service = ai_service
+
+    async def generate_outfit(
+        self,
+        items: List[Dict[str, Any]],
+        style: str = "casual",
+        background: str = "studio white",
+        pose: str = "standing front",
+        lighting: str = "professional studio lighting",
+        view_angle: str = "full body",
+        include_model: bool = True,
+        model_gender: str = "female",
+        custom_prompt: Optional[str] = None,
+    ) -> GeneratedImage:
+        """
+        Generate an outfit visualization image.
+
+        Args:
+            items: List of items with name, category, colors, brand, material, pattern
+            style: Overall style (casual, formal, streetwear, etc.)
+            background: Background description
+            pose: Model pose
+            lighting: Lighting description
+            view_angle: Camera angle
+            include_model: Whether to include a model or flat lay
+            model_gender: Gender of model
+            custom_prompt: Additional prompt instructions
+
+        Returns:
+            GeneratedImage with the result
+        """
+        logger.debug(
+            "Generating outfit image",
+            item_count=len(items),
+            style=style,
+            include_model=include_model,
+        )
+
+        wants_flat_lay = not include_model or "flat lay" in pose.lower()
+
+        # Build item descriptions
+        item_descriptions = []
+        for item in items:
+            parts = [item.get("name", "item")]
+            if item.get("brand"):
+                parts.append(f"by {item['brand']}")
+            if item.get("category"):
+                parts.append(f"({item['category']})")
+            if item.get("colors"):
+                parts.append(f"colors: {', '.join(item['colors'])}")
+            if item.get("material"):
+                parts.append(f"material: {item['material']}")
+            if item.get("pattern"):
+                parts.append(f"pattern: {item['pattern']}")
+            item_descriptions.append(" ".join(parts))
+
+        items_list = "; ".join(item_descriptions)
+
+        # Build prompt
+        if wants_flat_lay:
+            base_prompt = f"Professional flat lay fashion photography of a cohesive {style} outfit: {items_list}."
+        else:
+            base_prompt = f"Professional fashion photography of a {model_gender} model wearing a cohesive {style} outfit featuring: {items_list}."
+
+        prompt = f"""{base_prompt}
+
+Style specifications:
+- Background: {background}
+- Pose: {"flat lay (top-down)" if wants_flat_lay else pose}
+- View angle: {view_angle}
+- Lighting: {lighting}
+- Image quality: high-end editorial fashion photography, sharp focus, realistic fabric textures, accurate colors
+
+{f"Additional instructions: {custom_prompt}" if custom_prompt else ""}""".strip()
+
+        return await self._generate_image(prompt)
+
+    async def generate_product_image(
+        self,
+        item_description: str,
+        category: str,
+        sub_category: Optional[str] = None,
+        colors: Optional[List[str]] = None,
+        material: Optional[str] = None,
+        background: str = "white",
+        view_angle: str = "front",
+        include_shadows: bool = False,
+        reference_image: Optional[str] = None,
+    ) -> GeneratedImage:
+        """
+        Generate a clean e-commerce style product image for a single clothing item.
+
+        Args:
+            item_description: Detailed description of the item
+            category: Item category
+            sub_category: Item sub-category
+            colors: List of colors
+            material: Material type
+            background: Background style
+            view_angle: Camera angle
+            include_shadows: Whether to include shadows
+            reference_image: Optional base64 reference image for exact matching
+
+        Returns:
+            GeneratedImage with the result
+        """
+        logger.debug(
+            "Generating product image",
+            category=category,
+            sub_category=sub_category,
+            has_reference=reference_image is not None,
+        )
+
+        background_map = {
+            "white": "pure white studio background",
+            "gray": "light gray seamless studio background",
+            "gradient": "subtle gray-to-white gradient background",
+            "transparent": "clean white background",
+        }
+
+        view_map = {
+            "front": "front view, straight-on angle",
+            "side": "three-quarter view angle",
+            "flat-lay": "flat lay top-down view",
+        }
+
+        category_name = sub_category or category
+        color_desc = " and ".join(colors) if colors else ""
+
+        if reference_image:
+            # Image-to-image prompt: extract exact item from reference
+            prompt = f"""Look at the reference image and extract ONLY the {category_name} item. Create a clean e-commerce product photo of this EXACT item.
+
+CRITICAL - The generated item must be IDENTICAL to the one in the reference image:
+- EXACT same colors, shades, and tones
+- EXACT same pattern, print, or design details
+- EXACT same style, cut, and silhouette
+- EXACT same fabric texture and material appearance
+- EXACT same brand logos, labels, or embellishments if visible
+- EXACT same proportions and fit
+
+Item details from reference: {item_description}
+
+Output specifications:
+- {background_map.get(background, background_map["white"])}
+- {view_map.get(view_angle, view_map["front"])}
+- {"Subtle natural drop shadow for depth" if include_shadows else "No shadows, completely clean and isolated"}
+- Professional studio lighting with soft highlights
+- Display flat or on an invisible mannequin
+- ONLY this single {category_name} - remove the person/model completely
+- High-end fashion catalog quality, sharp focus
+- Clean, isolated product shot suitable for an online store""".strip()
+        else:
+            # Text-to-image prompt: generate from description only
+            prompt = f"""Professional e-commerce product photography of a single clothing item:
+
+{item_description}
+
+Photography specifications:
+- {background_map.get(background, background_map["white"])}
+- {view_map.get(view_angle, view_map["front"])}
+- {"Subtle natural drop shadow for depth" if include_shadows else "No shadows, completely clean and isolated"}
+- High-end fashion catalog quality
+- Sharp focus throughout
+- Accurate, true-to-life colors{f": {color_desc}" if color_desc else ""}
+- Realistic fabric textures{f" showing {material} clearly" if material else ""}
+- Professional studio lighting with soft highlights
+- The item should be displayed flat or on an invisible mannequin
+- ONLY this single {category_name} should be visible
+- No model, no other clothing items, no accessories unless part of this item
+- Clean, isolated product shot suitable for an online store listing""".strip()
+
+        return await self._generate_image(prompt, reference_image=reference_image)
+
+    async def generate_flat_lay(
+        self,
+        items: List[Dict[str, Any]],
+        style: str = "casual",
+        background: str = "white",
+        lighting: str = "soft natural light",
+    ) -> GeneratedImage:
+        """
+        Generate a flat lay composition of items.
+
+        Args:
+            items: List of items to include
+            style: Overall style
+            background: Background description
+            lighting: Lighting description
+
+        Returns:
+            GeneratedImage with the result
+        """
+        return await self.generate_outfit(
+            items=items,
+            style=style,
+            background=background,
+            pose="flat lay",
+            lighting=lighting,
+            include_model=False,
+        )
+
+    async def generate_variations(
+        self,
+        items: List[Dict[str, Any]],
+        styles: Optional[List[str]] = None,
+    ) -> List[GeneratedImage]:
+        """
+        Generate multiple style variations of an outfit in parallel.
+
+        Args:
+            items: List of items
+            styles: List of styles to generate
+
+        Returns:
+            List of GeneratedImage results (only successful ones)
+        """
+        if styles is None:
+            styles = ["casual", "formal", "streetwear"]
+
+        logger.debug(
+            "Generating style variations in parallel",
+            style_count=len(styles),
+            item_count=len(items),
+        )
+
+        # Process all styles in parallel with retry
+        results = await parallel_with_retry(
+            styles,
+            lambda style, _: self.generate_outfit(items=items, style=style),
+            max_retries=3,
+            initial_delay=2.0,  # AI operations need longer delays
+            backoff_factor=2.0,
+            retryable_exceptions=(AIServiceError, Exception),
+        )
+
+        # Log failures
+        failed = [r for r in results if not r.success]
+        if failed:
+            for r in failed:
+                logger.error(
+                    "Failed to generate variation after retries",
+                    style=styles[r.index],
+                    error=str(r.error),
+                )
+
+        # Return only successful results
+        successful = [r.data for r in results if r.success]
+
+        logger.info(
+            "Completed parallel variation generation",
+            successful=len(successful),
+            failed=len(failed),
+            total=len(styles),
+        )
+
+        return successful
+
+    async def _generate_image(
+        self, prompt: str, reference_image: Optional[str] = None
+    ) -> GeneratedImage:
+        """
+        Internal method to generate an image from a prompt.
+
+        Args:
+            prompt: The generation prompt
+            reference_image: Optional base64 reference image for image-to-image generation
+
+        Returns:
+            GeneratedImage with the result
+        """
+        try:
+            response = await self.ai_service.generate_image(
+                prompt, reference_image=reference_image
+            )
+
+            if not response.images:
+                raise AIServiceError("AI generated no images")
+
+            return GeneratedImage(
+                image_base64=response.images[0],
+                prompt=prompt,
+                model=response.model,
+                provider=response.provider,
+            )
+
+        except AIServiceError:
+            raise
+        except Exception as e:
+            logger.error("Image generation failed", error=str(e))
+            raise AIServiceError(f"Image generation failed: {str(e)}")
+
+    async def generate_try_on(
+        self,
+        user_avatar_base64: str,
+        clothing_image_base64: str,
+        clothing_description: Optional[str] = None,
+        style: str = "casual",
+        background: str = "studio white",
+        pose: str = "standing front",
+        lighting: str = "professional studio lighting",
+    ) -> GeneratedImage:
+        """
+        Generate a virtual try-on visualization.
+
+        Combines user's profile picture with uploaded clothing to show
+        how the user would look wearing those clothes.
+
+        Args:
+            user_avatar_base64: Base64-encoded user profile picture
+            clothing_image_base64: Base64-encoded clothing image
+            clothing_description: Optional description of the clothing
+            style: Overall style (casual, formal, etc.)
+            background: Background description
+            pose: Model pose
+            lighting: Lighting description
+
+        Returns:
+            GeneratedImage with the try-on visualization
+        """
+        logger.debug(
+            "Generating try-on image",
+            has_clothing_description=clothing_description is not None,
+            style=style,
+            pose=pose,
+        )
+
+        clothing_desc = f"\n\nClothing details: {clothing_description}" if clothing_description else ""
+
+        prompt = f"""Create a photorealistic fashion photograph showing the person from the first image wearing the clothing item shown in the second image.
+
+CRITICAL REQUIREMENTS:
+1. PRESERVE THE PERSON'S IDENTITY: The face, facial features, skin tone, hair style, hair color, and body proportions must match the first image (reference photo) EXACTLY. This is the most important requirement.
+2. CLOTHING ACCURACY: The clothing item must be rendered exactly as shown in the second image - same colors, patterns, textures, style, and fit.
+3. NATURAL INTEGRATION: The clothing should fit naturally on the person's body with realistic draping, shadows, and fabric behavior.
+4. SINGLE OUTPUT: Generate one cohesive image of the person wearing the clothes.
+
+Style specifications:
+- Overall style: {style}
+- Background: {background}
+- Pose: {pose}
+- Lighting: {lighting}
+- Image quality: High-end editorial fashion photography, sharp focus, realistic fabric textures, accurate colors{clothing_desc}
+
+Output a single, high-quality photorealistic image that looks like a professional fashion photograph of this specific person wearing these specific clothes."""
+
+        try:
+            # Use chat_with_vision for multi-image input with image generation
+            # Build message content with two images
+            avatar_url = f"data:image/jpeg;base64,{user_avatar_base64}" if not user_avatar_base64.startswith("data:") else user_avatar_base64
+            clothing_url = f"data:image/jpeg;base64,{clothing_image_base64}" if not clothing_image_base64.startswith("data:") else clothing_image_base64
+
+            content = [
+                {"type": "image_url", "image_url": {"url": avatar_url}},
+                {"type": "image_url", "image_url": {"url": clothing_url}},
+                {"type": "text", "text": prompt},
+            ]
+
+            from app.services.ai_provider_service import ChatMessage
+
+            messages = [ChatMessage(role="user", content=content)]
+
+            response = await self.ai_service.chat(
+                messages=messages,
+                model=self.ai_service.config.get_image_gen_model(),
+                response_modalities=["TEXT", "IMAGE"],
+            )
+
+            if not response.images:
+                raise AIServiceError("AI generated no images for try-on")
+
+            return GeneratedImage(
+                image_base64=response.images[0],
+                prompt=prompt,
+                model=response.model,
+                provider=response.provider,
+            )
+
+        except AIServiceError:
+            raise
+        except Exception as e:
+            logger.error("Try-on image generation failed", error=str(e))
+            raise AIServiceError(f"Try-on generation failed: {str(e)}")
+
+
+# =============================================================================
+# STORAGE HELPER
+# =============================================================================
+
+
+async def save_generated_image(
+    generated: GeneratedImage,
+    user_id: str,
+    image_type: str = "outfit",
+    db=None,
+) -> Dict[str, str]:
+    """
+    Save a generated image to Supabase Storage.
+
+    Args:
+        generated: The GeneratedImage result
+        user_id: User ID for path
+        image_type: Type of image (outfit, product)
+        db: Supabase client
+
+    Returns:
+        Dict with image_url and storage_path
+    """
+    if not db:
+        return {"image_url": "", "storage_path": ""}
+
+    try:
+        # Decode base64 image
+        image_data = base64.b64decode(generated.image_base64)
+
+        # Generate unique filename
+        filename = f"{user_id}/generated/{image_type}/{uuid.uuid4().hex}.png"
+
+        # Upload to storage
+        storage = StorageService()
+        result = await storage.upload_file(
+            file_data=image_data,
+            file_path=filename,
+            content_type="image/png",
+            db=db,
+        )
+
+        return {
+            "image_url": result.get("public_url", ""),
+            "storage_path": filename,
+        }
+
+    except Exception as e:
+        logger.error("Failed to save generated image", error=str(e))
+        return {"image_url": "", "storage_path": ""}
+
+
+# =============================================================================
+# FACTORY FUNCTION
+# =============================================================================
+
+
+async def get_image_generation_agent(
+    user_id: str,
+    db,
+) -> ImageGenerationAgent:
+    """
+    Get an image generation agent configured for a user.
+
+    Args:
+        user_id: The user's ID
+        db: Supabase client
+
+    Returns:
+        Configured ImageGenerationAgent
+    """
+    ai_service = await AISettingsService.get_ai_service_for_user(user_id, db)
+    return ImageGenerationAgent(ai_service)

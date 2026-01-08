@@ -2,7 +2,7 @@
 
 ## Overview
 
-FitCheck AI uses Supabase Auth for user authentication, providing secure JWT tokens for API access. This document details the complete authentication flow, token management, and authorization patterns.
+FitCheck AI uses Supabase Auth for user authentication (JWT access + refresh tokens). This document details the authentication flow, token management, and authorization patterns.
 
 ## Architecture
 
@@ -15,9 +15,11 @@ sequenceDiagram
     participant API as Backend API
 
     U->>FE: Sign up with email/password
-    FE->>SA: POST /auth/signup
+    FE->>API: POST /api/v1/auth/register
+    API->>SA: Create auth user + session
     SA->>DB: Create user record
-    SA-->>FE: JWT tokens (access + refresh)
+    SA-->>API: JWT tokens (access + refresh) OR email confirmation required
+    API-->>FE: JWT tokens (access + refresh) OR `requires_email_confirmation=true`
     FE->>FE: Store tokens securely
     FE->>API: Request with Bearer token
     API->>SA: Verify JWT token
@@ -36,24 +38,16 @@ sequenceDiagram
 
 ```typescript
 const handleSignup = async (email: string, password: string, fullName: string) => {
-  const { data, error } = await supabase.auth.signUp({
+  // Register in FitCheck (backend uses Supabase Auth server-side)
+  const { data } = await apiClient.post('/api/v1/auth/register', {
     email,
     password,
-    options: {
-      data: {
-        full_name: fullName,
-      },
-      emailRedirectTo: `${window.location.origin}/auth/callback`,
-    },
+    full_name: fullName,
   });
 
-  if (error) {
-    // Handle error (email already exists, weak password, etc.)
-    return;
-  }
-
-  // User created successfully
-  // Email verification required (if enabled)
+  // Store tokens
+  localStorage.setItem('access_token', data.data.access_token);
+  localStorage.setItem('refresh_token', data.data.refresh_token);
 };
 ```
 
@@ -64,7 +58,7 @@ from supabase import create_client, Client
 
 supabase: Client = create_client(
     supabase_url=os.getenv("SUPABASE_URL"),
-    supabase_key=os.getenv("SUPABASE_ANON_KEY")
+    supabase_key=os.getenv("SUPABASE_PUBLISHABLE_KEY")
 )
 
 @router.post("/auth/register")
@@ -93,7 +87,8 @@ async def register_user(user: UserCreate):
     return {
         "user": auth_response.user,
         "access_token": auth_response.session.access_token,
-        "refresh_token": auth_response.session.refresh_token
+        "refresh_token": auth_response.session.refresh_token,
+        "requires_email_confirmation": auth_response.session is None
     }
 ```
 
@@ -140,19 +135,11 @@ def is_password_strong(password: str) -> bool:
 
 ```typescript
 const handleLogin = async (email: string, password: string) => {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+  const { data } = await apiClient.post('/api/v1/auth/login', { email, password });
 
-  if (error) {
-    // Handle error (invalid credentials, etc.)
-    return;
-  }
-
-  // Store session in local storage
-  localStorage.setItem('access_token', data.session.access_token);
-  localStorage.setItem('refresh_token', data.session.refresh_token);
+  // Tokens are stored client-side (access + refresh)
+  localStorage.setItem('access_token', data.data.access_token);
+  localStorage.setItem('refresh_token', data.data.refresh_token);
 
   // Redirect to dashboard
   navigate('/dashboard');
@@ -423,18 +410,8 @@ async def admin_dashboard(
 **Frontend:**
 
 ```typescript
-const requestPasswordReset = async (email: string) => {
-  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/auth/reset-password`,
-  });
-
-  if (error) {
-    // Handle error
-    return;
-  }
-
-  // Show success message
-};
+// See: frontend/src/pages/auth/ForgotPasswordPage.tsx
+await apiClient.post('/api/v1/auth/reset-password', { email });
 ```
 
 **Backend:**
@@ -442,7 +419,7 @@ const requestPasswordReset = async (email: string) => {
 ```python
 @router.post("/auth/reset-password")
 async def reset_password_request(request: PasswordResetRequest):
-    # Trigger Supabase to send reset email
+    # Trigger Supabase to send reset email (redirects back to the frontend)
     supabase.auth.reset_password_for_email(
         request.email,
         {"redirectTo": os.getenv("FRONTEND_URL") + "/auth/reset-password"}
@@ -458,19 +435,17 @@ async def reset_password_request(request: PasswordResetRequest):
 **Frontend:**
 
 ```typescript
-const confirmResetPassword = async (token: string, newPassword: string) => {
-  const { data, error } = await supabase.auth.updateUser({
-    password: newPassword,
-  });
-
-  if (error) {
-    // Handle error
-    return;
-  }
-
-  // Password updated, redirect to login
-  navigate('/login');
-};
+// See: frontend/src/pages/auth/ResetPasswordPage.tsx
+// Supabase redirects to /auth/reset-password with:
+//   #access_token=...&refresh_token=...&type=recovery
+//
+// The frontend posts those tokens to the backend to set a temporary session
+// and update the password server-side.
+await apiClient.post('/api/v1/auth/confirm-reset-password', {
+  access_token,
+  refresh_token,
+  new_password,
+});
 ```
 
 **Backend:**
@@ -480,11 +455,8 @@ const confirmResetPassword = async (token: string, newPassword: string) => {
 async def confirm_reset_password(
     request: ConfirmResetPasswordRequest
 ):
-    # Verify token (handled by Supabase)
-    # Update password
-    supabase.auth.update_user({
-        "password": request.new_password
-    })
+    supabase.auth.set_session(request.access_token, request.refresh_token)
+    supabase.auth.update_user({"password": request.new_password})
 
     return {"message": "Password reset successfully"}
 ```

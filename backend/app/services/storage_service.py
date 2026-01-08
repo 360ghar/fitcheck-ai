@@ -7,18 +7,24 @@ import os
 import uuid
 from typing import Optional, List, Tuple
 from datetime import datetime
-import logging
 
 from supabase import Client
 from app.core.config import settings
+from app.core.logging_config import get_context_logger
+from app.core.exceptions import (
+    StorageServiceError,
+    FileTooLargeError,
+    UnsupportedMediaTypeError,
+)
 
-logger = logging.getLogger(__name__)
+logger = get_context_logger(__name__)
 
 
-# Storage bucket names
-BUCKET_ITEMS = "fitcheck-item-images"
-BUCKET_OUTFITS = "fitcheck-outfit-images"
-BUCKET_AVATARS = "fitcheck-avatars"
+# Storage bucket names (fallbacks).
+# If `SUPABASE_STORAGE_BUCKET` is set, it is used for all uploads by default.
+BUCKET_ITEMS = "items"
+BUCKET_OUTFITS = "outfits"
+BUCKET_AVATARS = "avatars"
 
 # Allowed file extensions
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
@@ -53,26 +59,40 @@ class StorageService:
         return f"{user_id}/{timestamp}/{unique_id}{ext}"
 
     @staticmethod
-    def _validate_image(file_data: bytes, filename: str) -> Tuple[bool, Optional[str]]:
+    def _validate_image(file_data: bytes, filename: str) -> None:
         """Validate an image file.
 
         Args:
             file_data: Raw file bytes
             filename: Original filename
 
-        Returns:
-            Tuple of (is_valid, error_message)
+        Raises:
+            FileTooLargeError: If file exceeds size limit
+            UnsupportedMediaTypeError: If file type not allowed
         """
         # Check file size
         if len(file_data) > MAX_FILE_SIZE:
-            return False, f"File size exceeds {MAX_FILE_SIZE // (1024*1024)}MB limit"
+            logger.warning(
+                "File size exceeds limit",
+                filename=filename,
+                file_size=len(file_data),
+                max_size=MAX_FILE_SIZE,
+            )
+            raise FileTooLargeError(max_size_mb=MAX_FILE_SIZE // (1024 * 1024))
 
         # Check file extension
         ext = os.path.splitext(filename)[1].lower()
         if ext not in ALLOWED_IMAGE_EXTENSIONS:
-            return False, f"Invalid file type. Allowed: {', '.join(ALLOWED_IMAGE_EXTENSIONS)}"
-
-        return True, None
+            logger.warning(
+                "Unsupported file type",
+                filename=filename,
+                extension=ext,
+                allowed_extensions=list(ALLOWED_IMAGE_EXTENSIONS),
+            )
+            raise UnsupportedMediaTypeError(
+                allowed_types=list(ALLOWED_IMAGE_EXTENSIONS),
+                message=f"Invalid file type '{ext}'. Allowed: {', '.join(ALLOWED_IMAGE_EXTENSIONS)}"
+            )
 
     @staticmethod
     async def upload_item_image(
@@ -95,12 +115,12 @@ class StorageService:
             Dict with image_url, thumbnail_url, and metadata
 
         Raises:
-            ValueError: If validation fails
+            FileTooLargeError: If file exceeds size limit
+            UnsupportedMediaTypeError: If file type not allowed
+            StorageServiceError: If upload fails
         """
-        # Validate the image
-        is_valid, error_msg = StorageService._validate_image(file_data, filename)
-        if not is_valid:
-            raise ValueError(error_msg)
+        # Validate the image (raises on failure)
+        StorageService._validate_image(file_data, filename)
 
         # Generate unique filename
         storage_path = StorageService._generate_filename(user_id, filename, "item")
@@ -120,6 +140,14 @@ class StorageService:
             # In production, you'd generate actual thumbnails
             thumbnail_url = image_url
 
+            logger.info(
+                "Uploaded item image",
+                user_id=user_id,
+                storage_path=storage_path,
+                file_size=len(file_data),
+                is_primary=is_primary,
+            )
+
             return {
                 "image_url": image_url,
                 "thumbnail_url": thumbnail_url,
@@ -130,8 +158,14 @@ class StorageService:
             }
 
         except Exception as e:
-            logger.error(f"Error uploading item image: {str(e)}")
-            raise ValueError(f"Failed to upload image: {str(e)}")
+            logger.error(
+                "Failed to upload item image",
+                user_id=user_id,
+                filename=filename,
+                file_size=len(file_data),
+                error=str(e),
+            )
+            raise StorageServiceError(f"Failed to upload image: {str(e)}")
 
     @staticmethod
     async def upload_outfit_image(
@@ -152,21 +186,33 @@ class StorageService:
 
         Returns:
             Dict with image_url and metadata
+
+        Raises:
+            FileTooLargeError: If file exceeds size limit
+            UnsupportedMediaTypeError: If file type not allowed
+            StorageServiceError: If upload fails
         """
-        is_valid, error_msg = StorageService._validate_image(file_data, filename)
-        if not is_valid:
-            raise ValueError(error_msg)
+        # Validate the image (raises on failure)
+        StorageService._validate_image(file_data, filename)
 
         storage_path = StorageService._generate_filename(user_id, filename, "outfit")
 
         try:
-            bucket = BUCKET_OUTFITS
+            bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_OUTFITS
             db.storage.from_(bucket).upload(
                 path=storage_path,
                 file=file_data
             )
 
             image_url = db.storage.from_(bucket).get_public_url(storage_path)
+
+            logger.info(
+                "Uploaded outfit image",
+                user_id=user_id,
+                storage_path=storage_path,
+                file_size=len(file_data),
+                generation_type=generation_type,
+            )
 
             return {
                 "image_url": image_url,
@@ -182,8 +228,15 @@ class StorageService:
             }
 
         except Exception as e:
-            logger.error(f"Error uploading outfit image: {str(e)}")
-            raise ValueError(f"Failed to upload outfit image: {str(e)}")
+            logger.error(
+                "Failed to upload outfit image",
+                user_id=user_id,
+                filename=filename,
+                file_size=len(file_data),
+                generation_type=generation_type,
+                error=str(e),
+            )
+            raise StorageServiceError(f"Failed to upload outfit image: {str(e)}")
 
     @staticmethod
     async def upload_avatar(
@@ -202,25 +255,42 @@ class StorageService:
 
         Returns:
             Public URL of the uploaded avatar
+
+        Raises:
+            FileTooLargeError: If file exceeds size limit
+            UnsupportedMediaTypeError: If file type not allowed
+            StorageServiceError: If upload fails
         """
-        is_valid, error_msg = StorageService._validate_image(file_data, filename)
-        if not is_valid:
-            raise ValueError(error_msg)
+        # Validate the image (raises on failure)
+        StorageService._validate_image(file_data, filename)
 
         storage_path = StorageService._generate_filename(user_id, filename, "avatar")
 
         try:
-            bucket = BUCKET_AVATARS
+            bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_AVATARS
             db.storage.from_(bucket).upload(
                 path=storage_path,
                 file=file_data
             )
 
+            logger.info(
+                "Uploaded avatar",
+                user_id=user_id,
+                storage_path=storage_path,
+                file_size=len(file_data),
+            )
+
             return db.storage.from_(bucket).get_public_url(storage_path)
 
         except Exception as e:
-            logger.error(f"Error uploading avatar: {str(e)}")
-            raise ValueError(f"Failed to upload avatar: {str(e)}")
+            logger.error(
+                "Failed to upload avatar",
+                user_id=user_id,
+                filename=filename,
+                file_size=len(file_data),
+                error=str(e),
+            )
+            raise StorageServiceError(f"Failed to upload avatar: {str(e)}")
 
     @staticmethod
     async def delete_image(
@@ -237,26 +307,31 @@ class StorageService:
 
         Returns:
             True if deleted successfully
+
+        Raises:
+            StorageServiceError: If deletion fails
         """
         if bucket is None:
-            # Try to determine bucket from path
-            if "item" in storage_path.lower():
-                bucket = BUCKET_ITEMS
-            elif "outfit" in storage_path.lower():
-                bucket = BUCKET_OUTFITS
-            elif "avatar" in storage_path.lower():
-                bucket = BUCKET_AVATARS
-            else:
-                bucket = settings.SUPABASE_STORAGE_BUCKET
+            # Default to the configured bucket used for uploads.
+            bucket = settings.SUPABASE_STORAGE_BUCKET
 
         try:
             db.storage.from_(bucket).remove([storage_path])
-            logger.info(f"Deleted image: {storage_path}")
+            logger.info(
+                "Deleted image",
+                storage_path=storage_path,
+                bucket=bucket,
+            )
             return True
 
         except Exception as e:
-            logger.error(f"Error deleting image {storage_path}: {str(e)}")
-            return False
+            logger.error(
+                "Failed to delete image",
+                storage_path=storage_path,
+                bucket=bucket,
+                error=str(e),
+            )
+            raise StorageServiceError(f"Failed to delete image: {str(e)}")
 
     @staticmethod
     async def delete_multiple_images(
@@ -273,6 +348,9 @@ class StorageService:
 
         Returns:
             Number of successfully deleted images
+
+        Raises:
+            StorageServiceError: If deletion fails
         """
         if not storage_paths:
             return 0
@@ -282,12 +360,21 @@ class StorageService:
 
         try:
             db.storage.from_(bucket).remove(storage_paths)
-            logger.info(f"Deleted {len(storage_paths)} images")
+            logger.info(
+                "Deleted multiple images",
+                count=len(storage_paths),
+                bucket=bucket,
+            )
             return len(storage_paths)
 
         except Exception as e:
-            logger.error(f"Error deleting multiple images: {str(e)}")
-            return 0
+            logger.error(
+                "Failed to delete multiple images",
+                count=len(storage_paths),
+                bucket=bucket,
+                error=str(e),
+            )
+            raise StorageServiceError(f"Failed to delete images: {str(e)}")
 
     @staticmethod
     def get_public_url(storage_path: str, bucket: Optional[str] = None) -> str:
@@ -324,6 +411,9 @@ class StorageService:
 
         Returns:
             True if moved successfully
+
+        Raises:
+            StorageServiceError: If move fails
         """
         if bucket is None:
             bucket = settings.SUPABASE_STORAGE_BUCKET
@@ -333,11 +423,24 @@ class StorageService:
             file_data = db.storage.from_(bucket).download(old_path)
             db.storage.from_(bucket).upload(path=new_path, file=file_data)
             db.storage.from_(bucket).remove([old_path])
+
+            logger.info(
+                "Moved image",
+                old_path=old_path,
+                new_path=new_path,
+                bucket=bucket,
+            )
             return True
 
         except Exception as e:
-            logger.error(f"Error moving image: {str(e)}")
-            return False
+            logger.error(
+                "Failed to move image",
+                old_path=old_path,
+                new_path=new_path,
+                bucket=bucket,
+                error=str(e),
+            )
+            raise StorageServiceError(f"Failed to move image: {str(e)}")
 
 
 # ============================================================================

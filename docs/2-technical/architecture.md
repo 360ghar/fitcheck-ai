@@ -2,7 +2,10 @@
 
 ## Overview
 
-FitCheck AI uses a modern microservices-inspired architecture with a monolithic backend for simplicity. The system consists of a FastAPI backend, React frontend, Supabase for data storage, Pinecone for vector search, and integration with Google Gemini AI models.
+FitCheck AI uses a modern microservices-inspired architecture with a monolithic backend for simplicity. The system consists of a FastAPI backend, React frontend, Supabase for data storage, Pinecone for vector search, and a server-side AI architecture:
+
+- **Server-side AI:** Backend AI API for item extraction + outfit image generation (multi-provider support)
+- **Server-side Embeddings:** Gemini embeddings for similarity search and recommendations
 
 ## High-Level Architecture
 
@@ -13,15 +16,15 @@ graph TB
     end
 
     subgraph "API Layer"
-        API[FastAPI Backend<br/>Python 3.12<br/>Pydantic v2 + Pydantic AI]
+        API[FastAPI Backend<br/>Python 3.12<br/>Pydantic v2]
         AUTH[Authentication Service<br/>Supabase Auth]
     end
 
     subgraph "AI Layer"
-        GEMINI[Google Gemini 3 Pro<br/>Image Generation]
-        GEMINI_NANO[Gemini Nano Banana Pro<br/>Item Extraction]
+        AI_API[Backend AI API<br/>Multi-Provider Support]
+        GEMINI_FLASH[Gemini 3 Flash<br/>Fast vision/chat]
+        GEMINI_NANO[Gemini Nano Banana Pro<br/>Vision + Image]
         EMBEDDINGS[Gemini Embeddings<br/>Vector Search]
-        PYDANTIC_AI[Pydantic AI Agent<br/>Orchestration]
     end
 
     subgraph "Data Layer"
@@ -39,10 +42,10 @@ graph TB
 
     FE --> API
     API --> AUTH
-    API --> PYDANTIC_AI
-    PYDANTIC_AI --> GEMINI
-    PYDANTIC_AI --> GEMINI_NANO
-    PYDANTIC_AI --> EMBEDDINGS
+    API --> AI_API
+    AI_API --> GEMINI_FLASH
+    AI_API --> GEMINI_NANO
+    API --> EMBEDDINGS
     API --> SUPABASE
     API --> PINECONE
     API --> STORAGE
@@ -66,7 +69,6 @@ graph TB
 - Routing: React Router v6
 - Forms: React Hook Form + Zod validation
 - HTTP Client: Axios
-- Client-Side AI: Putter.js (AI inference & image processing)
 
 **Key Components:**
 - **Authentication:** Login, signup, password reset
@@ -89,7 +91,7 @@ graph TB
 - Framework: FastAPI
 - Language: Python 3.12
 - Schema Validation: Pydantic v2
-- Agentic System: Pydantic AI
+- AI SDK (server-side): google-genai (Gemini embeddings)
 - Database ORM: Supabase Client (async)
 - Vector Store: Pinecone SDK
 - HTTP Client: httpx
@@ -107,9 +109,11 @@ app/
 │   │   ├── items/
 │   │   ├── outfits/
 │   │   ├── recommendations/
-│   │   ├── social/
-│   │   ├── shopping/
-│   │   └── analytics/
+│   │   ├── ai/
+│   │   ├── ai_settings/
+│   │   ├── calendar/
+│   │   ├── weather/
+│   │   └── gamification/
 │   └── dependencies.py
 ├── core/
 │   ├── config.py
@@ -117,18 +121,15 @@ app/
 │   └── logging.py
 ├── services/
 │   ├── ai_service.py
-│   ├── wardrobe_service.py
-│   ├── recommendation_service.py
-│   └── notification_service.py
+│   ├── storage_service.py
+│   ├── vector_service.py
+│   └── weather_service.py
 ├── models/
 │   ├── item.py
 │   ├── outfit.py
 │   ├── user.py
 │   └── recommendation.py
-└── agents/
-    ├── item_extraction_agent.py
-    ├── outfit_generation_agent.py
-    └── recommendation_agent.py
+└── agents/  # (Future) server-side agents
 ```
 
 **API Gateway Pattern:**
@@ -142,99 +143,35 @@ app/
 ### 3. AI Layer
 
 **Technology Stack:**
-- **Pydantic AI:** Agent orchestration and workflow management
-- **Google Gemini 3 Pro:** High-quality image generation
-- **Gemini Nano Banana Pro:** Real-time item extraction
-- **Gemini Embeddings:** Vector embeddings for similarity search
+- **Backend AI API:** Server-side AI processing with OpenAI-compatible format
+- **Gemini Nano Banana Pro (gemini-3-pro-preview):** Vision chat for item extraction
+- **Gemini Nano Banana Pro (gemini-3-pro-image-preview):** Image generation for outfit visualization
+- **Gemini 3 Flash (gemini-3-flash-preview):** Fast multimodal analysis (auxiliary/fallback)
+- **Gemini Embeddings (gemini-embedding-001):** Server-side embeddings for Pinecone similarity search
 
-**Agent Architecture:**
+**Server-Side AI Architecture:**
+- **Backend processes all AI requests** via `backend/app/services/ai_provider_service.py`
+- **Multi-provider support:** Gemini, OpenAI, or custom proxy (configurable per user)
+- **API keys encrypted** and stored in database
+
+**Server-Side Agent Modules:**
+- `backend/app/agents/item_extraction_agent.py`
+- `backend/app/agents/image_generation_agent.py`
 
 ```mermaid
 graph LR
-    A[User Request] --> B[Pydantic AI Agent]
-    B --> C{Task Type?}
-    C -->|Item Extraction| D[Extraction Agent]
-    C -->|Outfit Generation| E[Generation Agent]
-    C -->|Recommendations| F[Recommendation Agent]
-    D --> G[Gemini Nano Banana Pro]
-    E --> H[Gemini 3 Pro]
-    F --> I[Gemini Embeddings]
-    G --> B
-    H --> B
-    I --> B
-    B --> J[Response to User]
+    FE[Frontend] --> API[FastAPI Backend]
+    API --> AI_API[AI Provider Service]
+    AI_API --> NANO[Nano Banana Pro]
+    AI_API --> FLASH[Gemini 3 Flash]
+    API --> EMB[Gemini Embeddings]
+    API --> PINE[Pinecone]
+    API --> STORAGE[Supabase Storage]
 ```
 
-**Agent Implementations:**
-
-**Item Extraction Agent:**
-```python
-from pydantic_ai import Agent
-
-class ItemExtractionAgent(Agent):
-    def __init__(self):
-        super().__init__(
-            name="item_extraction",
-            model="gemini-nano-banana-pro",
-            tools=[supabase_client, pinecone_client]
-        )
-
-    async def extract_items(self, image: UploadFile) -> List[ExtractedItem]:
-        """Extract individual clothing items from photo"""
-        # 1. Send image to Gemini Nano Banana Pro
-        # 2. Parse response with Pydantic models
-        # 3. Return extracted items with confidence scores
-        pass
-```
-
-**Outfit Generation Agent:**
-```python
-class OutfitGenerationAgent(Agent):
-    def __init__(self):
-        super().__init__(
-            name="outfit_generation",
-            model="gemini-3-pro",
-            tools=[supabase_client]
-        )
-
-    async def generate_outfit(
-        self,
-        items: List[Item],
-        body_profile: BodyProfile,
-        pose: str,
-        lighting: str
-    ) -> GeneratedImage:
-        """Generate realistic outfit image"""
-        # 1. Prepare prompt with item images
-        # 2. Include body profile parameters
-        # 3. Generate with Gemini 3 Pro
-        # 4. Store image and return URL
-        pass
-```
-
-**Recommendation Agent:**
-```python
-class RecommendationAgent(Agent):
-    def __init__(self):
-        super().__init__(
-            name="recommendation",
-            model="gemini-embeddings-004",
-            tools=[pinecone_client, supabase_client]
-        )
-
-    async def find_matching_items(
-        self,
-        query_items: List[Item],
-        user_wardrobe: List[Item],
-        user_preferences: UserPreferences
-    ) -> List[MatchedItem]:
-        """Find items that match well with query items"""
-        # 1. Generate embeddings for query items
-        # 2. Query Pinecone for similar items
-        # 3. Filter by user preferences
-        # 4. Rank and return top matches
-        pass
-```
+**Key Flows:**
+- **Item Extraction:** Frontend → `POST /api/v1/ai/extract-items` → Backend AI → Response
+- **Outfit Generation:** `POST /api/v1/ai/generate-outfit` → Backend AI → `POST /api/v1/outfits/{id}/images`
 
 ---
 
@@ -360,23 +297,26 @@ sequenceDiagram
     participant U as User
     participant FE as Frontend
     participant API as API
-    participant AI as AI Service
+    participant AI as Backend AI
     participant DB as Database
     participant Storage as Storage
     participant VecDB as Vector DB
 
     U->>FE: Upload photo
-    FE->>FE: Compress/optimize with Putter.js
+    FE->>API: POST /api/v1/ai/extract-items
+    API->>AI: Extract metadata (Gemini Nano Banana Pro)
+    AI-->>API: Structured JSON (category/colors/etc.)
+    API-->>FE: Extracted items
+    FE->>U: Review/edit extraction
     FE->>API: POST /api/v1/items/upload
-    API->>Storage: Store image
-    Storage-->>API: Image URL
-    API->>AI: Request item extraction
-    AI->>AI: Extract items with Gemini Nano Banana Pro
-    AI-->>API: Extracted items
-    API->>DB: Save items
-    API->>VecDB: Generate embeddings and store
+    API->>Storage: Store image + thumbnail
+    Storage-->>API: Image URLs
+    FE->>API: POST /api/v1/items (metadata + image URLs)
+    API->>DB: Save items + images
+    API->>AI: Generate embeddings (gemini-embedding-001)
+    API->>VecDB: Upsert embeddings
     API-->>FE: Created items
-    FE-->>U: Display extracted items
+    FE-->>U: Items visible in wardrobe
 ```
 
 ### Outfit Generation Flow
@@ -386,20 +326,17 @@ sequenceDiagram
     participant U as User
     participant FE as Frontend
     participant API as API
-    participant AI as AI Service
+    participant AI as Backend AI
     participant DB as Database
     participant Storage as Storage
 
     U->>FE: Select items and generate
-    FE->>API: POST /api/v1/outfits/{id}/generate
-    API->>DB: Fetch item details
-    API->>DB: Fetch user body profile
-    API->>AI: Request outfit generation
-    AI->>AI: Generate with Gemini 3 Pro
-    AI-->>API: Generated image URL
+    FE->>API: POST /api/v1/ai/generate-outfit
+    API->>AI: Generate image (txt2img, Nano Banana Pro)
+    AI-->>API: Image (data URL)
     API->>Storage: Store generated image
-    API->>DB: Save outfit with image
-    API-->>FE: Generation complete
+    API->>DB: Save outfit image + create record
+    API-->>FE: Image URL
     FE-->>U: Display generated outfit
 ```
 
@@ -652,8 +589,9 @@ async def health_check():
 | **FastAPI** | Fast, modern, async support, automatic OpenAPI docs |
 | **Supabase** | PostgreSQL, auth, storage in one service, great DX |
 | **Pinecone** | Managed vector DB, excellent for similarity search |
-| **Pydantic AI** | Python-native agent framework, integrates with Pydantic |
-| **Gemini 3 Pro** | Best-in-class image generation |
+| **Backend AI API** | Server-side AI processing with multi-provider support |
+| **Gemini Nano Banana Pro** | Best-in-class vision + image generation |
+| **Gemini Embeddings** | 768-dim embeddings for similarity search |
 | **React + TypeScript** | Industry standard, great ecosystem |
 | **shadcn/ui** | Beautiful, accessible, customizable |
 | **Vite** | Fast development, optimized production builds |

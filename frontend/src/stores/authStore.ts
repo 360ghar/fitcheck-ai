@@ -5,8 +5,9 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User, AuthTokens } from '../types';
+import type { User, AuthTokens, AuthResponse } from '../types';
 import * as authApi from '../api/auth';
+import { getApiError, resetForcedLogoutFlag } from '../api/client';
 
 // ============================================================================
 // AUTH STATE INTERFACE
@@ -19,14 +20,16 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  hasHydrated: boolean;
 
   // Actions
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName?: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthResponse>;
+  register: (email: string, password: string, fullName?: string) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
   clearError: () => void;
   setUser: (user: User | null) => void;
+  setHasHydrated: (hydrated: boolean) => void;
 }
 
 // ============================================================================
@@ -42,25 +45,33 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      hasHydrated: false,
 
       // Login action
       login: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
         try {
           const response = await authApi.login({ email, password });
+          const hasTokens = Boolean(response.access_token && response.refresh_token);
           set({
             user: response.user,
-            tokens: {
-              access_token: response.access_token,
-              refresh_token: response.refresh_token,
-            },
-            isAuthenticated: true,
+            tokens: hasTokens
+              ? {
+                  access_token: response.access_token,
+                  refresh_token: response.refresh_token,
+                }
+              : null,
+            isAuthenticated: hasTokens,
             isLoading: false,
             error: null,
           });
-          authApi.storeUser(response.user);
+          if (hasTokens) {
+            authApi.storeUser(response.user);
+            resetForcedLogoutFlag();
+          }
+          return response;
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Login failed';
+          const message = getApiError(error).message || 'Login failed';
           set({
             isLoading: false,
             error: message,
@@ -81,19 +92,26 @@ export const useAuthStore = create<AuthState>()(
             password,
             full_name: fullName,
           });
+          const hasTokens = Boolean(response.access_token && response.refresh_token);
           set({
             user: response.user,
-            tokens: {
-              access_token: response.access_token,
-              refresh_token: response.refresh_token,
-            },
-            isAuthenticated: true,
+            tokens: hasTokens
+              ? {
+                  access_token: response.access_token,
+                  refresh_token: response.refresh_token,
+                }
+              : null,
+            isAuthenticated: hasTokens,
             isLoading: false,
             error: null,
           });
-          authApi.storeUser(response.user);
+          if (hasTokens) {
+            authApi.storeUser(response.user);
+            resetForcedLogoutFlag();
+          }
+          return response;
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Registration failed';
+          const message = getApiError(error).message || 'Registration failed';
           set({
             isLoading: false,
             error: message,
@@ -171,6 +189,11 @@ export const useAuthStore = create<AuthState>()(
           authApi.clearUser();
         }
       },
+
+      // Set hydration status (called by persist middleware)
+      setHasHydrated: (hydrated: boolean) => {
+        set({ hasHydrated: hydrated });
+      },
     }),
     {
       name: 'fitcheck-auth-storage',
@@ -178,7 +201,11 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         tokens: state.tokens,
         isAuthenticated: state.isAuthenticated,
+        // Note: hasHydrated is NOT persisted - it's runtime state
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );
@@ -191,6 +218,7 @@ export const selectUser = (state: AuthState) => state.user;
 export const selectIsAuthenticated = (state: AuthState) => state.isAuthenticated;
 export const selectIsLoading = (state: AuthState) => state.isLoading;
 export const selectAuthError = (state: AuthState) => state.error;
+export const selectHasHydrated = (state: AuthState) => state.hasHydrated;
 
 // ============================================================================
 // HOOKS
@@ -208,6 +236,13 @@ export function useCurrentUser(): User | null {
  */
 export function useIsAuthenticated(): boolean {
   return useAuthStore(selectIsAuthenticated);
+}
+
+/**
+ * Hook to check if auth store has hydrated from storage
+ */
+export function useHasHydrated(): boolean {
+  return useAuthStore(selectHasHydrated);
 }
 
 /**
