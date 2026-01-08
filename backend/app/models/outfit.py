@@ -37,11 +37,15 @@ class OutfitImageBase(BaseModel):
     """Base model for outfit images."""
     image_url: str
     thumbnail_url: Optional[str] = None
-    generation_type: str = "ai"  # 'ai' or 'manual'
-    is_primary: bool = True
+    storage_path: Optional[str] = None
+    pose: str = Field(..., min_length=1, max_length=50)
+    lighting: Optional[str] = Field(None, max_length=50)
+    body_profile_id: Optional[UUID] = None
+    generation_type: Optional[str] = Field(default="ai", max_length=20)
+    is_primary: Optional[bool] = True
     width: Optional[int] = None
     height: Optional[int] = None
-    metadata: Optional[Dict[str, Any]] = None  # AI prompt, model version, etc.
+    generation_metadata: Optional[Dict[str, Any]] = None  # prompt/model/version/etc
 
 
 class OutfitImage(OutfitImageBase):
@@ -55,18 +59,6 @@ class OutfitImage(OutfitImageBase):
 
 
 # ============================================================================
-# OUTFIT ITEM MODELS
-# ============================================================================
-
-
-class OutfitItem(BaseModel):
-    """An item within an outfit with optional styling notes."""
-    item_id: UUID
-    position: Optional[str] = None  # 'top', 'bottom', 'shoes', etc.
-    notes: Optional[str] = None
-
-
-# ============================================================================
 # OUTFIT MODELS
 # ============================================================================
 
@@ -75,105 +67,52 @@ class OutfitBase(BaseModel):
     """Base outfit model with common fields."""
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    items: List[OutfitItem] = Field(default_factory=list)
-    style: Optional[str] = None
-    season: Optional[str] = None
-    occasion: Optional[str] = Field(None, max_length=100)
+    item_ids: List[UUID] = Field(default_factory=list)
+    style: Optional[str] = Field(None, max_length=50)
+    season: Optional[str] = Field(None, max_length=20)
+    occasion: Optional[str] = Field(None, max_length=50)
     tags: List[str] = Field(default_factory=list)
     is_favorite: bool = False
-    is_public: bool = False  # For sharing in future
+    is_draft: bool = True
+    is_public: bool = False
 
-    @field_validator('style')
+    @field_validator("item_ids")
     @classmethod
-    def validate_style(cls, v: Optional[str]) -> Optional[str]:
-        """Validate style is one of the allowed values."""
-        if v is not None:
-            v_lower = v.lower()
-            if v_lower not in VALID_STYLES:
-                raise ValueError(
-                    f'Invalid style. Must be one of: {", ".join(VALID_STYLES)}'
-                )
-            return v_lower
-        return v
-
-    @field_validator('season')
-    @classmethod
-    def validate_season(cls, v: Optional[str]) -> Optional[str]:
-        """Validate season is one of the allowed values."""
-        if v is not None:
-            v_lower = v.lower()
-            if v_lower not in VALID_SEASONS:
-                raise ValueError(
-                    f'Invalid season. Must be one of: {", ".join(VALID_SEASONS)}'
-                )
-            return v_lower
-        return v
-
-    @field_validator('items')
-    @classmethod
-    def validate_items(cls, v: List[OutfitItem]) -> List[OutfitItem]:
-        """Ensure outfit has at least one item and no duplicate item_ids."""
-        if len(v) == 0:
-            raise ValueError('Outfit must contain at least one item')
-
-        item_ids = [item.item_id for item in v]
-        if len(item_ids) != len(set(item_ids)):
-            raise ValueError('Outfit cannot contain duplicate items')
-
+    def validate_item_ids(cls, v: List[UUID]) -> List[UUID]:
+        if not v:
+            raise ValueError("Outfit must contain at least one item")
+        if len(v) != len(set(v)):
+            raise ValueError("Outfit cannot contain duplicate items")
         return v
 
 
 class OutfitCreate(OutfitBase):
     """Model for creating a new outfit."""
-    generate_ai_image: bool = False
+    pass
 
 
 class OutfitUpdate(BaseModel):
     """Model for updating an outfit (all fields optional)."""
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
-    items: Optional[List[OutfitItem]] = None
-    style: Optional[str] = None
-    season: Optional[str] = None
-    occasion: Optional[str] = Field(None, max_length=100)
+    item_ids: Optional[List[UUID]] = None
+    style: Optional[str] = Field(None, max_length=50)
+    season: Optional[str] = Field(None, max_length=20)
+    occasion: Optional[str] = Field(None, max_length=50)
     tags: Optional[List[str]] = None
     is_favorite: Optional[bool] = None
+    is_draft: Optional[bool] = None
     is_public: Optional[bool] = None
 
-    @field_validator('style')
+    @field_validator("item_ids")
     @classmethod
-    def validate_style(cls, v: Optional[str]) -> Optional[str]:
-        """Validate style if provided."""
-        if v is not None:
-            v_lower = v.lower()
-            if v_lower not in VALID_STYLES:
-                raise ValueError(
-                    f'Invalid style. Must be one of: {", ".join(VALID_STYLES)}'
-                )
-            return v_lower
-        return v
-
-    @field_validator('season')
-    @classmethod
-    def validate_season(cls, v: Optional[str]) -> Optional[str]:
-        """Validate season if provided."""
-        if v is not None:
-            v_lower = v.lower()
-            if v_lower not in VALID_SEASONS:
-                raise ValueError(
-                    f'Invalid season. Must be one of: {", ".join(VALID_SEASONS)}'
-                )
-            return v_lower
-        return v
-
-    @field_validator('items')
-    @classmethod
-    def validate_items(cls, v: Optional[List[OutfitItem]]) -> Optional[List[OutfitItem]]:
-        """Ensure no duplicate item_ids if items provided."""
-        if v is not None and len(v) > 0:
-            item_ids = [item.item_id for item in v]
-            if len(item_ids) != len(set(item_ids)):
-                raise ValueError('Outfit cannot contain duplicate items')
+    def validate_item_ids(cls, v: Optional[List[UUID]]) -> Optional[List[UUID]]:
+        if v is None:
+            return v
+        if not v:
+            raise ValueError("Outfit must contain at least one item")
+        if len(v) != len(set(v)):
+            raise ValueError("Outfit cannot contain duplicate items")
         return v
 
 
@@ -181,9 +120,8 @@ class OutfitResponse(OutfitBase):
     """Model for outfit response with all fields."""
     id: UUID
     user_id: UUID
-    image_url: Optional[str] = None
-    times_worn: int = 0
-    last_worn: Optional[datetime] = None
+    worn_count: int = 0
+    last_worn_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     images: List[OutfitImage] = Field(default_factory=list)
@@ -214,15 +152,10 @@ class OutfitDetailResponse(OutfitResponse):
 
 class GenerationRequest(BaseModel):
     """Request model for AI outfit image generation."""
-    outfit_id: UUID
-    prompt: Optional[str] = None  # Custom prompt override
-    style: Optional[str] = None
-    background: Optional[str] = None  # 'studio', 'street', 'beach', etc.
-    include_model: bool = True  # Show the outfit on a model
-    model_gender: Optional[str] = None  # 'male', 'female', 'non-binary'
-    model_body_type: Optional[str] = None  # 'slim', 'average', 'athletic'
-    lighting: Optional[str] = 'natural'  # 'natural', 'studio', 'dramatic'
-    view_angle: Optional[str] = 'front'  # 'front', 'side', 'three-quarter'
+    pose: str = Field(default="front", max_length=20)
+    variations: int = Field(default=1, ge=1, le=3)
+    lighting: Optional[str] = Field(default="natural", max_length=50)
+    body_profile_id: Optional[UUID] = None
 
 
 class GenerationResponse(BaseModel):

@@ -27,6 +27,7 @@ class ItemImageBase(BaseModel):
     """Base model for item images."""
     image_url: str
     thumbnail_url: Optional[str] = None
+    storage_path: Optional[str] = None
     is_primary: bool = False
     width: Optional[int] = None
     height: Optional[int] = None
@@ -54,6 +55,12 @@ class ItemBase(BaseModel):
     sub_category: Optional[str] = Field(None, max_length=50)
     brand: Optional[str] = Field(None, max_length=100)
     colors: List[str] = Field(default_factory=list)
+    style: Optional[str] = Field(None, max_length=50)
+    material: Optional[str] = Field(None, max_length=50)
+    materials: List[str] = Field(default_factory=list)
+    pattern: Optional[str] = Field(None, max_length=50)
+    seasonal_tags: List[str] = Field(default_factory=list)
+    occasion_tags: List[str] = Field(default_factory=list)
     size: Optional[str] = Field(None, max_length=50)
     price: Optional[float] = Field(None, ge=0)
     purchase_date: Optional[datetime] = None
@@ -105,6 +112,12 @@ class ItemUpdate(BaseModel):
     sub_category: Optional[str] = Field(None, max_length=50)
     brand: Optional[str] = Field(None, max_length=100)
     colors: Optional[List[str]] = None
+    style: Optional[str] = Field(None, max_length=50)
+    material: Optional[str] = Field(None, max_length=50)
+    materials: Optional[List[str]] = None
+    pattern: Optional[str] = Field(None, max_length=50)
+    seasonal_tags: Optional[List[str]] = None
+    occasion_tags: Optional[List[str]] = None
     size: Optional[str] = Field(None, max_length=50)
     price: Optional[float] = Field(None, ge=0)
     purchase_date: Optional[datetime] = None

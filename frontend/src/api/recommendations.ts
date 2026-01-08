@@ -4,6 +4,7 @@
 
 import { apiClient, getApiError } from './client';
 import type {
+  ApiEnvelope,
   MatchResult,
   CompleteLookSuggestion,
   WeatherRecommendation,
@@ -25,18 +26,23 @@ export async function findMatchingItems(
     limit?: number;
     min_score?: number;
   }
-): Promise<MatchResult[]> {
+): Promise<{ matches: MatchResult[]; complete_looks: CompleteLookSuggestion[] }> {
   try {
     const params = new URLSearchParams();
     if (options?.category) params.append('category', options.category);
     if (options?.limit) params.append('limit', String(options.limit));
     if (options?.min_score) params.append('min_score', String(options.min_score));
 
-    const response = await apiClient.post<MatchResult[]>(
+    const response = await apiClient.post<
+      ApiEnvelope<{
+        matches: MatchResult[];
+        complete_looks: CompleteLookSuggestion[];
+      }>
+    >(
       `/api/v1/recommendations/match?${params.toString()}`,
       { item_id: itemId }
     );
-    return response.data;
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -59,11 +65,15 @@ export async function getCompleteLookSuggestions(
     if (options?.occasion) params.append('occasion', options.occasion);
     if (options?.limit) params.append('limit', String(options.limit));
 
-    const response = await apiClient.post<CompleteLookSuggestion[]>(
+    const response = await apiClient.post<
+      ApiEnvelope<{
+        complete_looks: CompleteLookSuggestion[];
+      }>
+    >(
       `/api/v1/recommendations/complete-look?${params.toString()}`,
       { item_ids: itemIds }
     );
-    return response.data;
+    return response.data.data.complete_looks;
   } catch (error) {
     throw getApiError(error);
   }
@@ -77,10 +87,10 @@ export async function getWeatherRecommendations(
 ): Promise<WeatherRecommendation> {
   try {
     const params = location ? `?location=${encodeURIComponent(location)}` : '';
-    const response = await apiClient.get<WeatherRecommendation>(
+    const response = await apiClient.get<ApiEnvelope<WeatherRecommendation>>(
       `/api/v1/recommendations/weather${params}`
     );
-    return response.data;
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -102,10 +112,10 @@ export async function findSimilarItems(
     if (options?.category) params.append('category', options.category);
     if (options?.limit) params.append('limit', String(options.limit));
 
-    const response = await apiClient.get<SimilarItemResult[]>(
+    const response = await apiClient.get<ApiEnvelope<SimilarItemResult[]>>(
       `/api/v1/recommendations/similar?${params.toString()}`
     );
-    return response.data;
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -128,7 +138,7 @@ export async function getItemStyleAnalysis(itemId: string): Promise<{
   }>;
 }> {
   try {
-    const response = await apiClient.get<{
+    const response = await apiClient.get<ApiEnvelope<{
       style: string;
       confidence: number;
       alternative_styles: Array<{ style: string; confidence: number }>;
@@ -140,8 +150,8 @@ export async function getItemStyleAnalysis(itemId: string): Promise<{
         category: string;
         confidence: number;
       }>;
-    }>(`/api/v1/recommendations/style/${itemId}`);
-    return response.data;
+    }>>(`/api/v1/recommendations/style/${itemId}`);
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -167,7 +177,7 @@ export async function getShoppingRecommendations(options?: {
     if (options?.budget) params.append('budget', String(options.budget));
     if (options?.style) params.append('style', options.style);
 
-    const response = await apiClient.get<
+    const response = await apiClient.get<ApiEnvelope<
       Array<{
         category: string;
         description: string;
@@ -175,8 +185,8 @@ export async function getShoppingRecommendations(options?: {
         suggested_brands?: string[];
         price_range?: { min: number; max: number };
       }>
-    >(`/api/v1/recommendations/shopping?${params.toString()}`);
-    return response.data;
+    >>(`/api/v1/recommendations/shopping?${params.toString()}`);
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -209,7 +219,7 @@ export async function getCapsuleWardrobe(options?: {
     if (options?.style) params.append('style', options.style);
     if (options?.item_count) params.append('item_count', String(options.item_count));
 
-    const response = await apiClient.get<{
+    const response = await apiClient.get<ApiEnvelope<{
       name: string;
       description: string;
       items: SuggestedItem[];
@@ -222,8 +232,8 @@ export async function getCapsuleWardrobe(options?: {
         cost_per_wear_estimate: number;
         versatility_score: number;
       };
-    }>(`/api/v1/recommendations/capsule?${params.toString()}`);
-    return response.data;
+    }>>(`/api/v1/recommendations/capsule?${params.toString()}`);
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -237,11 +247,11 @@ export async function rateRecommendation(
   rating: 'thumbs_up' | 'thumbs_down' | 'neutral'
 ): Promise<{ message: string }> {
   try {
-    const response = await apiClient.post<{ message: string }>(
+    const response = await apiClient.post<ApiEnvelope<{ saved?: boolean; logged?: boolean }>>(
       `/api/v1/recommendations/${recommendationId}/rate`,
       { rating }
     );
-    return response.data;
+    return { message: response.data.message || 'OK' };
   } catch (error) {
     throw getApiError(error);
   }

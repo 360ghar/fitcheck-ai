@@ -6,6 +6,7 @@
 import { create } from 'zustand';
 import type { Item, Category, Condition, ItemFilters as ApiItemFilters } from '../types';
 import * as itemsApi from '../api/items';
+import { getApiError, ApiError } from '../api/client';
 
 // ============================================================================
 // WARDROBE STATE INTERFACE
@@ -35,7 +36,7 @@ interface WardrobeState {
   sortOrder: 'asc' | 'desc';
 
   // Error state
-  error: string | null;
+  error: ApiError | null;
 
   // Pagination
   page: number;
@@ -59,6 +60,7 @@ interface WardrobeState {
   deleteItem: (itemId: string) => Promise<void>;
   deleteSelectedItems: () => Promise<void>;
   setPage: (page: number) => void;
+  clearError: () => void;
 }
 
 // ============================================================================
@@ -215,8 +217,8 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
         ),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch items';
-      set({ error: message, isLoading: false });
+      const apiError = getApiError(error);
+      set({ error: apiError, isLoading: false });
     }
   },
 
@@ -241,8 +243,8 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch item';
-      set({ error: message, isLoading: false });
+      const apiError = getApiError(error);
+      set({ error: apiError, isLoading: false });
     }
   },
 
@@ -317,17 +319,22 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
   // Toggle item favorite
   toggleItemFavorite: async (itemId: string) => {
     try {
-      const updatedItem = await itemsApi.toggleItemFavorite(itemId);
       const state = get();
-      const newItems = state.items.map((i) => (i.id === itemId ? updatedItem : i));
+      const updated = await itemsApi.toggleItemFavorite(itemId);
+      const newItems = state.items.map((item) =>
+        item.id === itemId ? { ...item, is_favorite: updated.is_favorite } : item
+      );
       set({
         items: newItems,
-        selectedItem: state.selectedItem?.id === itemId ? updatedItem : state.selectedItem,
+        selectedItem:
+          state.selectedItem?.id === itemId
+            ? { ...state.selectedItem, is_favorite: updated.is_favorite }
+            : state.selectedItem,
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update favorite';
-      set({ error: message });
+      const apiError = getApiError(error);
+      set({ error: apiError });
     }
   },
 
@@ -347,8 +354,8 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
         selectedItems: newSelected,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete item';
-      set({ error: message });
+      const apiError = getApiError(error);
+      set({ error: apiError });
       throw error;
     }
   },
@@ -368,8 +375,8 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
         selectedItems: new Set(),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete items';
-      set({ error: message });
+      const apiError = getApiError(error);
+      set({ error: apiError });
       throw error;
     }
   },
@@ -378,6 +385,9 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
   setPage: (page: number) => {
     set({ page });
   },
+
+  // Clear error
+  clearError: () => set({ error: null }),
 }));
 
 // ============================================================================

@@ -1,16 +1,14 @@
-# FitCheck AI - Docker Compose Configuration
+# FitCheck AI - Docker Compose Configuration (Development with Hot Reload)
 # Run the entire application with: docker-compose up --build
-
-version: '3.9'
 
 services:
   # ============================================================================
-  # Backend Service - FastAPI
+  # Backend Service - FastAPI with Hot Reload
   # ============================================================================
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: fitcheck-backend
     ports:
       - "8000:8000"
@@ -19,9 +17,18 @@ services:
     environment:
       - PORT=8000
       - FRONTEND_URL=http://localhost:3000
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -30,25 +37,23 @@ services:
       - fitcheck-network
 
   # ============================================================================
-  # Frontend Service - React + Vite + Nginx
+  # Frontend Service - React + Vite Dev Server with Hot Reload
   # ============================================================================
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: fitcheck-frontend
     ports:
-      - "3000:80"
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
     networks:
       - fitcheck-network
 

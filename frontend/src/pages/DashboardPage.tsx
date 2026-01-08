@@ -97,10 +97,10 @@ export default function DashboardPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Welcome header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           Welcome back, {userDisplayName}!
         </h1>
-        <p className="mt-2 text-gray-600">
+        <p className="mt-2 text-gray-600 dark:text-gray-400">
           Here's what's happening with your wardrobe today.
         </p>
       </div>
@@ -111,12 +111,12 @@ export default function DashboardPage() {
           <Link
             key={stat.name}
             to={stat.link}
-            className="relative bg-white pt-5 px-4 pb-4 sm:pt-6 sm:px-6 rounded-lg shadow hover:shadow-md transition-shadow"
+            className="relative bg-white dark:bg-gray-800 pt-5 px-4 pb-4 sm:pt-6 sm:px-6 rounded-lg shadow hover:shadow-md dark:shadow-gray-900/50 transition-shadow"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 truncate">{stat.name}</p>
-                <p className="mt-1 text-3xl font-semibold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 truncate">{stat.name}</p>
+                <p className="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">
                   {isLoadingItems || isLoadingOutfits ? '—' : stat.value}
                 </p>
               </div>
@@ -130,7 +130,7 @@ export default function DashboardPage() {
 
       {/* Quick actions */}
       <div className="mb-8">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
+        <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {quickActions.map((action) => (
             <Link
@@ -154,19 +154,19 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent activity */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
+      <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/50 rounded-lg">
+        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium text-gray-900">Recent Activity</h3>
-            <Calendar className="h-5 w-5 text-gray-400" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Recent Activity</h3>
+            <Calendar className="h-5 w-5 text-gray-400 dark:text-gray-500" />
           </div>
         </div>
         <div className="px-4 py-5 sm:p-6">
           {totalItems === 0 && totalOutfits === 0 ? (
             <div className="text-center py-8">
-              <Shirt className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No items yet</h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <Shirt className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
+              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No items yet</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Get started by adding items to your wardrobe.
               </p>
               <div className="mt-6">
@@ -186,7 +186,7 @@ export default function DashboardPage() {
                 <Link
                   key={item.id}
                   to={`/wardrobe/${item.id}`}
-                  className="flex items-center p-3 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex items-center p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
                   {item.images.length > 0 ? (
                     <img
@@ -195,15 +195,15 @@ export default function DashboardPage() {
                       className="h-12 w-12 rounded-lg object-cover"
                     />
                   ) : (
-                    <div className="h-12 w-12 rounded-lg bg-gray-200 flex items-center justify-center">
-                      <Shirt className="h-6 w-6 text-gray-400" />
+                    <div className="h-12 w-12 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                      <Shirt className="h-6 w-6 text-gray-400 dark:text-gray-500" />
                     </div>
                   )}
                   <div className="ml-4 flex-1">
-                    <p className="text-sm font-medium text-gray-900">{item.name}</p>
-                    <p className="text-sm text-gray-500 capitalize">{item.category}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{item.name}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{item.category}</p>
                   </div>
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-gray-400 dark:text-gray-500">
                     {new Date(item.created_at).toLocaleDateString()}
                   </span>
                 </Link>

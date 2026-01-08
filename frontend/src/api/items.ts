@@ -4,13 +4,13 @@
 
 import { apiClient, getApiError } from './client';
 import type {
+  ApiEnvelope,
   Item,
   ItemCreate,
   ItemFormData,
   ItemFilters,
-  PaginatedResponse,
-  ItemImageBase,
-  ExtractedItem,
+  PaginatedItemsResponse,
+  ItemImage,
 } from '../types';
 
 // ============================================================================
@@ -22,24 +22,46 @@ import type {
  */
 export async function createItem(data: ItemCreate): Promise<Item> {
   try {
-    const response = await apiClient.post<Item>('/api/v1/items/', data);
-    return response.data;
+    const response = await apiClient.post<ApiEnvelope<Item>>('/api/v1/items/', data);
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
 }
 
 /**
- * Upload images and extract items using AI
+ * Upload item images (for client-side AI extraction)
  */
-export async function uploadForExtraction(formData: FormData): Promise<ExtractedItem[]> {
+export async function uploadItemImages(formData: FormData): Promise<{
+  upload_id: string;
+  status: string;
+  uploaded_count: number;
+  images: Array<{
+    image_url?: string;
+    thumbnail_url?: string;
+    storage_path?: string;
+    filename?: string;
+  }>;
+}> {
   try {
-    const response = await apiClient.post<ExtractedItem[]>('/api/v1/items/upload', formData, {
+    const response = await apiClient.post<
+      ApiEnvelope<{
+        upload_id: string;
+        status: string;
+        uploaded_count: number;
+        images: Array<{
+          image_url?: string;
+          thumbnail_url?: string;
+          storage_path?: string;
+          filename?: string;
+        }>;
+      }>
+    >('/api/v1/items/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
-    return response.data;
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -48,20 +70,23 @@ export async function uploadForExtraction(formData: FormData): Promise<Extracted
 /**
  * Get list of items with optional filters
  */
-export async function getItems(filters?: ItemFilters): Promise<PaginatedResponse<Item>> {
+export async function getItems(filters?: ItemFilters): Promise<PaginatedItemsResponse<Item>> {
   try {
     const params = new URLSearchParams();
 
     if (filters?.category) params.append('category', filters.category);
     if (filters?.color) params.append('color', filters.color);
     if (filters?.condition) params.append('condition', filters.condition);
+    if (filters?.brand) params.append('brand', filters.brand);
     if (filters?.search) params.append('search', filters.search);
     if (filters?.is_favorite !== undefined) params.append('is_favorite', String(filters.is_favorite));
     params.append('page', String(filters?.page || 1));
     params.append('page_size', String(filters?.page_size || 24));
 
-    const response = await apiClient.get<PaginatedResponse<Item>>(`/api/v1/items/?${params.toString()}`);
-    return response.data;
+    const response = await apiClient.get<ApiEnvelope<PaginatedItemsResponse<Item>>>(
+      `/api/v1/items/?${params.toString()}`
+    );
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -72,8 +97,8 @@ export async function getItems(filters?: ItemFilters): Promise<PaginatedResponse
  */
 export async function getItem(id: string): Promise<Item> {
   try {
-    const response = await apiClient.get<Item>(`/api/v1/items/${id}`);
-    return response.data;
+    const response = await apiClient.get<ApiEnvelope<Item>>(`/api/v1/items/${id}`);
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -84,8 +109,8 @@ export async function getItem(id: string): Promise<Item> {
  */
 export async function updateItem(id: string, data: Partial<ItemFormData>): Promise<Item> {
   try {
-    const response = await apiClient.put<Item>(`/api/v1/items/${id}`, data);
-    return response.data;
+    const response = await apiClient.put<ApiEnvelope<Item>>(`/api/v1/items/${id}`, data);
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -94,10 +119,9 @@ export async function updateItem(id: string, data: Partial<ItemFormData>): Promi
 /**
  * Delete an item
  */
-export async function deleteItem(id: string): Promise<{ message: string }> {
+export async function deleteItem(id: string): Promise<void> {
   try {
-    const response = await apiClient.delete<{ message: string }>(`/api/v1/items/${id}`);
-    return response.data;
+    await apiClient.delete(`/api/v1/items/${id}`);
   } catch (error) {
     throw getApiError(error);
   }
@@ -106,10 +130,12 @@ export async function deleteItem(id: string): Promise<{ message: string }> {
 /**
  * Toggle favorite status of an item
  */
-export async function toggleItemFavorite(id: string): Promise<Item> {
+export async function toggleItemFavorite(id: string): Promise<{ id: string; is_favorite: boolean }> {
   try {
-    const response = await apiClient.post<Item>(`/api/v1/items/${id}/favorite`);
-    return response.data;
+    const response = await apiClient.post<ApiEnvelope<{ id: string; is_favorite: boolean }>>(
+      `/api/v1/items/${id}/favorite`
+    );
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -122,13 +148,13 @@ export async function uploadItemImage(
   itemId: string,
   file: File,
   isPrimary: boolean = false
-): Promise<{ image_url: string; thumbnail_url: string }> {
+): Promise<ItemImage> {
   try {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('is_primary', String(isPrimary));
 
-    const response = await apiClient.post<{ image_url: string; thumbnail_url: string }>(
+    const response = await apiClient.post<ApiEnvelope<ItemImage>>(
       `/api/v1/items/${itemId}/images`,
       formData,
       {
@@ -137,7 +163,7 @@ export async function uploadItemImage(
         },
       }
     );
-    return response.data;
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -146,12 +172,12 @@ export async function uploadItemImage(
 /**
  * Delete an item image
  */
-export async function deleteItemImage(itemId: string, imageId: string): Promise<{ message: string }> {
+export async function deleteItemImage(itemId: string, imageId: string): Promise<{ deleted: boolean }> {
   try {
-    const response = await apiClient.delete<{ message: string }>(
+    const response = await apiClient.delete<ApiEnvelope<{ deleted: boolean }>>(
       `/api/v1/items/${itemId}/images/${imageId}`
     );
-    return response.data;
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -160,10 +186,12 @@ export async function deleteItemImage(itemId: string, imageId: string): Promise<
 /**
  * Mark item as worn
  */
-export async function markItemAsWorn(id: string): Promise<Item> {
+export async function markItemAsWorn(id: string): Promise<{ id: string; usage_times_worn: number }> {
   try {
-    const response = await apiClient.post<Item>(`/api/v1/items/${id}/wear`);
-    return response.data;
+    const response = await apiClient.post<ApiEnvelope<{ id: string; usage_times_worn: number }>>(
+      `/api/v1/items/${id}/wear`
+    );
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -174,11 +202,11 @@ export async function markItemAsWorn(id: string): Promise<Item> {
  */
 export async function batchDeleteItems(itemIds: string[]): Promise<{ message: string; deleted_count: number }> {
   try {
-    const response = await apiClient.post<{ message: string; deleted_count: number }>(
+    const response = await apiClient.post<ApiEnvelope<{ deleted_count: number }>>(
       '/api/v1/items/batch-delete',
       { item_ids: itemIds }
     );
-    return response.data;
+    return { message: response.data.message || 'OK', deleted_count: response.data.data.deleted_count };
   } catch (error) {
     throw getApiError(error);
   }
@@ -197,8 +225,18 @@ export async function getItemStats(): Promise<{
   least_worn_items: Array<{ id: string; name: string; times_worn: number }>;
 }> {
   try {
-    const response = await apiClient.get('/api/v1/items/stats');
-    return response.data;
+    const response = await apiClient.get<
+      ApiEnvelope<{
+        total_items: number;
+        items_by_category: Record<string, number>;
+        items_by_color: Record<string, number>;
+        items_by_condition: Record<string, number>;
+        total_value: number;
+        most_worn_items: Array<{ id: string; name: string; times_worn: number }>;
+        least_worn_items: Array<{ id: string; name: string; times_worn: number }>;
+      }>
+    >('/api/v1/items/stats');
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -209,8 +247,10 @@ export async function getItemStats(): Promise<{
  */
 export async function getItemsByCategory(category: string): Promise<Item[]> {
   try {
-    const response = await apiClient.get<Item[]>(`/api/v1/items/by-category/${category}`);
-    return response.data;
+    const response = await apiClient.get<ApiEnvelope<{ items: Item[] }>>(
+      `/api/v1/items/by-category/${category}`
+    );
+    return response.data.data.items;
   } catch (error) {
     throw getApiError(error);
   }
@@ -221,8 +261,10 @@ export async function getItemsByCategory(category: string): Promise<Item[]> {
  */
 export async function searchItems(query: string, limit: number = 10): Promise<Item[]> {
   try {
-    const response = await apiClient.get<Item[]>(`/api/v1/items/search?q=${encodeURIComponent(query)}&limit=${limit}`);
-    return response.data;
+    const response = await apiClient.get<ApiEnvelope<{ items: Item[] }>>(
+      `/api/v1/items/search?q=${encodeURIComponent(query)}&limit=${limit}`
+    );
+    return response.data.data.items;
   } catch (error) {
     throw getApiError(error);
   }

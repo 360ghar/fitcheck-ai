@@ -84,11 +84,11 @@ Register a new user.
     "user": {
       "id": "uuid",
       "email": "user@example.com",
-      "full_name": "John Doe",
-      "created_at": "2026-01-06T00:00:00Z"
+      "full_name": "John Doe"
     },
     "access_token": "jwt_token",
-    "refresh_token": "refresh_token"
+    "refresh_token": "refresh_token",
+    "requires_email_confirmation": false
   }
 }
 ```
@@ -96,6 +96,7 @@ Register a new user.
 **Errors:**
 - `400`: Invalid email or password format
 - `409`: Email already registered
+- `503`: Database schema not initialized/complete
 
 ---
 
@@ -128,7 +129,7 @@ Login with email and password.
 
 **Errors:**
 - `401`: Invalid credentials
-- `403`: Account disabled
+- `403`: Email not confirmed
 
 ---
 
@@ -161,7 +162,8 @@ Refresh access token.
 {
   "data": {
     "access_token": "new_jwt_token",
-    "refresh_token": "new_refresh_token"
+    "refresh_token": "new_refresh_token",
+    "user": { "id": "uuid", "email": "user@example.com" }
   }
 }
 ```
@@ -190,12 +192,13 @@ Request password reset.
 
 ### POST /auth/confirm-reset-password
 
-Confirm password reset with token.
+Confirm password reset using a Supabase recovery session.
 
 **Request:**
 ```json
 {
-  "token": "reset_token",
+  "access_token": "access_token_from_recovery_link",
+  "refresh_token": "refresh_token_from_recovery_link",
   "new_password": "NewSecurePass123!"
 }
 ```
@@ -204,6 +207,162 @@ Confirm password reset with token.
 ```json
 {
   "message": "Password reset successfully"
+}
+```
+
+---
+
+## AI Endpoints
+
+These endpoints provide server-side AI processing for item extraction and outfit generation.
+
+### POST /ai/extract-items
+
+Extract clothing items from an uploaded image using AI.
+
+**Request (multipart/form-data):**
+```
+file: <image>
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "items": [
+      {
+        "name": "Blue Oxford Shirt",
+        "category": "tops",
+        "sub_category": "shirt",
+        "colors": ["blue", "white"],
+        "material": "cotton",
+        "pattern": "solid",
+        "brand": null,
+        "confidence": 0.92
+      }
+    ],
+    "processing_time_ms": 1250
+  }
+}
+```
+
+---
+
+### POST /ai/generate-outfit
+
+Generate a realistic outfit visualization image.
+
+**Request:**
+```json
+{
+  "outfit_id": "outfit_uuid",
+  "body_profile_id": "body_profile_uuid",
+  "pose": "front",
+  "lighting": "natural",
+  "variations": 1
+}
+```
+
+**Response (202):**
+```json
+{
+  "data": {
+    "generation_id": "gen_uuid",
+    "status": "processing",
+    "estimated_time": 30
+  }
+}
+```
+
+---
+
+### POST /ai/generate-product-image
+
+Generate a clean product image from a clothing item photo.
+
+**Request (multipart/form-data):**
+```
+file: <image>
+item_id: "item_uuid" (optional)
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "image_url": "https://...",
+    "thumbnail_url": "https://..."
+  }
+}
+```
+
+---
+
+### GET /ai/settings
+
+Get the current user's AI provider settings.
+
+**Response (200):**
+```json
+{
+  "data": {
+    "provider": "gemini",
+    "model": "gemini-3-flash-preview",
+    "has_custom_api_key": false,
+    "available_providers": ["gemini", "openai", "custom"]
+  }
+}
+```
+
+---
+
+### PUT /ai/settings
+
+Update AI provider settings (per-user configuration).
+
+**Request:**
+```json
+{
+  "provider": "openai",
+  "api_key": "sk-...",
+  "model": "gpt-4o"
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "provider": "openai",
+    "model": "gpt-4o",
+    "has_custom_api_key": true
+  },
+  "message": "AI settings updated"
+}
+```
+
+---
+
+### POST /ai/settings/test
+
+Test AI provider configuration.
+
+**Request:**
+```json
+{
+  "provider": "openai",
+  "api_key": "sk-..."
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "success": true,
+    "provider": "openai",
+    "response_time_ms": 450
+  }
 }
 ```
 
@@ -278,7 +437,11 @@ Get user preferences.
     "favorite_colors": ["blue", "black"],
     "preferred_styles": ["casual", "minimalist"],
     "liked_brands": ["Zara", "H&M"],
-    "color_temperature": "cool"
+    "disliked_patterns": ["stripes"],
+    "preferred_occasions": ["work"],
+    "color_temperature": "cool",
+    "style_personality": "minimalist",
+    "data_points_collected": 12
   }
 }
 ```
@@ -300,7 +463,264 @@ Update user preferences.
 **Response (200):**
 ```json
 {
-  "message": "Preferences updated successfully"
+  "data": {
+    "favorite_colors": ["red", "black"],
+    "preferred_styles": ["formal"],
+    "liked_brands": [],
+    "disliked_patterns": [],
+    "preferred_occasions": [],
+    "color_temperature": null,
+    "style_personality": null,
+    "data_points_collected": 12
+  },
+  "message": "Updated"
+}
+```
+
+---
+
+### GET /users/settings
+
+Get user settings.
+
+**Response (200):**
+```json
+{
+  "data": {
+    "default_location": "New York, NY",
+    "timezone": "America/New_York",
+    "language": "en",
+    "measurement_units": "imperial",
+    "notifications_enabled": true,
+    "email_marketing": false,
+    "dark_mode": false
+  }
+}
+```
+
+---
+
+### PUT /users/settings
+
+Update user settings.
+
+**Request:**
+```json
+{
+  "default_location": "New York, NY",
+  "measurement_units": "metric",
+  "dark_mode": true
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "default_location": "New York, NY",
+    "timezone": null,
+    "language": "en",
+    "measurement_units": "metric",
+    "notifications_enabled": true,
+    "email_marketing": false,
+    "dark_mode": true
+  },
+  "message": "Updated"
+}
+```
+
+---
+
+### POST /users/me/avatar
+
+Upload a new avatar image for the current user.
+
+**Request (multipart/form-data):**
+```
+file: <image>
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "avatar_url": "https://..."
+  }
+}
+```
+
+---
+
+### DELETE /users/me
+
+Delete the current user's account (best-effort).
+
+**Response (204):** No Content
+
+---
+
+### GET /users/body-profiles
+
+List body profiles for outfit visualization.
+
+**Response (200):**
+```json
+{
+  "data": {
+    "body_profiles": [
+      {
+        "id": "uuid",
+        "name": "Default",
+        "height_cm": 170,
+        "weight_kg": 65,
+        "body_shape": "athletic",
+        "skin_tone": "medium",
+        "is_default": true
+      }
+    ]
+  }
+}
+```
+
+---
+
+### POST /users/body-profiles
+
+Create a new body profile.
+
+**Request:**
+```json
+{
+  "name": "Work profile",
+  "height_cm": 170,
+  "weight_kg": 65,
+  "body_shape": "athletic",
+  "skin_tone": "medium",
+  "is_default": false
+}
+```
+
+**Response (201):**
+```json
+{
+  "data": {
+    "id": "uuid",
+    "name": "Work profile",
+    "height_cm": 170,
+    "weight_kg": 65,
+    "body_shape": "athletic",
+    "skin_tone": "medium",
+    "is_default": false
+  }
+}
+```
+
+---
+
+### PUT /users/body-profiles/{profile_id}
+
+Update a body profile.
+
+**Request:**
+```json
+{
+  "name": "Updated profile name",
+  "is_default": true
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "id": "uuid",
+    "name": "Updated profile name",
+    "is_default": true
+  },
+  "message": "Updated"
+}
+```
+
+---
+
+### DELETE /users/body-profiles/{profile_id}
+
+Delete a body profile.
+
+**Response (204):** No Content
+
+---
+
+### GET /users/body-profile
+
+Get the current user's most recent/default body profile (used for visualization).
+
+**Response (200):**
+```json
+{
+  "data": {
+    "id": "uuid",
+    "name": "Default",
+    "height_cm": 170,
+    "weight_kg": 65,
+    "body_shape": "athletic",
+    "skin_tone": "medium",
+    "is_default": true
+  },
+  "message": "OK"
+}
+```
+
+---
+
+### PUT /users/body-profile
+
+Create or update the user's body profile (upsert).
+
+**Request:**
+```json
+{
+  "name": "Default",
+  "height_cm": 170,
+  "weight_kg": 65,
+  "body_shape": "athletic",
+  "skin_tone": "medium",
+  "is_default": true
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "id": "uuid",
+    "name": "Default",
+    "height_cm": 170,
+    "weight_kg": 65,
+    "body_shape": "athletic",
+    "skin_tone": "medium",
+    "is_default": true
+  },
+  "message": "Updated"
+}
+```
+
+---
+
+### GET /users/dashboard
+
+Fetch a lightweight dashboard aggregate (user + stats + recent items/outfits).
+
+**Response (200):**
+```json
+{
+  "data": {
+    "user": { "id": "uuid", "email": "user@example.com", "full_name": "John Doe" },
+    "stats": { "total_items": 10, "total_outfits": 3 },
+    "recent_items": [],
+    "recent_outfits": [],
+    "recommendations": []
+  }
 }
 ```
 
@@ -310,16 +730,25 @@ Update user preferences.
 
 ### POST /items
 
-Create new item (manual entry).
+Create new item (manual entry or AI-assisted).
 
-**Request (multipart/form-data):**
-```
-name: "Blue T-Shirt"
-category: "tops"
-brand: "Zara"
-colors: ["blue"]
-price: 29.99
-image: <file>
+**Request (JSON):**
+```json
+{
+  "name": "Blue T-Shirt",
+  "category": "tops",
+  "brand": "Zara",
+  "colors": ["blue"],
+  "price": 29.99,
+  "images": [
+    {
+      "image_url": "https://...",
+      "thumbnail_url": "https://...",
+      "storage_path": "items/user_uuid/item_uuid.jpg",
+      "is_primary": true
+    }
+  ]
+}
 ```
 
 **Response (201):**
@@ -353,12 +782,11 @@ image: <file>
 
 ### POST /items/upload
 
-Upload item images for AI extraction.
+Upload item images to storage (AI extraction can be triggered via POST /ai/extract-items).
 
 **Request (multipart/form-data):**
 ```
 files: [<file1>, <file2>, ...]
-category: "tops"
 ```
 
 **Response (202):**
@@ -366,45 +794,31 @@ category: "tops"
 {
   "data": {
     "upload_id": "upload_uuid",
-    "status": "processing",
-    "uploaded_count": 5
+    "status": "completed",
+    "uploaded_count": 5,
+    "images": [
+      {
+        "image_url": "https://...",
+        "thumbnail_url": "https://...",
+        "storage_path": "items/user_uuid/upload_uuid.jpg",
+        "filename": "photo.jpg"
+      }
+    ]
   }
 }
 ```
 
 ---
 
-### POST /items/extract
+### Item Extraction (Server-Side)
 
-Extract items from uploaded image.
+Item extraction is performed server-side via the Backend AI API:
 
-**Request (multipart/form-data):**
-```
-image: <file>
-```
+- `POST /api/v1/ai/extract-items` with image file
+- Returns structured JSON with category/colors/material/brand/confidence
+- Supports multiple AI providers (Gemini, OpenAI, custom proxy)
 
-**Response (200):**
-```json
-{
-  "data": {
-    "extraction_id": "extraction_uuid",
-    "items": [
-      {
-        "id": "temp_item_id",
-        "image_url": "https://...",
-        "category": "tops",
-        "confidence": 0.92,
-        "bounding_box": {
-          "x": 10,
-          "y": 20,
-          "width": 200,
-          "height": 300
-        }
-      }
-    ]
-  }
-}
-```
+The backend handles both storage (`POST /items/upload`) and AI extraction (`POST /ai/extract-items`).
 
 ---
 
@@ -415,13 +829,13 @@ Browse items with filters.
 **Query Parameters:**
 ```
 category=tops,shoes
-color=blue,black
+color=blue
 brand=Zara
 condition=clean
 page=1
 page_size=20
-sort=created_desc
 search=blue t-shirt
+is_favorite=true
 ```
 
 **Response (200):**
@@ -438,7 +852,14 @@ search=blue t-shirt
         "price": 29.99,
         "usage_times_worn": 5,
         "cost_per_wear": 5.99,
-        "images": ["https://..."],
+        "images": [
+          {
+            "id": "image_uuid",
+            "image_url": "https://...",
+            "thumbnail_url": "https://...",
+            "is_primary": true
+          }
+        ],
         "created_at": "2026-01-06T00:00:00Z"
       }
     ],
@@ -530,6 +951,188 @@ Delete item.
 
 ---
 
+### POST /items/{id}/favorite
+
+Toggle favorite status for an item.
+
+**Response (200):**
+```json
+{
+  "data": { "id": "item_uuid", "is_favorite": true }
+}
+```
+
+---
+
+### POST /items/{id}/wear
+
+Increment wear count for an item.
+
+**Response (200):**
+```json
+{
+  "data": { "id": "item_uuid", "usage_times_worn": 6 }
+}
+```
+
+---
+
+### POST /items/{id}/images
+
+Upload an additional image for an existing item.
+
+**Request (multipart/form-data):**
+```
+file: <image>
+is_primary: false
+```
+
+**Response (201):**
+```json
+{
+  "data": {
+    "id": "image_uuid",
+    "item_id": "item_uuid",
+    "image_url": "https://...",
+    "thumbnail_url": "https://...",
+    "storage_path": "items/item_uuid/image_uuid.png",
+    "is_primary": false
+  }
+}
+```
+
+---
+
+### DELETE /items/{id}/images/{image_id}
+
+Delete an item image.
+
+**Response (200):**
+```json
+{
+  "data": { "deleted": true }
+}
+```
+
+---
+
+### POST /items/batch-delete
+
+Batch delete items.
+
+**Request:**
+```json
+{
+  "item_ids": ["uuid1", "uuid2"]
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": { "deleted_count": 2 }
+}
+```
+
+---
+
+### GET /items/stats
+
+Get item statistics for dashboard/analytics.
+
+**Response (200):**
+```json
+{
+  "data": {
+    "total_items": 50,
+    "items_by_category": { "tops": 20, "bottoms": 10 },
+    "items_by_color": { "black": 12, "blue": 8 },
+    "items_by_condition": { "clean": 40, "laundry": 10 },
+    "total_value": 1234.56
+  }
+}
+```
+
+---
+
+### GET /items/search
+
+Search items by name/brand/notes.
+
+**Query Parameters:**
+```
+q=jeans
+limit=10
+```
+
+**Response (200):**
+```json
+{
+  "data": { "items": [ { "id": "item_uuid", "name": "Black Jeans", "images": [] } ] }
+}
+```
+
+---
+
+### GET /items/by-category/{category}
+
+Get all items in a category.
+
+**Response (200):**
+```json
+{
+  "data": { "items": [ { "id": "item_uuid", "category": "tops", "images": [] } ] }
+}
+```
+
+---
+
+### POST /items/{id}/categorize
+
+Compute derived metadata (best-effort) to power recommendations.
+
+**Response (200):**
+```json
+{
+  "data": {
+    "category": "tops",
+    "colors": ["blue"],
+    "style": "casual",
+    "materials": ["cotton"],
+    "seasonal_tags": ["all-season"],
+    "confidence": 0.7
+  }
+}
+```
+
+---
+
+### PUT /items/{id}/categories
+
+Update category-related fields (user override).
+
+**Request:**
+```json
+{
+  "category": "tops",
+  "sub_category": "t-shirt",
+  "colors": ["blue"],
+  "style": "casual",
+  "materials": ["cotton"],
+  "seasonal_tags": ["all-season"]
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": { "id": "item_uuid", "category": "tops", "images": [] },
+  "message": "Updated"
+}
+```
+
+---
+
 ## Outfit Endpoints
 
 ### POST /outfits/create
@@ -552,13 +1155,9 @@ Create new outfit from selected items.
     "id": "outfit_uuid",
     "name": "Casual Friday Outfit",
     "item_ids": ["item1_uuid", "item2_uuid", "item3_uuid"],
-    "items": [
-      {"id": "item1_uuid", "name": "Blue T-Shirt", ...},
-      {"id": "item2_uuid", "name": "Black Jeans", ...},
-      {"id": "item3_uuid", "name": "White Sneakers", ...}
-    ],
     "tags": ["work", "casual"],
     "is_draft": true,
+    "images": [],
     "created_at": "2026-01-06T00:00:00Z"
   }
 }
@@ -566,9 +1165,104 @@ Create new outfit from selected items.
 
 ---
 
+### GET /outfits/available-items
+
+Get a simplified list of wardrobe items suitable for outfit builders.
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": "item_uuid",
+      "name": "Blue T-Shirt",
+      "category": "tops",
+      "colors": ["blue"],
+      "image_url": "https://..."
+    }
+  ]
+}
+```
+
+---
+
+### POST /outfits/{id}/favorite
+
+Toggle favorite status for an outfit.
+
+**Response (200):**
+```json
+{
+  "data": { "id": "outfit_uuid", "is_favorite": true }
+}
+```
+
+---
+
+### POST /outfits/{id}/wear
+
+Increment wear count for an outfit.
+
+**Response (200):**
+```json
+{
+  "data": { "id": "outfit_uuid", "worn_count": 4, "last_worn_at": "2026-01-06T00:00:00Z" }
+}
+```
+
+---
+
+### POST /outfits/{id}/duplicate
+
+Duplicate an outfit.
+
+**Response (201):**
+```json
+{
+  "data": { "id": "new_outfit_uuid", "name": "Copy of Casual Friday Outfit", "images": [] }
+}
+```
+
+---
+
+### POST /outfits/{id}/items
+
+Add an item to an outfit.
+
+**Request:**
+```json
+{
+  "item_id": "item_uuid"
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": { "id": "outfit_uuid", "item_ids": ["item1_uuid", "item_uuid"], "images": [] },
+  "message": "Updated"
+}
+```
+
+---
+
+### DELETE /outfits/{id}/items/{item_id}
+
+Remove an item from an outfit.
+
+**Response (200):**
+```json
+{
+  "data": { "id": "outfit_uuid", "item_ids": ["item1_uuid"], "images": [] },
+  "message": "Updated"
+}
+```
+
+---
+
 ### POST /outfits/{id}/generate
 
-Generate AI outfit image.
+Create an AI generation record (image generation runs server-side via Backend AI API).
 
 **Request:**
 ```json
@@ -588,6 +1282,49 @@ Generate AI outfit image.
     "status": "processing",
     "estimated_time": 30
   }
+}
+```
+
+---
+
+### POST /outfits/{id}/images
+
+Upload an outfit image (manual or AI) and optionally complete a generation.
+
+**Request (multipart/form-data):**
+```
+file: <file>
+pose: "front" (optional)
+lighting: "natural" (optional)
+body_profile_id: "uuid" (optional)
+generation_id: "gen_uuid" (optional)
+is_primary: false
+```
+
+**Response (201):**
+```json
+{
+  "data": {
+    "id": "outfit_img_uuid",
+    "image_url": "https://...",
+    "thumbnail_url": "https://...",
+    "generation_type": "ai",
+    "pose": "front",
+    "lighting": "natural"
+  }
+}
+```
+
+---
+
+### DELETE /outfits/{id}/images/{image_id}
+
+Delete an outfit image.
+
+**Response (200):**
+```json
+{
+  "data": { "deleted": true }
 }
 ```
 
@@ -705,6 +1442,271 @@ Delete outfit.
 
 ---
 
+### POST /outfits/{id}/share
+
+Enable public sharing for an outfit and return a share URL.
+
+**Request:**
+```json
+{
+  "visibility": "public",
+  "expires_at": null,
+  "allow_feedback": true,
+  "custom_caption": "Optional caption"
+}
+```
+
+**Response (201):**
+```json
+{
+  "data": {
+    "share_link": {
+      "url": "https://fitcheck.ai/shared/outfits/outfit_uuid",
+      "qr_code_url": null,
+      "expires_at": null,
+      "views": 0
+    }
+  }
+}
+```
+
+---
+
+### GET /outfits/public/{id}
+
+Public (no-auth) shared outfit view. Returns `404` if the outfit is not public.
+
+**Response (200):**
+```json
+{
+  "data": {
+    "id": "outfit_uuid",
+    "name": "Casual Friday Outfit",
+    "description": "Optional",
+    "style": "casual",
+    "season": "all-season",
+    "tags": ["work", "casual"],
+    "images": [{ "image_url": "https://..." }],
+    "items": [{ "id": "item_uuid", "name": "Blue T-Shirt", "category": "tops" }]
+  }
+}
+```
+
+---
+
+### POST /shared-outfits/{share_id}/feedback
+
+Leave feedback on a shared outfit (auth optional).
+
+**Request:**
+```json
+{
+  "rating": 5,
+  "comment": "Loved this combo!"
+}
+```
+
+**Response (201):**
+```json
+{
+  "data": {
+    "id": "feedback_uuid",
+    "shared_outfit_id": "share_uuid",
+    "user_id": "user_uuid_or_null",
+    "rating": 5,
+    "comment": "Loved this combo!"
+  },
+  "message": "Created"
+}
+```
+
+---
+
+### POST /outfits/collections
+
+Create a collection to group outfits.
+
+**Request:**
+```json
+{
+  "name": "Workweek Fits",
+  "description": "Outfits for Mon–Fri",
+  "is_favorite": false,
+  "outfit_ids": ["outfit_uuid"]
+}
+```
+
+**Response (201):**
+```json
+{
+  "data": {
+    "id": "collection_uuid",
+    "name": "Workweek Fits",
+    "outfit_count": 1
+  }
+}
+```
+
+---
+
+### GET /outfits/collections
+
+List outfit collections.
+
+**Response (200):**
+```json
+{
+  "data": {
+    "collections": [
+      { "id": "collection_uuid", "name": "Workweek Fits", "outfit_count": 1 }
+    ]
+  }
+}
+```
+
+---
+
+### PUT /outfits/collections/{collection_id}
+
+Update collection metadata and optionally replace outfits.
+
+**Request:**
+```json
+{
+  "name": "Updated Name",
+  "outfit_ids": ["outfit_uuid"]
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": { "id": "collection_uuid", "name": "Updated Name", "outfit_count": 1 }
+}
+```
+
+---
+
+### PUT /outfits/collections/{collection_id}/outfits
+
+Replace collection outfits.
+
+**Request:**
+```json
+{
+  "outfit_ids": ["outfit_uuid"]
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": { "id": "collection_uuid", "outfit_count": 1 }
+}
+```
+
+---
+
+### DELETE /outfits/collections/{collection_id}
+
+Delete a collection.
+
+**Response (204):** No Content
+
+---
+
+### GET /outfits/stats
+
+Get outfit statistics for dashboard/analytics.
+
+**Response (200):**
+```json
+{
+  "data": {
+    "total_outfits": 25,
+    "outfits_by_style": { "casual": 10, "formal": 2 },
+    "outfits_by_season": { "all-season": 12, "summer": 5 }
+  }
+}
+```
+
+---
+
+### GET /outfits/recently-worn
+
+Get recently worn outfits.
+
+**Query Parameters:**
+```
+limit=5
+```
+
+**Response (200):**
+```json
+{
+  "data": { "outfits": [ { "id": "outfit_uuid", "images": [] } ] }
+}
+```
+
+---
+
+### GET /outfits/favorites
+
+Get favorite outfits.
+
+**Response (200):**
+```json
+{
+  "data": { "outfits": [ { "id": "outfit_uuid", "is_favorite": true, "images": [] } ] }
+}
+```
+
+---
+
+### GET /outfits/suggestions/weather
+
+Get simple outfit suggestions based on temperature and weather.
+
+**Query Parameters:**
+```
+temperature=18.5
+weather_condition=rainy
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "suggestions": {
+      "outfits": [ { "id": "outfit_uuid", "images": [] } ],
+      "reasoning": "Suggested based on 18.5°C and season 'all-season'."
+    }
+  }
+}
+```
+
+---
+
+### POST /outfits/batch-delete
+
+Batch delete outfits.
+
+**Request:**
+```json
+{
+  "outfit_ids": ["uuid1", "uuid2"]
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": { "deleted_count": 2 }
+}
+```
+
+---
+
 ## Recommendation Endpoints
 
 ### POST /recommendations/match
@@ -800,6 +1802,228 @@ limit=10
 
 ---
 
+### GET /recommendations/weather
+
+Get weather-driven recommendation parameters.
+
+**Query Parameters:**
+```
+location=New%20York
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "temperature": 18.5,
+    "temp_category": "mild",
+    "weather_state": "cloudy",
+    "preferred_categories": ["tops", "bottoms", "shoes"],
+    "avoid_categories": ["swimwear"],
+    "preferred_materials": ["cotton"],
+    "suggested_layers": 2,
+    "additional_items": ["light jacket"],
+    "notes": []
+  }
+}
+```
+
+---
+
+### GET /recommendations/similar
+
+Find items similar to an existing wardrobe item (vector search when available).
+
+**Query Parameters:**
+```
+item_id=item_uuid
+category=tops
+limit=10
+```
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "item_id": "uuid",
+      "item_name": "Blue Oxford Shirt",
+      "image_url": "https://...",
+      "category": "tops",
+      "similarity": 87.2,
+      "reasons": ["Similar style and attributes"]
+    }
+  ]
+}
+```
+
+---
+
+### GET /recommendations/style/{item_id}
+
+Get a simple style analysis for an item.
+
+**Response (200):**
+```json
+{
+  "data": {
+    "style": "casual",
+    "confidence": 0.7,
+    "alternative_styles": [{ "style": "business", "confidence": 0.5 }],
+    "color_palette": ["navy", "white"],
+    "suggested_occasions": ["casual"],
+    "suggested_companions": []
+  }
+}
+```
+
+---
+
+### GET /recommendations/wardrobe-gaps
+
+Analyze wardrobe balance and identify missing essentials.
+
+**Response (200):**
+```json
+{
+  "data": {
+    "analysis": {
+      "category_breakdown": [
+        { "category": "tops", "count": 4, "ideal_min": 8, "ideal_max": 20, "is_underrepresented": true }
+      ],
+      "missing_essentials": [
+        { "category": "tops", "description": "Add more versatile tops to increase outfit options.", "priority": "high" }
+      ],
+      "wardrobe_completeness_score": 64
+    }
+  }
+}
+```
+
+---
+
+### GET /recommendations/shopping
+
+Get shopping recommendations based on wardrobe gaps.
+
+**Query Parameters:**
+```
+category=tops
+budget=200
+style=minimalist
+```
+
+**Response (200):**
+```json
+{
+  "data": [
+    { "category": "tops", "description": "Add more versatile tops to increase outfit options.", "priority": "high" }
+  ]
+}
+```
+
+---
+
+### GET /recommendations/capsule
+
+Generate a simple capsule wardrobe suggestion from existing favorites.
+
+**Query Parameters:**
+```
+season=all-season
+style=casual
+item_count=20
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "name": "All-season capsule",
+    "description": "A minimal set of versatile items from your wardrobe.",
+    "items": [],
+    "outfits": [],
+    "statistics": { "total_outfits_possible": 30, "cost_per_wear_estimate": 5, "versatility_score": 75 }
+  }
+}
+```
+
+---
+
+### POST /recommendations/{recommendation_id}/rate
+
+Record feedback on a recommendation.
+
+**Request:**
+```json
+{ "rating": "thumbs_up" }
+```
+
+**Response (200):**
+```json
+{ "data": { "saved": true } }
+```
+
+---
+
+## Gamification Endpoints
+
+### GET /gamification/streak
+
+Get current streak information.
+
+**Response (200):**
+```json
+{
+  "data": {
+    "current_streak": 7,
+    "longest_streak": 30,
+    "last_planned": "2026-01-06",
+    "streak_freezes_remaining": 3,
+    "streak_skips_remaining": 1,
+    "next_milestone": { "days": 30, "name": "Monthly Master", "badge": "month" }
+  }
+}
+```
+
+---
+
+### GET /gamification/achievements
+
+Get earned achievements and available definitions.
+
+**Response (200):**
+```json
+{
+  "data": {
+    "earned": [],
+    "available": [
+      { "id": "first_upload", "name": "First Upload", "description": "Add your first wardrobe item", "xp_reward": 50 }
+    ]
+  }
+}
+```
+
+---
+
+### GET /gamification/leaderboard
+
+Get a lightweight leaderboard (MVP: derived from streaks).
+
+**Response (200):**
+```json
+{
+  "data": {
+    "entries": [
+      { "rank": 1, "user_id": "uuid", "username": "John Doe", "level": 2, "total_points": 140 }
+    ],
+    "user_rank": { "rank": 3, "total_points": 90, "level": 1, "total_users": 25, "top_percentile": 12 }
+  }
+}
+```
+
+---
+
 ## Calendar Endpoints
 
 ### POST /calendar/connect
@@ -823,6 +2047,41 @@ Connect calendar provider.
     "email": "user@gmail.com",
     "connected_at": "2026-01-06T00:00:00Z"
   }
+}
+```
+
+---
+
+### GET /calendar/connections
+
+List calendar connections for the current user.
+
+**Response (200):**
+```json
+{
+  "data": {
+    "connections": [
+      {
+        "id": "calendar_connection_uuid",
+        "provider": "google",
+        "email": "user@gmail.com",
+        "connected_at": "2026-01-06T00:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### DELETE /calendar/connections/{id}
+
+Disconnect a calendar provider.
+
+**Response (200):**
+```json
+{
+  "data": { "id": "calendar_connection_uuid", "is_active": false }
 }
 ```
 
@@ -860,6 +2119,35 @@ end_date=2026-01-31
 
 ---
 
+### POST /calendar/events
+
+Create an in-app calendar event (local planning).
+
+**Request:**
+```json
+{
+  "title": "Dinner",
+  "description": "Reservation at 7pm",
+  "start_time": "2026-01-06T19:00:00Z",
+  "end_time": "2026-01-06T21:00:00Z",
+  "location": "Downtown"
+}
+```
+
+**Response (201):**
+```json
+{
+  "data": {
+    "id": "event_uuid",
+    "title": "Dinner",
+    "start_time": "2026-01-06T19:00:00Z",
+    "end_time": "2026-01-06T21:00:00Z"
+  }
+}
+```
+
+---
+
 ### POST /calendar/events/{id}/outfit
 
 Assign outfit to event.
@@ -879,6 +2167,19 @@ Assign outfit to event.
     "outfit_id": "outfit_uuid",
     "updated_at": "2026-01-06T00:00:00Z"
   }
+}
+```
+
+---
+
+### DELETE /calendar/events/{id}/outfit
+
+Remove outfit assignment from an event.
+
+**Response (200):**
+```json
+{
+  "data": { "id": "event_uuid", "outfit_id": null }
 }
 ```
 

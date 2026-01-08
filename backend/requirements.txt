@@ -7,8 +7,8 @@ python-jose[cryptography]
 passlib[bcrypt]
 httpx
 supabase
-pinecone-client
-google-generativeai
+pinecone
+google-genai
 pydantic-ai
 python-dotenv
 pytest

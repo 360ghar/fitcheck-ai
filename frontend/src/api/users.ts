@@ -4,6 +4,7 @@
 
 import { apiClient, getApiError } from './client';
 import type {
+  ApiEnvelope,
   User,
   UserPreferences,
   UserSettings,
@@ -19,8 +20,8 @@ import type {
  */
 export async function getCurrentUser(): Promise<User> {
   try {
-    const response = await apiClient.get<User>('/api/v1/users/me');
-    return response.data;
+    const response = await apiClient.get<ApiEnvelope<User>>('/api/v1/users/me');
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -32,10 +33,11 @@ export async function getCurrentUser(): Promise<User> {
 export async function updateCurrentUser(data: {
   full_name?: string;
   avatar_url?: string;
+  gender?: string | null;
 }): Promise<User> {
   try {
-    const response = await apiClient.put<User>('/api/v1/users/me', data);
-    return response.data;
+    const response = await apiClient.put<ApiEnvelope<User>>('/api/v1/users/me', data);
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -44,10 +46,9 @@ export async function updateCurrentUser(data: {
 /**
  * Delete current user account
  */
-export async function deleteAccount(): Promise<{ message: string }> {
+export async function deleteAccount(): Promise<void> {
   try {
-    const response = await apiClient.delete<{ message: string }>('/api/v1/users/me');
-    return response.data;
+    await apiClient.delete('/api/v1/users/me');
   } catch (error) {
     throw getApiError(error);
   }
@@ -58,8 +59,8 @@ export async function deleteAccount(): Promise<{ message: string }> {
  */
 export async function getUserPreferences(): Promise<UserPreferences> {
   try {
-    const response = await apiClient.get<UserPreferences>('/api/v1/users/preferences');
-    return response.data;
+    const response = await apiClient.get<ApiEnvelope<UserPreferences>>('/api/v1/users/preferences');
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -73,11 +74,14 @@ export async function updateUserPreferences(data: {
   preferred_styles?: string[];
   liked_brands?: string[];
   disliked_patterns?: string[];
-  style_notes?: string;
+  preferred_occasions?: string[];
+  color_temperature?: string;
+  style_personality?: string;
+  data_points_collected?: number;
 }): Promise<UserPreferences> {
   try {
-    const response = await apiClient.put<UserPreferences>('/api/v1/users/preferences', data);
-    return response.data;
+    const response = await apiClient.put<ApiEnvelope<UserPreferences>>('/api/v1/users/preferences', data);
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -88,8 +92,8 @@ export async function updateUserPreferences(data: {
  */
 export async function getUserSettings(): Promise<UserSettings> {
   try {
-    const response = await apiClient.get<UserSettings>('/api/v1/users/settings');
-    return response.data;
+    const response = await apiClient.get<ApiEnvelope<UserSettings>>('/api/v1/users/settings');
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -99,6 +103,8 @@ export async function getUserSettings(): Promise<UserSettings> {
  * Update user settings
  */
 export async function updateUserSettings(data: {
+  default_location?: string;
+  timezone?: string;
   language?: string;
   measurement_units?: 'imperial' | 'metric';
   notifications_enabled?: boolean;
@@ -106,8 +112,8 @@ export async function updateUserSettings(data: {
   dark_mode?: boolean;
 }): Promise<UserSettings> {
   try {
-    const response = await apiClient.put<UserSettings>('/api/v1/users/settings', data);
-    return response.data;
+    const response = await apiClient.put<ApiEnvelope<UserSettings>>('/api/v1/users/settings', data);
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -118,8 +124,8 @@ export async function updateUserSettings(data: {
  */
 export async function getBodyProfile(): Promise<BodyProfile> {
   try {
-    const response = await apiClient.get<BodyProfile>('/api/v1/users/body-profile');
-    return response.data;
+    const response = await apiClient.get<ApiEnvelope<BodyProfile>>('/api/v1/users/body-profile');
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -129,17 +135,16 @@ export async function getBodyProfile(): Promise<BodyProfile> {
  * Create or update body profile
  */
 export async function updateBodyProfile(data: {
-  height?: number;
-  weight?: number;
-  body_type?: string;
-  skin_tone?: string;
-  hair_color?: string;
-  eye_color?: string;
-  notes?: string;
+  name: string;
+  height_cm: number;
+  weight_kg: number;
+  body_shape: string;
+  skin_tone: string;
+  is_default?: boolean;
 }): Promise<BodyProfile> {
   try {
-    const response = await apiClient.put<BodyProfile>('/api/v1/users/body-profile', data);
-    return response.data;
+    const response = await apiClient.put<ApiEnvelope<BodyProfile>>('/api/v1/users/body-profile', data);
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -153,7 +158,7 @@ export async function uploadAvatar(file: File): Promise<{ avatar_url: string }> 
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await apiClient.post<{ avatar_url: string }>(
+    const response = await apiClient.post<ApiEnvelope<{ avatar_url: string }>>(
       '/api/v1/users/me/avatar',
       formData,
       {
@@ -162,7 +167,7 @@ export async function uploadAvatar(file: File): Promise<{ avatar_url: string }> 
         },
       }
     );
-    return response.data;
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
@@ -200,8 +205,37 @@ export async function getDashboardData(): Promise<{
   };
 }> {
   try {
-    const response = await apiClient.get('/api/v1/users/dashboard');
-    return response.data;
+    const response = await apiClient.get<
+      ApiEnvelope<{
+        user: User;
+        statistics: {
+          total_items: number;
+          total_outfits: number;
+          items_added_this_month: number;
+          outfits_created_this_month: number;
+          most_worn_item: { name: string; times_worn: number } | null;
+          favorite_items_count: number;
+          favorite_outfits_count: number;
+        };
+        recent_activity: Array<{
+          type: 'item_created' | 'outfit_created' | 'item_worn' | 'outfit_worn';
+          description: string;
+          timestamp: string;
+        }>;
+        suggestions: {
+          weather_based: {
+            temperature: number;
+            recommendation: string;
+          } | null;
+          outfit_of_the_day: {
+            id: string;
+            name: string;
+            image_url?: string;
+          } | null;
+        };
+      }>
+    >('/api/v1/users/dashboard');
+    return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }

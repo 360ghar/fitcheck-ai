@@ -45,14 +45,24 @@ Wardrobe Management is the foundational feature of FitCheck AI, allowing users t
 **API Endpoints:**
 ```
 POST /api/v1/items/upload
-- Upload single or multiple images
+- Upload one or more images to storage (no item record created yet)
 - Request: multipart/form-data
   - files: List of image files
-  - category: string (optional)
-  - tags: List<string> (optional)
-- Response: 201 Created
-  - items: List<created_item_objects>
+- Response: 202 Accepted
   - upload_id: string
+  - status: "completed"
+  - uploaded_count: number
+  - images: List<uploaded_image>
+    - image_url: string
+    - thumbnail_url: string
+    - storage_path: string
+
+Then create items with extracted metadata:
+
+POST /api/v1/items
+- Request: JSON
+  - name, category, colors, ... (from AI extraction + user edits)
+  - images: List<{image_url, thumbnail_url, storage_path, is_primary}>
 ```
 
 **Acceptance Criteria:**
@@ -81,9 +91,10 @@ POST /api/v1/items/upload
 **Requirements:**
 
 **AI Processing:**
-- Use Gemini 3 Pro for item detection
+- Use Backend AI API (`POST /api/v1/ai/extract-items`) for structured extraction
+- Supports multiple AI providers: Gemini, OpenAI, or custom proxy (configurable per user)
 - Identify clothing categories: tops, bottoms, shoes, accessories, outerwear
-- Extract each item as separate image with transparent background
+- (MVP) Extract item metadata; background removal can be added later
 - Detection accuracy target: >85% on clear, well-lit photos
 - Processing time: <10 seconds per image
 
@@ -106,31 +117,16 @@ POST /api/v1/items/upload
 
 **API Endpoints:**
 ```
-POST /api/v1/items/extract
-- Extract items from uploaded image
-- Request: multipart/form-data
-  - image: image file
-- Response: 200 OK
-  - items: List<extracted_item>
-    - id: string
-    - image_url: string
-    - category: string
-    - confidence: number (0-1)
-    - bounding_box: {x, y, width, height}
+POST /api/v1/ai/extract-items
+- Upload image and extract clothing items using server-side AI
+- Request: multipart/form-data with image file
+- Response: Structured JSON with category/colors/material/brand/confidence for each detected item
 ```
 
 ```
-POST /api/v1/items/extract/confirm
-- Confirm extracted items
-- Request: JSON
-  - extraction_id: string
-  - items: List<item_confirmation>
-    - item_id: string
-    - approved: boolean
-    - category?: string (if user wants to change)
-    - tags?: List<string>
-- Response: 200 OK
-  - created_items: List<item_objects>
+Server-side:
+- `POST /api/v1/items/upload` to store images
+- `POST /api/v1/items` to create item records with the extracted metadata + stored image URLs
 ```
 
 **Acceptance Criteria:**
@@ -146,6 +142,75 @@ POST /api/v1/items/extract/confirm
 - `400 Invalid Image`: Image cannot be processed
 - `422 Unprocessable Entity`: No items detected in image
 - `503 AI Service Unavailable`: AI processing temporarily down
+
+---
+
+### 2.1 Multi-Item Extraction with Product Image Generation
+
+**Priority:** P0 (MVP Enhancement)
+
+**Description:** Advanced extraction flow that detects ALL clothing items in a single photo and generates clean, e-commerce style product images for each item.
+
+**Two-Step AI Pipeline:**
+
+**Step 1: Multi-Item Detection (Backend AI API)**
+- Analyzes uploaded image via `POST /api/v1/ai/extract-items` to identify ALL visible clothing items
+- For each item, extracts:
+  - Category and sub-category
+  - Colors, material, pattern
+  - Brand (if visible)
+  - Bounding box coordinates (approximate location in image)
+  - Detailed description suitable for image generation
+  - Confidence score (0-1)
+
+**Step 2: Product Image Generation (Backend AI API)**
+- For each detected item, generates a clean product photo via `POST /api/v1/ai/generate-product-image`:
+  - Uses the detailed description from Step 1 as the prompt
+  - Creates isolated e-commerce style image
+  - White studio background
+  - Professional product photography quality
+  - Only the specific item visible (no other clothing)
+
+**User Flow:**
+1. User uploads a single image (outfit photo, full-body shot, etc.)
+2. AI detects all clothing items and shows progress
+3. AI generates product images for each item (shows thumbnails as they complete)
+4. User reviews all items in a grid view:
+   - See original image with bounding box overlays
+   - See generated product images for each item
+   - Edit metadata (name, category, colors, etc.)
+   - Delete unwanted items
+   - Regenerate unsatisfactory images
+5. User clicks "Save All" to create separate wardrobe entries
+
+**AI Models Used:**
+```
+Detection: Backend AI API (POST /api/v1/ai/extract-items) - supports Gemini, OpenAI, or custom proxy
+Generation: Backend AI API (POST /api/v1/ai/generate-product-image) - supports multiple providers
+```
+
+**Key Components:**
+- `MultiItemExtractionFlow.tsx` - Main orchestration component
+- `DetectionProgress.tsx` - Detection phase progress UI
+- `GenerationProgress.tsx` - Image generation progress UI
+- `ExtractedItemsGrid.tsx` - Grid layout for review phase
+- `ExtractedItemCard.tsx` - Individual item card with editing
+
+**Acceptance Criteria:**
+- [x] AI detects multiple items from single outfit photo
+- [x] Each item gets its own product-style generated image
+- [x] User can review all items in grid before saving
+- [x] User can edit metadata for each item
+- [x] User can delete unwanted items
+- [x] User can regenerate failed/unsatisfactory images
+- [x] Each item is saved as a separate wardrobe entry
+- [x] Generated product images are stored (not original photo)
+
+**Error Handling:**
+- No items detected: Show message, allow retry with different image
+- Low confidence items (<70%): Highlight with warning badge for review
+- Image generation fails: Mark item as failed, allow retry
+- All generations fail: Offer fallback options
 
 ---
 
@@ -223,7 +288,7 @@ POST /api/v1/items
 **Category Detection:**
 - Auto-detect: Tops, Bottoms, Shoes, Accessories, Outerwear, Swimwear, Activewear
 - Sub-categories: T-shirts, Blouses, Jeans, Sneakers, Handbags, etc.
-- Use image classification with Gemini 3 Pro
+- Use Backend AI API for extraction and server-side heuristics for derived metadata
 
 **Color Extraction:**
 - Extract primary and secondary colors

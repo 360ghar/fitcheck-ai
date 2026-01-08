@@ -1,0 +1,25 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.log
+backend/.venv/
+backend/.pytest_cache/
+backend/logs/
+
+# Node / Vite
+node_modules/
+dist/
+frontend/node_modules/
+frontend/dist/
+
+# Supabase local
+supabase/.branches/
+supabase/.temp/

@@ -6,6 +6,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FitCheck AI - Your Virtual Closet</title>
     <meta name="description" content="Virtual closet with AI-powered outfit visualization" />
+    <!-- Theme initialization - prevents flash of wrong theme -->
+    <script>
+      (function() {
+        var STORAGE_KEY = 'fitcheck-theme';
+        var stored = localStorage.getItem(STORAGE_KEY);
+        var theme = stored;
+        if (!theme || (theme !== 'light' && theme !== 'dark' && theme !== 'system')) {
+          theme = 'system';
+        }
+        var resolved = theme;
+        if (theme === 'system') {
+          resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.classList.add(resolved);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

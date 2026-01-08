@@ -4,8 +4,11 @@
  */
 
 import { create } from 'zustand';
-import type { Outfit, Style, Season, OutfitFilters as ApiOutfitFilters } from '../types';
+import type { Outfit, OutfitImage, Style, Season, OutfitFilters as ApiOutfitFilters } from '../types';
 import * as outfitsApi from '../api/outfits';
+import { generateOutfit } from '../api/ai';
+import { getApiError, ApiError } from '../api/client';
+import { withRetry } from '../lib/retry';
 
 // ============================================================================
 // OUTFIT STATE INTERFACE
@@ -50,7 +53,7 @@ interface OutfitState {
   sortOrder: 'asc' | 'desc';
 
   // Error state
-  error: string | null;
+  error: ApiError | null;
 
   // Pagination
   page: number;
@@ -71,6 +74,8 @@ interface OutfitState {
   setSortOrder: (order: 'asc' | 'desc') => void;
   setGridView: (isGrid: boolean) => void;
   toggleOutfitFavorite: (outfitId: string) => Promise<void>;
+  markOutfitAsWorn: (outfitId: string) => Promise<void>;
+  duplicateOutfit: (outfitId: string) => Promise<Outfit>;
   deleteOutfit: (outfitId: string) => Promise<void>;
   deleteSelectedOutfits: () => Promise<void>;
   setPage: (page: number) => void;
@@ -89,9 +94,10 @@ interface OutfitState {
   createOutfit: () => Promise<Outfit>;
 
   // Generation actions
-  startGeneration: (outfitId: string, options?: { style?: string; background?: string }) => Promise<void>;
+  startGeneration: (outfitId: string, request?: { pose?: string; variations?: number; lighting?: string; body_profile_id?: string }) => Promise<void>;
   checkGenerationStatus: () => Promise<void>;
   resetGeneration: () => void;
+  clearError: () => void;
 }
 
 // ============================================================================
@@ -166,7 +172,7 @@ function applyFiltersAndSort(
         comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
         break;
       case 'times_worn':
-        comparison = a.times_worn - b.times_worn;
+        comparison = a.worn_count - b.worn_count;
         break;
     }
 
@@ -174,6 +180,19 @@ function applyFiltersAndSort(
   });
 
   return filtered;
+}
+
+async function dataUrlToFile(dataUrl: string, filename: string): Promise<File> {
+  const resp = await fetch(dataUrl);
+  const blob = await resp.blob();
+  return new File([blob], filename, { type: blob.type || 'image/png' });
+}
+
+function mapPoseToPrompt(pose?: string): string {
+  const p = (pose || '').toLowerCase();
+  if (p.includes('side')) return 'standing side';
+  if (p.includes('back')) return 'standing back';
+  return 'standing front';
 }
 
 // ============================================================================
@@ -227,7 +246,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       const response = await outfitsApi.getOutfits(apiFilters);
 
       set({
-        outfits: refresh || newPage === 1 ? response.items : [...outfits, ...response.items],
+        outfits: refresh || newPage === 1 ? response.outfits : [...outfits, ...response.outfits],
         totalOutfits: response.total,
         hasMore: response.has_next,
         page: newPage,
@@ -245,8 +264,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         ),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch outfits';
-      set({ error: message, isLoading: false });
+      const apiError = getApiError(error);
+      set({ error: apiError, isLoading: false });
     }
   },
 
@@ -271,8 +290,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         filteredOutfits: applyFiltersAndSort(newOutfits, state.filters, state.sortBy, state.sortOrder),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch outfit';
-      set({ error: message, isLoading: false });
+      const apiError = getApiError(error);
+      set({ error: apiError, isLoading: false });
     }
   },
 
@@ -347,17 +366,66 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
   // Toggle outfit favorite
   toggleOutfitFavorite: async (outfitId: string) => {
     try {
-      const updatedOutfit = await outfitsApi.toggleOutfitFavorite(outfitId);
       const state = get();
-      const newOutfits = state.outfits.map((o) => (o.id === outfitId ? updatedOutfit : o));
+      const updated = await outfitsApi.toggleOutfitFavorite(outfitId);
+      const newOutfits = state.outfits.map((outfit) =>
+        outfit.id === outfitId ? { ...outfit, is_favorite: updated.is_favorite } : outfit
+      );
       set({
         outfits: newOutfits,
-        selectedOutfit: state.selectedOutfit?.id === outfitId ? updatedOutfit : state.selectedOutfit,
+        selectedOutfit:
+          state.selectedOutfit?.id === outfitId
+            ? { ...state.selectedOutfit, is_favorite: updated.is_favorite }
+            : state.selectedOutfit,
         filteredOutfits: applyFiltersAndSort(newOutfits, state.filters, state.sortBy, state.sortOrder),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update favorite';
-      set({ error: message });
+      const apiError = getApiError(error);
+      set({ error: apiError });
+    }
+  },
+
+  // Mark outfit as worn
+  markOutfitAsWorn: async (outfitId: string) => {
+    try {
+      const updated = await outfitsApi.markOutfitAsWorn(outfitId);
+      const state = get();
+      const newOutfits = state.outfits.map((o) =>
+        o.id === outfitId
+          ? { ...o, worn_count: updated.worn_count, last_worn_at: updated.last_worn_at }
+          : o
+      );
+
+      set({
+        outfits: newOutfits,
+        filteredOutfits: applyFiltersAndSort(newOutfits, state.filters, state.sortBy, state.sortOrder),
+        selectedOutfit:
+          state.selectedOutfit?.id === outfitId
+            ? { ...state.selectedOutfit, worn_count: updated.worn_count, last_worn_at: updated.last_worn_at }
+            : state.selectedOutfit,
+      });
+    } catch (error) {
+      const apiError = getApiError(error);
+      set({ error: apiError });
+      throw error;
+    }
+  },
+
+  // Duplicate outfit
+  duplicateOutfit: async (outfitId: string) => {
+    try {
+      const duplicated = await outfitsApi.duplicateOutfit(outfitId);
+      const state = get();
+      const newOutfits = [duplicated, ...state.outfits];
+      set({
+        outfits: newOutfits,
+        filteredOutfits: applyFiltersAndSort(newOutfits, state.filters, state.sortBy, state.sortOrder),
+      });
+      return duplicated;
+    } catch (error) {
+      const apiError = getApiError(error);
+      set({ error: apiError });
+      throw error;
     }
   },
 
@@ -377,8 +445,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         selectedOutfits: newSelected,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete outfit';
-      set({ error: message });
+      const apiError = getApiError(error);
+      set({ error: apiError });
       throw error;
     }
   },
@@ -398,8 +466,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         selectedOutfits: new Set(),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete outfits';
-      set({ error: message });
+      const apiError = getApiError(error);
+      set({ error: apiError });
       throw error;
     }
   },
@@ -481,12 +549,12 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
     const { creationItems, creationName, creationDescription, creationStyle, creationSeason, creationTags, creationOccasion } = state;
 
     if (creationItems.size === 0) {
-      set({ error: 'Please select at least one item' });
+      set({ error: { message: 'Please select at least one item' } });
       throw new Error('Please select at least one item');
     }
 
     if (!creationName) {
-      set({ error: 'Please enter a name' });
+      set({ error: { message: 'Please enter a name' } });
       throw new Error('Please enter a name');
     }
 
@@ -496,7 +564,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       const outfit = await outfitsApi.createOutfit({
         name: creationName,
         description: creationDescription,
-        item_ids: Array.from(creationItems).map((id) => ({ item_id: id })),
+        item_ids: Array.from(creationItems),
         style: creationStyle,
         season: creationSeason,
         tags: creationTags,
@@ -522,14 +590,17 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 
       return outfit;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create outfit';
-      set({ error: message, isLoading: false });
+      const apiError = getApiError(error);
+      set({ error: apiError, isLoading: false });
       throw error;
     }
   },
 
   // Start AI generation
-  startGeneration: async (outfitId: string, options = {}) => {
+  startGeneration: async (
+    outfitId: string,
+    options: { pose?: string; variations?: number; lighting?: string; body_profile_id?: string } = {}
+  ) => {
     set({ isGenerating: true, generationStatus: 'pending', error: null });
 
     try {
@@ -537,24 +608,122 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 
       set({
         generationId: response.generation_id,
-        generationStatus: response.status,
+        generationStatus:
+          response.status === 'pending' ||
+          response.status === 'processing' ||
+          response.status === 'completed' ||
+          response.status === 'failed'
+            ? response.status
+            : 'processing',
       });
 
-      if (response.status === 'completed') {
-        set({
-          generatedImageUrl: response.image_url || null,
-          isGenerating: false,
-        });
-      } else if (response.status === 'processing' || response.status === 'pending') {
-        set({ generationStatus: 'processing' });
-        // Poll for status
-        get().checkGenerationStatus();
-      } else if (response.status === 'failed') {
-        set({ isGenerating: false, generationStatus: 'failed' });
+      // Poll for status (generation completes when image is uploaded to backend)
+      get().checkGenerationStatus();
+
+      // Generate outfit via backend AI service, then upload to backend to mark completion.
+      const state = get();
+      let outfit =
+        state.outfits.find((o) => o.id === outfitId) ||
+        (state.selectedOutfit?.id === outfitId ? state.selectedOutfit : null);
+
+      if (!outfit) {
+        outfit = await outfitsApi.getOutfit(outfitId);
       }
+
+      const itemIds = new Set(outfit.item_ids);
+      const availableItems = await outfitsApi.getAvailableItems();
+      const promptItems = availableItems
+        .filter((it) => itemIds.has(it.id))
+        .map((it) => ({
+          name: it.name,
+          category: it.category,
+          colors: it.colors,
+          brand: it.brand,
+          material: it.material,
+          pattern: it.pattern,
+        }));
+
+      if (promptItems.length === 0) {
+        throw new Error('No outfit items available for generation');
+      }
+
+      // Generate outfit using backend AI service with retry
+      const aiResult = await withRetry(
+        () =>
+          generateOutfit(promptItems, {
+            style: outfit.style || 'casual',
+            background: 'studio white',
+            pose: mapPoseToPrompt(options.pose),
+            lighting: options.lighting || 'studio',
+            include_model: true,
+          }),
+        {
+          maxRetries: 3,
+          initialDelayMs: 2000, // AI operations need longer initial delay
+          backoffFactor: 2,
+          onRetry: (attempt, error, delayMs) => {
+            console.log(`Retrying outfit generation, attempt ${attempt}, waiting ${delayMs}ms`, error);
+          },
+        }
+      );
+
+      if (!aiResult.success || !aiResult.data) {
+        throw aiResult.error || new Error('AI image generation failed after retries');
+      }
+
+      // Get the image URL - either direct URL or convert base64 to data URL
+      const imageUrl = aiResult.data.image_url || `data:image/png;base64,${aiResult.data.image_base64}`;
+
+      if (!imageUrl) {
+        throw new Error('AI image generation returned no image');
+      }
+
+      const imageFile = await dataUrlToFile(
+        imageUrl,
+        `outfit-${outfitId}-${Date.now()}.png`
+      );
+
+      const uploaded = await outfitsApi.uploadOutfitImage(outfitId, imageFile, {
+        isPrimary: true,
+        pose: options.pose || 'front',
+        lighting: options.lighting,
+        body_profile_id: options.body_profile_id,
+        generation_id: response.generation_id,
+      });
+
+      // Update local outfits list with the new image
+      const current = get();
+      const updatedOutfits = current.outfits.map((o) => {
+        if (o.id !== outfitId) return o;
+
+        const existingImages = (o.images || []).map((img) => ({
+          ...img,
+          is_primary: uploaded.is_primary ? false : img.is_primary,
+        }));
+
+        const images: OutfitImage[] = [...existingImages, uploaded];
+        return { ...o, images };
+      });
+
+      set({
+        outfits: updatedOutfits,
+        filteredOutfits: applyFiltersAndSort(
+          updatedOutfits,
+          current.filters,
+          current.sortBy,
+          current.sortOrder
+        ),
+        selectedOutfit:
+          current.selectedOutfit?.id === outfitId
+            ? { ...current.selectedOutfit, images: [...(current.selectedOutfit.images || []).map((img) => ({ ...img, is_primary: uploaded.is_primary ? false : img.is_primary })), uploaded] }
+            : current.selectedOutfit,
+        generatedImageUrl: uploaded.image_url,
+        generationStatus: 'completed',
+        isGenerating: false,
+      });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to start generation';
-      set({ error: message, isGenerating: false, generationStatus: 'failed' });
+      const apiError = getApiError(error);
+      set({ error: apiError, isGenerating: false, generationStatus: 'failed' });
     }
   },
 
@@ -567,16 +736,24 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
     try {
       const status = await outfitsApi.getGenerationStatus(generationId);
 
-      set({ generationStatus: status.status });
+      set({
+        generationStatus:
+          status.status === 'pending' ||
+          status.status === 'processing' ||
+          status.status === 'completed' ||
+          status.status === 'failed'
+            ? status.status
+            : 'processing',
+      });
 
       if (status.status === 'completed') {
         set({
-          generatedImageUrl: status.image_url || null,
+          generatedImageUrl: status.images?.[0] || null,
           isGenerating: false,
         });
       } else if (status.status === 'failed') {
         set({
-          error: status.error || 'Generation failed',
+          error: { message: status.error || 'Generation failed' },
           isGenerating: false,
         });
       } else {
@@ -584,8 +761,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         setTimeout(() => get().checkGenerationStatus(), 2000);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to check generation status';
-      set({ error: message, isGenerating: false, generationStatus: 'failed' });
+      const apiError = getApiError(error);
+      set({ error: apiError, isGenerating: false, generationStatus: 'failed' });
     }
   },
 
@@ -598,6 +775,9 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       isGenerating: false,
     });
   },
+
+  // Clear error
+  clearError: () => set({ error: null }),
 }));
 
 // ============================================================================

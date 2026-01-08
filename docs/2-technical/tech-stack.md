@@ -101,7 +101,7 @@ This document details all technologies used in FitCheck AI, with justifications 
 
 ---
 
-### Agentic System: Pydantic AI
+### Agentic System (Future): Pydantic AI
 
 **Version:** 0.0.12+ (latest)
 
@@ -115,8 +115,7 @@ This document details all technologies used in FitCheck AI, with justifications 
 
 **Use Case:**
 - Orchestrate AI workflows
-- Manage item extraction agent
-- Manage outfit generation agent
+- (Future) Server-side agent workflows if we move generation/extraction off the client
 - Manage recommendation agent
 
 **Alternatives Considered:**
@@ -146,19 +145,25 @@ This document details all technologies used in FitCheck AI, with justifications 
 
 ### AI Models: Google Gemini
 
-**Gemini 3 Pro**
-- **Purpose:** High-quality image generation
-- **Why:** State-of-the-art photorealistic generation
-- **Use Case:** Generate outfit images with clothing items
+**Gemini 3 Flash (gemini-3-flash-preview)**
+- **Purpose:** Fast multimodal analysis (vision + text)
+- **Why:** Low-latency, strong reasoning for structured extraction and tagging
+- **Use Case:** Fallback/auxiliary analysis when needed (e.g., validation, quick classification)
 - **Cost:** Usage-based pricing
 
-**Gemini Nano Banana Pro**
-- **Purpose:** Real-time item extraction
-- **Why:** Fast, accurate object detection
-- **Use Case:** Extract individual items from photos
-- **Cost:** Usage-based pricing
+**Gemini Nano Banana Pro (gemini-3-pro-preview)**
+- **Purpose:** High-quality vision chat (image → structured JSON)
+- **Why:** Strong multimodal understanding for extraction and tagging
+- **Use Case:** Item Extraction Agent (server-side via Backend AI API)
+- **Cost:** Usage-based pricing (API keys per user or system default)
 
-**Gemini Embeddings (text-embedding-004)**
+**Gemini Nano Banana Pro (gemini-3-pro-image-preview)**
+- **Purpose:** High-quality image generation (txt2img)
+- **Why:** Strong fashion visualization quality; supports OpenAI-compatible API format
+- **Use Case:** Outfit Generation Agent (server-side via Backend AI API)
+- **Cost:** Usage-based pricing (API keys per user or system default)
+
+**Gemini Embeddings (gemini-embedding-001)**
 - **Purpose:** Generate text and image embeddings
 - **Why:** 768-dim vectors, excellent similarity search
 - **Use Case:** Item similarity, style matching
@@ -391,50 +396,45 @@ This document details all technologies used in FitCheck AI, with justifications 
 
 ---
 
-### Client-Side AI & Image Processing: Putter.js
+### Server-Side AI & Image Processing: Backend AI API
 
 **Version:** Latest
 
-**Why Putter.js:**
-- Client-side AI inference for running lightweight models in browser
-- Real-time image analysis without server round-trips
-- Image optimization and compression before upload
-- Reduce server load by processing locally
-- Offline AI capabilities
-- Fast inference with WebGL/WebGPU acceleration
+**Why Backend AI API:**
+- Unified server-side AI processing via FastAPI
+- Uses OpenAI-compatible API format for flexibility
+- Supports multiple providers: Gemini, OpenAI, custom proxy
+- Per-user provider configuration with system defaults
+- API keys stored encrypted in database
 
 **AI Inference Use Cases:**
-- **Real-time Garment Detection:** Identify clothing items in camera feed before upload
-- **Quick Style Classification:** Instantly classify item style (casual, formal, sporty)
-- **Color Extraction:** Extract dominant colors from images locally
-- **Image Quality Assessment:** Validate image quality before upload
-- **Background Detection:** Detect if image has clean background for better AI extraction
+- **Item Extraction (Vision → JSON):** Extract category/colors/material/brand from photos
+- **Outfit Visualization (txt2img):** Generate try-on/flat-lay images for outfits
+- **Product Image Generation:** Create clean e-commerce style product photos
 
 **Image Optimization Use Cases:**
-- Compress user uploads before sending to backend
+- Compress user uploads before storing
 - Reduce bandwidth usage
 - Lazy loading for image galleries
 - Responsive image generation
 - Format conversion (WebP, AVIF support)
 
 **Benefits:**
-- **Reduced Latency:** No server round-trip for initial analysis
-- **Lower Server Costs:** Offload lightweight AI tasks to client
-- **Offline Support:** Core AI features work without internet
-- **Privacy:** Sensitive images processed locally before upload
-- **Better UX:** Instant feedback while user selects images
+- **Centralized AI Control:** Server manages all AI processing and credentials
+- **Provider Flexibility:** Users can configure their own API keys or use system defaults
+- **Better Security:** API keys encrypted and stored server-side
+- **Consistent Experience:** Same AI behavior across all clients
 
 **Alternatives Considered:**
+- Client-side AI: Server-side provides better control and security
 - TensorFlow.js: Heavier bundle size, more complex setup
 - ONNX.js: Good performance, but less browser compatibility
-- Server-side only: Higher latency, more bandwidth usage
-- Manual processing: More work, inconsistent results
 
 ---
 
 ## Infrastructure
 
-### Containerization: Docker + Docker Compose
+### Containerization: Docker + Docker Compose (Optional)
 
 **Docker Version:** 24.0+
 **Docker Compose Version:** 2.20+
@@ -446,14 +446,14 @@ This document details all technologies used in FitCheck AI, with justifications 
 - Container orchestration ready
 
 **Why Docker Compose:**
-- Simple local development
-- Multi-container setup (API + DB + Redis)
-- Easy to understand and configure
+- Optional for deployment workflows that need containers
+- Keeps API container configs reproducible
 
 **Use Cases:**
 - Run API in container
-- Run Supabase locally (optional)
 - Run Redis (future)
+
+> Local development uses **hosted Supabase**. Do not run Supabase locally for this project.
 
 ---
 
@@ -679,7 +679,7 @@ class JSONFormatter(logging.Formatter):
 | **Database** | Supabase | PostgreSQL 15+ | Relational data |
 | **Vector DB** | Pinecone | 3.0+ | Similarity search |
 | **Schema Validation** | Pydantic | 2.5+ | Data validation |
-| **AI Framework** | Pydantic AI | 0.0.12+ | AI orchestration |
+| **AI Framework** | (Future) Pydantic AI | 0.0.12+ | Server-side AI orchestration |
 | **AI Models** | Google Gemini | - | Image generation & extraction |
 | **Frontend Framework** | React | 18.2+ | UI |
 | **Language** | TypeScript | 5.3+ | Type safety |
@@ -693,7 +693,7 @@ class JSONFormatter(logging.Formatter):
 | **Validation** | Zod | 3.22+ | Schema validation |
 | **Charts** | Recharts | 2.10+ | Data visualization |
 | **Charts** | D3.js | 7.8+ | Custom visualizations |
-| **Client-Side AI** | Putter.js | Latest | AI inference & image processing |
+| **Server-Side AI** | Backend AI API | Latest | AI extraction & generation |
 | **Containerization** | Docker | 24.0+ | Containers |
 | **Orchestration** | Docker Compose | 2.20+ | Multi-container |
 | **CI/CD** | GitHub Actions | - | Automated deployments |
@@ -716,7 +716,7 @@ class JSONFormatter(logging.Formatter):
 2. **FastAPI:** Modern, fast, async support, great DX
 3. **Supabase:** All-in-one solution (DB, Auth, Storage), great DX
 4. **Pinecone:** Managed vector DB, excellent performance
-5. **Pydantic AI:** Pythonic, simple, good LLM integration
+5. **Backend AI API:** Server-side AI processing with multi-provider support
 
 ### Frontend Choices
 

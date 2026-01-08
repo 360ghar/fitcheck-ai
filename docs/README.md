@@ -50,7 +50,7 @@ This documentation provides a complete technical specification and product requi
 
 ### 5. Development Documentation (`/5-development/`)
 
-- **[setup.md](./5-development/setup.md)** - Local development environment setup, Docker configuration
+- **[setup.md](./5-development/setup.md)** - Local development environment setup (hosted Supabase)
 - **[launch-checklist.md](./5-development/launch-checklist.md)** - Pre-launch requirements, deployment checklist
 
 ## Quick Start
@@ -75,8 +75,8 @@ Read [5-development/setup.md](./5-development/setup.md) for local environment se
 - **Vector DB:** Pinecone / Quadrant
 - **Storage:** Supabase Bucket
 - **Schema Definition:** Pydantic v2
-- **Agentic System:** Pydantic AI
-- **AI Models:** Gemini 3 Pro, Gemini Embeddings
+- **AI Services:** Backend AI API with multi-provider support (Gemini, OpenAI, custom proxy)
+- **AI Models:** Gemini 3 Flash, Gemini Nano Banana Pro, Gemini Embeddings (gemini-embedding-001)
 
 ### Frontend
 - **Framework:** React 18 + TypeScript
@@ -86,10 +86,9 @@ Read [5-development/setup.md](./5-development/setup.md) for local environment se
 - **Charts:** Recharts + D3.js
 - **Forms:** React Hook Form + Zod
 - **Routing:** React Router v6
-- **Client-Side AI:** Putter.js (AI inference & image processing)
 
 ### Infrastructure
-- **Containerization:** Docker + Docker Compose
+- **Containerization:** Optional (not required for local dev)
 - **CI/CD:** GitHub Actions
 - **Deployment:** Railway
 - **Logging:** Structured Logging

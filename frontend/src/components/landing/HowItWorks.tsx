@@ -1,0 +1,111 @@
+import { Badge } from '@/components/ui/badge'
+import { AnimatedSection } from './AnimatedSection'
+import { GlassCard } from './GlassCard'
+import { cn } from '@/lib/utils'
+import { Upload, Cpu, Lightbulb, TrendingUp } from 'lucide-react'
+
+const steps = [
+  {
+    step: 1,
+    icon: Upload,
+    title: 'Upload Your Wardrobe',
+    description:
+      'Snap photos of your clothes or upload from your gallery. Individual items or full outfit shots - our AI handles it all.',
+    gradient: 'from-blue-500 to-cyan-500',
+  },
+  {
+    step: 2,
+    icon: Cpu,
+    title: 'AI Organizes Everything',
+    description:
+      'Our AI automatically extracts items, detects colors, categories, and styles. Your entire wardrobe, digitized in minutes.',
+    gradient: 'from-purple-500 to-pink-500',
+  },
+  {
+    step: 3,
+    icon: Lightbulb,
+    title: 'Get Daily Recommendations',
+    description:
+      'Receive personalized outfit suggestions based on weather, your calendar, and style preferences. Decision fatigue, solved.',
+    gradient: 'from-yellow-500 to-orange-500',
+  },
+  {
+    step: 4,
+    icon: TrendingUp,
+    title: 'Track & Improve',
+    description:
+      'Analyze your wardrobe usage, discover underutilized gems, and make smarter fashion decisions with data-driven insights.',
+    gradient: 'from-green-500 to-teal-500',
+  },
+]
+
+export default function HowItWorks() {
+  return (
+    <section id="how-it-works" className="py-24 bg-white dark:bg-gray-950">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <AnimatedSection>
+          <div className="text-center mb-16">
+            <Badge className="mb-4 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border-0">
+              How It Works
+            </Badge>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 dark:text-white">
+              Get started in{' '}
+              <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                minutes
+              </span>
+            </h2>
+            <p className="mt-4 text-lg md:text-xl text-gray-600 dark:text-gray-300">
+              Four simple steps to transform your wardrobe experience
+            </p>
+          </div>
+        </AnimatedSection>
+
+        <div className="space-y-16 md:space-y-24">
+          {steps.map((step, index) => (
+            <AnimatedSection key={step.step}>
+              <div
+                className={cn(
+                  'grid lg:grid-cols-2 gap-8 md:gap-12 items-center',
+                  index % 2 === 1 && 'lg:flex-row-reverse'
+                )}
+              >
+                {/* Text side */}
+                <div className={index % 2 === 1 ? 'lg:order-2' : ''}>
+                  <div className="flex items-center gap-4 mb-4">
+                    <span
+                      className={cn(
+                        'flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-br text-white font-bold text-lg',
+                        step.gradient
+                      )}
+                    >
+                      {step.step}
+                    </span>
+                    <div className="h-px flex-1 bg-gradient-to-r from-indigo-600/50 to-transparent" />
+                  </div>
+                  <h3 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                    {step.title}
+                  </h3>
+                  <p className="text-lg text-gray-600 dark:text-gray-300">{step.description}</p>
+                </div>
+
+                {/* Visual side */}
+                <div className={index % 2 === 1 ? 'lg:order-1' : ''}>
+                  <GlassCard className="p-6 md:p-8">
+                    <div
+                      className={cn(
+                        'aspect-video rounded-xl bg-gradient-to-br flex items-center justify-center',
+                        step.gradient
+                      )}
+                    >
+                      <step.icon className="w-16 h-16 md:w-24 md:h-24 text-white/90" />
+                    </div>
+                  </GlassCard>
+                </div>
+              </div>
+            </AnimatedSection>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}

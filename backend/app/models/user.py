@@ -18,6 +18,7 @@ class UserBase(BaseModel):
     email: EmailStr
     full_name: Optional[str] = Field(None, max_length=255)
     avatar_url: Optional[str] = None
+    gender: Optional[str] = None
     is_active: bool = True
 
 
@@ -32,7 +33,17 @@ class UserUpdate(BaseModel):
     """Model for updating user profile."""
     full_name: Optional[str] = Field(None, max_length=255)
     avatar_url: Optional[str] = None
+    gender: Optional[str] = None
     is_active: Optional[bool] = None
+
+    @field_validator('gender')
+    @classmethod
+    def validate_gender(cls, v: Optional[str]) -> Optional[str]:
+        """Validate gender value."""
+        valid_values = {'male', 'female', 'non_binary', 'prefer_not_to_say', None}
+        if v is not None and v not in valid_values:
+            raise ValueError('gender must be one of: male, female, non_binary, prefer_not_to_say')
+        return v
 
 
 class UserResponse(UserBase):
@@ -42,6 +53,7 @@ class UserResponse(UserBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     last_login_at: Optional[datetime] = None
+    body_profile_id: Optional[UUID] = None
 
     class Config:
         from_attributes = True
@@ -65,7 +77,10 @@ class UserPreferencesBase(BaseModel):
     preferred_styles: List[str] = Field(default_factory=list)
     liked_brands: List[str] = Field(default_factory=list)
     disliked_patterns: List[str] = Field(default_factory=list)
-    style_notes: Optional[str] = None
+    preferred_occasions: List[str] = Field(default_factory=list)
+    color_temperature: Optional[str] = None
+    style_personality: Optional[str] = None
+    data_points_collected: int = 0
 
 
 class UserPreferencesUpdate(BaseModel):
@@ -74,15 +89,16 @@ class UserPreferencesUpdate(BaseModel):
     preferred_styles: Optional[List[str]] = None
     liked_brands: Optional[List[str]] = None
     disliked_patterns: Optional[List[str]] = None
-    style_notes: Optional[str] = None
+    preferred_occasions: Optional[List[str]] = None
+    color_temperature: Optional[str] = None
+    style_personality: Optional[str] = None
+    data_points_collected: Optional[int] = None
 
 
 class UserPreferences(UserPreferencesBase):
     """Complete user preferences model."""
-    id: UUID
     user_id: UUID
-    created_at: datetime
-    updated_at: datetime
+    last_updated: datetime
 
     class Config:
         from_attributes = True
@@ -95,6 +111,8 @@ class UserPreferences(UserPreferencesBase):
 
 class UserSettingsBase(BaseModel):
     """Base user settings model."""
+    default_location: Optional[str] = None
+    timezone: Optional[str] = None
     language: str = "en"
     measurement_units: str = "imperial"  # 'imperial' or 'metric'
     notifications_enabled: bool = True
@@ -104,6 +122,8 @@ class UserSettingsBase(BaseModel):
 
 class UserSettingsUpdate(BaseModel):
     """Model for updating user settings (all fields optional)."""
+    default_location: Optional[str] = None
+    timezone: Optional[str] = None
     language: Optional[str] = None
     measurement_units: Optional[str] = None
     notifications_enabled: Optional[bool] = None
@@ -121,7 +141,6 @@ class UserSettingsUpdate(BaseModel):
 
 class UserSettings(UserSettingsBase):
     """Complete user settings model."""
-    id: UUID
     user_id: UUID
     created_at: datetime
     updated_at: datetime
@@ -136,14 +155,13 @@ class UserSettings(UserSettingsBase):
 
 
 class BodyProfileBase(BaseModel):
-    """Base body profile model for sizing recommendations."""
-    height: Optional[int] = None  # In centimeters
-    weight: Optional[int] = None  # In kilograms
-    body_type: Optional[str] = None  # 'slim', 'average', 'athletic', 'plus'
-    skin_tone: Optional[str] = None
-    hair_color: Optional[str] = None
-    eye_color: Optional[str] = None
-    notes: Optional[str] = None
+    """Base body profile model for outfit visualization."""
+    name: str = Field(..., min_length=1, max_length=255)
+    height_cm: float = Field(..., gt=0, le=300)
+    weight_kg: float = Field(..., gt=0, le=500)
+    body_shape: str = Field(..., min_length=1, max_length=50)
+    skin_tone: str = Field(..., min_length=1, max_length=50)
+    is_default: bool = False
 
 
 class BodyProfileCreate(BodyProfileBase):
@@ -153,13 +171,12 @@ class BodyProfileCreate(BodyProfileBase):
 
 class BodyProfileUpdate(BaseModel):
     """Model for updating body profile (all fields optional)."""
-    height: Optional[int] = None
-    weight: Optional[int] = None
-    body_type: Optional[str] = None
-    skin_tone: Optional[str] = None
-    hair_color: Optional[str] = None
-    eye_color: Optional[str] = None
-    notes: Optional[str] = None
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    height_cm: Optional[float] = Field(None, gt=0, le=300)
+    weight_kg: Optional[float] = Field(None, gt=0, le=500)
+    body_shape: Optional[str] = Field(None, min_length=1, max_length=50)
+    skin_tone: Optional[str] = Field(None, min_length=1, max_length=50)
+    is_default: Optional[bool] = None
 
 
 class BodyProfile(BodyProfileBase):

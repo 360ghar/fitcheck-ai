@@ -462,24 +462,25 @@ POST /api/v1/recommendations/feedback
 ```
 
 ```
-GET /api/v1/user/preferences
+GET /api/v1/users/preferences
 - View user preference profile
 - Response: 200 OK
   - preferences: {
         favorite_colors: List<string>
         preferred_styles: List<string>
         liked_brands: List<string>
-        avoided_patterns: List<string>
+        disliked_patterns: List<string>
         data_points_collected: number
         last_updated: timestamp
       }
 ```
 
 ```
-POST /api/v1/user/preferences/reset
-- Reset preference profile
+PUT /api/v1/users/preferences
+- Update user preference profile
+- Request: JSON
 - Response: 200 OK
-  - message: "Preferences reset successfully"
+  - preferences: updated_preference_object
 ```
 
 **Acceptance Criteria:**

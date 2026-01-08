@@ -109,12 +109,14 @@
 - Base URL and authentication
 - Response formats
 - Status codes
-- Auth endpoints (5)
-- User endpoints (4)
-- Item endpoints (7)
-- Outfit endpoints (6)
-- Recommendation endpoints (3)
-- Calendar endpoints (3)
+- Auth endpoints (6)
+- AI endpoints (6)
+- User endpoints (15)
+- Item endpoints (16)
+- Outfit endpoints (28)
+- Recommendation endpoints (10)
+- Gamification endpoints (3)
+- Calendar endpoints (7)
 - Weather endpoints (2)
 - Error responses
 - Rate limiting
@@ -134,7 +136,7 @@
 - Testing authentication
 
 ✅ **2-technical/tech-stack.md** (4,000 words)
-- Backend: FastAPI, Pydantic, Pydantic AI, httpx, Google Gemini
+- Backend: FastAPI, Pydantic, httpx, Google Gemini (embeddings)
 - Frontend: React, TypeScript, Vite, shadcn/ui, Tailwind, TanStack Query, Zustand
 - Infrastructure: Docker, GitHub Actions, Railway
 - Database: Supabase, Pinecone
@@ -201,6 +203,7 @@ backend/
 frontend/
 ├── src/
 │   ├── components/
+│   ├── agents/
 │   ├── pages/
 │   ├── stores/
 │   ├── lib/
@@ -245,7 +248,7 @@ frontend/
 ### 5-development/ (Deployment Guide)
 
 **5-development/setup.md**
-- Prerequisites (Python 3.12, Node.js, Docker)
+- Prerequisites (Python 3.12, Node.js, hosted Supabase)
 - Environment variables (.env)
 - Supabase setup
 - Pinecone setup
@@ -297,14 +300,16 @@ frontend/
 - Mermaid diagrams: 10+
 
 **API Endpoints Documented:**
-- Auth: 5 endpoints
-- Users: 4 endpoints
-- Items: 7 endpoints
-- Outfits: 6 endpoints
-- Recommendations: 3 endpoints
-- Calendar: 3 endpoints
+- Auth: 6 endpoints
+- AI: 6 endpoints
+- Users: 15 endpoints
+- Items: 16 endpoints
+- Outfits: 28 endpoints
+- Recommendations: 10 endpoints
+- Gamification: 3 endpoints
+- Calendar: 7 endpoints
 - Weather: 2 endpoints
-- Total: 30+ endpoints with examples
+- Total: 90+ endpoints with examples
 
 **Database Tables:**
 - Users: 3 tables

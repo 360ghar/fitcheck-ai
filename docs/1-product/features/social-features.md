@@ -61,7 +61,7 @@ Social & Community features allow users to share outfits, get feedback from frie
 
 ```
 POST /api/v1/outfits/{outfit_id}/share
-- Generate share link
+- Enable sharing and return a share link
 - Request: JSON
   - visibility: "public"|"friends"|"private"
   - expires_at?: ISO8601 datetime
@@ -70,51 +70,29 @@ POST /api/v1/outfits/{outfit_id}/share
 - Response: 201 Created
   - share_link: {
         url: string
-        qr_code_url: string
+        qr_code_url: string|null
         expires_at: timestamp
         views: number
       }
 ```
 
 ```
-POST /api/v1/outfits/{outfit_id}/share/social
-- Generate social media post
-- Request: JSON
-  - platform: "instagram"|"tiktok"|"twitter"|"facebook"
-  - caption: string
-  - hashtags: List<string>
-  - tag_brands: boolean
-- Response: 200 OK
-  - post_data: {
-        image_url: string
-        caption: string
-        hashtags: string
-        platform: string
-        share_url: string
-      }
+POST /api/v1/outfits/{outfit_id}/share/social (planned)
+- Optional server-side helpers for platform-specific share payloads
 ```
 
 ```
-GET /api/v1/shared-outfits/{share_id}
-- View shared outfit
+GET /api/v1/outfits/public/{outfit_id}
+- View shared outfit (no auth, only when outfit is public)
 - Response: 200 OK
-  - outfit: shared_outfit_data
+  - outfit: public_outfit
     - images: List<image_urls>
-    - items: List<item_summary> (anonymized or brand only)
-    - caption: string
-    - comments: List<comment>
-    - likes: number
-    - view_count: number
+    - items: List<item_summary>
 ```
 
 ```
 POST /api/v1/shared-outfits/{share_id}/feedback
-- Leave feedback
-- Request: JSON
-  - rating: number (1-5)
-  - comment: string
-- Response: 201 Created
-  - feedback: feedback_object
+- Leave feedback on a shared outfit
 ```
 
 **Acceptance Criteria:**
