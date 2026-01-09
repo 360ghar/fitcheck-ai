@@ -732,10 +732,12 @@ async def generate_batch_embeddings(
             user_id=user_id,
             operation_type="embedding",
             db=db,
+            count=len(request.texts),
         )
         if not rate_check["allowed"]:
             raise RateLimitError(
-                f"Daily embedding limit ({rate_check['limit']}) exceeded."
+                f"Daily embedding limit ({rate_check['limit']}) exceeded. "
+                f"Requested {len(request.texts)} embeddings with {rate_check['remaining']} remaining."
             )
 
         # Generate batch embeddings
@@ -746,7 +748,7 @@ async def generate_batch_embeddings(
             user_id=user_id,
             operation_type="embedding",
             db=db,
-            count=len(request.texts),
+            count=len(embeddings),
         )
 
         return {
@@ -860,6 +862,7 @@ async def search_similar_items(
 async def test_embedding_model(
     request: TestEmbeddingRequest,
     user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
 ):
     """
     Test an embedding model configuration.
@@ -867,8 +870,24 @@ async def test_embedding_model(
     Generates a test embedding to verify the model is working correctly.
     """
     try:
+        # Check rate limit for embeddings
+        rate_check = await AISettingsService.check_rate_limit(
+            user_id=user_id,
+            operation_type="embedding",
+            db=db,
+        )
+        if not rate_check["allowed"]:
+            raise RateLimitError(
+                f"Daily embedding limit ({rate_check['limit']}) exceeded."
+            )
+
         # Generate test embedding
         test_embedding = await EmbeddingService.generate_embedding("test embedding")
+        await AISettingsService.increment_usage(
+            user_id=user_id,
+            operation_type="embedding",
+            db=db,
+        )
 
         return {
             "data": TestEmbeddingResult(
@@ -879,6 +898,8 @@ async def test_embedding_model(
             "message": "Embedding model test successful",
         }
 
+    except RateLimitError:
+        raise
     except AIServiceError as e:
         return {
             "data": TestEmbeddingResult(

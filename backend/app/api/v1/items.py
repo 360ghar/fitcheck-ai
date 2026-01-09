@@ -23,6 +23,7 @@ from app.core.exceptions import (
     StorageServiceError,
     DatabaseError,
     UnsupportedMediaTypeError,
+    RateLimitError,
 )
 from app.core.security import get_current_user_id
 from app.db.connection import get_db
@@ -35,6 +36,7 @@ from app.models.item import (
     VALID_CONDITIONS,
 )
 from app.services.ai_service import AIService
+from app.services.ai_settings_service import AISettingsService
 from app.services.storage_service import StorageService
 from app.services.vector_service import get_vector_service
 from app.utils.parallel import parallel_with_retry
@@ -241,20 +243,39 @@ async def create_item(
 
         # Generate embedding + upsert to Pinecone (best-effort)
         try:
-            embedding = await AIService.generate_item_embedding({**item_data, "images": images})
-            if embedding:
-                vector_service = get_vector_service()
-                await vector_service.upsert_item(
+            rate_check = await AISettingsService.check_rate_limit(
+                user_id=user_id,
+                operation_type="embedding",
+                db=db,
+            )
+            if not rate_check["allowed"]:
+                logger.info(
+                    "Embedding rate limit exceeded for item create, skipping vector upsert",
+                    user_id=user_id,
                     item_id=item_id,
-                    embedding=embedding,
-                    metadata={
-                        "user_id": user_id,
-                        "category": item.category,
-                        "colors": item.colors,
-                        "brand": item.brand or "",
-                        "name": item.name,
-                    },
+                    remaining=rate_check["remaining"],
+                    limit=rate_check["limit"],
                 )
+            else:
+                embedding = await AIService.generate_item_embedding({**item_data, "images": images})
+                if embedding:
+                    await AISettingsService.increment_usage(
+                        user_id=user_id,
+                        operation_type="embedding",
+                        db=db,
+                    )
+                    vector_service = get_vector_service()
+                    await vector_service.upsert_item(
+                        item_id=item_id,
+                        embedding=embedding,
+                        metadata={
+                            "user_id": user_id,
+                            "category": item.category,
+                            "colors": item.colors,
+                            "brand": item.brand or "",
+                            "name": item.name,
+                        },
+                    )
         except Exception as e:
             logger.warning("Embedding generation failed", item_id=item_id, error=str(e))
 
@@ -428,20 +449,39 @@ async def update_item(
         # Update embedding (best-effort) if relevant fields changed
         if any(k in update_dict for k in ("name", "category", "colors", "brand", "tags", "sub_category", "material")):
             try:
-                embedding = await AIService.generate_item_embedding(item)
-                if embedding:
-                    vector_service = get_vector_service()
-                    await vector_service.upsert_item(
+                rate_check = await AISettingsService.check_rate_limit(
+                    user_id=user_id,
+                    operation_type="embedding",
+                    db=db,
+                )
+                if not rate_check["allowed"]:
+                    logger.info(
+                        "Embedding rate limit exceeded for item update, skipping vector upsert",
+                        user_id=user_id,
                         item_id=item_id_str,
-                        embedding=embedding,
-                        metadata={
-                            "user_id": user_id,
-                            "category": item.get("category"),
-                            "colors": item.get("colors", []),
-                            "brand": item.get("brand") or "",
-                            "name": item.get("name"),
-                        },
+                        remaining=rate_check["remaining"],
+                        limit=rate_check["limit"],
                     )
+                else:
+                    embedding = await AIService.generate_item_embedding(item)
+                    if embedding:
+                        await AISettingsService.increment_usage(
+                            user_id=user_id,
+                            operation_type="embedding",
+                            db=db,
+                        )
+                        vector_service = get_vector_service()
+                        await vector_service.upsert_item(
+                            item_id=item_id_str,
+                            embedding=embedding,
+                            metadata={
+                                "user_id": user_id,
+                                "category": item.get("category"),
+                                "colors": item.get("colors", []),
+                                "brand": item.get("brand") or "",
+                                "name": item.get("name"),
+                            },
+                        )
             except Exception as e:
                 logger.warning("Embedding update failed", item_id=item_id_str, error=str(e))
 
@@ -990,6 +1030,21 @@ async def check_duplicates(
         threshold: The threshold used for matching
     """
     try:
+        # If embedding quota is exhausted, fall back to text-based matching
+        rate_check = await AISettingsService.check_rate_limit(
+            user_id=user_id,
+            operation_type="embedding",
+            db=db,
+        )
+        if not rate_check["allowed"]:
+            logger.info(
+                "Embedding rate limit exceeded for duplicate check, using fallback",
+                user_id=user_id,
+                remaining=rate_check["remaining"],
+                limit=rate_check["limit"],
+            )
+            return await _fallback_duplicate_check(db, user_id, request, threshold, limit)
+
         # Build text from item attributes for embedding
         item_data = {
             "name": request.name,
@@ -1004,6 +1059,11 @@ async def check_duplicates(
         # Generate embedding for the new item
         try:
             embedding = await AIService.generate_item_embedding(item_data)
+            await AISettingsService.increment_usage(
+                user_id=user_id,
+                operation_type="embedding",
+                db=db,
+            )
         except Exception as e:
             logger.warning(
                 "Failed to generate embedding for duplicate check, falling back to text search",
@@ -1150,9 +1210,26 @@ async def find_similar_items(
 
         source_item = item_result.data
 
+        # Check rate limit before generating the source embedding
+        rate_check = await AISettingsService.check_rate_limit(
+            user_id=user_id,
+            operation_type="embedding",
+            db=db,
+        )
+        if not rate_check["allowed"]:
+            raise RateLimitError(
+                f"Daily embedding limit ({rate_check['limit']}) exceeded. "
+                f"Requested 1 embedding with {rate_check['remaining']} remaining."
+            )
+
         # Generate embedding for source item
         try:
             embedding = await AIService.generate_item_embedding(source_item)
+            await AISettingsService.increment_usage(
+                user_id=user_id,
+                operation_type="embedding",
+                db=db,
+            )
         except Exception as e:
             logger.warning(
                 "Failed to generate embedding for similar items search",
@@ -1211,7 +1288,7 @@ async def find_similar_items(
             "message": f"Found {len(response_items)} similar item(s)"
         }
 
-    except (ItemNotFoundError, ValidationError, DatabaseError):
+    except (ItemNotFoundError, ValidationError, DatabaseError, RateLimitError):
         raise
     except Exception as e:
         logger.error(

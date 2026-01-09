@@ -317,6 +317,7 @@ class AISettingsService:
         user_id: str,
         operation_type: str,
         db,
+        count: int = 1,
     ) -> Dict[str, Any]:
         """
         Check if user has exceeded rate limits.
@@ -325,6 +326,7 @@ class AISettingsService:
             user_id: The user's ID
             operation_type: "extraction", "generation", or "embedding"
             db: Supabase client
+            count: Number of operations the user wants to perform (default: 1)
 
         Returns:
             Dict with allowed, current_count, and limit
@@ -341,8 +343,9 @@ class AISettingsService:
             current = user_settings.get("daily_generation_count", 0)
             limit = settings.AI_DAILY_GENERATION_LIMIT
 
+        requested = max(0, int(count))
         return {
-            "allowed": current < limit,
+            "allowed": (current + requested) <= limit,
             "current_count": current,
             "limit": limit,
             "remaining": max(0, limit - current),
