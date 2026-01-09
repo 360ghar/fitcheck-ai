@@ -14,7 +14,6 @@ import {
   RefreshCw,
   Check,
   X,
-  AlertCircle,
   Loader2,
   Eye,
   EyeOff,
@@ -46,8 +45,6 @@ import {
   updateAISettings,
   testProviderConfig,
   resetProviderConfig,
-  getUsageStats,
-  type AISettings,
   type ProviderConfigDisplay,
   type UsageStats,
 } from "@/api/ai";

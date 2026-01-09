@@ -10,7 +10,6 @@ import {
   Trash2,
   RefreshCw,
   AlertTriangle,
-  Check,
   Edit2,
   ChevronDown,
   ChevronUp,

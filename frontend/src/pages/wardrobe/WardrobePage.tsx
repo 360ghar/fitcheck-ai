@@ -222,23 +222,23 @@ export default function WardrobePage() {
   // ============================================================================
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 md:mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Wardrobe</h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Wardrobe</h1>
+          <p className="text-sm text-muted-foreground">
             {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
           </p>
         </div>
-        <Button onClick={() => setIsUploadModalOpen(true)}>
+        <Button onClick={() => setIsUploadModalOpen(true)} className="hidden md:flex">
           <Plus className="h-4 w-4 mr-2" />
           Add Item
         </Button>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-800 dark:text-red-400">
+        <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md text-sm text-destructive">
           {error.message}
         </div>
       )}
@@ -255,14 +255,14 @@ export default function WardrobePage() {
       {/* Items grid/list */}
       {isLoading ? (
         <div className="text-center py-12">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading items...</p>
+          <div className="inline-block animate-spin rounded-full h-10 w-10 md:h-12 md:w-12 border-b-2 border-primary"></div>
+          <p className="mt-4 text-muted-foreground">Loading items...</p>
         </div>
       ) : filteredItems.length === 0 ? (
-        <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow">
-          <Shirt className="mx-auto h-16 w-16 text-gray-400" />
-          <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">No items found</h3>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+        <div className="text-center py-12 bg-card rounded-lg shadow">
+          <Shirt className="mx-auto h-12 w-12 md:h-16 md:w-16 text-muted-foreground" />
+          <h3 className="mt-4 text-lg font-medium text-foreground">No items found</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
             {filters.search || filters.category !== 'all' || filters.condition !== 'all'
               ? 'Try adjusting your filters or search query'
               : 'Add your first item to get started'}
@@ -274,9 +274,9 @@ export default function WardrobePage() {
         </div>
       ) : (
         <div
-          className={`grid gap-4 ${
+          className={`grid gap-3 md:gap-4 ${
             sort.isGridView
-              ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+              ? 'grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
               : 'grid-cols-1'
           }`}
         >
@@ -293,6 +293,15 @@ export default function WardrobePage() {
           ))}
         </div>
       )}
+
+      {/* Floating Action Button for mobile */}
+      <button
+        onClick={() => setIsUploadModalOpen(true)}
+        className="fixed bottom-[calc(var(--bottom-nav-height)+16px+var(--safe-area-bottom))] right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center md:hidden z-40 hover:bg-primary/90 active:scale-95 transition-transform"
+        aria-label="Add new item"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
 
       {/* Modals */}
       <ItemUpload
@@ -343,40 +352,41 @@ function ItemCard({ item, onClick, onToggleFavorite }: ItemCardProps) {
       case 'donate':
         return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
       default:
-        return 'bg-gray-100 text-gray-800'
+        return 'bg-muted text-muted-foreground'
     }
   }
 
   return (
     <div
-      className="bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer relative group"
+      className="bg-card rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer relative group"
       onClick={onClick}
     >
       {/* Checkbox for selection */}
       <div
-        className={`absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 ${
+        className={`absolute top-2 left-2 z-10 w-6 h-6 md:w-5 md:h-5 rounded border-2 ${
           isSelected
-            ? 'bg-indigo-600 border-indigo-600'
-            : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
-        } flex items-center justify-center`}
+            ? 'bg-primary border-primary'
+            : 'bg-card border-border'
+        } flex items-center justify-center touch-target`}
         onClick={(e) => {
           e.stopPropagation()
           toggleItemSelected(item.id)
         }}
       >
         {isSelected && (
-          <div className="w-2 h-2 bg-white rounded-sm" />
+          <div className="w-2.5 h-2.5 md:w-2 md:h-2 bg-primary-foreground rounded-sm" />
         )}
       </div>
 
-      {/* Favorite button */}
+      {/* Favorite button - larger touch target */}
       <button
-        className={`absolute top-2 right-2 z-10 p-1.5 rounded-full ${
+        className={`absolute top-2 right-2 z-10 p-2.5 md:p-2 rounded-full touch-target flex items-center justify-center ${
           item.is_favorite
             ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400'
-            : 'bg-white/80 dark:bg-gray-800/80 text-gray-400 hover:text-pink-500 dark:hover:text-pink-400'
+            : 'bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-pink-500 dark:hover:text-pink-400'
         }`}
         onClick={onToggleFavorite}
+        aria-label={item.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
       >
         <Heart
           className={`h-4 w-4 ${item.is_favorite ? 'fill-current' : ''}`}
@@ -384,29 +394,30 @@ function ItemCard({ item, onClick, onToggleFavorite }: ItemCardProps) {
       </button>
 
       {/* Item image */}
-      <div className="aspect-square rounded-t-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
+      <div className="aspect-square rounded-t-lg overflow-hidden bg-muted">
         {item.images.length > 0 ? (
           <img
             src={item.images[0].thumbnail_url || item.images[0].image_url}
             alt={item.name}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+            loading="lazy"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Shirt className="h-16 w-16 text-gray-300 dark:text-gray-600" />
+            <Shirt className="h-12 w-12 md:h-16 md:w-16 text-muted-foreground/50" />
           </div>
         )}
       </div>
 
       {/* Item info */}
-      <div className="p-3">
-        <h3 className="font-medium text-gray-900 dark:text-white truncate">{item.name}</h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">{item.category}</p>
+      <div className="p-2.5 md:p-3">
+        <h3 className="font-medium text-sm md:text-base text-foreground truncate">{item.name}</h3>
+        <p className="text-xs md:text-sm text-muted-foreground capitalize">{item.category}</p>
         {item.brand && (
-          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">{item.brand}</p>
+          <p className="text-xs text-muted-foreground/70 mt-0.5 md:mt-1 truncate">{item.brand}</p>
         )}
         {item.usage_times_worn > 0 && (
-          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground/70 mt-0.5 md:mt-1">
             Worn {item.usage_times_worn} {item.usage_times_worn === 1 ? 'time' : 'times'}
           </p>
         )}
@@ -414,7 +425,7 @@ function ItemCard({ item, onClick, onToggleFavorite }: ItemCardProps) {
 
       {/* Condition indicator */}
       <div
-        className={`absolute bottom-16 left-2 px-2 py-0.5 rounded-full text-xs font-medium ${getConditionBadgeClass(item.condition)}`}
+        className={`absolute bottom-14 md:bottom-16 left-2 px-2 py-0.5 rounded-full text-xs font-medium ${getConditionBadgeClass(item.condition)}`}
       >
         {item.condition}
       </div>

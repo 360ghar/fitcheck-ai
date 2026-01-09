@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User, AuthTokens, AuthResponse } from '../types';
 import * as authApi from '../api/auth';
+import { getCurrentUser } from '../api/users';
 import { getApiError, resetForcedLogoutFlag } from '../api/client';
 
 // ============================================================================
@@ -205,6 +206,17 @@ export const useAuthStore = create<AuthState>()(
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
+        // Sync user data with server to ensure avatar_url and other fields are fresh
+        if (state?.isAuthenticated && state?.tokens?.access_token) {
+          getCurrentUser()
+            .then((freshUser) => {
+              useAuthStore.setState({ user: freshUser });
+              authApi.storeUser(freshUser);
+            })
+            .catch(() => {
+              // Silently fail - user data from localStorage will be used
+            });
+        }
       },
     }
   )

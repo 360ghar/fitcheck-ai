@@ -7,8 +7,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, Sparkles, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Upload, Sparkles } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -16,9 +15,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { extractItems, generateProductImage, fileToBase64 } from '@/api/ai'
+import { extractItems, generateProductImage } from '@/api/ai'
 import { createItem, uploadItemImages } from '@/api/items'
-import { parallelWithRetry, withRetry } from '@/lib/retry'
+import { parallelWithRetry } from '@/lib/retry'
 import { DetectionProgress } from './DetectionProgress'
 import { GenerationProgress } from './GenerationProgress'
 import { ExtractedItemsGrid } from './ExtractedItemsGrid'
@@ -139,7 +138,7 @@ export function MultiItemExtractionFlow({
   // DETECTION PHASE
   // ============================================================================
 
-  const runDetection = async (file: File, previewUrl: string) => {
+  const runDetection = async (file: File, _previewUrl: string) => {
     try {
       setState((prev) => ({ ...prev, detectionProgress: 10 }))
 
@@ -168,7 +167,7 @@ export function MultiItemExtractionFlow({
         brand: item.brand,
         confidence: item.confidence,
         boundingBox: item.bounding_box,
-        detailedDescription: item.detailed_description,
+        detailedDescription: item.detailed_description || '',
         status: 'detected' as const,
         name: generateItemName({
           tempId: item.temp_id,
@@ -177,6 +176,7 @@ export function MultiItemExtractionFlow({
           colors: item.colors,
           confidence: item.confidence,
           status: 'detected',
+          detailedDescription: '',
         }),
       }))
 
@@ -203,7 +203,7 @@ export function MultiItemExtractionFlow({
   // GENERATION PHASE
   // ============================================================================
 
-  const runGeneration = async (items: DetectedItem[], originalFile: File) => {
+  const runGeneration = async (items: DetectedItem[], _originalFile: File) => {
     // Create abort controller for cancellation
     abortControllerRef.current = new AbortController()
 
@@ -517,7 +517,7 @@ export function MultiItemExtractionFlow({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="sm:max-w-[90vw] lg:max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-indigo-500" />
@@ -533,7 +533,7 @@ export function MultiItemExtractionFlow({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto min-h-[400px]">
+        <div className="flex-1 overflow-y-auto min-h-[400px] min-w-0">
           {/* Upload Phase */}
           {state.step === 'upload' && (
             <div className="h-full flex flex-col">

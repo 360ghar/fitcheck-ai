@@ -4,7 +4,7 @@
  * All AI processing is done server-side using configurable providers.
  */
 
-import { apiClient, getApiError, ApiError } from './client';
+import { apiClient } from './client';
 
 // =============================================================================
 // TYPES

@@ -73,7 +73,14 @@ export async function getCompleteLookSuggestions(
       `/api/v1/recommendations/complete-look?${params.toString()}`,
       { item_ids: itemIds }
     );
-    return response.data.data.complete_looks;
+
+    // Defensive: ensure we always return an array
+    const looks = response.data?.data?.complete_looks;
+    if (!Array.isArray(looks)) {
+      console.warn('[recommendations] Unexpected response structure from complete-look API:', response.data);
+      return [];
+    }
+    return looks;
   } catch (error) {
     throw getApiError(error);
   }

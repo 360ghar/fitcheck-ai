@@ -638,9 +638,6 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
           name: it.name,
           category: it.category,
           colors: it.colors,
-          brand: it.brand,
-          material: it.material,
-          pattern: it.pattern,
         }));
 
       if (promptItems.length === 0) {
