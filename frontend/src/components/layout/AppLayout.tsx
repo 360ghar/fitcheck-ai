@@ -1,46 +1,34 @@
 /**
  * Main App Layout Component
  * Wraps authenticated pages with collapsible sidebar navigation
+ * Mobile: Bottom navigation bar with simplified header
+ * Desktop: Collapsible sidebar
  */
 
 import { Outlet } from 'react-router-dom'
-import { Menu } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   SidebarProvider,
   Sidebar,
-  SidebarMobile,
   useSidebar,
 } from '@/components/sidebar'
-import { Button } from '@/components/ui/button'
+import { BottomNav } from '@/components/navigation/BottomNav'
 
 function AppLayoutContent() {
-  const { isCollapsed, toggleMobile } = useSidebar()
+  const { isCollapsed } = useSidebar()
 
   return (
     <div className="flex min-h-screen bg-background">
       {/* Desktop sidebar */}
       <Sidebar className="hidden md:flex" />
 
-      {/* Mobile header */}
-      <header className="fixed left-0 right-0 top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-background px-4 md:hidden">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleMobile}
-          aria-label="Open navigation menu"
-        >
-          <Menu className="h-6 w-6" />
-        </Button>
+      {/* Mobile header - simplified since we have bottom nav */}
+      <header className="fixed left-0 right-0 top-0 z-40 flex h-14 items-center justify-center border-b border-border bg-background/95 backdrop-blur-sm safe-area-top md:hidden">
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold text-primary">FitCheck</span>
           <span className="text-lg font-light text-muted-foreground">AI</span>
         </div>
-        <div className="w-10" /> {/* Spacer for centering */}
       </header>
-
-      {/* Mobile drawer */}
-      <SidebarMobile />
 
       {/* Main content */}
       <main
@@ -49,14 +37,18 @@ function AppLayoutContent() {
           isCollapsed ? 'md:ml-16' : 'md:ml-60'
         )}
       >
-        <div className="min-h-screen pt-14 md:pt-0">
+        {/* Content wrapper with padding for mobile header and bottom nav */}
+        <div className="min-h-screen pt-[calc(56px+var(--safe-area-top))] pb-bottom-nav md:pt-0 md:pb-0">
           <Outlet />
         </div>
 
-        <footer className="py-6 text-center text-xs text-muted-foreground">
+        <footer className="py-6 text-center text-xs text-muted-foreground hidden md:block">
           © {new Date().getFullYear()} FitCheck AI. All rights reserved.
         </footer>
       </main>
+
+      {/* Bottom navigation for mobile */}
+      <BottomNav />
     </div>
   )
 }

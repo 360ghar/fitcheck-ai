@@ -5,8 +5,7 @@
  * Shows original image with bounding boxes and item cards.
  */
 
-import { useState } from 'react'
-import { Trash2, Save, ArrowLeft, AlertTriangle, Check } from 'lucide-react'
+import { Save, ArrowLeft, AlertTriangle, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -55,9 +54,9 @@ export function ExtractedItemsGrid({
   return (
     <div className="flex flex-col h-full">
       {/* Header with stats */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Review Extracted Items</h3>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <h3 className="text-lg font-semibold text-foreground">Review Extracted Items</h3>
           <div className="flex gap-2">
             <Badge variant="secondary" className="bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
               <Check className="h-3 w-3 mr-1" />
@@ -76,15 +75,15 @@ export function ExtractedItemsGrid({
             )}
           </div>
         </div>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <p className="text-sm text-muted-foreground">
           {activeItems.length} item{activeItems.length !== 1 ? 's' : ''} detected
         </p>
       </div>
 
       {/* Main content */}
-      <div className="flex gap-6 flex-1 overflow-hidden">
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 flex-1 min-h-0">
         {/* Original image with bounding boxes */}
-        <div className="flex-shrink-0 w-64">
+        <div className="w-full lg:w-64 lg:flex-shrink-0">
           <Card className="sticky top-0">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Original Image</CardTitle>
@@ -167,17 +166,17 @@ export function ExtractedItemsGrid({
         </div>
 
         {/* Items grid */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-w-0 overflow-y-auto">
           {activeItems.length === 0 ? (
             <Card className="p-8 text-center">
-              <p className="text-gray-500 dark:text-gray-400 mb-4">No items to save</p>
+              <p className="text-muted-foreground mb-4">No items to save</p>
               <Button variant="outline" onClick={onBack}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Upload Different Image
               </Button>
             </Card>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 lg:gap-4">
               {activeItems.map((item) => (
                 <ExtractedItemCard
                   key={item.tempId}
@@ -194,7 +193,7 @@ export function ExtractedItemsGrid({
       </div>
 
       {/* Footer actions */}
-      <div className="flex items-center justify-between pt-4 border-t dark:border-gray-700 mt-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-border mt-4">
         <Button variant="outline" onClick={onBack} disabled={isSaving}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back

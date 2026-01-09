@@ -300,7 +300,16 @@ async def register(
         logger.info("User registered successfully", user_id=user_id, email=request.email)
         return {
             "data": {
-                "user": {"id": user_id, "email": request.email, "full_name": request.full_name},
+                "user": {
+                    "id": user_id,
+                    "email": request.email,
+                    "full_name": request.full_name,
+                    "avatar_url": None,
+                    "gender": None,
+                    "is_active": True,
+                    "email_verified": False,
+                    "created_at": profile_payload.get("created_at"),
+                },
                 "access_token": session.access_token if session else "",
                 "refresh_token": session.refresh_token if session else "",
                 "requires_email_confirmation": requires_email_confirmation,
@@ -400,13 +409,31 @@ async def login(
         except Exception as e:
             logger.warning("Failed to ensure user profile", user_id=user.id, error=str(e))
 
-        # Get user profile data
-        user_data = {
-            "id": user.id,
-            "email": user.email,
-            "full_name": user.user_metadata.get("full_name") if user.user_metadata else None,
-            "avatar_url": user.user_metadata.get("avatar_url") if user.user_metadata else None
-        }
+        # Get user profile data from database (not auth metadata) to ensure
+        # avatar_url and other profile fields are returned correctly
+        profile_result = db.table("users").select("*").eq("id", user.id).execute()
+        if profile_result.data:
+            profile = profile_result.data[0]
+            user_data = {
+                "id": user.id,
+                "email": user.email,
+                "full_name": profile.get("full_name"),
+                "avatar_url": profile.get("avatar_url"),
+                "gender": profile.get("gender"),
+                "is_active": profile.get("is_active", True),
+                "email_verified": profile.get("email_verified", False),
+                "created_at": profile.get("created_at"),
+                "updated_at": profile.get("updated_at"),
+                "last_login_at": profile.get("last_login_at"),
+            }
+        else:
+            # Fallback to auth metadata if no profile exists yet
+            user_data = {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.user_metadata.get("full_name") if user.user_metadata else None,
+                "avatar_url": None,
+            }
 
         logger.info("User logged in successfully", user_id=user.id)
         return {

@@ -10,7 +10,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { ScrollableTabs } from '@/components/ui/scrollable-tabs'
 import { useToast } from '@/components/ui/use-toast'
+import { ItemImage } from '@/components/ui/item-image'
+import { cn } from '@/lib/utils'
+import { generateFallbackOutfits } from '@/lib/outfit-generator'
 
 import { useWardrobeStore } from '@/stores/wardrobeStore'
 import {
@@ -22,6 +26,26 @@ import {
 import type { CompleteLookSuggestion, MatchResult, Item } from '@/types'
 
 type TabType = 'match' | 'complete' | 'weather' | 'shopping'
+
+/**
+ * Enrich an item with images from the wardrobe store
+ * The recommendations API returns items without images for performance,
+ * so we look up the full item data from the local store
+ */
+const enrichItemWithImages = (item: Item, wardrobeItems: Item[]): Item => {
+  // If item already has images, return as-is
+  if (item.images && item.images.length > 0) {
+    return item
+  }
+
+  // Look up the full item from wardrobe store
+  const fullItem = wardrobeItems.find(w => w.id === item.id)
+  if (fullItem?.images && fullItem.images.length > 0) {
+    return { ...item, images: fullItem.images }
+  }
+
+  return item
+}
 
 export default function RecommendationsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('match')
@@ -74,6 +98,7 @@ export default function RecommendationsPage() {
   const [completeSelection, setCompleteSelection] = useState<Set<string>>(new Set())
   const [completeLooks, setCompleteLooks] = useState<CompleteLookSuggestion[]>([])
   const [isLoadingComplete, setIsLoadingComplete] = useState(false)
+  const [hasAttemptedComplete, setHasAttemptedComplete] = useState(false)
 
   const toggleCompleteItem = (itemId: string) => {
     setCompleteSelection((prev) => {
@@ -92,15 +117,32 @@ export default function RecommendationsPage() {
     }
 
     setIsLoadingComplete(true)
+    setHasAttemptedComplete(true)
+
     try {
-      const looks = await getCompleteLookSuggestions(ids, { limit: 6 })
+      let looks = await getCompleteLookSuggestions(ids, { limit: 6 })
+
+      // Fallback: If API returns empty, generate client-side suggestions
+      if (!looks || looks.length === 0) {
+        const selectedItems = items.filter((item) => ids.includes(item.id))
+        looks = generateFallbackOutfits(selectedItems, items, 6)
+      }
+
       setCompleteLooks(looks)
     } catch (err) {
-      toast({
-        title: 'Failed to generate complete looks',
-        description: err instanceof Error ? err.message : 'An error occurred',
-        variant: 'destructive',
-      })
+      // On API error, try fallback
+      const selectedItems = items.filter((item) => ids.includes(item.id))
+      const fallbackLooks = generateFallbackOutfits(selectedItems, items, 6)
+
+      if (fallbackLooks.length > 0) {
+        setCompleteLooks(fallbackLooks)
+      } else {
+        toast({
+          title: 'Failed to generate complete looks',
+          description: err instanceof Error ? err.message : 'An error occurred',
+          variant: 'destructive',
+        })
+      }
     } finally {
       setIsLoadingComplete(false)
     }
@@ -168,74 +210,67 @@ export default function RecommendationsPage() {
     { id: 'shopping' as TabType, name: 'Shopping', icon: Palette },
   ]
 
-  const renderItemCard = (item: Item) => (
-    <div className="flex items-center gap-3">
-      {item.images?.length ? (
-        <img
-          src={item.images[0].thumbnail_url || item.images[0].image_url}
-          alt={item.name}
-          className="h-10 w-10 rounded-lg object-cover"
-        />
-      ) : (
-        <div className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 text-xs">
-          {item.category}
+  const renderItemCard = (item: Item) => {
+    const enrichedItem = enrichItemWithImages(item, items)
+    return (
+      <div className="flex items-center gap-3">
+        <ItemImage item={enrichedItem} size="sm" />
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-foreground truncate">{enrichedItem.name}</div>
+          <div className="text-xs text-muted-foreground capitalize truncate">{enrichedItem.category}</div>
         </div>
-      )}
-      <div className="min-w-0">
-        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{item.name}</div>
-        <div className="text-xs text-gray-500 dark:text-gray-400 capitalize truncate">{item.category}</div>
       </div>
-    </div>
-  )
+    )
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
-          <Sparkles className="h-7 w-7 text-purple-600 dark:text-purple-400 mr-2" />
+      <div className="mb-4 md:mb-8">
+        <h1 className="text-xl md:text-2xl font-bold text-foreground flex items-center">
+          <Sparkles className="h-5 w-5 md:h-7 md:w-7 text-primary mr-2" />
           AI Recommendations
         </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
+        <p className="mt-1 md:mt-2 text-sm text-muted-foreground">
           Get personalized outfit suggestions powered by AI
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
-        <nav className="flex space-x-8">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center px-1 py-4 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === tab.id
-                  ? 'border-purple-500 text-purple-600 dark:text-purple-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-              }`}
-            >
-              <tab.icon className="h-4 w-4 mr-2" />
-              {tab.name}
-            </button>
-          ))}
-        </nav>
-      </div>
+      {/* Scrollable Tabs for mobile, regular tabs for desktop */}
+      <ScrollableTabs className="mb-4 md:mb-6">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              'flex items-center gap-2 px-4 py-3 md:py-4 text-sm font-medium whitespace-nowrap transition-colors touch-target border-b-2',
+              activeTab === tab.id
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+            )}
+          >
+            <tab.icon className="h-4 w-4" />
+            <span className="hidden xs:inline">{tab.name}</span>
+            <span className="xs:hidden">{tab.name.split(' ')[0]}</span>
+          </button>
+        ))}
+      </ScrollableTabs>
 
       {/* Tab content */}
       <div className="space-y-4">
         {activeTab === 'match' && (
           <Card>
-            <CardHeader>
-              <CardTitle>Find Matches</CardTitle>
+            <CardHeader className="px-4 py-3 md:px-6 md:py-4">
+              <CardTitle className="text-base md:text-lg">Find Matches</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+            <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end">
                 <div className="flex-1 w-full space-y-2">
-                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300">Pick an item</div>
+                  <div className="text-sm font-medium text-foreground">Pick an item</div>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <select
-                      className="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                      className="w-full h-12 pl-9 pr-3 border border-border rounded-md text-base bg-background text-foreground"
                       value={matchItemId}
                       onChange={(e) => setMatchItemId(e.target.value)}
                       disabled={isLoadingItems}
@@ -252,14 +287,15 @@ export default function RecommendationsPage() {
                 <Button
                   onClick={() => runMatch(matchItemId)}
                   disabled={!matchItemId || isLoadingMatch}
+                  className="w-full md:w-auto"
                 >
                   {isLoadingMatch ? 'Finding…' : 'Find Matches'}
                 </Button>
               </div>
 
               {selectedMatchItem && (
-                <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Selected</div>
+                <div className="p-3 rounded-lg bg-muted">
+                  <div className="text-sm text-muted-foreground mb-2">Selected</div>
                   {renderItemCard(selectedMatchItem)}
                 </div>
               )}
@@ -267,19 +303,22 @@ export default function RecommendationsPage() {
               {matchData && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <div className="text-sm font-semibold text-gray-900 dark:text-white">Matching items</div>
+                    <div className="text-sm font-semibold text-foreground">Matching items</div>
                     {matchData.matches.length === 0 ? (
-                      <div className="text-sm text-gray-600 dark:text-gray-400">No matches found.</div>
+                      <div className="text-sm text-muted-foreground">No matches found.</div>
                     ) : (
                       <div className="space-y-2">
-                        {matchData.matches.slice(0, 10).map((m, idx) => (
-                          <div key={`${m.item?.id || idx}-${idx}`} className="p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                        {matchData.matches
+                          .filter((m) => m.item?.id)
+                          .slice(0, 10)
+                          .map((m, idx) => (
+                          <div key={`${m.item.id}-${idx}`} className="p-3 rounded-lg border border-border">
                             <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">{renderItemCard(m.item as Item)}</div>
+                              <div className="min-w-0">{renderItemCard(m.item)}</div>
                               <Badge variant="secondary">{m.score}</Badge>
                             </div>
                             {m.reasons?.length > 0 && (
-                              <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                              <div className="mt-2 text-xs text-muted-foreground">
                                 {m.reasons.join(' • ')}
                               </div>
                             )}
@@ -290,19 +329,22 @@ export default function RecommendationsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <div className="text-sm font-semibold text-gray-900 dark:text-white">Complete looks</div>
+                    <div className="text-sm font-semibold text-foreground">Complete looks</div>
                     {matchData.complete_looks.length === 0 ? (
-                      <div className="text-sm text-gray-600 dark:text-gray-400">No complete looks yet.</div>
+                      <div className="text-sm text-muted-foreground">No complete looks yet.</div>
                     ) : (
                       <div className="space-y-2">
                         {matchData.complete_looks.slice(0, 4).map((look, idx) => (
-                          <div key={idx} className="p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                          <div key={idx} className="p-3 rounded-lg border border-border">
                             <div className="flex items-center justify-between gap-3">
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">{look.description}</div>
+                              <div className="text-sm font-medium text-foreground">{look.description}</div>
                               <Badge variant="outline">{look.match_score}</Badge>
                             </div>
                             <div className="mt-2 space-y-2">
-                              {look.items.slice(0, 4).map((it) => (
+                              {(look.items || [])
+                                .filter((it) => it?.id)
+                                .slice(0, 4)
+                                .map((it) => (
                                 <div key={it.id} className="text-sm">
                                   {renderItemCard(it)}
                                 </div>
@@ -317,7 +359,7 @@ export default function RecommendationsPage() {
               )}
 
               {items.length === 0 && !isLoadingItems && (
-                <div className="text-sm text-gray-600 dark:text-gray-400">
+                <div className="text-sm text-muted-foreground">
                   Add items to your wardrobe first to unlock recommendations.
                 </div>
               )}
@@ -327,20 +369,24 @@ export default function RecommendationsPage() {
 
         {activeTab === 'complete' && (
           <Card>
-            <CardHeader>
-              <CardTitle>Complete Look</CardTitle>
+            <CardHeader className="px-4 py-3 md:px-6 md:py-4">
+              <CardTitle className="text-base md:text-lg">Complete Look</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm text-gray-600 dark:text-gray-400">
+            <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="text-sm text-muted-foreground">
                   Select a few items and generate full outfit suggestions.
                 </div>
-                <Button onClick={runCompleteLook} disabled={isLoadingComplete || completeSelection.size === 0}>
+                <Button
+                  onClick={runCompleteLook}
+                  disabled={isLoadingComplete || completeSelection.size === 0}
+                  className="w-full md:w-auto"
+                >
                   {isLoadingComplete ? 'Generating…' : 'Generate'}
                 </Button>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[18rem] overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3 max-h-[18rem] overflow-y-auto pr-1">
                 {items.map((item) => {
                   const selected = completeSelection.has(item.id)
                   return (
@@ -348,9 +394,12 @@ export default function RecommendationsPage() {
                       key={item.id}
                       type="button"
                       onClick={() => toggleCompleteItem(item.id)}
-                      className={`p-3 rounded-lg border text-left transition-colors ${
-                        selected ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                      }`}
+                      className={cn(
+                        'p-2 md:p-3 rounded-lg border text-left transition-colors touch-target',
+                        selected
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-muted-foreground'
+                      )}
                     >
                       {renderItemCard(item)}
                     </button>
@@ -360,16 +409,19 @@ export default function RecommendationsPage() {
 
               {completeLooks.length > 0 && (
                 <div className="space-y-2">
-                  <div className="text-sm font-semibold text-gray-900 dark:text-white">Suggestions</div>
+                  <div className="text-sm font-semibold text-foreground">Suggestions</div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {completeLooks.map((look, idx) => (
-                      <div key={idx} className="p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div key={idx} className="p-3 rounded-lg border border-border">
                         <div className="flex items-center justify-between gap-3">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{look.description}</div>
+                          <div className="text-sm font-medium text-foreground">{look.description}</div>
                           <Badge variant="outline">{look.match_score}</Badge>
                         </div>
                         <div className="mt-2 space-y-2">
-                          {look.items.slice(0, 5).map((it) => (
+                          {(look.items || [])
+                            .filter((it) => it?.id)
+                            .slice(0, 5)
+                            .map((it) => (
                             <div key={it.id}>{renderItemCard(it)}</div>
                           ))}
                         </div>
@@ -378,47 +430,64 @@ export default function RecommendationsPage() {
                   </div>
                 </div>
               )}
+
+              {completeLooks.length === 0 && hasAttemptedComplete && !isLoadingComplete && (
+                <div className="p-4 rounded-lg bg-muted text-center">
+                  <div className="text-sm text-muted-foreground">
+                    No outfit suggestions could be generated.
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Try adding more items to your wardrobe for better suggestions.
+                  </div>
+                </div>
+              )}
+
+              {items.length === 0 && !isLoadingItems && (
+                <div className="text-sm text-muted-foreground">
+                  Add items to your wardrobe first to unlock recommendations.
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
 
         {activeTab === 'weather' && (
           <Card>
-            <CardHeader>
-              <CardTitle>Weather-Based</CardTitle>
+            <CardHeader className="px-4 py-3 md:px-6 md:py-4">
+              <CardTitle className="text-base md:text-lg">Weather-Based</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+            <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end">
                 <div className="flex-1 w-full space-y-2">
-                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300">Location (optional)</div>
+                  <div className="text-sm font-medium text-foreground">Location (optional)</div>
                   <Input
                     placeholder="e.g., New York or 40.7128,-74.0060"
                     value={weatherLocation}
                     onChange={(e) => setWeatherLocation(e.target.value)}
                   />
                 </div>
-                <Button onClick={runWeather} disabled={isLoadingWeather}>
+                <Button onClick={runWeather} disabled={isLoadingWeather} className="w-full md:w-auto">
                   {isLoadingWeather ? 'Loading…' : 'Get Recommendations'}
                 </Button>
               </div>
 
               {weatherData && (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2 md:gap-3">
                     <Badge variant="secondary">{Math.round(weatherData.temperature)}°C</Badge>
                     <Badge variant="outline" className="capitalize">{weatherData.weather_state}</Badge>
-                    <span className="text-sm text-gray-600 dark:text-gray-400 capitalize">{weatherData.temp_category}</span>
+                    <span className="text-sm text-muted-foreground capitalize">{weatherData.temp_category}</span>
                   </div>
 
                   {weatherData.notes?.length > 0 && (
-                    <div className="text-sm text-gray-700 dark:text-gray-300">
+                    <div className="text-sm text-foreground">
                       {weatherData.notes.join(' ')}
                     </div>
                   )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
-                      <div className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Preferred categories</div>
+                    <div className="p-3 rounded-lg bg-muted">
+                      <div className="text-sm font-semibold text-foreground mb-2">Preferred categories</div>
                       <div className="flex flex-wrap gap-2">
                         {weatherData.preferred_categories.map((c) => (
                           <Badge key={c} variant="secondary" className="capitalize">
@@ -427,11 +496,11 @@ export default function RecommendationsPage() {
                         ))}
                       </div>
                     </div>
-                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
-                      <div className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Extra items</div>
+                    <div className="p-3 rounded-lg bg-muted">
+                      <div className="text-sm font-semibold text-foreground mb-2">Extra items</div>
                       <div className="flex flex-wrap gap-2">
                         {(weatherData.additional_items || []).length === 0 ? (
-                          <span className="text-sm text-gray-600 dark:text-gray-400">None</span>
+                          <span className="text-sm text-muted-foreground">None</span>
                         ) : (
                           weatherData.additional_items.map((x) => (
                             <Badge key={x} variant="outline">
@@ -450,13 +519,13 @@ export default function RecommendationsPage() {
 
         {activeTab === 'shopping' && (
           <Card>
-            <CardHeader>
-              <CardTitle>Shopping Recommendations</CardTitle>
+            <CardHeader className="px-4 py-3 md:px-6 md:py-4">
+              <CardTitle className="text-base md:text-lg">Shopping Recommendations</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="space-y-2">
-                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300">Category</div>
+                  <div className="text-sm font-medium text-foreground">Category</div>
                   <Input
                     placeholder="e.g., tops"
                     value={shoppingCategory}
@@ -464,7 +533,7 @@ export default function RecommendationsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300">Style</div>
+                  <div className="text-sm font-medium text-foreground">Style</div>
                   <Input
                     placeholder="e.g., minimalist"
                     value={shoppingStyle}
@@ -472,7 +541,7 @@ export default function RecommendationsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300">Budget</div>
+                  <div className="text-sm font-medium text-foreground">Budget</div>
                   <Input
                     placeholder="e.g., 200"
                     value={shoppingBudget}
@@ -481,23 +550,23 @@ export default function RecommendationsPage() {
                 </div>
               </div>
 
-              <Button onClick={runShopping} disabled={isLoadingShopping}>
+              <Button onClick={runShopping} disabled={isLoadingShopping} className="w-full md:w-auto">
                 {isLoadingShopping ? 'Loading…' : 'Get Suggestions'}
               </Button>
 
               {shopping.length > 0 && (
                 <div className="space-y-2">
                   {shopping.map((rec, idx) => (
-                    <div key={idx} className="p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <div key={idx} className="p-3 rounded-lg border border-border">
                       <div className="flex items-center justify-between gap-3">
-                        <div className="font-medium text-gray-900 dark:text-white capitalize">{rec.category}</div>
+                        <div className="font-medium text-foreground capitalize">{rec.category}</div>
                         <Badge variant={rec.priority === 'high' ? 'default' : 'secondary'}>
                           {rec.priority}
                         </Badge>
                       </div>
-                      <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">{rec.description}</div>
+                      <div className="text-sm text-muted-foreground mt-1">{rec.description}</div>
                       {rec.suggested_brands?.length ? (
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        <div className="text-xs text-muted-foreground mt-2">
                           Brands: {rec.suggested_brands.join(', ')}
                         </div>
                       ) : null}
@@ -507,7 +576,7 @@ export default function RecommendationsPage() {
               )}
 
               {shopping.length === 0 && !isLoadingShopping && (
-                <div className="text-sm text-gray-600 dark:text-gray-400">
+                <div className="text-sm text-muted-foreground">
                   Generate suggestions to see recommended items to buy.
                 </div>
               )}
@@ -517,9 +586,9 @@ export default function RecommendationsPage() {
       </div>
 
       {/* Tips section */}
-      <div className="mt-8 bg-purple-50 dark:bg-purple-900/20 rounded-lg p-6">
-        <h3 className="font-medium text-purple-900 dark:text-purple-200 mb-2">Pro Tips</h3>
-        <ul className="text-sm text-purple-800 dark:text-purple-300 space-y-1">
+      <div className="mt-6 md:mt-8 bg-primary/10 rounded-lg p-4 md:p-6">
+        <h3 className="font-medium text-primary mb-2">Pro Tips</h3>
+        <ul className="text-sm text-primary/80 space-y-1">
           <li>• The more items you add, the better the recommendations become</li>
           <li>• Tag your items with styles and occasions for better matches</li>
           <li>• Mark items as favorites to prioritize them in suggestions</li>

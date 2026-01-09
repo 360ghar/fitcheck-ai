@@ -283,15 +283,15 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8 space-y-4 md:space-y-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <CalendarIcon className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+          <h1 className="text-xl md:text-2xl font-bold text-foreground flex items-center gap-2">
+            <CalendarIcon className="h-5 w-5 md:h-6 md:w-6 text-primary" />
             Calendar
           </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Plan outfits against your schedule.</p>
-          <div className="flex items-center gap-2 mt-1 text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-muted-foreground">Plan outfits against your schedule.</p>
+          <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
             <MapPin className="h-4 w-4" />
             {userLocation ? (
               <button
@@ -299,7 +299,7 @@ export default function CalendarPage() {
                   setEditingLocation(userLocation)
                   setShowLocationDialog(true)
                 }}
-                className="hover:text-indigo-600 transition-colors underline-offset-2 hover:underline"
+                className="hover:text-primary transition-colors underline-offset-2 hover:underline touch-target"
               >
                 {userLocation}
               </button>
@@ -317,14 +317,14 @@ export default function CalendarPage() {
                   }
                 }}
                 disabled={geoState.isLoading}
-                className="text-indigo-600 hover:text-indigo-800"
+                className="text-primary hover:text-primary/80 touch-target"
               >
                 {geoState.isLoading ? 'Detecting...' : 'Set location for weather'}
               </button>
             )}
           </div>
         </div>
-        <Button onClick={handleConnect} variant="outline" disabled={isConnecting}>
+        <Button onClick={handleConnect} variant="outline" disabled={isConnecting} className="w-full md:w-auto">
           {isConnecting ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -337,16 +337,16 @@ export default function CalendarPage() {
       </div>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0">
-          <CardTitle>Events</CardTitle>
+        <CardHeader className="flex-row items-center justify-between space-y-0 px-4 py-3 md:px-6 md:py-4">
+          <CardTitle className="text-base md:text-lg">Events</CardTitle>
           {isLoadingEvents && (
-            <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+            <div className="text-sm text-muted-foreground flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Loading…
+              <span className="hidden md:inline">Loading…</span>
             </div>
           )}
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-2 md:p-4">
           <CalendarView
             events={decoratedEvents}
             outfits={outfits}
@@ -394,7 +394,7 @@ export default function CalendarPage() {
                 onChange={(e) => setCreateLocation(e.target.value)}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="event-start">Start</Label>
                 <Input
@@ -415,11 +415,11 @@ export default function CalendarPage() {
               </div>
             </div>
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+          <DialogFooter className="flex-col md:flex-row gap-2">
+            <Button variant="outline" onClick={() => setCreateOpen(false)} className="w-full md:w-auto">
               Cancel
             </Button>
-            <Button onClick={submitCreate}>
+            <Button onClick={submitCreate} className="w-full md:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Create
             </Button>
@@ -445,25 +445,26 @@ export default function CalendarPage() {
           </DialogHeader>
 
           {selectedEvent?.description && (
-            <div className="text-sm text-gray-700 dark:text-gray-300">{selectedEvent.description}</div>
+            <div className="text-sm text-muted-foreground">{selectedEvent.description}</div>
           )}
 
           {selectedEvent?.outfit_id ? (
-            <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
-              <div className="text-sm font-medium text-gray-900 dark:text-white">Assigned outfit</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{selectedEvent.outfit_name || selectedEvent.outfit_id}</div>
+            <div className="p-3 rounded-lg bg-muted">
+              <div className="text-sm font-medium text-foreground">Assigned outfit</div>
+              <div className="text-sm text-muted-foreground mt-1">{selectedEvent.outfit_name || selectedEvent.outfit_id}</div>
             </div>
           ) : (
-            <div className="text-sm text-gray-600 dark:text-gray-400">No outfit assigned yet. Use "+ Outfit" on the calendar.</div>
+            <div className="text-sm text-muted-foreground">No outfit assigned yet. Use "+ Outfit" on the calendar.</div>
           )}
 
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setSelectedEvent(null)}>
+          <DialogFooter className="flex-col md:flex-row gap-2">
+            <Button variant="outline" onClick={() => setSelectedEvent(null)} className="w-full md:w-auto">
               Close
             </Button>
             {selectedEvent?.outfit_id && (
               <Button
                 variant="destructive"
+                className="w-full md:w-auto"
                 onClick={async () => {
                   if (!selectedEvent) return
                   try {

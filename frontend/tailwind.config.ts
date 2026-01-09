@@ -7,7 +7,23 @@ const config: Config = {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
+    screens: {
+      'xs': '375px',   // Small phones (iPhone SE)
+      'sm': '640px',   // Large phones / small tablets
+      'md': '768px',   // Tablets
+      'lg': '1024px',  // Small laptops
+      'xl': '1280px',  // Desktops
+      '2xl': '1536px', // Large screens
+    },
     extend: {
+      spacing: {
+        'touch': '44px',      // Minimum touch target (Apple HIG)
+        'touch-lg': '48px',   // Comfortable touch target
+        'safe-top': 'env(safe-area-inset-top)',
+        'safe-bottom': 'env(safe-area-inset-bottom)',
+        'safe-left': 'env(safe-area-inset-left)',
+        'safe-right': 'env(safe-area-inset-right)',
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

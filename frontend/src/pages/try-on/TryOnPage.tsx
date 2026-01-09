@@ -6,7 +6,7 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Download, Upload, RefreshCw, Loader2, Sparkles, X } from 'lucide-react';
+import { Download, Upload, RefreshCw, Loader2, Sparkles, X, Check } from 'lucide-react';
 import { useUserAvatar } from '@/stores/authStore';
 import { generateTryOn, TryOnOptions, TryOnResult } from '@/api/ai';
 import { AvatarRequiredPrompt } from '@/components/try-on';
@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
+import { cn } from '@/lib/utils';
 
 type TryOnStep = 'upload' | 'options' | 'generating' | 'result';
 
@@ -48,6 +49,65 @@ const POSE_OPTIONS = [
   { value: 'walking', label: 'Walking' },
   { value: 'casual pose', label: 'Casual' },
 ];
+
+const STEPS = [
+  { id: 'upload', label: 'Upload', shortLabel: '1' },
+  { id: 'options', label: 'Options', shortLabel: '2' },
+  { id: 'generating', label: 'Generate', shortLabel: '3' },
+  { id: 'result', label: 'Result', shortLabel: '4' },
+] as const;
+
+function StepIndicator({ currentStep }: { currentStep: TryOnStep }) {
+  const currentIndex = STEPS.findIndex((s) => s.id === currentStep);
+
+  return (
+    <div className="flex items-center justify-center gap-2 md:gap-4 mb-6">
+      {STEPS.map((step, index) => {
+        const isCompleted = index < currentIndex;
+        const isCurrent = index === currentIndex;
+        const isPending = index > currentIndex;
+
+        return (
+          <div key={step.id} className="flex items-center gap-2 md:gap-4">
+            <div className="flex flex-col items-center">
+              <div
+                className={cn(
+                  'w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors',
+                  isCompleted && 'bg-primary text-primary-foreground',
+                  isCurrent && 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background',
+                  isPending && 'bg-muted text-muted-foreground'
+                )}
+              >
+                {isCompleted ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <span className="md:hidden">{step.shortLabel}</span>
+                )}
+                <span className="hidden md:inline">{index + 1}</span>
+              </div>
+              <span
+                className={cn(
+                  'mt-1 text-xs hidden sm:block',
+                  isCurrent ? 'text-foreground font-medium' : 'text-muted-foreground'
+                )}
+              >
+                {step.label}
+              </span>
+            </div>
+            {index < STEPS.length - 1 && (
+              <div
+                className={cn(
+                  'w-6 md:w-12 h-0.5 transition-colors',
+                  index < currentIndex ? 'bg-primary' : 'bg-muted'
+                )}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function TryOnPage() {
   const userAvatar = useUserAvatar();
@@ -144,39 +204,43 @@ export default function TryOnPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Try My Look</h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-400">
+    <div className="max-w-4xl mx-auto px-4 py-4 md:py-8">
+      <div className="mb-4 md:mb-8">
+        <h1 className="text-xl md:text-2xl font-bold text-foreground">Try My Look</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Upload a picture of clothes to see how you would look wearing them.
         </p>
       </div>
 
+      {/* Step Indicator */}
+      <StepIndicator currentStep={step} />
+
       {/* Upload Step */}
       {step === 'upload' && (
         <Card>
-          <CardHeader>
-            <CardTitle>Upload Clothing Image</CardTitle>
+          <CardHeader className="px-4 py-3 md:px-6 md:py-4">
+            <CardTitle className="text-base md:text-lg">Upload Clothing Image</CardTitle>
             <CardDescription>
               Upload a photo of the clothes you want to try on. Works best with clear, well-lit images.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
             <div
               {...getRootProps()}
-              className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
+              className={cn(
+                'border-2 border-dashed rounded-lg p-8 md:p-12 text-center cursor-pointer transition-colors touch-target',
                 isDragActive
-                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-                  : 'border-gray-300 dark:border-gray-700 hover:border-indigo-400'
-              }`}
+                  ? 'border-primary bg-primary/10'
+                  : 'border-border hover:border-primary/50'
+              )}
             >
               <input {...getInputProps()} />
-              <Upload className="mx-auto h-12 w-12 text-gray-400" />
-              <p className="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">
+              <Upload className="mx-auto h-10 w-10 md:h-12 md:w-12 text-muted-foreground" />
+              <p className="mt-4 text-base md:text-lg font-medium text-foreground">
                 {isDragActive ? 'Drop the image here' : 'Drag & drop a clothing image'}
               </p>
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                or click to browse (PNG, JPG, WEBP up to 10MB)
+              <p className="mt-2 text-sm text-muted-foreground">
+                or tap to browse (PNG, JPG, WEBP up to 10MB)
               </p>
             </div>
           </CardContent>
@@ -185,11 +249,11 @@ export default function TryOnPage() {
 
       {/* Options Step */}
       {step === 'options' && clothingPreview && (
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-4 md:gap-6 md:grid-cols-2">
           {/* Preview */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
+            <CardHeader className="px-4 py-3 md:px-6 md:py-4">
+              <CardTitle className="flex items-center justify-between text-base md:text-lg">
                 Clothing Preview
                 <Button variant="ghost" size="sm" onClick={handleReset}>
                   <X className="h-4 w-4 mr-1" />
@@ -197,24 +261,24 @@ export default function TryOnPage() {
                 </Button>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
               <img
                 src={clothingPreview}
                 alt="Clothing preview"
-                className="w-full h-64 object-contain rounded-lg bg-gray-100 dark:bg-gray-800"
+                className="w-full h-48 md:h-64 object-contain rounded-lg bg-muted"
               />
             </CardContent>
           </Card>
 
           {/* Options */}
           <Card>
-            <CardHeader>
-              <CardTitle>Generation Options</CardTitle>
+            <CardHeader className="px-4 py-3 md:px-6 md:py-4">
+              <CardTitle className="text-base md:text-lg">Generation Options</CardTitle>
               <CardDescription>
                 Customize how your try-on image will look.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
               <div className="space-y-2">
                 <Label htmlFor="description">Description (optional)</Label>
                 <Input
@@ -223,7 +287,7 @@ export default function TryOnPage() {
                   value={clothingDescription}
                   onChange={(e) => setClothingDescription(e.target.value)}
                 />
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Adding a description helps improve accuracy.
                 </p>
               </div>
@@ -277,7 +341,7 @@ export default function TryOnPage() {
               </div>
 
               {error && (
-                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                <p className="text-sm text-destructive">{error}</p>
               )}
 
               <Button
@@ -296,13 +360,13 @@ export default function TryOnPage() {
       {/* Generating Step */}
       {step === 'generating' && (
         <Card>
-          <CardContent className="py-16">
+          <CardContent className="py-12 md:py-16">
             <div className="flex flex-col items-center justify-center">
-              <Loader2 className="h-12 w-12 text-indigo-600 animate-spin" />
-              <p className="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">
+              <Loader2 className="h-10 w-10 md:h-12 md:w-12 text-primary animate-spin" />
+              <p className="mt-4 text-base md:text-lg font-medium text-foreground">
                 Generating your try-on image...
               </p>
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              <p className="mt-2 text-sm text-muted-foreground text-center">
                 This may take a minute. We're combining your profile picture with the clothing.
               </p>
             </div>
@@ -312,34 +376,36 @@ export default function TryOnPage() {
 
       {/* Result Step */}
       {step === 'result' && result && (
-        <div className="space-y-6">
+        <div className="space-y-4 md:space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
+            <CardHeader className="px-4 py-3 md:px-6 md:py-4">
+              <CardTitle className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-base md:text-lg">
                 Your Try-On Result
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={handleRegenerate}>
                     <RefreshCw className="h-4 w-4 mr-1" />
-                    Regenerate
+                    <span className="hidden xs:inline">Regenerate</span>
+                    <span className="xs:hidden">Retry</span>
                   </Button>
                   <Button variant="outline" size="sm" onClick={handleDownload}>
                     <Download className="h-4 w-4 mr-1" />
-                    Download
+                    <span className="hidden xs:inline">Download</span>
+                    <span className="xs:hidden">Save</span>
                   </Button>
                 </div>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
               <img
                 src={result.image_url || `data:image/png;base64,${result.image_base64}`}
                 alt="Try-on result"
-                className="w-full max-h-[600px] object-contain rounded-lg"
+                className="w-full max-h-[400px] md:max-h-[600px] object-contain rounded-lg"
               />
             </CardContent>
           </Card>
 
           <div className="flex justify-center">
-            <Button onClick={handleReset}>
+            <Button onClick={handleReset} className="w-full sm:w-auto">
               <Upload className="h-4 w-4 mr-2" />
               Try Another Look
             </Button>

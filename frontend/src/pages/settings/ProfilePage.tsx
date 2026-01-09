@@ -8,6 +8,8 @@ import { useAuthStore, useCurrentUser, useUserDisplayName, useUserAvatar } from 
 import { User, Mail, Camera, Shield, Bell, Palette, Cpu, Sun, Moon, Monitor, MapPin } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { Switch } from '@/components/ui/switch'
+import { Button } from '@/components/ui/button'
+import { ScrollableTabs } from '@/components/ui/scrollable-tabs'
 import { updateCurrentUser, uploadAvatar, getUserPreferences, updateUserPreferences, getUserSettings, updateUserSettings, deleteAccount } from '@/api/users'
 import { requestPasswordReset } from '@/api/auth'
 import { AISettingsPanel, LocationInput } from '@/components/settings'
@@ -29,12 +31,12 @@ function ThemeSelector() {
   const { theme, setTheme } = useTheme();
 
   return (
-    <div className="flex items-center justify-between py-3 border-b border-gray-200 dark:border-gray-700">
+    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between py-3 border-b border-border">
       <div>
-        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Theme</p>
-        <p className="text-sm text-gray-500 dark:text-gray-400">Choose your preferred theme</p>
+        <p className="text-sm font-medium text-foreground">Theme</p>
+        <p className="text-sm text-muted-foreground">Choose your preferred theme</p>
       </div>
-      <div className="flex items-center space-x-1">
+      <div className="flex items-center gap-1">
         {THEMES.map((option) => {
           const Icon = themeIcons[option.value];
           return (
@@ -42,14 +44,14 @@ function ThemeSelector() {
               key={option.value}
               onClick={() => setTheme(option.value)}
               className={cn(
-                'px-3 py-1.5 text-sm rounded-md transition-colors flex items-center gap-1.5',
+                'px-3 py-2 text-sm rounded-md transition-colors flex items-center gap-1.5 touch-target',
                 theme === option.value
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
               )}
             >
               <Icon className="h-4 w-4" />
-              {option.label}
+              <span className="hidden xs:inline">{option.label}</span>
             </button>
           );
         })}
@@ -291,27 +293,27 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Profile & Settings</h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">Manage your account and preferences</p>
+      <div className="mb-4 md:mb-8">
+        <h1 className="text-xl md:text-2xl font-bold text-foreground">Profile & Settings</h1>
+        <p className="mt-1 md:mt-2 text-sm text-muted-foreground">Manage your account and preferences</p>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/50 rounded-lg">
+      <div className="bg-card shadow rounded-lg">
         {/* Avatar section */}
-        <div className="px-6 py-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="px-4 py-4 md:px-6 md:py-6 border-b border-border">
           <div className="flex items-center">
             <div className="relative">
               {userAvatar ? (
                 <img
                   src={userAvatar}
                   alt=""
-                  className="h-24 w-24 rounded-full object-cover"
+                  className="h-16 w-16 md:h-24 md:w-24 rounded-full object-cover"
                 />
               ) : (
-                <div className="h-24 w-24 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                  <span className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
+                <div className="h-16 w-16 md:h-24 md:w-24 rounded-full bg-primary/10 flex items-center justify-center">
+                  <span className="text-xl md:text-3xl font-bold text-primary">
                     {userDisplayName.charAt(0).toUpperCase()}
                   </span>
                 </div>
@@ -326,50 +328,50 @@ export default function ProfilePage() {
               <button
                 onClick={handleAvatarClick}
                 disabled={isUploadingAvatar}
-                className="absolute bottom-0 right-0 p-1.5 bg-indigo-600 rounded-full text-white hover:bg-indigo-700 disabled:opacity-60"
+                className="absolute bottom-0 right-0 p-2 md:p-2.5 bg-primary rounded-full text-primary-foreground hover:bg-primary/90 disabled:opacity-60 touch-target shadow-md"
                 title="Change avatar"
               >
-                <Camera className="h-4 w-4" />
+                <Camera className="h-4 w-4 md:h-5 md:w-5" />
               </button>
             </div>
-            <div className="ml-6">
-              <h2 className="text-xl font-medium text-gray-900 dark:text-white">{userDisplayName}</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400">{user?.email}</p>
+            <div className="ml-4 md:ml-6 min-w-0">
+              <h2 className="text-lg md:text-xl font-medium text-foreground truncate">{userDisplayName}</h2>
+              <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
             </div>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="border-b border-gray-200 dark:border-gray-700">
-          <nav className="flex -mb-px">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center px-6 py-4 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-                }`}
-              >
-                <tab.icon className="h-4 w-4 mr-2" />
-                {tab.name}
-              </button>
-            ))}
-          </nav>
-        </div>
+        {/* Scrollable Tabs */}
+        <ScrollableTabs className="border-b border-border">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                'flex items-center gap-2 px-4 py-3 md:py-4 text-sm font-medium whitespace-nowrap transition-colors touch-target border-b-2',
+                activeTab === tab.id
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+              )}
+            >
+              <tab.icon className="h-4 w-4" />
+              <span className="hidden xs:inline">{tab.name}</span>
+              <span className="xs:hidden">{tab.name.split(' ')[0]}</span>
+            </button>
+          ))}
+        </ScrollableTabs>
 
         {/* Tab content */}
-        <div className="px-6 py-6">
+        <div className="px-4 py-4 md:px-6 md:py-6">
           {activeTab === 'profile' && (
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Profile Information</h3>
-                <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                  <div className="sm:col-span-6">
+                <h3 className="text-base md:text-lg font-medium text-foreground mb-4">Profile Information</h3>
+                <div className="grid grid-cols-1 gap-y-4 md:gap-y-6 gap-x-4 md:grid-cols-6">
+                  <div className="md:col-span-6">
                     <label
                       htmlFor="fullName"
-                      className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                      className="block text-sm font-medium text-foreground"
                     >
                       Full Name
                     </label>
@@ -380,19 +382,19 @@ export default function ProfilePage() {
                         value={isEditing ? fullName : user?.full_name || ''}
                         onChange={(e) => setFullName(e.target.value)}
                         disabled={!isEditing}
-                        className="flex-1 min-w-0 block w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:text-gray-600 dark:disabled:text-gray-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="flex-1 min-w-0 block w-full h-12 px-3 rounded-md border border-border focus:ring-primary focus:border-primary text-base disabled:bg-muted disabled:text-muted-foreground bg-background text-foreground"
                       />
                     </div>
                   </div>
 
-                  <div className="sm:col-span-6">
+                  <div className="md:col-span-6">
                     <label
                       htmlFor="gender"
-                      className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                      className="block text-sm font-medium text-foreground"
                     >
                       Gender
                     </label>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                    <p className="text-xs text-muted-foreground mb-1">
                       Used for AI-generated outfit visualizations
                     </p>
                     <select
@@ -400,7 +402,7 @@ export default function ProfilePage() {
                       value={isEditing ? gender : user?.gender || ''}
                       onChange={(e) => setGender(e.target.value)}
                       disabled={!isEditing}
-                      className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:text-gray-600 dark:disabled:text-gray-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="mt-1 block w-full h-12 px-3 pr-10 text-base border border-border focus:outline-none focus:ring-primary focus:border-primary rounded-md disabled:bg-muted disabled:text-muted-foreground bg-background text-foreground"
                     >
                       <option value="">Prefer not to say</option>
                       <option value="male">Male</option>
@@ -409,59 +411,57 @@ export default function ProfilePage() {
                     </select>
                   </div>
 
-                  <div className="sm:col-span-6">
+                  <div className="md:col-span-6">
                     <label
                       htmlFor="email"
-                      className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                      className="block text-sm font-medium text-foreground"
                     >
                       Email Address
                     </label>
                     <div className="mt-1 relative rounded-md shadow-sm">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Mail className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+                        <Mail className="h-5 w-5 text-muted-foreground" />
                       </div>
                       <input
                         type="email"
                         id="email"
                         value={user?.email || ''}
                         disabled
-                        className="pl-10 flex-1 min-w-0 block w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 sm:text-sm"
+                        className="pl-10 flex-1 min-w-0 block w-full h-12 px-3 rounded-md border border-border bg-muted text-muted-foreground text-base"
                       />
                     </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       Contact support to change your email
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-6 flex justify-end">
+                <div className="mt-6 flex flex-col-reverse gap-3 md:flex-row md:justify-end">
                   {isEditing ? (
-                    <div className="flex space-x-3">
-                      <button
+                    <>
+                      <Button
+                        variant="outline"
                         onClick={() => {
                           setIsEditing(false)
                           setFullName(user?.full_name || '')
                           setGender(user?.gender || '')
                         }}
-                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                        className="w-full md:w-auto"
                       >
                         Cancel
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         onClick={handleSaveProfile}
                         disabled={isSavingProfile}
-                        className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                        className="w-full md:w-auto"
                       >
                         {isSavingProfile ? 'Saving...' : 'Save Changes'}
-                      </button>
-                    </div>
+                      </Button>
+                    </>
                   ) : (
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
-                    >
+                    <Button onClick={() => setIsEditing(true)} className="w-full md:w-auto">
                       Edit Profile
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
@@ -470,74 +470,76 @@ export default function ProfilePage() {
 
           {activeTab === 'preferences' && (
             <div className="space-y-6">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Style Preferences</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Configure your style preferences to get better recommendations.
-              </p>
+              <div>
+                <h3 className="text-base md:text-lg font-medium text-foreground">Style Preferences</h3>
+                <p className="text-sm text-muted-foreground">
+                  Configure your style preferences to get better recommendations.
+                </p>
+              </div>
 
               {isLoadingPreferences ? (
-                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-md text-center text-gray-600 dark:text-gray-400">Loading…</div>
+                <div className="p-4 bg-muted rounded-md text-center text-muted-foreground">Loading…</div>
               ) : (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Favorite colors</label>
+                    <label className="block text-sm font-medium text-foreground">Favorite colors</label>
                     <input
                       value={favoriteColorsCsv}
                       onChange={(e) => setFavoriteColorsCsv(e.target.value)}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base bg-background text-foreground focus:ring-primary focus:border-primary"
                       placeholder="e.g. black, white, navy"
                     />
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Comma-separated list.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Comma-separated list.</p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferred styles</label>
+                    <label className="block text-sm font-medium text-foreground">Preferred styles</label>
                     <input
                       value={preferredStylesCsv}
                       onChange={(e) => setPreferredStylesCsv(e.target.value)}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base bg-background text-foreground focus:ring-primary focus:border-primary"
                       placeholder="e.g. casual, streetwear, minimalist"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferred occasions</label>
+                    <label className="block text-sm font-medium text-foreground">Preferred occasions</label>
                     <input
                       value={preferredOccasionsCsv}
                       onChange={(e) => setPreferredOccasionsCsv(e.target.value)}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base bg-background text-foreground focus:ring-primary focus:border-primary"
                       placeholder="e.g. work, date night, travel"
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Liked brands</label>
+                      <label className="block text-sm font-medium text-foreground">Liked brands</label>
                       <input
                         value={likedBrandsCsv}
                         onChange={(e) => setLikedBrandsCsv(e.target.value)}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base bg-background text-foreground focus:ring-primary focus:border-primary"
                         placeholder="e.g. Nike, Uniqlo"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Disliked patterns</label>
+                      <label className="block text-sm font-medium text-foreground">Disliked patterns</label>
                       <input
                         value={dislikedPatternsCsv}
                         onChange={(e) => setDislikedPatternsCsv(e.target.value)}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base bg-background text-foreground focus:ring-primary focus:border-primary"
                         placeholder="e.g. plaid, polka dots"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Color temperature</label>
+                      <label className="block text-sm font-medium text-foreground">Color temperature</label>
                       <select
                         value={colorTemperature}
                         onChange={(e) => setColorTemperature(e.target.value)}
-                        className="mt-1 block w-full px-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="mt-1 block w-full h-12 px-3 pr-10 text-base border border-border rounded-md bg-background text-foreground focus:ring-primary focus:border-primary"
                       >
                         <option value="">Not set</option>
                         <option value="warm">Warm</option>
@@ -546,28 +548,28 @@ export default function ProfilePage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Style personality</label>
+                      <label className="block text-sm font-medium text-foreground">Style personality</label>
                       <input
                         value={stylePersonality}
                         onChange={(e) => setStylePersonality(e.target.value)}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base bg-background text-foreground focus:ring-primary focus:border-primary"
                         placeholder="e.g. minimalist, bold, classic"
                       />
                     </div>
                   </div>
 
-                  <div className="flex justify-end">
-                    <button
+                  <div className="flex flex-col-reverse gap-3 md:flex-row md:justify-end">
+                    <Button
                       onClick={handleSavePreferences}
                       disabled={isSavingPreferences}
-                      className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60"
+                      className="w-full md:w-auto"
                     >
                       {isSavingPreferences ? 'Saving…' : 'Save Preferences'}
-                    </button>
+                    </Button>
                   </div>
 
                   {!preferences && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <p className="text-xs text-muted-foreground">
                       Preferences will be created automatically after your first save.
                     </p>
                   )}
@@ -578,20 +580,20 @@ export default function ProfilePage() {
 
           {activeTab === 'settings' && (
             <div className="space-y-6">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white">App Settings</h3>
+              <h3 className="text-base md:text-lg font-medium text-foreground">App Settings</h3>
 
               {isLoadingSettings ? (
-                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-md text-center text-gray-600 dark:text-gray-400">Loading…</div>
+                <div className="p-4 bg-muted rounded-md text-center text-muted-foreground">Loading…</div>
               ) : !settings ? (
-                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-md text-center text-gray-600 dark:text-gray-400">
+                <div className="p-4 bg-muted rounded-md text-center text-muted-foreground">
                   Settings are unavailable. Ensure the database schema is initialized.
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between py-3 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between py-3 border-b border-border">
                     <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Notifications</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Enable in-app notifications</p>
+                      <p className="text-sm font-medium text-foreground">Notifications</p>
+                      <p className="text-sm text-muted-foreground">Enable in-app notifications</p>
                     </div>
                     <Switch
                       checked={settings.notifications_enabled}
@@ -599,10 +601,10 @@ export default function ProfilePage() {
                     />
                   </div>
 
-                  <div className="flex items-center justify-between py-3 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between py-3 border-b border-border">
                     <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Email Marketing</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Receive emails about new features</p>
+                      <p className="text-sm font-medium text-foreground">Email Marketing</p>
+                      <p className="text-sm text-muted-foreground">Receive emails about new features</p>
                     </div>
                     <Switch
                       checked={settings.email_marketing}
@@ -612,10 +614,10 @@ export default function ProfilePage() {
 
                   <ThemeSelector />
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-3">
                     <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Measurement Units</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Choose between metric and imperial</p>
+                      <p className="text-sm font-medium text-foreground">Measurement Units</p>
+                      <p className="text-sm text-muted-foreground">Choose between metric and imperial</p>
                       <select
                         value={settings.measurement_units}
                         onChange={(e) =>
@@ -623,32 +625,32 @@ export default function ProfilePage() {
                             measurement_units: (e.target.value as 'imperial' | 'metric') || 'imperial',
                           })
                         }
-                        className="mt-2 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="mt-2 block w-full h-12 px-3 pr-10 text-base border border-border rounded-md bg-background text-foreground focus:ring-primary focus:border-primary"
                       >
                         <option value="imperial">Imperial (lbs, ft)</option>
                         <option value="metric">Metric (kg, cm)</option>
                       </select>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Language</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Interface language</p>
+                      <p className="text-sm font-medium text-foreground">Language</p>
+                      <p className="text-sm text-muted-foreground">Interface language</p>
                       <select
                         value={settings.language}
                         onChange={(e) => handleUpdateSettings({ language: e.target.value })}
-                        className="mt-2 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="mt-2 block w-full h-12 px-3 pr-10 text-base border border-border rounded-md bg-background text-foreground focus:ring-primary focus:border-primary"
                       >
                         <option value="en">English</option>
                       </select>
                     </div>
                   </div>
 
-                  <div className="py-3 border-b border-gray-200 dark:border-gray-700">
+                  <div className="py-3 border-b border-border">
                     <div className="mb-2">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                      <p className="text-sm font-medium text-foreground flex items-center gap-2">
                         <MapPin className="h-4 w-4" />
                         Weather Location
                       </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className="text-sm text-muted-foreground">
                         Used for weather-based outfit recommendations
                       </p>
                     </div>
@@ -669,14 +671,14 @@ export default function ProfilePage() {
                     />
                   </div>
 
-                  <div className="flex justify-end pt-2">
-                    <button
+                  <div className="flex flex-col-reverse gap-3 md:flex-row md:justify-end pt-2">
+                    <Button
                       onClick={handleSaveSettings}
                       disabled={isSavingSettings}
-                      className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60"
+                      className="w-full md:w-auto"
                     >
                       {isSavingSettings ? 'Saving…' : 'Save Settings'}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
@@ -689,33 +691,35 @@ export default function ProfilePage() {
 
           {activeTab === 'security' && (
             <div className="space-y-6">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Security</h3>
+              <h3 className="text-base md:text-lg font-medium text-foreground">Security</h3>
 
               <div className="space-y-4">
-                <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-md">
-                  <h4 className="text-sm font-medium text-gray-900 dark:text-white">Password</h4>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                <div className="p-4 border border-border rounded-md">
+                  <h4 className="text-sm font-medium text-foreground">Password</h4>
+                  <p className="text-sm text-muted-foreground mt-1">
                     Change your password to keep your account secure
                   </p>
-                  <button
+                  <Button
+                    variant="outline"
                     onClick={handleSendPasswordReset}
-                    className="mt-3 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                    className="mt-3 w-full md:w-auto"
                   >
                     Send Password Reset Email
-                  </button>
+                  </Button>
                 </div>
 
-                <div className="p-4 border border-red-200 dark:border-red-800 rounded-md">
-                  <h4 className="text-sm font-medium text-red-900 dark:text-red-300">Danger Zone</h4>
-                  <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                <div className="p-4 border border-destructive/30 rounded-md bg-destructive/5">
+                  <h4 className="text-sm font-medium text-destructive">Danger Zone</h4>
+                  <p className="text-sm text-destructive/80 mt-1">
                     Once you delete your account, there is no going back
                   </p>
-                  <button
+                  <Button
+                    variant="destructive"
                     onClick={handleDeleteAccount}
-                    className="mt-3 px-4 py-2 border border-red-300 dark:border-red-700 rounded-md shadow-sm text-sm font-medium text-red-700 dark:text-red-300 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    className="mt-3 w-full md:w-auto"
                   >
                     Delete Account
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -724,13 +728,14 @@ export default function ProfilePage() {
       </div>
 
       {/* Logout button */}
-      <div className="mt-6 text-center">
-        <button
+      <div className="mt-6 mb-4 text-center">
+        <Button
+          variant="outline"
           onClick={handleLogout}
-          className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+          className="w-full md:w-auto"
         >
           Sign Out
-        </button>
+        </Button>
       </div>
     </div>
   )
