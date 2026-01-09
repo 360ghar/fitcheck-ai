@@ -98,6 +98,8 @@ export interface Item {
   occasion_tags: string[];
   size?: string;
   price?: number;
+  /** @deprecated Use price instead. Alias for backward compatibility. */
+  purchase_price?: number;
   purchase_date?: string;
   purchase_location?: string;
   tags: string[];
@@ -107,9 +109,13 @@ export interface Item {
   usage_times_worn: number;
   usage_last_worn?: string;
   cost_per_wear?: number;
+  /** Season for the item (derived from seasonal_tags if needed) */
+  season?: Season;
   created_at: string;
   updated_at: string;
   images: ItemImage[];
+  /** Primary image URL (convenience accessor) */
+  image_url?: string;
 }
 
 export interface ItemCreate {
@@ -181,6 +187,8 @@ export interface Outfit {
   name: string;
   description?: string;
   item_ids: UUID[];
+  /** Populated items (when joined/expanded) */
+  items?: Item[];
   style?: string;
   season?: string;
   occasion?: string;

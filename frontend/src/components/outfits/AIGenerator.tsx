@@ -14,6 +14,8 @@ import {
   RefreshCw,
   Settings,
   Check,
+  LayoutGrid,
+  Sun,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -29,7 +31,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
-import { generateOutfit } from '@/api/ai'
+import { generateOutfit, generateMultiPoseOutfit, type PosePreset } from '@/api/ai'
 import { useToast } from '@/components/ui/use-toast'
 import type { Item } from '@/types'
 
@@ -103,6 +105,72 @@ const LIGHTING_OPTIONS = [
   { value: 'golden hour', label: 'Golden Hour' },
   { value: 'dramatic', label: 'Dramatic' },
   { value: 'soft', label: 'Soft/Diffused' },
+  { value: 'office fluorescent', label: 'Office Fluorescent' },
+  { value: 'evening warm', label: 'Evening Warm' },
+  { value: 'overcast outdoor', label: 'Overcast Outdoor' },
+]
+
+/**
+ * Lighting scenarios combine lighting + background for common real-world contexts.
+ * These are quick presets for visualizing how an outfit looks in different settings.
+ */
+const LIGHTING_SCENARIOS = [
+  {
+    value: 'office',
+    label: 'Office',
+    icon: '🏢',
+    description: 'Professional office environment',
+    settings: { lighting: 'office fluorescent', background: 'minimal' },
+  },
+  {
+    value: 'outdoor-day',
+    label: 'Outdoor Day',
+    icon: '☀️',
+    description: 'Bright natural daylight',
+    settings: { lighting: 'natural', background: 'nature outdoor' },
+  },
+  {
+    value: 'evening-out',
+    label: 'Evening Out',
+    icon: '🌙',
+    description: 'Warm evening restaurant/bar',
+    settings: { lighting: 'evening warm', background: 'cafe interior' },
+  },
+  {
+    value: 'golden-hour',
+    label: 'Golden Hour',
+    icon: '🌅',
+    description: 'Perfect sunset lighting',
+    settings: { lighting: 'golden hour', background: 'urban street' },
+  },
+  {
+    value: 'studio',
+    label: 'Studio',
+    icon: '📸',
+    description: 'Clean professional studio',
+    settings: { lighting: 'studio', background: 'studio white' },
+  },
+  {
+    value: 'cloudy',
+    label: 'Cloudy Day',
+    icon: '☁️',
+    description: 'Soft overcast lighting',
+    settings: { lighting: 'overcast outdoor', background: 'urban street' },
+  },
+  {
+    value: 'beach',
+    label: 'Beach',
+    icon: '🏖️',
+    description: 'Bright beach setting',
+    settings: { lighting: 'natural', background: 'beach' },
+  },
+  {
+    value: 'dramatic',
+    label: 'Dramatic',
+    icon: '✨',
+    description: 'High contrast editorial',
+    settings: { lighting: 'dramatic', background: 'gradient' },
+  },
 ]
 
 const VIEW_ANGLE_OPTIONS = [
@@ -119,9 +187,11 @@ const VIEW_ANGLE_OPTIONS = [
 
 export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isGeneratingMultiPose, setIsGeneratingMultiPose] = useState(false)
   const [progress, setProgress] = useState(0)
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([])
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null)
+  const [multiPoseImages, setMultiPoseImages] = useState<GeneratedImage[]>([])
 
   const [customPrompt, setCustomPrompt] = useState('')
   const [options, setOptions] = useState<GenerationOptions>({
@@ -137,12 +207,25 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
   })
 
   const [advancedMode, setAdvancedMode] = useState(false)
+  const [selectedScenario, setSelectedScenario] = useState<string | null>(null)
 
   const { toast } = useToast()
 
   // ============================================================================
   // GENERATION
   // ============================================================================
+
+  const handleApplyScenario = (scenarioValue: string) => {
+    const scenario = LIGHTING_SCENARIOS.find((s) => s.value === scenarioValue)
+    if (scenario) {
+      setOptions((prev) => ({
+        ...prev,
+        lighting: scenario.settings.lighting,
+        background: scenario.settings.background,
+      }))
+      setSelectedScenario(scenarioValue)
+    }
+  }
 
   const handleGenerate = async () => {
     if (items.length === 0) {
@@ -230,6 +313,93 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
       setCustomPrompt(selectedImage.prompt)
     }
     handleGenerate()
+  }
+
+  const handleGenerateMultiPose = async () => {
+    if (items.length === 0) {
+      toast({
+        title: 'No items',
+        description: 'Please add items to the outfit first',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setIsGeneratingMultiPose(true)
+    setProgress(0)
+    setMultiPoseImages([])
+
+    // Simulate progress for UX
+    const progressInterval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 90) {
+          clearInterval(progressInterval)
+          return 90
+        }
+        return prev + 5
+      })
+    }, 500)
+
+    try {
+      // Convert items to API format
+      const itemInputs = items.map((item) => ({
+        name: item.name,
+        category: item.category,
+        colors: item.colors,
+        brand: item.brand,
+        material: item.material,
+        pattern: item.pattern,
+      }))
+
+      // Generate front, side, and back views
+      const poses: PosePreset[] = ['front', 'side', 'back']
+      const result = await generateMultiPoseOutfit(itemInputs, poses, {
+        style: options.style,
+        background: options.background,
+        include_model: options.includeModel,
+        model_gender: options.modelGender,
+        lighting: options.lighting,
+        custom_prompt: customPrompt || undefined,
+      })
+
+      clearInterval(progressInterval)
+      setProgress(100)
+
+      // Convert results to GeneratedImage format
+      const newImages: GeneratedImage[] = result.poses.map((pose) => {
+        const imageUrl = pose.image_url || `data:image/png;base64,${pose.image_base64}`
+        return {
+          url: imageUrl,
+          prompt: pose.prompt,
+          options: { ...options, pose: pose.pose || '', viewAngle: pose.view_angle || '' },
+          timestamp: Date.now() + Math.random() * 1000,
+        }
+      })
+
+      setMultiPoseImages(newImages)
+      setGeneratedImages((prev) => [...newImages, ...prev])
+      if (newImages.length > 0) {
+        setSelectedImage(newImages[0])
+      }
+
+      toast({
+        title: 'Multi-pose generation complete!',
+        description: `Generated ${result.total_generated} views${result.failed_poses.length > 0 ? ` (${result.failed_poses.length} failed)` : ''}`,
+      })
+
+      if (newImages.length > 0) {
+        onGenerated?.(newImages[0].url, { prompt: newImages[0].prompt, options: newImages[0].options, multiPose: true })
+      }
+    } catch (err) {
+      toast({
+        title: 'Multi-pose generation failed',
+        description: err instanceof Error ? err.message : 'Failed to generate images',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsGeneratingMultiPose(false)
+      setProgress(0)
+    }
   }
 
   const handleDownload = (imageUrl: string, filename: string) => {
@@ -330,6 +500,36 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
                       className="w-full h-full"
                       style={{ background: bg.color }}
                     />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Lighting Scenarios */}
+            <div>
+              <Label className="flex items-center gap-2">
+                <Sun className="h-4 w-4 text-yellow-500" />
+                Lighting Scenario
+              </Label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                Quick presets for different environments
+              </p>
+              <div className="grid grid-cols-4 gap-2">
+                {LIGHTING_SCENARIOS.map((scenario) => (
+                  <button
+                    key={scenario.value}
+                    onClick={() => handleApplyScenario(scenario.value)}
+                    className={`p-2 rounded-lg border text-center transition-all ${
+                      selectedScenario === scenario.value
+                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                    }`}
+                    title={scenario.description}
+                  >
+                    <span className="text-lg block">{scenario.icon}</span>
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300 block mt-1">
+                      {scenario.label}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -467,27 +667,49 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
               </p>
             </div>
 
-            {/* Generate button */}
-            <Button
-              className="w-full"
-              size="lg"
-              onClick={handleGenerate}
-              disabled={isGenerating || items.length === 0}
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="h-4 w-4 mr-2" />
-                  Generate Image
-                </>
-              )}
-            </Button>
+            {/* Generate buttons */}
+            <div className="space-y-2">
+              <Button
+                className="w-full"
+                size="lg"
+                onClick={handleGenerate}
+                disabled={isGenerating || isGeneratingMultiPose || items.length === 0}
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="h-4 w-4 mr-2" />
+                    Generate Image
+                  </>
+                )}
+              </Button>
 
-            {isGenerating && (
+              <Button
+                className="w-full"
+                variant="outline"
+                size="lg"
+                onClick={handleGenerateMultiPose}
+                disabled={isGenerating || isGeneratingMultiPose || items.length === 0}
+              >
+                {isGeneratingMultiPose ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating All Angles...
+                  </>
+                ) : (
+                  <>
+                    <LayoutGrid className="h-4 w-4 mr-2" />
+                    Generate All Angles (Front, Side, Back)
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {(isGenerating || isGeneratingMultiPose) && (
               <div className="space-y-2">
                 <Progress value={progress} />
                 <p className="text-xs text-center text-gray-500 dark:text-gray-400">
@@ -569,6 +791,50 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
             )}
           </CardContent>
         </Card>
+
+        {/* Multi-Pose Gallery */}
+        {multiPoseImages.length > 0 && (
+          <Card className="border-indigo-200 dark:border-indigo-800">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <LayoutGrid className="h-5 w-5 text-indigo-500" />
+                All Angles View
+              </CardTitle>
+              <CardDescription>
+                Click to view each angle in detail
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-3">
+                {multiPoseImages.map((img, index) => {
+                  const angleLabels = ['Front', 'Side', 'Back']
+                  return (
+                    <button
+                      key={img.timestamp}
+                      onClick={() => setSelectedImage(img)}
+                      className={`relative aspect-[3/4] rounded-lg overflow-hidden border-2 transition-all ${
+                        selectedImage?.timestamp === img.timestamp
+                          ? 'border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-800'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <img
+                        src={img.url}
+                        alt={`Outfit ${angleLabels[index] || 'view'}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                        <span className="text-white text-sm font-medium">
+                          {angleLabels[index] || `View ${index + 1}`}
+                        </span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Gallery */}
         {generatedImages.length > 1 && (

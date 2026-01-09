@@ -2,6 +2,7 @@
  * Shared Outfit Page (public)
  *
  * Displays a shared outfit via `/api/v1/outfits/public/:id` with no auth.
+ * Includes SEO tags for social sharing (backup for edge function).
  */
 
 import { useEffect, useState } from 'react'
@@ -11,6 +12,7 @@ import { Layers, Loader2 } from 'lucide-react'
 import { getPublicOutfit, type PublicOutfit } from '@/api/outfits'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SEO, OutfitJsonLd } from '@/components/seo'
 
 export default function SharedOutfitPage() {
   const { id } = useParams()
@@ -40,8 +42,33 @@ export default function SharedOutfitPage() {
     ? outfit.images.find((img) => img.is_primary) || outfit.images[0]
     : null
 
+  // Generate SEO data
+  const seoTitle = outfit?.name ? `${outfit.name} | FitCheck AI` : 'Shared Outfit | FitCheck AI'
+  const seoDescription = outfit?.description ||
+    `Check out this ${outfit?.style || ''} outfit on FitCheck AI`.trim()
+  const seoImage = primary?.image_url || 'https://fitcheckaiapp.com/og-outfit-fallback.svg'
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <>
+      {/* SEO - Client-side fallback (Edge function handles crawlers) */}
+      <SEO
+        title={seoTitle}
+        description={seoDescription}
+        ogImage={seoImage}
+        ogType="article"
+        canonicalUrl={`https://fitcheckaiapp.com/shared/outfits/${id}`}
+      />
+      {outfit && (
+        <OutfitJsonLd
+          name={outfit.name}
+          description={outfit.description || undefined}
+          imageUrl={seoImage}
+          datePublished={outfit.created_at}
+          tags={[outfit.style, outfit.season, outfit.occasion, ...(outfit.tags || [])].filter(Boolean) as string[]}
+        />
+      )}
+
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="flex items-center justify-between mb-6">
           <Link to="/" className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
@@ -127,6 +154,7 @@ export default function SharedOutfitPage() {
         ) : null}
       </div>
     </div>
+    </>
   )
 }
 

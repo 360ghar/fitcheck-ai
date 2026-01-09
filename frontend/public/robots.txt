@@ -1,0 +1,27 @@
+# FitCheck AI - robots.txt
+# https://fitcheckaiapp.com
+
+User-agent: *
+Allow: /
+Allow: /shared/outfits/
+
+# Block authenticated app routes from indexing
+Disallow: /dashboard
+Disallow: /wardrobe
+Disallow: /outfits
+Disallow: /calendar
+Disallow: /recommendations
+Disallow: /try-on
+Disallow: /gamification
+Disallow: /profile
+Disallow: /settings
+Disallow: /auth/
+
+# Block API routes
+Disallow: /api/
+
+# Sitemap location
+Sitemap: https://fitcheckaiapp.com/sitemap.xml
+
+# LLMs.txt for AI crawlers
+# See https://llmstxt.org/

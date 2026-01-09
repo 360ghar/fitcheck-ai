@@ -1,0 +1,55 @@
+# FitCheck AI - llms.txt
+# For more information: https://llmstxt.org/
+
+> FitCheck AI is a wardrobe management application with AI-powered outfit visualization.
+
+# About
+FitCheck AI helps users organize their wardrobe, create outfits, and visualize how they look using AI technology. The app features:
+- Digital wardrobe management
+- AI-powered item detection from photos
+- Outfit creation and organization
+- AI outfit visualization and virtual try-on
+- Weather-based outfit recommendations
+- Outfit sharing with friends
+- Calendar integration for outfit planning
+- Style analytics and insights
+
+# Contact
+- Website: https://fitcheckaiapp.com
+- Support: support@fitcheckaiapp.com
+
+# Features
+
+## Wardrobe Management
+Upload photos of your clothing items. Our AI automatically detects and catalogs items with details like category, color, brand, and material. Organize items by type, season, occasion, and more.
+
+## Outfit Creation
+Combine items from your digital wardrobe to create outfits. Tag them by occasion, season, and style for easy organization. Save your favorite combinations for quick access.
+
+## AI Visualization
+Generate realistic visualizations of how outfits would look together using AI image generation. See your outfit combinations before wearing them.
+
+## Smart Recommendations
+Get outfit suggestions based on weather, occasion, and your personal style preferences. Never wonder what to wear again.
+
+## Calendar Integration
+Plan your outfits ahead of time with calendar integration. Schedule outfits for upcoming events and meetings.
+
+## Sharing
+Share your outfits with friends via unique links. Get feedback and inspiration from others.
+
+# Technical Details
+- Web application built with React and FastAPI
+- AI-powered clothing detection using computer vision
+- Virtual try-on using generative AI
+- Secure authentication with Supabase
+- Cloud storage for wardrobe images
+
+# Privacy
+We take privacy seriously. User wardrobe data is private by default. Shared outfits are only visible via explicit sharing links. We do not sell user data.
+
+# Terms
+Users must agree to our terms of service at https://fitcheckaiapp.com/terms
+
+# API
+FitCheck AI provides a RESTful API for authenticated users. API documentation is available at https://fitcheckaiapp.com/api/docs

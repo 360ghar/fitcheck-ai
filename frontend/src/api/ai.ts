@@ -78,6 +78,14 @@ export interface GeneratedOutfit {
   prompt: string;
   model: string;
   provider: string;
+  view_angle?: string;
+  pose?: string;
+}
+
+export interface MultiPoseOutfitResult {
+  poses: GeneratedOutfit[];
+  total_generated: number;
+  failed_poses: string[];
 }
 
 export interface GenerateProductImageOptions {
@@ -127,6 +135,7 @@ export interface ProviderConfigInput {
   model?: string;
   vision_model?: string;
   image_gen_model?: string;
+  embedding_model?: string;
 }
 
 export interface ProviderConfigDisplay {
@@ -134,6 +143,7 @@ export interface ProviderConfigDisplay {
   model: string;
   vision_model: string;
   image_gen_model: string;
+  embedding_model: string;
   api_key_set: boolean;
 }
 
@@ -147,18 +157,22 @@ export interface UsageStats {
   daily: {
     extractions: number;
     generations: number;
+    embeddings: number;
   };
   total: {
     extractions: number;
     generations: number;
+    embeddings: number;
   };
   limits: {
     daily_extractions: number;
     daily_generations: number;
+    daily_embeddings: number;
   };
   remaining: {
     extractions: number;
     generations: number;
+    embeddings: number;
   };
 }
 
@@ -180,6 +194,55 @@ export interface AvailableModels {
   gemini: Record<string, string[]>;
   openai: Record<string, string[]>;
   custom: Record<string, string[]>;
+}
+
+// =============================================================================
+// EMBEDDING TYPES
+// =============================================================================
+
+export interface EmbeddingRequest {
+  text: string;
+  model?: string;
+}
+
+export interface EmbeddingResult {
+  embedding: number[];
+  model: string;
+  dimensions: number;
+  provider: string;
+}
+
+export interface BatchEmbeddingRequest {
+  texts: string[];
+  model?: string;
+}
+
+export interface BatchEmbeddingResult {
+  embeddings: number[][];
+  model: string;
+  dimensions: number;
+  provider: string;
+  count: number;
+}
+
+export interface SimilaritySearchRequest {
+  text?: string;
+  embedding?: number[];
+  category?: string;
+  colors?: string[];
+  top_k?: number;
+  min_score?: number;
+}
+
+export interface SimilarItem {
+  item_id: string;
+  score: number;
+  metadata: Record<string, unknown>;
+}
+
+export interface SimilaritySearchResult {
+  items: SimilarItem[];
+  query_embedding_dimensions: number;
 }
 
 // =============================================================================
@@ -276,6 +339,73 @@ export async function generateOutfit(
   });
 
   return response.data.data;
+}
+
+/**
+ * Available pose presets for multi-pose generation.
+ */
+export const POSE_PRESETS = {
+  front: { pose: 'standing front', view_angle: 'full body front view' },
+  side: { pose: 'standing side profile', view_angle: 'full body side view' },
+  back: { pose: 'standing back view', view_angle: 'full body back view' },
+  'three-quarter': { pose: 'standing three-quarter angle', view_angle: 'full body 3/4 view' },
+  seated: { pose: 'seated relaxed', view_angle: 'full body seated view' },
+  walking: { pose: 'walking casual', view_angle: 'full body action shot' },
+} as const;
+
+export type PosePreset = keyof typeof POSE_PRESETS;
+
+/**
+ * Generate outfit visualization from multiple angles/poses.
+ *
+ * Generates the outfit from multiple viewing angles in parallel for
+ * a comprehensive visualization.
+ */
+export async function generateMultiPoseOutfit(
+  items: OutfitItemInput[],
+  poses: PosePreset[] = ['front', 'side', 'back'],
+  options: Omit<GenerateOutfitOptions, 'pose' | 'view_angle'> = {}
+): Promise<MultiPoseOutfitResult> {
+  const results: GeneratedOutfit[] = [];
+  const failedPoses: string[] = [];
+
+  // Generate poses in parallel (limit to 3 at a time to avoid rate limits)
+  const batchSize = 3;
+  for (let i = 0; i < poses.length; i += batchSize) {
+    const batch = poses.slice(i, i + batchSize);
+
+    const batchResults = await Promise.allSettled(
+      batch.map(async (posePreset) => {
+        const presetConfig = POSE_PRESETS[posePreset];
+        const result = await generateOutfit(items, {
+          ...options,
+          pose: presetConfig.pose,
+          view_angle: presetConfig.view_angle,
+        });
+        return {
+          ...result,
+          view_angle: posePreset,
+          pose: presetConfig.pose,
+        };
+      })
+    );
+
+    for (let j = 0; j < batchResults.length; j++) {
+      const result = batchResults[j];
+      if (result.status === 'fulfilled') {
+        results.push(result.value);
+      } else {
+        failedPoses.push(batch[j]);
+        console.error(`Failed to generate pose ${batch[j]}:`, result.reason);
+      }
+    }
+  }
+
+  return {
+    poses: results,
+    total_generated: results.length,
+    failed_poses: failedPoses,
+  };
 }
 
 /**
@@ -416,7 +546,7 @@ export async function getUsageStats(): Promise<UsageStats> {
  * Check rate limit for a specific operation.
  */
 export async function checkRateLimit(
-  operationType: 'extraction' | 'generation'
+  operationType: 'extraction' | 'generation' | 'embedding'
 ): Promise<RateLimitCheck> {
   const response = await apiClient.get<{ data: RateLimitCheck }>(
     `/api/v1/ai/settings/rate-limit/${operationType}`
@@ -429,4 +559,66 @@ export async function checkRateLimit(
  */
 export async function resetProviderConfig(provider: string): Promise<void> {
   await apiClient.post(`/api/v1/ai/settings/reset-provider/${provider}`);
+}
+
+// =============================================================================
+// EMBEDDINGS API
+// =============================================================================
+
+/**
+ * Generate an embedding for a single text.
+ */
+export async function generateEmbedding(text: string, model?: string): Promise<EmbeddingResult> {
+  const response = await apiClient.post<{ data: EmbeddingResult }>('/api/v1/ai/embeddings', {
+    text,
+    model,
+  });
+  return response.data.data;
+}
+
+/**
+ * Generate embeddings for multiple texts in batch.
+ */
+export async function generateBatchEmbeddings(
+  texts: string[],
+  model?: string
+): Promise<BatchEmbeddingResult> {
+  const response = await apiClient.post<{ data: BatchEmbeddingResult }>(
+    '/api/v1/ai/embeddings/batch',
+    {
+      texts,
+      model,
+    }
+  );
+  return response.data.data;
+}
+
+/**
+ * Search for similar items using text or embedding.
+ */
+export async function searchSimilarItems(
+  request: SimilaritySearchRequest
+): Promise<SimilaritySearchResult> {
+  const response = await apiClient.post<{ data: SimilaritySearchResult }>(
+    '/api/v1/ai/embeddings/search',
+    request
+  );
+  return response.data.data;
+}
+
+/**
+ * Test an embedding model configuration.
+ */
+export async function testEmbeddingModel(
+  provider: string,
+  model: string
+): Promise<TestProviderResult> {
+  const response = await apiClient.post<{ data: TestProviderResult }>(
+    '/api/v1/ai/embeddings/test',
+    {
+      provider,
+      model,
+    }
+  );
+  return response.data.data;
 }

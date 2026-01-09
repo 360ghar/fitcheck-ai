@@ -4,21 +4,27 @@
   command = "npm run build"
   publish = "dist"
 
-# SPA routing - redirect all routes to index.html
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+[build.environment]
+  NODE_VERSION = "18"
+
+# Edge Functions for dynamic OG tags on shared outfits
+[[edge_functions]]
+  path = "/shared/outfits/*"
+  function = "og-tags"
 
 # API proxy - forward API requests to backend (Railway)
+# IMPORTANT: This must come before the SPA fallback
 [[redirects]]
   from = "/api/*"
   to = "https://fitcheck-backend.railway.app/api/:splat"
   status = 200
   force = true
 
-[build.environment]
-  NODE_VERSION = "18"
+# SPA routing - redirect all routes to index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
 
 # Headers for security and caching
 [[headers]]
@@ -33,3 +39,28 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+# Cache static SEO files
+[[headers]]
+  for = "/robots.txt"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+[[headers]]
+  for = "/sitemap.xml"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+    Content-Type = "application/xml"
+
+[[headers]]
+  for = "/llms.txt"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+    Content-Type = "text/plain"
+
+# OG images
+[[headers]]
+  for = "/og-*.svg"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+    Content-Type = "image/svg+xml"

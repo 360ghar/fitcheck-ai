@@ -59,6 +59,7 @@ interface ProviderConfig {
   model: string;
   vision_model: string;
   image_gen_model: string;
+  embedding_model: string;
 }
 
 interface TestResult {
@@ -81,6 +82,7 @@ const PROVIDERS = [
       chat: ["gemini-3-flash-preview", "gemini-3-pro-preview"],
       vision: ["gemini-3-flash-preview", "gemini-3-pro-preview"],
       image_gen: ["gemini-3-pro-image-preview", "gemini-3-flash-preview"],
+      embedding: ["gemini-embedding-001", "text-embedding-004"],
     },
   },
   {
@@ -92,6 +94,7 @@ const PROVIDERS = [
       chat: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
       vision: ["gpt-4o", "gpt-4o-mini"],
       image_gen: ["dall-e-3", "dall-e-2"],
+      embedding: ["text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002"],
     },
   },
   {
@@ -103,6 +106,7 @@ const PROVIDERS = [
       chat: [],
       vision: [],
       image_gen: [],
+      embedding: [],
     },
   },
 ];
@@ -158,6 +162,7 @@ export function AISettingsPanel() {
           model: display?.model || "",
           vision_model: display?.vision_model || "",
           image_gen_model: display?.image_gen_model || "",
+          embedding_model: display?.embedding_model || "",
         };
       }
       setProviderConfigs(configs);
@@ -189,6 +194,8 @@ export function AISettingsPanel() {
         if (config.vision_model) updates.vision_model = config.vision_model;
         if (config.image_gen_model)
           updates.image_gen_model = config.image_gen_model;
+        if (config.embedding_model)
+          updates.embedding_model = config.embedding_model;
 
         if (Object.keys(updates).length > 0) {
           configsToSave[provider] = updates;
@@ -501,31 +508,78 @@ export function AISettingsPanel() {
                         placeholder="e.g., dall-e-3, sdxl"
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`${provider.id}-embedding-model`}>
+                        Embedding Model
+                      </Label>
+                      <Input
+                        id={`${provider.id}-embedding-model`}
+                        value={
+                          providerConfigs[provider.id]?.embedding_model || ""
+                        }
+                        onChange={(e) =>
+                          updateProviderConfig(
+                            provider.id,
+                            "embedding_model",
+                            e.target.value,
+                          )
+                        }
+                        placeholder="e.g., text-embedding-3-small"
+                      />
+                    </div>
                   </div>
                 ) : (
-                  provider.models.chat.length > 0 && (
-                    <div className="space-y-2">
-                      <Label>Chat Model (Optional Override)</Label>
-                      <Select
-                        value={providerConfigs[provider.id]?.model || "default"}
-                        onValueChange={(value) =>
-                          updateProviderConfig(provider.id, "model", value === "default" ? "" : value)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Use default model" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="default">Use default</SelectItem>
-                          {provider.models.chat.map((model) => (
-                            <SelectItem key={model} value={model}>
-                              {model}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )
+                  <div className="space-y-4">
+                    {provider.models.chat.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>Chat Model (Optional Override)</Label>
+                        <Select
+                          value={providerConfigs[provider.id]?.model || "default"}
+                          onValueChange={(value) =>
+                            updateProviderConfig(provider.id, "model", value === "default" ? "" : value)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Use default model" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">Use default</SelectItem>
+                            {provider.models.chat.map((model) => (
+                              <SelectItem key={model} value={model}>
+                                {model}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {provider.models.embedding.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>Embedding Model</Label>
+                        <Select
+                          value={providerConfigs[provider.id]?.embedding_model || "default"}
+                          onValueChange={(value) =>
+                            updateProviderConfig(provider.id, "embedding_model", value === "default" ? "" : value)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Use default model" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">Use default</SelectItem>
+                            {provider.models.embedding.map((model) => (
+                              <SelectItem key={model} value={model}>
+                                {model}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Used for duplicate detection and similarity search
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Test Result */}
@@ -634,12 +688,34 @@ export function AISettingsPanel() {
               </p>
             </div>
 
+            {/* Embeddings */}
+            {usage.limits.daily_embeddings > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Embeddings (Today)</Label>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {usage.daily.embeddings} / {usage.limits.daily_embeddings}
+                  </span>
+                </div>
+                <Progress
+                  value={
+                    (usage.daily.embeddings / usage.limits.daily_embeddings) *
+                    100
+                  }
+                  className="h-2"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {usage.remaining.embeddings} remaining today
+                </p>
+              </div>
+            )}
+
             {/* Total Usage */}
             <div className="pt-4 border-t dark:border-gray-700">
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 <span className="font-medium text-gray-900 dark:text-white">Total Usage:</span>{" "}
                 {usage.total.extractions} extractions, {usage.total.generations}{" "}
-                generations
+                generations{usage.total.embeddings > 0 && `, ${usage.total.embeddings} embeddings`}
               </p>
             </div>
           </CardContent>
