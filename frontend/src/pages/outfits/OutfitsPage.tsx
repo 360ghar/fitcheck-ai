@@ -10,7 +10,6 @@ import {
   Layers,
   Plus,
   Sparkles,
-  Heart,
   Loader2,
   Share2,
   Camera,
@@ -28,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { OutfitCreateDialog } from '@/components/outfits/OutfitCreateDialog'
+import { OutfitCard } from '@/components/outfits/OutfitCard'
 import { ShareOutfitDialog } from '@/components/social/ShareOutfitDialog'
 import { useToast } from '@/components/ui/use-toast'
 import { ZoomableImage } from '@/components/ui/zoomable-image'
@@ -138,103 +138,22 @@ export default function OutfitsPage() {
             isGridView ? 'grid-cols-2 gap-2 md:gap-4 md:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'
           }`}
         >
-          {filteredOutfits.map((outfit) => (
-            <div
-              key={outfit.id}
-              className="bg-card rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer relative group"
-              onClick={() => setSelectedOutfit(outfit)}
-            >
-              {/* Favorite button */}
-              <button
-                className={`absolute top-2 right-2 z-10 p-2.5 md:p-2 rounded-full touch-target flex items-center justify-center ${
-                  outfit.is_favorite
-                    ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400'
-                    : 'bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-pink-500 dark:hover:text-pink-400'
-                }`}
-                onClick={(e) => {
+          {filteredOutfits.map((outfit) => {
+            const genStatus = generatingOutfits.get(outfit.id)?.status || null
+            return (
+              <OutfitCard
+                key={outfit.id}
+                outfit={outfit}
+                variant={isGridView ? 'default' : 'list'}
+                generationStatus={genStatus}
+                onClick={() => setSelectedOutfit(outfit)}
+                onToggleFavorite={(e) => {
                   e.stopPropagation()
                   toggleOutfitFavorite(outfit.id)
                 }}
-                aria-label={outfit.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
-              >
-                <Heart
-                  className={`h-4 w-4 ${outfit.is_favorite ? 'fill-current' : ''}`}
-                />
-              </button>
-
-              {/* Outfit image or items grid */}
-              <div className="aspect-[4/3] rounded-t-lg overflow-hidden bg-muted">
-                {/* Show loading state if generating */}
-                {(generatingOutfits.get(outfit.id)?.status === 'pending' ||
-                  generatingOutfits.get(outfit.id)?.status === 'processing') ? (
-                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    <p className="text-xs text-muted-foreground mt-2">Generating AI image...</p>
-                  </div>
-                ) : generatingOutfits.get(outfit.id)?.status === 'failed' ? (
-                  <div className="w-full h-full flex flex-col items-center justify-center bg-destructive/5">
-                    <Sparkles className="h-8 w-8 text-destructive/50" />
-                    <p className="text-xs text-muted-foreground mt-2">Generation failed</p>
-                    <p className="text-[10px] text-muted-foreground">Click to retry</p>
-                  </div>
-                ) : outfit.images.length > 0 ? (
-                  <img
-                    src={
-                      (outfit.images.find((img) => img.is_primary) || outfit.images[0]).thumbnail_url ||
-                      (outfit.images.find((img) => img.is_primary) || outfit.images[0]).image_url
-                    }
-                    alt={outfit.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center p-4">
-                    <div className="grid grid-cols-3 gap-2">
-                      {outfit.item_ids.slice(0, 6).map((_, index) => (
-                        <div
-                          key={index}
-                          className="aspect-square bg-muted-foreground/10 rounded flex items-center justify-center"
-                        >
-                          <Layers className="h-4 w-4 md:h-6 md:w-6 text-muted-foreground" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Outfit info */}
-              <div className="p-2.5 md:p-4">
-                <h3 className="font-medium text-sm text-foreground truncate">{outfit.name}</h3>
-                {outfit.description && (
-                  <p className="text-xs md:text-sm text-muted-foreground line-clamp-2 mt-0.5 md:mt-1 hidden md:block">{outfit.description}</p>
-                )}
-                <div className="flex items-center justify-between mt-1 md:mt-2">
-                  <span className="text-[10px] md:text-xs text-muted-foreground">
-                    {outfit.item_ids.length} {outfit.item_ids.length === 1 ? 'item' : 'items'}
-                  </span>
-                  {outfit.style && (
-                    <span className="text-[10px] md:text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full capitalize">
-                      {outfit.style}
-                    </span>
-                  )}
-                </div>
-                {outfit.worn_count > 0 && (
-                  <p className="hidden md:block text-xs text-muted-foreground mt-1 md:mt-2">
-                    Worn {outfit.worn_count} {outfit.worn_count === 1 ? 'time' : 'times'}
-                  </p>
-                )}
-              </div>
-
-              {/* AI generation indicator */}
-              {outfit.images.some((img) => img.generation_type === 'ai') && (
-                <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 bg-purple-100 dark:bg-purple-900/30 rounded-full">
-                  <Sparkles className="h-3 w-3 md:h-3 md:w-3 text-purple-600 dark:text-purple-400" />
-                  <span className="text-[10px] md:text-xs font-medium text-purple-700 dark:text-purple-300">AI</span>
-                </div>
-              )}
-            </div>
-          ))}
+              />
+            )
+          })}
         </div>
       )}
 
@@ -258,7 +177,7 @@ export default function OutfitsPage() {
           }
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>{selectedOutfit?.name}</DialogTitle>
             {selectedOutfit?.description && (
@@ -267,8 +186,8 @@ export default function OutfitsPage() {
           </DialogHeader>
 
           {selectedOutfit && (
-            <div className="space-y-4">
-              <div className="aspect-[4/3] rounded-lg overflow-hidden bg-muted">
+            <div className="space-y-3 sm:space-y-4">
+              <div className="aspect-square sm:aspect-[4/3] rounded-lg overflow-hidden bg-muted">
                 {generatedImageUrl ? (
                   <ZoomableImage
                     src={generatedImageUrl}
@@ -292,7 +211,7 @@ export default function OutfitsPage() {
               </div>
 
               {generationStatus !== 'idle' && (
-                <div className="text-sm text-muted-foreground">
+                <div className="text-xs sm:text-sm text-muted-foreground">
                   Status: <span className="capitalize">{generationStatus}</span>
                 </div>
               )}

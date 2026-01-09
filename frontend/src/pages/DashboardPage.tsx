@@ -15,8 +15,11 @@ import {
   Calendar,
   Plus,
   ArrowRight,
+  Heart,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { StatCard } from '@/components/dashboard/StatCard'
+import { cn } from '@/lib/utils'
 
 export default function DashboardPage() {
   const userDisplayName = useUserDisplayName()
@@ -43,28 +46,28 @@ export default function DashboardPage() {
       name: 'Total Items',
       value: totalItems,
       icon: Shirt,
-      color: 'bg-blue-500',
+      gradient: 'cool' as const,
       link: '/wardrobe',
     },
     {
       name: 'Outfits Created',
       value: totalOutfits,
       icon: Layers,
-      color: 'bg-purple-500',
+      gradient: 'primary' as const,
       link: '/outfits',
     },
     {
       name: 'Total Wears',
       value: totalWears,
       icon: TrendingUp,
-      color: 'bg-green-500',
+      gradient: 'success' as const,
       link: '/wardrobe',
     },
     {
       name: 'Favorites',
       value: favoriteItems,
-      icon: Sparkles,
-      color: 'bg-yellow-500',
+      icon: Heart,
+      gradient: 'warm' as const,
       link: '/wardrobe?favorites=true',
     },
   ]
@@ -75,21 +78,21 @@ export default function DashboardPage() {
       description: 'Add a new item to your wardrobe',
       icon: Shirt,
       link: '/wardrobe?action=add',
-      color: 'bg-indigo-600 hover:bg-indigo-700',
+      gradient: 'bg-gradient-to-br from-indigo-500 to-purple-600',
     },
     {
       name: 'Create Outfit',
       description: 'Combine items into a new outfit',
       icon: Layers,
       link: '/outfits?action=create',
-      color: 'bg-purple-600 hover:bg-purple-700',
+      gradient: 'bg-gradient-to-br from-purple-500 to-pink-600',
     },
     {
       name: 'Get Recommendations',
       description: 'AI-powered outfit suggestions',
       icon: Sparkles,
       link: '/recommendations',
-      color: 'bg-pink-600 hover:bg-pink-700',
+      gradient: 'bg-gradient-to-br from-pink-500 to-rose-600',
     },
   ]
 
@@ -105,80 +108,92 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Stats cards - scroll on mobile, grid on desktop */}
-      <div className="flex gap-3 overflow-x-auto scrollbar-hide scroll-snap-x -mx-4 px-4 pb-1 md:mx-0 md:px-0 md:pb-0 md:grid md:grid-cols-4 md:gap-4 lg:gap-5 mb-6 md:mb-8">
+      {/* Stats cards - responsive grid */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4 lg:gap-5 mb-6 md:mb-8">
         {stats.map((stat) => (
-          <Link
+          <StatCard
             key={stat.name}
-            to={stat.link}
-            className="relative bg-card p-3 sm:p-4 md:p-5 lg:p-6 rounded-lg shadow hover:shadow-md transition-shadow touch-target flex flex-col justify-between min-w-[160px] sm:min-w-[180px] md:min-w-0 scroll-snap-start"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] md:text-sm font-medium text-muted-foreground truncate">{stat.name}</p>
-                <p className="mt-0.5 md:mt-1 text-lg md:text-3xl font-semibold text-foreground">
-                  {isLoadingItems || isLoadingOutfits ? '—' : stat.value}
-                </p>
-              </div>
-              <div className={`${stat.color} p-1.5 md:p-3 rounded-full shrink-0`}>
-                <stat.icon className="h-4 w-4 md:h-6 md:w-6 text-white" />
-              </div>
-            </div>
-          </Link>
+            name={stat.name}
+            value={stat.value}
+            icon={stat.icon}
+            gradient={stat.gradient}
+            link={stat.link}
+            isLoading={isLoadingItems || isLoadingOutfits}
+          />
         ))}
       </div>
 
-      {/* Quick actions - horizontal scroll on mobile with improved snap and visual cues */}
+      {/* Quick actions - responsive grid */}
       <div className="mb-6 md:mb-8">
         <div className="flex items-center justify-between mb-3 md:mb-4 px-1">
-          <h2 className="text-base md:text-lg font-medium text-foreground">Quick Actions</h2>
-          <span className="text-xs text-muted-foreground md:hidden">Scroll for more</span>
+          <h2 className="text-base md:text-lg font-semibold text-foreground">Quick Actions</h2>
         </div>
-        
-        <div className="w-full overflow-x-auto scrollbar-hide scroll-snap-x -mx-4 px-4 pb-1 md:mx-0 md:px-0 md:pb-0">
-          <div className="flex gap-3 md:grid md:grid-cols-3 md:gap-4 w-max md:w-full">
-            {quickActions.map((action) => (
-              <Link
-                key={action.name}
-                to={action.link}
-                className={`relative rounded-lg p-4 md:p-6 text-white ${action.color} transition-colors w-[85vw] max-w-[340px] md:w-auto md:max-w-none shrink-0 md:shrink touch-target scroll-snap-center md:scroll-snap-align-none shadow-sm`}
-              >
-                <div className="flex items-start">
-                  <div className="flex-shrink-0">
-                    <action.icon className="h-6 w-6 md:h-8 md:w-8" />
-                  </div>
-                  <div className="ml-3 md:ml-4 flex-1">
-                    <h3 className="text-base md:text-lg font-medium">{action.name}</h3>
-                    <p className="mt-0.5 md:mt-1 text-xs md:text-sm opacity-90">{action.description}</p>
-                  </div>
-                  <ArrowRight className="h-5 w-5 opacity-70 shrink-0" />
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+          {quickActions.map((action) => (
+            <Link
+              key={action.name}
+              to={action.link}
+              className={cn(
+                'group relative rounded-xl p-4 md:p-5 text-white overflow-hidden',
+                'transition-all duration-300',
+                'hover:shadow-elevated hover:-translate-y-0.5',
+                'touch-target',
+                action.gradient
+              )}
+            >
+              {/* Background glow effect on hover */}
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white/10" />
+
+              <div className="relative flex items-start gap-3 md:gap-4">
+                <div className="p-2 md:p-2.5 rounded-lg bg-white/20 backdrop-blur-sm shrink-0">
+                  <action.icon className="h-5 w-5 md:h-6 md:w-6" />
                 </div>
-              </Link>
-            ))}
-          </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm md:text-base font-semibold">{action.name}</h3>
+                  <p className="mt-0.5 text-xs md:text-sm text-white/80 line-clamp-2">{action.description}</p>
+                </div>
+                <ArrowRight className={cn(
+                  'h-5 w-5 shrink-0 opacity-50',
+                  'transition-all duration-200',
+                  'group-hover:opacity-100 group-hover:translate-x-0.5'
+                )} />
+              </div>
+            </Link>
+          ))}
         </div>
       </div>
 
       {/* Recent activity */}
-      <div className="bg-card shadow rounded-lg">
+      <div className="bg-card shadow-sm rounded-xl overflow-hidden">
         <div className="px-4 py-4 md:py-5 md:px-6 border-b border-border">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium text-foreground">Recent Activity</h3>
-            <Calendar className="h-5 w-5 text-muted-foreground" />
+            <h3 className="text-base md:text-lg font-semibold text-foreground">Recent Activity</h3>
+            <div className="p-2 rounded-lg bg-muted">
+              <Calendar className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
+            </div>
           </div>
         </div>
         <div className="px-4 py-4 md:p-6">
           {totalItems === 0 && totalOutfits === 0 ? (
-            <div className="text-center py-6 md:py-8">
-              <Shirt className="mx-auto h-10 w-10 md:h-12 md:w-12 text-muted-foreground" />
-              <h3 className="mt-2 text-sm font-medium text-foreground">No items yet</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
+            <div className="text-center py-8 md:py-12">
+              <div className="mx-auto w-16 h-16 md:w-20 md:h-20 rounded-full bg-muted flex items-center justify-center mb-4">
+                <Shirt className="h-8 w-8 md:h-10 md:w-10 text-muted-foreground" />
+              </div>
+              <h3 className="text-sm md:text-base font-medium text-foreground">No items yet</h3>
+              <p className="mt-1 text-sm text-muted-foreground max-w-xs mx-auto">
                 Get started by adding items to your wardrobe.
               </p>
-              <div className="mt-4 md:mt-6">
+              <div className="mt-5 md:mt-6">
                 <Link
                   to="/wardrobe?action=add"
-                  className="inline-flex items-center px-4 py-2.5 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary/90 touch-target"
+                  className={cn(
+                    'inline-flex items-center px-4 py-2.5 rounded-lg',
+                    'text-sm font-medium text-white',
+                    'bg-gradient-to-r from-indigo-500 to-purple-600',
+                    'hover:shadow-elevated transition-all duration-200',
+                    'touch-target'
+                  )}
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Add First Item
@@ -186,32 +201,39 @@ export default function DashboardPage() {
               </div>
             </div>
           ) : (
-            <div className="space-y-3 md:space-y-4 max-h-[60vh] overflow-y-auto pr-1 md:max-h-none md:overflow-visible">
+            <div className="space-y-2 md:space-y-3">
               {/* Recent items */}
               {items.slice(0, 3).map((item) => (
                 <Link
                   key={item.id}
                   to={`/wardrobe/${item.id}`}
-                  className="flex items-center p-2.5 md:p-3 rounded-lg hover:bg-accent transition-colors touch-target"
+                  className={cn(
+                    'flex items-center p-2.5 md:p-3 rounded-xl',
+                    'hover:bg-accent/50 transition-colors',
+                    'touch-target group'
+                  )}
                 >
                   {item.images.length > 0 ? (
                     <img
                       src={item.images[0].thumbnail_url || item.images[0].image_url}
                       alt={item.name}
-                      className="h-11 w-11 md:h-12 md:w-12 rounded-lg object-cover"
+                      className="h-12 w-12 md:h-14 md:w-14 rounded-lg object-cover"
                     />
                   ) : (
-                    <div className="h-11 w-11 md:h-12 md:w-12 rounded-lg bg-muted flex items-center justify-center">
+                    <div className="h-12 w-12 md:h-14 md:w-14 rounded-lg bg-muted flex items-center justify-center">
                       <Shirt className="h-5 w-5 md:h-6 md:w-6 text-muted-foreground" />
                     </div>
                   )}
                   <div className="ml-3 md:ml-4 flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
-                    <p className="text-sm text-muted-foreground capitalize">{item.category}</p>
+                    <p className="text-xs md:text-sm text-muted-foreground capitalize">{item.category}</p>
                   </div>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {new Date(item.created_at).toLocaleDateString()}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {new Date(item.created_at).toLocaleDateString()}
+                    </span>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                 </Link>
               ))}
             </div>

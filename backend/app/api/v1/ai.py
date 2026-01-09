@@ -630,7 +630,7 @@ async def generate_embedding(
         return {
             "data": EmbeddingResult(
                 embedding=embedding,
-                model=settings.GEMINI_EMBEDDING_MODEL,
+                model=settings.AI_GEMINI_EMBEDDING_MODEL,
                 dimensions=len(embedding),
                 provider="gemini",
             ).model_dump(),
@@ -664,7 +664,7 @@ async def generate_batch_embeddings(
             return {
                 "data": BatchEmbeddingResult(
                     embeddings=[],
-                    model=settings.GEMINI_EMBEDDING_MODEL,
+                    model=settings.AI_GEMINI_EMBEDDING_MODEL,
                     dimensions=0,
                     provider="gemini",
                     count=0,
@@ -679,7 +679,7 @@ async def generate_batch_embeddings(
         return {
             "data": BatchEmbeddingResult(
                 embeddings=embeddings,
-                model=settings.GEMINI_EMBEDDING_MODEL,
+                model=settings.AI_GEMINI_EMBEDDING_MODEL,
                 dimensions=len(embeddings[0]) if embeddings else 0,
                 provider="gemini",
                 count=len(embeddings),
@@ -787,7 +787,7 @@ async def test_embedding_model(
             "data": TestEmbeddingResult(
                 success=True,
                 message=f"Embedding model working ({len(test_embedding)} dimensions)",
-                model=settings.GEMINI_EMBEDDING_MODEL,
+                model=settings.AI_GEMINI_EMBEDDING_MODEL,
             ).model_dump(),
             "message": "Embedding model test successful",
         }

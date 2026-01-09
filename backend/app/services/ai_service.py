@@ -22,12 +22,12 @@ from app.utils.parallel import parallel_with_retry
 logger = get_context_logger(__name__)
 
 def _create_genai_client() -> genai.Client | None:
-    if not settings.GEMINI_API_KEY:
-        logger.info("GEMINI_API_KEY is not set; server-side embeddings are disabled.")
+    if not settings.AI_GEMINI_API_KEY:
+        logger.info("AI_GEMINI_API_KEY is not set; server-side embeddings are disabled.")
         return None
 
     try:
-        return genai.Client(api_key=settings.GEMINI_API_KEY)
+        return genai.Client(api_key=settings.AI_GEMINI_API_KEY)
     except Exception as e:
         logger.error(
             "Failed to initialize Gemini client",
@@ -71,11 +71,11 @@ class EmbeddingService:
                 "AI client not initialized",
                 text_length=len(text),
             )
-            raise AIServiceError("AI service not configured. GEMINI_API_KEY is required.")
+            raise AIServiceError("AI service not configured. AI_GEMINI_API_KEY is required.")
 
         try:
             result = _client.models.embed_content(
-                model=settings.GEMINI_EMBEDDING_MODEL,
+                model=settings.AI_GEMINI_EMBEDDING_MODEL,
                 contents=text,
                 config=types.EmbedContentConfig(
                     task_type="RETRIEVAL_DOCUMENT",

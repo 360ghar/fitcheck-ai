@@ -65,23 +65,20 @@ class Settings(BaseSettings):
     PINECONE_ENVIRONMENT: Optional[str] = None
     PINECONE_DIMENSION: int = 768  # Gemini embeddings dimension
 
-    # Google Gemini AI (Legacy - for embeddings)
-    GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-3-flash-preview"
-    GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
-
     # ==========================================================================
     # AI Provider Configuration (Multi-provider support)
     # ==========================================================================
 
     # Default AI Provider (gemini, openai, custom)
-    AI_DEFAULT_PROVIDER: str = "gemini"
+    AI_DEFAULT_PROVIDER: str = "custom"
 
     # Gemini Provider Defaults
     AI_GEMINI_API_URL: str = "https://generativelanguage.googleapis.com/v1beta"
+    AI_GEMINI_API_KEY: Optional[str] = None
     AI_GEMINI_CHAT_MODEL: str = "gemini-3-flash-preview"
     AI_GEMINI_VISION_MODEL: str = "gemini-3-flash-preview"
     AI_GEMINI_IMAGE_MODEL: str = "gemini-3-pro-image-preview"
+    AI_GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
 
     # OpenAI Provider Defaults
     AI_OPENAI_API_URL: str = "https://api.openai.com/v1"
@@ -91,8 +88,8 @@ class Settings(BaseSettings):
     AI_OPENAI_IMAGE_MODEL: str = "dall-e-3"
 
     # Custom Proxy Defaults (e.g., local proxy at localhost:8317)
-    AI_CUSTOM_API_URL: Optional[str] = None
-    AI_CUSTOM_API_KEY: Optional[str] = None
+    AI_CUSTOM_API_URL: str = "http://localhost:8317/v1"
+    AI_CUSTOM_API_KEY: str = "***REMOVED***"
     AI_CUSTOM_CHAT_MODEL: str = "gemini-3-flash-preview"
     AI_CUSTOM_VISION_MODEL: str = "gemini-3-flash-preview"
     AI_CUSTOM_IMAGE_MODEL: str = "gemini-3-pro-image-preview"

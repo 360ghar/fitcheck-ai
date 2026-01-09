@@ -82,9 +82,11 @@ Errors are caught by exception handlers in `main.py` and return standardized JSO
 
 ### AI Provider System
 Multi-provider AI support configured in `app/core/config.py`:
-- **Gemini** (default): Vision, image generation, embeddings
+- **Custom** (default): Local proxy at localhost:8317 (Quotio)
+- **Gemini**: Direct Google AI API
 - **OpenAI**: GPT-4o, DALL-E
-- **Custom**: Any OpenAI-compatible endpoint
+
+Embeddings use Google's `google.genai` SDK with `AI_GEMINI_API_KEY` and `AI_GEMINI_EMBEDDING_MODEL`.
 
 User-specific AI settings stored in `user_ai_settings` table with encrypted API keys.
 
@@ -134,9 +136,11 @@ SUPABASE_PUBLISHABLE_KEY=your-anon-key
 SUPABASE_SECRET_KEY=your-service-role-key
 SUPABASE_JWT_SECRET=your-jwt-secret
 
-# AI (at least one required)
-GEMINI_API_KEY=your-gemini-key
-AI_OPENAI_API_KEY=your-openai-key  # Optional
+# AI Configuration (custom provider is default)
+# The backend defaults to a local proxy at localhost:8317
+AI_DEFAULT_PROVIDER=custom  # Options: custom, gemini, openai
+AI_GEMINI_API_KEY=your-gemini-key  # Required for embeddings
+AI_OPENAI_API_KEY=your-openai-key  # Optional, for OpenAI provider
 
 # Optional
 PINECONE_API_KEY=your-pinecone-key
