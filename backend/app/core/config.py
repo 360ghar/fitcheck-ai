@@ -21,6 +21,8 @@ class Settings(BaseSettings):
 
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = [
+        "https://www.fitcheckaiapp.com",
+        "https://fitcheckaiapp.com",
         "http://localhost:5173",
         "http://localhost:3000",
         "http://localhost:8000",
@@ -98,6 +100,7 @@ class Settings(BaseSettings):
     # Rate Limiting
     AI_DAILY_EXTRACTION_LIMIT: int = 100
     AI_DAILY_GENERATION_LIMIT: int = 50
+    AI_DAILY_EMBEDDING_LIMIT: int = 500
 
     # Encryption key for storing user API keys (generate with: openssl rand -hex 32)
     AI_ENCRYPTION_KEY: Optional[str] = None

@@ -269,3 +269,97 @@ export async function searchItems(query: string, limit: number = 10): Promise<It
     throw getApiError(error);
   }
 }
+
+// ============================================================================
+// DUPLICATE DETECTION
+// ============================================================================
+
+/**
+ * Duplicate item found during check
+ */
+export interface DuplicateItem {
+  id: string;
+  name: string;
+  category: string;
+  sub_category?: string;
+  colors: string[];
+  brand?: string;
+  similarity_score: number;
+  image_url?: string;
+  reasons: string[];
+}
+
+/**
+ * Response from duplicate check
+ */
+export interface DuplicateCheckResponse {
+  has_duplicates: boolean;
+  duplicates: DuplicateItem[];
+  threshold: number;
+}
+
+/**
+ * Request body for duplicate check
+ */
+export interface DuplicateCheckRequest {
+  name: string;
+  category: string;
+  colors?: string[];
+  brand?: string;
+  sub_category?: string;
+  material?: string;
+  tags?: string[];
+}
+
+/**
+ * Check for potential duplicate items before adding a new item
+ */
+export async function checkDuplicates(
+  request: DuplicateCheckRequest,
+  options?: { threshold?: number; limit?: number }
+): Promise<DuplicateCheckResponse> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.threshold) params.append('threshold', options.threshold.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const response = await apiClient.post<ApiEnvelope<DuplicateCheckResponse>>(
+      `/api/v1/items/check-duplicates${queryString}`,
+      {
+        name: request.name,
+        category: request.category,
+        colors: request.colors || [],
+        brand: request.brand || null,
+        sub_category: request.sub_category || null,
+        material: request.material || null,
+        tags: request.tags || [],
+      }
+    );
+    return response.data.data;
+  } catch (error) {
+    throw getApiError(error);
+  }
+}
+
+/**
+ * Find items similar to a specific item
+ */
+export async function findSimilarItems(
+  itemId: string,
+  options?: { limit?: number; minScore?: number }
+): Promise<{ items: Item[]; source_item_id: string }> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.minScore) params.append('min_score', options.minScore.toString());
+
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const response = await apiClient.get<ApiEnvelope<{ items: Item[]; source_item_id: string }>>(
+      `/api/v1/items/${itemId}/similar${queryString}`
+    );
+    return response.data.data;
+  } catch (error) {
+    throw getApiError(error);
+  }
+}

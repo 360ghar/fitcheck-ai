@@ -16,6 +16,18 @@ export { GenerationProgress } from './GenerationProgress'
 export { ExtractedItemsGrid } from './ExtractedItemsGrid'
 export { ExtractedItemCard } from './ExtractedItemCard'
 
+// Duplicate detection
+export { DuplicateDetection } from './DuplicateDetection'
+
+// Occasion filtering
+export { OccasionQuickFilter } from './OccasionQuickFilter'
+
+// Care instructions
+export { CareInstructionsEditor, CareInstructionsDisplay, MaterialGuideCard } from './CareInstructionsEditor'
+
+// Laundry tracking
+export { LaundryTracker, ItemLaundryPanel } from './LaundryTracker'
+
 // Other wardrobe components
 export { FilterPanel } from './FilterPanel'
 export { ItemDetailModal } from './ItemDetailModal'

@@ -39,7 +39,7 @@ export default function RegisterPage() {
   const passwordsMatch = password === confirmPassword && password.length > 0
   const isFormValid =
     email.length > 0 &&
-    password.length >= 8 &&
+    passwordStrength === 5 &&
     passwordsMatch &&
     agreedToTerms
 
@@ -190,6 +190,14 @@ export default function RegisterPage() {
                       )}
                       Uppercase letter
                     </li>
+                    <li className={/[a-z]/.test(password) ? 'text-green-600 dark:text-green-400 flex items-center' : 'flex items-center'}>
+                      {/[a-z]/.test(password) ? (
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                      ) : (
+                        <span className="w-3 h-3 mr-1" />
+                      )}
+                      Lowercase letter
+                    </li>
                     <li className={/\d/.test(password) ? 'text-green-600 dark:text-green-400 flex items-center' : 'flex items-center'}>
                       {/\d/.test(password) ? (
                         <CheckCircle className="w-3 h-3 mr-1" />
@@ -197,6 +205,14 @@ export default function RegisterPage() {
                         <span className="w-3 h-3 mr-1" />
                       )}
                       Number
+                    </li>
+                    <li className={/[!@#$%^&*(),.?":{}|<>]/.test(password) ? 'text-green-600 dark:text-green-400 flex items-center' : 'flex items-center'}>
+                      {/[!@#$%^&*(),.?":{}|<>]/.test(password) ? (
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                      ) : (
+                        <span className="w-3 h-3 mr-1" />
+                      )}
+                      Special character
                     </li>
                   </ul>
                 </div>

@@ -149,10 +149,12 @@ class AISettingsService:
                         db.table("user_ai_settings").update({
                             "daily_extraction_count": 0,
                             "daily_generation_count": 0,
+                            "daily_embedding_count": 0,
                             "last_reset_date": date.today().isoformat(),
                         }).eq("user_id", user_id).execute()
                         settings_row["daily_extraction_count"] = 0
                         settings_row["daily_generation_count"] = 0
+                        settings_row["daily_embedding_count"] = 0
 
                 return settings_row
 
@@ -163,9 +165,11 @@ class AISettingsService:
                 "default_provider": get_default_provider().value,
                 "daily_extraction_count": 0,
                 "daily_generation_count": 0,
+                "daily_embedding_count": 0,
                 "last_reset_date": date.today().isoformat(),
                 "total_extractions": 0,
                 "total_generations": 0,
+                "total_embeddings": 0,
             }
 
             db.table("user_ai_settings").insert(default_settings).execute()
@@ -319,7 +323,7 @@ class AISettingsService:
 
         Args:
             user_id: The user's ID
-            operation_type: "extraction" or "generation"
+            operation_type: "extraction", "generation", or "embedding"
             db: Supabase client
 
         Returns:
@@ -330,6 +334,9 @@ class AISettingsService:
         if operation_type == "extraction":
             current = user_settings.get("daily_extraction_count", 0)
             limit = settings.AI_DAILY_EXTRACTION_LIMIT
+        elif operation_type == "embedding":
+            current = user_settings.get("daily_embedding_count", 0)
+            limit = settings.AI_DAILY_EMBEDDING_LIMIT
         else:  # generation
             current = user_settings.get("daily_generation_count", 0)
             limit = settings.AI_DAILY_GENERATION_LIMIT
@@ -346,14 +353,16 @@ class AISettingsService:
         user_id: str,
         operation_type: str,
         db,
+        count: int = 1,
     ) -> None:
         """
         Increment usage counter for a user.
 
         Args:
             user_id: The user's ID
-            operation_type: "extraction" or "generation"
+            operation_type: "extraction", "generation", or "embedding"
             db: Supabase client
+            count: Number of operations to increment by (default: 1)
         """
         try:
             # Get current settings
@@ -361,13 +370,18 @@ class AISettingsService:
 
             if operation_type == "extraction":
                 updates = {
-                    "daily_extraction_count": user_settings.get("daily_extraction_count", 0) + 1,
-                    "total_extractions": user_settings.get("total_extractions", 0) + 1,
+                    "daily_extraction_count": user_settings.get("daily_extraction_count", 0) + count,
+                    "total_extractions": user_settings.get("total_extractions", 0) + count,
+                }
+            elif operation_type == "embedding":
+                updates = {
+                    "daily_embedding_count": user_settings.get("daily_embedding_count", 0) + count,
+                    "total_embeddings": user_settings.get("total_embeddings", 0) + count,
                 }
             else:  # generation
                 updates = {
-                    "daily_generation_count": user_settings.get("daily_generation_count", 0) + 1,
-                    "total_generations": user_settings.get("total_generations", 0) + 1,
+                    "daily_generation_count": user_settings.get("daily_generation_count", 0) + count,
+                    "total_generations": user_settings.get("total_generations", 0) + count,
                 }
 
             db.table("user_ai_settings").update(updates).eq("user_id", user_id).execute()
@@ -394,18 +408,22 @@ class AISettingsService:
             "daily": {
                 "extractions": user_settings.get("daily_extraction_count", 0),
                 "generations": user_settings.get("daily_generation_count", 0),
+                "embeddings": user_settings.get("daily_embedding_count", 0),
             },
             "total": {
                 "extractions": user_settings.get("total_extractions", 0),
                 "generations": user_settings.get("total_generations", 0),
+                "embeddings": user_settings.get("total_embeddings", 0),
             },
             "limits": {
                 "daily_extractions": settings.AI_DAILY_EXTRACTION_LIMIT,
                 "daily_generations": settings.AI_DAILY_GENERATION_LIMIT,
+                "daily_embeddings": settings.AI_DAILY_EMBEDDING_LIMIT,
             },
             "remaining": {
                 "extractions": max(0, settings.AI_DAILY_EXTRACTION_LIMIT - user_settings.get("daily_extraction_count", 0)),
                 "generations": max(0, settings.AI_DAILY_GENERATION_LIMIT - user_settings.get("daily_generation_count", 0)),
+                "embeddings": max(0, settings.AI_DAILY_EMBEDDING_LIMIT - user_settings.get("daily_embedding_count", 0)),
             },
         }
 

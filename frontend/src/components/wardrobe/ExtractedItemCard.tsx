@@ -3,9 +3,10 @@
  *
  * Individual card for displaying and editing a detected clothing item.
  * Shows generated product image, extracted metadata, and editing controls.
+ * Includes duplicate detection to warn users about similar items.
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Trash2,
   RefreshCw,
@@ -13,6 +14,7 @@ import {
   Edit2,
   ChevronDown,
   ChevronUp,
+  Copy,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -31,6 +33,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { checkDuplicates, type DuplicateItem } from '@/api/items'
 import type { DetectedItem, Category } from '@/types'
 
 interface ExtractedItemCardProps {
@@ -71,9 +80,46 @@ export function ExtractedItemCard({
 }: ExtractedItemCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
+  const [duplicates, setDuplicates] = useState<DuplicateItem[]>([])
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false)
+  const [hasCheckedDuplicates, setHasCheckedDuplicates] = useState(false)
 
   const isLowConfidence = item.confidence < 0.7
   const hasFailed = item.status === 'failed'
+  const hasDuplicates = duplicates.length > 0
+
+  // Check for duplicates when item has name and category
+  useEffect(() => {
+    const checkForDuplicates = async () => {
+      if (!item.name || !item.category || hasCheckedDuplicates || item.status === 'deleted') {
+        return
+      }
+
+      setIsCheckingDuplicates(true)
+      try {
+        const result = await checkDuplicates({
+          name: item.name,
+          category: item.category,
+          colors: item.colors,
+          brand: item.brand,
+          sub_category: item.sub_category,
+          material: item.material,
+        }, { threshold: 0.7, limit: 3 })
+
+        setDuplicates(result.duplicates)
+        setHasCheckedDuplicates(true)
+      } catch (error) {
+        console.error('Duplicate check failed:', error)
+        setHasCheckedDuplicates(true)
+      } finally {
+        setIsCheckingDuplicates(false)
+      }
+    }
+
+    // Debounce the check to avoid too many API calls
+    const timeoutId = setTimeout(checkForDuplicates, 500)
+    return () => clearTimeout(timeoutId)
+  }, [item.name, item.category, item.colors, item.brand, hasCheckedDuplicates, item.status])
 
   const toggleColor = (color: string) => {
     const colors = item.colors.includes(color)
@@ -124,6 +170,34 @@ export function ExtractedItemCard({
 
           {/* Status badges */}
           <div className="absolute top-2 left-2 flex flex-col gap-1">
+            {hasDuplicates && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="outline" className="bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-700 cursor-help">
+                      <Copy className="h-3 w-3 mr-1" />
+                      {duplicates.length} similar
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-xs">
+                    <p className="font-medium mb-1">Similar items found:</p>
+                    <ul className="text-xs space-y-1">
+                      {duplicates.slice(0, 3).map((dup) => (
+                        <li key={dup.id}>
+                          {dup.name} ({Math.round(dup.similarity_score * 100)}% match)
+                        </li>
+                      ))}
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {isCheckingDuplicates && (
+              <Badge variant="outline" className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700">
+                <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                Checking...
+              </Badge>
+            )}
             {isLowConfidence && !hasFailed && (
               <Badge variant="outline" className="bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700">
                 <AlertTriangle className="h-3 w-3 mr-1" />

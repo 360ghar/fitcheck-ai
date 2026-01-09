@@ -928,3 +928,436 @@ async def update_item_categories(
     except Exception as e:
         logger.error("Update item categories error", item_id=str(item_id), user_id=user_id, error=str(e))
         raise DatabaseError("Failed to update item categories", operation="update")
+
+
+# ============================================================================
+# DUPLICATE DETECTION
+# ============================================================================
+
+
+class DuplicateCheckRequest(BaseModel):
+    """Request body for duplicate check."""
+    name: str = Field(..., min_length=1)
+    category: str
+    colors: List[str] = Field(default_factory=list)
+    brand: Optional[str] = None
+    sub_category: Optional[str] = None
+    material: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+
+
+class DuplicateItem(BaseModel):
+    """A potential duplicate item."""
+    id: str
+    name: str
+    category: str
+    sub_category: Optional[str] = None
+    colors: List[str] = Field(default_factory=list)
+    brand: Optional[str] = None
+    similarity_score: float = Field(..., ge=0, le=1)
+    image_url: Optional[str] = None
+    reasons: List[str] = Field(default_factory=list)
+
+
+class DuplicateCheckResponse(BaseModel):
+    """Response for duplicate check."""
+    has_duplicates: bool
+    duplicates: List[DuplicateItem] = Field(default_factory=list)
+    threshold: float = Field(default=0.75)
+
+
+@router.post("/check-duplicates", response_model=Dict[str, Any])
+async def check_duplicates(
+    request: DuplicateCheckRequest,
+    threshold: float = Query(0.75, ge=0.5, le=0.99, description="Similarity threshold (0.5-0.99)"),
+    limit: int = Query(5, ge=1, le=20, description="Max duplicates to return"),
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """Check for potential duplicate items in the user's wardrobe.
+
+    Uses AI embeddings to find items with similar attributes.
+    Called before creating a new item to warn about potential duplicates.
+
+    Args:
+        request: Item attributes to check for duplicates
+        threshold: Minimum similarity score to consider a duplicate (default 0.75)
+        limit: Maximum number of duplicates to return (default 5)
+
+    Returns:
+        has_duplicates: Whether any duplicates were found
+        duplicates: List of potential duplicate items with similarity scores
+        threshold: The threshold used for matching
+    """
+    try:
+        # Build text from item attributes for embedding
+        item_data = {
+            "name": request.name,
+            "category": request.category,
+            "sub_category": request.sub_category,
+            "colors": request.colors,
+            "brand": request.brand,
+            "material": request.material,
+            "tags": request.tags,
+        }
+
+        # Generate embedding for the new item
+        try:
+            embedding = await AIService.generate_item_embedding(item_data)
+        except Exception as e:
+            logger.warning(
+                "Failed to generate embedding for duplicate check, falling back to text search",
+                error=str(e),
+                user_id=user_id,
+            )
+            # Fallback: simple text-based duplicate check
+            return await _fallback_duplicate_check(db, user_id, request, threshold, limit)
+
+        # Search for similar items using vector service
+        vector_service = get_vector_service()
+        similar_items = await vector_service.find_similar(
+            embedding=embedding,
+            user_id=user_id,
+            category=None,  # Search across all categories
+            top_k=limit * 2,  # Get more than needed for filtering
+            min_score=threshold,
+        )
+
+        if not similar_items:
+            return {
+                "data": {
+                    "has_duplicates": False,
+                    "duplicates": [],
+                    "threshold": threshold,
+                },
+                "message": "No duplicates found"
+            }
+
+        # Fetch full item details for matches
+        item_ids = [item["item_id"] for item in similar_items]
+        items_result = (
+            db.table("items")
+            .select("*, item_images(*)")
+            .in_("id", item_ids)
+            .eq("user_id", user_id)
+            .execute()
+        )
+
+        items_by_id = {item["id"]: _normalize_item_images(item) for item in (items_result.data or [])}
+
+        # Build duplicate response with details
+        duplicates = []
+        for match in similar_items[:limit]:
+            item_id = match["item_id"]
+            if item_id not in items_by_id:
+                continue
+
+            item = items_by_id[item_id]
+            score = match["score"]
+
+            # Get primary image URL
+            images = item.get("images", [])
+            primary_image = next(
+                (img for img in images if img.get("is_primary")),
+                images[0] if images else None
+            )
+            image_url = primary_image.get("image_url") if primary_image else None
+
+            # Generate reasons for similarity
+            reasons = _generate_duplicate_reasons(request, item, score)
+
+            duplicates.append({
+                "id": item_id,
+                "name": item.get("name", ""),
+                "category": item.get("category", ""),
+                "sub_category": item.get("sub_category"),
+                "colors": item.get("colors", []),
+                "brand": item.get("brand"),
+                "similarity_score": round(score, 3),
+                "image_url": image_url,
+                "reasons": reasons,
+            })
+
+        has_duplicates = len(duplicates) > 0
+
+        logger.info(
+            "Duplicate check completed",
+            user_id=user_id,
+            item_name=request.name,
+            duplicates_found=len(duplicates),
+            threshold=threshold,
+        )
+
+        return {
+            "data": {
+                "has_duplicates": has_duplicates,
+                "duplicates": duplicates,
+                "threshold": threshold,
+            },
+            "message": f"Found {len(duplicates)} potential duplicate(s)" if has_duplicates else "No duplicates found"
+        }
+
+    except (ValidationError, DatabaseError):
+        raise
+    except Exception as e:
+        logger.error(
+            "Duplicate check error",
+            user_id=user_id,
+            item_name=request.name,
+            error=str(e),
+        )
+        raise DatabaseError("Failed to check for duplicates", operation="select")
+
+
+@router.get("/{item_id}/similar", response_model=Dict[str, Any])
+async def find_similar_items(
+    item_id: UUID,
+    limit: int = Query(5, ge=1, le=20),
+    min_score: float = Query(0.6, ge=0.0, le=1.0),
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """Find items similar to the specified item.
+
+    Uses AI embeddings for similarity matching. Useful for:
+    - Finding duplicates in existing wardrobe
+    - Discovering items that could be paired together
+    - Identifying items to consolidate or declutter
+
+    Args:
+        item_id: The item to find similar items for
+        limit: Maximum number of similar items to return
+        min_score: Minimum similarity score (0-1)
+
+    Returns:
+        List of similar items with similarity scores
+    """
+    try:
+        item_id_str = str(item_id)
+
+        # Fetch the source item
+        item_result = (
+            db.table("items")
+            .select("*")
+            .eq("id", item_id_str)
+            .eq("user_id", user_id)
+            .single()
+            .execute()
+        )
+
+        if not item_result.data:
+            raise ItemNotFoundError(item_id=item_id_str)
+
+        source_item = item_result.data
+
+        # Generate embedding for source item
+        try:
+            embedding = await AIService.generate_item_embedding(source_item)
+        except Exception as e:
+            logger.warning(
+                "Failed to generate embedding for similar items search",
+                error=str(e),
+                item_id=item_id_str,
+            )
+            return {
+                "data": {"items": [], "source_item_id": item_id_str},
+                "message": "Similarity search unavailable - AI service error"
+            }
+
+        # Search for similar items
+        vector_service = get_vector_service()
+        similar_items = await vector_service.find_similar(
+            embedding=embedding,
+            user_id=user_id,
+            exclude_item_ids=[item_id_str],  # Don't include the source item
+            top_k=limit,
+            min_score=min_score,
+        )
+
+        if not similar_items:
+            return {
+                "data": {"items": [], "source_item_id": item_id_str},
+                "message": "No similar items found"
+            }
+
+        # Fetch full item details
+        similar_ids = [item["item_id"] for item in similar_items]
+        items_result = (
+            db.table("items")
+            .select("*, item_images(*)")
+            .in_("id", similar_ids)
+            .eq("user_id", user_id)
+            .execute()
+        )
+
+        items_by_id = {item["id"]: _normalize_item_images(item) for item in (items_result.data or [])}
+
+        # Build response with scores
+        response_items = []
+        for match in similar_items:
+            item_id = match["item_id"]
+            if item_id not in items_by_id:
+                continue
+
+            item = items_by_id[item_id]
+            item["similarity_score"] = round(match["score"], 3)
+            response_items.append(item)
+
+        return {
+            "data": {
+                "items": response_items,
+                "source_item_id": item_id_str,
+            },
+            "message": f"Found {len(response_items)} similar item(s)"
+        }
+
+    except (ItemNotFoundError, ValidationError, DatabaseError):
+        raise
+    except Exception as e:
+        logger.error(
+            "Find similar items error",
+            item_id=str(item_id),
+            user_id=user_id,
+            error=str(e),
+        )
+        raise DatabaseError("Failed to find similar items", operation="select")
+
+
+async def _fallback_duplicate_check(
+    db: Client,
+    user_id: str,
+    request: DuplicateCheckRequest,
+    threshold: float,
+    limit: int,
+) -> Dict[str, Any]:
+    """Fallback duplicate check using text-based matching when embeddings unavailable."""
+    try:
+        # Search by name similarity and same category
+        name_pattern = f"%{request.name}%"
+
+        items_result = (
+            db.table("items")
+            .select("*, item_images(*)")
+            .eq("user_id", user_id)
+            .eq("category", request.category.lower())
+            .ilike("name", name_pattern)
+            .limit(limit)
+            .execute()
+        )
+
+        duplicates = []
+        for item in (items_result.data or []):
+            item = _normalize_item_images(item)
+
+            # Calculate a basic similarity score
+            score = _calculate_text_similarity(request, item)
+
+            if score >= threshold:
+                images = item.get("images", [])
+                primary_image = next(
+                    (img for img in images if img.get("is_primary")),
+                    images[0] if images else None
+                )
+
+                duplicates.append({
+                    "id": item["id"],
+                    "name": item.get("name", ""),
+                    "category": item.get("category", ""),
+                    "sub_category": item.get("sub_category"),
+                    "colors": item.get("colors", []),
+                    "brand": item.get("brand"),
+                    "similarity_score": round(score, 3),
+                    "image_url": primary_image.get("image_url") if primary_image else None,
+                    "reasons": _generate_duplicate_reasons(request, item, score),
+                })
+
+        # Sort by score
+        duplicates.sort(key=lambda x: x["similarity_score"], reverse=True)
+
+        return {
+            "data": {
+                "has_duplicates": len(duplicates) > 0,
+                "duplicates": duplicates[:limit],
+                "threshold": threshold,
+            },
+            "message": "Fallback text-based duplicate check"
+        }
+    except Exception as e:
+        logger.error("Fallback duplicate check error", error=str(e))
+        return {
+            "data": {
+                "has_duplicates": False,
+                "duplicates": [],
+                "threshold": threshold,
+            },
+            "message": "Duplicate check unavailable"
+        }
+
+
+def _calculate_text_similarity(request: DuplicateCheckRequest, item: Dict[str, Any]) -> float:
+    """Calculate a basic text similarity score."""
+    score = 0.0
+
+    # Name similarity (40%)
+    req_name = request.name.lower()
+    item_name = (item.get("name") or "").lower()
+    if req_name == item_name:
+        score += 0.4
+    elif req_name in item_name or item_name in req_name:
+        score += 0.3
+
+    # Category match (20%)
+    if request.category.lower() == (item.get("category") or "").lower():
+        score += 0.2
+
+    # Sub-category match (10%)
+    if request.sub_category and request.sub_category.lower() == (item.get("sub_category") or "").lower():
+        score += 0.1
+
+    # Color overlap (15%)
+    req_colors = set(c.lower() for c in request.colors)
+    item_colors = set(c.lower() for c in (item.get("colors") or []))
+    if req_colors and item_colors:
+        overlap = len(req_colors & item_colors) / max(len(req_colors), len(item_colors))
+        score += 0.15 * overlap
+
+    # Brand match (15%)
+    if request.brand and request.brand.lower() == (item.get("brand") or "").lower():
+        score += 0.15
+
+    return min(score, 1.0)
+
+
+def _generate_duplicate_reasons(request: DuplicateCheckRequest, item: Dict[str, Any], score: float) -> List[str]:
+    """Generate human-readable reasons for why items are similar."""
+    reasons = []
+
+    req_name = request.name.lower()
+    item_name = (item.get("name") or "").lower()
+
+    if req_name == item_name:
+        reasons.append("Exact name match")
+    elif req_name in item_name or item_name in req_name:
+        reasons.append("Similar name")
+
+    if request.category.lower() == (item.get("category") or "").lower():
+        reasons.append(f"Same category ({request.category})")
+
+    if request.sub_category and request.sub_category.lower() == (item.get("sub_category") or "").lower():
+        reasons.append(f"Same sub-category ({request.sub_category})")
+
+    req_colors = set(c.lower() for c in request.colors)
+    item_colors = set(c.lower() for c in (item.get("colors") or []))
+    common_colors = req_colors & item_colors
+    if common_colors:
+        reasons.append(f"Matching colors: {', '.join(common_colors)}")
+
+    if request.brand and request.brand.lower() == (item.get("brand") or "").lower():
+        reasons.append(f"Same brand ({request.brand})")
+
+    if score >= 0.9:
+        reasons.insert(0, "Very high similarity")
+    elif score >= 0.8:
+        reasons.insert(0, "High similarity")
+
+    return reasons

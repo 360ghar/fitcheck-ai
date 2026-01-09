@@ -5,11 +5,13 @@ Provides endpoints for AI-powered item extraction and image generation.
 All AI processing is done server-side using configurable providers.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from supabase import Client
 
+from app.core.config import settings
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError, RateLimitError
 from app.core.security import get_current_user_id
@@ -34,6 +36,8 @@ from app.agents.image_generation_agent import (
     save_generated_image,
 )
 from app.services.ai_settings_service import AISettingsService
+from app.services.ai_service import EmbeddingService
+from app.services.vector_service import get_vector_service
 
 logger = get_context_logger(__name__)
 
@@ -569,3 +573,328 @@ async def get_available_models(
         "data": models.model_dump(),
         "message": "OK",
     }
+
+
+# =============================================================================
+# EMBEDDINGS
+# =============================================================================
+
+
+class EmbeddingRequest(BaseModel):
+    """Request to generate a single embedding."""
+    text: str = Field(..., min_length=1, max_length=10000, description="Text to generate embedding for")
+    model: Optional[str] = None
+
+
+class EmbeddingResult(BaseModel):
+    """Result of embedding generation."""
+    embedding: List[float]
+    model: str
+    dimensions: int
+    provider: str
+
+
+class BatchEmbeddingRequest(BaseModel):
+    """Request to generate batch embeddings."""
+    texts: List[str] = Field(..., min_length=1, max_length=100, description="List of texts to generate embeddings for")
+    model: Optional[str] = None
+
+
+class BatchEmbeddingResult(BaseModel):
+    """Result of batch embedding generation."""
+    embeddings: List[List[float]]
+    model: str
+    dimensions: int
+    provider: str
+    count: int
+
+
+class SimilaritySearchRequest(BaseModel):
+    """Request to search for similar items."""
+    text: Optional[str] = None
+    embedding: Optional[List[float]] = None
+    category: Optional[str] = None
+    colors: Optional[List[str]] = None
+    top_k: int = 10
+    min_score: float = 0.5
+
+
+class SimilarItem(BaseModel):
+    """A similar item from vector search."""
+    item_id: str
+    score: float
+    metadata: Dict[str, Any]
+
+
+class SimilaritySearchResult(BaseModel):
+    """Result of similarity search."""
+    items: List[SimilarItem]
+    query_embedding_dimensions: int
+
+
+class TestEmbeddingRequest(BaseModel):
+    """Request to test embedding model."""
+    provider: str
+    model: str
+
+
+class TestEmbeddingResult(BaseModel):
+    """Result of embedding model test."""
+    success: bool
+    message: str
+    model: Optional[str] = None
+
+
+@router.post(
+    "/embeddings",
+    response_model=Dict[str, Any],
+    status_code=status.HTTP_200_OK,
+)
+async def generate_embedding(
+    request: EmbeddingRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """
+    Generate an embedding for a single text.
+
+    Used for similarity matching and semantic search.
+    """
+    try:
+        # Check rate limit for embeddings
+        rate_check = await AISettingsService.check_rate_limit(
+            user_id=user_id,
+            operation_type="embedding",
+            db=db,
+        )
+        if not rate_check["allowed"]:
+            raise RateLimitError(
+                f"Daily embedding limit ({rate_check['limit']}) exceeded."
+            )
+
+        # Generate embedding
+        embedding = await EmbeddingService.generate_embedding(request.text)
+
+        # Increment usage
+        await AISettingsService.increment_usage(
+            user_id=user_id,
+            operation_type="embedding",
+            db=db,
+        )
+
+        return {
+            "data": EmbeddingResult(
+                embedding=embedding,
+                model=settings.GEMINI_EMBEDDING_MODEL,
+                dimensions=len(embedding),
+                provider="gemini",
+            ).model_dump(),
+            "message": "Embedding generated successfully",
+        }
+
+    except (AIServiceError, RateLimitError):
+        raise
+    except Exception as e:
+        logger.error("Generate embedding error", user_id=user_id, error=str(e))
+        raise AIServiceError(f"Failed to generate embedding: {str(e)}")
+
+
+@router.post(
+    "/embeddings/batch",
+    response_model=Dict[str, Any],
+    status_code=status.HTTP_200_OK,
+)
+async def generate_batch_embeddings(
+    request: BatchEmbeddingRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """
+    Generate embeddings for multiple texts in batch.
+
+    More efficient than calling single embedding endpoint multiple times.
+    """
+    try:
+        if not request.texts:
+            return {
+                "data": BatchEmbeddingResult(
+                    embeddings=[],
+                    model=settings.GEMINI_EMBEDDING_MODEL,
+                    dimensions=0,
+                    provider="gemini",
+                    count=0,
+                ).model_dump(),
+                "message": "No texts provided",
+            }
+
+        # Check rate limit
+        rate_check = await AISettingsService.check_rate_limit(
+            user_id=user_id,
+            operation_type="embedding",
+            db=db,
+        )
+        if not rate_check["allowed"]:
+            raise RateLimitError(
+                f"Daily embedding limit ({rate_check['limit']}) exceeded."
+            )
+
+        # Generate batch embeddings
+        embeddings = await EmbeddingService.batch_generate_embeddings(request.texts)
+
+        # Increment usage atomically (count as number of texts processed)
+        await AISettingsService.increment_usage(
+            user_id=user_id,
+            operation_type="embedding",
+            db=db,
+            count=len(request.texts),
+        )
+
+        return {
+            "data": BatchEmbeddingResult(
+                embeddings=embeddings,
+                model=settings.GEMINI_EMBEDDING_MODEL,
+                dimensions=len(embeddings[0]) if embeddings else 0,
+                provider="gemini",
+                count=len(embeddings),
+            ).model_dump(),
+            "message": "Batch embeddings generated successfully",
+        }
+
+    except (AIServiceError, RateLimitError):
+        raise
+    except Exception as e:
+        logger.error("Generate batch embeddings error", user_id=user_id, error=str(e))
+        raise AIServiceError(f"Failed to generate batch embeddings: {str(e)}")
+
+
+@router.post(
+    "/embeddings/search",
+    response_model=Dict[str, Any],
+    status_code=status.HTTP_200_OK,
+)
+async def search_similar_items(
+    request: SimilaritySearchRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """
+    Search for similar items using text or embedding.
+
+    Uses vector similarity to find matching items in the user's wardrobe.
+    """
+    try:
+        # Need either text or embedding
+        if not request.text and not request.embedding:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Either 'text' or 'embedding' must be provided",
+            )
+
+        # Generate embedding from text if not provided
+        if request.embedding:
+            query_embedding = request.embedding
+        else:
+            # Check rate limit when generating embedding from text
+            rate_check = await AISettingsService.check_rate_limit(
+                user_id=user_id,
+                operation_type="embedding",
+                db=db,
+            )
+            if not rate_check["allowed"]:
+                raise RateLimitError(
+                    f"Daily embedding limit ({rate_check['limit']}) exceeded."
+                )
+
+            query_embedding = await EmbeddingService.generate_embedding(request.text)
+
+            # Increment usage for the embedding generation
+            await AISettingsService.increment_usage(
+                user_id=user_id,
+                operation_type="embedding",
+                db=db,
+            )
+
+        # Get vector service and search
+        vector_service = get_vector_service()
+        results = await vector_service.find_similar(
+            embedding=query_embedding,
+            user_id=user_id,
+            category=request.category,
+            colors=request.colors,
+            top_k=request.top_k,
+            min_score=request.min_score,
+        )
+
+        # Convert results to response format
+        items = [
+            SimilarItem(
+                item_id=r.get("id", ""),
+                score=r.get("score", 0.0),
+                metadata=r.get("metadata", {}),
+            )
+            for r in results
+        ]
+
+        return {
+            "data": SimilaritySearchResult(
+                items=items,
+                query_embedding_dimensions=len(query_embedding),
+            ).model_dump(),
+            "message": f"Found {len(items)} similar items",
+        }
+
+    except HTTPException:
+        raise
+    except (AIServiceError, RateLimitError):
+        raise
+    except Exception as e:
+        logger.error("Search similar items error", user_id=user_id, error=str(e))
+        raise AIServiceError(f"Failed to search similar items: {str(e)}")
+
+
+@router.post(
+    "/embeddings/test",
+    response_model=Dict[str, Any],
+    status_code=status.HTTP_200_OK,
+)
+async def test_embedding_model(
+    request: TestEmbeddingRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Test an embedding model configuration.
+
+    Generates a test embedding to verify the model is working correctly.
+    """
+    try:
+        # Generate test embedding
+        test_embedding = await EmbeddingService.generate_embedding("test embedding")
+
+        return {
+            "data": TestEmbeddingResult(
+                success=True,
+                message=f"Embedding model working ({len(test_embedding)} dimensions)",
+                model=settings.GEMINI_EMBEDDING_MODEL,
+            ).model_dump(),
+            "message": "Embedding model test successful",
+        }
+
+    except AIServiceError as e:
+        return {
+            "data": TestEmbeddingResult(
+                success=False,
+                message=str(e),
+                model=request.model,
+            ).model_dump(),
+            "message": "Embedding model test failed",
+        }
+    except Exception as e:
+        logger.error("Test embedding model error", user_id=user_id, error=str(e))
+        return {
+            "data": TestEmbeddingResult(
+                success=False,
+                message=str(e),
+                model=request.model,
+            ).model_dump(),
+            "message": "Embedding model test failed",
+        }
