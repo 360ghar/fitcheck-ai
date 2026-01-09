@@ -511,7 +511,7 @@ export function CalendarView({
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2 md:gap-4">
+      <div className="flex flex-wrap items-center gap-2 md:gap-4">
           <h2 className="text-lg md:text-2xl font-bold text-foreground">
             {viewMode === 'week'
               ? getWeekRangeString(currentDate)
@@ -532,7 +532,7 @@ export function CalendarView({
           )}
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide touch-pan-x overscroll-x-contain pb-1">
           {/* View mode toggle - visible on mobile */}
           <div className="flex items-center gap-1 md:hidden">
             <Button
@@ -620,7 +620,7 @@ export function CalendarView({
                 >
                   {/* Day info */}
                   <div className={cn(
-                    'flex flex-col items-center justify-center w-14 shrink-0',
+                    'flex flex-col items-center justify-center w-12 sm:w-14 shrink-0',
                     day.isToday ? 'text-primary' : 'text-muted-foreground'
                   )}>
                     <span className="text-xs font-medium uppercase">{WEEKDAYS[index]}</span>
@@ -770,107 +770,109 @@ export function CalendarView({
       {/* Month View */}
       {viewMode === 'month' && (
         <Card>
-          <CardContent className="p-2 md:p-4">
-            {/* Weekday headers */}
-            <div className="grid grid-cols-7 gap-1 md:gap-2 mb-2">
-              {WEEKDAYS.map((day) => (
-                <div key={day} className="text-center text-xs md:text-sm font-medium text-muted-foreground">
-                  <span className="hidden md:inline">{day}</span>
-                  <span className="md:hidden">{day.charAt(0)}</span>
-                </div>
-              ))}
-            </div>
+          <CardContent className="p-2 md:p-4 overflow-x-auto scrollbar-hide">
+            <div className="min-w-[560px] md:min-w-0">
+              {/* Weekday headers */}
+              <div className="grid grid-cols-7 gap-1 md:gap-2 mb-2">
+                {WEEKDAYS.map((day) => (
+                  <div key={day} className="text-center text-xs md:text-sm font-medium text-muted-foreground">
+                    <span className="hidden md:inline">{day}</span>
+                    <span className="md:hidden">{day.charAt(0)}</span>
+                  </div>
+                ))}
+              </div>
 
-            {/* Days grid */}
-            <div className="grid grid-cols-7 gap-1 md:gap-2">
-              {days.map((day, index) => (
-                <div
-                  key={index}
-                  onClick={() => handleDayClick(day)}
-                  className={cn(
-                    'group min-h-[60px] md:min-h-24 p-1 md:p-2 rounded-lg border transition-all cursor-pointer',
-                    day.isCurrentMonth
-                      ? day.isToday
-                        ? 'bg-primary/5 border-primary'
-                        : 'bg-card border-border hover:bg-accent'
-                      : 'bg-muted/50 border-transparent text-muted-foreground'
-                  )}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className={cn(
-                      'text-xs md:text-sm font-medium',
-                      day.isToday ? 'text-primary' : day.isCurrentMonth ? 'text-foreground' : 'text-muted-foreground'
-                    )}>
-                      {day.date.getDate()}
-                    </span>
+              {/* Days grid */}
+              <div className="grid grid-cols-7 gap-1 md:gap-2">
+                {days.map((day, index) => (
+                  <div
+                    key={index}
+                    onClick={() => handleDayClick(day)}
+                    className={cn(
+                      'group min-h-[60px] md:min-h-24 p-1 md:p-2 rounded-lg border transition-all cursor-pointer',
+                      day.isCurrentMonth
+                        ? day.isToday
+                          ? 'bg-primary/5 border-primary'
+                          : 'bg-card border-border hover:bg-accent'
+                        : 'bg-muted/50 border-transparent text-muted-foreground'
+                    )}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={cn(
+                        'text-xs md:text-sm font-medium',
+                        day.isToday ? 'text-primary' : day.isCurrentMonth ? 'text-foreground' : 'text-muted-foreground'
+                      )}>
+                        {day.date.getDate()}
+                      </span>
 
-                    {/* Weather indicator */}
-                    {day.weather && (
-                      <div
-                        className="hidden md:flex items-center gap-1 text-xs text-muted-foreground"
-                        title={`${Math.round(day.weather.temperature)}°C - ${day.weather.description}`}
-                      >
-                        <WeatherIcon weatherState={day.weather.weather_state} className="h-3 w-3" />
-                        <span>{Math.round(day.weather.temperature)}°</span>
+                      {/* Weather indicator */}
+                      {day.weather && (
+                        <div
+                          className="hidden md:flex items-center gap-1 text-xs text-muted-foreground"
+                          title={`${Math.round(day.weather.temperature)}°C - ${day.weather.description}`}
+                        >
+                          <WeatherIcon weatherState={day.weather.weather_state} className="h-3 w-3" />
+                          <span>{Math.round(day.weather.temperature)}°</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Events */}
+                    <div className="space-y-0.5 md:space-y-1">
+                      {/* Mobile: show dots for events */}
+                      <div className="flex gap-0.5 md:hidden">
+                        {day.events.slice(0, 3).map((event) => (
+                          <div
+                            key={event.id}
+                            className={cn(
+                              'w-1.5 h-1.5 rounded-full',
+                              event.outfit_id ? 'bg-primary' : 'bg-muted-foreground'
+                            )}
+                          />
+                        ))}
+                        {day.events.length > 3 && (
+                          <span className="text-[10px] text-muted-foreground">+{day.events.length - 3}</span>
+                        )}
                       </div>
+
+                      {/* Desktop: show event badges */}
+                      <div className="hidden md:block">
+                        {day.events.slice(0, 2).map((event) => (
+                          <div key={event.id}>
+                            <EventBadge event={event} onClick={handleEventClick} />
+                            {!event.outfit_id && onAssignOutfit && (
+                              <button
+                                onClick={(e) => handleQuickAssign(e, event)}
+                                className="text-xs text-primary hover:text-primary/80 ml-1"
+                              >
+                                + Outfit
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        {day.events.length > 2 && (
+                          <div className="text-xs text-muted-foreground pl-2">
+                            +{day.events.length - 2} more
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Add event button - desktop only */}
+                    {onCreateEvent && day.isCurrentMonth && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleCreateEvent(day.date)
+                        }}
+                        className="hidden md:flex mt-1 w-full py-1 text-xs text-muted-foreground hover:text-primary items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
                     )}
                   </div>
-
-                  {/* Events */}
-                  <div className="space-y-0.5 md:space-y-1">
-                    {/* Mobile: show dots for events */}
-                    <div className="flex gap-0.5 md:hidden">
-                      {day.events.slice(0, 3).map((event) => (
-                        <div
-                          key={event.id}
-                          className={cn(
-                            'w-1.5 h-1.5 rounded-full',
-                            event.outfit_id ? 'bg-primary' : 'bg-muted-foreground'
-                          )}
-                        />
-                      ))}
-                      {day.events.length > 3 && (
-                        <span className="text-[10px] text-muted-foreground">+{day.events.length - 3}</span>
-                      )}
-                    </div>
-
-                    {/* Desktop: show event badges */}
-                    <div className="hidden md:block">
-                      {day.events.slice(0, 2).map((event) => (
-                        <div key={event.id}>
-                          <EventBadge event={event} onClick={handleEventClick} />
-                          {!event.outfit_id && onAssignOutfit && (
-                            <button
-                              onClick={(e) => handleQuickAssign(e, event)}
-                              className="text-xs text-primary hover:text-primary/80 ml-1"
-                            >
-                              + Outfit
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                      {day.events.length > 2 && (
-                        <div className="text-xs text-muted-foreground pl-2">
-                          +{day.events.length - 2} more
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Add event button - desktop only */}
-                  {onCreateEvent && day.isCurrentMonth && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleCreateEvent(day.date)
-                      }}
-                      className="hidden md:flex mt-1 w-full py-1 text-xs text-muted-foreground hover:text-primary items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <Plus className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>

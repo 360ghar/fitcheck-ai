@@ -94,7 +94,7 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-3 md:py-8 overflow-hidden">
+    <div className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
       {/* Welcome header */}
       <div className="mb-4 md:mb-8">
         <h1 className="text-xl md:text-3xl font-bold text-foreground">
@@ -105,13 +105,13 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Stats grid - 2 columns on mobile with improved spacing */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:gap-5 lg:grid-cols-4 mb-6 md:mb-8">
+      {/* Stats cards - scroll on mobile, grid on desktop */}
+      <div className="flex gap-3 overflow-x-auto scrollbar-hide scroll-snap-x -mx-4 px-4 pb-1 md:mx-0 md:px-0 md:pb-0 md:grid md:grid-cols-4 md:gap-4 lg:gap-5 mb-6 md:mb-8">
         {stats.map((stat) => (
           <Link
             key={stat.name}
             to={stat.link}
-            className="relative bg-card p-2 sm:p-4 md:p-5 lg:p-6 rounded-lg shadow hover:shadow-md transition-shadow touch-target flex flex-col justify-between"
+            className="relative bg-card p-3 sm:p-4 md:p-5 lg:p-6 rounded-lg shadow hover:shadow-md transition-shadow touch-target flex flex-col justify-between min-w-[160px] sm:min-w-[180px] md:min-w-0 scroll-snap-start"
           >
             <div className="flex items-center justify-between">
               <div>
@@ -141,7 +141,7 @@ export default function DashboardPage() {
               <Link
                 key={action.name}
                 to={action.link}
-                className={`relative rounded-lg p-4 md:p-6 text-white ${action.color} transition-colors w-[80vw] max-w-[300px] md:w-auto md:max-w-none shrink-0 md:shrink touch-target scroll-snap-center md:scroll-snap-align-none shadow-sm`}
+                className={`relative rounded-lg p-4 md:p-6 text-white ${action.color} transition-colors w-[85vw] max-w-[340px] md:w-auto md:max-w-none shrink-0 md:shrink touch-target scroll-snap-center md:scroll-snap-align-none shadow-sm`}
               >
                 <div className="flex items-start">
                   <div className="flex-shrink-0">
@@ -186,7 +186,7 @@ export default function DashboardPage() {
               </div>
             </div>
           ) : (
-            <div className="space-y-3 md:space-y-4">
+            <div className="space-y-3 md:space-y-4 max-h-[60vh] overflow-y-auto pr-1 md:max-h-none md:overflow-visible">
               {/* Recent items */}
               {items.slice(0, 3).map((item) => (
                 <Link

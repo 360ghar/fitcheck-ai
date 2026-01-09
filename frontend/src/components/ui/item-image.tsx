@@ -7,12 +7,19 @@ import { useState } from 'react'
 import { Shirt, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Skeleton } from './skeleton'
+import { ZoomableImage } from './zoomable-image'
 import type { Item } from '@/types'
 
 interface ItemImageProps {
   item: Item
   size?: 'sm' | 'md' | 'lg'
   className?: string
+  /**
+   * Enable click-to-zoom functionality. When true, clicking opens a lightbox.
+   * Recommended for 'lg' size images where detail matters.
+   * @default false
+   */
+  enableZoom?: boolean
 }
 
 const SIZE_CLASSES = {
@@ -55,11 +62,12 @@ function getCategoryIcon() {
 /**
  * ItemImage - Displays item image with loading skeleton and error fallback
  */
-export function ItemImage({ item, size = 'sm', className }: ItemImageProps) {
+export function ItemImage({ item, size = 'sm', className, enableZoom = false }: ItemImageProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [hasError, setHasError] = useState(false)
 
-  const imageUrl = getImageUrl(item, size === 'sm')
+  // For zoom, use full-size image instead of thumbnail
+  const imageUrl = getImageUrl(item, !enableZoom && size === 'sm')
   const sizeClass = SIZE_CLASSES[size]
   const iconSize = ICON_SIZES[size]
   const CategoryIcon = getCategoryIcon()
@@ -90,6 +98,30 @@ export function ItemImage({ item, size = 'sm', className }: ItemImageProps) {
         )}
       >
         <AlertTriangle className={cn(iconSize, 'text-muted-foreground')} />
+      </div>
+    )
+  }
+
+  // Use ZoomableImage when zoom is enabled
+  if (enableZoom) {
+    return (
+      <div className={cn(sizeClass, 'relative rounded-lg overflow-hidden', className)}>
+        {isLoading && (
+          <Skeleton className="absolute inset-0" />
+        )}
+        <ZoomableImage
+          src={imageUrl}
+          alt={item.name}
+          className={cn(
+            'h-full w-full object-cover',
+            isLoading && 'opacity-0'
+          )}
+          onLoad={() => setIsLoading(false)}
+          onError={() => {
+            setIsLoading(false)
+            setHasError(true)
+          }}
+        />
       </div>
     )
   }

@@ -342,7 +342,7 @@ export function AISettingsPanel() {
     <div className="space-y-6">
       {/* Default Provider Selection */}
       <Card>
-        <CardHeader>
+        <CardHeader className="px-4 py-4 md:px-6 md:py-6">
           <CardTitle className="flex items-center gap-2">
             <Cpu className="h-5 w-5 text-indigo-500" />
             Default AI Provider
@@ -351,9 +351,9 @@ export function AISettingsPanel() {
             Choose which AI provider to use for image analysis and generation
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
           <Select value={defaultProvider} onValueChange={setDefaultProvider}>
-            <SelectTrigger className="w-full max-w-xs">
+            <SelectTrigger className="w-full md:max-w-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -376,7 +376,7 @@ export function AISettingsPanel() {
 
       {/* Provider Configuration Tabs */}
       <Card>
-        <CardHeader>
+        <CardHeader className="px-4 py-4 md:px-6 md:py-6">
           <CardTitle className="flex items-center gap-2">
             <Key className="h-5 w-5 text-indigo-500" />
             Provider Configuration
@@ -385,14 +385,14 @@ export function AISettingsPanel() {
             Configure API keys and endpoints for each provider
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
           <Tabs defaultValue="gemini" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="flex w-full gap-2 justify-start overflow-x-auto scrollbar-hide touch-pan-x overscroll-x-contain">
               {PROVIDERS.map((provider) => (
                 <TabsTrigger
                   key={provider.id}
                   value={provider.id}
-                  className="w-full min-w-0 px-2 text-xs sm:px-3 sm:text-sm"
+                  className="min-w-[120px] flex-1 px-2 text-xs sm:min-w-0 sm:px-3 sm:text-sm"
                 >
                   <span className="sm:hidden">
                     {PROVIDER_SHORT_LABELS[provider.id] || provider.name}
@@ -655,14 +655,14 @@ export function AISettingsPanel() {
       {/* Usage Statistics */}
       {usage && (
         <Card>
-          <CardHeader>
+          <CardHeader className="px-4 py-4 md:px-6 md:py-6">
             <CardTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-indigo-500" />
               Usage Statistics
             </CardTitle>
             <CardDescription>Your AI usage and rate limits</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 px-4 pb-4 md:px-6 md:pb-6">
             {/* Extractions */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">

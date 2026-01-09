@@ -224,7 +224,7 @@ export default function WardrobePage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 md:mb-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 md:mb-6">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-foreground">Wardrobe</h1>
           <p className="text-sm text-muted-foreground">
@@ -232,6 +232,13 @@ export default function WardrobePage() {
           </p>
         </div>
         <Button onClick={() => setIsUploadModalOpen(true)} className="hidden md:flex">
+          <Plus className="h-4 w-4 mr-2" />
+          Add Item
+        </Button>
+      </div>
+
+      <div className="md:hidden mb-4">
+        <Button onClick={() => setIsUploadModalOpen(true)} className="w-full">
           <Plus className="h-4 w-4 mr-2" />
           Add Item
         </Button>
@@ -297,7 +304,7 @@ export default function WardrobePage() {
       {/* Floating Action Button for mobile */}
       <button
         onClick={() => setIsUploadModalOpen(true)}
-        className="fixed bottom-[calc(var(--bottom-nav-height)+16px+var(--safe-area-bottom))] right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center md:hidden z-[90] hover:bg-primary/90 active:scale-95 transition-transform"
+        className="fixed bottom-[calc(var(--bottom-nav-height)+16px+var(--safe-area-bottom))] right-[calc(var(--safe-area-right)+1rem)] w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center md:hidden z-[90] hover:bg-primary/90 active:scale-95 transition-transform"
         aria-label="Add new item"
       >
         <Plus className="h-6 w-6" />

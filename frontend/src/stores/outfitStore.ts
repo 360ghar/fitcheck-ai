@@ -37,6 +37,12 @@ interface OutfitState {
   generationId: string | null;
   generatedImageUrl: string | null;
 
+  // Per-outfit generation tracking (for auto-generation on create)
+  generatingOutfits: Map<string, {
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    error?: string;
+  }>;
+
   // Filters
   filters: {
     style: Style | 'all';
@@ -95,6 +101,7 @@ interface OutfitState {
 
   // Generation actions
   startGeneration: (outfitId: string, request?: { pose?: string; variations?: number; lighting?: string; body_profile_id?: string }) => Promise<void>;
+  startGenerationForNewOutfit: (outfitId: string) => void;
   checkGenerationStatus: () => Promise<void>;
   resetGeneration: () => void;
   clearError: () => void;
@@ -210,6 +217,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
   generationStatus: 'idle',
   generationId: null,
   generatedImageUrl: null,
+  generatingOutfits: new Map(),
   ...initialCreationState,
   filters: initialFilters,
   isLoading: false,
@@ -574,6 +582,11 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 
       const currentState = get();
       const newOutfits = [outfit, ...currentState.outfits];
+
+      // Set outfit in generatingOutfits map with pending status
+      const newGeneratingOutfits = new Map(currentState.generatingOutfits);
+      newGeneratingOutfits.set(outfit.id, { status: 'pending' });
+
       set({
         outfits: newOutfits,
         filteredOutfits: applyFiltersAndSort(newOutfits, currentState.filters, currentState.sortBy, currentState.sortOrder),
@@ -586,7 +599,11 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         creationSeason: undefined,
         creationTags: [],
         creationOccasion: '',
+        generatingOutfits: newGeneratingOutfits,
       });
+
+      // Fire-and-forget generation (don't await - let it run in background)
+      get().startGenerationForNewOutfit(outfit.id);
 
       return outfit;
     } catch (error) {
@@ -771,6 +788,117 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       generatedImageUrl: null,
       isGenerating: false,
     });
+  },
+
+  // Start generation for newly created outfit (fire-and-forget, updates generatingOutfits map)
+  startGenerationForNewOutfit: (outfitId: string) => {
+    // Run async generation in background
+    (async () => {
+      try {
+        // Update status to processing
+        const state = get();
+        const newMap = new Map(state.generatingOutfits);
+        newMap.set(outfitId, { status: 'processing' });
+        set({ generatingOutfits: newMap });
+
+        // Get outfit data
+        let outfit = state.outfits.find((o) => o.id === outfitId);
+        if (!outfit) {
+          outfit = await outfitsApi.getOutfit(outfitId);
+        }
+
+        // Get items for generation
+        const itemIds = new Set(outfit.item_ids);
+        const availableItems = await outfitsApi.getAvailableItems();
+        const promptItems = availableItems
+          .filter((it) => itemIds.has(it.id))
+          .map((it) => ({
+            name: it.name,
+            category: it.category,
+            colors: it.colors,
+          }));
+
+        if (promptItems.length === 0) {
+          throw new Error('No outfit items available for generation');
+        }
+
+        // Generate outfit using backend AI service with retry
+        const aiResult = await withRetry(
+          () =>
+            generateOutfit(promptItems, {
+              style: outfit.style || 'casual',
+              background: 'studio white',
+              pose: 'standing front',
+              lighting: 'studio',
+              include_model: true,
+              include_user_face: true,
+              use_body_profile: true,
+            }),
+          {
+            maxRetries: 3,
+            initialDelayMs: 2000,
+            backoffFactor: 2,
+            onRetry: (attempt, error, delayMs) => {
+              console.log(`Retrying auto outfit generation, attempt ${attempt}, waiting ${delayMs}ms`, error);
+            },
+          }
+        );
+
+        if (!aiResult.success || !aiResult.data) {
+          throw aiResult.error || new Error('AI image generation failed after retries');
+        }
+
+        // Get the image URL
+        const imageUrl = aiResult.data.image_url || `data:image/png;base64,${aiResult.data.image_base64}`;
+        if (!imageUrl) {
+          throw new Error('AI image generation returned no image');
+        }
+
+        // Convert to file and upload
+        const imageFile = await dataUrlToFile(
+          imageUrl,
+          `outfit-${outfitId}-${Date.now()}.png`
+        );
+
+        const uploaded = await outfitsApi.uploadOutfitImage(outfitId, imageFile, {
+          isPrimary: true,
+          pose: 'front',
+        });
+
+        // Update outfits with new image and remove from generatingOutfits
+        const current = get();
+        const updatedOutfits = current.outfits.map((o) => {
+          if (o.id !== outfitId) return o;
+          const images: OutfitImage[] = [...(o.images || []), uploaded];
+          return { ...o, images };
+        });
+
+        const finalMap = new Map(current.generatingOutfits);
+        finalMap.delete(outfitId);
+
+        set({
+          outfits: updatedOutfits,
+          filteredOutfits: applyFiltersAndSort(
+            updatedOutfits,
+            current.filters,
+            current.sortBy,
+            current.sortOrder
+          ),
+          generatingOutfits: finalMap,
+        });
+
+      } catch (error) {
+        console.error('Auto generation failed for outfit', outfitId, error);
+        // Mark as failed in the map
+        const current = get();
+        const failedMap = new Map(current.generatingOutfits);
+        failedMap.set(outfitId, {
+          status: 'failed',
+          error: error instanceof Error ? error.message : 'Generation failed',
+        });
+        set({ generatingOutfits: failedMap });
+      }
+    })();
   },
 
   // Clear error

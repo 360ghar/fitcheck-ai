@@ -29,18 +29,19 @@ export function BottomNav() {
     <nav
       className={cn(
         // Fixed to bottom with safe area padding
-        'fixed bottom-0 inset-x-0 z-[100] w-full',
+        'fixed bottom-0 left-0 right-0 z-[100] w-screen max-w-[100vw]',
         // Background with blur
         'bg-background/95 backdrop-blur-sm',
         // Border
         'border-t border-border',
         // Safe area for notched devices
         'pb-[var(--safe-area-bottom)]',
+        'pl-[var(--safe-area-left)] pr-[var(--safe-area-right)]',
         // Only show on mobile
         'md:hidden'
       )}
     >
-      <div className="flex items-center justify-around h-16">
+      <div className="flex h-16 items-center justify-between gap-1 px-2">
         {navItems.map((item) => {
           const isActive =
             location.pathname === item.href ||
@@ -52,10 +53,10 @@ export function BottomNav() {
               to={item.href}
               className={cn(
                 // Touch target
-                'flex flex-col items-center justify-center',
-                'min-w-[64px] min-h-[44px] py-1 px-2',
+                'flex flex-1 min-w-0 flex-col items-center justify-center',
+                'min-h-[44px] py-1 px-1.5',
                 // Text styling
-                'text-xs font-medium',
+                'text-[11px] font-medium',
                 // Transition
                 'transition-colors duration-200',
                 // Active/inactive states

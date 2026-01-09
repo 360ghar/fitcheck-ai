@@ -166,9 +166,57 @@ async def generate_outfit(
     Generate an outfit visualization image.
 
     Creates a professional fashion photo or flat lay of the specified items.
+    If include_user_face is True and user has an avatar, generates with the user's face.
     """
     try:
         async with rate_limited_operation(user_id, "generation", db):
+            # Fetch user avatar and body profile if include_user_face is enabled
+            user_avatar_base64 = None
+            body_profile = None
+
+            if request.include_user_face:
+                import httpx
+                import base64 as b64
+
+                # Fetch user avatar_url and body_profile_id
+                user_result = (
+                    db.table("users")
+                    .select("avatar_url, body_profile_id")
+                    .eq("id", user_id)
+                    .single()
+                    .execute()
+                )
+
+                if user_result.data and user_result.data.get("avatar_url"):
+                    avatar_url = user_result.data["avatar_url"]
+                    try:
+                        async with httpx.AsyncClient(timeout=30.0) as client:
+                            resp = await client.get(avatar_url)
+                            resp.raise_for_status()
+                            user_avatar_base64 = b64.b64encode(resp.content).decode("utf-8")
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to fetch user avatar, falling back to generic model",
+                            user_id=user_id,
+                            error=str(e),
+                        )
+
+                # Fetch body profile if available and requested
+                if request.use_body_profile:
+                    body_profile_id = (
+                        user_result.data.get("body_profile_id") if user_result.data else None
+                    )
+                    if body_profile_id:
+                        bp_result = (
+                            db.table("body_profiles")
+                            .select("height_cm, weight_kg, body_shape, skin_tone")
+                            .eq("id", body_profile_id)
+                            .single()
+                            .execute()
+                        )
+                        if bp_result.data:
+                            body_profile = bp_result.data
+
             # Get generation agent
             agent = await get_image_generation_agent(user_id=user_id, db=db)
 
@@ -187,6 +235,8 @@ async def generate_outfit(
                     include_model=request.include_model,
                     model_gender=request.model_gender,
                     custom_prompt=request.custom_prompt,
+                    user_avatar_base64=user_avatar_base64,
+                    body_profile=body_profile,
                 ),
                 max_retries=3,
                 initial_delay=2.0,

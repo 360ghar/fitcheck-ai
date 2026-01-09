@@ -18,6 +18,7 @@ import {
   Sun,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ZoomableImage } from '@/components/ui/zoomable-image'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -731,7 +732,7 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
             {selectedImage ? (
               <div className="space-y-4">
                 <div className="aspect-video rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
-                  <img
+                  <ZoomableImage
                     src={selectedImage.url}
                     alt="Generated outfit"
                     className="w-full h-full object-cover"
@@ -818,7 +819,7 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
                           : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
                       }`}
                     >
-                      <img
+                      <ZoomableImage
                         src={img.url}
                         alt={`Outfit ${angleLabels[index] || 'view'}`}
                         className="w-full h-full object-cover"

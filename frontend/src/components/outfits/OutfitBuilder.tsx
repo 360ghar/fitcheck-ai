@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
+import { ZoomableImage } from '@/components/ui/zoomable-image'
 import { generateOutfit } from '@/api/ai'
 import type { Item, Category, Style, Season } from '@/types'
 
@@ -581,7 +582,7 @@ export function OutfitBuilder({
               <div>
                 <Label>Generated Preview</Label>
                 <div className="mt-2 rounded-lg overflow-hidden border">
-                  <img src={generatedImageUrl} alt="AI Generated Outfit" className="w-full" />
+                  <ZoomableImage src={generatedImageUrl} alt="AI Generated Outfit" className="w-full" />
                 </div>
               </div>
             )}

@@ -36,7 +36,7 @@ function ThemeSelector() {
         <p className="text-sm font-medium text-foreground">Theme</p>
         <p className="text-sm text-muted-foreground">Choose your preferred theme</p>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-2">
         {THEMES.map((option) => {
           const Icon = themeIcons[option.value];
           return (
@@ -44,7 +44,7 @@ function ThemeSelector() {
               key={option.value}
               onClick={() => setTheme(option.value)}
               className={cn(
-                'px-3 py-2 text-sm rounded-md transition-colors flex items-center gap-1.5 touch-target',
+                'flex-1 sm:flex-none px-3 py-2 text-sm rounded-md transition-colors flex items-center gap-1.5 touch-target',
                 theme === option.value
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-muted-foreground hover:bg-muted/80'
@@ -293,7 +293,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-3 md:py-8 overflow-hidden">
+    <div className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
       {/* Header */}
       <div className="mb-4 md:mb-8">
         <h1 className="text-lg md:text-2xl font-bold text-foreground">Profile & Settings</h1>
@@ -342,7 +342,7 @@ export default function ProfilePage() {
         </div>
 
         {/* Scrollable Tabs */}
-        <ScrollableTabs className="border-b border-border px-0 md:px-6 lg:px-8 w-full">
+        <ScrollableTabs className="border-b border-border px-0 md:px-6 lg:px-8 w-full sticky top-[calc(var(--mobile-header-height)+var(--safe-area-top))] z-20 bg-card/95 backdrop-blur-sm md:static">
           {tabs.map((tab) => (
             <button
               key={tab.id}

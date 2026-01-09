@@ -25,6 +25,23 @@ logger = get_context_logger(__name__)
 
 
 # =============================================================================
+# NEGATIVE PROMPTS FOR IMAGE QUALITY
+# =============================================================================
+
+NEGATIVE_PROMPTS = """
+AVOID these issues:
+- Do NOT distort or change facial features from the reference image
+- Do NOT alter skin tone - match reference exactly
+- Do NOT generate extra limbs, fingers, or distorted body parts
+- Do NOT create floating or disconnected clothing
+- Do NOT blend face features unnaturally
+- Do NOT generate text, watermarks, or logos
+- AVOID uncanny valley effects or plastic-looking skin
+- AVOID inconsistent lighting between face and body
+"""
+
+
+# =============================================================================
 # DATA CLASSES
 # =============================================================================
 
@@ -82,6 +99,8 @@ class ImageGenerationAgent:
         include_model: bool = True,
         model_gender: str = "female",
         custom_prompt: Optional[str] = None,
+        user_avatar_base64: Optional[str] = None,
+        body_profile: Optional[Dict[str, Any]] = None,
     ) -> GeneratedImage:
         """
         Generate an outfit visualization image.
@@ -96,6 +115,8 @@ class ImageGenerationAgent:
             include_model: Whether to include a model or flat lay
             model_gender: Gender of model
             custom_prompt: Additional prompt instructions
+            user_avatar_base64: Optional user avatar for face consistency
+            body_profile: Optional body profile dict with height_cm, body_shape, skin_tone
 
         Returns:
             GeneratedImage with the result
@@ -105,6 +126,8 @@ class ImageGenerationAgent:
             item_count=len(items),
             style=style,
             include_model=include_model,
+            has_avatar=user_avatar_base64 is not None,
+            has_body_profile=body_profile is not None,
         )
 
         wants_flat_lay = not include_model or "flat lay" in pose.lower()
@@ -127,24 +150,108 @@ class ImageGenerationAgent:
 
         items_list = "; ".join(item_descriptions)
 
-        # Build prompt
+        # Build body profile description if available
+        body_desc = ""
+        if body_profile:
+            parts = []
+            if body_profile.get("skin_tone"):
+                parts.append(f"skin tone: {body_profile['skin_tone']}")
+            if body_profile.get("body_shape"):
+                parts.append(f"body shape: {body_profile['body_shape']}")
+            if body_profile.get("height_cm"):
+                parts.append(f"height: approximately {int(body_profile['height_cm'])}cm")
+            if parts:
+                body_desc = f"\nModel physical characteristics: {', '.join(parts)}"
+
+        # Build prompt based on whether we have user avatar
         if wants_flat_lay:
             base_prompt = f"Professional flat lay fashion photography of a cohesive {style} outfit: {items_list}."
-        else:
-            base_prompt = f"Professional fashion photography of a {model_gender} model wearing a cohesive {style} outfit featuring: {items_list}."
-
-        prompt = f"""{base_prompt}
+            prompt = f"""{base_prompt}
 
 Style specifications:
 - Background: {background}
-- Pose: {"flat lay (top-down)" if wants_flat_lay else pose}
+- Pose: flat lay (top-down)
 - View angle: {view_angle}
 - Lighting: {lighting}
 - Image quality: high-end editorial fashion photography, sharp focus, realistic fabric textures, accurate colors
 
 {f"Additional instructions: {custom_prompt}" if custom_prompt else ""}""".strip()
 
-        return await self._generate_image(prompt)
+            return await self._generate_image(prompt)
+
+        elif user_avatar_base64:
+            # Use Try-On style prompt with identity preservation
+            base_prompt = f"""Create a photorealistic fashion photograph showing the person from the reference image wearing a cohesive {style} outfit featuring: {items_list}.
+
+CRITICAL REQUIREMENTS:
+1. PRESERVE THE PERSON'S IDENTITY: The face, facial features, skin tone, hair style, hair color, and body proportions must match the reference image EXACTLY. This is the most important requirement.
+2. CLOTHING ACCURACY: Render the outfit items exactly as described with accurate colors, patterns, textures, and styling.
+3. NATURAL INTEGRATION: The clothing should fit naturally on the person's body with realistic draping, shadows, and fabric behavior.
+4. SINGLE OUTPUT: Generate one cohesive image of the person wearing the complete outfit.
+{body_desc}
+
+Style specifications:
+- Background: {background}
+- Pose: {pose}
+- View angle: {view_angle}
+- Lighting: {lighting}
+- Image quality: High-end editorial fashion photography, sharp focus, realistic fabric textures, accurate colors
+
+{NEGATIVE_PROMPTS}
+
+{f"Additional instructions: {custom_prompt}" if custom_prompt else ""}""".strip()
+
+            # Use multi-modal generation with avatar image
+            try:
+                avatar_url = f"data:image/jpeg;base64,{user_avatar_base64}" if not user_avatar_base64.startswith("data:") else user_avatar_base64
+
+                content = [
+                    {"type": "image_url", "image_url": {"url": avatar_url}},
+                    {"type": "text", "text": base_prompt},
+                ]
+
+                from app.services.ai_provider_service import ChatMessage
+
+                messages = [ChatMessage(role="user", content=content)]
+
+                response = await self.ai_service.chat(
+                    messages=messages,
+                    model=self.ai_service.config.get_image_gen_model(),
+                    response_modalities=["TEXT", "IMAGE"],
+                )
+
+                if not response.images:
+                    raise AIServiceError("AI generated no images for outfit with avatar")
+
+                return GeneratedImage(
+                    image_base64=response.images[0],
+                    prompt=base_prompt,
+                    model=response.model,
+                    provider=response.provider,
+                )
+
+            except AIServiceError:
+                raise
+            except Exception as e:
+                logger.error("Outfit generation with avatar failed", error=str(e))
+                raise AIServiceError(f"Outfit generation with avatar failed: {str(e)}")
+
+        else:
+            # Generic model generation (no avatar)
+            base_prompt = f"Professional fashion photography of a {model_gender} model wearing a cohesive {style} outfit featuring: {items_list}."
+            prompt = f"""{base_prompt}
+{body_desc}
+
+Style specifications:
+- Background: {background}
+- Pose: {pose}
+- View angle: {view_angle}
+- Lighting: {lighting}
+- Image quality: high-end editorial fashion photography, sharp focus, realistic fabric textures, accurate colors
+
+{f"Additional instructions: {custom_prompt}" if custom_prompt else ""}""".strip()
+
+            return await self._generate_image(prompt)
 
     async def generate_product_image(
         self,

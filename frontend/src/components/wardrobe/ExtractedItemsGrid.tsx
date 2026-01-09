@@ -9,6 +9,7 @@ import { Save, ArrowLeft, AlertTriangle, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { ZoomableImage } from '@/components/ui/zoomable-image'
 import { ExtractedItemCard } from './ExtractedItemCard'
 import type { DetectedItem } from '@/types'
 
@@ -90,7 +91,7 @@ export function ExtractedItemsGrid({
             </CardHeader>
             <CardContent>
               <div className="relative">
-                <img
+                <ZoomableImage
                   src={originalImageUrl}
                   alt="Original"
                   className="w-full rounded-lg"

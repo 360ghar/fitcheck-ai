@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils'
 import {
   SidebarProvider,
   Sidebar,
+  SidebarMobile,
+  SidebarMobileTrigger,
   useSidebar,
 } from '@/components/sidebar'
 import { BottomNav } from '@/components/navigation/BottomNav'
@@ -18,12 +20,15 @@ function AppLayoutContent() {
   const { isCollapsed } = useSidebar()
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-[100svh] md:min-h-screen bg-background">
       {/* Desktop sidebar */}
       <Sidebar className="hidden md:flex" />
 
       {/* Mobile header - simplified since we have bottom nav */}
-      <header className="fixed left-0 right-0 top-0 z-40 flex h-14 items-center justify-center border-b border-border bg-background/95 backdrop-blur-sm safe-area-top md:hidden">
+      <header className="fixed left-0 right-0 top-0 z-40 flex h-14 items-center justify-center border-b border-border bg-background/95 backdrop-blur-sm safe-area-top md:hidden pl-[var(--safe-area-left)] pr-[var(--safe-area-right)]">
+        <div className="absolute left-[calc(var(--safe-area-left)+0.5rem)]">
+          <SidebarMobileTrigger />
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold text-primary">FitCheck</span>
           <span className="text-lg font-light text-muted-foreground">AI</span>
@@ -38,7 +43,7 @@ function AppLayoutContent() {
         )}
       >
         {/* Content wrapper with padding for mobile header and bottom nav */}
-        <div className="min-h-screen pt-[calc(var(--mobile-header-height)+var(--safe-area-top))] pb-[calc(var(--bottom-nav-height)+var(--safe-area-bottom))] md:pt-0 md:pb-0">
+        <div className="min-h-[100svh] md:min-h-screen pt-[calc(var(--mobile-header-height)+var(--safe-area-top))] pb-[calc(var(--bottom-nav-height)+var(--safe-area-bottom))] md:pt-0 md:pb-0">
           <Outlet />
         </div>
 
@@ -48,6 +53,7 @@ function AppLayoutContent() {
       </main>
 
       {/* Bottom navigation for mobile */}
+      <SidebarMobile />
       <BottomNav />
     </div>
   )

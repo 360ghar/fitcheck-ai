@@ -30,6 +30,7 @@ import {
 import { OutfitCreateDialog } from '@/components/outfits/OutfitCreateDialog'
 import { ShareOutfitDialog } from '@/components/social/ShareOutfitDialog'
 import { useToast } from '@/components/ui/use-toast'
+import { ZoomableImage } from '@/components/ui/zoomable-image'
 
 export default function OutfitsPage() {
   const { id } = useParams()
@@ -53,6 +54,7 @@ export default function OutfitsPage() {
   const isGenerating = useOutfitStore((state) => state.isGenerating)
   const generationStatus = useOutfitStore((state) => state.generationStatus)
   const generatedImageUrl = useOutfitStore((state) => state.generatedImageUrl)
+  const generatingOutfits = useOutfitStore((state) => state.generatingOutfits)
   const markOutfitAsWorn = useOutfitStore((state) => state.markOutfitAsWorn)
   const duplicateOutfit = useOutfitStore((state) => state.duplicateOutfit)
   const deleteOutfit = useOutfitStore((state) => state.deleteOutfit)
@@ -75,7 +77,7 @@ export default function OutfitsPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 md:mb-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 md:mb-6">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-foreground">Outfits</h1>
           <p className="text-sm text-muted-foreground">
@@ -95,6 +97,21 @@ export default function OutfitsPage() {
             Create Outfit
           </Button>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-2 md:hidden mb-4">
+        <Button
+          variant="outline"
+          onClick={() => navigate('/try-on')}
+          className="w-full"
+        >
+          <Camera className="h-4 w-4 mr-2" />
+          Try My Look
+        </Button>
+        <Button onClick={startCreating} className="w-full">
+          <Plus className="h-4 w-4 mr-2" />
+          Create Outfit
+        </Button>
       </div>
 
       {/* Outfits grid */}
@@ -147,7 +164,20 @@ export default function OutfitsPage() {
 
               {/* Outfit image or items grid */}
               <div className="aspect-[4/3] rounded-t-lg overflow-hidden bg-muted">
-                {outfit.images.length > 0 ? (
+                {/* Show loading state if generating */}
+                {(generatingOutfits.get(outfit.id)?.status === 'pending' ||
+                  generatingOutfits.get(outfit.id)?.status === 'processing') ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-xs text-muted-foreground mt-2">Generating AI image...</p>
+                  </div>
+                ) : generatingOutfits.get(outfit.id)?.status === 'failed' ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-destructive/5">
+                    <Sparkles className="h-8 w-8 text-destructive/50" />
+                    <p className="text-xs text-muted-foreground mt-2">Generation failed</p>
+                    <p className="text-[10px] text-muted-foreground">Click to retry</p>
+                  </div>
+                ) : outfit.images.length > 0 ? (
                   <img
                     src={
                       (outfit.images.find((img) => img.is_primary) || outfit.images[0]).thumbnail_url ||
@@ -211,7 +241,7 @@ export default function OutfitsPage() {
       {/* Floating Action Button for mobile */}
       <button
         onClick={startCreating}
-        className="fixed bottom-[calc(var(--bottom-nav-height)+16px+var(--safe-area-bottom))] right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center md:hidden z-[90] hover:bg-primary/90 active:scale-95 transition-transform"
+        className="fixed bottom-[calc(var(--bottom-nav-height)+16px+var(--safe-area-bottom))] right-[calc(var(--safe-area-right)+1rem)] w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center md:hidden z-[90] hover:bg-primary/90 active:scale-95 transition-transform"
         aria-label="Create new outfit"
       >
         <Plus className="h-6 w-6" />
@@ -240,13 +270,13 @@ export default function OutfitsPage() {
             <div className="space-y-4">
               <div className="aspect-[4/3] rounded-lg overflow-hidden bg-muted">
                 {generatedImageUrl ? (
-                  <img
+                  <ZoomableImage
                     src={generatedImageUrl}
                     alt={`${selectedOutfit.name} (generated)`}
                     className="w-full h-full object-cover"
                   />
                 ) : selectedOutfit.images.length > 0 ? (
-                  <img
+                  <ZoomableImage
                     src={
                       (selectedOutfit.images.find((img) => img.is_primary) || selectedOutfit.images[0]).thumbnail_url ||
                       (selectedOutfit.images.find((img) => img.is_primary) || selectedOutfit.images[0]).image_url

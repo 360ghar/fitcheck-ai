@@ -307,12 +307,12 @@ export default function RecommendationsPage() {
                     {matchData.matches.length === 0 ? (
                       <div className="text-sm text-muted-foreground">No matches found.</div>
                     ) : (
-                      <div className="flex overflow-x-auto gap-3 pb-2 md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
+                      <div className="flex overflow-x-auto gap-3 pb-2 scrollbar-hide scroll-snap-x md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
                         {matchData.matches
                           .filter((m) => m.item?.id)
                           .slice(0, 10)
                           .map((m, idx) => (
-                          <div key={`${m.item.id}-${idx}`} className="p-3 rounded-lg border border-border min-w-[200px] md:min-w-0">
+                          <div key={`${m.item.id}-${idx}`} className="p-3 rounded-lg border border-border min-w-[200px] md:min-w-0 scroll-snap-start">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">{renderItemCard(m.item)}</div>
                               <Badge variant="secondary">{m.score}</Badge>
@@ -333,9 +333,9 @@ export default function RecommendationsPage() {
                     {matchData.complete_looks.length === 0 ? (
                       <div className="text-sm text-muted-foreground">No complete looks yet.</div>
                     ) : (
-                      <div className="flex overflow-x-auto gap-3 pb-2 md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
+                      <div className="flex overflow-x-auto gap-3 pb-2 scrollbar-hide scroll-snap-x md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
                         {matchData.complete_looks.slice(0, 4).map((look, idx) => (
-                          <div key={idx} className="p-3 rounded-lg border border-border min-w-[250px] md:min-w-0">
+                          <div key={idx} className="p-3 rounded-lg border border-border min-w-[250px] md:min-w-0 scroll-snap-start">
                             <div className="flex items-center justify-between gap-3">
                               <div className="text-sm font-medium text-foreground">{look.description}</div>
                               <Badge variant="outline">{look.match_score}</Badge>
@@ -386,7 +386,7 @@ export default function RecommendationsPage() {
                 </Button>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3 max-h-[18rem] overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3 max-h-[40vh] md:max-h-[18rem] overflow-y-auto pr-1">
                 {items.map((item) => {
                   const selected = completeSelection.has(item.id)
                   return (
