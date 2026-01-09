@@ -1,4 +1,5 @@
 import Hero from '@/components/landing/Hero'
+import DemoSection from '@/components/landing/DemoSection'
 import Features from '@/components/landing/Features'
 import HowItWorks from '@/components/landing/HowItWorks'
 import Testimonials from '@/components/landing/Testimonials'
@@ -10,6 +11,7 @@ export default function LandingPage() {
   return (
     <>
       <Hero />
+      <DemoSection />
       <Features />
       <HowItWorks />
       <Testimonials />
