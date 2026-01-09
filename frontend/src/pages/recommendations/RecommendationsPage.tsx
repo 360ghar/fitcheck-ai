@@ -243,7 +243,7 @@ export default function RecommendationsPage() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              'flex items-center gap-2 px-4 py-3 md:py-4 text-sm font-medium whitespace-nowrap transition-colors touch-target border-b-2',
+              'flex items-center gap-2 px-4 py-3 md:py-4 text-sm font-medium whitespace-nowrap transition-colors touch-target border-b-2 scroll-snap-start min-w-[100px] justify-center',
               activeTab === tab.id
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
@@ -270,7 +270,7 @@ export default function RecommendationsPage() {
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <select
-                      className="w-full h-12 pl-9 pr-3 border border-border rounded-md text-base bg-background text-foreground"
+                      className="w-full h-12 pl-9 pr-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground appearance-none"
                       value={matchItemId}
                       onChange={(e) => setMatchItemId(e.target.value)}
                       disabled={isLoadingItems}
@@ -307,12 +307,12 @@ export default function RecommendationsPage() {
                     {matchData.matches.length === 0 ? (
                       <div className="text-sm text-muted-foreground">No matches found.</div>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="flex overflow-x-auto gap-3 pb-2 md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
                         {matchData.matches
                           .filter((m) => m.item?.id)
                           .slice(0, 10)
                           .map((m, idx) => (
-                          <div key={`${m.item.id}-${idx}`} className="p-3 rounded-lg border border-border">
+                          <div key={`${m.item.id}-${idx}`} className="p-3 rounded-lg border border-border min-w-[200px] md:min-w-0">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">{renderItemCard(m.item)}</div>
                               <Badge variant="secondary">{m.score}</Badge>
@@ -333,9 +333,9 @@ export default function RecommendationsPage() {
                     {matchData.complete_looks.length === 0 ? (
                       <div className="text-sm text-muted-foreground">No complete looks yet.</div>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="flex overflow-x-auto gap-3 pb-2 md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
                         {matchData.complete_looks.slice(0, 4).map((look, idx) => (
-                          <div key={idx} className="p-3 rounded-lg border border-border">
+                          <div key={idx} className="p-3 rounded-lg border border-border min-w-[250px] md:min-w-0">
                             <div className="flex items-center justify-between gap-3">
                               <div className="text-sm font-medium text-foreground">{look.description}</div>
                               <Badge variant="outline">{look.match_score}</Badge>

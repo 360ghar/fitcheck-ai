@@ -111,6 +111,12 @@ const PROVIDERS = [
   },
 ];
 
+const PROVIDER_SHORT_LABELS: Record<string, string> = {
+  gemini: "Gemini",
+  openai: "OpenAI",
+  custom: "Custom",
+};
+
 // ============================================================================
 // COMPONENT
 // ============================================================================
@@ -383,8 +389,15 @@ export function AISettingsPanel() {
           <Tabs defaultValue="gemini" className="w-full">
             <TabsList className="grid w-full grid-cols-3">
               {PROVIDERS.map((provider) => (
-                <TabsTrigger key={provider.id} value={provider.id}>
-                  {provider.name}
+                <TabsTrigger
+                  key={provider.id}
+                  value={provider.id}
+                  className="w-full min-w-0 px-2 text-xs sm:px-3 sm:text-sm"
+                >
+                  <span className="sm:hidden">
+                    {PROVIDER_SHORT_LABELS[provider.id] || provider.name}
+                  </span>
+                  <span className="hidden sm:inline">{provider.name}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -610,11 +623,12 @@ export function AISettingsPanel() {
                 )}
 
                 {/* Actions */}
-                <div className="flex gap-2 pt-4 border-t dark:border-gray-700">
+                <div className="flex flex-col gap-2 pt-4 border-t dark:border-gray-700 sm:flex-row">
                   <Button
                     variant="outline"
                     onClick={() => handleTestProvider(provider.id)}
                     disabled={testingProvider === provider.id}
+                    className="w-full sm:w-auto"
                   >
                     {testingProvider === provider.id ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -626,6 +640,7 @@ export function AISettingsPanel() {
                   <Button
                     variant="ghost"
                     onClick={() => handleResetProvider(provider.id)}
+                    className="w-full sm:w-auto"
                   >
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Reset to Defaults
@@ -723,8 +738,13 @@ export function AISettingsPanel() {
       )}
 
       {/* Save Button */}
-      <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={isSaving} size="lg">
+      <div className="flex">
+        <Button
+          onClick={handleSave}
+          disabled={isSaving}
+          size="lg"
+          className="w-full sm:w-auto sm:ml-auto"
+        >
           {isSaving ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />

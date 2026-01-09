@@ -94,50 +94,54 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
+    <div className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-3 md:py-8 overflow-hidden">
       {/* Welcome header */}
-      <div className="mb-6 md:mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+      <div className="mb-4 md:mb-8">
+        <h1 className="text-xl md:text-3xl font-bold text-foreground">
           Welcome back, {userDisplayName}!
         </h1>
-        <p className="mt-1 md:mt-2 text-sm md:text-base text-muted-foreground">
+        <p className="mt-1 md:mt-2 text-xs md:text-base text-muted-foreground">
           Here's what's happening with your wardrobe today.
         </p>
       </div>
 
-      {/* Stats grid - 2 columns on mobile, 4 on desktop */}
-      <div className="grid grid-cols-2 gap-3 md:gap-5 lg:grid-cols-4 mb-6 md:mb-8">
+      {/* Stats grid - 2 columns on mobile with improved spacing */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:gap-5 lg:grid-cols-4 mb-6 md:mb-8">
         {stats.map((stat) => (
           <Link
             key={stat.name}
             to={stat.link}
-            className="relative bg-card p-3 md:p-5 lg:p-6 rounded-lg shadow hover:shadow-md transition-shadow touch-target"
+            className="relative bg-card p-2 sm:p-4 md:p-5 lg:p-6 rounded-lg shadow hover:shadow-md transition-shadow touch-target flex flex-col justify-between"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs md:text-sm font-medium text-muted-foreground truncate">{stat.name}</p>
-                <p className="mt-0.5 md:mt-1 text-2xl md:text-3xl font-semibold text-foreground">
+                <p className="text-[10px] md:text-sm font-medium text-muted-foreground truncate">{stat.name}</p>
+                <p className="mt-0.5 md:mt-1 text-lg md:text-3xl font-semibold text-foreground">
                   {isLoadingItems || isLoadingOutfits ? '—' : stat.value}
                 </p>
               </div>
-              <div className={`${stat.color} p-2 md:p-3 rounded-full shrink-0`}>
-                <stat.icon className="h-5 w-5 md:h-6 md:w-6 text-white" />
+              <div className={`${stat.color} p-1.5 md:p-3 rounded-full shrink-0`}>
+                <stat.icon className="h-4 w-4 md:h-6 md:w-6 text-white" />
               </div>
             </div>
           </Link>
         ))}
       </div>
 
-      {/* Quick actions - horizontal scroll on mobile, grid on desktop */}
+      {/* Quick actions - horizontal scroll on mobile with improved snap and visual cues */}
       <div className="mb-6 md:mb-8">
-        <h2 className="text-lg font-medium text-foreground mb-3 md:mb-4">Quick Actions</h2>
-        <div className="overflow-x-auto scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
-          <div className="flex gap-3 md:grid md:grid-cols-3 md:gap-4 w-max md:w-auto">
+        <div className="flex items-center justify-between mb-3 md:mb-4 px-1">
+          <h2 className="text-base md:text-lg font-medium text-foreground">Quick Actions</h2>
+          <span className="text-xs text-muted-foreground md:hidden">Scroll for more</span>
+        </div>
+        
+        <div className="w-full overflow-x-auto scrollbar-hide scroll-snap-x -mx-4 px-4 pb-1 md:mx-0 md:px-0 md:pb-0">
+          <div className="flex gap-3 md:grid md:grid-cols-3 md:gap-4 w-max md:w-full">
             {quickActions.map((action) => (
               <Link
                 key={action.name}
                 to={action.link}
-                className={`relative rounded-lg p-4 md:p-6 text-white ${action.color} transition-colors w-[75vw] min-w-[200px] max-w-[280px] md:w-auto md:max-w-none shrink-0 md:shrink touch-target`}
+                className={`relative rounded-lg p-4 md:p-6 text-white ${action.color} transition-colors w-[80vw] max-w-[300px] md:w-auto md:max-w-none shrink-0 md:shrink touch-target scroll-snap-center md:scroll-snap-align-none shadow-sm`}
               >
                 <div className="flex items-start">
                   <div className="flex-shrink-0">

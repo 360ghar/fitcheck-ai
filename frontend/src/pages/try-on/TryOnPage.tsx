@@ -61,7 +61,7 @@ function StepIndicator({ currentStep }: { currentStep: TryOnStep }) {
   const currentIndex = STEPS.findIndex((s) => s.id === currentStep);
 
   return (
-    <div className="flex items-center justify-center gap-2 md:gap-4 mb-6">
+    <div className="flex items-center justify-center gap-2 md:gap-4 mb-4 md:mb-6 px-2 overflow-x-auto">
       {STEPS.map((step, index) => {
         const isCompleted = index < currentIndex;
         const isCurrent = index === currentIndex;
@@ -72,7 +72,7 @@ function StepIndicator({ currentStep }: { currentStep: TryOnStep }) {
             <div className="flex flex-col items-center">
               <div
                 className={cn(
-                  'w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors',
+                  'w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors shrink-0',
                   isCompleted && 'bg-primary text-primary-foreground',
                   isCurrent && 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background',
                   isPending && 'bg-muted text-muted-foreground'
@@ -87,7 +87,7 @@ function StepIndicator({ currentStep }: { currentStep: TryOnStep }) {
               </div>
               <span
                 className={cn(
-                  'mt-1 text-xs hidden sm:block',
+                  'mt-1 text-[10px] md:text-xs',
                   isCurrent ? 'text-foreground font-medium' : 'text-muted-foreground'
                 )}
               >
@@ -97,7 +97,7 @@ function StepIndicator({ currentStep }: { currentStep: TryOnStep }) {
             {index < STEPS.length - 1 && (
               <div
                 className={cn(
-                  'w-6 md:w-12 h-0.5 transition-colors',
+                  'w-4 md:w-12 h-0.5 transition-colors',
                   index < currentIndex ? 'bg-primary' : 'bg-muted'
                 )}
               />
@@ -228,7 +228,7 @@ export default function TryOnPage() {
             <div
               {...getRootProps()}
               className={cn(
-                'border-2 border-dashed rounded-lg p-8 md:p-12 text-center cursor-pointer transition-colors touch-target',
+                'border-2 border-dashed rounded-lg p-6 md:p-12 text-center cursor-pointer transition-colors touch-target',
                 isDragActive
                   ? 'border-primary bg-primary/10'
                   : 'border-border hover:border-primary/50'
@@ -240,8 +240,11 @@ export default function TryOnPage() {
                 {isDragActive ? 'Drop the image here' : 'Drag & drop a clothing image'}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                or tap to browse (PNG, JPG, WEBP up to 10MB)
+                or tap to browse
               </p>
+              <Button variant="outline" className="mt-4 md:hidden w-full">
+                Select Image
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -399,7 +402,7 @@ export default function TryOnPage() {
               <img
                 src={result.image_url || `data:image/png;base64,${result.image_base64}`}
                 alt="Try-on result"
-                className="w-full max-h-[400px] md:max-h-[600px] object-contain rounded-lg"
+                className="w-full max-h-[50vh] md:max-h-[600px] object-contain rounded-lg bg-muted"
               />
             </CardContent>
           </Card>

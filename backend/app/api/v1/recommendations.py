@@ -331,6 +331,20 @@ async def personalized(
 # ============================================================================
 
 
+def _parse_coordinates(location: str) -> Optional[Tuple[float, float]]:
+    try:
+        parts = [part.strip() for part in location.split(",")]
+        if len(parts) != 2:
+            return None
+        lat = float(parts[0])
+        lon = float(parts[1])
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return None
+        return lat, lon
+    except ValueError:
+        return None
+
+
 @router.get("/weather", response_model=Dict[str, Any])
 async def weather_recommendations(
     location: Optional[str] = Query(None),
@@ -348,7 +362,12 @@ async def weather_recommendations(
                 location = None
 
         service = get_weather_service()
-        weather = await service.get_weather(location=location or "New York", units="imperial")
+        resolved_location = (location or "New York").strip()
+        coords = _parse_coordinates(resolved_location)
+        if coords:
+            weather = await service.get_weather_by_coordinates(lat=coords[0], lon=coords[1], units="imperial")
+        else:
+            weather = await service.get_weather(location=resolved_location, units="imperial")
         temp_f = float((weather or {}).get("temperature") or 70)
         temp_c = round((temp_f - 32.0) * 5.0 / 9.0, 1)
         state = (weather or {}).get("weather_state") or (weather or {}).get("condition") or "unknown"

@@ -25,7 +25,7 @@ export function LocationInput({
 }: LocationInputProps) {
   return (
     <div className={className}>
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <Input
           type="text"
           value={value}
@@ -39,7 +39,7 @@ export function LocationInput({
             variant="outline"
             onClick={onAutoDetect}
             disabled={isAutoDetecting}
-            className="shrink-0"
+            className="w-full shrink-0 sm:w-auto"
           >
             {isAutoDetecting ? (
               <Loader2 className="h-4 w-4 animate-spin" />

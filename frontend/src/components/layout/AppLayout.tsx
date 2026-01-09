@@ -38,7 +38,7 @@ function AppLayoutContent() {
         )}
       >
         {/* Content wrapper with padding for mobile header and bottom nav */}
-        <div className="min-h-screen pt-[calc(56px+var(--safe-area-top))] pb-bottom-nav md:pt-0 md:pb-0">
+        <div className="min-h-screen pt-[calc(var(--mobile-header-height)+var(--safe-area-top))] pb-[calc(var(--bottom-nav-height)+var(--safe-area-bottom))] md:pt-0 md:pb-0">
           <Outlet />
         </div>
 

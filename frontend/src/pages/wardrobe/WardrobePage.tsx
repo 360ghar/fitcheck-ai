@@ -255,7 +255,7 @@ export default function WardrobePage() {
       {/* Items grid/list */}
       {isLoading ? (
         <div className="text-center py-12">
-          <div className="inline-block animate-spin rounded-full h-10 w-10 md:h-12 md:w-12 border-b-2 border-primary"></div>
+          <div className="inline-block animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-b-2 border-primary"></div>
           <p className="mt-4 text-muted-foreground">Loading items...</p>
         </div>
       ) : filteredItems.length === 0 ? (
@@ -276,7 +276,7 @@ export default function WardrobePage() {
         <div
           className={`grid gap-3 md:gap-4 ${
             sort.isGridView
-              ? 'grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+              ? 'grid-cols-2 gap-2 xs:gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
               : 'grid-cols-1'
           }`}
         >
@@ -297,7 +297,7 @@ export default function WardrobePage() {
       {/* Floating Action Button for mobile */}
       <button
         onClick={() => setIsUploadModalOpen(true)}
-        className="fixed bottom-[calc(var(--bottom-nav-height)+16px+var(--safe-area-bottom))] right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center md:hidden z-40 hover:bg-primary/90 active:scale-95 transition-transform"
+        className="fixed bottom-[calc(var(--bottom-nav-height)+16px+var(--safe-area-bottom))] right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center md:hidden z-[90] hover:bg-primary/90 active:scale-95 transition-transform"
         aria-label="Add new item"
       >
         <Plus className="h-6 w-6" />
@@ -361,9 +361,9 @@ function ItemCard({ item, onClick, onToggleFavorite }: ItemCardProps) {
       className="bg-card rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer relative group"
       onClick={onClick}
     >
-      {/* Checkbox for selection */}
+      {/* Checkbox for selection - Improved visibility */}
       <div
-        className={`absolute top-2 left-2 z-10 w-6 h-6 md:w-5 md:h-5 rounded border-2 ${
+        className={`absolute top-2 left-2 z-10 w-7 h-7 md:w-5 md:h-5 rounded border-2 ${
           isSelected
             ? 'bg-primary border-primary'
             : 'bg-card border-border'
@@ -411,13 +411,13 @@ function ItemCard({ item, onClick, onToggleFavorite }: ItemCardProps) {
 
       {/* Item info */}
       <div className="p-2.5 md:p-3">
-        <h3 className="font-medium text-sm md:text-base text-foreground truncate">{item.name}</h3>
+        <h3 className="font-medium text-sm text-foreground truncate">{item.name}</h3>
         <p className="text-xs md:text-sm text-muted-foreground capitalize">{item.category}</p>
         {item.brand && (
-          <p className="text-xs text-muted-foreground/70 mt-0.5 md:mt-1 truncate">{item.brand}</p>
+          <p className="hidden md:block text-xs text-muted-foreground/70 mt-0.5 md:mt-1 truncate">{item.brand}</p>
         )}
         {item.usage_times_worn > 0 && (
-          <p className="text-xs text-muted-foreground/70 mt-0.5 md:mt-1">
+          <p className="hidden md:block text-xs text-muted-foreground/70 mt-0.5 md:mt-1">
             Worn {item.usage_times_worn} {item.usage_times_worn === 1 ? 'time' : 'times'}
           </p>
         )}
@@ -425,7 +425,7 @@ function ItemCard({ item, onClick, onToggleFavorite }: ItemCardProps) {
 
       {/* Condition indicator */}
       <div
-        className={`absolute bottom-14 md:bottom-16 left-2 px-2 py-0.5 rounded-full text-xs font-medium ${getConditionBadgeClass(item.condition)}`}
+        className={`absolute top-2 left-10 md:bottom-16 md:left-2 md:top-auto px-2 py-0.5 rounded-full text-[10px] md:text-xs font-medium shadow-sm border border-transparent/10 ${getConditionBadgeClass(item.condition)}`}
       >
         {item.condition}
       </div>

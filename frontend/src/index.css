@@ -68,7 +68,11 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overflow-x-hidden w-full max-w-[100vw];
+  }
+
+  #root {
+    @apply w-full max-w-[100vw] overflow-x-hidden;
   }
 
   /* Focus styles */

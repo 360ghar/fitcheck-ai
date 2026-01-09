@@ -100,7 +100,7 @@ export default function OutfitsPage() {
       {/* Outfits grid */}
       {isLoading ? (
         <div className="text-center py-12">
-          <div className="inline-block animate-spin rounded-full h-10 w-10 md:h-12 md:w-12 border-b-2 border-primary"></div>
+          <div className="inline-block animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-b-2 border-primary"></div>
           <p className="mt-4 text-muted-foreground">Loading outfits...</p>
         </div>
       ) : filteredOutfits.length === 0 ? (
@@ -118,7 +118,7 @@ export default function OutfitsPage() {
       ) : (
         <div
           className={`grid gap-3 md:gap-4 ${
-            isGridView ? 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'
+            isGridView ? 'grid-cols-2 gap-2 md:gap-4 md:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'
           }`}
         >
           {filteredOutfits.map((outfit) => (
@@ -175,22 +175,22 @@ export default function OutfitsPage() {
 
               {/* Outfit info */}
               <div className="p-2.5 md:p-4">
-                <h3 className="font-medium text-sm md:text-base text-foreground truncate">{outfit.name}</h3>
+                <h3 className="font-medium text-sm text-foreground truncate">{outfit.name}</h3>
                 {outfit.description && (
                   <p className="text-xs md:text-sm text-muted-foreground line-clamp-2 mt-0.5 md:mt-1 hidden md:block">{outfit.description}</p>
                 )}
                 <div className="flex items-center justify-between mt-1 md:mt-2">
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-[10px] md:text-xs text-muted-foreground">
                     {outfit.item_ids.length} {outfit.item_ids.length === 1 ? 'item' : 'items'}
                   </span>
                   {outfit.style && (
-                    <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full capitalize">
+                    <span className="text-[10px] md:text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full capitalize">
                       {outfit.style}
                     </span>
                   )}
                 </div>
                 {outfit.worn_count > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1 md:mt-2">
+                  <p className="hidden md:block text-xs text-muted-foreground mt-1 md:mt-2">
                     Worn {outfit.worn_count} {outfit.worn_count === 1 ? 'time' : 'times'}
                   </p>
                 )}
@@ -199,8 +199,8 @@ export default function OutfitsPage() {
               {/* AI generation indicator */}
               {outfit.images.some((img) => img.generation_type === 'ai') && (
                 <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 bg-purple-100 dark:bg-purple-900/30 rounded-full">
-                  <Sparkles className="h-3 w-3 text-purple-600 dark:text-purple-400" />
-                  <span className="text-xs font-medium text-purple-700 dark:text-purple-300">AI</span>
+                  <Sparkles className="h-3 w-3 md:h-3 md:w-3 text-purple-600 dark:text-purple-400" />
+                  <span className="text-[10px] md:text-xs font-medium text-purple-700 dark:text-purple-300">AI</span>
                 </div>
               )}
             </div>
@@ -211,7 +211,7 @@ export default function OutfitsPage() {
       {/* Floating Action Button for mobile */}
       <button
         onClick={startCreating}
-        className="fixed bottom-[calc(var(--bottom-nav-height)+16px+var(--safe-area-bottom))] right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center md:hidden z-40 hover:bg-primary/90 active:scale-95 transition-transform"
+        className="fixed bottom-[calc(var(--bottom-nav-height)+16px+var(--safe-area-bottom))] right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center md:hidden z-[90] hover:bg-primary/90 active:scale-95 transition-transform"
         aria-label="Create new outfit"
       >
         <Plus className="h-6 w-6" />
