@@ -29,7 +29,7 @@ export function BottomNav() {
     <nav
       className={cn(
         // Fixed to bottom with safe area padding
-        'fixed bottom-0 inset-x-0 z-50',
+        'fixed bottom-0 inset-x-0 z-[100] w-full',
         // Background with blur
         'bg-background/95 backdrop-blur-sm',
         // Border

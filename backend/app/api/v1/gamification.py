@@ -79,7 +79,7 @@ async def get_streak(
     db: Client = Depends(get_db),
 ):
     try:
-        row = db.table("user_streaks").select("*").eq("user_id", user_id).single().execute().data
+        row = db.table("user_streaks").select("*").eq("user_id", user_id).maybe_single().execute().data
         if not row:
             now = _now()
             insert = {
@@ -217,7 +217,7 @@ async def get_leaderboard(
         # User rank summary (best-effort)
         user_rank: Optional[Dict[str, Any]] = None
         try:
-            me_row = db.table("user_streaks").select("current_streak").eq("user_id", user_id).single().execute().data
+            me_row = db.table("user_streaks").select("current_streak").eq("user_id", user_id).maybe_single().execute().data
             me_streak = _safe_int((me_row or {}).get("current_streak"), 0)
             higher = db.table("user_streaks").select("user_id", count="exact").gt("current_streak", me_streak).execute()
             higher_count = getattr(higher, "count", len(getattr(higher, "data", []) or [])) or 0

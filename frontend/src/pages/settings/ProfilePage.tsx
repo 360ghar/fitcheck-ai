@@ -293,17 +293,17 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
+    <div className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-3 md:py-8 overflow-hidden">
       {/* Header */}
       <div className="mb-4 md:mb-8">
-        <h1 className="text-xl md:text-2xl font-bold text-foreground">Profile & Settings</h1>
-        <p className="mt-1 md:mt-2 text-sm text-muted-foreground">Manage your account and preferences</p>
+        <h1 className="text-lg md:text-2xl font-bold text-foreground">Profile & Settings</h1>
+        <p className="mt-1 md:mt-2 text-xs md:text-sm text-muted-foreground">Manage your account and preferences</p>
       </div>
 
       <div className="bg-card shadow rounded-lg">
         {/* Avatar section */}
-        <div className="px-4 py-4 md:px-6 md:py-6 border-b border-border">
-          <div className="flex items-center">
+        <div className="px-4 py-4 md:px-6 md:py-6 lg:px-8 border-b border-border">
+          <div className="flex flex-col items-center xs:flex-row xs:items-center w-full">
             <div className="relative">
               {userAvatar ? (
                 <img
@@ -332,9 +332,9 @@ export default function ProfilePage() {
                 title="Change avatar"
               >
                 <Camera className="h-4 w-4 md:h-5 md:w-5" />
-              </button>
+                </button>
             </div>
-            <div className="ml-4 md:ml-6 min-w-0">
+            <div className="mt-3 xs:mt-0 xs:ml-4 md:ml-6 min-w-0 text-center xs:text-left">
               <h2 className="text-lg md:text-xl font-medium text-foreground truncate">{userDisplayName}</h2>
               <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
             </div>
@@ -342,13 +342,13 @@ export default function ProfilePage() {
         </div>
 
         {/* Scrollable Tabs */}
-        <ScrollableTabs className="border-b border-border">
+        <ScrollableTabs className="border-b border-border px-0 md:px-6 lg:px-8 w-full">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'flex items-center gap-2 px-4 py-3 md:py-4 text-sm font-medium whitespace-nowrap transition-colors touch-target border-b-2',
+                'flex items-center gap-2 px-4 py-3 md:py-4 text-sm font-medium whitespace-nowrap transition-colors touch-target border-b-2 scroll-snap-start min-w-[100px] justify-center',
                 activeTab === tab.id
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
@@ -362,7 +362,7 @@ export default function ProfilePage() {
         </ScrollableTabs>
 
         {/* Tab content */}
-        <div className="px-4 py-4 md:px-6 md:py-6">
+        <div className="px-4 py-4 md:px-6 md:py-6 lg:px-8">
           {activeTab === 'profile' && (
             <div className="space-y-6">
               <div>
@@ -382,7 +382,7 @@ export default function ProfilePage() {
                         value={isEditing ? fullName : user?.full_name || ''}
                         onChange={(e) => setFullName(e.target.value)}
                         disabled={!isEditing}
-                        className="flex-1 min-w-0 block w-full h-12 px-3 rounded-md border border-border focus:ring-primary focus:border-primary text-base disabled:bg-muted disabled:text-muted-foreground bg-background text-foreground"
+                        className="flex-1 min-w-0 block w-full h-12 px-3 rounded-md border border-border focus:ring-primary focus:border-primary text-base md:text-sm disabled:bg-muted disabled:text-muted-foreground bg-background text-foreground appearance-none"
                       />
                     </div>
                   </div>
@@ -402,7 +402,7 @@ export default function ProfilePage() {
                       value={isEditing ? gender : user?.gender || ''}
                       onChange={(e) => setGender(e.target.value)}
                       disabled={!isEditing}
-                      className="mt-1 block w-full h-12 px-3 pr-10 text-base border border-border focus:outline-none focus:ring-primary focus:border-primary rounded-md disabled:bg-muted disabled:text-muted-foreground bg-background text-foreground"
+                      className="mt-1 block w-full h-12 px-3 pr-10 text-base md:text-sm border border-border focus:outline-none focus:ring-primary focus:border-primary rounded-md disabled:bg-muted disabled:text-muted-foreground bg-background text-foreground appearance-none"
                     >
                       <option value="">Prefer not to say</option>
                       <option value="male">Male</option>
@@ -486,7 +486,7 @@ export default function ProfilePage() {
                     <input
                       value={favoriteColorsCsv}
                       onChange={(e) => setFavoriteColorsCsv(e.target.value)}
-                      className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base bg-background text-foreground focus:ring-primary focus:border-primary"
+                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
                       placeholder="e.g. black, white, navy"
                     />
                     <p className="mt-1 text-xs text-muted-foreground">Comma-separated list.</p>
@@ -497,7 +497,7 @@ export default function ProfilePage() {
                     <input
                       value={preferredStylesCsv}
                       onChange={(e) => setPreferredStylesCsv(e.target.value)}
-                      className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base bg-background text-foreground focus:ring-primary focus:border-primary"
+                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
                       placeholder="e.g. casual, streetwear, minimalist"
                     />
                   </div>
@@ -507,7 +507,7 @@ export default function ProfilePage() {
                     <input
                       value={preferredOccasionsCsv}
                       onChange={(e) => setPreferredOccasionsCsv(e.target.value)}
-                      className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base bg-background text-foreground focus:ring-primary focus:border-primary"
+                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
                       placeholder="e.g. work, date night, travel"
                     />
                   </div>
@@ -518,7 +518,7 @@ export default function ProfilePage() {
                       <input
                         value={likedBrandsCsv}
                         onChange={(e) => setLikedBrandsCsv(e.target.value)}
-                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base bg-background text-foreground focus:ring-primary focus:border-primary"
+                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
                         placeholder="e.g. Nike, Uniqlo"
                       />
                     </div>
@@ -527,7 +527,7 @@ export default function ProfilePage() {
                       <input
                         value={dislikedPatternsCsv}
                         onChange={(e) => setDislikedPatternsCsv(e.target.value)}
-                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base bg-background text-foreground focus:ring-primary focus:border-primary"
+                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
                         placeholder="e.g. plaid, polka dots"
                       />
                     </div>
@@ -539,7 +539,7 @@ export default function ProfilePage() {
                       <select
                         value={colorTemperature}
                         onChange={(e) => setColorTemperature(e.target.value)}
-                        className="mt-1 block w-full h-12 px-3 pr-10 text-base border border-border rounded-md bg-background text-foreground focus:ring-primary focus:border-primary"
+                        className="mt-1 block w-full h-12 px-3 pr-10 text-base md:text-sm border border-border rounded-md bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
                       >
                         <option value="">Not set</option>
                         <option value="warm">Warm</option>
@@ -552,7 +552,7 @@ export default function ProfilePage() {
                       <input
                         value={stylePersonality}
                         onChange={(e) => setStylePersonality(e.target.value)}
-                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base bg-background text-foreground focus:ring-primary focus:border-primary"
+                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
                         placeholder="e.g. minimalist, bold, classic"
                       />
                     </div>

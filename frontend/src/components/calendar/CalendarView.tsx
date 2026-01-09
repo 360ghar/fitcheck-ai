@@ -13,7 +13,7 @@
  * @see https://docs.fitcheck.ai/features/calendar-integration
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -255,6 +255,7 @@ export function CalendarView({
   const [assignDialogEvent, setAssignDialogEvent] = useState<CalendarEvent | null>(null)
   const [weatherCache, setWeatherCache] = useState<Map<string, WeatherData>>(new Map())
   const [isLoadingWeather, setIsLoadingWeather] = useState(false)
+  const lastWeatherFetcherRef = useRef(onGetWeather)
 
   // Detect mobile and set default view mode
   const [_isMobile, setIsMobile] = useState(false)
@@ -392,37 +393,50 @@ export function CalendarView({
     const fetchWeatherForMonth = async () => {
       if (!onGetWeather) return
 
-      setIsLoadingWeather(true)
-      const newCache = new Map(weatherCache)
+      const weatherFetcherChanged = lastWeatherFetcherRef.current !== onGetWeather
+      if (weatherFetcherChanged) {
+        lastWeatherFetcherRef.current = onGetWeather
+      }
 
-      // Fetch weather for each unique day in the current month
-      const uniqueDates = new Set<string>()
-      days.forEach((day) => {
-        if (day.isCurrentMonth) {
-          uniqueDates.add(day.date.toDateString())
-        }
-      })
+      const newCache = weatherFetcherChanged ? new Map<string, WeatherData>() : new Map(weatherCache)
+      const year = currentDate.getFullYear()
+      const month = currentDate.getMonth()
+      const daysInMonth = new Date(year, month + 1, 0).getDate()
+      const missingDates: string[] = []
 
-      for (const dateStr of uniqueDates) {
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = new Date(year, month, day).toDateString()
         if (!newCache.has(dateStr)) {
-          try {
-            const date = new Date(dateStr)
-            const weather = await onGetWeather(date)
-            if (weather) {
-              newCache.set(dateStr, weather)
-            }
-          } catch (err) {
-            console.error('Failed to fetch weather:', err)
-          }
+          missingDates.push(dateStr)
         }
       }
 
-      setWeatherCache(newCache)
+      if (missingDates.length === 0 && !weatherFetcherChanged) return
+
+      setIsLoadingWeather(true)
+      let didUpdate = false
+
+      for (const dateStr of missingDates) {
+        try {
+          const date = new Date(dateStr)
+          const weather = await onGetWeather(date)
+          if (weather) {
+            newCache.set(dateStr, weather)
+            didUpdate = true
+          }
+        } catch (err) {
+          console.error('Failed to fetch weather:', err)
+        }
+      }
+
+      if (weatherFetcherChanged || didUpdate) {
+        setWeatherCache(newCache)
+      }
       setIsLoadingWeather(false)
     }
 
     fetchWeatherForMonth()
-  }, [currentDate, onGetWeather])
+  }, [currentDate, onGetWeather, weatherCache])
 
   // Navigate to previous/next month or week
   const navigate = (direction: 'prev' | 'next') => {

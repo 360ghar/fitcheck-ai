@@ -57,6 +57,17 @@ export default function CalendarPage() {
   const [editingLocation, setEditingLocation] = useState('')
   const locationInitialized = useRef(false)
   const { state: geoState, requestLocation } = useGeolocation()
+  const weatherRequestRef = useRef<{
+    locationKey: string
+    data: WeatherData | null
+    inFlight: Promise<WeatherData | null> | null
+    failed: boolean
+  }>({
+    locationKey: '',
+    data: null,
+    inFlight: null,
+    failed: false,
+  })
 
   const [createOpen, setCreateOpen] = useState(false)
   const [createTitle, setCreateTitle] = useState('')
@@ -243,20 +254,52 @@ export default function CalendarPage() {
     )
   }
 
-  const getWeatherForDay = async (_date: Date): Promise<WeatherData | null> => {
-    try {
-      const rec = await getWeatherRecommendations(userLocation || undefined)
-      return {
-        temperature: rec.temperature,
-        temp_category: rec.temp_category,
-        weather_state: rec.weather_state,
-        description: (rec.notes || []).join(' ') || rec.weather_state,
-        icon: rec.weather_state,
-      }
-    } catch {
-      return null
+  const getWeatherForDay = useCallback(async (_date: Date): Promise<WeatherData | null> => {
+    const locationKey = (userLocation || '').trim()
+    const cache = weatherRequestRef.current
+
+    if (cache.locationKey !== locationKey) {
+      cache.locationKey = locationKey
+      cache.data = null
+      cache.inFlight = null
+      cache.failed = false
     }
-  }
+
+    if (cache.data) return cache.data
+    if (cache.failed) return null
+    if (cache.inFlight) return cache.inFlight
+
+    const requestLocation = locationKey
+    const request = getWeatherRecommendations(locationKey || undefined)
+      .then((rec) => {
+        if (cache.locationKey !== requestLocation) {
+          return null
+        }
+        const weather: WeatherData = {
+          temperature: rec.temperature,
+          temp_category: rec.temp_category,
+          weather_state: rec.weather_state,
+          description: (rec.notes || []).join(' ') || rec.weather_state,
+          icon: rec.weather_state,
+        }
+        cache.data = weather
+        return weather
+      })
+      .catch(() => {
+        if (cache.locationKey === requestLocation) {
+          cache.failed = true
+        }
+        return null
+      })
+      .finally(() => {
+        if (cache.locationKey === requestLocation) {
+          cache.inFlight = null
+        }
+      })
+
+    cache.inFlight = request
+    return request
+  }, [userLocation])
 
   const handleAutoDetect = async () => {
     const coords = await requestLocation()
