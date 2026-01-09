@@ -11,13 +11,14 @@ from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from app.db.connection import get_db, get_anon_db
-from app.core.security import verify_password_strength, TokenData
+from app.db.connection import get_db, get_anon_db, SupabaseDB
+from app.core.security import verify_password_strength, TokenData, verify_token
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import (
     AuthenticationError,
     EmailAlreadyExistsError,
+    FitCheckException,
     ValidationError,
     SchemaNotInitializedError,
     DatabaseError,
@@ -174,6 +175,12 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class OAuthSyncRequest(BaseModel):
+    """Optional metadata from OAuth provider for profile sync."""
+    full_name: Optional[str] = Field(None, max_length=255)
+    avatar_url: Optional[str] = None
+
+
 # ============================================================================
 # AUTH ENDPOINTS
 # ============================================================================
@@ -317,7 +324,7 @@ async def register(
             "message": "Registered",
         }
 
-    except (HTTPException, EmailAlreadyExistsError, AuthenticationError, DatabaseError, SchemaNotInitializedError):
+    except (HTTPException, FitCheckException):
         raise
     except AuthApiError as e:
         logger.error("Registration error", error=str(e))
@@ -445,7 +452,7 @@ async def login(
             "message": "OK",
         }
 
-    except (HTTPException, AuthenticationError, SchemaNotInitializedError):
+    except (HTTPException, FitCheckException):
         raise
     except AuthApiError as e:
         logger.error("Login error", error=str(e))
@@ -510,7 +517,7 @@ async def refresh_token(
             "message": "OK",
         }
 
-    except (ValidationError, AuthenticationError):
+    except FitCheckException:
         raise
     except Exception as e:
         logger.error("Token refresh error", error=str(e))
@@ -584,3 +591,141 @@ async def confirm_reset_password(
     except Exception as e:
         logger.error("Confirm password reset error")
         raise DatabaseError("An error occurred while resetting password")
+
+
+@router.post("/oauth/sync", response_model=dict)
+async def oauth_sync(
+    request: Optional[OAuthSyncRequest] = None,
+    db: Client = Depends(get_db),
+    token_data: TokenData = Depends(verify_token),
+):
+    """
+    Sync user profile after OAuth authentication.
+
+    Called by frontend after successful OAuth flow. Creates or updates
+    the user profile in public.users table if it doesn't exist.
+
+    This endpoint is idempotent - calling it multiple times is safe.
+    """
+    user_id = token_data.sub
+    user_email = token_data.email
+
+    try:
+        _require_schema(db)
+
+        # Check if user profile already exists
+        existing = db.table("users").select("*").eq("id", user_id).execute()
+        is_new_user = not existing.data
+
+        if is_new_user:
+            # Fetch additional metadata from Supabase Auth if available
+            user_metadata = {}
+            try:
+                client = SupabaseDB.get_service_client()
+                auth_user = client.auth.admin.get_user_by_id(user_id)
+                if auth_user and auth_user.user:
+                    user_metadata = auth_user.user.user_metadata or {}
+                    # Use email from auth if not in token
+                    if not user_email:
+                        user_email = auth_user.user.email
+            except Exception as e:
+                logger.debug(f"Could not fetch auth user metadata: {e}")
+
+            # Determine values (priority: request > auth metadata > defaults)
+            full_name = (
+                (request.full_name if request else None)
+                or user_metadata.get("full_name")
+                or user_metadata.get("name")  # Google OAuth uses "name"
+                or ""
+            )
+            avatar_url = (
+                (request.avatar_url if request else None)
+                or user_metadata.get("avatar_url")
+                or user_metadata.get("picture")  # Google OAuth uses "picture"
+            )
+
+            # Create user profile
+            profile_payload = {
+                "id": user_id,
+                "email": user_email,
+                "full_name": full_name,
+                "avatar_url": avatar_url,
+                "email_verified": True,  # OAuth emails are verified by provider
+                "is_active": True,
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
+                "last_login_at": datetime.now().isoformat(),
+            }
+
+            profile_created = await _upsert_user_profile(db, profile_payload)
+            if not profile_created:
+                raise DatabaseError(
+                    "User profile could not be created",
+                    operation="oauth_sync"
+                )
+
+            # Create default user_preferences
+            try:
+                db.table("user_preferences").upsert({
+                    "user_id": user_id,
+                    "favorite_colors": [],
+                    "preferred_styles": [],
+                    "liked_brands": [],
+                    "disliked_patterns": [],
+                    "preferred_occasions": [],
+                    "data_points_collected": 0,
+                }, on_conflict="user_id").execute()
+            except Exception as e:
+                logger.debug(f"User preferences upsert skipped: {e}")
+
+            # Create default user_settings
+            try:
+                db.table("user_settings").upsert({
+                    "user_id": user_id,
+                    "language": "en",
+                    "measurement_units": "imperial",
+                    "notifications_enabled": True,
+                    "email_marketing": False,
+                    "dark_mode": False,
+                }, on_conflict="user_id").execute()
+            except Exception as e:
+                logger.debug(f"User settings upsert skipped: {e}")
+
+            logger.info("Created user profile via OAuth sync", user_id=user_id)
+
+            # Fetch the created profile
+            profile_result = db.table("users").select("*").eq("id", user_id).execute()
+            user_data = profile_result.data[0] if profile_result.data else profile_payload
+        else:
+            # Profile exists - update last_login_at
+            db.table("users").update({
+                "last_login_at": datetime.now().isoformat()
+            }).eq("id", user_id).execute()
+
+            user_data = existing.data[0]
+            logger.info("OAuth sync for existing user", user_id=user_id)
+
+        return {
+            "data": {
+                "user": {
+                    "id": user_id,
+                    "email": user_email,
+                    "full_name": user_data.get("full_name"),
+                    "avatar_url": user_data.get("avatar_url"),
+                    "gender": user_data.get("gender"),
+                    "is_active": user_data.get("is_active", True),
+                    "email_verified": user_data.get("email_verified", True),
+                    "created_at": user_data.get("created_at"),
+                    "updated_at": user_data.get("updated_at"),
+                    "last_login_at": user_data.get("last_login_at"),
+                },
+                "is_new_user": is_new_user,
+            },
+            "message": "OK",
+        }
+
+    except (HTTPException, FitCheckException):
+        raise
+    except Exception as e:
+        logger.error("OAuth sync error", error=str(e))
+        raise DatabaseError("An error occurred during OAuth sync")

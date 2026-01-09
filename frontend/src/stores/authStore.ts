@@ -8,7 +8,8 @@ import { persist } from 'zustand/middleware';
 import type { User, AuthTokens, AuthResponse } from '../types';
 import * as authApi from '../api/auth';
 import { getCurrentUser } from '../api/users';
-import { getApiError, resetForcedLogoutFlag } from '../api/client';
+import { getApiError, resetForcedLogoutFlag, setTokens } from '../api/client';
+import { supabase } from '../lib/supabase';
 
 // ============================================================================
 // AUTH STATE INTERFACE
@@ -31,6 +32,8 @@ interface AuthState {
   clearError: () => void;
   setUser: (user: User | null) => void;
   setHasHydrated: (hydrated: boolean) => void;
+  signInWithGoogle: () => Promise<void>;
+  handleOAuthCallback: () => Promise<AuthResponse & { is_new_user: boolean }>;
 }
 
 // ============================================================================
@@ -194,6 +197,65 @@ export const useAuthStore = create<AuthState>()(
       // Set hydration status (called by persist middleware)
       setHasHydrated: (hydrated: boolean) => {
         set({ hasHydrated: hydrated });
+      },
+
+      // Sign in with Google OAuth
+      signInWithGoogle: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+              redirectTo: `${window.location.origin}/auth/callback`,
+            },
+          });
+          if (error) throw error;
+          // User will be redirected to Google
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : 'Failed to sign in with Google';
+          set({ error: message, isLoading: false });
+          throw error;
+        }
+      },
+
+      // Handle OAuth callback after redirect
+      handleOAuthCallback: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          // Get session from Supabase (populated from URL hash after redirect)
+          const { data: { session }, error } = await supabase.auth.getSession();
+
+          if (error) throw error;
+          if (!session) throw new Error('No session found');
+
+          // Sync profile with backend
+          const { user, is_new_user } = await authApi.syncOAuthProfile(session.access_token);
+
+          const tokens = {
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+          };
+
+          // Store tokens in localStorage for API client
+          setTokens(tokens);
+
+          set({
+            user,
+            tokens,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          });
+
+          authApi.storeUser(user);
+          resetForcedLogoutFlag();
+
+          return { ...tokens, user, is_new_user };
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : 'OAuth callback failed';
+          set({ error: message, isLoading: false });
+          throw error;
+        }
       },
     }),
     {
