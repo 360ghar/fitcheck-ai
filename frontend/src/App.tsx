@@ -2,6 +2,9 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useIsAuthenticated, useHasHydrated } from './stores/authStore'
 import { memo } from 'react'
 
+// Analytics
+import { PostHogIdentify } from './components/analytics/PostHogIdentify'
+
 // Layouts
 import AppLayout from './components/layout/AppLayout'
 import AuthLayout from './components/layout/AuthLayout'
@@ -87,7 +90,11 @@ const CatchAllRoute = memo(function CatchAllRoute() {
 
 function App() {
   return (
-    <Routes>
+    <>
+      {/* PostHog user identification - syncs auth state with analytics */}
+      <PostHogIdentify />
+
+      <Routes>
       {/* Public marketing routes */}
       <Route element={<PublicLayout />}>
         <Route path="/" element={<LandingPage />} />
@@ -161,6 +168,7 @@ function App() {
       {/* Catch all - redirect to dashboard or landing */}
       <Route path="*" element={<CatchAllRoute />} />
     </Routes>
+    </>
   )
 }
 

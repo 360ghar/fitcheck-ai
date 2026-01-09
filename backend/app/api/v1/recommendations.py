@@ -24,6 +24,7 @@ from app.core.logging_config import get_context_logger
 from app.core.security import get_current_user_id
 from app.db.connection import get_db
 from app.services.ai_service import AIService
+from app.services.ai_settings_service import AISettingsService
 from app.services.vector_service import get_vector_service
 from app.services.weather_service import get_weather_service
 
@@ -446,39 +447,58 @@ async def similar_items(
         # Vector search best-effort
         results: List[Dict[str, Any]] = []
         try:
-            embedding = await AIService.generate_item_embedding(source.data)
-            if embedding:
-                vector_service = get_vector_service()
-                matches = await vector_service.find_similar(
-                    embedding=embedding,
+            rate_check = await AISettingsService.check_rate_limit(
+                user_id=user_id,
+                operation_type="embedding",
+                db=db,
+            )
+            if rate_check["allowed"]:
+                embedding = await AIService.generate_item_embedding(source.data)
+                if embedding:
+                    await AISettingsService.increment_usage(
+                        user_id=user_id,
+                        operation_type="embedding",
+                        db=db,
+                    )
+                    vector_service = get_vector_service()
+                    matches = await vector_service.find_similar(
+                        embedding=embedding,
+                        user_id=user_id,
+                        category=category,
+                        exclude_item_ids=[item_id],
+                        top_k=limit,
+                        min_score=0.2,
+                    )
+                    match_ids = [m["item_id"] for m in matches if m.get("item_id")]
+                    if match_ids:
+                        items_res = db.table("items").select("*, item_images(*)").in_("id", match_ids).execute()
+                        by_id = {r["id"]: r for r in (items_res.data or [])}
+                        for m in matches:
+                            it = by_id.get(m.get("item_id"))
+                            if not it:
+                                continue
+                            results.append(
+                                {
+                                    "item_id": it["id"],
+                                    "item_name": it.get("name"),
+                                    "image_url": (it.get("item_images") or [{}])[0].get("thumbnail_url")
+                                    or (it.get("item_images") or [{}])[0].get("image_url"),
+                                    "category": it.get("category"),
+                                    "sub_category": it.get("sub_category"),
+                                    "brand": it.get("brand"),
+                                    "colors": it.get("colors") or [],
+                                    "similarity": float(m.get("score") or 0) * 100.0,
+                                    "reasons": ["Similar style and attributes"],
+                                }
+                            )
+            else:
+                logger.info(
+                    "Embedding rate limit exceeded for recommendations similar, using fallback",
                     user_id=user_id,
-                    category=category,
-                    exclude_item_ids=[item_id],
-                    top_k=limit,
-                    min_score=0.2,
+                    item_id=item_id,
+                    remaining=rate_check["remaining"],
+                    limit=rate_check["limit"],
                 )
-                match_ids = [m["item_id"] for m in matches if m.get("item_id")]
-                if match_ids:
-                    items_res = db.table("items").select("*, item_images(*)").in_("id", match_ids).execute()
-                    by_id = {r["id"]: r for r in (items_res.data or [])}
-                    for m in matches:
-                        it = by_id.get(m.get("item_id"))
-                        if not it:
-                            continue
-                        results.append(
-                            {
-                                "item_id": it["id"],
-                                "item_name": it.get("name"),
-                                "image_url": (it.get("item_images") or [{}])[0].get("thumbnail_url")
-                                or (it.get("item_images") or [{}])[0].get("image_url"),
-                                "category": it.get("category"),
-                                "sub_category": it.get("sub_category"),
-                                "brand": it.get("brand"),
-                                "colors": it.get("colors") or [],
-                                "similarity": float(m.get("score") or 0) * 100.0,
-                                "reasons": ["Similar style and attributes"],
-                            }
-                        )
         except Exception as ve:
             logger.debug(
                 "Vector search failed, falling back to rule-based",
