@@ -155,3 +155,23 @@ export function storeUser(user: User): void {
 export function clearUser(): void {
   localStorage.removeItem('fitcheck_user');
 }
+
+/**
+ * Sync OAuth profile with backend after OAuth authentication
+ * Creates user profile if it doesn't exist
+ */
+export async function syncOAuthProfile(accessToken: string): Promise<{
+  user: User;
+  is_new_user: boolean;
+}> {
+  const response = await apiClient.post<ApiEnvelope<{ user: User; is_new_user: boolean }>>(
+    '/api/v1/auth/oauth/sync',
+    {},
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
+  return response.data.data;
+}

@@ -21,6 +21,7 @@ import LoginPage from './pages/auth/LoginPage'
 import RegisterPage from './pages/auth/RegisterPage'
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
 import ResetPasswordPage from './pages/auth/ResetPasswordPage'
+import AuthCallbackPage from './pages/auth/AuthCallbackPage'
 
 // Main pages
 import WardrobePage from './pages/wardrobe/WardrobePage'
@@ -139,6 +140,10 @@ function App() {
             <ResetPasswordPage />
           </AuthLayout>
         }
+      />
+      <Route
+        path="/auth/callback"
+        element={<AuthCallbackPage />}
       />
 
       {/* Public share routes */}
