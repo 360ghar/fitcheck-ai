@@ -36,7 +36,7 @@ export function BatchOriginalsReview({ images }: BatchOriginalsReviewProps) {
         return (
           <div
             key={image.imageId}
-            className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-white dark:bg-gray-900"
+            className="rounded-lg border border-border overflow-hidden bg-card"
           >
             <div className="relative aspect-square">
               <ZoomableImage
@@ -91,14 +91,14 @@ export function BatchOriginalsReview({ images }: BatchOriginalsReviewProps) {
 
               {hasError && (
                 <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center">
-                  <span className="text-xs font-medium text-red-700 dark:text-red-300 bg-white/80 dark:bg-gray-900/80 px-2 py-1 rounded">
+                  <span className="text-xs font-medium text-red-700 dark:text-red-300 bg-white/80 dark:bg-card/80 px-2 py-1 rounded">
                     Extraction failed
                   </span>
                 </div>
               )}
 
               {!hasError && itemCount > 0 && (
-                <div className="absolute top-2 right-2 bg-indigo-600 text-white text-xs font-medium px-2 py-1 rounded">
+                <div className="absolute top-2 right-2 bg-gold-600 text-white text-xs font-medium px-2 py-1 rounded">
                   {itemCount} item{itemCount !== 1 ? 's' : ''}
                 </div>
               )}
@@ -107,12 +107,12 @@ export function BatchOriginalsReview({ images }: BatchOriginalsReviewProps) {
             <div className="p-3 space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <p
-                  className="text-sm font-medium text-gray-900 dark:text-white truncate"
+                  className="text-sm font-medium text-foreground truncate"
                   title={image.file.name}
                 >
                   {image.file.name}
                 </p>
-                <span className="text-xs text-gray-500 dark:text-gray-400">
+                <span className="text-xs text-muted-foreground">
                   {itemCount} found
                 </span>
               </div>
@@ -126,7 +126,7 @@ export function BatchOriginalsReview({ images }: BatchOriginalsReviewProps) {
                       >
                         {index + 1}
                       </div>
-                      <span className="truncate text-gray-600 dark:text-gray-300">
+                      <span className="truncate text-muted-foreground">
                         {getItemLabel(item)}
                       </span>
                     </div>
@@ -135,7 +135,7 @@ export function BatchOriginalsReview({ images }: BatchOriginalsReviewProps) {
               )}
 
               {!hasError && items.length === 0 && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-muted-foreground">
                   No items detected in this photo
                 </p>
               )}

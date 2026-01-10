@@ -70,13 +70,13 @@ const getConditionConfig = (condition: string) => {
       }
     case 'donate':
       return {
-        bg: 'bg-violet-500/90',
+        bg: 'bg-gold-500/90',
         text: 'text-white',
         label: 'Donate',
       }
     default:
       return {
-        bg: 'bg-gray-500/90',
+        bg: 'bg-muted-foreground/90',
         text: 'text-white',
         label: condition,
       }
@@ -153,8 +153,8 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
                 className={cn(
                   'p-2 rounded-full touch-target',
                   item.is_favorite
-                    ? 'text-pink-500'
-                    : 'text-muted-foreground hover:text-pink-500'
+                    ? 'text-gold-500'
+                    : 'text-muted-foreground hover:text-gold-500'
                 )}
                 onClick={(e) => {
                   e.stopPropagation()
@@ -221,7 +221,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
               'touch-target',
               isSelected
                 ? 'bg-primary text-primary-foreground'
-                : 'bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm border border-white/20'
+                : 'bg-white/90 dark:bg-card/90 backdrop-blur-sm border border-white/20'
             )}
             onClick={(e) => {
               e.stopPropagation()
@@ -243,8 +243,8 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
               'transition-all duration-200',
               'touch-target',
               item.is_favorite
-                ? 'bg-pink-500 text-white shadow-lg shadow-pink-500/30'
-                : 'bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm text-muted-foreground hover:text-pink-500'
+                ? 'bg-gold-500 text-white shadow-lg shadow-gold-500/30'
+                : 'bg-white/90 dark:bg-card/90 backdrop-blur-sm text-muted-foreground hover:text-gold-500'
             )}
             onClick={(e) => {
               e.stopPropagation()

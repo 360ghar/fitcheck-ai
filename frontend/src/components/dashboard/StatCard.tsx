@@ -8,8 +8,6 @@
  * - Loading skeleton support
  * - Hover lift animation
  * - Arrow indicator on hover
- *
- * @see https://docs.fitcheck.ai/features/dashboard
  */
 
 import * as React from 'react'
@@ -45,28 +43,28 @@ export interface StatCardProps {
 
 const gradientConfig = {
   primary: {
-    bar: 'bg-gradient-primary',
-    icon: 'bg-gradient-to-br from-indigo-500 to-purple-600',
-    shadow: 'shadow-indigo-500/25',
+    bar: 'bg-gradient-to-r from-navy-700 to-navy-900',
+    icon: 'bg-navy-800 dark:bg-navy-700',
+    shadow: 'shadow-navy-500/15',
   },
   accent: {
-    bar: 'bg-gradient-accent',
-    icon: 'bg-gradient-to-br from-amber-500 to-red-500',
-    shadow: 'shadow-amber-500/25',
+    bar: 'bg-gradient-to-r from-gold-400 to-gold-600',
+    icon: 'bg-gradient-to-br from-gold-400 to-gold-600',
+    shadow: 'shadow-gold-500/25',
   },
   cool: {
-    bar: 'bg-gradient-cool',
-    icon: 'bg-gradient-to-br from-cyan-500 to-blue-500',
-    shadow: 'shadow-cyan-500/25',
+    bar: 'bg-gradient-to-r from-navy-600 to-navy-800',
+    icon: 'bg-navy-700 dark:bg-navy-600',
+    shadow: 'shadow-navy-500/15',
   },
   warm: {
-    bar: 'bg-gradient-warm',
-    icon: 'bg-gradient-to-br from-orange-500 to-pink-500',
-    shadow: 'shadow-orange-500/25',
+    bar: 'bg-gradient-to-r from-gold-500 to-gold-700',
+    icon: 'bg-gradient-to-br from-gold-500 to-gold-700',
+    shadow: 'shadow-gold-500/25',
   },
   success: {
-    bar: 'bg-gradient-success',
-    icon: 'bg-gradient-to-br from-emerald-500 to-cyan-500',
+    bar: 'bg-gradient-to-r from-emerald-500 to-emerald-600',
+    icon: 'bg-gradient-to-br from-emerald-500 to-emerald-600',
     shadow: 'shadow-emerald-500/25',
   },
 }

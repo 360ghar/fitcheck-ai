@@ -8,12 +8,13 @@ const cardVariants = cva(
   {
     variants: {
       variant: {
-        default: "border bg-card shadow-sm",
-        elevated: "bg-card shadow-elevated hover:shadow-card-hover hover:-translate-y-0.5",
-        glass: "bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl border border-white/20 dark:border-gray-700/30",
-        gradient: "bg-card border-0 ring-1 ring-primary/20 hover:ring-primary/40 relative overflow-hidden",
+        default: "border border-border/50 bg-card shadow-sm",
+        elevated: "bg-card shadow-elevated hover:shadow-elevated-hover hover:-translate-y-0.5",
+        glass: "bg-white/80 dark:bg-navy-900/80 backdrop-blur-xl border border-navy-100/30 dark:border-navy-700/30",
+        gradient: "bg-card border-0 ring-1 ring-gold-200/30 dark:ring-gold-700/20 hover:ring-gold-400/50 relative overflow-hidden",
         image: "bg-card border-0 overflow-hidden relative",
-        interactive: "bg-card border shadow-sm hover:shadow-elevated hover:-translate-y-0.5 cursor-pointer",
+        interactive: "bg-card border border-border/50 shadow-sm hover:shadow-elevated hover:-translate-y-0.5 cursor-pointer",
+        luxury: "bg-card border border-gold-200/30 dark:border-gold-700/20 shadow-sm hover:shadow-gold-glow",
       },
     },
     defaultVariants: {
@@ -100,7 +101,7 @@ CardFooter.displayName = "CardFooter"
 const CardAccent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & { gradient?: string }
->(({ className, gradient = "bg-gradient-primary", ...props }, ref) => (
+>(({ className, gradient = "bg-gradient-gold", ...props }, ref) => (
   <div
     ref={ref}
     className={cn("absolute top-0 left-0 right-0 h-1", gradient, className)}

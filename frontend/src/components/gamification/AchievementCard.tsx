@@ -69,8 +69,8 @@ interface AchievementCardProps {
 
 const DIFFICULTY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   easy: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400', border: 'border-green-200 dark:border-green-800' },
-  medium: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-400', border: 'border-blue-200 dark:border-blue-800' },
-  hard: { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-700 dark:text-purple-400', border: 'border-purple-200 dark:border-purple-800' },
+  medium: { bg: 'bg-navy-100 dark:bg-navy-900/30', text: 'text-navy-700 dark:text-navy-400', border: 'border-navy-200 dark:border-navy-800' },
+  hard: { bg: 'bg-gold-100 dark:bg-gold-900/30', text: 'text-gold-700 dark:text-gold-400', border: 'border-gold-200 dark:border-gold-800' },
   expert: { bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-orange-700 dark:text-orange-400', border: 'border-orange-200 dark:border-orange-800' },
 }
 
@@ -133,7 +133,7 @@ export function AchievementCard({
         className={`
           cursor-pointer transition-all hover:shadow-md
           ${colors.border} border-2
-          ${isCompleted ? colors.bg : 'bg-white dark:bg-gray-800'}
+          ${isCompleted ? colors.bg : 'bg-card'}
           ${onClick ? 'hover:scale-[1.02]' : ''}
         `}
       >
@@ -142,7 +142,7 @@ export function AchievementCard({
             {/* Icon/Badge */}
             <div className={`
               ${iconSizes[size]} rounded-full flex items-center justify-center
-              ${isCompleted ? 'bg-gradient-to-br from-yellow-400 to-orange-500' : 'bg-gray-200 dark:bg-gray-700'}
+              ${isCompleted ? 'bg-gradient-to-br from-gold-400 to-gold-600' : 'bg-muted'}
               flex-shrink-0
             `}>
               {isHidden ? (
@@ -173,7 +173,7 @@ export function AchievementCard({
 
               {!isHidden && (
                 <>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                  <p className="text-sm text-muted-foreground line-clamp-2">
                     {data.description}
                   </p>
 
@@ -204,7 +204,7 @@ export function AchievementCard({
           {/* Progress bar */}
           {showProgress && isUserAchievement && !isCompleted && !isHidden && data.target_value && (
             <div className="space-y-1">
-              <div className="flex justify-between text-xs text-gray-500">
+              <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Progress</span>
                 <span>{progress} / {data.target_value}</span>
               </div>

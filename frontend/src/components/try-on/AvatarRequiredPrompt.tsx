@@ -26,8 +26,8 @@ export function AvatarRequiredPrompt({ onGoToProfile }: AvatarRequiredPromptProp
     <div className="flex items-center justify-center min-h-[60vh] p-4">
       <Card className="max-w-md w-full">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-indigo-100 flex items-center justify-center">
-            <Camera className="h-8 w-8 text-indigo-600" />
+          <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-gold-100 dark:bg-gold-900/30 flex items-center justify-center">
+            <Camera className="h-8 w-8 text-gold-600 dark:text-gold-400" />
           </div>
           <CardTitle className="text-xl">Profile Picture Required</CardTitle>
           <CardDescription className="mt-2">
@@ -35,11 +35,11 @@ export function AvatarRequiredPrompt({ onGoToProfile }: AvatarRequiredPromptProp
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex flex-col items-center gap-4 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <div className="h-24 w-24 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-              <User className="h-12 w-12 text-gray-400" />
+          <div className="flex flex-col items-center gap-4 p-6 bg-muted rounded-lg">
+            <div className="h-24 w-24 rounded-full bg-muted-foreground/20 flex items-center justify-center">
+              <User className="h-12 w-12 text-muted-foreground" />
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-300 text-center">
+            <p className="text-sm text-muted-foreground text-center">
               Your profile picture will be used to create personalized try-on visualizations showing how clothes look on you.
             </p>
           </div>

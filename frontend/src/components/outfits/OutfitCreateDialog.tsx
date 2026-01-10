@@ -253,7 +253,7 @@ export function OutfitCreateDialog() {
           <div className="lg:col-span-2 space-y-3">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search wardrobe..."
                   value={search}
@@ -277,7 +277,7 @@ export function OutfitCreateDialog() {
             </div>
 
             {isLoadingItems ? (
-              <div className="py-10 text-center text-gray-600 dark:text-gray-400">
+              <div className="py-10 text-center text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin inline-block mr-2" />
                 Loading wardrobe items...
               </div>
@@ -293,10 +293,10 @@ export function OutfitCreateDialog() {
                       type="button"
                       onClick={() => toggleCreationItem(item.id)}
                       className={`relative rounded-lg border overflow-hidden text-left transition-colors ${
-                        selected ? 'border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-800' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        selected ? 'border-gold-500 ring-2 ring-gold-200 dark:ring-gold-800' : 'border-border hover:border-muted-foreground/50'
                       }`}
                     >
-                      <div className="aspect-square bg-gray-100 dark:bg-gray-700">
+                      <div className="aspect-square bg-muted">
                         {item.image_url ? (
                           <img
                             src={item.image_url}
@@ -304,18 +304,18 @@ export function OutfitCreateDialog() {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">
+                          <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
                             No image
                           </div>
                         )}
                       </div>
                       <div className="p-2">
-                        <div className="text-sm font-medium truncate text-gray-900 dark:text-white">{item.name}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 capitalize">{item.category}</div>
+                        <div className="text-sm font-medium truncate text-foreground">{item.name}</div>
+                        <div className="text-xs text-muted-foreground capitalize">{item.category}</div>
                       </div>
 
                       {selected && (
-                        <div className="absolute top-2 right-2 h-6 w-6 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow">
+                        <div className="absolute top-2 right-2 h-6 w-6 rounded-full bg-gold-600 text-white flex items-center justify-center shadow">
                           <Check className="h-4 w-4" />
                         </div>
                       )}
@@ -325,7 +325,7 @@ export function OutfitCreateDialog() {
               </div>
             )}
 
-            <div className="text-sm text-gray-600 dark:text-gray-400">
+            <div className="text-sm text-muted-foreground">
               Selected: {creationItems.size} item{creationItems.size === 1 ? '' : 's'}
             </div>
           </div>

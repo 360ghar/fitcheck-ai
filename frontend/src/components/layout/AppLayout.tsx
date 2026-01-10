@@ -30,8 +30,8 @@ function AppLayoutContent() {
           <SidebarMobileTrigger />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold text-primary">FitCheck</span>
-          <span className="text-lg font-light text-muted-foreground">AI</span>
+          <span className="text-lg font-display font-semibold text-navy-800 dark:text-white">FitCheck</span>
+          <span className="text-lg font-light text-gold-500 dark:text-gold-400">AI</span>
         </div>
       </header>
 

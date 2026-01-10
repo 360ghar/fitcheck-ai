@@ -3,14 +3,14 @@ import { AnimatedSection } from '@/components/landing/AnimatedSection'
 export default function TermsPage() {
   return (
     <div className="pt-20">
-      <section className="py-24 bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-950">
+      <section className="py-24 bg-gradient-to-br from-navy-50 via-white to-gold-50/30 dark:from-navy-950 dark:via-navy-900 dark:to-navy-950">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimatedSection>
             <div className="text-center mb-12">
-              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
+              <h1 className="text-4xl md:text-5xl font-display font-semibold text-foreground mb-4">
                 Terms of Service
               </h1>
-              <p className="text-gray-600 dark:text-gray-300">
+              <p className="text-muted-foreground">
                 Last updated: January 1, 2026
               </p>
             </div>
@@ -18,7 +18,7 @@ export default function TermsPage() {
         </div>
       </section>
 
-      <section className="py-16 bg-white dark:bg-gray-950">
+      <section className="py-16 bg-background">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimatedSection>
             <div className="prose prose-gray dark:prose-invert max-w-none">
@@ -123,7 +123,7 @@ export default function TermsPage() {
               <p>
                 If you have any questions about these Terms, please contact us at:
                 <br />
-                <a href="mailto:legal@fitcheckai.com" className="text-indigo-600 hover:text-indigo-500">
+                <a href="mailto:legal@fitcheckai.com" className="text-navy-700 hover:text-navy-600 dark:text-gold-400 dark:hover:text-gold-300">
                   legal@fitcheckai.com
                 </a>
               </p>

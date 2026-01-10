@@ -84,7 +84,7 @@ export default function ResetPasswordPage() {
   return (
     <>
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="text-xl md:text-2xl font-extrabold text-foreground">Choose a new password</h2>
+        <h2 className="text-xl md:text-2xl font-display font-semibold text-foreground">Choose a new password</h2>
         <p className="mt-2 text-sm text-muted-foreground">Your new password must be at least 8 characters.</p>
       </div>
 

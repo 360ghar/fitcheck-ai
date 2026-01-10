@@ -56,7 +56,7 @@ function ScoreGauge({ score }: { score: number }) {
           stroke="currentColor"
           strokeWidth="8"
           fill="none"
-          className="text-gray-200 dark:text-gray-700"
+          className="text-muted-foreground/30"
         />
         <circle
           cx="64"
@@ -79,7 +79,7 @@ function ScoreGauge({ score }: { score: number }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-3xl font-bold">{score}</span>
-        <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+        <span className="text-xs text-muted-foreground capitalize">
           {health.status}
         </span>
       </div>
@@ -122,7 +122,7 @@ function CategoryBar({ distribution }: { distribution: CategoryDistribution }) {
           <span className="capitalize font-medium">{distribution.category}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-gray-500 dark:text-gray-400">
+          <span className="text-muted-foreground">
             {distribution.count} items
           </span>
           <Badge variant="outline" className="text-xs">
@@ -140,7 +140,7 @@ function CategoryBar({ distribution }: { distribution: CategoryDistribution }) {
           title={`Ideal: ${distribution.idealPercentage}%`}
         />
       </div>
-      <p className="text-xs text-gray-500 dark:text-gray-400">
+      <p className="text-xs text-muted-foreground">
         Ideal: {distribution.idealPercentage}% •{' '}
         {distribution.gapScore > 0 ? 'Needs more' : distribution.gapScore < 0 ? 'Well stocked' : 'Balanced'}
       </p>
@@ -158,7 +158,7 @@ function GapCard({
   const priorityStyles = {
     high: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20',
     medium: 'border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-900/20',
-    low: 'border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50',
+    low: 'border-border bg-muted',
   }
 
   const priorityBadge = {
@@ -179,15 +179,15 @@ function GapCard({
               {gap.subCategory || gap.category}
             </span>
           </div>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-muted-foreground">
             {gap.reason}
           </p>
-          <p className="text-sm text-gray-700 dark:text-gray-300 mt-1 font-medium">
+          <p className="text-sm text-foreground/80 mt-1 font-medium">
             {gap.suggestion}
           </p>
           <div className="flex items-center gap-1 mt-2">
-            <Sparkles className="h-3 w-3 text-indigo-500" />
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <Sparkles className="h-3 w-3 text-gold-500" />
+            <span className="text-xs text-muted-foreground">
               Versatility: {gap.versatilityScore}/10
             </span>
           </div>
@@ -221,17 +221,17 @@ function VersatilitySection({ analysis }: { analysis: WardrobeAnalysis }) {
       </CollapsibleTrigger>
       <CollapsibleContent className="space-y-4 pt-4">
         <div className="grid grid-cols-3 gap-4 text-center">
-          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+          <div className="p-3 rounded-lg bg-muted">
             <p className="text-2xl font-bold">{versatility.averageTimesWorn}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Avg. times worn</p>
+            <p className="text-xs text-muted-foreground">Avg. times worn</p>
           </div>
-          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+          <div className="p-3 rounded-lg bg-muted">
             <p className="text-2xl font-bold">{versatility.neverWornItems}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Never worn</p>
+            <p className="text-xs text-muted-foreground">Never worn</p>
           </div>
-          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+          <div className="p-3 rounded-lg bg-muted">
             <p className="text-2xl font-bold">{versatility.totalItems}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Total items</p>
+            <p className="text-xs text-muted-foreground">Total items</p>
           </div>
         </div>
 
@@ -270,7 +270,7 @@ function VersatilitySection({ analysis }: { analysis: WardrobeAnalysis }) {
                 >
                   <span className="text-sm font-medium truncate">{item.name}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                    <span className="text-xs text-muted-foreground">
                       {timesWorn}x in {daysOwned} days
                     </span>
                     <Badge variant="secondary" className="text-xs">
@@ -311,7 +311,7 @@ export function GapAnalysis({ items, onShopSuggestion }: GapAnalysisProps) {
     return (
       <Card>
         <CardContent className="py-8">
-          <div className="text-center text-gray-400">
+          <div className="text-center text-muted-foreground">
             <PieChart className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p className="font-medium">No items to analyze</p>
             <p className="text-sm mt-2">Add items to your wardrobe to see gap analysis</p>
@@ -327,7 +327,7 @@ export function GapAnalysis({ items, onShopSuggestion }: GapAnalysisProps) {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <PieChart className="h-5 w-5 text-indigo-500" />
+              <PieChart className="h-5 w-5 text-gold-500" />
               Wardrobe Gap Analysis
             </CardTitle>
             <CardDescription>
@@ -358,9 +358,9 @@ export function GapAnalysis({ items, onShopSuggestion }: GapAnalysisProps) {
       {analysis && (
         <CardContent className="space-y-6">
           {/* Overall Score */}
-          <div className="text-center p-4 rounded-lg bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20">
+          <div className="text-center p-4 rounded-lg bg-gradient-to-br from-gold-50 to-navy-50 dark:from-gold-900/20 dark:to-navy-900/20">
             <ScoreGauge score={analysis.overallScore} />
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-4">
+            <p className="text-sm text-muted-foreground mt-4">
               {analysis.summary}
             </p>
           </div>
@@ -384,7 +384,7 @@ export function GapAnalysis({ items, onShopSuggestion }: GapAnalysisProps) {
 
           {/* Category Distribution */}
           <div>
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            <h4 className="text-sm font-medium text-foreground/80 mb-3">
               Category Balance
             </h4>
             <div className="space-y-4">
@@ -397,7 +397,7 @@ export function GapAnalysis({ items, onShopSuggestion }: GapAnalysisProps) {
           {/* Gaps */}
           {analysis.gaps.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              <h4 className="text-sm font-medium text-foreground/80 mb-3">
                 Recommended Additions ({analysis.gaps.length})
               </h4>
               <div className="space-y-2">
@@ -410,7 +410,7 @@ export function GapAnalysis({ items, onShopSuggestion }: GapAnalysisProps) {
                 ))}
               </div>
               {analysis.gaps.length > 5 && (
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+                <p className="text-xs text-muted-foreground mt-2 text-center">
                   +{analysis.gaps.length - 5} more suggestions
                 </p>
               )}
@@ -420,17 +420,17 @@ export function GapAnalysis({ items, onShopSuggestion }: GapAnalysisProps) {
           {/* Top Colors */}
           {analysis.colorDistribution.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              <h4 className="text-sm font-medium text-foreground/80 mb-3">
                 Color Distribution
               </h4>
               <div className="flex flex-wrap gap-2">
                 {analysis.colorDistribution.slice(0, 8).map((color) => (
                   <div
                     key={color.color}
-                    className="flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800"
+                    className="flex items-center gap-1 px-2 py-1 rounded-full bg-muted"
                   >
                     <div
-                      className="w-3 h-3 rounded-full border border-gray-300 dark:border-gray-600"
+                      className="w-3 h-3 rounded-full border border-border"
                       style={{
                         backgroundColor: color.color,
                         background: ['black', 'white', 'gray', 'navy', 'brown', 'beige', 'red', 'blue', 'green', 'yellow', 'pink', 'purple', 'orange', 'teal'].includes(color.color.toLowerCase())
@@ -439,7 +439,7 @@ export function GapAnalysis({ items, onShopSuggestion }: GapAnalysisProps) {
                       }}
                     />
                     <span className="text-xs capitalize">{color.color}</span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                    <span className="text-xs text-muted-foreground">
                       {color.percentage}%
                     </span>
                   </div>

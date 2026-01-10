@@ -46,7 +46,7 @@ export default function Navbar() {
       className={cn(
         'fixed top-0 left-0 right-0 z-50 transition-all duration-300',
         isScrolled
-          ? 'bg-white/80 dark:bg-gray-950/80 backdrop-blur-lg shadow-sm border-b border-gray-200/50 dark:border-gray-800/50'
+          ? 'bg-white/90 dark:bg-navy-950/90 backdrop-blur-lg shadow-sm border-b border-navy-100/50 dark:border-navy-800/50'
           : 'bg-transparent'
       )}
     >
@@ -54,11 +54,11 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16 lg:h-20">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
-              <Shirt className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-lg bg-navy-800 dark:bg-gold-400 flex items-center justify-center">
+              <Shirt className="w-5 h-5 text-white dark:text-navy-900" />
             </div>
-            <span className="text-xl font-bold text-indigo-600">FitCheck</span>
-            <span className="text-xl font-light text-gray-600 dark:text-gray-300">AI</span>
+            <span className="text-xl font-display font-semibold text-navy-800 dark:text-white">FitCheck</span>
+            <span className="text-xl font-light text-navy-400 dark:text-gold-400">AI</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -68,7 +68,7 @@ export default function Navbar() {
                 key={link.name}
                 href={link.href}
                 onClick={(e) => handleNavClick(e, link.href)}
-                className="text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors"
+                className="text-sm font-medium text-navy-500 hover:text-navy-800 dark:text-navy-300 dark:hover:text-white transition-colors"
               >
                 {link.name}
               </a>
@@ -87,10 +87,7 @@ export default function Navbar() {
                 <Button variant="ghost" asChild>
                   <Link to="/auth/login">Login</Link>
                 </Button>
-                <Button
-                  asChild
-                  className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25"
-                >
+                <Button asChild>
                   <Link to="/auth/register">Get Started</Link>
                 </Button>
               </>
@@ -111,16 +108,16 @@ export default function Navbar() {
                     key={link.name}
                     href={link.href}
                     onClick={(e) => handleNavClick(e, link.href)}
-                    className="text-lg font-medium text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    className="text-lg font-medium text-navy-800 dark:text-white hover:text-gold-500 dark:hover:text-gold-400 transition-colors"
                   >
                     {link.name}
                   </a>
                 ))}
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Theme</span>
+                  <span className="text-sm text-navy-400 dark:text-navy-400">Theme</span>
                   <ThemeToggle />
                 </div>
-                <hr className="border-gray-200 dark:border-gray-700" />
+                <hr className="border-navy-100 dark:border-navy-700" />
                 {isAuthenticated ? (
                   <Button asChild className="w-full">
                     <Link to="/dashboard">Go to Dashboard</Link>
@@ -130,10 +127,7 @@ export default function Navbar() {
                     <Button variant="outline" asChild className="w-full">
                       <Link to="/auth/login">Login</Link>
                     </Button>
-                    <Button
-                      asChild
-                      className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-                    >
+                    <Button asChild className="w-full">
                       <Link to="/auth/register">Get Started</Link>
                     </Button>
                   </>

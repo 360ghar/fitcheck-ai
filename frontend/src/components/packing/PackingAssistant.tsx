@@ -72,7 +72,7 @@ const CLIMATE_OPTIONS = [
   { value: 'warm', label: 'Warm', icon: ThermometerSun, color: 'text-yellow-500' },
   { value: 'mild', label: 'Mild', icon: Cloud, color: 'text-blue-400' },
   { value: 'cold', label: 'Cold', icon: Snowflake, color: 'text-cyan-500' },
-  { value: 'mixed', label: 'Mixed', icon: Cloud, color: 'text-gray-500' },
+  { value: 'mixed', label: 'Mixed', icon: Cloud, color: 'text-muted-foreground' },
 ]
 
 function ActivityToggle({
@@ -90,8 +90,8 @@ function ActivityToggle({
       className={cn(
         'flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-sm',
         isSelected
-          ? 'bg-indigo-50 border-indigo-300 text-indigo-700 dark:bg-indigo-900/30 dark:border-indigo-700 dark:text-indigo-300'
-          : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300'
+          ? 'bg-gold-50 border-gold-300 text-gold-700 dark:bg-gold-900/30 dark:border-gold-700 dark:text-gold-300'
+          : 'bg-card border-border text-foreground hover:border-muted-foreground/50'
       )}
     >
       <span>{activity.icon}</span>
@@ -118,7 +118,7 @@ function PackingItemCard({
         'flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer',
         isChecked
           ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
-          : 'bg-white border-gray-200 hover:border-gray-300 dark:bg-gray-800 dark:border-gray-700'
+          : 'bg-card border-border hover:border-muted-foreground/50'
       )}
       onClick={onToggle}
     >
@@ -127,7 +127,7 @@ function PackingItemCard({
           'w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0',
           isChecked
             ? 'bg-green-500 border-green-500'
-            : 'border-gray-300 dark:border-gray-600'
+            : 'border-border'
         )}
       >
         {isChecked && <Check className="h-3 w-3 text-white" />}
@@ -144,11 +144,11 @@ function PackingItemCard({
       <div className="flex-1 min-w-0">
         <p className={cn(
           'font-medium text-sm truncate',
-          isChecked && 'line-through text-gray-500 dark:text-gray-400'
+          isChecked && 'line-through text-muted-foreground'
         )}>
           {packingItem.item.name}
         </p>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-muted-foreground">
           {packingItem.reason}
         </p>
       </div>
@@ -265,7 +265,7 @@ export function PackingAssistant({ items, onClose }: PackingAssistantProps) {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
-                <Luggage className="h-5 w-5 text-indigo-500" />
+                <Luggage className="h-5 w-5 text-gold-500" />
                 Packing Assistant
               </CardTitle>
               <CardDescription>
@@ -306,7 +306,7 @@ export function PackingAssistant({ items, onClose }: PackingAssistantProps) {
                   value={tripDetails.startDate}
                   onChange={(e) => setTripDetails((prev) => ({ ...prev, startDate: e.target.value }))}
                 />
-                <span className="self-center text-gray-400">to</span>
+                <span className="self-center text-muted-foreground">to</span>
                 <Input
                   type="date"
                   value={tripDetails.endDate}
@@ -332,8 +332,8 @@ export function PackingAssistant({ items, onClose }: PackingAssistantProps) {
                     className={cn(
                       'p-3 rounded-lg border text-center transition-all',
                       tripDetails.climate === climate.value
-                        ? 'bg-indigo-50 border-indigo-300 dark:bg-indigo-900/30 dark:border-indigo-700'
-                        : 'bg-white border-gray-200 hover:border-gray-300 dark:bg-gray-800 dark:border-gray-700'
+                        ? 'bg-gold-50 border-gold-300 dark:bg-gold-900/30 dark:border-gold-700'
+                        : 'bg-card border-border hover:border-muted-foreground/50'
                     )}
                   >
                     <Icon className={cn('h-5 w-5 mx-auto', climate.color)} />
@@ -347,7 +347,7 @@ export function PackingAssistant({ items, onClose }: PackingAssistantProps) {
           {/* Activities */}
           <div>
             <Label>Planned Activities</Label>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+            <p className="text-xs text-muted-foreground mb-2">
               Select all that apply
             </p>
             <div className="flex flex-wrap gap-2">
@@ -395,7 +395,7 @@ export function PackingAssistant({ items, onClose }: PackingAssistantProps) {
           </Button>
 
           {items.length === 0 && (
-            <p className="text-sm text-center text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-center text-muted-foreground">
               Add items to your wardrobe first to generate a packing list
             </p>
           )}
@@ -411,7 +411,7 @@ export function PackingAssistant({ items, onClose }: PackingAssistantProps) {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <Luggage className="h-5 w-5 text-indigo-500" />
+              <Luggage className="h-5 w-5 text-gold-500" />
               Packing List for {tripDetails.destination}
             </CardTitle>
             <CardDescription>
@@ -439,10 +439,10 @@ export function PackingAssistant({ items, onClose }: PackingAssistantProps) {
       {packingList && (
         <CardContent className="space-y-6">
           {/* Progress */}
-          <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+          <div className="p-4 rounded-lg bg-muted">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium">Packing Progress</span>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
+              <span className="text-sm text-muted-foreground">
                 {packedCount} / {totalCount} items
               </span>
             </div>
@@ -451,23 +451,23 @@ export function PackingAssistant({ items, onClose }: PackingAssistantProps) {
 
           {/* Statistics */}
           <div className="grid grid-cols-3 gap-4 text-center">
-            <div className="p-3 rounded-lg bg-indigo-50 dark:bg-indigo-900/20">
-              <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+            <div className="p-3 rounded-lg bg-gold-50 dark:bg-gold-900/20">
+              <p className="text-2xl font-bold text-gold-600 dark:text-gold-400">
                 {packingList.statistics.totalItems}
               </p>
-              <p className="text-xs text-gray-600 dark:text-gray-400">Items</p>
+              <p className="text-xs text-muted-foreground">Items</p>
             </div>
             <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
               <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                 {packingList.statistics.outfitCombinations}
               </p>
-              <p className="text-xs text-gray-600 dark:text-gray-400">Outfits</p>
+              <p className="text-xs text-muted-foreground">Outfits</p>
             </div>
-            <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20">
-              <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+            <div className="p-3 rounded-lg bg-navy-50 dark:bg-navy-900/20">
+              <p className="text-2xl font-bold text-navy-600 dark:text-navy-400">
                 {packingList.statistics.daysPerItem}
               </p>
-              <p className="text-xs text-gray-600 dark:text-gray-400">Days/Item</p>
+              <p className="text-xs text-muted-foreground">Days/Item</p>
             </div>
           </div>
 
@@ -531,16 +531,16 @@ export function PackingAssistant({ items, onClose }: PackingAssistantProps) {
           {/* Outfit Ideas */}
           {packingList.outfitIdeas.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              <h4 className="text-sm font-medium text-foreground/80 mb-3">
                 Outfit Ideas
               </h4>
               <div className="grid gap-2 sm:grid-cols-2">
                 {packingList.outfitIdeas.map((outfit, i) => (
                   <div
                     key={i}
-                    className="p-3 rounded-lg bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800"
+                    className="p-3 rounded-lg bg-gradient-to-r from-gold-50 to-navy-50 dark:from-gold-900/20 dark:to-navy-900/20 border border-gold-100 dark:border-gold-800"
                   >
-                    <p className="font-medium text-sm text-indigo-700 dark:text-indigo-300">
+                    <p className="font-medium text-sm text-gold-700 dark:text-gold-300">
                       {outfit.name}
                     </p>
                     <div className="flex flex-wrap gap-1 mt-2">

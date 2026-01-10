@@ -84,7 +84,7 @@ export default function RegisterPage() {
   return (
     <>
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="text-xl md:text-2xl font-extrabold text-foreground">
+        <h2 className="text-xl md:text-2xl font-display font-semibold text-foreground">
           Create your account
         </h2>
       </div>

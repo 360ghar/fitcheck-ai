@@ -27,17 +27,17 @@ const socialLinks = [
 
 export default function Footer() {
   return (
-    <footer className="bg-gray-900 text-gray-400 pt-16 pb-8">
+    <footer className="bg-navy-950 text-navy-300 pt-16 pb-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-8 mb-12">
           {/* Brand column */}
           <div className="lg:col-span-2">
             <Link to="/" className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
-                <Shirt className="w-5 h-5 text-white" />
+              <div className="w-10 h-10 rounded-lg bg-gold-400 flex items-center justify-center">
+                <Shirt className="w-5 h-5 text-navy-900" />
               </div>
-              <span className="text-2xl font-bold text-white">FitCheck</span>
-              <span className="text-2xl font-light text-gray-400">AI</span>
+              <span className="text-2xl font-display font-semibold text-white">FitCheck</span>
+              <span className="text-2xl font-light text-gold-400">AI</span>
             </Link>
             <p className="max-w-xs mb-6">
               Your AI-powered virtual closet. Transform how you dress with intelligent outfit
@@ -48,7 +48,7 @@ export default function Footer() {
                 <a
                   key={social.name}
                   href={social.href}
-                  className="hover:text-white transition-colors"
+                  className="hover:text-gold-400 transition-colors"
                   aria-label={social.name}
                 >
                   <social.icon className="w-5 h-5" />
@@ -58,7 +58,7 @@ export default function Footer() {
             <div className="mt-6 space-y-2">
               <a
                 href="mailto:info@fitcheckaiapp.com"
-                className="flex items-center gap-2 hover:text-white transition-colors"
+                className="flex items-center gap-2 hover:text-gold-400 transition-colors"
               >
                 <Mail className="w-4 h-4" />
                 <span>info@fitcheckaiapp.com</span>
@@ -67,7 +67,7 @@ export default function Footer() {
                 href="https://wa.me/919310833204"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 hover:text-white transition-colors"
+                className="flex items-center gap-2 hover:text-gold-400 transition-colors"
               >
                 <Phone className="w-4 h-4" />
                 <span>+91 9310833204</span>
@@ -85,12 +85,12 @@ export default function Footer() {
                     {link.href.startsWith('/') ? (
                       <Link
                         to={link.href}
-                        className="hover:text-white transition-colors"
+                        className="hover:text-gold-400 transition-colors"
                       >
                         {link.name}
                       </Link>
                     ) : (
-                      <a href={link.href} className="hover:text-white transition-colors">
+                      <a href={link.href} className="hover:text-gold-400 transition-colors">
                         {link.name}
                       </a>
                     )}
@@ -101,12 +101,12 @@ export default function Footer() {
           ))}
         </div>
 
-        <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
+        <div className="border-t border-navy-800 pt-8 flex flex-col md:flex-row justify-between items-center">
           <p className="text-sm">
             &copy; {new Date().getFullYear()} FitCheck AI. All rights reserved.
           </p>
           <p className="text-sm mt-4 md:mt-0">
-            Made with <span className="text-red-500">&#9829;</span> for fashion lovers
+            Made with <span className="text-gold-400">&#9829;</span> for fashion lovers
           </p>
         </div>
       </div>

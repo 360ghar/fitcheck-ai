@@ -37,8 +37,8 @@ import TryOnPage from './pages/try-on/TryOnPage'
 // Loading spinner for hydration state
 function LoadingSpinner() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+    <div className="min-h-screen flex items-center justify-center bg-muted">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gold-500" />
     </div>
   )
 }

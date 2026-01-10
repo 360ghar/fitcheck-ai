@@ -376,7 +376,7 @@ export function BatchExtractionFlow({
       <DialogContent className="sm:max-w-[95vw] lg:max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-indigo-500" />
+            <Sparkles className="h-5 w-5 text-gold-500" />
             {getStepTitle()}
             {isConnected && (
               <span className="inline-flex items-center gap-1 text-xs font-normal text-green-600 dark:text-green-400 ml-2">
@@ -407,14 +407,14 @@ export function BatchExtractionFlow({
           {state.step === 'uploading' && (
             <div className="flex flex-col items-center justify-center py-16 space-y-6">
               <div className="relative">
-                <Upload className="h-16 w-16 text-indigo-500" />
-                <Loader2 className="absolute -right-2 -bottom-2 h-8 w-8 text-indigo-400 animate-spin" />
+                <Upload className="h-16 w-16 text-gold-500" />
+                <Loader2 className="absolute -right-2 -bottom-2 h-8 w-8 text-gold-400 animate-spin" />
               </div>
               <div className="text-center space-y-2">
-                <p className="text-lg font-medium text-gray-900 dark:text-white">
+                <p className="text-lg font-medium text-foreground">
                   Preparing {state.images.length} images...
                 </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   Converting images for AI processing
                 </p>
               </div>
@@ -455,47 +455,47 @@ export function BatchExtractionFlow({
           {state.step === 'review' && (
             <div className="space-y-4">
               {/* Summary banner */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-muted/50 rounded-lg">
                 <div className="flex flex-wrap items-center gap-4">
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <p className="text-2xl font-bold text-foreground">
                       {state.images.length}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Images</p>
+                    <p className="text-xs text-muted-foreground">Images</p>
                   </div>
-                  <div className="hidden sm:block h-8 w-px bg-gray-200 dark:bg-gray-700" />
+                  <div className="hidden sm:block h-8 w-px bg-border" />
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                    <p className="text-2xl font-bold text-gold-600 dark:text-gold-400">
                       {state.allDetectedItems.length}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Items Found</p>
+                    <p className="text-xs text-muted-foreground">Items Found</p>
                   </div>
-                  <div className="hidden sm:block h-8 w-px bg-gray-200 dark:bg-gray-700" />
+                  <div className="hidden sm:block h-8 w-px bg-border" />
                   <div className="text-center">
                     <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                       {generatedCount}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Ready</p>
+                    <p className="text-xs text-muted-foreground">Ready</p>
                   </div>
                   {failedCount > 0 && (
                     <>
-                      <div className="hidden sm:block h-8 w-px bg-gray-200 dark:bg-gray-700" />
+                      <div className="hidden sm:block h-8 w-px bg-border" />
                       <div className="text-center">
                         <p className="text-2xl font-bold text-red-600 dark:text-red-400">
                           {failedCount}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Failed</p>
+                        <p className="text-xs text-muted-foreground">Failed</p>
                       </div>
                     </>
                   )}
                   {deletedCount > 0 && (
                     <>
-                      <div className="hidden sm:block h-8 w-px bg-gray-200 dark:bg-gray-700" />
+                      <div className="hidden sm:block h-8 w-px bg-border" />
                       <div className="text-center">
-                        <p className="text-2xl font-bold text-gray-400">
+                        <p className="text-2xl font-bold text-muted-foreground">
                           {deletedCount}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Removed</p>
+                        <p className="text-xs text-muted-foreground">Removed</p>
                       </div>
                     </>
                   )}
@@ -505,10 +505,10 @@ export function BatchExtractionFlow({
               {/* Original photos with bounding boxes */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                  <h3 className="text-sm font-semibold text-foreground">
                     Original Photos
                   </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-muted-foreground">
                     Tap any photo to zoom
                   </p>
                 </div>
@@ -539,15 +539,15 @@ export function BatchExtractionFlow({
                 <Loader2 className="absolute -right-2 -bottom-2 h-8 w-8 text-green-400 animate-spin" />
               </div>
               <div className="text-center space-y-2">
-                <p className="text-lg font-medium text-gray-900 dark:text-white">
+                <p className="text-lg font-medium text-foreground">
                   Saving items to wardrobe...
                 </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   {Math.round(savingProgress)}% complete
                 </p>
               </div>
               <Progress value={savingProgress} className="w-64 h-2" />
-              <p className="text-xs text-gray-400 dark:text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 Uploading {generatedCount} items
               </p>
             </div>
@@ -556,7 +556,7 @@ export function BatchExtractionFlow({
 
         {/* Footer actions for select step */}
         {state.step === 'select' && state.images.length === 0 && (
-          <div className="flex justify-end pt-4 border-t dark:border-gray-700">
+          <div className="flex justify-end pt-4 border-t border-border">
             <Button variant="outline" onClick={handleClose}>
               Cancel
             </Button>

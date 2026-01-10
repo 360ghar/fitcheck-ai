@@ -133,7 +133,7 @@ function ReminderCard({
   const urgencyColors = {
     high: 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400',
     medium: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-700 dark:text-yellow-400',
-    low: 'bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-400',
+    low: 'bg-navy-500/10 border-navy-500/20 text-navy-700 dark:text-navy-400',
   }
 
   const urgencyIcons = {
@@ -508,8 +508,8 @@ export function LaundryTracker({
             <div className="text-2xl font-bold text-green-600">{summary.recentlyWashed}</div>
             <div className="text-xs text-muted-foreground">This Week</div>
           </div>
-          <div className="text-center p-3 bg-blue-500/10 rounded-lg">
-            <div className="text-2xl font-bold text-blue-600">{summary.totalWashesThisMonth}</div>
+          <div className="text-center p-3 bg-navy-500/10 rounded-lg">
+            <div className="text-2xl font-bold text-navy-600 dark:text-navy-400">{summary.totalWashesThisMonth}</div>
             <div className="text-xs text-muted-foreground">This Month</div>
           </div>
         </div>
@@ -610,7 +610,7 @@ export function LaundryTracker({
           <div className="text-sm text-muted-foreground">Washed This Week</div>
         </div>
         <div className="p-4 bg-card rounded-lg border text-center">
-          <div className="text-3xl font-bold text-blue-600">{summary.totalWashesThisMonth}</div>
+          <div className="text-3xl font-bold text-navy-600 dark:text-navy-400">{summary.totalWashesThisMonth}</div>
           <div className="text-sm text-muted-foreground">This Month</div>
         </div>
       </div>

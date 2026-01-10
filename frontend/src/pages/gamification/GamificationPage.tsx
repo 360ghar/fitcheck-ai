@@ -64,8 +64,8 @@ export default function GamificationPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-8 space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Gamification</h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Streaks, achievements, and leaderboard</p>
+          <h1 className="text-xl md:text-2xl font-display font-semibold text-foreground">Gamification</h1>
+          <p className="text-sm text-muted-foreground">Streaks, achievements, and leaderboard</p>
         </div>
         <Button
           variant="outline"
@@ -87,11 +87,11 @@ export default function GamificationPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Current: {streak?.current_streak ?? 0} days</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Best: {streak?.longest_streak ?? 0} days</p>
+            <p className="text-sm text-muted-foreground">Current: {streak?.current_streak ?? 0} days</p>
+            <p className="text-sm text-muted-foreground">Best: {streak?.longest_streak ?? 0} days</p>
             {streak?.next_milestone && (
               <div className="pt-2">
-                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                <div className="flex justify-between text-xs text-muted-foreground mb-1">
                   <span>Next milestone</span>
                   <span>{streak.next_milestone.days} days</span>
                 </div>
@@ -109,11 +109,11 @@ export default function GamificationPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Earned: {achievements?.earned?.length ?? 0}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Available: {achievements?.available?.length ?? 0}</p>
+            <p className="text-sm text-muted-foreground">Earned: {achievements?.earned?.length ?? 0}</p>
+            <p className="text-sm text-muted-foreground">Available: {achievements?.available?.length ?? 0}</p>
             <div className="pt-2 space-y-1">
               {(achievements?.available || []).slice(0, 3).map((a) => (
-                <div key={a.id} className="text-xs text-gray-700 dark:text-gray-300">
+                <div key={a.id} className="text-xs text-foreground">
                   <span className="font-medium">{a.name}</span>: {a.description}
                 </div>
               ))}

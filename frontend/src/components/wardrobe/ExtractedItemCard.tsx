@@ -143,12 +143,12 @@ export function ExtractedItemCard({
           ? 'border-red-300 dark:border-red-800 bg-red-50/50 dark:bg-red-900/20'
           : isLowConfidence
           ? 'border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-900/20'
-          : 'border-gray-200 dark:border-gray-700'
+          : 'border-border'
       }`}
     >
       <CardContent className="p-0">
         {/* Image Section */}
-        <div className="relative aspect-square bg-gray-100 dark:bg-gray-700">
+        <div className="relative aspect-square bg-muted">
           {item.generatedImageUrl ? (
             <img
               src={item.generatedImageUrl}
@@ -156,12 +156,12 @@ export function ExtractedItemCard({
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
+            <div className="w-full h-full flex items-center justify-center text-muted-foreground">
               {hasFailed ? (
                 <AlertTriangle className="h-8 w-8 text-red-400" />
               ) : (
                 <div className="text-center">
-                  <div className="h-8 w-8 mx-auto mb-2 border-2 border-gray-300 dark:border-gray-500 border-dashed rounded" />
+                  <div className="h-8 w-8 mx-auto mb-2 border-2 border-muted-foreground/50 border-dashed rounded" />
                   <span className="text-xs">No image</span>
                 </div>
               )}
@@ -193,7 +193,7 @@ export function ExtractedItemCard({
               </TooltipProvider>
             )}
             {isCheckingDuplicates && (
-              <Badge variant="outline" className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700">
+              <Badge variant="outline" className="bg-navy-100 dark:bg-navy-900/50 text-navy-700 dark:text-navy-300 border-navy-300 dark:border-navy-700">
                 <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
                 Checking...
               </Badge>
@@ -216,7 +216,7 @@ export function ExtractedItemCard({
             <Button
               variant="secondary"
               size="icon"
-              className="h-7 w-7 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-700"
+              className="h-7 w-7 bg-white/90 dark:bg-card/90 hover:bg-white dark:hover:bg-gray-700"
               onClick={() => onRegenerate(item.tempId)}
               disabled={isRegenerating}
             >
@@ -240,7 +240,7 @@ export function ExtractedItemCard({
                 item.confidence >= 0.85
                   ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
                   : item.confidence >= 0.7
-                  ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                  ? 'bg-navy-100 dark:bg-navy-900/50 text-navy-700 dark:text-navy-300'
                   : 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300'
               }`}
             >
@@ -252,8 +252,8 @@ export function ExtractedItemCard({
         {/* Delete confirmation overlay */}
         {showConfirmDelete && (
           <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mx-4 text-center space-y-3">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">Delete this item?</p>
+            <div className="bg-white dark:bg-card rounded-lg p-4 mx-4 text-center space-y-3">
+              <p className="text-sm font-medium text-foreground">Delete this item?</p>
               <div className="flex gap-2">
                 <Button
                   variant="outline"

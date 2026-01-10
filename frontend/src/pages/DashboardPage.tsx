@@ -91,21 +91,24 @@ export default function DashboardPage() {
       description: 'Add a new item to your wardrobe',
       icon: Shirt,
       onClick: () => setIsUploadModalOpen(true),
-      gradient: 'bg-gradient-to-br from-indigo-500 to-purple-600',
+      gradient: 'bg-gradient-to-br from-gold-400 to-gold-600',
+      textColor: 'text-navy-900',
     },
     {
       name: 'Create Outfit',
       description: 'Combine items into a new outfit',
       icon: Layers,
       link: '/outfits?action=create',
-      gradient: 'bg-gradient-to-br from-purple-500 to-pink-600',
+      gradient: 'bg-navy-800 dark:bg-navy-700',
+      textColor: 'text-white',
     },
     {
       name: 'Get Recommendations',
       description: 'AI-powered outfit suggestions',
       icon: Sparkles,
       link: '/recommendations',
-      gradient: 'bg-gradient-to-br from-pink-500 to-rose-600',
+      gradient: 'bg-gradient-to-br from-navy-700 to-navy-900',
+      textColor: 'text-white',
     },
   ]
 
@@ -113,7 +116,7 @@ export default function DashboardPage() {
     <div className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
       {/* Welcome header */}
       <div className="mb-4 md:mb-8">
-        <h1 className="text-xl md:text-3xl font-bold text-foreground">
+        <h1 className="text-xl md:text-3xl font-display font-semibold text-foreground">
           Welcome back, {userDisplayName}!
         </h1>
         <p className="mt-1 md:mt-2 text-xs md:text-base text-muted-foreground">
@@ -145,11 +148,12 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
           {quickActions.map((action) => {
             const commonClassName = cn(
-              'group relative rounded-xl p-4 md:p-5 text-white overflow-hidden text-left w-full',
+              'group relative rounded-xl p-4 md:p-5 overflow-hidden text-left w-full',
               'transition-all duration-300',
               'hover:shadow-elevated hover:-translate-y-0.5',
               'touch-target',
-              action.gradient
+              action.gradient,
+              action.textColor
             )
 
             const content = (
@@ -226,8 +230,8 @@ export default function DashboardPage() {
                   onClick={() => setIsUploadModalOpen(true)}
                   className={cn(
                     'inline-flex items-center px-4 py-2.5 rounded-lg',
-                    'text-sm font-medium text-white',
-                    'bg-gradient-to-r from-indigo-500 to-purple-600',
+                    'text-sm font-medium text-navy-900',
+                    'bg-gradient-to-r from-gold-400 to-gold-600',
                     'hover:shadow-elevated transition-all duration-200',
                     'touch-target'
                   )}

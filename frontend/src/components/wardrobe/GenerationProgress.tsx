@@ -61,19 +61,19 @@ export function GenerationProgress({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
-            <ImageIcon className="h-5 w-5 text-indigo-500" />
+            <ImageIcon className="h-5 w-5 text-gold-500" />
             Generating Product Images
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between text-sm">
-            <span className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+            <span className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               {activeCount > 1
                 ? `Processing ${activeCount} items in parallel...`
                 : 'Creating e-commerce style images...'}
             </span>
-            <span className="font-medium text-gray-900 dark:text-white">
+            <span className="font-medium text-foreground">
               {completedCount} of {items.length}
             </span>
           </div>
@@ -95,8 +95,8 @@ export function GenerationProgress({
                   : status === 'failed'
                   ? 'border-red-400 dark:border-red-500'
                   : status === 'processing'
-                  ? 'border-indigo-400 dark:border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-800'
-                  : 'border-gray-200 dark:border-gray-700'
+                  ? 'border-gold-400 dark:border-gold-500 ring-2 ring-gold-200 dark:ring-gold-800'
+                  : 'border-border'
               }`}
             >
               {/* Show generated image if available, otherwise placeholder */}
@@ -107,11 +107,11 @@ export function GenerationProgress({
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                <div className="w-full h-full bg-muted flex items-center justify-center">
                   {status === 'processing' ? (
-                    <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+                    <Loader2 className="h-6 w-6 animate-spin text-gold-500" />
                   ) : (
-                    <ImageIcon className="h-6 w-6 text-gray-300 dark:text-gray-500" />
+                    <ImageIcon className="h-6 w-6 text-muted-foreground/50" />
                   )}
                 </div>
               )}
@@ -129,7 +129,7 @@ export function GenerationProgress({
                   </div>
                 )}
                 {status === 'processing' && (
-                  <div className="bg-indigo-500 rounded-full p-0.5">
+                  <div className="bg-gold-500 rounded-full p-0.5">
                     <Loader2 className="h-3 w-3 text-white animate-spin" />
                   </div>
                 )}
@@ -147,7 +147,7 @@ export function GenerationProgress({
       </div>
 
       {/* Generation info */}
-      <p className="text-center text-sm text-gray-500 dark:text-gray-400">
+      <p className="text-center text-sm text-muted-foreground">
         {activeCount > 1
           ? `Generating ${activeCount} images in parallel for faster processing`
           : 'Using AI to create professional product photos'}

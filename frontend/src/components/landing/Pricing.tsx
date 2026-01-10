@@ -70,11 +70,11 @@ function PricingCard({
     <Card
       className={cn(
         'relative overflow-hidden h-full',
-        highlighted && 'border-2 border-indigo-600 shadow-xl shadow-indigo-500/10'
+        highlighted && 'border-2 border-gold-400 shadow-xl shadow-gold-500/10'
       )}
     >
       {badge && (
-        <div className="absolute top-0 right-0 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-1 text-sm font-medium rounded-bl-lg">
+        <div className="absolute top-0 right-0 bg-gradient-to-r from-gold-400 to-gold-600 text-navy-900 px-4 py-1 text-sm font-medium rounded-bl-lg">
           {badge}
         </div>
       )}
@@ -86,30 +86,26 @@ function PricingCard({
 
       <CardContent className="space-y-6">
         <div>
-          <span className="text-5xl font-bold text-gray-900 dark:text-white">
+          <span className="text-5xl font-display font-semibold text-foreground">
             ${displayPrice.toFixed(displayPrice % 1 === 0 ? 0 : 2)}
           </span>
           {displayPrice > 0 && (
-            <span className="text-gray-500 dark:text-gray-400">/{isYearly ? 'year' : 'month'}</span>
+            <span className="text-muted-foreground">/{isYearly ? 'year' : 'month'}</span>
           )}
         </div>
 
         <ul className="space-y-3">
           {features.map((feature) => (
             <li key={feature} className="flex items-start gap-3">
-              <Check className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
-              <span className="text-gray-600 dark:text-gray-300">{feature}</span>
+              <Check className="w-5 h-5 text-gold-500 shrink-0 mt-0.5" />
+              <span className="text-muted-foreground">{feature}</span>
             </li>
           ))}
         </ul>
 
         <Button
-          className={cn(
-            'w-full',
-            highlighted &&
-              'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700'
-          )}
-          variant={highlighted ? 'default' : 'outline'}
+          className="w-full"
+          variant={highlighted ? 'gold' : 'outline'}
           size="lg"
           asChild
         >
@@ -124,21 +120,21 @@ export default function Pricing() {
   const [isYearly, setIsYearly] = useState(false)
 
   return (
-    <section id="pricing" className="py-24 bg-white dark:bg-gray-950">
+    <section id="pricing" className="py-24 bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <AnimatedSection>
           <div className="text-center mb-16">
-            <Badge className="mb-4 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border-0">
+            <Badge variant="gold" className="mb-4">
               Pricing
             </Badge>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-display font-semibold text-foreground mb-4">
               Simple,{' '}
-              <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-gold-400 to-gold-600 bg-clip-text text-transparent">
                 transparent
               </span>{' '}
               pricing
             </h2>
-            <p className="text-lg md:text-xl text-gray-600 dark:text-gray-300 mb-8">
+            <p className="text-lg md:text-xl text-muted-foreground mb-8">
               Start free, upgrade when you need more
             </p>
 
@@ -147,7 +143,7 @@ export default function Pricing() {
               <span
                 className={cn(
                   'font-medium transition-colors',
-                  !isYearly ? 'text-gray-900 dark:text-white' : 'text-gray-500'
+                  !isYearly ? 'text-foreground' : 'text-muted-foreground'
                 )}
               >
                 Monthly
@@ -156,11 +152,11 @@ export default function Pricing() {
               <span
                 className={cn(
                   'font-medium transition-colors flex items-center gap-2',
-                  isYearly ? 'text-gray-900 dark:text-white' : 'text-gray-500'
+                  isYearly ? 'text-foreground' : 'text-muted-foreground'
                 )}
               >
                 Yearly
-                <Badge className="bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300 border-0">
+                <Badge variant="gold">
                   Save 25%
                 </Badge>
               </span>
@@ -177,7 +173,7 @@ export default function Pricing() {
         </div>
 
         <AnimatedSection delay={400}>
-          <p className="text-center text-gray-500 dark:text-gray-400 mt-8">
+          <p className="text-center text-muted-foreground mt-8">
             No credit card required. Cancel anytime.
           </p>
         </AnimatedSection>
