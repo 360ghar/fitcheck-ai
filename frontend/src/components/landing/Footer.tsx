@@ -4,7 +4,6 @@ import { Shirt, Twitter, Instagram, Linkedin, Mail, Phone } from 'lucide-react'
 const footerLinks = {
   Product: [
     { name: 'Features', href: '/#features' },
-    { name: 'Pricing', href: '/#pricing' },
     { name: 'FAQ', href: '/#faq' },
   ],
   Company: [

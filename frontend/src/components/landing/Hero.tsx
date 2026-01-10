@@ -47,7 +47,7 @@ export default function Hero() {
                 asChild
               >
                 <Link to="/auth/register">
-                  Start Free Trial
+                  Use It Free
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
               </Button>
