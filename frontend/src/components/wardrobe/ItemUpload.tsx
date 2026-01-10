@@ -1,19 +1,19 @@
 /**
  * ItemUpload Component
  *
- * Re-exports the MultiItemExtractionFlow component for backward compatibility.
- * The multi-item extraction flow handles:
- * - Uploading clothing images
- * - AI-powered detection of ALL clothing items in the image
- * - Product image generation for each detected item
+ * Re-exports the BatchExtractionFlow component for multi-image batch upload.
+ * The batch extraction flow handles:
+ * - Uploading up to 50 clothing images at once
+ * - AI-powered detection of ALL clothing items in parallel
+ * - Batched product image generation (5 at a time)
  * - Review and edit extracted data
  * - Saving multiple items to wardrobe
  *
- * @see MultiItemExtractionFlow for the full implementation
+ * @see BatchExtractionFlow for the full implementation
  */
 
 export {
-  MultiItemExtractionFlow as ItemUpload,
-  MultiItemExtractionFlow as default,
+  BatchExtractionFlow as ItemUpload,
+  BatchExtractionFlow as default,
   type ItemUploadResult,
-} from './MultiItemExtractionFlow'
+} from './BatchExtractionFlow'

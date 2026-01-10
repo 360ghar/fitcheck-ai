@@ -324,6 +324,7 @@ export default function WardrobePage() {
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         onUploadComplete={handleUploadComplete}
+        onRequestOpen={() => setIsUploadModalOpen(true)}
       />
 
       <ItemDetailModal

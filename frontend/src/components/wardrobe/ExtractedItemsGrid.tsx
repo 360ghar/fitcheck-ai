@@ -17,7 +17,7 @@ interface ExtractedItemsGridProps {
   /** All detected items */
   items: DetectedItem[]
   /** Original image preview URL */
-  originalImageUrl: string
+  originalImageUrl?: string | null
   /** Callback when an item is updated */
   onItemUpdate: (tempId: string, updates: Partial<DetectedItem>) => void
   /** Callback when an item is deleted */
@@ -32,6 +32,8 @@ interface ExtractedItemsGridProps {
   isSaving: boolean
   /** Item currently being regenerated */
   regeneratingItemId?: string | null
+  /** Optional label for the empty state back button */
+  backLabel?: string
 }
 
 export function ExtractedItemsGrid({
@@ -44,6 +46,7 @@ export function ExtractedItemsGrid({
   onBack,
   isSaving,
   regeneratingItemId,
+  backLabel,
 }: ExtractedItemsGridProps) {
   const activeItems = items.filter((item) => item.status !== 'deleted')
   const failedCount = activeItems.filter((item) => item.status === 'failed').length
@@ -84,87 +87,89 @@ export function ExtractedItemsGrid({
       {/* Main content */}
       <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 flex-1 min-h-0">
         {/* Original image with bounding boxes */}
-        <div className="w-full lg:w-64 lg:flex-shrink-0">
-          <Card className="sticky top-0">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Original Image</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="relative">
-                <ZoomableImage
-                  src={originalImageUrl}
-                  alt="Original"
-                  className="w-full rounded-lg"
-                />
-                {/* Bounding box overlays */}
-                <svg
-                  className="absolute inset-0 w-full h-full pointer-events-none"
-                  viewBox="0 0 100 100"
-                  preserveAspectRatio="none"
-                >
-                  {activeItems.map((item, index) => {
-                    if (!item.boundingBox) return null
-                    const { x, y, width, height } = item.boundingBox
-                    const colors = [
-                      '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
-                      '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16',
-                    ]
-                    const color = colors[index % colors.length]
+        {originalImageUrl && (
+          <div className="w-full lg:w-64 lg:flex-shrink-0">
+            <Card className="sticky top-0">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Original Image</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="relative">
+                  <ZoomableImage
+                    src={originalImageUrl}
+                    alt="Original"
+                    className="w-full rounded-lg"
+                  />
+                  {/* Bounding box overlays */}
+                  <svg
+                    className="absolute inset-0 w-full h-full pointer-events-none"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                  >
+                    {activeItems.map((item, index) => {
+                      if (!item.boundingBox) return null
+                      const { x, y, width, height } = item.boundingBox
+                      const colors = [
+                        '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
+                        '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16',
+                      ]
+                      const color = colors[index % colors.length]
 
+                      return (
+                        <g key={item.tempId}>
+                          <rect
+                            x={x}
+                            y={y}
+                            width={width}
+                            height={height}
+                            fill="none"
+                            stroke={color}
+                            strokeWidth="0.5"
+                            strokeDasharray="2,1"
+                          />
+                          <rect
+                            x={x}
+                            y={y}
+                            width="8"
+                            height="4"
+                            fill={color}
+                          />
+                          <text
+                            x={x + 1}
+                            y={y + 3}
+                            fill="white"
+                            fontSize="2.5"
+                            fontWeight="bold"
+                          >
+                            {index + 1}
+                          </text>
+                        </g>
+                      )
+                    })}
+                  </svg>
+                </div>
+
+                {/* Legend */}
+                <div className="mt-3 space-y-1">
+                  {activeItems.map((item, index) => {
+                    const colors = [
+                      'bg-blue-500', 'bg-green-500', 'bg-amber-500', 'bg-red-500',
+                      'bg-purple-500', 'bg-pink-500', 'bg-cyan-500', 'bg-lime-500',
+                    ]
                     return (
-                      <g key={item.tempId}>
-                        <rect
-                          x={x}
-                          y={y}
-                          width={width}
-                          height={height}
-                          fill="none"
-                          stroke={color}
-                          strokeWidth="0.5"
-                          strokeDasharray="2,1"
-                        />
-                        <rect
-                          x={x}
-                          y={y}
-                          width="8"
-                          height="4"
-                          fill={color}
-                        />
-                        <text
-                          x={x + 1}
-                          y={y + 3}
-                          fill="white"
-                          fontSize="2.5"
-                          fontWeight="bold"
-                        >
-                          {index + 1}
-                        </text>
-                      </g>
+                      <div key={item.tempId} className="flex items-center gap-2 text-xs">
+                        <div className={`w-3 h-3 rounded ${colors[index % colors.length]}`} />
+                        <span className="truncate">
+                          {item.name || item.sub_category || item.category}
+                        </span>
+                      </div>
                     )
                   })}
-                </svg>
-              </div>
-
-              {/* Legend */}
-              <div className="mt-3 space-y-1">
-                {activeItems.map((item, index) => {
-                  const colors = [
-                    'bg-blue-500', 'bg-green-500', 'bg-amber-500', 'bg-red-500',
-                    'bg-purple-500', 'bg-pink-500', 'bg-cyan-500', 'bg-lime-500',
-                  ]
-                  return (
-                    <div key={item.tempId} className="flex items-center gap-2 text-xs">
-                      <div className={`w-3 h-3 rounded ${colors[index % colors.length]}`} />
-                      <span className="truncate">
-                        {item.name || item.sub_category || item.category}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Items grid */}
         <div className="flex-1 min-w-0 overflow-y-auto">
@@ -173,7 +178,7 @@ export function ExtractedItemsGrid({
               <p className="text-muted-foreground mb-4">No items to save</p>
               <Button variant="outline" onClick={onBack}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Upload Different Image
+                {backLabel || 'Upload Different Image'}
               </Button>
             </Card>
           ) : (

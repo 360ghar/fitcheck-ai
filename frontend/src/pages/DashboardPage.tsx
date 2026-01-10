@@ -3,7 +3,7 @@
  * Overview of user's wardrobe, outfits, and recommendations
  */
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useWardrobeStore } from '../stores/wardrobeStore'
 import { useOutfitStore } from '../stores/outfitStore'
 import { useUserDisplayName } from '../stores/authStore'
@@ -17,8 +17,9 @@ import {
   ArrowRight,
   Heart,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { StatCard } from '@/components/dashboard/StatCard'
+import { ItemUpload, type ItemUploadResult } from '@/components/wardrobe/ItemUpload'
 import { cn } from '@/lib/utils'
 
 export default function DashboardPage() {
@@ -30,10 +31,22 @@ export default function DashboardPage() {
   const isLoadingItems = useWardrobeStore((state) => state.isLoading)
   const isLoadingOutfits = useOutfitStore((state) => state.isLoading)
 
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const navigate = useNavigate()
+
   useEffect(() => {
     fetchItems(true)
     fetchOutfits(true)
   }, [fetchItems, fetchOutfits])
+
+  // Handle upload completion
+  const handleUploadComplete = (results: ItemUploadResult[]) => {
+    setIsUploadModalOpen(false)
+    fetchItems(true) // Refresh items
+    if (results.some((r) => r.success)) {
+      navigate('/wardrobe')
+    }
+  }
 
   // Calculate statistics
   const totalItems = items.length
@@ -77,7 +90,7 @@ export default function DashboardPage() {
       name: 'Add Item',
       description: 'Add a new item to your wardrobe',
       icon: Shirt,
-      link: '/wardrobe?action=add',
+      onClick: () => setIsUploadModalOpen(true),
       gradient: 'bg-gradient-to-br from-indigo-500 to-purple-600',
     },
     {
@@ -130,37 +143,60 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-          {quickActions.map((action) => (
-            <Link
-              key={action.name}
-              to={action.link}
-              className={cn(
-                'group relative rounded-xl p-4 md:p-5 text-white overflow-hidden',
-                'transition-all duration-300',
-                'hover:shadow-elevated hover:-translate-y-0.5',
-                'touch-target',
-                action.gradient
-              )}
-            >
-              {/* Background glow effect on hover */}
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white/10" />
+          {quickActions.map((action) => {
+            const commonClassName = cn(
+              'group relative rounded-xl p-4 md:p-5 text-white overflow-hidden text-left w-full',
+              'transition-all duration-300',
+              'hover:shadow-elevated hover:-translate-y-0.5',
+              'touch-target',
+              action.gradient
+            )
 
-              <div className="relative flex items-start gap-3 md:gap-4">
-                <div className="p-2 md:p-2.5 rounded-lg bg-white/20 backdrop-blur-sm shrink-0">
-                  <action.icon className="h-5 w-5 md:h-6 md:w-6" />
+            const content = (
+              <>
+                {/* Background glow effect on hover */}
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white/10" />
+
+                <div className="relative flex items-start gap-3 md:gap-4">
+                  <div className="p-2 md:p-2.5 rounded-lg bg-white/20 backdrop-blur-sm shrink-0">
+                    <action.icon className="h-5 w-5 md:h-6 md:w-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm md:text-base font-semibold">{action.name}</h3>
+                    <p className="mt-0.5 text-xs md:text-sm text-white/80 line-clamp-2">{action.description}</p>
+                  </div>
+                  <ArrowRight className={cn(
+                    'h-5 w-5 shrink-0 opacity-50',
+                    'transition-all duration-200',
+                    'group-hover:opacity-100 group-hover:translate-x-0.5'
+                  )} />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm md:text-base font-semibold">{action.name}</h3>
-                  <p className="mt-0.5 text-xs md:text-sm text-white/80 line-clamp-2">{action.description}</p>
-                </div>
-                <ArrowRight className={cn(
-                  'h-5 w-5 shrink-0 opacity-50',
-                  'transition-all duration-200',
-                  'group-hover:opacity-100 group-hover:translate-x-0.5'
-                )} />
-              </div>
-            </Link>
-          ))}
+              </>
+            )
+
+            if (action.onClick) {
+              return (
+                <button
+                  key={action.name}
+                  type="button"
+                  onClick={action.onClick}
+                  className={commonClassName}
+                >
+                  {content}
+                </button>
+              )
+            }
+
+            return (
+              <Link
+                key={action.name}
+                to={action.link!}
+                className={commonClassName}
+              >
+                {content}
+              </Link>
+            )
+          })}
         </div>
       </div>
 
@@ -185,8 +221,9 @@ export default function DashboardPage() {
                 Get started by adding items to your wardrobe.
               </p>
               <div className="mt-5 md:mt-6">
-                <Link
-                  to="/wardrobe?action=add"
+                <button
+                  type="button"
+                  onClick={() => setIsUploadModalOpen(true)}
                   className={cn(
                     'inline-flex items-center px-4 py-2.5 rounded-lg',
                     'text-sm font-medium text-white',
@@ -197,7 +234,7 @@ export default function DashboardPage() {
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Add First Item
-                </Link>
+                </button>
               </div>
             </div>
           ) : (
@@ -240,6 +277,14 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Upload Modal */}
+      <ItemUpload
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onUploadComplete={handleUploadComplete}
+        onRequestOpen={() => setIsUploadModalOpen(true)}
+      />
     </div>
   )
 }

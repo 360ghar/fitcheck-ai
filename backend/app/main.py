@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.logging_config import setup_session_logging
 from app.core.exceptions import FitCheckException
 from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, get_correlation_id
-from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo
+from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing
 from app.db.connection import SupabaseDB
 from postgrest.exceptions import APIError as PostgrestAPIError
 
@@ -182,6 +182,9 @@ app.include_router(ai.router, prefix="/api/v1/ai", tags=["AI Operations"])
 
 # AI settings routes (requires auth)
 app.include_router(ai_settings.router, prefix="/api/v1/ai/settings", tags=["AI Settings"])
+
+# Batch processing routes (requires auth) - SSE endpoints for multi-image extraction
+app.include_router(batch_processing.router, prefix="/api/v1/ai", tags=["Batch Processing"])
 
 # Calendar integration routes (requires auth)
 app.include_router(calendar.router, prefix="/api/v1/calendar", tags=["Calendar"])
