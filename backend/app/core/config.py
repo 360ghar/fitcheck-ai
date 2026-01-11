@@ -4,9 +4,10 @@ All settings can be overridden via environment variables.
 """
 
 import json
+import re
 from typing import List, Optional
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -27,6 +28,7 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:8000",
     ]
+    BACKEND_CORS_ORIGIN_REGEX: Optional[str] = r"^https://.*\.netlify\.app$"
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
@@ -48,7 +50,7 @@ class Settings(BaseSettings):
                 except Exception:
                     pass
 
-            return [v.strip() for v in value.split(",") if v.strip()]
+            return [v.strip() for v in re.split(r"[,\s]+", value) if v.strip()]
 
         return value
 
@@ -129,6 +131,24 @@ class Settings(BaseSettings):
         case_sensitive = True
         enable_decoding = False
         extra = "ignore"
+
+    @model_validator(mode="after")
+    def _include_frontend_origin(self):
+        frontend_url = (self.FRONTEND_URL or "").strip().rstrip("/")
+        origins = [origin.strip().rstrip("/") for origin in (self.BACKEND_CORS_ORIGINS or [])]
+        if frontend_url:
+            origins.append(frontend_url)
+
+        deduped = []
+        seen = set()
+        for origin in origins:
+            if not origin or origin in seen:
+                continue
+            seen.add(origin)
+            deduped.append(origin)
+
+        self.BACKEND_CORS_ORIGINS = deduped
+        return self
 
 
 settings = Settings()
