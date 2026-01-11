@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(flutter)",
+      "Bash(flutter create:*)",
+      "Bash(flutter pub get:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(flutter pub run build_runner build:*)",
+      "Bash(flutter build:*)",
+      "Bash(gh pr list:*)",
+      "Bash(curl:*)",
+      "Bash(flutter run:*)",
+      "Bash(dart run build_runner build:*)",
+      "Bash(flutter devices:*)",
+      "Bash(nc:*)",
+      "Bash(timeout:*)",
+      "Bash(ping:*)"
+    ]
+  }
+}

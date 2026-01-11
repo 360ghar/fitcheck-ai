@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Flutter (Local Backend)",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=API_BASE_URL=http://localhost:8000"
+      ]
+    },
+    {
+      "name": "Flutter (Production)",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=API_BASE_URL=https://fitcheck-backend.railway.app"
+      ]
+    },
+    {
+      "name": "Flutter (Profile Mode)",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=API_BASE_URL=http://localhost:8000",
+        "--profile"
+      ]
+    },
+    {
+      "name": "Flutter (Release Mode)",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=API_BASE_URL=https://fitcheck-backend.railway.app",
+        "--release"
+      ]
+    }
+  ]
+}
