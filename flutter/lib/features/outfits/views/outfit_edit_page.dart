@@ -8,8 +8,7 @@ import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../../../domain/enums/style.dart';
 import '../../../domain/enums/season.dart';
-import '../controllers/outfit_controller.dart';
-import '../controllers/outfit_builder_controller.dart';
+import '../controllers/outfit_list_controller.dart';
 import '../models/outfit_model.dart';
 
 /// Edit page for an existing outfit
@@ -27,7 +26,7 @@ class OutfitEditPage extends StatefulWidget {
 
 class _OutfitEditPageState extends State<OutfitEditPage> {
   final _formKey = GlobalKey<FormState>();
-  final OutfitsController _outfitsController = Get.find<OutfitsController>();
+  final OutfitListController _outfitsController = Get.find<OutfitListController>();
 
   late TextEditingController _nameController;
   late TextEditingController _descriptionController;
@@ -141,14 +140,14 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
       Get.snackbar(
         'Success',
         'Outfit updated successfully',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 2),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     } finally {
       isSaving.value = false;
@@ -516,13 +515,13 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
                 Get.snackbar(
                   'Deleted',
                   'Outfit removed successfully',
-                  snackPosition: SnackPosition.BOTTOM,
+                  snackPosition: SnackPosition.TOP,
                 );
               } catch (e) {
                 Get.snackbar(
                   'Error',
                   e.toString().replaceAll('Exception: ', ''),
-                  snackPosition: SnackPosition.BOTTOM,
+                  snackPosition: SnackPosition.TOP,
                 );
               }
             },

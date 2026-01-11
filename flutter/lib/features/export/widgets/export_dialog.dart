@@ -47,7 +47,7 @@ class ExportDialog extends StatelessWidget {
     Get.snackbar(
       'Exporting',
       'Preparing your $format file...',
-      snackPosition: SnackPosition.BOTTOM,
+      snackPosition: SnackPosition.TOP,
     );
     // Would trigger actual export
   }

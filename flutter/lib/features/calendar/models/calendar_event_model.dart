@@ -2,14 +2,21 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'calendar_event_model.g.dart';
 
+/// Safely parse DateTime from JSON, with fallback to current time
+DateTime _dateTimeFromJson(dynamic value) {
+  if (value == null) return DateTime.now();
+  if (value is DateTime) return value;
+  return DateTime.tryParse(value.toString()) ?? DateTime.now();
+}
+
 @JsonSerializable()
 class CalendarEventModel {
   final String id;
   final String title;
   final String? description;
-  @JsonKey(name: 'start_time')
+  @JsonKey(name: 'start_time', fromJson: _dateTimeFromJson)
   final DateTime startTime;
-  @JsonKey(name: 'end_time')
+  @JsonKey(name: 'end_time', fromJson: _dateTimeFromJson)
   final DateTime endTime;
   final String? location;
   @JsonKey(name: 'is_all_day')

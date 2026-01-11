@@ -66,7 +66,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
         Get.snackbar(
           'Image Required',
           'Please add a photo of the item',
-          snackPosition: SnackPosition.BOTTOM,
+          snackPosition: SnackPosition.TOP,
         );
         isSaving.value = false;
         return;
@@ -111,14 +111,14 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
       Get.snackbar(
         'Success',
         '"${created.name}" added to your wardrobe',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 2),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     } finally {
       isSaving.value = false;

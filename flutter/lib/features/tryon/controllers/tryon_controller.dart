@@ -140,7 +140,7 @@ class TryOnController extends GetxController {
       Get.snackbar(
         'Avatar Required',
         'Please upload a photo of yourself first',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
       return;
     }
@@ -149,7 +149,7 @@ class TryOnController extends GetxController {
       Get.snackbar(
         'Avatar Uploading',
         'Please wait for your profile photo to finish uploading',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
       return;
     }
@@ -186,7 +186,7 @@ class TryOnController extends GetxController {
       Get.snackbar(
         'Success',
         'Try-on generated successfully',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     } catch (e) {
       error.value = e.toString().replaceAll('Exception: ', '');

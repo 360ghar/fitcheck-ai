@@ -51,7 +51,7 @@ class ItemAddController extends GetxController {
         Get.snackbar(
           'Extraction Failed',
           error.value,
-          snackPosition: SnackPosition.BOTTOM,
+          snackPosition: SnackPosition.TOP,
         );
       }
     } catch (e) {
@@ -60,7 +60,7 @@ class ItemAddController extends GetxController {
       Get.snackbar(
         'Error',
         error.value,
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     }
   }
@@ -80,7 +80,7 @@ class ItemAddController extends GetxController {
           Get.snackbar(
             'Taking Too Long',
             error.value,
-            snackPosition: SnackPosition.BOTTOM,
+            snackPosition: SnackPosition.TOP,
           );
           return;
         }
@@ -97,7 +97,7 @@ class ItemAddController extends GetxController {
           Get.snackbar(
             'Extraction Failed',
             error.value,
-            snackPosition: SnackPosition.BOTTOM,
+            snackPosition: SnackPosition.TOP,
           );
         }
       } catch (e) {
@@ -135,14 +135,14 @@ class ItemAddController extends GetxController {
       Get.snackbar(
         'Success',
         '${items.length} item(s) added to your wardrobe',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 2),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     }
   }

@@ -10,6 +10,9 @@ import '../models/user_model.dart';
 class AuthController extends GetxController {
   final SupabaseService _supabase = SupabaseService.instance;
 
+  // Workers for cleanup (prevent memory leaks)
+  final List<Worker> _workers = [];
+
   // Reactive state
   final Rx<UserModel?> user = Rx<UserModel?>(null);
   final RxBool isLoading = false.obs;
@@ -27,15 +30,27 @@ class AuthController extends GetxController {
     initializeAuth();
   }
 
+  @override
+  void onClose() {
+    // Clean up all workers to prevent memory leaks
+    for (final worker in _workers) {
+      worker.dispose();
+    }
+    _workers.clear();
+    super.onClose();
+  }
+
   /// Listen to Supabase auth state changes
   void _listenToAuthChanges() {
-    ever<bool>(_supabase.isAuthenticated, (isAuth) async {
-      if (!isAuth) {
-        user.value = null;
-        return;
-      }
-      await _loadUserData();
-    });
+    _workers.add(
+      ever<bool>(_supabase.isAuthenticated, (isAuth) async {
+        if (!isAuth) {
+          user.value = null;
+          return;
+        }
+        await _loadUserData();
+      }),
+    );
   }
 
   /// Initialize authentication state
@@ -110,7 +125,7 @@ class AuthController extends GetxController {
         Get.snackbar(
           'Welcome back!',
           'Successfully logged in as ${user.value?.fullName ?? user.value?.email}',
-          snackPosition: SnackPosition.BOTTOM,
+          snackPosition: SnackPosition.TOP,
           backgroundColor: Colors.green.shade50,
           colorText: Colors.green.shade900,
         );
@@ -125,7 +140,7 @@ class AuthController extends GetxController {
       Get.snackbar(
         'Login Failed',
         e.message,
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.red.shade50,
         colorText: Colors.red.shade900,
       );
@@ -135,7 +150,7 @@ class AuthController extends GetxController {
       Get.snackbar(
         'Login Failed',
         error.value,
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.red.shade50,
         colorText: Colors.red.shade900,
       );
@@ -167,7 +182,7 @@ class AuthController extends GetxController {
         Get.snackbar(
           'Welcome to Fit Check!',
           'Account created successfully',
-          snackPosition: SnackPosition.BOTTOM,
+          snackPosition: SnackPosition.TOP,
           backgroundColor: Colors.green.shade50,
           colorText: Colors.green.shade900,
         );
@@ -182,7 +197,7 @@ class AuthController extends GetxController {
       Get.snackbar(
         'Registration Failed',
         e.message,
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.red.shade50,
         colorText: Colors.red.shade900,
       );
@@ -192,7 +207,7 @@ class AuthController extends GetxController {
       Get.snackbar(
         'Registration Failed',
         error.value,
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.red.shade50,
         colorText: Colors.red.shade900,
       );
@@ -218,7 +233,7 @@ class AuthController extends GetxController {
       Get.snackbar(
         'Google Sign-In Failed',
         e.message,
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.red.shade50,
         colorText: Colors.red.shade900,
       );
@@ -228,7 +243,7 @@ class AuthController extends GetxController {
       Get.snackbar(
         'Google Sign-In Failed',
         error.value,
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.red.shade50,
         colorText: Colors.red.shade900,
       );
@@ -251,7 +266,7 @@ class AuthController extends GetxController {
       Get.snackbar(
         'Logged Out',
         'You have been logged out successfully',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     } catch (e) {
       error.value = e.toString();
@@ -269,7 +284,7 @@ class AuthController extends GetxController {
       Get.snackbar(
         'Email Sent',
         'Check your email for password reset instructions',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.green.shade50,
         colorText: Colors.green.shade900,
       );
@@ -278,7 +293,7 @@ class AuthController extends GetxController {
       Get.snackbar(
         'Request Failed',
         e.message,
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.red.shade50,
         colorText: Colors.red.shade900,
       );
@@ -288,7 +303,7 @@ class AuthController extends GetxController {
       Get.snackbar(
         'Request Failed',
         error.value,
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.red.shade50,
         colorText: Colors.red.shade900,
       );
@@ -309,7 +324,7 @@ class AuthController extends GetxController {
       Get.snackbar(
         'Password Updated',
         'Your password has been updated successfully',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.green.shade50,
         colorText: Colors.green.shade900,
       );
@@ -318,7 +333,7 @@ class AuthController extends GetxController {
       Get.snackbar(
         'Update Failed',
         e.message,
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.red.shade50,
         colorText: Colors.red.shade900,
       );
@@ -328,7 +343,7 @@ class AuthController extends GetxController {
       Get.snackbar(
         'Update Failed',
         error.value,
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.red.shade50,
         colorText: Colors.red.shade900,
       );

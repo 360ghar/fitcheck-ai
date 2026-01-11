@@ -168,14 +168,14 @@ class _ItemEditPageState extends State<ItemEditPage> {
       Get.snackbar(
         'Success',
         'Item updated successfully',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 2),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     } finally {
       isSaving.value = false;
@@ -636,13 +636,13 @@ class _ItemEditPageState extends State<ItemEditPage> {
                 Get.snackbar(
                   'Deleted',
                   'Item removed from wardrobe',
-                  snackPosition: SnackPosition.BOTTOM,
+                  snackPosition: SnackPosition.TOP,
                 );
               } catch (e) {
                 Get.snackbar(
                   'Error',
                   e.toString().replaceAll('Exception: ', ''),
-                  snackPosition: SnackPosition.BOTTOM,
+                  snackPosition: SnackPosition.TOP,
                 );
               }
             },

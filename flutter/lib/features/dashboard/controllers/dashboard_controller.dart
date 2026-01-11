@@ -34,7 +34,7 @@ class DashboardController extends GetxController {
       Get.snackbar(
         'Error',
         error.value,
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     } finally {
       isLoading.value = false;

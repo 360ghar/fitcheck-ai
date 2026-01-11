@@ -130,7 +130,7 @@ class CalendarController extends GetxController {
       Get.snackbar(
         'Coming Soon',
         'Calendar connection via ${provider.name} will be available soon',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     } finally {
       isConnecting.value = false;
@@ -145,14 +145,14 @@ class CalendarController extends GetxController {
       Get.snackbar(
         'Disconnected',
         'Calendar disconnected successfully',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 1),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         'Failed to disconnect calendar',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     }
   }
@@ -184,7 +184,7 @@ class CalendarController extends GetxController {
       Get.snackbar(
         'Event Created',
         'Your event has been added',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 1),
       );
       Get.back();
@@ -192,7 +192,7 @@ class CalendarController extends GetxController {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     }
   }
@@ -228,14 +228,14 @@ class CalendarController extends GetxController {
       Get.snackbar(
         'Updated',
         'Event updated successfully',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 1),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     }
   }
@@ -250,14 +250,14 @@ class CalendarController extends GetxController {
       Get.snackbar(
         'Deleted',
         'Event removed',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 1),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     }
   }
@@ -275,14 +275,14 @@ class CalendarController extends GetxController {
       Get.snackbar(
         'Linked',
         'Outfit linked to event',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 1),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     }
   }
@@ -299,14 +299,14 @@ class CalendarController extends GetxController {
       Get.snackbar(
         'Removed',
         'Outfit removed from event',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 1),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     }
   }

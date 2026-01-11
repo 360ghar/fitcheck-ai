@@ -6,7 +6,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/style.dart';
 import '../../../domain/enums/season.dart';
-import '../controllers/outfit_controller.dart';
+import '../controllers/outfit_list_controller.dart';
 import '../models/outfit_model.dart';
 
 /// Detail page for a single outfit
@@ -21,7 +21,7 @@ class OutfitDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
-    final OutfitsController controller = Get.find<OutfitsController>();
+    final OutfitListController controller = Get.find<OutfitListController>();
 
     return Scaffold(
       body: AppPageBackground(
@@ -188,7 +188,7 @@ class OutfitDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildImageHeader(OutfitModel outfit, AppUiTokens tokens, OutfitsController controller) {
+  Widget _buildImageHeader(OutfitModel outfit, AppUiTokens tokens, OutfitListController controller) {
     return SliverAppBar(
       expandedHeight: 350,
       pinned: false,
@@ -225,7 +225,7 @@ class OutfitDetailPage extends StatelessWidget {
     // but we could add custom overlay buttons here if needed
   }
 
-  Widget _buildItemsSection(BuildContext context, OutfitModel outfit, AppUiTokens tokens, OutfitsController controller) {
+  Widget _buildItemsSection(BuildContext context, OutfitModel outfit, AppUiTokens tokens, OutfitListController controller) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -271,7 +271,7 @@ class OutfitDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildStatsSection(BuildContext context, OutfitModel outfit, AppUiTokens tokens, OutfitsController controller) {
+  Widget _buildStatsSection(BuildContext context, OutfitModel outfit, AppUiTokens tokens, OutfitListController controller) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -423,7 +423,7 @@ class OutfitDetailPage extends StatelessWidget {
         top: false,
         child: ElevatedButton.icon(
           onPressed: () {
-            final OutfitsController controller = Get.find<OutfitsController>();
+            final OutfitListController controller = Get.find<OutfitListController>();
             controller.markAsWorn(outfitId);
           },
           icon: const Icon(Icons.checkroom),
@@ -457,14 +457,14 @@ class OutfitDetailPage extends StatelessWidget {
     );
   }
 
-  void _shareOutfit(OutfitModel outfit, OutfitsController controller) async {
+  void _shareOutfit(OutfitModel outfit, OutfitListController controller) async {
     // Generate share link
     // For now, just share the text
     final text = 'Check out my outfit "${outfit.name}" on FitCheck AI!';
     await Share.share(text);
   }
 
-  void _showDeleteDialog(OutfitModel outfit, OutfitsController controller) {
+  void _showDeleteDialog(OutfitModel outfit, OutfitListController controller) {
     Get.dialog(
       AlertDialog(
         title: const Text('Delete Outfit?'),
@@ -483,13 +483,13 @@ class OutfitDetailPage extends StatelessWidget {
                 Get.snackbar(
                   'Deleted',
                   'Outfit removed successfully',
-                  snackPosition: SnackPosition.BOTTOM,
+                  snackPosition: SnackPosition.TOP,
                 );
               } catch (e) {
                 Get.snackbar(
                   'Error',
                   e.toString().replaceAll('Exception: ', ''),
-                  snackPosition: SnackPosition.BOTTOM,
+                  snackPosition: SnackPosition.TOP,
                 );
               }
             },
