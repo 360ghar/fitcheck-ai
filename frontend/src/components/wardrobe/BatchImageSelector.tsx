@@ -1,16 +1,18 @@
 /**
  * BatchImageSelector Component
  *
- * Multi-image selection component with drag-and-drop.
+ * Multi-image selection component with drag-and-drop and Instagram import.
  * Allows users to select up to 50 images for batch processing.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, X, ImagePlus, Trash2 } from 'lucide-react';
+import { Upload, X, ImagePlus, Trash2, Instagram } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import type { BatchImageInput } from '@/types';
+import { InstagramImportTab } from './InstagramImportTab';
 
 interface BatchImageSelectorProps {
   /** Currently selected images */
@@ -29,6 +31,8 @@ interface BatchImageSelectorProps {
   error?: string | null;
   /** Callback when user wants to proceed */
   onContinue?: () => void;
+  /** Callback when Instagram batch is ready */
+  onInstagramBatchReady?: (batchJobId: string, sseUrl: string) => void;
 }
 
 export function BatchImageSelector({
@@ -40,7 +44,9 @@ export function BatchImageSelector({
   disabled = false,
   error,
   onContinue,
+  onInstagramBatchReady,
 }: BatchImageSelectorProps) {
+  const [activeTab, setActiveTab] = useState<'upload' | 'instagram'>('upload');
   const remainingSlots = maxImages - selectedImages.length;
 
   const onDrop = useCallback(
@@ -74,147 +80,181 @@ export function BatchImageSelector({
   };
 
   return (
-    <div className="flex flex-col h-full space-y-4">
-      {/* Error message */}
-      {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-300">
-          {error}
-        </div>
-      )}
+    <Tabs
+      value={activeTab}
+      onValueChange={(v) => setActiveTab(v as 'upload' | 'instagram')}
+      className="flex flex-col h-full"
+    >
+      <TabsList className="grid w-full grid-cols-2 mb-4">
+        <TabsTrigger value="upload" className="flex items-center gap-2">
+          <Upload className="h-4 w-4" />
+          Upload Photos
+        </TabsTrigger>
+        <TabsTrigger value="instagram" className="flex items-center gap-2">
+          <Instagram className="h-4 w-4" />
+          Import from Instagram
+        </TabsTrigger>
+      </TabsList>
 
-      {/* Drop zone */}
-      {!isFull && (
-        <div
-          {...getRootProps()}
-          className={cn(
-            'border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer flex flex-col items-center justify-center',
-            isDragActive
-              ? 'border-gold-500 bg-gold-50 dark:bg-gold-900/20'
-              : 'border-border hover:border-muted-foreground/50',
-            disabled && 'opacity-50 cursor-not-allowed',
-            hasImages ? 'min-h-[120px]' : 'min-h-[200px]'
+      <TabsContent value="upload" className="flex-1 mt-0">
+        <div className="flex flex-col h-full space-y-4">
+          {/* Error message */}
+          {error && (
+            <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-300">
+              {error}
+            </div>
           )}
-        >
-          <input {...getInputProps()} />
-          <Upload
-            className={cn(
-              'mx-auto text-muted-foreground mb-3',
-              hasImages ? 'h-8 w-8' : 'h-12 w-12'
-            )}
-          />
-          <p className={cn('font-medium text-foreground', hasImages ? 'text-sm' : 'text-lg')}>
-            {isDragActive ? 'Drop images here' : 'Drop clothing photos here'}
-          </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            or click to browse
-          </p>
-          <p className="text-xs text-muted-foreground mt-2">
-            Supports PNG, JPG, WEBP up to 10MB each
-          </p>
+
+          {/* Drop zone */}
+          {!isFull && (
+            <div
+              {...getRootProps()}
+              className={cn(
+                'border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer flex flex-col items-center justify-center',
+                isDragActive
+                  ? 'border-gold-500 bg-gold-50 dark:bg-gold-900/20'
+                  : 'border-border hover:border-muted-foreground/50',
+                disabled && 'opacity-50 cursor-not-allowed',
+                hasImages ? 'min-h-[120px]' : 'min-h-[200px]'
+              )}
+            >
+              <input {...getInputProps()} />
+              <Upload
+                className={cn(
+                  'mx-auto text-muted-foreground mb-3',
+                  hasImages ? 'h-8 w-8' : 'h-12 w-12'
+                )}
+              />
+              <p className={cn('font-medium text-foreground', hasImages ? 'text-sm' : 'text-lg')}>
+                {isDragActive ? 'Drop images here' : 'Drop clothing photos here'}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                or click to browse
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Supports PNG, JPG, WEBP up to 10MB each
+              </p>
+              {hasImages && (
+                <p className="text-xs text-muted-foreground/70 mt-1">
+                  {remainingSlots} more {remainingSlots === 1 ? 'image' : 'images'} allowed
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Selected images grid */}
           {hasImages && (
-            <p className="text-xs text-muted-foreground/70 mt-1">
-              {remainingSlots} more {remainingSlots === 1 ? 'image' : 'images'} allowed
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Selected images grid */}
-      {hasImages && (
-        <div className="flex-1 overflow-y-auto min-h-0">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-medium text-foreground/80">
-              {selectedImages.length} of {maxImages} images selected
-            </p>
-            {onClearAll && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onClearAll}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-              >
-                <Trash2 className="h-4 w-4 mr-1" />
-                Clear all
-              </Button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {selectedImages.map((image) => (
-              <div
-                key={image.imageId}
-                className="relative aspect-square rounded-lg overflow-hidden bg-muted group"
-              >
-                <img
-                  src={image.previewUrl}
-                  alt={image.file.name}
-                  className="w-full h-full object-cover"
-                />
-                {/* Overlay with file name */}
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                  <p className="text-xs text-white truncate">
-                    {image.file.name}
-                  </p>
-                </div>
-                {/* Remove button */}
-                <button
-                  type="button"
-                  onClick={() => onImageRemove(image.imageId)}
-                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-black/70"
-                  disabled={disabled}
-                  aria-label={`Remove ${image.file.name}`}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-                {/* Status indicator */}
-                {image.status === 'failed' && (
-                  <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center">
-                    <div className="bg-red-500 text-white text-xs px-2 py-1 rounded">
-                      Failed
-                    </div>
-                  </div>
+            <div className="flex-1 overflow-y-auto min-h-0">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium text-foreground/80">
+                  {selectedImages.length} of {maxImages} images selected
+                </p>
+                {onClearAll && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onClearAll}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Clear all
+                  </Button>
                 )}
               </div>
-            ))}
 
-            {/* Add more button when there are images but not full */}
-            {!isFull && (
-              <button
-                type="button"
-                onClick={handleOpen}
-                className={cn(
-                  'aspect-square rounded-lg border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors',
-                  isDragActive
-                    ? 'border-gold-500 bg-gold-50 dark:bg-gold-900/20'
-                    : 'border-border hover:border-muted-foreground/50',
-                  disabled && 'opacity-50 cursor-not-allowed'
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                {selectedImages.map((image) => (
+                  <div
+                    key={image.imageId}
+                    className="relative aspect-square rounded-lg overflow-hidden bg-muted group"
+                  >
+                    <img
+                      src={image.previewUrl}
+                      alt={image.file.name}
+                      className="w-full h-full object-cover"
+                    />
+                    {/* Overlay with file name */}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                      <p className="text-xs text-white truncate">
+                        {image.file.name}
+                      </p>
+                    </div>
+                    {/* Remove button */}
+                    <button
+                      type="button"
+                      onClick={() => onImageRemove(image.imageId)}
+                      className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-black/70"
+                      disabled={disabled}
+                      aria-label={`Remove ${image.file.name}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                    {/* Status indicator */}
+                    {image.status === 'failed' && (
+                      <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center">
+                        <div className="bg-red-500 text-white text-xs px-2 py-1 rounded">
+                          Failed
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Add more button when there are images but not full */}
+                {!isFull && (
+                  <button
+                    type="button"
+                    onClick={handleOpen}
+                    className={cn(
+                      'aspect-square rounded-lg border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors',
+                      isDragActive
+                        ? 'border-gold-500 bg-gold-50 dark:bg-gold-900/20'
+                        : 'border-border hover:border-muted-foreground/50',
+                      disabled && 'opacity-50 cursor-not-allowed'
+                    )}
+                    disabled={disabled}
+                    aria-label="Add more images"
+                  >
+                    <ImagePlus className="h-8 w-8 text-muted-foreground mb-1" />
+                    <span className="text-xs text-muted-foreground">
+                      Add more
+                    </span>
+                  </button>
                 )}
-                disabled={disabled}
-                aria-label="Add more images"
-              >
-                <ImagePlus className="h-8 w-8 text-muted-foreground mb-1" />
-                <span className="text-xs text-muted-foreground">
-                  Add more
-                </span>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+              </div>
+            </div>
+          )}
 
-      {/* Action buttons */}
-      {hasImages && onContinue && (
-        <div className="flex justify-end pt-4 border-t border-border">
-          <Button
-            onClick={onContinue}
-            disabled={disabled || selectedImages.length === 0}
-            className="min-w-[120px]"
-          >
-            Continue
-          </Button>
+          {/* Action buttons */}
+          {hasImages && onContinue && (
+            <div className="flex justify-end pt-4 border-t border-border">
+              <Button
+                onClick={onContinue}
+                disabled={disabled || selectedImages.length === 0}
+                className="min-w-[120px]"
+              >
+                Continue
+              </Button>
+            </div>
+          )}
         </div>
-      )}
-    </div>
+      </TabsContent>
+
+      <TabsContent value="instagram" className="flex-1 mt-0">
+        {onInstagramBatchReady ? (
+          <InstagramImportTab
+            onBatchReady={onInstagramBatchReady}
+            maxImages={maxImages}
+            disabled={disabled}
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+            <Instagram className="h-12 w-12 mb-3 opacity-50" />
+            <p className="text-sm">Instagram import is not available</p>
+          </div>
+        )}
+      </TabsContent>
+    </Tabs>
   );
 }
 

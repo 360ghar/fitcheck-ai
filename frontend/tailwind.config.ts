@@ -82,6 +82,8 @@ const config: Config = {
           500: '#B8934A',
           600: '#9A7A3D',
           700: '#7C6230',
+          800: '#634A24',
+          900: '#4A381B',
         },
       },
       borderRadius: {

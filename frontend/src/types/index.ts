@@ -798,3 +798,108 @@ export interface BatchExtractionState {
   /** Error message if any */
   error: string | null;
 }
+
+// ============================================================================
+// INSTAGRAM IMPORT TYPES
+// ============================================================================
+
+/**
+ * Type of Instagram URL
+ */
+export type InstagramURLType = 'profile' | 'post' | 'reel';
+
+/**
+ * Status of an Instagram scrape job
+ */
+export type InstagramScrapeStatus =
+  | 'pending'
+  | 'validating'
+  | 'scraping'
+  | 'completed'
+  | 'cancelled'
+  | 'failed';
+
+/**
+ * Metadata for a scraped Instagram image
+ */
+export interface InstagramImageMeta {
+  image_id: string;
+  image_url: string;
+  thumbnail_url?: string;
+  post_shortcode: string;
+  post_url: string;
+  caption?: string;
+  timestamp?: string;
+  is_video: boolean;
+  width?: number;
+  height?: number;
+}
+
+/**
+ * Instagram profile information
+ */
+export interface InstagramProfileInfo {
+  username: string;
+  is_public: boolean;
+  post_count: number;
+  profile_pic_url?: string;
+  full_name?: string;
+  bio?: string;
+  error?: string;
+}
+
+/**
+ * SSE event types for Instagram scraping
+ */
+export type InstagramSSEEventType =
+  | 'connected'
+  | 'heartbeat'
+  | 'scrape_started'
+  | 'scrape_progress'
+  | 'scrape_complete'
+  | 'scrape_error'
+  | 'scrape_cancelled';
+
+/**
+ * Data for scrape_progress event
+ */
+export interface InstagramScrapeProgressData {
+  scraped: number;
+  total: number;
+  images: InstagramImageMeta[];
+  timestamp: string;
+}
+
+/**
+ * Data for scrape_complete event
+ */
+export interface InstagramScrapeCompleteData {
+  job_id: string;
+  total_images: number;
+  has_more: boolean;
+  timestamp: string;
+}
+
+/**
+ * State for the Instagram import flow
+ */
+export interface InstagramImportState {
+  /** Current step in the flow */
+  step: 'input' | 'loading' | 'scraping' | 'selecting' | 'preparing';
+  /** The Instagram URL */
+  url: string;
+  /** URL validation error */
+  urlError: string | null;
+  /** Profile info (for profile URLs) */
+  profileInfo: InstagramProfileInfo | null;
+  /** Current scrape job ID */
+  jobId: string | null;
+  /** All scraped images */
+  scrapedImages: InstagramImageMeta[];
+  /** Selected image IDs */
+  selectedImageIds: Set<string>;
+  /** Scraping progress */
+  scrapeProgress: { scraped: number; total: number };
+  /** Error message */
+  error: string | null;
+}

@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.logging_config import setup_session_logging
 from app.core.exceptions import FitCheckException
 from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, get_correlation_id
-from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing
+from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, instagram
 from app.db.connection import SupabaseDB
 from postgrest.exceptions import APIError as PostgrestAPIError
 
@@ -200,6 +200,9 @@ app.include_router(waitlist.router, prefix="/api/v1/waitlist", tags=["Waitlist"]
 
 # Demo routes (public, no auth required - IP rate limited)
 app.include_router(demo.router, prefix="/api/v1/demo", tags=["Demo"])
+
+# Instagram import routes (requires auth)
+app.include_router(instagram.router, prefix="/api/v1/instagram", tags=["Instagram"])
 
 
 # ============================================================================

@@ -12,5 +12,6 @@ google-genai
 sse-starlette>=1.8.0
 pydantic-ai
 python-dotenv
+instaloader>=4.10
 pytest
 pytest-asyncio

@@ -96,6 +96,7 @@ export function BatchExtractionFlow({
     removeImage,
     clearImages,
     startExtraction,
+    connectToExistingJob,
     cancel,
     reset,
     updateItem,
@@ -133,6 +134,15 @@ export function BatchExtractionFlow({
       addImages(files);
     },
     [addImages]
+  );
+
+  const handleInstagramBatchReady = useCallback(
+    (batchJobId: string, _sseUrl: string) => {
+      // The SSE URL format gives us the image count from the path
+      // For now, we use a placeholder count that will be updated by SSE events
+      connectToExistingJob(batchJobId, 0);
+    },
+    [connectToExistingJob]
   );
 
   const handleContinue = useCallback(async () => {
@@ -400,6 +410,7 @@ export function BatchExtractionFlow({
               disabled={false}
               error={state.error}
               onContinue={handleContinue}
+              onInstagramBatchReady={handleInstagramBatchReady}
             />
           )}
 
