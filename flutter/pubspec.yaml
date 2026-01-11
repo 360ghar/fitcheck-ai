@@ -1,0 +1,69 @@
+name: fitcheck_ai
+description: "Fit Check AI - AI-Powered Wardrobe & Outfit Manager"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management & Dependency Injection
+  get: ^4.6.6
+
+  # HTTP & Networking
+  dio: ^5.7.0
+  connectivity_plus: ^6.1.0
+
+  # UI Components
+  shimmer: ^3.0.0
+  cached_network_image: ^3.3.1
+  image_picker: ^1.0.7
+  photo_view: ^0.14.0
+
+  # Icons - using community package for remix icons
+  # For now, using Material Icons. To use Remix icons, add:
+  # https://pub.dev/packages/remixicon
+  # or add custom icon font
+
+  # Supabase Auth & Database
+  supabase_flutter: ^2.8.4
+
+  # Analytics
+  posthog_flutter: ^4.0.1
+
+  # Utils
+  path_provider: ^2.1.5
+  share_plus: ^10.1.3
+  package_info_plus: ^8.1.2
+
+  # Icons
+  cupertino_icons: ^1.0.8
+
+  # Code Generation
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.8.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Code Generation
+  build_runner: ^2.4.0
+  freezed: ^2.5.2
+  freezed_annotation: ^2.4.1
+  json_serializable: ^6.7.1
+  json_annotation: ^4.8.1
+  # Linting
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - .env
+    - assets/images/
+    - assets/icons/
+    - assets/animations/
