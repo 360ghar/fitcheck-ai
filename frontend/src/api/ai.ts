@@ -69,6 +69,8 @@ export interface GenerateOutfitOptions {
   model_gender?: string;
   custom_prompt?: string;
   save_to_storage?: boolean;
+  include_user_face?: boolean;  // Use avatar for face consistency when available
+  use_body_profile?: boolean;   // Use body profile data if available
 }
 
 export interface GeneratedOutfit {
@@ -336,6 +338,8 @@ export async function generateOutfit(
     model_gender: options.model_gender ?? 'female',
     custom_prompt: options.custom_prompt,
     save_to_storage: options.save_to_storage ?? false,
+    include_user_face: options.include_user_face ?? true,
+    use_body_profile: options.use_body_profile ?? true,
   });
 
   return response.data.data;

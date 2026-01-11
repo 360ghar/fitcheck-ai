@@ -8,6 +8,7 @@
 import { Loader2, Sparkles, Search } from 'lucide-react'
 import { Progress } from '@/components/ui/progress'
 import { Card, CardContent } from '@/components/ui/card'
+import { ZoomableImage } from '@/components/ui/zoomable-image'
 
 interface DetectionProgressProps {
   /** Progress percentage (0-100) */
@@ -27,12 +28,12 @@ export function DetectionProgress({
     <div className="flex flex-col items-center justify-center py-8 space-y-6">
       {/* Image being analyzed */}
       <div className="relative">
-        <img
+        <ZoomableImage
           src={imageUrl}
           alt="Analyzing"
           className="w-64 h-64 object-cover rounded-lg shadow-lg opacity-80"
         />
-        <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-lg">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-lg pointer-events-none">
           <div className="bg-white/90 dark:bg-gray-800/90 rounded-full p-4">
             <Search className="h-8 w-8 text-indigo-500 animate-pulse" />
           </div>

@@ -61,8 +61,8 @@ export default function GamificationPage() {
     : 0
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-8 space-y-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Gamification</h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">Streaks, achievements, and leaderboard</p>
@@ -71,13 +71,14 @@ export default function GamificationPage() {
           variant="outline"
           onClick={() => window.location.reload()}
           disabled={isLoading}
+          className="w-full md:w-auto"
         >
           <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

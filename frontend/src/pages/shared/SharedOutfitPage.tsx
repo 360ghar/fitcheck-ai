@@ -12,6 +12,7 @@ import { Layers, Loader2 } from 'lucide-react'
 import { getPublicOutfit, type PublicOutfit } from '@/api/outfits'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ZoomableImage } from '@/components/ui/zoomable-image'
 import { SEO, OutfitJsonLd } from '@/components/seo'
 
 export default function SharedOutfitPage() {
@@ -69,17 +70,17 @@ export default function SharedOutfitPage() {
       )}
 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="flex items-center justify-between mb-6">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
           <Link to="/" className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
             FitCheck<span className="font-light text-gray-600 dark:text-gray-400 ml-1">AI</span>
           </Link>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" asChild>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <Button variant="outline" asChild className="w-full sm:w-auto">
               <Link to="/auth/login">Sign in</Link>
             </Button>
             {id && (
-              <Button asChild>
+              <Button asChild className="w-full sm:w-auto">
                 <Link to={`/outfits/${id}`}>Open in app</Link>
               </Button>
             )}
@@ -101,7 +102,7 @@ export default function SharedOutfitPage() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 overflow-hidden">
             <div className="aspect-[4/3] bg-gray-100 dark:bg-gray-700">
               {primary?.image_url ? (
-                <img
+                <ZoomableImage
                   src={primary.thumbnail_url || primary.image_url}
                   alt={outfit.name}
                   className="w-full h-full object-cover"

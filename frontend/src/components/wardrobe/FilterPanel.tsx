@@ -8,18 +8,26 @@
  * - Favorite toggle
  * - Sort options
  * - Active filter display with clear option
- * - Collapsible on mobile
+ * - Bottom sheet on mobile, inline on desktop
  *
  * @see https://docs.fitcheck.ai/features/wardrobe/filtering
  */
 
 import { useState } from 'react'
-import { Search, X, Grid3x3, List, SortAsc, SortDesc, SlidersHorizontal } from 'lucide-react'
+import { Search, X, Grid3x3, List, SortAsc, SortDesc, SlidersHorizontal, Heart } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import {
+  BottomSheet,
+  BottomSheetContent,
+  BottomSheetHeader,
+  BottomSheetTitle,
+  BottomSheetFooter,
+  BottomSheetTrigger,
+} from '@/components/ui/bottom-sheet'
+import { cn } from '@/lib/utils'
 import type { Category, Condition } from '@/types'
 
 // ============================================================================
@@ -80,21 +88,21 @@ const SORT_OPTIONS = [
 ]
 
 const COMMON_COLORS = [
-  'All Colors',
-  'Black',
-  'White',
-  'Gray',
-  'Navy',
-  'Brown',
-  'Beige',
-  'Red',
-  'Blue',
-  'Green',
-  'Yellow',
-  'Pink',
-  'Purple',
-  'Orange',
-  'Tan',
+  { value: 'all', label: 'All Colors', color: null },
+  { value: 'Black', label: 'Black', color: '#000000' },
+  { value: 'White', label: 'White', color: '#FFFFFF' },
+  { value: 'Gray', label: 'Gray', color: '#6B7280' },
+  { value: 'Navy', label: 'Navy', color: '#1E3A5F' },
+  { value: 'Brown', label: 'Brown', color: '#92400E' },
+  { value: 'Beige', label: 'Beige', color: '#D4C4B0' },
+  { value: 'Red', label: 'Red', color: '#DC2626' },
+  { value: 'Blue', label: 'Blue', color: '#2563EB' },
+  { value: 'Green', label: 'Green', color: '#16A34A' },
+  { value: 'Yellow', label: 'Yellow', color: '#EAB308' },
+  { value: 'Pink', label: 'Pink', color: '#EC4899' },
+  { value: 'Purple', label: 'Purple', color: '#9333EA' },
+  { value: 'Orange', label: 'Orange', color: '#EA580C' },
+  { value: 'Tan', label: 'Tan', color: '#D2B48C' },
 ]
 
 // ============================================================================
@@ -108,7 +116,7 @@ export function FilterPanel({
   onSortChange,
   onResetFilters,
 }: FilterPanelProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
 
   const hasActiveFilters =
     filters.category !== 'all' ||
@@ -125,7 +133,7 @@ export function FilterPanel({
   ].filter(Boolean).length
 
   return (
-    <div className="bg-card shadow rounded-lg p-3 md:p-4 mb-4 md:mb-6">
+    <div className="bg-card shadow-sm rounded-xl p-3 md:p-4 mb-4 md:mb-6">
       {/* Always visible: Search + Filter toggle (mobile) */}
       <div className="flex gap-2 md:gap-4">
         {/* Search */}
@@ -140,226 +148,290 @@ export function FilterPanel({
           />
         </div>
 
-        {/* Mobile filter toggle */}
-        <Collapsible open={isExpanded} onOpenChange={setIsExpanded} className="md:contents">
-          <CollapsibleTrigger asChild className="md:hidden">
-            <Button variant="outline" size="icon" className="relative shrink-0">
-              <SlidersHorizontal className="h-4 w-4" />
-              {activeFilterCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-xs rounded-full flex items-center justify-center">
-                  {activeFilterCount}
-                </span>
-              )}
-            </Button>
-          </CollapsibleTrigger>
-
-          {/* Desktop filters - always visible */}
-          <div className="hidden md:contents">
-            {/* Category filter */}
-            <Select
-              value={filters.category}
-              onValueChange={(value) => onFilterChange('category', value)}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                {CATEGORIES.map((cat) => (
-                  <SelectItem key={cat.value} value={cat.value}>
-                    {cat.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Color filter */}
-            <Select
-              value={filters.color || 'all'}
-              onValueChange={(value) => onFilterChange('color', value === 'all' ? '' : value)}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Color" />
-              </SelectTrigger>
-              <SelectContent>
-                {COMMON_COLORS.map((color) => (
-                  <SelectItem key={color} value={color === 'All Colors' ? 'all' : color}>
-                    {color}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Condition filter */}
-            <Select
-              value={filters.condition}
-              onValueChange={(value) => onFilterChange('condition', value)}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Condition" />
-              </SelectTrigger>
-              <SelectContent>
-                {CONDITIONS.map((cond) => (
-                  <SelectItem key={cond.value} value={cond.value}>
-                    {cond.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Sort */}
-            <div className="flex items-center gap-2">
-              <Select
-                value={sort.sortBy}
-                onValueChange={(value) => onSortChange('sortBy', value)}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => onSortChange('sortOrder', sort.sortOrder === 'asc' ? 'desc' : 'asc')}
-                title={sort.sortOrder === 'asc' ? 'Ascending' : 'Descending'}
-              >
-                {sort.sortOrder === 'asc' ? (
-                  <SortAsc className="h-5 w-5" />
-                ) : (
-                  <SortDesc className="h-5 w-5" />
+        {/* Mobile filter bottom sheet */}
+        <div className="md:hidden">
+          <BottomSheet open={isOpen} onOpenChange={setIsOpen}>
+            <BottomSheetTrigger asChild>
+              <Button variant="outline" size="icon" className="relative shrink-0">
+                <SlidersHorizontal className="h-4 w-4" />
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-xs rounded-full flex items-center justify-center">
+                    {activeFilterCount}
+                  </span>
                 )}
               </Button>
-            </div>
+            </BottomSheetTrigger>
+            <BottomSheetContent height="large">
+              <BottomSheetHeader>
+                <BottomSheetTitle>Filters & Sort</BottomSheetTitle>
+              </BottomSheetHeader>
 
-            {/* View toggle */}
-            <div className="flex items-center gap-2">
-              <Button
-                variant={sort.isGridView ? 'default' : 'outline'}
-                size="icon"
-                onClick={() => onSortChange('isGridView', true)}
-              >
-                <Grid3x3 className="h-5 w-5" />
-              </Button>
-              <Button
-                variant={!sort.isGridView ? 'default' : 'outline'}
-                size="icon"
-                onClick={() => onSortChange('isGridView', false)}
-              >
-                <List className="h-5 w-5" />
-              </Button>
-            </div>
+              <div className="flex-1 overflow-y-auto py-4 space-y-6">
+                {/* Category Section */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Category</label>
+                  <Select
+                    value={filters.category}
+                    onValueChange={(value) => onFilterChange('category', value)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map((cat) => (
+                        <SelectItem key={cat.value} value={cat.value}>
+                          {cat.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Color Section */}
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-foreground">Color</label>
+                  <div className="flex flex-wrap gap-2">
+                    {COMMON_COLORS.map((c) => (
+                      <button
+                        key={c.value}
+                        onClick={() => onFilterChange('color', c.value === 'all' ? '' : c.value)}
+                        className={cn(
+                          'flex items-center gap-2 px-3 py-2 rounded-full text-sm',
+                          'border transition-all duration-200',
+                          (filters.color === c.value || (c.value === 'all' && filters.color === ''))
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border hover:border-primary/50'
+                        )}
+                      >
+                        {c.color && (
+                          <span
+                            className="w-4 h-4 rounded-full border border-border/50"
+                            style={{ backgroundColor: c.color }}
+                          />
+                        )}
+                        <span>{c.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Condition Section */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Condition</label>
+                  <Select
+                    value={filters.condition}
+                    onValueChange={(value) => onFilterChange('condition', value)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Condition" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CONDITIONS.map((cond) => (
+                        <SelectItem key={cond.value} value={cond.value}>
+                          {cond.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Favorites Toggle */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Quick Filters</label>
+                  <button
+                    onClick={() => onFilterChange('isFavorite', !filters.isFavorite)}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-3 rounded-xl w-full',
+                      'border transition-all duration-200',
+                      filters.isFavorite
+                        ? 'border-pink-500 bg-pink-500/10 text-pink-500'
+                        : 'border-border hover:border-pink-500/50'
+                    )}
+                  >
+                    <Heart className={cn('h-5 w-5', filters.isFavorite && 'fill-current')} />
+                    <span className="font-medium">Favorites Only</span>
+                  </button>
+                </div>
+
+                {/* Sort Section */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Sort By</label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={sort.sortBy}
+                      onValueChange={(value) => onSortChange('sortBy', value)}
+                    >
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Sort by" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SORT_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => onSortChange('sortOrder', sort.sortOrder === 'asc' ? 'desc' : 'asc')}
+                    >
+                      {sort.sortOrder === 'asc' ? (
+                        <SortAsc className="h-5 w-5" />
+                      ) : (
+                        <SortDesc className="h-5 w-5" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* View Toggle */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">View</label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={sort.isGridView ? 'default' : 'outline'}
+                      className="flex-1"
+                      onClick={() => onSortChange('isGridView', true)}
+                    >
+                      <Grid3x3 className="h-4 w-4 mr-2" />
+                      Grid
+                    </Button>
+                    <Button
+                      variant={!sort.isGridView ? 'default' : 'outline'}
+                      className="flex-1"
+                      onClick={() => onSortChange('isGridView', false)}
+                    >
+                      <List className="h-4 w-4 mr-2" />
+                      List
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <BottomSheetFooter>
+                <Button variant="outline" onClick={onResetFilters} className="flex-1">
+                  Clear All
+                </Button>
+                <Button onClick={() => setIsOpen(false)} className="flex-1">
+                  Apply Filters
+                </Button>
+              </BottomSheetFooter>
+            </BottomSheetContent>
+          </BottomSheet>
+        </div>
+
+        {/* Desktop filters - always visible */}
+        <div className="hidden md:contents">
+          {/* Category filter */}
+          <Select
+            value={filters.category}
+            onValueChange={(value) => onFilterChange('category', value)}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              {CATEGORIES.map((cat) => (
+                <SelectItem key={cat.value} value={cat.value}>
+                  {cat.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Color filter */}
+          <Select
+            value={filters.color || 'all'}
+            onValueChange={(value) => onFilterChange('color', value === 'all' ? '' : value)}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Color" />
+            </SelectTrigger>
+            <SelectContent>
+              {COMMON_COLORS.map((c) => (
+                <SelectItem key={c.value} value={c.value}>
+                  <div className="flex items-center gap-2">
+                    {c.color && (
+                      <span
+                        className="w-3 h-3 rounded-full border border-border/50"
+                        style={{ backgroundColor: c.color }}
+                      />
+                    )}
+                    <span>{c.label}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Condition filter */}
+          <Select
+            value={filters.condition}
+            onValueChange={(value) => onFilterChange('condition', value)}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Condition" />
+            </SelectTrigger>
+            <SelectContent>
+              {CONDITIONS.map((cond) => (
+                <SelectItem key={cond.value} value={cond.value}>
+                  {cond.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Sort */}
+          <div className="flex items-center gap-2">
+            <Select
+              value={sort.sortBy}
+              onValueChange={(value) => onSortChange('sortBy', value)}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => onSortChange('sortOrder', sort.sortOrder === 'asc' ? 'desc' : 'asc')}
+              title={sort.sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+            >
+              {sort.sortOrder === 'asc' ? (
+                <SortAsc className="h-5 w-5" />
+              ) : (
+                <SortDesc className="h-5 w-5" />
+              )}
+            </Button>
           </div>
 
-          {/* Mobile collapsible filters */}
-          <CollapsibleContent className="md:hidden">
-            <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-border">
-              {/* Category filter */}
-              <Select
-                value={filters.category}
-                onValueChange={(value) => onFilterChange('category', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map((cat) => (
-                    <SelectItem key={cat.value} value={cat.value}>
-                      {cat.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Color filter */}
-              <Select
-                value={filters.color || 'all'}
-                onValueChange={(value) => onFilterChange('color', value === 'all' ? '' : value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Color" />
-                </SelectTrigger>
-                <SelectContent>
-                  {COMMON_COLORS.map((color) => (
-                    <SelectItem key={color} value={color === 'All Colors' ? 'all' : color}>
-                      {color}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Condition filter */}
-              <Select
-                value={filters.condition}
-                onValueChange={(value) => onFilterChange('condition', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Condition" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CONDITIONS.map((cond) => (
-                    <SelectItem key={cond.value} value={cond.value}>
-                      {cond.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Sort */}
-              <Select
-                value={sort.sortBy}
-                onValueChange={(value) => onSortChange('sortBy', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* View toggle + Sort order */}
-              <div className="col-span-2 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant={sort.isGridView ? 'default' : 'outline'}
-                    size="icon"
-                    onClick={() => onSortChange('isGridView', true)}
-                  >
-                    <Grid3x3 className="h-5 w-5" />
-                  </Button>
-                  <Button
-                    variant={!sort.isGridView ? 'default' : 'outline'}
-                    size="icon"
-                    onClick={() => onSortChange('isGridView', false)}
-                  >
-                    <List className="h-5 w-5" />
-                  </Button>
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => onSortChange('sortOrder', sort.sortOrder === 'asc' ? 'desc' : 'asc')}
-                >
-                  {sort.sortOrder === 'asc' ? (
-                    <SortAsc className="h-5 w-5" />
-                  ) : (
-                    <SortDesc className="h-5 w-5" />
-                  )}
-                </Button>
-              </div>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
+          {/* View toggle */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={sort.isGridView ? 'default' : 'outline'}
+              size="icon"
+              onClick={() => onSortChange('isGridView', true)}
+            >
+              <Grid3x3 className="h-5 w-5" />
+            </Button>
+            <Button
+              variant={!sort.isGridView ? 'default' : 'outline'}
+              size="icon"
+              onClick={() => onSortChange('isGridView', false)}
+            >
+              <List className="h-5 w-5" />
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* Active filters */}
@@ -380,6 +452,10 @@ export function FilterPanel({
             )}
             {filters.color && (
               <Badge variant="secondary" className="gap-1 shrink-0">
+                <span
+                  className="w-3 h-3 rounded-full border border-border/50"
+                  style={{ backgroundColor: COMMON_COLORS.find((c) => c.value === filters.color)?.color || undefined }}
+                />
                 {filters.color}
                 <button
                   onClick={() => onFilterChange('color', '')}
@@ -401,7 +477,8 @@ export function FilterPanel({
               </Badge>
             )}
             {filters.isFavorite && (
-              <Badge variant="secondary" className="gap-1 shrink-0">
+              <Badge variant="secondary" className="gap-1 shrink-0 text-pink-500">
+                <Heart className="h-3 w-3 fill-current" />
                 Favorites
                 <button
                   onClick={() => onFilterChange('isFavorite', false)}

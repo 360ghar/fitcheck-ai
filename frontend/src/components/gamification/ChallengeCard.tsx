@@ -27,6 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { ZoomableImage } from '@/components/ui/zoomable-image'
 
 // ============================================================================
 // TYPES
@@ -259,7 +260,7 @@ export function ChallengeCard({
         {/* Cover image */}
         {challenge.cover_image_url && (
           <div className="h-48 w-full overflow-hidden">
-            <img
+            <ZoomableImage
               src={challenge.cover_image_url}
               alt={challenge.title}
               className="w-full h-full object-cover"

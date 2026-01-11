@@ -25,7 +25,7 @@ import type {
  */
 export async function createOutfit(data: OutfitCreate): Promise<Outfit> {
   try {
-    const response = await apiClient.post<ApiEnvelope<Outfit>>('/api/v1/outfits/', data);
+    const response = await apiClient.post<ApiEnvelope<Outfit>>('/api/v1/outfits', data);
     return response.data.data;
   } catch (error) {
     throw getApiError(error);
@@ -47,7 +47,7 @@ export async function getOutfits(filters?: OutfitFilters): Promise<PaginatedOutf
     params.append('page_size', String(filters?.page_size || 24));
 
     const response = await apiClient.get<ApiEnvelope<PaginatedOutfitsResponse<Outfit>>>(
-      `/api/v1/outfits/?${params.toString()}`
+      `/api/v1/outfits?${params.toString()}`
     );
     return response.data.data;
   } catch (error) {

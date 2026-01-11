@@ -22,7 +22,7 @@ import type {
  */
 export async function createItem(data: ItemCreate): Promise<Item> {
   try {
-    const response = await apiClient.post<ApiEnvelope<Item>>('/api/v1/items/', data);
+    const response = await apiClient.post<ApiEnvelope<Item>>('/api/v1/items', data);
     return response.data.data;
   } catch (error) {
     throw getApiError(error);
@@ -84,7 +84,7 @@ export async function getItems(filters?: ItemFilters): Promise<PaginatedItemsRes
     params.append('page_size', String(filters?.page_size || 24));
 
     const response = await apiClient.get<ApiEnvelope<PaginatedItemsResponse<Item>>>(
-      `/api/v1/items/?${params.toString()}`
+      `/api/v1/items?${params.toString()}`
     );
     return response.data.data;
   } catch (error) {

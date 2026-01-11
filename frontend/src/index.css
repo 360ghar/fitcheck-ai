@@ -69,6 +69,9 @@
 
   body {
     @apply bg-background text-foreground overflow-x-hidden w-full max-w-[100vw];
+    min-height: 100svh;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   #root {
@@ -83,6 +86,29 @@
 
 /* Custom utilities */
 @layer utilities {
+  /* Container query support */
+  .container-query {
+    container-type: inline-size;
+  }
+
+  .container-query-normal {
+    container-type: normal;
+  }
+
+  /* Glass morphism */
+  .glass {
+    @apply bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/20 dark:border-gray-700/30;
+  }
+
+  .glass-card {
+    @apply bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg border border-white/30 dark:border-gray-700/40 shadow-elevated;
+  }
+
+  /* Gradient text */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-primary;
+  }
+
   .line-clamp-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;

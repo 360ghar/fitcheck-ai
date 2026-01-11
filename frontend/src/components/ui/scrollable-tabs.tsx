@@ -50,7 +50,7 @@ export function ScrollableTabs({
       {/* Scrollable container */}
       <div
         ref={scrollRef}
-        className="overflow-x-auto scrollbar-hide scroll-snap-x px-4 md:px-0"
+        className="overflow-x-auto scrollbar-hide scroll-snap-x px-4 md:px-0 touch-pan-x overscroll-x-contain"
       >
         <div className="flex gap-1 w-max">{children}</div>
       </div>

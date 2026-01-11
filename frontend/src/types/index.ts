@@ -454,6 +454,8 @@ export type DetectedItemStatus =
 export interface DetectedItem {
   /** Temporary ID for tracking during review */
   tempId: string;
+  /** Source image ID for batch workflows */
+  sourceImageId?: string;
   /** Category of the item */
   category: Category;
   /** Sub-category (e.g., "t-shirt", "jeans") */
@@ -534,4 +536,265 @@ export interface ProductImageGenerationOptions {
   includeShadows?: boolean;
   /** Image size */
   size?: { width: number; height: number };
+}
+
+// ============================================================================
+// BATCH PROCESSING TYPES
+// ============================================================================
+
+/**
+ * Status of a batch processing job
+ */
+export type BatchJobStatus =
+  | 'pending'
+  | 'extracting'
+  | 'generating'
+  | 'completed'
+  | 'cancelled'
+  | 'failed';
+
+/**
+ * Status of a single image in batch processing
+ */
+export type BatchImageStatus =
+  | 'pending'
+  | 'uploading'
+  | 'extracting'
+  | 'completed'
+  | 'failed';
+
+/**
+ * Single image in a batch upload
+ */
+export interface BatchImageInput {
+  /** Client-generated unique ID for tracking */
+  imageId: string;
+  /** Original file */
+  file: File;
+  /** Preview URL for display */
+  previewUrl: string;
+  /** Current status */
+  status: BatchImageStatus;
+  /** Error message if failed */
+  error?: string;
+  /** Items detected from this image */
+  detectedItems?: DetectedItem[];
+}
+
+/**
+ * Response from starting a batch job
+ */
+export interface BatchJobResponse {
+  job_id: string;
+  status: BatchJobStatus;
+  total_images: number;
+  sse_url: string;
+  message: string;
+}
+
+/**
+ * SSE event types for batch processing
+ */
+export type BatchSSEEventType =
+  | 'connected'
+  | 'heartbeat'
+  | 'extraction_started'
+  | 'image_extraction_complete'
+  | 'image_extraction_failed'
+  | 'all_extractions_complete'
+  | 'generation_started'
+  | 'batch_generation_started'
+  | 'item_generation_complete'
+  | 'item_generation_failed'
+  | 'batch_generation_complete'
+  | 'all_generations_complete'
+  | 'job_complete'
+  | 'job_failed'
+  | 'job_cancelled';
+
+/**
+ * Generic SSE event structure
+ */
+export interface BatchSSEEvent<T = unknown> {
+  event: BatchSSEEventType;
+  data: T;
+}
+
+/**
+ * Data for extraction_started event
+ */
+export interface ExtractionStartedData {
+  job_id: string;
+  total_images: number;
+  timestamp: string;
+}
+
+/**
+ * Data for image_extraction_complete event
+ */
+export interface ImageExtractionCompleteData {
+  job_id: string;
+  image_id: string;
+  items: Array<{
+    temp_id: string;
+    category: string;
+    sub_category?: string;
+    colors: string[];
+    material?: string;
+    pattern?: string;
+    brand?: string;
+    confidence: number;
+    bounding_box?: BoundingBox;
+    detailed_description?: string;
+    status: string;
+  }>;
+  items_count: number;
+  completed_count: number;
+  total_images: number;
+  timestamp: string;
+}
+
+/**
+ * Data for image_extraction_failed event
+ */
+export interface ImageExtractionFailedData {
+  job_id: string;
+  image_id: string;
+  error: string;
+  completed_count: number;
+  failed_count: number;
+  total_images: number;
+  timestamp: string;
+}
+
+/**
+ * Data for all_extractions_complete event
+ */
+export interface AllExtractionsCompleteData {
+  job_id: string;
+  total_images: number;
+  successful: number;
+  failed: number;
+  total_items_detected: number;
+  timestamp: string;
+}
+
+/**
+ * Data for generation_started event
+ */
+export interface GenerationStartedData {
+  job_id: string;
+  total_items: number;
+  batch_size: number;
+  total_batches: number;
+  timestamp: string;
+}
+
+/**
+ * Data for batch_generation_started event
+ */
+export interface BatchGenerationStartedData {
+  job_id: string;
+  batch_number: number;
+  total_batches: number;
+  items_in_batch: number;
+  item_ids: string[];
+  start_index: number;
+  end_index: number;
+  timestamp: string;
+}
+
+/**
+ * Data for item_generation_complete event
+ */
+export interface ItemGenerationCompleteData {
+  job_id: string;
+  temp_id: string;
+  image_id: string;
+  generated_image_base64: string;
+  completed_count: number;
+  total_items: number;
+  timestamp: string;
+}
+
+/**
+ * Data for item_generation_failed event
+ */
+export interface ItemGenerationFailedData {
+  job_id: string;
+  temp_id: string;
+  image_id: string;
+  error: string;
+  completed_count: number;
+  failed_count: number;
+  total_items: number;
+  timestamp: string;
+}
+
+/**
+ * Data for job_complete event
+ */
+export interface JobCompleteData {
+  job_id: string;
+  total_images: number;
+  total_items_detected: number;
+  successful_extractions: number;
+  failed_extractions: number;
+  successful_generations: number;
+  failed_generations: number;
+  items: Array<{
+    temp_id: string;
+    image_id: string;
+    category: string;
+    sub_category?: string;
+    colors: string[];
+    material?: string;
+    pattern?: string;
+    brand?: string;
+    confidence: number;
+    bounding_box?: BoundingBox;
+    detailed_description?: string;
+    status: string;
+    generated_image_base64?: string;
+    generated_image_url?: string;
+    generation_error?: string;
+  }>;
+  timestamp: string;
+}
+
+/**
+ * State for the batch extraction flow
+ */
+export interface BatchExtractionState {
+  /** Current step in the flow */
+  step: 'select' | 'uploading' | 'extracting' | 'generating' | 'review' | 'saving';
+  /** All selected images */
+  images: BatchImageInput[];
+  /** Current job ID */
+  jobId: string | null;
+  /** All detected items from all images */
+  allDetectedItems: DetectedItem[];
+
+  // Progress tracking
+  /** Extraction progress (0-100) */
+  extractionProgress: number;
+  /** Generation progress (0-100) */
+  generationProgress: number;
+  /** Current batch number during generation */
+  currentBatch: number;
+  /** Total number of batches */
+  totalBatches: number;
+
+  // Stats
+  /** Number of images that completed extraction */
+  imagesCompleted: number;
+  /** Number of images that failed extraction */
+  imagesFailed: number;
+  /** Number of items that completed generation */
+  itemsGenerated: number;
+  /** Number of items that failed generation */
+  itemsFailed: number;
+
+  /** Error message if any */
+  error: string | null;
 }

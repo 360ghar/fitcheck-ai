@@ -1,17 +1,16 @@
 import { Link } from 'react-router-dom'
-import { Shirt, Twitter, Instagram, Linkedin } from 'lucide-react'
+import { Shirt, Twitter, Instagram, Linkedin, Mail, Phone } from 'lucide-react'
 
 const footerLinks = {
   Product: [
     { name: 'Features', href: '/#features' },
-    { name: 'Pricing', href: '/#pricing' },
     { name: 'FAQ', href: '/#faq' },
   ],
   Company: [
     { name: 'About', href: '/about' },
     { name: 'Blog', href: '#' },
     { name: 'Careers', href: '#' },
-    { name: 'Contact', href: '#' },
+    { name: 'Contact', href: 'mailto:info@fitcheckaiapp.com' },
   ],
   Legal: [
     { name: 'Terms of Service', href: '/terms' },
@@ -55,6 +54,24 @@ export default function Footer() {
                   <social.icon className="w-5 h-5" />
                 </a>
               ))}
+            </div>
+            <div className="mt-6 space-y-2">
+              <a
+                href="mailto:info@fitcheckaiapp.com"
+                className="flex items-center gap-2 hover:text-white transition-colors"
+              >
+                <Mail className="w-4 h-4" />
+                <span>info@fitcheckaiapp.com</span>
+              </a>
+              <a
+                href="https://wa.me/919310833204"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 hover:text-white transition-colors"
+              >
+                <Phone className="w-4 h-4" />
+                <span>+91 9310833204</span>
+              </a>
             </div>
           </div>
 

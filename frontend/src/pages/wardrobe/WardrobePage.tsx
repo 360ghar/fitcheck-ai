@@ -21,12 +21,12 @@ import { useWardrobeStore } from '../../stores/wardrobeStore'
 import {
   Shirt,
   Plus,
-  Heart,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { FilterPanel, type ItemFilters, type SortOptions } from '@/components/wardrobe/FilterPanel'
 import { ItemUpload } from '@/components/wardrobe/ItemUpload'
 import { ItemDetailModal } from '@/components/wardrobe/ItemDetailModal'
+import { ItemCard } from '@/components/wardrobe/ItemCard'
 import { useToast } from '@/components/ui/use-toast'
 import { toggleItemFavorite as apiToggleFavorite, markItemAsWorn as apiMarkAsWorn, deleteItem as apiDeleteItem } from '@/api/items'
 import type { Item } from '@/types'
@@ -224,7 +224,7 @@ export default function WardrobePage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 md:mb-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 md:mb-6">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-foreground">Wardrobe</h1>
           <p className="text-sm text-muted-foreground">
@@ -232,6 +232,13 @@ export default function WardrobePage() {
           </p>
         </div>
         <Button onClick={() => setIsUploadModalOpen(true)} className="hidden md:flex">
+          <Plus className="h-4 w-4 mr-2" />
+          Add Item
+        </Button>
+      </div>
+
+      <div className="md:hidden mb-4">
+        <Button onClick={() => setIsUploadModalOpen(true)} className="w-full">
           <Plus className="h-4 w-4 mr-2" />
           Add Item
         </Button>
@@ -280,24 +287,33 @@ export default function WardrobePage() {
               : 'grid-cols-1'
           }`}
         >
-          {filteredItems.map((item) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              onClick={() => handleItemClick(item)}
-              onToggleFavorite={(e) => {
-                e.stopPropagation()
-                handleToggleFavorite(item.id)
-              }}
-            />
-          ))}
+          {filteredItems.map((item) => {
+            const isSelected = useWardrobeStore.getState().selectedItems.has(item.id)
+            return (
+              <ItemCard
+                key={item.id}
+                item={item}
+                variant={sort.isGridView ? 'default' : 'list'}
+                isSelected={isSelected}
+                onClick={() => handleItemClick(item)}
+                onToggleFavorite={(e) => {
+                  e.stopPropagation()
+                  handleToggleFavorite(item.id)
+                }}
+                onSelect={(e) => {
+                  e.stopPropagation()
+                  useWardrobeStore.getState().toggleItemSelected(item.id)
+                }}
+              />
+            )
+          })}
         </div>
       )}
 
       {/* Floating Action Button for mobile */}
       <button
         onClick={() => setIsUploadModalOpen(true)}
-        className="fixed bottom-[calc(var(--bottom-nav-height)+16px+var(--safe-area-bottom))] right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center md:hidden z-[90] hover:bg-primary/90 active:scale-95 transition-transform"
+        className="fixed bottom-[calc(var(--bottom-nav-height)+16px+var(--safe-area-bottom))] right-[calc(var(--safe-area-right)+1rem)] w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center md:hidden z-[90] hover:bg-primary/90 active:scale-95 transition-transform"
         aria-label="Add new item"
       >
         <Plus className="h-6 w-6" />
@@ -308,6 +324,7 @@ export default function WardrobePage() {
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         onUploadComplete={handleUploadComplete}
+        onRequestOpen={() => setIsUploadModalOpen(true)}
       />
 
       <ItemDetailModal
@@ -319,116 +336,6 @@ export default function WardrobePage() {
         onToggleFavorite={handleToggleFavorite}
         onMarkAsWorn={handleMarkAsWorn}
       />
-    </div>
-  )
-}
-
-// ============================================================================
-// ITEM CARD COMPONENT
-// ============================================================================
-
-interface ItemCardProps {
-  item: Item
-  onClick: () => void
-  onToggleFavorite: (e: React.MouseEvent) => void
-}
-
-function ItemCard({ item, onClick, onToggleFavorite }: ItemCardProps) {
-  const selectedItems = useWardrobeStore((state) => state.selectedItems)
-  const toggleItemSelected = useWardrobeStore((state) => state.toggleItemSelected)
-
-  const isSelected = selectedItems.has(item.id)
-
-  const getConditionBadgeClass = (condition: string) => {
-    switch (condition) {
-      case 'clean':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-      case 'dirty':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-      case 'laundry':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-      case 'repair':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-      case 'donate':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
-      default:
-        return 'bg-muted text-muted-foreground'
-    }
-  }
-
-  return (
-    <div
-      className="bg-card rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer relative group"
-      onClick={onClick}
-    >
-      {/* Checkbox for selection - Improved visibility */}
-      <div
-        className={`absolute top-2 left-2 z-10 w-7 h-7 md:w-5 md:h-5 rounded border-2 ${
-          isSelected
-            ? 'bg-primary border-primary'
-            : 'bg-card border-border'
-        } flex items-center justify-center touch-target`}
-        onClick={(e) => {
-          e.stopPropagation()
-          toggleItemSelected(item.id)
-        }}
-      >
-        {isSelected && (
-          <div className="w-2.5 h-2.5 md:w-2 md:h-2 bg-primary-foreground rounded-sm" />
-        )}
-      </div>
-
-      {/* Favorite button - larger touch target */}
-      <button
-        className={`absolute top-2 right-2 z-10 p-2.5 md:p-2 rounded-full touch-target flex items-center justify-center ${
-          item.is_favorite
-            ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400'
-            : 'bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-pink-500 dark:hover:text-pink-400'
-        }`}
-        onClick={onToggleFavorite}
-        aria-label={item.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
-      >
-        <Heart
-          className={`h-4 w-4 ${item.is_favorite ? 'fill-current' : ''}`}
-        />
-      </button>
-
-      {/* Item image */}
-      <div className="aspect-square rounded-t-lg overflow-hidden bg-muted">
-        {item.images.length > 0 ? (
-          <img
-            src={item.images[0].thumbnail_url || item.images[0].image_url}
-            alt={item.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-            loading="lazy"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Shirt className="h-12 w-12 md:h-16 md:w-16 text-muted-foreground/50" />
-          </div>
-        )}
-      </div>
-
-      {/* Item info */}
-      <div className="p-2.5 md:p-3">
-        <h3 className="font-medium text-sm text-foreground truncate">{item.name}</h3>
-        <p className="text-xs md:text-sm text-muted-foreground capitalize">{item.category}</p>
-        {item.brand && (
-          <p className="hidden md:block text-xs text-muted-foreground/70 mt-0.5 md:mt-1 truncate">{item.brand}</p>
-        )}
-        {item.usage_times_worn > 0 && (
-          <p className="hidden md:block text-xs text-muted-foreground/70 mt-0.5 md:mt-1">
-            Worn {item.usage_times_worn} {item.usage_times_worn === 1 ? 'time' : 'times'}
-          </p>
-        )}
-      </div>
-
-      {/* Condition indicator */}
-      <div
-        className={`absolute top-2 left-10 md:bottom-16 md:left-2 md:top-auto px-2 py-0.5 rounded-full text-[10px] md:text-xs font-medium shadow-sm border border-transparent/10 ${getConditionBadgeClass(item.condition)}`}
-      >
-        {item.condition}
-      </div>
     </div>
   )
 }

@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
+import { ZoomableImage } from '@/components/ui/zoomable-image';
 import { cn } from '@/lib/utils';
 
 type TryOnStep = 'upload' | 'options' | 'generating' | 'result';
@@ -61,14 +62,14 @@ function StepIndicator({ currentStep }: { currentStep: TryOnStep }) {
   const currentIndex = STEPS.findIndex((s) => s.id === currentStep);
 
   return (
-    <div className="flex items-center justify-center gap-2 md:gap-4 mb-4 md:mb-6 px-2 overflow-x-auto">
+    <div className="flex items-center justify-center gap-2 md:gap-4 mb-4 md:mb-6 px-2 overflow-x-auto scrollbar-hide scroll-snap-x touch-pan-x overscroll-x-contain">
       {STEPS.map((step, index) => {
         const isCompleted = index < currentIndex;
         const isCurrent = index === currentIndex;
         const isPending = index > currentIndex;
 
         return (
-          <div key={step.id} className="flex items-center gap-2 md:gap-4">
+          <div key={step.id} className="flex items-center gap-2 md:gap-4 scroll-snap-start">
             <div className="flex flex-col items-center">
               <div
                 className={cn(
@@ -265,7 +266,7 @@ export default function TryOnPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
-              <img
+              <ZoomableImage
                 src={clothingPreview}
                 alt="Clothing preview"
                 className="w-full h-48 md:h-64 object-contain rounded-lg bg-muted"
@@ -399,7 +400,7 @@ export default function TryOnPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
-              <img
+              <ZoomableImage
                 src={result.image_url || `data:image/png;base64,${result.image_base64}`}
                 alt="Try-on result"
                 className="w-full max-h-[50vh] md:max-h-[600px] object-contain rounded-lg bg-muted"

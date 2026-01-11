@@ -113,6 +113,8 @@ class GenerateOutfitRequest(BaseModel):
     model_gender: str = "female"
     custom_prompt: Optional[str] = None
     save_to_storage: bool = False
+    include_user_face: bool = True  # Use avatar for face consistency when available
+    use_body_profile: bool = True   # Use body profile data if available
 
 
 class GenerateOutfitResponse(BaseModel):

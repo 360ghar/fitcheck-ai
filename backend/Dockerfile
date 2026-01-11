@@ -20,19 +20,22 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 # Stage 2: Runtime - Final production image
 FROM python:3.12-slim
 
-# Set environment variables
+# Set environment variables - PATH updated for appuser
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PATH=/root/.local/bin:$PATH
+    PATH=/home/appuser/.local/bin:$PATH
 
-# Create a non-root user
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+# Create a non-root user with home directory
+RUN groupadd -r appuser && useradd -r -g appuser -m appuser
 
 # Set working directory
 WORKDIR /app
 
-# Copy Python dependencies from builder stage
-COPY --from=builder /root/.local /root/.local
+# Copy Python dependencies to appuser's home directory with correct ownership
+COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
+
+# Create logs directory with correct ownership (for session logging)
+RUN mkdir -p /app/logs && chown appuser:appuser /app/logs
 
 # Copy application code
 COPY --chown=appuser:appuser . .

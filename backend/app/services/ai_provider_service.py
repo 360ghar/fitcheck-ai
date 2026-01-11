@@ -99,14 +99,14 @@ class ChatMessage:
 def get_system_provider_config(provider: AIProvider) -> Optional[ProviderConfig]:
     """Get system-level default configuration for a provider."""
     if provider == AIProvider.GEMINI:
-        if not settings.GEMINI_API_KEY:
+        if not settings.AI_GEMINI_API_KEY:
             return None
         return ProviderConfig(
-            api_url=getattr(settings, 'AI_GEMINI_API_URL', 'https://generativelanguage.googleapis.com/v1beta'),
-            api_key=settings.GEMINI_API_KEY,
-            model=getattr(settings, 'AI_GEMINI_CHAT_MODEL', 'gemini-3-flash-preview'),
-            vision_model=getattr(settings, 'AI_GEMINI_VISION_MODEL', 'gemini-3-flash-preview'),
-            image_gen_model=getattr(settings, 'AI_GEMINI_IMAGE_MODEL', 'gemini-3-pro-image-preview'),
+            api_url=settings.AI_GEMINI_API_URL,
+            api_key=settings.AI_GEMINI_API_KEY,
+            model=settings.AI_GEMINI_CHAT_MODEL,
+            vision_model=settings.AI_GEMINI_VISION_MODEL,
+            image_gen_model=settings.AI_GEMINI_IMAGE_MODEL,
         )
     elif provider == AIProvider.OPENAI:
         api_key = getattr(settings, 'AI_OPENAI_API_KEY', None)
@@ -120,16 +120,12 @@ def get_system_provider_config(provider: AIProvider) -> Optional[ProviderConfig]
             image_gen_model=getattr(settings, 'AI_OPENAI_IMAGE_MODEL', 'dall-e-3'),
         )
     elif provider == AIProvider.CUSTOM:
-        api_url = getattr(settings, 'AI_CUSTOM_API_URL', None)
-        api_key = getattr(settings, 'AI_CUSTOM_API_KEY', None)
-        if not api_url or not api_key:
-            return None
         return ProviderConfig(
-            api_url=api_url,
-            api_key=api_key,
-            model=getattr(settings, 'AI_CUSTOM_CHAT_MODEL', 'gemini-3-flash-preview'),
-            vision_model=getattr(settings, 'AI_CUSTOM_VISION_MODEL', 'gemini-3-flash-preview'),
-            image_gen_model=getattr(settings, 'AI_CUSTOM_IMAGE_MODEL', 'gemini-3-pro-image-preview'),
+            api_url=settings.AI_CUSTOM_API_URL,
+            api_key=settings.AI_CUSTOM_API_KEY,
+            model=settings.AI_CUSTOM_CHAT_MODEL,
+            vision_model=settings.AI_CUSTOM_VISION_MODEL,
+            image_gen_model=settings.AI_CUSTOM_IMAGE_MODEL,
         )
     return None
 

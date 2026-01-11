@@ -24,6 +24,7 @@ import {
   Zap,
   Image as ImageIcon,
 } from 'lucide-react'
+import { ZoomableImage } from '@/components/ui/zoomable-image'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -159,7 +160,7 @@ export function ItemDetailModal({
                 {/* Image */}
                 <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
                   {item.images.length > 0 ? (
-                    <img
+                    <ZoomableImage
                       src={item.images[0].image_url}
                       alt={item.name}
                       className="w-full h-full object-cover"
@@ -336,7 +337,7 @@ export function ItemDetailModal({
                     <div className="grid grid-cols-3 gap-4">
                       {item.images.map((image) => (
                         <div key={image.id} className="aspect-square rounded-lg overflow-hidden">
-                          <img
+                          <ZoomableImage
                             src={image.image_url}
                             alt={item.name}
                             className="w-full h-full object-cover"

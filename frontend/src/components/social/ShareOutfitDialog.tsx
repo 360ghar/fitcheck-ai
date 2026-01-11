@@ -38,6 +38,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/use-toast'
+import { ZoomableImage } from '@/components/ui/zoomable-image'
 import { shareOutfit } from '@/api/outfits'
 import type { Outfit } from '@/types'
 
@@ -217,7 +218,7 @@ export function ShareOutfitDialog({
             <div className="flex gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
               <div className="w-32 h-32 rounded-lg overflow-hidden bg-white dark:bg-gray-700 flex-shrink-0">
                 {outfit.images?.length ? (
-                  <img
+                  <ZoomableImage
                     src={(outfit.images.find((img) => img.is_primary) || outfit.images[0]).image_url}
                     alt={outfit.name}
                     className="w-full h-full object-cover"
