@@ -292,6 +292,30 @@ async def list_outfits(
         res = query.order("created_at", desc=True).range(start, end).execute()
         outfits = [_normalize_outfit_images(o) for o in (res.data or [])]
 
+        # Fetch all items for all outfits in a single batch query
+        all_item_ids: List[str] = []
+        for outfit in outfits:
+            all_item_ids.extend(outfit.get("item_ids") or [])
+        all_item_ids = list(set(all_item_ids))  # dedupe
+
+        items_map: Dict[str, Dict[str, Any]] = {}
+        if all_item_ids:
+            items_res = db.table("items").select("*, item_images(*)").in_("id", all_item_ids).execute()
+            for item in (items_res.data or []):
+                # Transform item_images to have 'url' field for Flutter compatibility
+                item_images = item.get("item_images") or []
+                for img in item_images:
+                    img["url"] = img.get("image_url") or img.get("thumbnail_url") or ""
+                items_map[str(item["id"])] = item
+
+        # Attach items to each outfit
+        for outfit in outfits:
+            outfit["items"] = [
+                items_map.get(str(iid))
+                for iid in (outfit.get("item_ids") or [])
+                if str(iid) in items_map
+            ]
+
         total_pages = max(1, (total + page_size - 1) // page_size)
         return {
             "data": {
@@ -837,13 +861,80 @@ async def mark_worn(
 
         current = int(existing.data.get("worn_count") or 0)
         now = _now()
+
+        # Update outfit
         db.table("outfits").update({"worn_count": current + 1, "last_worn_at": now, "updated_at": now}).eq("id", outfit_id_str).execute()
+
+        # Insert wear history record
+        wear_record = {
+            "id": str(uuid.uuid4()),
+            "outfit_id": outfit_id_str,
+            "user_id": user_id,
+            "worn_at": now,
+            "created_at": now,
+        }
+        try:
+            db.table("outfit_wear_history").insert(wear_record).execute()
+        except Exception as hist_err:
+            # Log but don't fail if wear history table doesn't exist yet
+            logger.warning("Could not insert wear history record", outfit_id=outfit_id_str, error=str(hist_err))
+
         return {"data": {"id": outfit_id_str, "worn_count": current + 1, "last_worn_at": now}, "message": "OK"}
     except OutfitNotFoundError:
         raise
     except Exception as e:
         logger.error("Mark outfit worn error", outfit_id=str(outfit_id), user_id=user_id, error=str(e))
         raise DatabaseError("Failed to update wear count", operation="update")
+
+
+@router.get("/{outfit_id}/wear-history", response_model=Dict[str, Any])
+async def get_wear_history(
+    outfit_id: UUID,
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """Get wear history for an outfit."""
+    try:
+        outfit_id_str = str(outfit_id)
+
+        # Verify outfit exists and belongs to user
+        outfit = (
+            db.table("outfits")
+            .select("id")
+            .eq("id", outfit_id_str)
+            .eq("user_id", user_id)
+            .single()
+            .execute()
+        )
+        if not outfit.data:
+            raise OutfitNotFoundError(outfit_id=outfit_id_str)
+
+        # Get wear history
+        try:
+            history = (
+                db.table("outfit_wear_history")
+                .select("*")
+                .eq("outfit_id", outfit_id_str)
+                .order("worn_at", desc=True)
+                .limit(100)
+                .execute()
+            )
+            wear_history = history.data or []
+        except Exception:
+            # Table might not exist yet
+            wear_history = []
+
+        return {
+            "data": {
+                "wear_history": wear_history
+            },
+            "message": "OK"
+        }
+    except OutfitNotFoundError:
+        raise
+    except Exception as e:
+        logger.error("Get wear history error", outfit_id=str(outfit_id), user_id=user_id, error=str(e))
+        raise DatabaseError("Failed to fetch wear history", operation="select")
 
 
 @router.post("/{outfit_id}/duplicate", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)

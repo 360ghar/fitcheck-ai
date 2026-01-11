@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../../core/constants/app_constants.dart';
@@ -396,13 +395,17 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(AppConstants.radius8),
-                          child: CachedNetworkImage(
-                            imageUrl: image.url,
+                          child: SizedBox(
                             width: 100,
                             height: 100,
-                            fit: BoxFit.cover,
-                            color: isDeleting ? Colors.black.withOpacity(0.5) : null,
-                            colorBlendMode: isDeleting ? BlendMode.srcOver : null,
+                            child: AppImage(
+                              imageUrl: image.url,
+                              fit: BoxFit.contain,
+                              enableZoom: false,
+                              backgroundColor: isDeleting
+                                  ? Colors.black.withOpacity(0.5)
+                                  : null,
+                            ),
                           ),
                         ),
                         Positioned(

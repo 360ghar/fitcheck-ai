@@ -15,6 +15,11 @@ class SettingsController extends GetxController {
   final RxBool isSaving = false.obs;
   final RxString error = ''.obs;
 
+  // Action-specific loading states
+  final RxBool isChangingPassword = false.obs;
+  final RxBool isExportingData = false.obs;
+  final RxBool isDeletingAccount = false.obs;
+
   // Getters
   bool get hasError => error.value.isNotEmpty;
   bool get hasPreferences => preferences.value != null;
@@ -168,6 +173,7 @@ class SettingsController extends GetxController {
 
   /// Change password
   Future<void> changePassword(String currentPassword, String newPassword) async {
+    isChangingPassword.value = true;
     try {
       await _repository.updatePassword(currentPassword, newPassword);
       Get.back();
@@ -183,11 +189,15 @@ class SettingsController extends GetxController {
         e.toString().replaceAll('Exception: ', ''),
         snackPosition: SnackPosition.TOP,
       );
+      rethrow;
+    } finally {
+      isChangingPassword.value = false;
     }
   }
 
   /// Request data export
   Future<void> exportData() async {
+    isExportingData.value = true;
     try {
       final exportUrl = await _repository.requestDataExport();
       Get.snackbar(
@@ -201,11 +211,14 @@ class SettingsController extends GetxController {
         e.toString().replaceAll('Exception: ', ''),
         snackPosition: SnackPosition.TOP,
       );
+    } finally {
+      isExportingData.value = false;
     }
   }
 
   /// Delete account
   Future<void> deleteAccount() async {
+    isDeletingAccount.value = true;
     try {
       await _repository.deleteAccount();
       await _authController.logout();
@@ -215,6 +228,9 @@ class SettingsController extends GetxController {
         e.toString().replaceAll('Exception: ', ''),
         snackPosition: SnackPosition.TOP,
       );
+      rethrow;
+    } finally {
+      isDeletingAccount.value = false;
     }
   }
 

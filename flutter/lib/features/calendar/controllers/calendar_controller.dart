@@ -28,6 +28,20 @@ class CalendarController extends GetxController {
   final RxBool isConnecting = false.obs;
   final RxString error = ''.obs;
 
+  // Action-specific loading states
+  final RxBool isCreatingEvent = false.obs;
+  final RxBool isUpdatingEvent = false.obs;
+  final RxMap<String, bool> isDeletingEventMap = <String, bool>{}.obs;
+  final RxMap<String, bool> isDisconnectingMap = <String, bool>{}.obs;
+  final RxMap<String, bool> isLinkingOutfitMap = <String, bool>{}.obs;
+  final RxMap<String, bool> isRemovingOutfitMap = <String, bool>{}.obs;
+
+  // Loading state helpers
+  bool isDeletingEvent(String id) => isDeletingEventMap[id] ?? false;
+  bool isDisconnecting(String id) => isDisconnectingMap[id] ?? false;
+  bool isLinkingOutfit(String id) => isLinkingOutfitMap[id] ?? false;
+  bool isRemovingOutfit(String id) => isRemovingOutfitMap[id] ?? false;
+
   // Getters
   bool get hasError => error.value.isNotEmpty;
   List<CalendarEventModel> get selectedDateEvents {
@@ -139,6 +153,7 @@ class CalendarController extends GetxController {
 
   /// Disconnect calendar
   Future<void> disconnectCalendar(String connectionId) async {
+    isDisconnectingMap[connectionId] = true;
     try {
       await _repository.disconnectCalendar(connectionId);
       connections.removeWhere((c) => c.id == connectionId);
@@ -154,6 +169,8 @@ class CalendarController extends GetxController {
         'Failed to disconnect calendar',
         snackPosition: SnackPosition.TOP,
       );
+    } finally {
+      isDisconnectingMap.remove(connectionId);
     }
   }
 
@@ -167,6 +184,7 @@ class CalendarController extends GetxController {
     bool isAllDay = false,
     String? outfitId,
   }) async {
+    isCreatingEvent.value = true;
     try {
       final newEvent = await _repository.createEvent(
         title: title,
@@ -194,6 +212,8 @@ class CalendarController extends GetxController {
         e.toString().replaceAll('Exception: ', ''),
         snackPosition: SnackPosition.TOP,
       );
+    } finally {
+      isCreatingEvent.value = false;
     }
   }
 
@@ -208,6 +228,7 @@ class CalendarController extends GetxController {
     bool? isAllDay,
     String? outfitId,
   }) async {
+    isUpdatingEvent.value = true;
     try {
       final updatedEvent = await _repository.updateEvent(
         eventId,
@@ -237,11 +258,14 @@ class CalendarController extends GetxController {
         e.toString().replaceAll('Exception: ', ''),
         snackPosition: SnackPosition.TOP,
       );
+    } finally {
+      isUpdatingEvent.value = false;
     }
   }
 
   /// Delete event
   Future<void> deleteEvent(String eventId) async {
+    isDeletingEventMap[eventId] = true;
     try {
       await _repository.deleteEvent(eventId);
       events.removeWhere((e) => e.id == eventId);
@@ -259,11 +283,14 @@ class CalendarController extends GetxController {
         e.toString().replaceAll('Exception: ', ''),
         snackPosition: SnackPosition.TOP,
       );
+    } finally {
+      isDeletingEventMap.remove(eventId);
     }
   }
 
   /// Link outfit to event
   Future<void> linkOutfit(String eventId, String outfitId) async {
+    isLinkingOutfitMap[eventId] = true;
     try {
       final updatedEvent = await _repository.linkOutfit(eventId, outfitId);
       final index = events.indexWhere((e) => e.id == eventId);
@@ -284,11 +311,14 @@ class CalendarController extends GetxController {
         e.toString().replaceAll('Exception: ', ''),
         snackPosition: SnackPosition.TOP,
       );
+    } finally {
+      isLinkingOutfitMap.remove(eventId);
     }
   }
 
   /// Remove outfit from event
   Future<void> removeOutfit(String eventId) async {
+    isRemovingOutfitMap[eventId] = true;
     try {
       final updatedEvent = await _repository.removeOutfit(eventId);
       final index = events.indexWhere((e) => e.id == eventId);
@@ -308,6 +338,8 @@ class CalendarController extends GetxController {
         e.toString().replaceAll('Exception: ', ''),
         snackPosition: SnackPosition.TOP,
       );
+    } finally {
+      isRemovingOutfitMap.remove(eventId);
     }
   }
 

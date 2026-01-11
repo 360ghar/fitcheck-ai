@@ -4,6 +4,8 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../auth/controllers/auth_controller.dart';
+import '../repositories/profile_repository.dart';
 
 /// Edit profile page
 class ProfileEditPage extends StatefulWidget {
@@ -16,18 +18,22 @@ class ProfileEditPage extends StatefulWidget {
 class _ProfileEditPageState extends State<ProfileEditPage> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _imagePicker = ImagePicker();
+  final ProfileRepository _repository = ProfileRepository();
 
   late TextEditingController _nameController;
-  late TextEditingController _bioController;
   final Rx<File?> newAvatar = Rx<File?>(null);
   final RxBool isSaving = false.obs;
+
+  String? _currentAvatarUrl;
 
   @override
   void initState() {
     super.initState();
-    // TODO: Get user data from auth controller
-    _nameController = TextEditingController(text: 'User Name');
-    _bioController = TextEditingController(text: 'Fashion enthusiast');
+    final authController = Get.find<AuthController>();
+    final user = authController.user.value;
+
+    _nameController = TextEditingController(text: user?.fullName ?? '');
+    _currentAvatarUrl = user?.avatarUrl;
   }
 
   Future<void> _pickAvatar() async {
@@ -49,7 +55,23 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     isSaving.value = true;
 
     try {
-      // TODO: Implement profile update
+      String? avatarUrl = _currentAvatarUrl;
+
+      // Upload avatar if changed
+      if (newAvatar.value != null) {
+        avatarUrl = await _repository.uploadAvatar(newAvatar.value!);
+      }
+
+      // Update profile
+      await _repository.updateProfile(
+        fullName: _nameController.text.trim(),
+        avatarUrl: avatarUrl,
+      );
+
+      // Refresh user data in AuthController
+      final authController = Get.find<AuthController>();
+      await authController.refreshUser();
+
       Get.back();
       Get.snackbar(
         'Success',
@@ -70,7 +92,6 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   @override
   void dispose() {
     _nameController.dispose();
-    _bioController.dispose();
     super.dispose();
   }
 
@@ -104,70 +125,80 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
               child: Column(
                 children: [
                   // Avatar section
-                  Obx(() => GestureDetector(
-                        onTap: _pickAvatar,
-                        child: AppGlassCard(
-                          padding: const EdgeInsets.all(AppConstants.spacing20),
-                          child: Row(
-                            children: [
-                              Obx(() {
-                                final avatar = newAvatar.value;
+                  GestureDetector(
+                    onTap: _pickAvatar,
+                    child: AppGlassCard(
+                      padding: const EdgeInsets.all(AppConstants.spacing20),
+                      child: Row(
+                        children: [
+                          Obx(() {
+                            final avatar = newAvatar.value;
 
-                                return Container(
-                                  width: 80,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: tokens.brandColor,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  child: ClipOval(
-                                    child: avatar != null
-                                        ? Image.file(
-                                            avatar,
-                                            fit: BoxFit.cover,
-                                          )
-                                        : Container(
-                                            color: tokens.brandColor,
-                                            child: const Icon(
-                                              Icons.person,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                  ),
-                                );
-                              }),
-                              const SizedBox(width: AppConstants.spacing16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Profile Photo',
-                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                    ),
-                                    const SizedBox(height: AppConstants.spacing4),
-                                    Text(
-                                      'Tap to change',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            color: tokens.textMuted,
-                                          ),
-                                    ),
-                                  ],
+                            return Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: tokens.brandColor,
+                                  width: 2,
                                 ),
                               ),
-                              Icon(
-                                Icons.camera_alt,
-                                color: tokens.brandColor,
+                              child: ClipOval(
+                                child: avatar != null
+                                    ? Image.file(
+                                        avatar,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : _currentAvatarUrl != null &&
+                                            _currentAvatarUrl!.isNotEmpty
+                                        ? Image.network(
+                                            _currentAvatarUrl!,
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (context, error, stackTrace) =>
+                                                    _buildAvatarPlaceholder(
+                                                        tokens),
+                                          )
+                                        : _buildAvatarPlaceholder(tokens),
                               ),
-                            ],
+                            );
+                          }),
+                          const SizedBox(width: AppConstants.spacing16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Profile Photo',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                ),
+                                const SizedBox(height: AppConstants.spacing4),
+                                Text(
+                                  'Tap to change',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: tokens.textMuted,
+                                      ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      )),
+                          Icon(
+                            Icons.camera_alt,
+                            color: tokens.brandColor,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
                   const SizedBox(height: AppConstants.spacing24),
 
@@ -186,24 +217,23 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                     },
                   ),
 
-                  const SizedBox(height: AppConstants.spacing16),
-
-                  // Bio field
-                  TextFormField(
-                    controller: _bioController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Bio',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-
                   const SizedBox(height: AppConstants.spacing32),
                 ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildAvatarPlaceholder(AppUiTokens tokens) {
+    return Container(
+      color: tokens.brandColor,
+      child: const Icon(
+        Icons.person,
+        color: Colors.white,
+        size: 40,
       ),
     );
   }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
@@ -79,13 +78,11 @@ class FindMatchesTab extends StatelessWidget {
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(AppConstants.radius8),
                       child: item.itemImages != null && item.itemImages!.isNotEmpty
-                          ? CachedNetworkImage(
+                          ? AppImage(
                               imageUrl: item.itemImages!.first.url,
-                              fit: BoxFit.cover,
-                              errorWidget: (context, url, error) => Icon(
-                                    _getCategoryIcon(item.category),
-                                    color: tokens.textMuted,
-                                  ),
+                              fit: BoxFit.contain,
+                              enableZoom: false,
+                              errorIcon: _getCategoryIcon(item.category),
                             )
                           : Icon(
                               _getCategoryIcon(item.category),

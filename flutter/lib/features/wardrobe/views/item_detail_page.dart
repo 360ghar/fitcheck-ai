@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:photo_view/photo_view.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
@@ -66,12 +64,20 @@ class ItemDetailPage extends StatelessWidget {
                                   ),
                                 ),
                                 IconButton(
-                                  onPressed: () => wardrobeController.toggleFavorite(item.id),
-                                  icon: Icon(
-                                    item.isFavorite ? Icons.favorite : Icons.favorite_border,
-                                    color: item.isFavorite ? Colors.red : null,
-                                    size: 28,
-                                  ),
+                                  onPressed: wardrobeController.isFavoriting(item.id)
+                                      ? null
+                                      : () => wardrobeController.toggleFavorite(item.id),
+                                  icon: wardrobeController.isFavoriting(item.id)
+                                      ? const SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : Icon(
+                                          item.isFavorite ? Icons.favorite : Icons.favorite_border,
+                                          color: item.isFavorite ? Colors.red : null,
+                                          size: 28,
+                                        ),
                                 ),
                               ],
                             ),
@@ -199,62 +205,42 @@ class ItemDetailPage extends StatelessWidget {
   }
 
   Widget _buildImageHeader(ItemModel item, AppUiTokens tokens) {
+    final hasImages = item.itemImages != null && item.itemImages!.isNotEmpty;
+    final imageUrls = hasImages
+        ? item.itemImages!.map((img) => img.url).toList()
+        : <String>[];
+
     return SliverAppBar(
-      expandedHeight: 300,
+      expandedHeight: 350,
       pinned: false,
       backgroundColor: Colors.transparent,
+      automaticallyImplyLeading: false,
       flexibleSpace: FlexibleSpaceBar(
-        background: item.itemImages != null && item.itemImages!.isNotEmpty
-            ? GestureDetector(
-                onTap: () => _openFullScreenImage(item.itemImages!.first.url),
-                child: CachedNetworkImage(
-                  imageUrl: item.itemImages!.first.url,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    color: tokens.cardColor,
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    color: tokens.cardColor,
-                    child: Icon(
-                      _getCategoryIcon(item.category),
-                      size: 64,
-                      color: tokens.textMuted,
-                    ),
+        background: Container(
+          color: tokens.isDarkMode
+              ? Colors.black.withOpacity(0.3)
+              : Colors.grey.withOpacity(0.1),
+          child: hasImages
+              ? AppImage(
+                  imageUrl: imageUrls.first,
+                  fit: BoxFit.contain,
+                  backgroundColor: tokens.isDarkMode
+                      ? Colors.black.withOpacity(0.3)
+                      : Colors.grey.withOpacity(0.1),
+                  enableZoom: true,
+                  galleryUrls: imageUrls,
+                  errorIcon: _getCategoryIcon(item.category),
+                )
+              : Center(
+                  child: Icon(
+                    _getCategoryIcon(item.category),
+                    size: 64,
+                    color: tokens.textMuted,
                   ),
                 ),
-              )
-            : Container(
-                color: tokens.cardColor,
-                child: Icon(
-                  _getCategoryIcon(item.category),
-                  size: 64,
-                  color: tokens.textMuted,
-                ),
-              ),
+        ),
       ),
     );
-
-    // Image gallery indicator
-    // if (item.itemImages != null && item.itemImages!.length > 1) ...[
-    //   Positioned(
-    //     bottom: AppConstants.spacing8,
-    //     right: AppConstants.spacing8,
-    //     child: Container(
-    //       padding: const EdgeInsets.symmetric(
-    //         horizontal: AppConstants.spacing8,
-    //         vertical: AppConstants.spacing4,
-    //       ),
-    //       decoration: BoxDecoration(
-    //         color: Colors.black.withOpacity(0.6),
-    //         borderRadius: BorderRadius.circular(AppConstants.radius12),
-    //       ),
-    //       child: Text(
-    //         '1/${item.itemImages!.length}',
-    //         style: const TextStyle(color: Colors.white),
-    //       ),
-    //     ),
-    //   ),
-    // ],
   }
 
   Widget _buildDetailsSection(
@@ -448,6 +434,8 @@ class ItemDetailPage extends StatelessWidget {
   }
 
   Widget _buildBottomActionBar(BuildContext context, AppUiTokens tokens) {
+    final WardrobeController controller = Get.find<WardrobeController>();
+
     return Container(
       padding: const EdgeInsets.all(AppConstants.spacing16),
       decoration: BoxDecoration(
@@ -476,14 +464,19 @@ class ItemDetailPage extends StatelessWidget {
             ),
             const SizedBox(width: AppConstants.spacing12),
             Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  final WardrobeController controller = Get.find<WardrobeController>();
-                  controller.markAsWorn(itemId);
-                },
-                icon: const Icon(Icons.checkroom),
-                label: const Text('Mark Worn'),
-              ),
+              child: Obx(() => ElevatedButton.icon(
+                onPressed: controller.isMarkingWorn(itemId)
+                    ? null
+                    : () => controller.markAsWorn(itemId),
+                icon: controller.isMarkingWorn(itemId)
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.checkroom),
+                label: Text(controller.isMarkingWorn(itemId) ? 'Marking...' : 'Mark Worn'),
+              )),
             ),
           ],
         ),
@@ -508,23 +501,6 @@ class ItemDetailPage extends StatelessWidget {
               color: tokens.brandColor,
               fontWeight: FontWeight.w500,
             ),
-      ),
-    );
-  }
-
-  void _openFullScreenImage(String imageUrl) {
-    Get.to(
-      () => Scaffold(
-        backgroundColor: Colors.black,
-        appBar: AppBar(
-          backgroundColor: Colors.black,
-          iconTheme: const IconThemeData(color: Colors.white),
-        ),
-        body: Center(
-          child: PhotoView(
-            imageProvider: NetworkImage(imageUrl),
-          ),
-        ),
       ),
     );
   }

@@ -517,12 +517,12 @@ class _CalendarPageState extends State<CalendarPage> {
               ),
             ),
             actions: [
-              TextButton(
-                onPressed: () => Get.back(),
+              Obx(() => TextButton(
+                onPressed: controller.isCreatingEvent.value ? null : () => Get.back(),
                 child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () {
+              )),
+              Obx(() => ElevatedButton(
+                onPressed: controller.isCreatingEvent.value ? null : () {
                   if (titleController.text.isEmpty) {
                     Get.snackbar('Error', 'Please enter a title');
                     return;
@@ -536,8 +536,14 @@ class _CalendarPageState extends State<CalendarPage> {
                     isAllDay: isAllDay,
                   );
                 },
-                child: const Text('Create'),
-              ),
+                child: controller.isCreatingEvent.value
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Create'),
+              )),
             ],
           );
         },
@@ -632,12 +638,12 @@ class _CalendarPageState extends State<CalendarPage> {
               ),
             ),
             actions: [
-              TextButton(
-                onPressed: () => Get.back(),
+              Obx(() => TextButton(
+                onPressed: controller.isUpdatingEvent.value ? null : () => Get.back(),
                 child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () {
+              )),
+              Obx(() => ElevatedButton(
+                onPressed: controller.isUpdatingEvent.value ? null : () {
                   if (titleController.text.isEmpty) {
                     Get.snackbar('Error', 'Please enter a title');
                     return;
@@ -652,8 +658,14 @@ class _CalendarPageState extends State<CalendarPage> {
                     isAllDay: isAllDay,
                   );
                 },
-                child: const Text('Save'),
-              ),
+                child: controller.isUpdatingEvent.value
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save'),
+              )),
             ],
           );
         },
@@ -663,24 +675,31 @@ class _CalendarPageState extends State<CalendarPage> {
 
   void _showDeleteConfirmDialog(CalendarEventModel event) {
     Get.dialog(
-      AlertDialog(
+      Obx(() => AlertDialog(
         title: const Text('Delete Event?'),
         content: Text('Are you sure you want to delete "${event.title}"?'),
         actions: [
           TextButton(
-            onPressed: () => Get.back(),
+            onPressed: controller.isDeletingEvent(event.id) ? null : () => Get.back(),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () => controller.deleteEvent(event.id),
+            onPressed: controller.isDeletingEvent(event.id) ? null : () => controller.deleteEvent(event.id),
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
               foregroundColor: Theme.of(context).colorScheme.onError,
             ),
-            child: const Text('Delete'),
+            child: controller.isDeletingEvent(event.id)
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('Delete'),
           ),
         ],
-      ),
+      )),
+      barrierDismissible: false,
     );
   }
 

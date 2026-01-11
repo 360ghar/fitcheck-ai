@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
@@ -45,7 +44,9 @@ class _WardrobePageState extends State<WardrobePage> {
                     return _buildEmptyState();
                   }
 
-                  return _buildItemsGrid();
+                  return controller.viewMode.value == 'grid'
+                      ? _buildItemsGrid()
+                      : _buildItemsList();
                 }),
               ),
             ],
@@ -163,6 +164,179 @@ class _WardrobePageState extends State<WardrobePage> {
     );
   }
 
+  Widget _buildItemsList() {
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          final item = controller.filteredItems[index];
+          final isSelected = controller.selectedIds.contains(item.id);
+
+          return GestureDetector(
+            onTap: () {
+              if (controller.selectedIds.isNotEmpty) {
+                controller.toggleItemSelection(item);
+              } else {
+                Get.toNamed('/wardrobe/${item.id}');
+              }
+            },
+            onLongPress: () {
+              controller.setSelectedItem(item);
+              _showItemOptions(item);
+            },
+            child: _buildListItemCard(item, isSelected),
+          );
+        },
+        childCount: controller.filteredItems.length,
+      ),
+    );
+  }
+
+  Widget _buildListItemCard(dynamic item, bool isSelected) {
+    final tokens = AppUiTokens.of(context);
+    final hasImages = item.itemImages != null && item.itemImages!.isNotEmpty;
+    final imageUrls = hasImages
+        ? item.itemImages!.map<String>((img) => img.url as String).toList()
+        : <String>[];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppConstants.spacing12),
+      decoration: BoxDecoration(
+        color: tokens.cardColor,
+        borderRadius: BorderRadius.circular(AppConstants.radius16),
+        border: Border.all(
+          color: isSelected ? tokens.brandColor : tokens.cardBorderColor,
+          width: isSelected ? 2 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: tokens.cardShadowColor,
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Item image thumbnail
+          ClipRRect(
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(AppConstants.radius16 - 1),
+              bottomLeft: Radius.circular(AppConstants.radius16 - 1),
+            ),
+            child: SizedBox(
+              width: 100,
+              height: 100,
+              child: hasImages
+                  ? AppImage(
+                      imageUrl: imageUrls.first,
+                      fit: BoxFit.cover,
+                      backgroundColor: tokens.isDarkMode
+                          ? Colors.black.withOpacity(0.3)
+                          : Colors.grey.withOpacity(0.1),
+                      enableZoom: controller.selectedIds.isEmpty,
+                      galleryUrls: imageUrls,
+                      memCacheWidth: 200,
+                      memCacheHeight: 200,
+                      errorIcon: _getCategoryIcon(item.category),
+                    )
+                  : _buildPlaceholder(item.category),
+            ),
+          ),
+
+          // Item details
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(AppConstants.spacing12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    item.name,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: tokens.textPrimary,
+                        ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: AppConstants.spacing4),
+                  Row(
+                    children: [
+                      Icon(
+                        _getCategoryIcon(item.category),
+                        size: 14,
+                        color: tokens.textMuted,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        item.category.displayName,
+                        style: TextStyle(
+                          color: tokens.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (item.brand != null && item.brand!.isNotEmpty) ...[
+                    const SizedBox(height: AppConstants.spacing4),
+                    Text(
+                      item.brand!,
+                      style: TextStyle(
+                        color: tokens.textMuted,
+                        fontSize: 12,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          // Indicators (favorite, selection)
+          Padding(
+            padding: const EdgeInsets.only(right: AppConstants.spacing12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (item.isFavorite)
+                  Container(
+                    padding: const EdgeInsets.all(AppConstants.spacing4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondary.withOpacity(0.9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.favorite,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                  ),
+                if (isSelected) ...[
+                  const SizedBox(width: AppConstants.spacing8),
+                  Container(
+                    padding: const EdgeInsets.all(AppConstants.spacing4),
+                    decoration: BoxDecoration(
+                      color: tokens.brandColor,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildItemCard(dynamic item, bool isSelected) {
     final tokens = AppUiTokens.of(context);
 
@@ -187,22 +361,17 @@ class _WardrobePageState extends State<WardrobePage> {
           // Item image
           Positioned.fill(
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppConstants.radius16),
+              borderRadius: BorderRadius.circular(AppConstants.radius16 - 1),
               child: item.itemImages != null && item.itemImages!.isNotEmpty
-                  ? CachedNetworkImage(
+                  ? AppImage(
                       imageUrl: item.itemImages!.first.url,
-                      fit: BoxFit.cover,
-                      memCacheWidth: 400, // Downsample for thumbnail (better performance)
-                      memCacheHeight: 600,
-                      placeholder: (context, url) => Shimmer.fromColors(
-                        baseColor: tokens.cardColor.withOpacity(0.4),
-                        highlightColor: tokens.cardColor.withOpacity(0.7),
-                        period: const Duration(milliseconds: 1200),
-                        child: Container(
-                          color: tokens.cardColor.withOpacity(0.3),
-                        ),
-                      ),
-                      errorWidget: (context, url, error) => _buildPlaceholder(item.category),
+                      fit: BoxFit.contain,
+                      enableZoom: true,
+                      galleryUrls: item.itemImages!.map<String>((img) => img.url as String).toList(),
+                      backgroundColor: tokens.isDarkMode
+                          ? Colors.black.withOpacity(0.3)
+                          : Colors.grey.withOpacity(0.1),
+                      errorIcon: _getCategoryIcon(item.category),
                     )
                   : _buildPlaceholder(item.category),
             ),

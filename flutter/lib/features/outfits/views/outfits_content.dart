@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
@@ -126,6 +125,10 @@ class _OutfitsContentState extends State<OutfitsContent> {
 
   Widget _buildOutfitCard(dynamic outfit) {
     final tokens = AppUiTokens.of(context);
+    final hasImages = outfit.outfitImages != null && outfit.outfitImages!.isNotEmpty;
+    final imageUrls = hasImages
+        ? outfit.outfitImages!.map<String>((img) => img.url as String).toList()
+        : <String>[];
 
     return GestureDetector(
       onTap: () => Get.toNamed('/outfits/${outfit.id}'),
@@ -147,19 +150,19 @@ class _OutfitsContentState extends State<OutfitsContent> {
         ),
         child: Stack(
           children: [
-            // Outfit image/items preview
+            // Outfit image/items preview using AppImage
             Positioned.fill(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppConstants.radius16),
-                child: outfit.outfitImages != null && outfit.outfitImages!.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: outfit.outfitImages!.first.url,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: tokens.cardColor.withOpacity(0.6),
-                        ),
-                        errorWidget: (context, url, error) =>
-                            _buildPlaceholder(),
+                borderRadius: BorderRadius.circular(AppConstants.radius16 - 1),
+                child: hasImages
+                    ? AppImage(
+                        imageUrl: imageUrls.first,
+                        fit: BoxFit.contain,
+                        backgroundColor: tokens.isDarkMode
+                            ? Colors.black.withOpacity(0.3)
+                            : Colors.grey.withOpacity(0.1),
+                        enableZoom: false,
+                        galleryUrls: imageUrls,
                       )
                     : _buildPlaceholder(),
               ),
@@ -175,6 +178,13 @@ class _OutfitsContentState extends State<OutfitsContent> {
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.secondary.withOpacity(0.9),
                     shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: const Icon(
                     Icons.favorite,

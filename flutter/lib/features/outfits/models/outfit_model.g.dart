@@ -28,6 +28,9 @@ _$OutfitModelImpl _$$OutfitModelImplFromJson(Map<String, dynamic> json) =>
       outfitImages: (json['outfit_images'] as List<dynamic>?)
           ?.map((e) => OutfitImage.fromJson(e as Map<String, dynamic>))
           .toList(),
+      items: (json['items'] as List<dynamic>?)
+          ?.map((e) => ItemModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
       createdAt: json['created_at'] == null
           ? null
           : DateTime.parse(json['created_at'] as String),
@@ -53,6 +56,7 @@ Map<String, dynamic> _$$OutfitModelImplToJson(_$OutfitModelImpl instance) =>
       'worn_count': instance.wornCount,
       'last_worn_at': instance.lastWornAt?.toIso8601String(),
       'outfit_images': instance.outfitImages,
+      'items': instance.items,
       'created_at': instance.createdAt?.toIso8601String(),
       'updated_at': instance.updatedAt?.toIso8601String(),
     };
@@ -290,5 +294,27 @@ Map<String, dynamic> _$$OutfitVisualizationResultImplToJson(
       'imageUrl': instance.imageUrl,
       'image_base64': instance.imageBase64,
       'error': instance.error,
+      'created_at': instance.createdAt?.toIso8601String(),
+    };
+
+_$WearHistoryEntryImpl _$$WearHistoryEntryImplFromJson(
+        Map<String, dynamic> json) =>
+    _$WearHistoryEntryImpl(
+      id: json['id'] as String,
+      outfitId: json['outfit_id'] as String,
+      wornAt: DateTime.parse(json['worn_at'] as String),
+      notes: json['notes'] as String?,
+      createdAt: json['created_at'] == null
+          ? null
+          : DateTime.parse(json['created_at'] as String),
+    );
+
+Map<String, dynamic> _$$WearHistoryEntryImplToJson(
+        _$WearHistoryEntryImpl instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'outfit_id': instance.outfitId,
+      'worn_at': instance.wornAt.toIso8601String(),
+      'notes': instance.notes,
       'created_at': instance.createdAt?.toIso8601String(),
     };

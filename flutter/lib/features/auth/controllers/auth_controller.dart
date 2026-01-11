@@ -19,6 +19,10 @@ class AuthController extends GetxController {
   final RxBool isInitialized = false.obs;
   final RxString error = RxString('');
 
+  // Action-specific loading states
+  final RxBool isLoggingOut = false.obs;
+  final RxBool isGoogleSigningIn = false.obs;
+
   // Getters
   bool get isAuthenticated => _supabase.isAuthenticated.value && user.value != null;
   bool get hasError => error.value.isNotEmpty;
@@ -220,7 +224,7 @@ class AuthController extends GetxController {
   /// Sign in with Google OAuth
   Future<void> signInWithGoogle() async {
     try {
-      isLoading.value = true;
+      isGoogleSigningIn.value = true;
       error.value = '';
 
       await _supabase.signInWithGoogle();
@@ -249,12 +253,13 @@ class AuthController extends GetxController {
       );
       rethrow;
     } finally {
-      isLoading.value = false;
+      isGoogleSigningIn.value = false;
     }
   }
 
   /// Logout user
   Future<void> logout() async {
+    isLoggingOut.value = true;
     try {
       await _supabase.signOut();
       AnalyticsService.instance.reset();
@@ -270,6 +275,8 @@ class AuthController extends GetxController {
       );
     } catch (e) {
       error.value = e.toString();
+    } finally {
+      isLoggingOut.value = false;
     }
   }
 

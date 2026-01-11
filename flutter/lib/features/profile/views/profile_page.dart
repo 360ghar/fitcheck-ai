@@ -172,9 +172,7 @@ class ProfilePage extends StatelessWidget {
             ),
             IconButton(
               icon: const Icon(Icons.edit),
-              onPressed: () {
-                // TODO: Navigate to edit profile
-              },
+              onPressed: () => Get.toNamed(Routes.profileEdit),
             ),
           ],
         );
@@ -339,27 +337,21 @@ class ProfilePage extends StatelessWidget {
             context,
             icon: Icons.person,
             title: 'Edit Profile',
-            onTap: () {
-              // TODO: Navigate to edit profile
-            },
+            onTap: () => Get.toNamed(Routes.profileEdit),
           ),
           _buildDivider(context),
           _buildMenuItem(
             context,
             icon: Icons.palette,
             title: 'Style Preferences',
-            onTap: () {
-              // TODO: Navigate to preferences
-            },
+            onTap: () => Get.toNamed(Routes.settings),
           ),
           _buildDivider(context),
           _buildMenuItem(
             context,
             icon: Icons.accessibility_new,
             title: 'Body Profiles',
-            onTap: () {
-              // TODO: Navigate to body profiles
-            },
+            onTap: () => Get.toNamed(Routes.bodyProfiles),
           ),
         ],
       ),
@@ -556,27 +548,33 @@ class ProfilePage extends StatelessWidget {
 
   void _showLogoutDialog(BuildContext context, AuthController authController) {
     Get.dialog(
-      AlertDialog(
+      Obx(() => AlertDialog(
         title: const Text('Logout?'),
         content: const Text('Are you sure you want to logout?'),
         actions: [
           TextButton(
-            onPressed: () => Get.back(),
+            onPressed: authController.isLoggingOut.value ? null : () => Get.back(),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
-              Get.back();
-              authController.logout();
-            },
+            onPressed: authController.isLoggingOut.value
+                ? null
+                : () => authController.logout(),
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
               foregroundColor: Theme.of(context).colorScheme.onError,
             ),
-            child: const Text('Logout'),
+            child: authController.isLoggingOut.value
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('Logout'),
           ),
         ],
-      ),
+      )),
+      barrierDismissible: false,
     );
   }
 

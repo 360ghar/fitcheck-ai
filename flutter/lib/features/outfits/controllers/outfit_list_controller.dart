@@ -34,10 +34,30 @@ class OutfitListController extends GetxController {
   final RxBool hasMore = true.obs;
   final RxInt totalOutfits = 0.obs;
 
+  // Action-specific loading states (per-item)
+  final RxMap<String, bool> isDeletingMap = <String, bool>{}.obs;
+  final RxMap<String, bool> isFavoritingMap = <String, bool>{}.obs;
+  final RxMap<String, bool> isMarkingWornMap = <String, bool>{}.obs;
+  final RxMap<String, bool> isDuplicatingMap = <String, bool>{}.obs;
+
+  // Single outfit fetch state
+  final RxBool isFetchingSingle = false.obs;
+  final RxString singleFetchError = ''.obs;
+
+  // Wear history state
+  final RxMap<String, List<WearHistoryEntry>> wearHistoryCache = <String, List<WearHistoryEntry>>{}.obs;
+  final RxBool isLoadingWearHistory = false.obs;
+
   // Getters
   bool get hasError => error.value.isNotEmpty;
   bool get isSelectionActive => selectedIds.isNotEmpty;
   int get selectedCount => selectedIds.length;
+
+  // Loading state helpers
+  bool isDeleting(String id) => isDeletingMap[id] ?? false;
+  bool isFavoriting(String id) => isFavoritingMap[id] ?? false;
+  bool isMarkingWorn(String id) => isMarkingWornMap[id] ?? false;
+  bool isDuplicating(String id) => isDuplicatingMap[id] ?? false;
 
   @override
   void onInit() {
@@ -107,6 +127,73 @@ class OutfitListController extends GetxController {
     }
   }
 
+  /// Fetch single outfit by ID from API
+  Future<OutfitModel?> fetchOutfitById(String outfitId) async {
+    // Check cache first
+    final cached = outfits.firstWhereOrNull((o) => o.id == outfitId);
+    if (cached != null) {
+      return cached;
+    }
+
+    isFetchingSingle.value = true;
+    singleFetchError.value = '';
+
+    try {
+      final outfit = await _repository.getOutfit(outfitId);
+
+      // Add to cache
+      final existingIndex = outfits.indexWhere((o) => o.id == outfitId);
+      if (existingIndex == -1) {
+        outfits.add(outfit);
+      } else {
+        outfits[existingIndex] = outfit;
+      }
+      applyFilters();
+
+      return outfit;
+    } catch (e) {
+      singleFetchError.value = e.toString().replaceAll('Exception: ', '');
+      NotificationService.instance.showError(singleFetchError.value);
+      return null;
+    } finally {
+      isFetchingSingle.value = false;
+    }
+  }
+
+  /// Refresh single outfit by ID
+  Future<void> refreshOutfitById(String outfitId) async {
+    try {
+      final outfit = await _repository.getOutfit(outfitId);
+      _updateOutfitInLists(outfitId, outfit);
+    } catch (e) {
+      NotificationService.instance.showError(
+        e.toString().replaceAll('Exception: ', ''),
+      );
+    }
+  }
+
+  /// Fetch wear history for an outfit
+  Future<List<WearHistoryEntry>> fetchWearHistory(String outfitId) async {
+    // Return cached if available
+    if (wearHistoryCache.containsKey(outfitId)) {
+      return wearHistoryCache[outfitId]!;
+    }
+
+    isLoadingWearHistory.value = true;
+    try {
+      final history = await _repository.getWearHistory(outfitId);
+      wearHistoryCache[outfitId] = history;
+      return history;
+    } catch (e) {
+      NotificationService.instance.showError(
+        e.toString().replaceAll('Exception: ', ''),
+      );
+      return [];
+    } finally {
+      isLoadingWearHistory.value = false;
+    }
+  }
+
   /// Apply filters to the outfit list
   void applyFilters() {
     filteredOutfits.value = outfits.where((outfit) {
@@ -166,6 +253,7 @@ class OutfitListController extends GetxController {
 
   /// Toggle outfit favorite
   Future<void> toggleFavorite(String outfitId) async {
+    isFavoritingMap[outfitId] = true;
     try {
       final updatedOutfit = await _repository.toggleFavorite(outfitId);
       _updateOutfitInLists(outfitId, updatedOutfit);
@@ -177,14 +265,30 @@ class OutfitListController extends GetxController {
       NotificationService.instance.showError(
         e.toString().replaceAll('Exception: ', ''),
       );
+    } finally {
+      isFavoritingMap.remove(outfitId);
     }
   }
 
   /// Mark outfit as worn
   Future<void> markAsWorn(String outfitId) async {
+    isMarkingWornMap[outfitId] = true;
     try {
       final updatedOutfit = await _repository.markAsWorn(outfitId);
       _updateOutfitInLists(outfitId, updatedOutfit);
+
+      // Add to local wear history cache
+      final now = DateTime.now();
+      final entry = WearHistoryEntry(
+        id: 'local-${now.millisecondsSinceEpoch}',
+        outfitId: outfitId,
+        wornAt: now,
+      );
+      if (wearHistoryCache.containsKey(outfitId)) {
+        wearHistoryCache[outfitId] = [entry, ...wearHistoryCache[outfitId]!];
+      } else {
+        wearHistoryCache[outfitId] = [entry];
+      }
 
       NotificationService.instance.showSuccess(
         'Marked as worn',
@@ -194,11 +298,14 @@ class OutfitListController extends GetxController {
       NotificationService.instance.showError(
         e.toString().replaceAll('Exception: ', ''),
       );
+    } finally {
+      isMarkingWornMap.remove(outfitId);
     }
   }
 
   /// Delete outfit
   Future<void> deleteOutfit(String outfitId) async {
+    isDeletingMap[outfitId] = true;
     try {
       await _repository.deleteOutfit(outfitId);
 
@@ -214,11 +321,15 @@ class OutfitListController extends GetxController {
       NotificationService.instance.showError(
         e.toString().replaceAll('Exception: ', ''),
       );
+      rethrow;
+    } finally {
+      isDeletingMap.remove(outfitId);
     }
   }
 
   /// Duplicate outfit
   Future<void> duplicateOutfit(String outfitId) async {
+    isDuplicatingMap[outfitId] = true;
     try {
       final duplicated = await _repository.duplicateOutfit(outfitId);
       outfits.insert(0, duplicated);
@@ -232,6 +343,8 @@ class OutfitListController extends GetxController {
       NotificationService.instance.showError(
         e.toString().replaceAll('Exception: ', ''),
       );
+    } finally {
+      isDuplicatingMap.remove(outfitId);
     }
   }
 

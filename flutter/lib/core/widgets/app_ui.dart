@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import '../constants/app_constants.dart';
 
+// Export image widgets for convenience
+export 'app_image.dart';
+export 'app_image_viewer.dart';
+
 class AppUiTokens {
   AppUiTokens._({
     required this.isDarkMode,

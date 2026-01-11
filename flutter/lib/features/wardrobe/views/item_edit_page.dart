@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
@@ -463,11 +462,13 @@ class _ItemEditPageState extends State<ItemEditPage> {
                           child: SizedBox(
                             width: 100,
                             height: 100,
-                            child: CachedNetworkImage(
+                            child: AppImage(
                               imageUrl: image.url,
-                              fit: BoxFit.cover,
-                              color: isDeleting ? Colors.black.withOpacity(0.5) : null,
-                              colorBlendMode: isDeleting ? BlendMode.srcOver : null,
+                              fit: BoxFit.contain,
+                              enableZoom: false,
+                              backgroundColor: isDeleting
+                                  ? Colors.black.withOpacity(0.5)
+                                  : null,
                             ),
                           ),
                         ),

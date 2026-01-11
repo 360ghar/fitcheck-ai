@@ -46,6 +46,15 @@ class ApiConstants {
   static const String users = '$apiVersion/users';
   static const String waitlist = '$apiVersion/waitlist';
 
+  // Batch Extraction Endpoints
+  static const String aiBatchExtract = '$apiVersion/ai/batch-extract';
+  static String aiBatchExtractEvents(String jobId) =>
+      '$aiBatchExtract/$jobId/events';
+  static String aiBatchExtractCancel(String jobId) =>
+      '$aiBatchExtract/$jobId/cancel';
+  static String aiBatchExtractStatus(String jobId) =>
+      '$aiBatchExtract/$jobId/status';
+
   // Auth Endpoints
   static const String login = '/login';
   static const String register = '/register';

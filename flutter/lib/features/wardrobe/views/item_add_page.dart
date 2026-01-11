@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/item_add_controller.dart';
@@ -242,6 +243,50 @@ class _ItemAddPageState extends State<ItemAddPage> {
                 const SizedBox(height: AppConstants.spacing4),
                 Text(
                   'Add item details without a photo',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: tokens.textMuted,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: AppConstants.spacing16),
+
+        // Batch Upload Option
+        AppGlassCard(
+          padding: const EdgeInsets.all(AppConstants.spacing20),
+          child: InkWell(
+            onTap: () => Get.toNamed(Routes.wardrobeBatchAdd),
+            borderRadius: BorderRadius.circular(AppConstants.radius16),
+            child: Column(
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: tokens.brandColor.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.collections_outlined,
+                    size: 32,
+                    color: tokens.brandColor,
+                  ),
+                ),
+                const SizedBox(height: AppConstants.spacing12),
+                Text(
+                  'Batch Upload',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: tokens.textPrimary,
+                      ),
+                ),
+                const SizedBox(height: AppConstants.spacing4),
+                Text(
+                  'Add multiple items at once (up to 50 photos)',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: tokens.textMuted,
                       ),

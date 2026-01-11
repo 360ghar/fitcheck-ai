@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../domain/enums/style.dart';
@@ -51,6 +50,20 @@ class OutfitBuilderController extends GetxController {
     }
   }
 
+  /// Check if item is selected
+  bool isItemSelected(String itemId) {
+    return selectedItems.any((oi) => oi.item.id == itemId);
+  }
+
+  /// Toggle item selection (add if not selected, remove if selected)
+  void toggleItem(ItemModel item) {
+    if (isItemSelected(item.id)) {
+      removeItemByItemId(item.id);
+    } else {
+      addItem(item);
+    }
+  }
+
   /// Add item to outfit
   void addItem(ItemModel item) {
     if (selectedItems.any((oi) => oi.item.id == item.id)) return;
@@ -68,9 +81,15 @@ class OutfitBuilderController extends GetxController {
     selectedItems.add(outfitItem);
   }
 
-  /// Remove item from outfit
+  /// Remove item from outfit by outfit builder item id
   void removeItem(String id) {
     selectedItems.removeWhere((oi) => oi.id == id);
+    _recalculateLayers();
+  }
+
+  /// Remove item from outfit by original item id
+  void removeItemByItemId(String itemId) {
+    selectedItems.removeWhere((oi) => oi.item.id == itemId);
     _recalculateLayers();
   }
 
@@ -118,12 +137,9 @@ class OutfitBuilderController extends GetxController {
     selectedItems.refresh();
   }
 
-  /// Get filtered items
+  /// Get filtered items (includes selected items so they can show selection state)
   List<ItemModel> get filteredItems {
     return availableItems.where((item) {
-      // Check if already in outfit
-      if (selectedItems.any((oi) => oi.item.id == item.id)) return false;
-
       // Category filter
       if (categoryFilter.value != 'all' &&
           item.category.name != categoryFilter.value) return false;

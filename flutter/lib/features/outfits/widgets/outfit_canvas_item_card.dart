@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
@@ -61,11 +60,12 @@ class OutfitCanvasItemCard extends StatelessWidget {
                 height: 96,
                 child: outfitItem.item.itemImages != null &&
                         outfitItem.item.itemImages!.isNotEmpty
-                    ? CachedNetworkImage(
+                    ? AppImage(
                         imageUrl: outfitItem.item.itemImages!.first.url,
-                        fit: BoxFit.cover,
-                        color: isVisible ? null : Colors.black54,
-                        colorBlendMode: isVisible ? null : BlendMode.srcOver,
+                        fit: BoxFit.contain,
+                        enableZoom: false,
+                        backgroundColor: isVisible ? null : Colors.black54,
+                        errorIcon: _getCategoryIcon(outfitItem.item.category),
                       )
                     : Container(
                         color: tokens.cardColor.withOpacity(0.5),

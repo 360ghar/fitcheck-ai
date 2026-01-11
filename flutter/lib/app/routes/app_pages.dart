@@ -32,8 +32,12 @@ import '../bindings/home_binding.dart';
 import '../bindings/calendar_binding.dart';
 import '../bindings/settings_binding.dart';
 import '../bindings/ai_settings_binding.dart';
+import '../bindings/batch_extraction_binding.dart';
 import '../../features/recommendations/bindings/recommendations_binding.dart';
 import '../../features/gamification/bindings/gamification_binding.dart';
+import '../../features/wardrobe/views/batch_image_selector_page.dart';
+import '../../features/wardrobe/views/batch_extraction_progress_page.dart';
+import '../../features/wardrobe/views/batch_item_review_page.dart';
 import 'app_routes.dart';
 
 /// Route pages configuration
@@ -103,6 +107,25 @@ class AppPages {
       name: Routes.wardrobeAdd,
       page: () => const ItemAddPage(),
       binding: WardrobeBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    // Batch extraction routes
+    GetPage(
+      name: Routes.wardrobeBatchAdd,
+      page: () => const BatchImageSelectorPage(),
+      binding: BatchExtractionBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
+      name: Routes.wardrobeBatchProgress,
+      page: () => const BatchExtractionProgressPage(),
+      binding: BatchExtractionBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
+      name: Routes.wardrobeBatchReview,
+      page: () => const BatchItemReviewPage(),
+      binding: BatchExtractionBinding(),
       middlewares: [AuthMiddleware()],
     ),
     GetPage(

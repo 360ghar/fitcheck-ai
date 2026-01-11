@@ -39,6 +39,17 @@ class WardrobeController extends GetxController {
   bool get isSelectionActive => selectedIds.isNotEmpty;
   int get selectedCount => selectedIds.length;
 
+  // Action-specific loading states (per-item)
+  final RxMap<String, bool> isDeletingMap = <String, bool>{}.obs;
+  final RxMap<String, bool> isFavoritingMap = <String, bool>{}.obs;
+  final RxMap<String, bool> isMarkingWornMap = <String, bool>{}.obs;
+  final RxBool isBatchDeleting = false.obs;
+
+  // Loading state helpers
+  bool isDeleting(String id) => isDeletingMap[id] ?? false;
+  bool isFavoriting(String id) => isFavoritingMap[id] ?? false;
+  bool isMarkingWorn(String id) => isMarkingWornMap[id] ?? false;
+
   @override
   void onInit() {
     super.onInit();
@@ -263,6 +274,7 @@ class WardrobeController extends GetxController {
 
   /// Toggle item favorite
   Future<void> toggleFavorite(String itemId) async {
+    isFavoritingMap[itemId] = true;
     try {
       final updatedItem = await _itemRepository.toggleFavorite(itemId);
 
@@ -293,11 +305,14 @@ class WardrobeController extends GetxController {
         e.toString().replaceAll('Exception: ', ''),
         snackPosition: SnackPosition.TOP,
       );
+    } finally {
+      isFavoritingMap.remove(itemId);
     }
   }
 
   /// Mark item as worn
   Future<void> markAsWorn(String itemId) async {
+    isMarkingWornMap[itemId] = true;
     try {
       final updatedItem = await _itemRepository.markAsWorn(itemId);
 
@@ -328,11 +343,14 @@ class WardrobeController extends GetxController {
         e.toString().replaceAll('Exception: ', ''),
         snackPosition: SnackPosition.TOP,
       );
+    } finally {
+      isMarkingWornMap.remove(itemId);
     }
   }
 
   /// Delete item
   Future<void> deleteItem(String itemId) async {
+    isDeletingMap[itemId] = true;
     try {
       await _itemRepository.deleteItem(itemId);
 
@@ -355,6 +373,9 @@ class WardrobeController extends GetxController {
         e.toString().replaceAll('Exception: ', ''),
         snackPosition: SnackPosition.TOP,
       );
+      rethrow;
+    } finally {
+      isDeletingMap.remove(itemId);
     }
   }
 
@@ -362,6 +383,8 @@ class WardrobeController extends GetxController {
   Future<void> batchDeleteSelected() async {
     if (selectedIds.isEmpty) return;
 
+    isBatchDeleting.value = true;
+    final count = selectedIds.length;
     try {
       await _itemRepository.batchDeleteItems(selectedIds.toList());
 
@@ -371,7 +394,7 @@ class WardrobeController extends GetxController {
 
       Get.snackbar(
         'Deleted',
-        '${selectedIds.length} items removed',
+        '$count items removed',
         snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 1),
       );
@@ -381,6 +404,9 @@ class WardrobeController extends GetxController {
         e.toString().replaceAll('Exception: ', ''),
         snackPosition: SnackPosition.TOP,
       );
+      rethrow;
+    } finally {
+      isBatchDeleting.value = false;
     }
   }
 
