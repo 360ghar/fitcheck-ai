@@ -97,14 +97,14 @@ export function TryOnDemo() {
   return (
     <GlassCard className="p-6 h-full flex flex-col">
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-lg bg-navy-800 dark:bg-navy-700 flex items-center justify-center">
           <Wand2 className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h3 className="font-semibold text-gray-900 dark:text-white">
+          <h3 className="font-semibold text-navy-800 dark:text-white">
             Virtual Try-On
           </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-navy-400 dark:text-navy-400">
             See yourself in any outfit
           </p>
         </div>
@@ -117,16 +117,16 @@ export function TryOnDemo() {
             {...personDropzone.getRootProps()}
             className={`h-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors flex flex-col items-center justify-center ${
               personDropzone.isDragActive
-                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
+                ? 'border-gold-400 bg-gold-50 dark:bg-gold-900/20'
+                : 'border-navy-200 dark:border-navy-600 hover:border-navy-300'
             }`}
           >
             <input {...personDropzone.getInputProps()} />
-            <User className="w-10 h-10 text-gray-400 mb-4" />
-            <p className="text-gray-700 dark:text-gray-300 font-medium mb-1">
+            <User className="w-10 h-10 text-navy-300 mb-4" />
+            <p className="text-navy-700 dark:text-navy-200 font-medium mb-1">
               Step 1: Upload your photo
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-navy-400 dark:text-navy-400">
               A clear full-body or half-body photo works best
             </p>
           </div>
@@ -135,7 +135,7 @@ export function TryOnDemo() {
         {/* Step 2: Upload Outfit Photo */}
         {state === 'outfit' && (
           <div className="h-full flex flex-col">
-            <div className="flex items-center gap-3 mb-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+            <div className="flex items-center gap-3 mb-4 p-3 bg-gold-50 dark:bg-gold-900/20 rounded-lg">
               {personPreview && (
                 <img
                   src={personPreview}
@@ -144,11 +144,11 @@ export function TryOnDemo() {
                 />
               )}
               <div className="flex-1">
-                <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                <p className="text-sm font-medium text-gold-700 dark:text-gold-300">
                   Your photo uploaded
                 </p>
                 <button
-                  className="text-xs text-green-600 hover:underline"
+                  className="text-xs text-gold-600 hover:underline"
                   onClick={handleReset}
                 >
                   Change photo
@@ -160,16 +160,16 @@ export function TryOnDemo() {
               {...outfitDropzone.getRootProps()}
               className={`flex-1 border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors flex flex-col items-center justify-center ${
                 outfitDropzone.isDragActive
-                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                  : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
+                  ? 'border-gold-400 bg-gold-50 dark:bg-gold-900/20'
+                  : 'border-navy-200 dark:border-navy-600 hover:border-navy-300'
               }`}
             >
               <input {...outfitDropzone.getInputProps()} />
-              <Shirt className="w-10 h-10 text-gray-400 mb-4" />
-              <p className="text-gray-700 dark:text-gray-300 font-medium mb-1">
+              <Shirt className="w-10 h-10 text-navy-300 mb-4" />
+              <p className="text-navy-700 dark:text-navy-200 font-medium mb-1">
                 Step 2: Upload outfit to try on
               </p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-navy-400 dark:text-navy-400">
                 Drop a clothing image or outfit photo
               </p>
             </div>
@@ -187,7 +187,7 @@ export function TryOnDemo() {
                   className="w-20 h-20 rounded-lg object-cover"
                 />
               )}
-              <span className="text-2xl text-gray-400 self-center">+</span>
+              <span className="text-2xl text-navy-300 self-center">+</span>
               {outfitPreview && (
                 <img
                   src={outfitPreview}
@@ -196,11 +196,11 @@ export function TryOnDemo() {
                 />
               )}
             </div>
-            <Loader2 className="w-8 h-8 text-purple-500 animate-spin mb-2" />
-            <p className="text-gray-600 dark:text-gray-400">
+            <Loader2 className="w-8 h-8 text-gold-500 animate-spin mb-2" />
+            <p className="text-navy-500 dark:text-navy-300">
               Creating your look...
             </p>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-navy-400 mt-1">
               This may take 20-30 seconds
             </p>
           </div>
@@ -223,7 +223,8 @@ export function TryOnDemo() {
               </Button>
               <Button
                 size="sm"
-                className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                variant="gold"
+                className="flex-1"
                 onClick={() => setShowLoginModal(true)}
               >
                 Get Unlimited Access

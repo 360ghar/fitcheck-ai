@@ -62,13 +62,13 @@ function getStatusIndicator(status: BatchImageInput['status']) {
 function getBorderStyle(status: BatchImageInput['status']) {
   switch (status) {
     case 'extracting':
-      return 'ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-gray-900 animate-pulse';
+      return 'ring-2 ring-gold-500 ring-offset-2 dark:ring-offset-background animate-pulse';
     case 'completed':
-      return 'ring-2 ring-green-500 ring-offset-1 dark:ring-offset-gray-900';
+      return 'ring-2 ring-green-500 ring-offset-1 dark:ring-offset-background';
     case 'failed':
-      return 'ring-2 ring-red-500 ring-offset-1 dark:ring-offset-gray-900';
+      return 'ring-2 ring-red-500 ring-offset-1 dark:ring-offset-background';
     default:
-      return 'ring-1 ring-gray-200 dark:ring-gray-700';
+      return 'ring-1 ring-border';
   }
 }
 
@@ -90,22 +90,22 @@ export function BatchExtractionProgress({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            <h3 className="text-lg font-semibold text-foreground">
               Analyzing Images
             </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-muted-foreground">
               Detecting clothing items in your photos...
             </p>
           </div>
           {isProcessing && (
-            <Loader2 className="h-5 w-5 text-indigo-500 animate-spin" />
+            <Loader2 className="h-5 w-5 text-gold-500 animate-spin" />
           )}
         </div>
 
         {/* Progress bar */}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600 dark:text-gray-400">
+            <span className="text-muted-foreground">
               {processedCount} of {totalImages} images processed
               {imagesFailed > 0 && (
                 <span className="text-red-500 ml-1">
@@ -113,7 +113,7 @@ export function BatchExtractionProgress({
                 </span>
               )}
             </span>
-            <span className="font-medium text-gray-900 dark:text-white">
+            <span className="font-medium text-foreground">
               {Math.round(progress)}%
             </span>
           </div>
@@ -143,7 +143,7 @@ export function BatchExtractionProgress({
             <div
               key={image.imageId}
               className={cn(
-                'group relative aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 transition-all duration-300',
+                'group relative aspect-square rounded-lg overflow-hidden bg-muted transition-all duration-300',
                 getBorderStyle(image.status)
               )}
             >
@@ -163,7 +163,7 @@ export function BatchExtractionProgress({
 
               {/* Items count badge for completed images */}
               {image.status === 'completed' && image.detectedItems && image.detectedItems.length > 0 && (
-                <div className="absolute bottom-2 left-2 bg-indigo-500 text-white text-xs font-medium px-1.5 py-0.5 rounded">
+                <div className="absolute bottom-2 left-2 bg-gold-500 text-white text-xs font-medium px-1.5 py-0.5 rounded">
                   {image.detectedItems.length} item{image.detectedItems.length !== 1 ? 's' : ''}
                 </div>
               )}
@@ -173,30 +173,30 @@ export function BatchExtractionProgress({
       </div>
 
       {/* Status summary */}
-      <div className="grid grid-cols-3 gap-4 py-3 border-t dark:border-gray-700">
+      <div className="grid grid-cols-3 gap-4 py-3 border-t border-border">
         <div className="text-center">
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+          <p className="text-2xl font-bold text-foreground">
             {images.filter((i) => i.status === 'pending' || i.status === 'uploading').length}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Pending</p>
+          <p className="text-xs text-muted-foreground">Pending</p>
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">
             {imagesCompleted}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Completed</p>
+          <p className="text-xs text-muted-foreground">Completed</p>
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-red-600 dark:text-red-400">
             {imagesFailed}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Failed</p>
+          <p className="text-xs text-muted-foreground">Failed</p>
         </div>
       </div>
 
       {/* Cancel button */}
       {isProcessing && onCancel && (
-        <div className="flex justify-center pt-2 border-t dark:border-gray-700">
+        <div className="flex justify-center pt-2 border-t border-border">
           <Button
             variant="outline"
             onClick={onCancel}

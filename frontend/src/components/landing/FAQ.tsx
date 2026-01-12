@@ -47,18 +47,18 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <CollapsibleTrigger className="flex items-center justify-between w-full p-6 bg-white dark:bg-gray-800 rounded-lg text-left hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors group">
-        <span className="font-medium text-gray-900 dark:text-white pr-4">{question}</span>
+      <CollapsibleTrigger className="flex items-center justify-between w-full p-6 bg-white dark:bg-navy-800 rounded-lg text-left hover:bg-navy-50 dark:hover:bg-navy-750 transition-colors group">
+        <span className="font-medium text-navy-800 dark:text-white pr-4">{question}</span>
         <ChevronDown
           className={cn(
-            'w-5 h-5 text-gray-500 transition-transform shrink-0',
+            'w-5 h-5 text-navy-400 transition-transform shrink-0',
             isOpen && 'rotate-180'
           )}
         />
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="px-6 pb-6 pt-2">
-          <p className="text-gray-600 dark:text-gray-400">{answer}</p>
+          <p className="text-navy-500 dark:text-navy-300">{answer}</p>
         </div>
       </CollapsibleContent>
     </Collapsible>
@@ -67,20 +67,20 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
 export default function FAQ() {
   return (
-    <section id="faq" className="py-24 bg-gray-50 dark:bg-gray-900">
+    <section id="faq" className="py-24 bg-navy-50 dark:bg-navy-900">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <AnimatedSection>
           <div className="text-center mb-16">
-            <Badge className="mb-4 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border-0">
+            <Badge variant="gold" className="mb-4">
               FAQ
             </Badge>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 dark:text-white">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-display font-semibold text-navy-800 dark:text-white">
               Frequently asked{' '}
-              <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              <span className="text-gold-500 dark:text-gold-400">
                 questions
               </span>
             </h2>
-            <p className="mt-4 text-lg text-gray-600 dark:text-gray-300">
+            <p className="mt-4 text-lg text-navy-500 dark:text-navy-300">
               Everything you need to know about FitCheck AI
             </p>
           </div>

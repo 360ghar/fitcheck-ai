@@ -447,7 +447,7 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
           <CardHeader>
             <CardTitle className="flex items-center justify-between gap-3">
               <span className="flex items-center gap-2">
-                <Wand2 className="h-5 w-5 text-indigo-500" />
+                <Wand2 className="h-5 w-5 text-gold-500" />
                 AI Image Generator
               </span>
               {onClose && (
@@ -471,12 +471,12 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
                     onClick={() => setOptions((prev) => ({ ...prev, style: preset.value }))}
                     className={`p-3 rounded-lg border text-left transition-all ${
                       options.style === preset.value
-                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        ? 'border-gold-500 bg-gold-50 dark:bg-gold-900/20'
+                        : 'border-border hover:border-gold-300 dark:hover:border-gold-700'
                     }`}
                   >
-                    <p className="font-medium text-sm text-gray-900 dark:text-white">{preset.label}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{preset.description}</p>
+                    <p className="font-medium text-sm text-foreground">{preset.label}</p>
+                    <p className="text-xs text-muted-foreground">{preset.description}</p>
                   </button>
                 ))}
               </div>
@@ -492,8 +492,8 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
                     onClick={() => setOptions((prev) => ({ ...prev, background: bg.value }))}
                     className={`aspect-square rounded-lg border-2 overflow-hidden transition-all ${
                       options.background === bg.value
-                        ? 'border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-800'
-                        : 'border-gray-200 dark:border-gray-700'
+                        ? 'border-gold-500 ring-2 ring-gold-200 dark:ring-gold-800'
+                        : 'border-border'
                     }`}
                     title={bg.label}
                   >
@@ -512,7 +512,7 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
                 <Sun className="h-4 w-4 text-yellow-500" />
                 Lighting Scenario
               </Label>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+              <p className="text-xs text-muted-foreground mb-2">
                 Quick presets for different environments
               </p>
               <div className="grid grid-cols-4 gap-2">
@@ -522,13 +522,13 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
                     onClick={() => handleApplyScenario(scenario.value)}
                     className={`p-2 rounded-lg border text-center transition-all ${
                       selectedScenario === scenario.value
-                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        ? 'border-gold-500 bg-gold-50 dark:bg-gold-900/20'
+                        : 'border-border hover:border-gold-300 dark:hover:border-gold-700'
                     }`}
                     title={scenario.description}
                   >
                     <span className="text-lg block">{scenario.icon}</span>
-                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300 block mt-1">
+                    <span className="text-xs font-medium text-foreground block mt-1">
                       {scenario.label}
                     </span>
                   </button>
@@ -587,7 +587,7 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
             </Button>
 
             {advancedMode && (
-              <div className="space-y-4 pt-4 border-t dark:border-gray-700">
+              <div className="space-y-4 pt-4 border-t border-border">
                 <div>
                   <Label>Pose</Label>
                   <Select
@@ -663,7 +663,7 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
                 placeholder="Add any additional details you want in the generated image..."
                 rows={3}
               />
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 line-clamp-3">
+              <p className="mt-2 text-xs text-muted-foreground line-clamp-3">
                 <span className="font-medium">Prompt preview:</span> {promptPreview}
               </p>
             </div>
@@ -713,7 +713,7 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
             {(isGenerating || isGeneratingMultiPose) && (
               <div className="space-y-2">
                 <Progress value={progress} />
-                <p className="text-xs text-center text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-center text-muted-foreground">
                   Creating your masterpiece...
                 </p>
               </div>
@@ -731,7 +731,7 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
           <CardContent>
             {selectedImage ? (
               <div className="space-y-4">
-                <div className="aspect-video rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
+                <div className="aspect-video rounded-lg overflow-hidden bg-muted">
                   <ZoomableImage
                     src={selectedImage.url}
                     alt="Generated outfit"
@@ -770,16 +770,16 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
                 </div>
 
                 {selectedImage.prompt && (
-                  <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-sm text-muted-foreground">
                       <span className="font-medium">Prompt:</span> {selectedImage.prompt}
                     </p>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="aspect-video rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                <div className="text-center text-gray-400">
+              <div className="aspect-video rounded-lg bg-muted flex items-center justify-center">
+                <div className="text-center text-muted-foreground">
                   <ImageIcon className="h-16 w-16 mx-auto mb-4 opacity-50" />
                   <p>Your generated image will appear here</p>
                   <p className="text-sm mt-2">
@@ -795,10 +795,10 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
 
         {/* Multi-Pose Gallery */}
         {multiPoseImages.length > 0 && (
-          <Card className="border-indigo-200 dark:border-indigo-800">
+          <Card className="border-gold-200 dark:border-gold-800">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                <LayoutGrid className="h-5 w-5 text-indigo-500" />
+                <LayoutGrid className="h-5 w-5 text-gold-500" />
                 All Angles View
               </CardTitle>
               <CardDescription>
@@ -815,8 +815,8 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
                       onClick={() => setSelectedImage(img)}
                       className={`relative aspect-[3/4] rounded-lg overflow-hidden border-2 transition-all ${
                         selectedImage?.timestamp === img.timestamp
-                          ? 'border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-800'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                          ? 'border-gold-500 ring-2 ring-gold-200 dark:ring-gold-800'
+                          : 'border-border hover:border-gold-300'
                       }`}
                     >
                       <ZoomableImage
@@ -851,8 +851,8 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
                     onClick={() => setSelectedImage(img)}
                     className={`aspect-square rounded-lg overflow-hidden border-2 ${
                       selectedImage?.timestamp === img.timestamp
-                        ? 'border-indigo-500'
-                        : 'border-gray-200 dark:border-gray-700'
+                        ? 'border-gold-500'
+                        : 'border-border'
                     }`}
                   >
                     <img

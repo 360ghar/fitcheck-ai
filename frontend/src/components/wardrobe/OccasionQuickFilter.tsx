@@ -60,8 +60,8 @@ function OccasionChip({
         'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all',
         'border whitespace-nowrap',
         isSelected
-          ? 'bg-indigo-100 border-indigo-300 text-indigo-700 dark:bg-indigo-900/40 dark:border-indigo-700 dark:text-indigo-300'
-          : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700'
+          ? 'bg-gold-100 border-gold-300 text-gold-700 dark:bg-gold-900/40 dark:border-gold-700 dark:text-gold-300'
+          : 'bg-muted border-border text-foreground hover:bg-accent dark:hover:bg-accent'
       )}
     >
       <span>{occasion.icon}</span>
@@ -85,17 +85,17 @@ function OccasionCard({
       className={cn(
         'p-3 rounded-lg border text-left transition-all w-full',
         isSelected
-          ? 'bg-indigo-50 border-indigo-300 dark:bg-indigo-900/30 dark:border-indigo-700'
-          : 'bg-white border-gray-200 hover:border-gray-300 dark:bg-gray-800 dark:border-gray-700 dark:hover:border-gray-600'
+          ? 'bg-gold-50 border-gold-300 dark:bg-gold-900/30 dark:border-gold-700'
+          : 'bg-card border-border hover:border-muted-foreground/50'
       )}
     >
       <div className="flex items-start gap-2">
         <span className="text-xl">{occasion.icon}</span>
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-gray-900 dark:text-white text-sm">
+          <p className="font-medium text-foreground text-sm">
             {occasion.name}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">
             {occasion.description}
           </p>
         </div>
@@ -139,7 +139,7 @@ export function OccasionQuickFilter({
     return (
       <div className={cn('space-y-2', className)}>
         <div className="flex items-center justify-between">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          <label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
             <Tag className="h-4 w-4" />
             Quick Occasion Filter
           </label>
@@ -160,13 +160,13 @@ export function OccasionQuickFilter({
             />
           ))}
           {hasMore && (
-            <span className="text-xs text-gray-500 dark:text-gray-400 self-center">
+            <span className="text-xs text-muted-foreground self-center">
               +{OCCASION_PRESETS.length - limit} more
             </span>
           )}
         </div>
         {selectedOccasion && (
-          <div className="p-2 rounded bg-indigo-50 dark:bg-indigo-900/20 text-xs text-indigo-700 dark:text-indigo-300">
+          <div className="p-2 rounded bg-gold-50 dark:bg-gold-900/20 text-xs text-gold-700 dark:text-gold-300">
             Filtering for: {selectedOccasion.description}
           </div>
         )}
@@ -179,7 +179,7 @@ export function OccasionQuickFilter({
     return (
       <div className={cn('space-y-3', className)}>
         <div className="flex items-center justify-between">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          <label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
             <Tag className="h-4 w-4" />
             Filter by Occasion
           </label>
@@ -208,7 +208,7 @@ export function OccasionQuickFilter({
   return (
     <div className={cn('space-y-2', className)}>
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+        <label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
           <Tag className="h-4 w-4" />
           Occasion Presets
         </label>
@@ -221,8 +221,8 @@ export function OccasionQuickFilter({
       </div>
 
       {selectedOccasion && (
-        <div className="p-2 rounded bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-between">
-          <span className="text-sm text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
+        <div className="p-2 rounded bg-gold-50 dark:bg-gold-900/20 flex items-center justify-between">
+          <span className="text-sm text-gold-700 dark:text-gold-300 flex items-center gap-2">
             <span>{selectedOccasion.icon}</span>
             {selectedOccasion.name}
           </span>

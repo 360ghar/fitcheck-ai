@@ -162,7 +162,7 @@ function WeeklyStreakCalendar({ currentStreak }: { currentStreak: number }) {
                     ${isActive
                       ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 border border-orange-300 dark:border-orange-700'
                       : 'bg-gray-100 dark:bg-gray-800 text-gray-400'}
-                    ${isToday ? 'ring-2 ring-indigo-500' : ''}
+                    ${isToday ? 'ring-2 ring-gold-500' : ''}
                   `}
                 >
                   {date.toLocaleDateString('en', { weekday: 'short' }).charAt(0)}

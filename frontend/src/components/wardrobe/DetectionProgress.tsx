@@ -34,8 +34,8 @@ export function DetectionProgress({
           className="w-64 h-64 object-cover rounded-lg shadow-lg opacity-80"
         />
         <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-lg pointer-events-none">
-          <div className="bg-white/90 dark:bg-gray-800/90 rounded-full p-4">
-            <Search className="h-8 w-8 text-indigo-500 animate-pulse" />
+          <div className="bg-white/90 dark:bg-card/90 rounded-full p-4">
+            <Search className="h-8 w-8 text-gold-500 animate-pulse" />
           </div>
         </div>
       </div>
@@ -44,13 +44,13 @@ export function DetectionProgress({
       <Card className="w-full max-w-md">
         <CardContent className="pt-6 space-y-4">
           <div className="flex items-center justify-center gap-3">
-            <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
-            <span className="text-lg font-medium text-gray-900 dark:text-white">{statusMessage}</span>
+            <Loader2 className="h-5 w-5 animate-spin text-gold-500" />
+            <span className="text-lg font-medium text-foreground">{statusMessage}</span>
           </div>
 
           <Progress value={progress} className="h-2" />
 
-          <p className="text-center text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-center text-sm text-muted-foreground">
             <Sparkles className="inline h-4 w-4 mr-1" />
             Using Gemini 3 Pro to identify clothing items
           </p>

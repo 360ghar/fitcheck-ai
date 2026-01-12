@@ -127,8 +127,8 @@ function CanvasItem({
       onDragStart={(e) => onDragStart(e, outfitItem.id)}
       onDragOver={onDragOver}
       onDrop={(e) => onDrop(e, outfitItem.id)}
-      className={`relative group bg-white dark:bg-gray-800 rounded-lg shadow-md cursor-move transition-all ${
-        isSelected ? 'ring-2 ring-indigo-500' : ''
+      className={`relative group bg-card rounded-lg shadow-md cursor-move transition-all ${
+        isSelected ? 'ring-2 ring-gold-500' : ''
       } ${!outfitItem.isVisible ? 'opacity-50' : ''}`}
       onClick={onSelect}
       style={{
@@ -140,8 +140,8 @@ function CanvasItem({
       }}
     >
       {/* Drag handle */}
-      <div className="absolute top-1 left-1 p-1 bg-gray-100 dark:bg-gray-700 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-        <GripVertical className="h-3 w-3 text-gray-500" />
+      <div className="absolute top-1 left-1 p-1 bg-muted rounded opacity-0 group-hover:opacity-100 transition-opacity">
+        <GripVertical className="h-3 w-3 text-muted-foreground" />
       </div>
 
       {/* Remove button */}
@@ -161,17 +161,17 @@ function CanvasItem({
           e.stopPropagation()
           onToggleVisibility()
         }}
-        className="absolute top-1 left-1/2 -translate-x-1/2 p-1 bg-gray-100 dark:bg-gray-700 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200"
+        className="absolute top-1 left-1/2 -translate-x-1/2 p-1 bg-muted rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent"
       >
         {outfitItem.isVisible ? (
-          <Eye className="h-3 w-3 text-gray-600 dark:text-gray-400" />
+          <Eye className="h-3 w-3 text-muted-foreground" />
         ) : (
-          <EyeOff className="h-3 w-3 text-gray-600 dark:text-gray-400" />
+          <EyeOff className="h-3 w-3 text-muted-foreground" />
         )}
       </button>
 
       {/* Item image */}
-      <div className="aspect-square rounded-t-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
+      <div className="aspect-square rounded-t-lg overflow-hidden bg-muted">
         {item.images.length > 0 ? (
           <img
             src={item.images[0].thumbnail_url || item.images[0].image_url}
@@ -179,7 +179,7 @@ function CanvasItem({
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-400">
+          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
             <span className="text-2xl">{item.category[0].toUpperCase()}</span>
           </div>
         )}
@@ -187,8 +187,8 @@ function CanvasItem({
 
       {/* Item name */}
       <div className="p-2">
-        <p className="text-xs font-medium truncate text-gray-900 dark:text-white">{item.name}</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{item.category}</p>
+        <p className="text-xs font-medium truncate text-foreground">{item.name}</p>
+        <p className="text-xs text-muted-foreground capitalize">{item.category}</p>
       </div>
 
       {/* Layer indicator */}
@@ -485,8 +485,8 @@ export function OutfitBuilder({
                     disabled={isInOutfit}
                     className={`relative w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
                       isInOutfit
-                        ? 'border-gray-200 dark:border-gray-700 opacity-50 cursor-not-allowed'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-indigo-500'
+                        ? 'border-border opacity-50 cursor-not-allowed'
+                        : 'border-border hover:border-gold-500'
                     }`}
                     title={item.name}
                   >
@@ -497,7 +497,7 @@ export function OutfitBuilder({
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-gray-400">
+                      <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground">
                         {item.category[0].toUpperCase()}
                       </div>
                     )}
@@ -512,7 +512,7 @@ export function OutfitBuilder({
             </div>
 
             {filteredItems.length === 0 && (
-              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No items found</p>
+              <p className="text-sm text-muted-foreground text-center py-4">No items found</p>
             )}
           </CardContent>
         </Card>
@@ -623,10 +623,10 @@ export function OutfitBuilder({
           <CardContent className="flex-1">
             <div
               ref={canvasRef}
-              className="relative w-full h-[500px] bg-gray-50 dark:bg-gray-900 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700 overflow-hidden"
+              className="relative w-full h-[500px] bg-muted/50 rounded-lg border-2 border-dashed border-border overflow-hidden"
             >
               {outfitItems.length === 0 ? (
-                <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
                   <div className="text-center">
                     <Plus className="h-12 w-12 mx-auto mb-2 opacity-50" />
                     <p>Drag items here or click to add</p>
@@ -651,11 +651,11 @@ export function OutfitBuilder({
 
             {/* Selected item controls */}
             {selectedItem && (
-              <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <div className="mt-4 p-4 bg-muted rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">{selectedItem.item.name}</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">{selectedItem.item.category}</p>
+                    <p className="font-medium text-foreground">{selectedItem.item.name}</p>
+                    <p className="text-sm text-muted-foreground capitalize">{selectedItem.item.category}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button

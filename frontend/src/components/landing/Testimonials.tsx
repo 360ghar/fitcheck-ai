@@ -11,7 +11,7 @@ const testimonials = [
     role: 'Marketing Manager',
     rating: 5,
     initials: 'SC',
-    gradient: 'from-pink-500 to-rose-500',
+    variant: 'gold' as const,
   },
   {
     quote:
@@ -20,7 +20,7 @@ const testimonials = [
     role: 'Creative Director',
     rating: 5,
     initials: 'MJ',
-    gradient: 'from-blue-500 to-cyan-500',
+    variant: 'navy' as const,
   },
   {
     quote:
@@ -29,7 +29,7 @@ const testimonials = [
     role: 'Fashion Influencer',
     rating: 5,
     initials: 'PS',
-    gradient: 'from-purple-500 to-indigo-500',
+    variant: 'gold' as const,
   },
 ]
 
@@ -39,36 +39,41 @@ function TestimonialCard({
   role,
   rating,
   initials,
-  gradient,
+  variant,
 }: (typeof testimonials)[0]) {
+  const avatarStyles = {
+    gold: 'bg-gradient-to-br from-gold-400 to-gold-600 text-navy-900',
+    navy: 'bg-navy-800 text-white dark:bg-navy-700',
+  }
+
   return (
-    <Card className="relative overflow-hidden border-0 bg-white dark:bg-gray-800 h-full">
+    <Card className="relative overflow-hidden border-0 bg-white dark:bg-navy-800 h-full">
       <CardContent className="p-6 md:p-8 flex flex-col h-full">
         {/* Quote icon */}
         <div className="mb-4">
-          <Quote className="w-8 h-8 text-indigo-500/20" />
+          <Quote className="w-8 h-8 text-gold-400/30" />
         </div>
 
         {/* Rating */}
         <div className="flex gap-1 mb-4">
           {Array.from({ length: rating }).map((_, i) => (
-            <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+            <Star key={i} className="w-5 h-5 fill-gold-400 text-gold-400" />
           ))}
         </div>
 
         {/* Quote */}
-        <p className="text-gray-600 dark:text-gray-300 flex-1 mb-6">{quote}</p>
+        <p className="text-navy-500 dark:text-navy-300 flex-1 mb-6">{quote}</p>
 
         {/* Author */}
         <div className="flex items-center gap-3">
           <div
-            className={`w-12 h-12 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-bold`}
+            className={`w-12 h-12 rounded-full ${avatarStyles[variant]} flex items-center justify-center font-bold`}
           >
             {initials}
           </div>
           <div>
-            <p className="font-semibold text-gray-900 dark:text-white">{author}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{role}</p>
+            <p className="font-semibold text-navy-800 dark:text-white">{author}</p>
+            <p className="text-sm text-navy-400 dark:text-navy-400">{role}</p>
           </div>
         </div>
       </CardContent>
@@ -78,21 +83,21 @@ function TestimonialCard({
 
 export default function Testimonials() {
   return (
-    <section className="py-24 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-950">
+    <section className="py-24 bg-gradient-to-b from-navy-50 to-white dark:from-navy-900 dark:to-navy-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <AnimatedSection>
           <div className="text-center mb-16">
-            <Badge className="mb-4 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border-0">
+            <Badge variant="gold" className="mb-4">
               Testimonials
             </Badge>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 dark:text-white">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-display font-semibold text-navy-800 dark:text-white">
               Loved by{' '}
-              <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              <span className="text-gold-500 dark:text-gold-400">
                 fashion-forward
               </span>{' '}
               people
             </h2>
-            <p className="mt-4 text-lg md:text-xl text-gray-600 dark:text-gray-300">
+            <p className="mt-4 text-lg md:text-xl text-navy-500 dark:text-navy-300">
               Join thousands who have transformed their daily dressing routine
             </p>
           </div>
@@ -109,12 +114,12 @@ export default function Testimonials() {
         {/* Trust badges */}
         <AnimatedSection delay={500}>
           <div className="mt-16 text-center">
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Trusted by users from</p>
+            <p className="text-sm text-navy-400 dark:text-navy-400 mb-6">Trusted by users from</p>
             <div className="flex items-center justify-center gap-8 md:gap-12 opacity-50 flex-wrap">
               {['Google', 'Apple', 'Meta', 'Amazon', 'Netflix'].map((company) => (
                 <span
                   key={company}
-                  className="text-xl md:text-2xl font-bold text-gray-400 dark:text-gray-600"
+                  className="text-xl md:text-2xl font-bold text-navy-300 dark:text-navy-600"
                 >
                   {company}
                 </span>

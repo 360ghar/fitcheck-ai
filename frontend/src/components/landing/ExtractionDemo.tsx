@@ -83,14 +83,14 @@ export function ExtractionDemo() {
   return (
     <GlassCard className="p-6 h-full flex flex-col">
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-          <Camera className="w-5 h-5 text-white" />
+        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center">
+          <Camera className="w-5 h-5 text-navy-900" />
         </div>
         <div>
-          <h3 className="font-semibold text-gray-900 dark:text-white">
+          <h3 className="font-semibold text-navy-800 dark:text-white">
             AI Item Extraction
           </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-navy-400 dark:text-navy-400">
             Upload a photo to detect clothing
           </p>
         </div>
@@ -103,16 +103,16 @@ export function ExtractionDemo() {
             {...getRootProps()}
             className={`h-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors flex flex-col items-center justify-center ${
               isDragActive
-                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-                : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
+                ? 'border-gold-400 bg-gold-50 dark:bg-gold-900/20'
+                : 'border-navy-200 dark:border-navy-600 hover:border-navy-300'
             }`}
           >
             <input {...getInputProps()} />
-            <Upload className="w-10 h-10 text-gray-400 mb-4" />
-            <p className="text-gray-700 dark:text-gray-300 font-medium mb-1">
+            <Upload className="w-10 h-10 text-navy-300 mb-4" />
+            <p className="text-navy-700 dark:text-navy-200 font-medium mb-1">
               {isDragActive ? 'Drop your photo here' : 'Drop a clothing photo'}
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-navy-400 dark:text-navy-400">
               or click to browse
             </p>
           </div>
@@ -126,8 +126,8 @@ export function ExtractionDemo() {
               alt="Preview"
               className="max-h-48 rounded-lg mb-4 object-contain"
             />
-            <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-2" />
-            <p className="text-gray-600 dark:text-gray-400">
+            <Loader2 className="w-8 h-8 text-gold-500 animate-spin mb-2" />
+            <p className="text-navy-500 dark:text-navy-300">
               Analyzing clothing items...
             </p>
           </div>
@@ -145,11 +145,11 @@ export function ExtractionDemo() {
                 />
               )}
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-navy-400 dark:text-navy-400">
                   Found {results.item_count} item
                   {results.item_count !== 1 ? 's' : ''}
                 </p>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-navy-300">
                   {Math.round(results.overall_confidence * 100)}% confidence
                 </p>
               </div>
@@ -167,7 +167,8 @@ export function ExtractionDemo() {
               </Button>
               <Button
                 size="sm"
-                className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+                variant="gold"
+                className="flex-1"
                 onClick={handleSaveToWardrobe}
               >
                 Save to Wardrobe
@@ -200,22 +201,22 @@ export function ExtractionDemo() {
 
 function ExtractedItemCard({ item }: { item: DemoDetectedItem }) {
   return (
-    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-      <div className="w-8 h-8 rounded bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
+    <div className="flex items-center gap-3 p-3 bg-navy-50 dark:bg-navy-800 rounded-lg">
+      <div className="w-8 h-8 rounded bg-navy-800 dark:bg-navy-700 flex items-center justify-center">
         <Shirt className="w-4 h-4 text-white" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-gray-900 dark:text-white text-sm capitalize">
+        <p className="font-medium text-navy-800 dark:text-white text-sm capitalize">
           {item.sub_category || item.category}
         </p>
-        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-navy-400 dark:text-navy-400">
           {item.colors.length > 0 && (
             <span className="capitalize">{item.colors.slice(0, 2).join(', ')}</span>
           )}
           {item.material && <span>{item.material}</span>}
         </div>
       </div>
-      <span className="text-xs text-gray-400">
+      <span className="text-xs text-navy-300">
         {Math.round(item.confidence * 100)}%
       </span>
     </div>

@@ -520,7 +520,7 @@ export function MultiItemExtractionFlow({
       <DialogContent className="sm:max-w-[90vw] lg:max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-indigo-500" />
+            <Sparkles className="h-5 w-5 text-gold-500" />
             Add Items to Wardrobe
           </DialogTitle>
           <DialogDescription>
@@ -547,20 +547,20 @@ export function MultiItemExtractionFlow({
                 {...getRootProps()}
                 className={`flex-1 border-2 border-dashed rounded-lg p-12 text-center transition-colors cursor-pointer flex flex-col items-center justify-center ${
                   isDragActive
-                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-                    : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                    ? 'border-gold-500 bg-gold-50 dark:bg-gold-900/20'
+                    : 'border-border hover:border-muted-foreground/50'
                 }`}
               >
                 <input {...getInputProps()} />
-                <Upload className="h-12 w-12 mx-auto text-gray-400 dark:text-gray-500 mb-4" />
-                <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-lg font-medium text-foreground mb-2">
                   {isDragActive ? 'Drop image here' : 'Drop a clothing photo here'}
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">or click to browse</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground mb-4">or click to browse</p>
+                <p className="text-xs text-muted-foreground">
                   AI will detect and extract all visible clothing items
                 </p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                <p className="text-xs text-muted-foreground/70 mt-2">
                   Supports PNG, JPG, WEBP up to 10MB
                 </p>
               </div>
@@ -608,9 +608,9 @@ export function MultiItemExtractionFlow({
           {/* Saving Phase */}
           {state.step === 'saving' && (
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
-              <div className="h-12 w-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-lg font-medium text-gray-900 dark:text-white">Saving items to wardrobe...</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <div className="h-12 w-12 border-4 border-gold-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-lg font-medium text-foreground">Saving items to wardrobe...</p>
+              <p className="text-sm text-muted-foreground">
                 {Math.round(state.savingProgress)}% complete
               </p>
             </div>

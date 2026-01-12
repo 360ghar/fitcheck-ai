@@ -207,7 +207,7 @@ export default function TryOnPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-4 md:py-8">
       <div className="mb-4 md:mb-8">
-        <h1 className="text-xl md:text-2xl font-bold text-foreground">Try My Look</h1>
+        <h1 className="text-xl md:text-2xl font-display font-semibold text-foreground">Try My Look</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Upload a picture of clothes to see how you would look wearing them.
         </p>

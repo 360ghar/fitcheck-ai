@@ -34,7 +34,7 @@ export default function ForgotPasswordPage() {
   return (
     <>
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="text-xl md:text-2xl font-extrabold text-foreground">Reset your password</h2>
+        <h2 className="text-xl md:text-2xl font-display font-semibold text-foreground">Reset your password</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           Enter your email and we'll send you a link to choose a new password.
         </p>

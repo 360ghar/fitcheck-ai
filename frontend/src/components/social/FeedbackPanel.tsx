@@ -75,7 +75,7 @@ function StarRating({ value, size = 4 }: { value: number; size?: number }) {
           className={`h-${size} w-${size} ${
             star <= value
               ? 'fill-yellow-400 text-yellow-400'
-              : 'text-gray-300 dark:text-gray-600'
+              : 'text-muted-foreground/50'
           }`}
         />
       ))}
@@ -102,7 +102,7 @@ function FeedbackForm({ onSubmit, isLoading }: { onSubmit: (rating: number, comm
       </CardHeader>
       <CardContent className="space-y-4">
         <div>
-          <label className="text-sm font-medium text-gray-900 dark:text-white">Your Rating</label>
+          <label className="text-sm font-medium text-foreground">Your Rating</label>
           <div
             className="flex gap-1 mt-2"
             onMouseLeave={() => setHoverRating(0)}
@@ -127,7 +127,7 @@ function FeedbackForm({ onSubmit, isLoading }: { onSubmit: (rating: number, comm
         </div>
 
         <div>
-          <label className="text-sm font-medium text-gray-900 dark:text-white">Comment (Optional)</label>
+          <label className="text-sm font-medium text-foreground">Comment (Optional)</label>
           <Textarea
             placeholder="Share your thoughts about this outfit..."
             value={comment}
@@ -205,18 +205,18 @@ export function FeedbackPanel({
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-3xl font-bold text-gray-900 dark:text-white">
+                <span className="text-3xl font-bold text-foreground">
                   {stats.average_rating.toFixed(1)}
                 </span>
                 <StarRating value={Math.round(stats.average_rating)} />
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 {stats.total_ratings} rating{stats.total_ratings !== 1 ? 's' : ''}
               </p>
             </div>
 
             <div className="text-right">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">Top compliments</p>
+              <p className="text-sm font-medium text-foreground">Top compliments</p>
               <div className="flex flex-wrap gap-1 mt-1 justify-end">
                 {stats.top_compliments.slice(0, 3).map((compliment, i) => (
                   <Badge key={i} variant="secondary" className="text-xs">
@@ -238,14 +238,14 @@ export function FeedbackPanel({
 
               return (
                 <div key={star} className="flex items-center gap-2">
-                  <span className="text-xs w-12 text-gray-700 dark:text-gray-300">{star} star</span>
-                  <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <span className="text-xs w-12 text-foreground/80">{star} star</span>
+                  <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                     <div
                       className="h-full bg-yellow-400"
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
-                  <span className="text-xs w-8 text-right text-gray-700 dark:text-gray-300">{count}</span>
+                  <span className="text-xs w-8 text-right text-foreground/80">{count}</span>
                 </div>
               )
             })}
@@ -272,7 +272,7 @@ export function FeedbackPanel({
 
           {feedback.length === 0 ? (
             <Card>
-              <CardContent className="pt-12 text-center text-gray-500 dark:text-gray-400">
+              <CardContent className="pt-12 text-center text-muted-foreground">
                 <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No feedback yet</p>
                 <p className="text-sm">Be the first to share your thoughts!</p>
@@ -296,12 +296,12 @@ export function FeedbackPanel({
 
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
-                          <p className="font-medium text-gray-900 dark:text-white">{item.user_name}</p>
+                          <p className="font-medium text-foreground">{item.user_name}</p>
                           <StarRating value={item.rating} size={3} />
                         </div>
 
                         {item.comment && (
-                          <p className="text-sm mt-1 text-gray-700 dark:text-gray-300">
+                          <p className="text-sm mt-1 text-foreground/80">
                             {item.comment}
                           </p>
                         )}
@@ -317,7 +317,7 @@ export function FeedbackPanel({
                           </div>
                         )}
 
-                        <div className="flex items-center justify-between mt-3 text-xs text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
                           <span>
                             {new Date(item.created_at).toLocaleDateString()}
                           </span>
@@ -331,7 +331,7 @@ export function FeedbackPanel({
                                   className={`p-1 rounded transition-colors ${
                                     item.is_helpful === true
                                       ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
-                                      : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                                      : 'hover:bg-muted'
                                   }`}
                                 >
                                   <ThumbsUp className="h-3 w-3" />
@@ -342,7 +342,7 @@ export function FeedbackPanel({
                                   className={`p-1 rounded transition-colors ${
                                     item.is_helpful === false
                                       ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
-                                      : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                                      : 'hover:bg-muted'
                                   }`}
                                 >
                                   <ThumbsDown className="h-3 w-3" />
@@ -368,7 +368,7 @@ export function FeedbackPanel({
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <p className="text-sm font-medium mb-2 text-gray-900 dark:text-white">Most Complimented</p>
+                <p className="text-sm font-medium mb-2 text-foreground">Most Complimented</p>
                 <div className="flex flex-wrap gap-2">
                   {stats.top_compliments.map((compliment, i) => (
                     <Badge key={i} className="gap-1">
@@ -377,13 +377,13 @@ export function FeedbackPanel({
                     </Badge>
                   ))}
                   {stats.top_compliments.length === 0 && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">No data yet</p>
+                    <p className="text-sm text-muted-foreground">No data yet</p>
                   )}
                 </div>
               </div>
 
               <div>
-                <p className="text-sm font-medium mb-2 text-gray-900 dark:text-white">Suggested Improvements</p>
+                <p className="text-sm font-medium mb-2 text-foreground">Suggested Improvements</p>
                 <div className="flex flex-wrap gap-2">
                   {stats.top_suggestions.map((suggestion, i) => (
                     <Badge key={i} variant="outline" className="gap-1">
@@ -392,7 +392,7 @@ export function FeedbackPanel({
                     </Badge>
                   ))}
                   {stats.top_suggestions.length === 0 && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">No suggestions yet</p>
+                    <p className="text-sm text-muted-foreground">No suggestions yet</p>
                   )}
                 </div>
               </div>

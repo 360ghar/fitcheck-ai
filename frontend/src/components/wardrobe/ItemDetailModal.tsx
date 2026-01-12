@@ -72,9 +72,9 @@ const CATEGORIES: { value: Category; label: string }[] = [
 const CONDITIONS: { value: Condition; label: string; className: string }[] = [
   { value: 'clean', label: 'Clean', className: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' },
   { value: 'dirty', label: 'Dirty', className: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' },
-  { value: 'laundry', label: 'In Laundry', className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300' },
+  { value: 'laundry', label: 'In Laundry', className: 'bg-navy-100 dark:bg-navy-900/30 text-navy-800 dark:text-navy-300' },
   { value: 'repair', label: 'Needs Repair', className: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' },
-  { value: 'donate', label: 'To Donate', className: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300' },
+  { value: 'donate', label: 'To Donate', className: 'bg-gold-100 dark:bg-gold-900/30 text-gold-700 dark:text-gold-300' },
 ]
 
 // ============================================================================
@@ -131,7 +131,7 @@ export function ItemDetailModal({
                     onClick={() => onToggleFavorite?.(item.id)}
                   >
                     <Heart
-                      className={`h-5 w-5 ${item.is_favorite ? 'fill-pink-500 text-pink-500' : ''}`}
+                      className={`h-5 w-5 ${item.is_favorite ? 'fill-gold-500 text-gold-500' : ''}`}
                     />
                   </Button>
                   <Button variant="ghost" size="icon" onClick={handleEdit}>
@@ -158,7 +158,7 @@ export function ItemDetailModal({
             <TabsContent value="details" className="space-y-4">
               <div className="grid md:grid-cols-2 gap-6">
                 {/* Image */}
-                <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
+                <div className="aspect-square rounded-lg overflow-hidden bg-muted">
                   {item.images.length > 0 ? (
                     <ZoomableImage
                       src={item.images[0].image_url}
@@ -167,7 +167,7 @@ export function ItemDetailModal({
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <Shirt className="h-24 w-24 text-gray-300 dark:text-gray-500" />
+                      <Shirt className="h-24 w-24 text-muted-foreground" />
                     </div>
                   )}
                 </div>
@@ -258,35 +258,35 @@ export function ItemDetailModal({
                   ) : (
                     <>
                       <div>
-                        <Label className="text-sm text-gray-500 dark:text-gray-400">Category</Label>
-                        <p className="font-medium capitalize text-gray-900 dark:text-white">{item.category}</p>
+                        <Label className="text-sm text-muted-foreground">Category</Label>
+                        <p className="font-medium capitalize text-foreground">{item.category}</p>
                         {item.sub_category && (
-                          <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">{item.sub_category}</p>
+                          <p className="text-sm text-muted-foreground capitalize">{item.sub_category}</p>
                         )}
                       </div>
 
                       <div>
-                        <Label className="text-sm text-gray-500 dark:text-gray-400">Condition</Label>
+                        <Label className="text-sm text-muted-foreground">Condition</Label>
                         <Badge className={conditionInfo?.className}>{conditionInfo?.label}</Badge>
                       </div>
 
                       {item.brand && (
                         <div>
-                          <Label className="text-sm text-gray-500 dark:text-gray-400">Brand</Label>
-                          <p className="font-medium text-gray-900 dark:text-white">{item.brand}</p>
+                          <Label className="text-sm text-muted-foreground">Brand</Label>
+                          <p className="font-medium text-foreground">{item.brand}</p>
                         </div>
                       )}
 
                       {item.size && (
                         <div>
-                          <Label className="text-sm text-gray-500 dark:text-gray-400">Size</Label>
-                          <p className="font-medium text-gray-900 dark:text-white">{item.size}</p>
+                          <Label className="text-sm text-muted-foreground">Size</Label>
+                          <p className="font-medium text-foreground">{item.size}</p>
                         </div>
                       )}
 
                       {item.colors.length > 0 && (
                         <div>
-                          <Label className="text-sm text-gray-500 dark:text-gray-400">Colors</Label>
+                          <Label className="text-sm text-muted-foreground">Colors</Label>
                           <div className="flex flex-wrap gap-1 mt-1">
                             {item.colors.map((color) => (
                               <Badge key={color} variant="outline">
@@ -299,7 +299,7 @@ export function ItemDetailModal({
 
                       {item.tags.length > 0 && (
                         <div>
-                          <Label className="text-sm text-gray-500 dark:text-gray-400">Tags</Label>
+                          <Label className="text-sm text-muted-foreground">Tags</Label>
                           <div className="flex flex-wrap gap-1 mt-1">
                             {item.tags.map((tag) => (
                               <Badge key={tag} variant="secondary">
@@ -312,15 +312,15 @@ export function ItemDetailModal({
 
                       {item.notes && (
                         <div>
-                          <Label className="text-sm text-gray-500 dark:text-gray-400">Notes</Label>
-                          <p className="text-sm text-gray-700 dark:text-gray-300">{item.notes}</p>
+                          <Label className="text-sm text-muted-foreground">Notes</Label>
+                          <p className="text-sm text-muted-foreground">{item.notes}</p>
                         </div>
                       )}
 
                       {item.price && (
                         <div>
-                          <Label className="text-sm text-gray-500 dark:text-gray-400">Price</Label>
-                          <p className="font-medium text-gray-900 dark:text-white">${item.price.toFixed(2)}</p>
+                          <Label className="text-sm text-muted-foreground">Price</Label>
+                          <p className="font-medium text-foreground">${item.price.toFixed(2)}</p>
                         </div>
                       )}
                     </>
@@ -346,7 +346,7 @@ export function ItemDetailModal({
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                    <div className="text-center py-12 text-muted-foreground">
                       <ImageIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
                       <p>No additional images</p>
                     </div>
@@ -360,9 +360,9 @@ export function ItemDetailModal({
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card>
                   <CardContent className="pt-6 text-center">
-                    <Zap className="h-8 w-8 mx-auto text-indigo-500 mb-2" />
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{item.usage_times_worn}</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Times Worn</p>
+                    <Zap className="h-8 w-8 mx-auto text-gold-500 mb-2" />
+                    <p className="text-2xl font-bold text-foreground">{item.usage_times_worn}</p>
+                    <p className="text-sm text-muted-foreground">Times Worn</p>
                   </CardContent>
                 </Card>
 
@@ -370,8 +370,8 @@ export function ItemDetailModal({
                   <Card>
                     <CardContent className="pt-6 text-center">
                       <DollarSign className="h-8 w-8 mx-auto text-green-500 mb-2" />
-                      <p className="text-2xl font-bold text-gray-900 dark:text-white">${item.cost_per_wear.toFixed(2)}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Cost Per Wear</p>
+                      <p className="text-2xl font-bold text-foreground">${item.cost_per_wear.toFixed(2)}</p>
+                      <p className="text-sm text-muted-foreground">Cost Per Wear</p>
                     </CardContent>
                   </Card>
                 )}
@@ -379,9 +379,9 @@ export function ItemDetailModal({
                 {item.usage_last_worn && (
                   <Card>
                     <CardContent className="pt-6 text-center">
-                      <Calendar className="h-8 w-8 mx-auto text-blue-500 mb-2" />
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">{new Date(item.usage_last_worn).toLocaleDateString()}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Last Worn</p>
+                      <Calendar className="h-8 w-8 mx-auto text-navy-600 dark:text-navy-400 mb-2" />
+                      <p className="text-sm font-medium text-foreground">{new Date(item.usage_last_worn).toLocaleDateString()}</p>
+                      <p className="text-sm text-muted-foreground">Last Worn</p>
                     </CardContent>
                   </Card>
                 )}
@@ -389,9 +389,9 @@ export function ItemDetailModal({
                 {item.price && (
                   <Card>
                     <CardContent className="pt-6 text-center">
-                      <DollarSign className="h-8 w-8 mx-auto text-purple-500 mb-2" />
-                      <p className="text-2xl font-bold text-gray-900 dark:text-white">${item.price.toFixed(2)}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Purchase Price</p>
+                      <DollarSign className="h-8 w-8 mx-auto text-gold-600 mb-2" />
+                      <p className="text-2xl font-bold text-foreground">${item.price.toFixed(2)}</p>
+                      <p className="text-sm text-muted-foreground">Purchase Price</p>
                     </CardContent>
                   </Card>
                 )}
@@ -400,7 +400,7 @@ export function ItemDetailModal({
           </Tabs>
         </div>
 
-        <DialogFooter className="border-t dark:border-gray-700 pt-4">
+        <DialogFooter className="border-t border-border pt-4">
           {isEditing ? (
             <>
               <Button variant="outline" onClick={handleCancel}>

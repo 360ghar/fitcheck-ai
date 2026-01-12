@@ -134,6 +134,8 @@ export interface UseBatchExtractionReturn {
   clearImages: () => void;
   /** Start the extraction process */
   startExtraction: () => Promise<void>;
+  /** Connect to an existing batch job (e.g., from Instagram import) */
+  connectToExistingJob: (jobId: string, imageCount: number) => void;
   /** Cancel the current job */
   cancel: () => Promise<void>;
   /** Reset to initial state */
@@ -455,6 +457,28 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
   }, [state.images]);
 
   /**
+   * Connect to an existing batch job (e.g., from Instagram import)
+   * The job has already been started by the backend with images already processed
+   */
+  const connectToExistingJob = useCallback((jobId: string, imageCount: number) => {
+    // Create placeholder images for the Instagram imports
+    const placeholderImages: BatchImageInput[] = Array.from({ length: imageCount }, (_, i) => ({
+      imageId: `instagram-${i}`,
+      file: new File([], `instagram-image-${i}.jpg`),
+      previewUrl: '',
+      status: 'extracting' as const,
+    }));
+
+    setState((prev) => ({
+      ...prev,
+      jobId,
+      step: 'extracting',
+      images: placeholderImages,
+      error: null,
+    }));
+  }, []);
+
+  /**
    * Cancel the current job
    */
   const cancel = useCallback(async () => {
@@ -527,6 +551,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
     removeImage,
     clearImages,
     startExtraction,
+    connectToExistingJob,
     cancel,
     reset,
     updateItem,

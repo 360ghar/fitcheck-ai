@@ -68,14 +68,14 @@ interface ChallengeCardProps {
 
 const DIFFICULTY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   easy: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400', label: 'Easy' },
-  medium: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-400', label: 'Medium' },
-  hard: { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-700 dark:text-purple-400', label: 'Hard' },
+  medium: { bg: 'bg-navy-100 dark:bg-navy-900/30', text: 'text-navy-700 dark:text-navy-400', label: 'Medium' },
+  hard: { bg: 'bg-gold-100 dark:bg-gold-900/30', text: 'text-gold-700 dark:text-gold-400', label: 'Hard' },
   expert: { bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-orange-700 dark:text-orange-400', label: 'Expert' },
 }
 
 const STATUS_STYLES: Record<string, { color: string; icon: React.ElementType }> = {
-  pending: { color: 'text-gray-500', icon: Clock },
-  in_progress: { color: 'text-blue-500', icon: Zap },
+  pending: { color: 'text-muted-foreground', icon: Clock },
+  in_progress: { color: 'text-navy-600 dark:text-navy-400', icon: Zap },
   completed: { color: 'text-green-500', icon: Check },
   expired: { color: 'text-red-500', icon: Clock },
 }
@@ -124,7 +124,7 @@ function ChallengeProgress({
   return (
     <div className="space-y-2">
       <div className="flex justify-between text-sm">
-        <span className="text-gray-600 dark:text-gray-400">Progress</span>
+        <span className="text-muted-foreground">Progress</span>
         <span className={`font-medium ${isComplete ? 'text-green-600' : ''}`}>
           {progress} / {target}
         </span>
@@ -142,7 +142,7 @@ function ChallengeProgress({
 
 function FeaturedBanner() {
   return (
-    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-gold-400 via-gold-500 to-gold-600" />
   )
 }
 
@@ -192,12 +192,12 @@ export function ChallengeCard({
   // Compact variant
   if (variant === 'compact') {
     return (
-      <Card className={`hover:shadow-md transition-shadow ${challenge.featured ? 'border-purple-200 dark:border-purple-800' : ''}`}>
+      <Card className={`hover:shadow-md transition-shadow ${challenge.featured ? 'border-gold-200 dark:border-gold-800' : ''}`}>
         {challenge.featured && <FeaturedBanner />}
         <CardContent className="p-4">
           <div className="flex items-center gap-3">
             {/* Cover image or icon */}
-            <div className="h-14 w-14 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0">
+            <div className="h-14 w-14 rounded-lg overflow-hidden bg-muted flex-shrink-0">
               {challenge.cover_image_url ? (
                 <img src={challenge.cover_image_url} alt={challenge.title} className="h-full w-full object-cover" />
               ) : (
@@ -211,7 +211,7 @@ export function ChallengeCard({
               <div className="flex items-center gap-2 mb-1">
                 <h4 className="font-semibold truncate">{challenge.title}</h4>
                 {challenge.featured && (
-                  <Badge className="bg-purple-100 text-purple-700 border-purple-200">
+                  <Badge className="bg-gold-100 text-gold-700 border-gold-200">
                     <Crown className="h-3 w-3 mr-1" />
                     Featured
                   </Badge>
@@ -254,7 +254,7 @@ export function ChallengeCard({
   // Featured variant (larger, more prominent)
   if (variant === 'featured') {
     return (
-      <Card className={`overflow-hidden ${challenge.featured ? 'border-purple-200 dark:border-purple-800' : ''}`}>
+      <Card className={`overflow-hidden ${challenge.featured ? 'border-gold-200 dark:border-gold-800' : ''}`}>
         {challenge.featured && <FeaturedBanner />}
 
         {/* Cover image */}
@@ -274,7 +274,7 @@ export function ChallengeCard({
               <div className="flex items-center gap-2">
                 <CardTitle className="text-xl">{challenge.title}</CardTitle>
                 {challenge.featured && (
-                  <Badge className="bg-purple-100 text-purple-700 border-purple-200">
+                  <Badge className="bg-gold-100 text-gold-700 border-gold-200">
                     <Crown className="h-3 w-3 mr-1" />
                     Featured
                   </Badge>
@@ -293,26 +293,26 @@ export function ChallengeCard({
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <p className="text-gray-600 dark:text-gray-400">{challenge.description}</p>
+          <p className="text-muted-foreground">{challenge.description}</p>
 
           {/* Challenge details */}
           <div className="grid grid-cols-3 gap-4">
             <div className="text-center">
-              <Users className="h-5 w-5 mx-auto mb-1 text-gray-400" />
+              <Users className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
               <p className="text-lg font-semibold">{challenge.participant_count}</p>
-              <p className="text-xs text-gray-500">Participants</p>
+              <p className="text-xs text-muted-foreground">Participants</p>
             </div>
             <div className="text-center">
-              <Target className="h-5 w-5 mx-auto mb-1 text-gray-400" />
+              <Target className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
               <p className="text-lg font-semibold">{target}</p>
-              <p className="text-xs text-gray-500">Target</p>
+              <p className="text-xs text-muted-foreground">Target</p>
             </div>
             <div className="text-center">
-              <Clock className="h-5 w-5 mx-auto mb-1 text-gray-400" />
+              <Clock className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
               <p className="text-lg font-semibold">
                 {challenge.time_remaining?.days || 0}d
               </p>
-              <p className="text-xs text-gray-500">Remaining</p>
+              <p className="text-xs text-muted-foreground">Remaining</p>
             </div>
           </div>
 
@@ -367,14 +367,14 @@ export function ChallengeCard({
 
   // Default variant
   return (
-    <Card className={`hover:shadow-md transition-shadow ${challenge.featured ? 'border-purple-200 dark:border-purple-800' : ''}`}>
+    <Card className={`hover:shadow-md transition-shadow ${challenge.featured ? 'border-gold-200 dark:border-gold-800' : ''}`}>
       {challenge.featured && <FeaturedBanner />}
 
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
             {/* Thumbnail */}
-            <div className="h-16 w-16 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0">
+            <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
               {challenge.cover_image_url ? (
                 <img src={challenge.cover_image_url} alt={challenge.title} className="h-full w-full object-cover" />
               ) : (
@@ -391,7 +391,7 @@ export function ChallengeCard({
                   <Crown className="h-4 w-4 text-purple-500" />
                 )}
               </div>
-              <p className="text-sm text-gray-500 line-clamp-2">{challenge.description}</p>
+              <p className="text-sm text-muted-foreground line-clamp-2">{challenge.description}</p>
             </div>
           </div>
 
@@ -410,7 +410,7 @@ export function ChallengeCard({
       <CardContent className="space-y-3">
         {/* Info bar */}
         <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-3 text-gray-500">
+          <div className="flex items-center gap-3 text-muted-foreground">
             <div className="flex items-center gap-1">
               <Users className="h-4 w-4" />
               <span>{challenge.participant_count}</span>
@@ -482,7 +482,7 @@ export function ChallengeList({
   if (challenges.length === 0) {
     return (
       <Card>
-        <CardContent className="pt-6 text-center text-gray-500">
+        <CardContent className="pt-6 text-center text-muted-foreground">
           <Trophy className="h-12 w-12 mx-auto mb-4 opacity-30" />
           <p>No active challenges</p>
           <p className="text-sm">Check back soon for new challenges!</p>

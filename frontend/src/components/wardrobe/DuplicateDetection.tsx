@@ -58,7 +58,7 @@ function DuplicateCard({ duplicate, onView }: DuplicateCardProps) {
       <CardContent className="p-0">
         <div className="flex gap-3 p-3">
           {/* Thumbnail */}
-          <div className="w-16 h-16 flex-shrink-0 rounded-md overflow-hidden bg-gray-100 dark:bg-gray-800">
+          <div className="w-16 h-16 flex-shrink-0 rounded-md overflow-hidden bg-muted">
             {duplicate.image_url ? (
               <img
                 src={duplicate.image_url}
@@ -66,7 +66,7 @@ function DuplicateCard({ duplicate, onView }: DuplicateCardProps) {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-400">
+              <div className="w-full h-full flex items-center justify-center text-muted-foreground">
                 <Copy className="h-6 w-6" />
               </div>
             )}
@@ -76,10 +76,10 @@ function DuplicateCard({ duplicate, onView }: DuplicateCardProps) {
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <h4 className="font-medium text-sm truncate text-gray-900 dark:text-white">
+                <h4 className="font-medium text-sm truncate text-foreground">
                   {duplicate.name}
                 </h4>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-muted-foreground">
                   {duplicate.category}
                   {duplicate.sub_category && ` • ${duplicate.sub_category}`}
                 </p>
@@ -111,7 +111,7 @@ function DuplicateCard({ duplicate, onView }: DuplicateCardProps) {
             {duplicate.reasons.length > 0 && (
               <div className="mt-2 space-y-0.5">
                 {duplicate.reasons.slice(0, 2).map((reason, idx) => (
-                  <p key={idx} className="text-xs text-gray-500 dark:text-gray-400">
+                  <p key={idx} className="text-xs text-muted-foreground">
                     • {reason}
                   </p>
                 ))}
@@ -182,13 +182,13 @@ export function DuplicateDetection({
   // Loading state
   if (isChecking) {
     return (
-      <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/20">
+      <Card className="border-navy-200 dark:border-navy-800 bg-navy-50/50 dark:bg-navy-900/20">
         <CardContent className="py-6">
           <div className="flex flex-col items-center gap-3">
             <div className="animate-pulse">
-              <Copy className="h-8 w-8 text-blue-500" />
+              <Copy className="h-8 w-8 text-navy-500" />
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-muted-foreground">
               Checking for similar items in your wardrobe...
             </p>
             <Progress value={50} className="w-48 h-1" />
@@ -242,7 +242,7 @@ export function DuplicateDetection({
               <CardTitle className="text-base">
                 {highSimilarity ? 'Possible Duplicate Detected' : 'Similar Items Found'}
               </CardTitle>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+              <p className="text-sm text-muted-foreground mt-0.5">
                 {duplicates.length === 1
                   ? 'We found 1 similar item in your wardrobe'
                   : `We found ${duplicates.length} similar items in your wardrobe`}

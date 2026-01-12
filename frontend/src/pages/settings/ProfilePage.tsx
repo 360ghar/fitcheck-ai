@@ -296,7 +296,7 @@ export default function ProfilePage() {
     <div className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
       {/* Header */}
       <div className="mb-4 md:mb-8">
-        <h1 className="text-lg md:text-2xl font-bold text-foreground">Profile & Settings</h1>
+        <h1 className="text-lg md:text-2xl font-display font-semibold text-foreground">Profile & Settings</h1>
         <p className="mt-1 md:mt-2 text-xs md:text-sm text-muted-foreground">Manage your account and preferences</p>
       </div>
 

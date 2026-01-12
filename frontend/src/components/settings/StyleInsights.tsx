@@ -51,17 +51,17 @@ function InsightCard({ insight }: { insight: StyleInsight }) {
   const Icon = iconMap[insight.type] || TrendingUp
 
   return (
-    <div className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-      <div className="p-2 rounded-full bg-indigo-100 dark:bg-indigo-900/50">
-        <Icon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+    <div className="flex items-start gap-3 p-3 rounded-lg bg-muted">
+      <div className="p-2 rounded-full bg-gold-100 dark:bg-gold-900/50">
+        <Icon className="h-4 w-4 text-gold-600 dark:text-gold-400" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-900 dark:text-white">
+        <p className="text-sm font-medium text-foreground">
           {insight.message}
         </p>
         <div className="flex items-center gap-2 mt-1">
           <Progress value={insight.confidence * 100} className="h-1 flex-1" />
-          <span className="text-xs text-gray-500 dark:text-gray-400">
+          <span className="text-xs text-muted-foreground">
             {Math.round(insight.confidence * 100)}% confident
           </span>
         </div>
@@ -80,7 +80,7 @@ function ColorSwatch({ color, score }: { color: string; score: number }) {
         <TooltipTrigger asChild>
           <div className="flex flex-col items-center gap-1">
             <div
-              className="w-8 h-8 rounded-full border-2 border-white dark:border-gray-700 shadow-sm"
+              className="w-8 h-8 rounded-full border-2 border-white dark:border-border shadow-sm"
               style={{
                 backgroundColor: cssColor,
                 // Fallback for complex color names
@@ -89,7 +89,7 @@ function ColorSwatch({ color, score }: { color: string; score: number }) {
                   : '#9CA3AF',
               }}
             />
-            <span className="text-xs text-gray-600 dark:text-gray-400 capitalize truncate max-w-12">
+            <span className="text-xs text-muted-foreground capitalize truncate max-w-12">
               {color}
             </span>
           </div>
@@ -170,7 +170,7 @@ export function StyleInsights({ onSyncComplete }: StyleInsightsProps) {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-indigo-500" />
+              <Sparkles className="h-5 w-5 text-gold-500" />
               Your Style DNA
             </CardTitle>
             <CardDescription>
@@ -206,18 +206,18 @@ export function StyleInsights({ onSyncComplete }: StyleInsightsProps) {
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Data collection progress */}
-        <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+        <div className="p-4 rounded-lg bg-muted">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <span className="text-sm font-medium text-foreground/80">
               Style learning progress
             </span>
-            <span className="text-sm text-gray-500 dark:text-gray-400">
+            <span className="text-sm text-muted-foreground">
               {interactionCount} / 10 interactions
             </span>
           </div>
           <Progress value={Math.min((interactionCount / 10) * 100, 100)} />
           {showAnalysisPrompt && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 flex items-center gap-1">
+            <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
               <Info className="h-3 w-3" />
               Keep using FitCheck to help us learn your style preferences
             </p>
@@ -227,9 +227,9 @@ export function StyleInsights({ onSyncComplete }: StyleInsightsProps) {
         {preferences && hasEnoughData ? (
           <>
             {/* Style personality */}
-            <div className="text-center p-4 rounded-lg bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Your style personality</p>
-              <h3 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+            <div className="text-center p-4 rounded-lg bg-gradient-to-br from-gold-50 to-navy-50 dark:from-gold-900/20 dark:to-navy-900/20">
+              <p className="text-sm text-muted-foreground mb-1">Your style personality</p>
+              <h3 className="text-2xl font-bold text-gold-600 dark:text-gold-400">
                 {preferences.stylePersonality}
               </h3>
               <Badge
@@ -246,7 +246,7 @@ export function StyleInsights({ onSyncComplete }: StyleInsightsProps) {
             {/* Top colors */}
             {preferences.topColors.length > 0 && (
               <div>
-                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                <h4 className="text-sm font-medium text-foreground/80 mb-3">
                   Your favorite colors
                 </h4>
                 <div className="flex gap-4">
@@ -260,7 +260,7 @@ export function StyleInsights({ onSyncComplete }: StyleInsightsProps) {
             {/* Top styles */}
             {preferences.topStyles.length > 0 && (
               <div>
-                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                <h4 className="text-sm font-medium text-foreground/80 mb-3">
                   Preferred styles
                 </h4>
                 <div className="flex flex-wrap gap-2">
@@ -276,7 +276,7 @@ export function StyleInsights({ onSyncComplete }: StyleInsightsProps) {
             {/* Top brands */}
             {preferences.topBrands.length > 0 && (
               <div>
-                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                <h4 className="text-sm font-medium text-foreground/80 mb-3">
                   Favorite brands
                 </h4>
                 <div className="flex flex-wrap gap-2">
@@ -292,7 +292,7 @@ export function StyleInsights({ onSyncComplete }: StyleInsightsProps) {
             {/* Insights */}
             {preferences.insights.length > 0 && (
               <div>
-                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                <h4 className="text-sm font-medium text-foreground/80 mb-3">
                   Style insights
                 </h4>
                 <div className="space-y-2">
@@ -304,13 +304,13 @@ export function StyleInsights({ onSyncComplete }: StyleInsightsProps) {
             )}
 
             {/* Last analyzed */}
-            <p className="text-xs text-gray-400 text-center">
+            <p className="text-xs text-muted-foreground text-center">
               Last analyzed: {new Date(preferences.lastAnalyzed).toLocaleDateString()} •{' '}
               {preferences.dataPointsAnalyzed} interactions analyzed
             </p>
           </>
         ) : (
-          <div className="text-center py-8 text-gray-400">
+          <div className="text-center py-8 text-muted-foreground">
             <Sparkles className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p className="font-medium">Not enough data yet</p>
             <p className="text-sm mt-2">

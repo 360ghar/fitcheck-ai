@@ -95,7 +95,7 @@ function RankBadge({ rank }: { rank: number }) {
   }
 
   return (
-    <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center font-bold text-gray-600 dark:text-gray-400">
+    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center font-bold text-muted-foreground">
       {rank}
     </div>
   )
@@ -125,8 +125,8 @@ function Podium({ entries }: { entries: LeaderboardEntry[] }) {
               </AvatarFallback>
             )}
           </Avatar>
-          <p className="text-sm font-medium mt-2 max-w-20 truncate text-gray-900 dark:text-white">{second.username}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">{second.total_points.toLocaleString()} pts</p>
+          <p className="text-sm font-medium mt-2 max-w-20 truncate text-foreground">{second.username}</p>
+          <p className="text-xs text-muted-foreground">{second.total_points.toLocaleString()} pts</p>
           <div className="w-20 h-24 bg-gradient-to-t from-gray-400 to-gray-300 rounded-t-lg mt-2 flex items-end justify-center pb-2">
             <span className="text-2xl font-bold text-white">2</span>
           </div>
@@ -147,8 +147,8 @@ function Podium({ entries }: { entries: LeaderboardEntry[] }) {
           </Avatar>
           <Trophy className="h-8 w-8 text-yellow-500 absolute -bottom-2 -right-2 fill-yellow-500" />
         </div>
-        <p className="text-sm font-semibold mt-2 max-w-24 truncate text-gray-900 dark:text-white">{first.username}</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400">{first.total_points.toLocaleString()} pts</p>
+        <p className="text-sm font-semibold mt-2 max-w-24 truncate text-foreground">{first.username}</p>
+        <p className="text-xs text-muted-foreground">{first.total_points.toLocaleString()} pts</p>
         <div className="w-24 h-32 bg-gradient-to-t from-yellow-500 to-yellow-400 rounded-t-lg mt-2 flex items-end justify-center pb-2 shadow-lg">
           <span className="text-3xl font-bold text-white">1</span>
         </div>
@@ -166,8 +166,8 @@ function Podium({ entries }: { entries: LeaderboardEntry[] }) {
               </AvatarFallback>
             )}
           </Avatar>
-          <p className="text-sm font-medium mt-2 max-w-20 truncate text-gray-900 dark:text-white">{third.username}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">{third.total_points.toLocaleString()} pts</p>
+          <p className="text-sm font-medium mt-2 max-w-20 truncate text-foreground">{third.username}</p>
+          <p className="text-xs text-muted-foreground">{third.total_points.toLocaleString()} pts</p>
           <div className="w-20 h-16 bg-gradient-to-t from-amber-700 to-amber-600 rounded-t-lg mt-2 flex items-end justify-center pb-2">
             <span className="text-2xl font-bold text-white">3</span>
           </div>
@@ -190,12 +190,12 @@ function LeaderboardRow({
     <div
       className={`
         flex items-center gap-3 p-3 rounded-lg transition-colors
-        ${isCurrentUser ? 'bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}
+        ${isCurrentUser ? 'bg-gold-50 dark:bg-gold-900/20 border border-gold-200 dark:border-gold-800' : 'hover:bg-muted'}
       `}
     >
       {showRank && <RankBadge rank={entry.rank} />}
 
-      <Avatar className={isCurrentUser ? 'ring-2 ring-indigo-500' : ''}>
+      <Avatar className={isCurrentUser ? 'ring-2 ring-gold-500' : ''}>
         {entry.avatar_url ? (
           <AvatarImage src={entry.avatar_url} />
         ) : (
@@ -207,15 +207,15 @@ function LeaderboardRow({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <p className="font-medium truncate text-gray-900 dark:text-white">{entry.username}</p>
+          <p className="font-medium truncate text-foreground">{entry.username}</p>
           {isCurrentUser && (
             <Badge variant="secondary" className="text-xs">You</Badge>
           )}
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>Level {entry.level}</span>
           <span>•</span>
-          <span className="font-semibold text-indigo-600 dark:text-indigo-400">{entry.total_points.toLocaleString()} pts</span>
+          <span className="font-semibold text-navy-700 dark:text-gold-400">{entry.total_points.toLocaleString()} pts</span>
         </div>
       </div>
 
@@ -311,9 +311,9 @@ export function Leaderboard({
 
         {/* User's own rank if not in list */}
         {userRank && !isCurrentUserVisible && (
-          <div className="pt-4 border-t dark:border-gray-700">
+          <div className="pt-4 border-t border-border">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">Your Ranking</p>
+              <p className="text-sm font-medium text-foreground">Your Ranking</p>
               <Badge variant="outline">
                 Top {userRank.top_percentile}%
               </Badge>
@@ -334,19 +334,19 @@ export function Leaderboard({
 
         {/* User stats summary */}
         {userRank && (
-          <div className="pt-4 border-t dark:border-gray-700">
+          <div className="pt-4 border-t border-border">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">#{userRank.rank}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Your Rank</p>
+                <p className="text-2xl font-bold text-navy-700 dark:text-gold-400">#{userRank.rank}</p>
+                <p className="text-xs text-muted-foreground">Your Rank</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{userRank.level}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Level</p>
+                <p className="text-2xl font-bold text-foreground">{userRank.level}</p>
+                <p className="text-xs text-muted-foreground">Level</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-500">{userRank.total_points.toLocaleString()}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Total Points</p>
+                <p className="text-2xl font-bold text-gold-600 dark:text-gold-500">{userRank.total_points.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">Total Points</p>
               </div>
             </div>
           </div>

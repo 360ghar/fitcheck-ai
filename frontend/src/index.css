@@ -2,29 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
-/* shadcn/ui CSS variables */
+/* shadcn/ui CSS variables - Modern Luxury Theme */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 210 20% 98%;
+    --foreground: 213 27% 23%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 213 27% 23%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 238.7 83.5% 66.7%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 238.7 83.5% 66.7%;
-    --radius: 0.5rem;
+    --popover-foreground: 213 27% 23%;
+    --primary: 213 55% 23%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 17% 95%;
+    --secondary-foreground: 213 27% 23%;
+    --muted: 210 17% 95%;
+    --muted-foreground: 214 20% 50%;
+    --accent: 43 49% 58%;
+    --accent-foreground: 213 55% 10%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 43 49% 58%;
+    --radius: 0.375rem;
 
     /* Sidebar */
     --sidebar-width: 240px;
@@ -42,25 +42,25 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 238.7 83.5% 66.7%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 238.7 83.5% 66.7%;
+    --background: 212 63% 10%;
+    --foreground: 210 20% 95%;
+    --card: 212 50% 14%;
+    --card-foreground: 210 20% 95%;
+    --popover: 212 50% 14%;
+    --popover-foreground: 210 20% 95%;
+    --primary: 43 49% 58%;
+    --primary-foreground: 212 63% 10%;
+    --secondary: 212 45% 17%;
+    --secondary-foreground: 210 20% 95%;
+    --muted: 212 45% 17%;
+    --muted-foreground: 210 17% 70%;
+    --accent: 43 49% 58%;
+    --accent-foreground: 212 63% 10%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 212 40% 20%;
+    --input: 212 40% 20%;
+    --ring: 43 49% 58%;
   }
 
   * {
@@ -95,18 +95,18 @@
     container-type: normal;
   }
 
-  /* Glass morphism */
+  /* Glass morphism - refined for luxury */
   .glass {
-    @apply bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/20 dark:border-gray-700/30;
+    @apply bg-white/80 dark:bg-navy-900/80 backdrop-blur-xl border border-navy-100/30 dark:border-navy-700/30;
   }
 
   .glass-card {
-    @apply bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg border border-white/30 dark:border-gray-700/40 shadow-elevated;
+    @apply bg-white/90 dark:bg-navy-800/90 backdrop-blur-lg border border-navy-100/40 dark:border-navy-700/40 shadow-elevated;
   }
 
-  /* Gradient text */
+  /* Gradient text - gold accent */
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-primary;
+    @apply bg-clip-text text-transparent bg-gradient-gold;
   }
 
   .line-clamp-2 {

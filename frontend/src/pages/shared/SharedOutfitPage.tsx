@@ -69,18 +69,18 @@ export default function SharedOutfitPage() {
         />
       )}
 
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="min-h-screen bg-muted/30">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
-          <Link to="/" className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
-            FitCheck<span className="font-light text-gray-600 dark:text-gray-400 ml-1">AI</span>
+          <Link to="/" className="text-xl font-display font-semibold text-navy-800 dark:text-gold-400">
+            FitCheck<span className="font-light text-muted-foreground ml-1">AI</span>
           </Link>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <Button variant="outline" asChild className="w-full sm:w-auto">
               <Link to="/auth/login">Sign in</Link>
             </Button>
             {id && (
-              <Button asChild className="w-full sm:w-auto">
+              <Button variant="gold" asChild className="w-full sm:w-auto">
                 <Link to={`/outfits/${id}`}>Open in app</Link>
               </Button>
             )}
@@ -88,19 +88,19 @@ export default function SharedOutfitPage() {
         </div>
 
         {isLoading ? (
-          <div className="text-center py-16 text-gray-600 dark:text-gray-400">
+          <div className="text-center py-16 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin inline-block mr-2" />
             Loading shared outfit…
           </div>
         ) : error ? (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-8 text-center">
-            <Layers className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-            <h1 className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">Outfit not available</h1>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{error}</p>
+          <div className="bg-card rounded-lg shadow-sm p-8 text-center">
+            <Layers className="mx-auto h-12 w-12 text-muted-foreground" />
+            <h1 className="mt-4 text-lg font-semibold text-foreground">Outfit not available</h1>
+            <p className="mt-2 text-sm text-muted-foreground">{error}</p>
           </div>
         ) : outfit ? (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 overflow-hidden">
-            <div className="aspect-[4/3] bg-gray-100 dark:bg-gray-700">
+          <div className="bg-card rounded-lg shadow-sm overflow-hidden">
+            <div className="aspect-[4/3] bg-muted">
               {primary?.image_url ? (
                 <ZoomableImage
                   src={primary.thumbnail_url || primary.image_url}
@@ -108,7 +108,7 @@ export default function SharedOutfitPage() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
+                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
                   <Layers className="h-10 w-10" />
                 </div>
               )}
@@ -116,9 +116,9 @@ export default function SharedOutfitPage() {
 
             <div className="p-6 space-y-4">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{outfit.name}</h1>
+                <h1 className="text-2xl font-display font-semibold text-foreground">{outfit.name}</h1>
                 {outfit.description && (
-                  <p className="mt-2 text-gray-600 dark:text-gray-400">{outfit.description}</p>
+                  <p className="mt-2 text-muted-foreground">{outfit.description}</p>
                 )}
               </div>
 
@@ -133,17 +133,17 @@ export default function SharedOutfitPage() {
 
               {outfit.items?.length > 0 && (
                 <div>
-                  <div className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Items</div>
+                  <div className="text-sm font-semibold text-foreground mb-2">Items</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {outfit.items.map((it) => (
-                      <div key={it.id} className="p-3 rounded-lg border border-gray-200 dark:border-gray-700">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">{it.name}</div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400 capitalize">{it.category}</div>
+                      <div key={it.id} className="p-3 rounded-lg border border-border">
+                        <div className="text-sm font-medium text-foreground">{it.name}</div>
+                        <div className="text-xs text-muted-foreground capitalize">{it.category}</div>
                         {it.colors?.length > 0 && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{it.colors.join(', ')}</div>
+                          <div className="text-xs text-muted-foreground mt-1">{it.colors.join(', ')}</div>
                         )}
                         {it.brand && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{it.brand}</div>
+                          <div className="text-xs text-muted-foreground mt-1">{it.brand}</div>
                         )}
                       </div>
                     ))}

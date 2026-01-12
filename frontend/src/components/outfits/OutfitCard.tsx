@@ -103,7 +103,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
           {/* Actions */}
           <div className="flex items-center gap-2">
             {hasAiImage && (
-              <Badge className="bg-violet-500/90 text-white text-[10px]">
+              <Badge className="bg-gold-500/90 text-white text-[10px]">
                 <Sparkles className="h-3 w-3 mr-1" />
                 AI
               </Badge>
@@ -113,8 +113,8 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
                 className={cn(
                   'p-2 rounded-full touch-target',
                   outfit.is_favorite
-                    ? 'text-pink-500'
-                    : 'text-muted-foreground hover:text-pink-500'
+                    ? 'text-gold-500'
+                    : 'text-muted-foreground hover:text-gold-500'
                 )}
                 onClick={(e) => {
                   e.stopPropagation()
@@ -144,7 +144,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
       >
         {/* Image/Content */}
         {isGenerating ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-primary/10 to-violet-500/10">
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-navy-100/50 to-gold-100/50 dark:from-navy-900/50 dark:to-gold-900/50">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="text-xs text-muted-foreground mt-2">Generating AI image...</p>
           </div>
@@ -196,7 +196,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
           <Badge
             className={cn(
               'absolute top-2.5 left-2.5 z-10',
-              'bg-violet-500/90 text-white text-[10px]',
+              'bg-gold-500/90 text-white text-[10px]',
               'shadow-sm'
             )}
           >
@@ -215,8 +215,8 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
               'transition-all duration-200',
               'touch-target',
               outfit.is_favorite
-                ? 'bg-pink-500 text-white shadow-lg shadow-pink-500/30'
-                : 'bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm text-muted-foreground hover:text-pink-500'
+                ? 'bg-gold-500 text-white shadow-lg shadow-gold-500/30'
+                : 'bg-white/90 dark:bg-card/90 backdrop-blur-sm text-muted-foreground hover:text-gold-500'
             )}
             onClick={(e) => {
               e.stopPropagation()

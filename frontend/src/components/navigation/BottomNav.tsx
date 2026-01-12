@@ -90,22 +90,22 @@ export function BottomNav() {
               // Size and shape
               'w-12 h-12 rounded-full',
               // Gradient background
-              'bg-gradient-to-br from-indigo-500 to-purple-600',
+              'bg-gradient-to-br from-gold-400 to-gold-600',
               // Shadow and glow
-              'shadow-lg shadow-indigo-500/30',
+              'shadow-lg shadow-gold-500/30',
               // Flex center
               'flex items-center justify-center',
               // Offset to float above nav bar
               '-mt-6',
               // Hover effects
-              'hover:shadow-xl hover:shadow-indigo-500/40 hover:scale-105',
+              'hover:shadow-xl hover:shadow-gold-500/40 hover:scale-105',
               'active:scale-95',
               // Transition
               'transition-all duration-200'
             )}
             aria-label={fabAction.label}
           >
-            <Plus className="h-6 w-6 text-white" strokeWidth={2.5} />
+            <Plus className="h-6 w-6 text-navy-900" strokeWidth={2.5} />
           </button>
         </div>
 
