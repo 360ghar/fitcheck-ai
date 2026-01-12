@@ -47,7 +47,9 @@ class BatchExtractionRepository {
   /// Returns a stream of SSE events for real-time progress updates
   Stream<SSEEvent> subscribeToEvents(String jobId) {
     final path = ApiConstants.aiBatchExtractEvents(jobId);
-    return _sseService.connect(path);
+    return _sseService.connect(path).map(
+      (event) => SSEEvent(type: event.type, data: event.data),
+    );
   }
 
   /// Cancel a batch extraction job

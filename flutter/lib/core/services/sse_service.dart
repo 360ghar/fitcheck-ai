@@ -18,7 +18,7 @@ class SSEService {
   ///
   /// [path] - The API path (e.g., '/api/v1/ai/batch-extract/{id}/events')
   /// [headers] - Additional headers to include
-  Stream<SSEEvent> connect(
+  Stream<ServerSentEvent> connect(
     String path, {
     Map<String, String>? headers,
     int maxRetries = 3,
@@ -45,7 +45,7 @@ class SSEService {
           print('SSE connection error (attempt $retryCount/$maxRetries): $e');
         }
         if (retryCount >= maxRetries) {
-          yield SSEEvent(
+          yield ServerSentEvent(
             type: 'error',
             data: {'message': 'Connection failed after $maxRetries attempts'},
           );
@@ -70,7 +70,7 @@ class SSEService {
   }
 
   /// Internal connection method
-  Stream<SSEEvent> _connectInternal(
+  Stream<ServerSentEvent> _connectInternal(
     String url, {
     Map<String, String>? headers,
   }) async* {
@@ -108,7 +108,7 @@ class SSEService {
           final eventStr = buffer.substring(0, eventEnd);
           buffer = buffer.substring(eventEnd + 2);
 
-          final event = _parseSSEEvent(eventStr);
+          final event = _parseServerSentEvent(eventStr);
           if (event != null) {
             yield event;
           }
@@ -120,7 +120,7 @@ class SSEService {
   }
 
   /// Parse a single SSE event string
-  SSEEvent? _parseSSEEvent(String eventStr) {
+  ServerSentEvent? _parseServerSentEvent(String eventStr) {
     String? eventType;
     String? dataStr;
 
@@ -142,7 +142,7 @@ class SSEService {
           data = {'message': dataStr};
         }
       }
-      return SSEEvent(type: eventType, data: data);
+      return ServerSentEvent(type: eventType, data: data);
     }
     return null;
   }
@@ -164,17 +164,17 @@ class SSEService {
 }
 
 /// SSE Event data class
-class SSEEvent {
+class ServerSentEvent {
   final String type;
   final Map<String, dynamic>? data;
 
-  const SSEEvent({
+  const ServerSentEvent({
     required this.type,
     this.data,
   });
 
   @override
-  String toString() => 'SSEEvent(type: $type, data: $data)';
+  String toString() => 'ServerSentEvent(type: $type, data: $data)';
 }
 
 /// SSE connection exception

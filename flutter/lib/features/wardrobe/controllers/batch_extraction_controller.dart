@@ -8,7 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/services/sse_service.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../../domain/enums/category.dart';
-import '../../../domain/enums/condition.dart';
+import '../../../domain/enums/condition.dart' as domain;
 import '../models/batch_extraction_models.dart';
 import '../models/item_model.dart';
 import '../repositories/batch_extraction_repository.dart';
@@ -52,7 +52,7 @@ class BatchExtractionController extends GetxController {
   final RxList<BatchExtractedItem> extractedItems = <BatchExtractedItem>[].obs;
 
   // SSE subscription
-  StreamSubscription<SSEEvent>? _sseSubscription;
+  StreamSubscription? _sseSubscription;
 
   // Computed properties
   bool get isIdle => jobStatus.value == BatchJobStatus.idle;
@@ -534,7 +534,7 @@ class BatchExtractionController extends GetxController {
           material: item.material,
           pattern: item.pattern,
           description: item.description,
-          condition: Condition.clean,
+          condition: domain.Condition.clean,
         );
 
         // If we have a source image, create with image
