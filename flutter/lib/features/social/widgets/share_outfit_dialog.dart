@@ -80,7 +80,7 @@ class ShareOutfitDialog extends StatelessWidget {
     Get.snackbar(
       'Copied',
       'Link copied to clipboard',
-      snackPosition: SnackPosition.BOTTOM,
+      snackPosition: SnackPosition.TOP,
       duration: const Duration(seconds: 1),
     );
   }

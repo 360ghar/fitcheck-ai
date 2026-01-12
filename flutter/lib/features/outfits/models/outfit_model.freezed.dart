@@ -43,6 +43,7 @@ mixin _$OutfitModel {
   DateTime? get lastWornAt => throw _privateConstructorUsedError;
   @JsonKey(name: 'outfit_images')
   List<OutfitImage>? get outfitImages => throw _privateConstructorUsedError;
+  List<ItemModel>? get items => throw _privateConstructorUsedError;
   @JsonKey(name: 'created_at')
   DateTime? get createdAt => throw _privateConstructorUsedError;
   @JsonKey(name: 'updated_at')
@@ -76,6 +77,7 @@ abstract class $OutfitModelCopyWith<$Res> {
       @JsonKey(name: 'worn_count') int wornCount,
       @JsonKey(name: 'last_worn_at') DateTime? lastWornAt,
       @JsonKey(name: 'outfit_images') List<OutfitImage>? outfitImages,
+      List<ItemModel>? items,
       @JsonKey(name: 'created_at') DateTime? createdAt,
       @JsonKey(name: 'updated_at') DateTime? updatedAt});
 }
@@ -108,6 +110,7 @@ class _$OutfitModelCopyWithImpl<$Res, $Val extends OutfitModel>
     Object? wornCount = null,
     Object? lastWornAt = freezed,
     Object? outfitImages = freezed,
+    Object? items = freezed,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
   }) {
@@ -172,6 +175,10 @@ class _$OutfitModelCopyWithImpl<$Res, $Val extends OutfitModel>
           ? _value.outfitImages
           : outfitImages // ignore: cast_nullable_to_non_nullable
               as List<OutfitImage>?,
+      items: freezed == items
+          ? _value.items
+          : items // ignore: cast_nullable_to_non_nullable
+              as List<ItemModel>?,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -208,6 +215,7 @@ abstract class _$$OutfitModelImplCopyWith<$Res>
       @JsonKey(name: 'worn_count') int wornCount,
       @JsonKey(name: 'last_worn_at') DateTime? lastWornAt,
       @JsonKey(name: 'outfit_images') List<OutfitImage>? outfitImages,
+      List<ItemModel>? items,
       @JsonKey(name: 'created_at') DateTime? createdAt,
       @JsonKey(name: 'updated_at') DateTime? updatedAt});
 }
@@ -238,6 +246,7 @@ class __$$OutfitModelImplCopyWithImpl<$Res>
     Object? wornCount = null,
     Object? lastWornAt = freezed,
     Object? outfitImages = freezed,
+    Object? items = freezed,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
   }) {
@@ -302,6 +311,10 @@ class __$$OutfitModelImplCopyWithImpl<$Res>
           ? _value._outfitImages
           : outfitImages // ignore: cast_nullable_to_non_nullable
               as List<OutfitImage>?,
+      items: freezed == items
+          ? _value._items
+          : items // ignore: cast_nullable_to_non_nullable
+              as List<ItemModel>?,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -333,11 +346,13 @@ class _$OutfitModelImpl implements _OutfitModel {
       @JsonKey(name: 'worn_count') this.wornCount = 0,
       @JsonKey(name: 'last_worn_at') this.lastWornAt,
       @JsonKey(name: 'outfit_images') final List<OutfitImage>? outfitImages,
+      final List<ItemModel>? items,
       @JsonKey(name: 'created_at') this.createdAt,
       @JsonKey(name: 'updated_at') this.updatedAt})
       : _itemIds = itemIds,
         _tags = tags,
-        _outfitImages = outfitImages;
+        _outfitImages = outfitImages,
+        _items = items;
 
   factory _$OutfitModelImpl.fromJson(Map<String, dynamic> json) =>
       _$$OutfitModelImplFromJson(json);
@@ -402,6 +417,16 @@ class _$OutfitModelImpl implements _OutfitModel {
     return EqualUnmodifiableListView(value);
   }
 
+  final List<ItemModel>? _items;
+  @override
+  List<ItemModel>? get items {
+    final value = _items;
+    if (value == null) return null;
+    if (_items is EqualUnmodifiableListView) return _items;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(value);
+  }
+
   @override
   @JsonKey(name: 'created_at')
   final DateTime? createdAt;
@@ -411,7 +436,7 @@ class _$OutfitModelImpl implements _OutfitModel {
 
   @override
   String toString() {
-    return 'OutfitModel(id: $id, userId: $userId, name: $name, description: $description, itemIds: $itemIds, style: $style, season: $season, occasion: $occasion, tags: $tags, isFavorite: $isFavorite, isDraft: $isDraft, isPublic: $isPublic, wornCount: $wornCount, lastWornAt: $lastWornAt, outfitImages: $outfitImages, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'OutfitModel(id: $id, userId: $userId, name: $name, description: $description, itemIds: $itemIds, style: $style, season: $season, occasion: $occasion, tags: $tags, isFavorite: $isFavorite, isDraft: $isDraft, isPublic: $isPublic, wornCount: $wornCount, lastWornAt: $lastWornAt, outfitImages: $outfitImages, items: $items, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -441,6 +466,7 @@ class _$OutfitModelImpl implements _OutfitModel {
                 other.lastWornAt == lastWornAt) &&
             const DeepCollectionEquality()
                 .equals(other._outfitImages, _outfitImages) &&
+            const DeepCollectionEquality().equals(other._items, _items) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -466,6 +492,7 @@ class _$OutfitModelImpl implements _OutfitModel {
       wornCount,
       lastWornAt,
       const DeepCollectionEquality().hash(_outfitImages),
+      const DeepCollectionEquality().hash(_items),
       createdAt,
       updatedAt);
 
@@ -500,6 +527,7 @@ abstract class _OutfitModel implements OutfitModel {
           @JsonKey(name: 'worn_count') final int wornCount,
           @JsonKey(name: 'last_worn_at') final DateTime? lastWornAt,
           @JsonKey(name: 'outfit_images') final List<OutfitImage>? outfitImages,
+          final List<ItemModel>? items,
           @JsonKey(name: 'created_at') final DateTime? createdAt,
           @JsonKey(name: 'updated_at') final DateTime? updatedAt}) =
       _$OutfitModelImpl;
@@ -545,6 +573,8 @@ abstract class _OutfitModel implements OutfitModel {
   @override
   @JsonKey(name: 'outfit_images')
   List<OutfitImage>? get outfitImages;
+  @override
+  List<ItemModel>? get items;
   @override
   @JsonKey(name: 'created_at')
   DateTime? get createdAt;
@@ -2896,4 +2926,238 @@ abstract class _OutfitVisualizationResult implements OutfitVisualizationResult {
   @JsonKey(ignore: true)
   _$$OutfitVisualizationResultImplCopyWith<_$OutfitVisualizationResultImpl>
       get copyWith => throw _privateConstructorUsedError;
+}
+
+WearHistoryEntry _$WearHistoryEntryFromJson(Map<String, dynamic> json) {
+  return _WearHistoryEntry.fromJson(json);
+}
+
+/// @nodoc
+mixin _$WearHistoryEntry {
+  String get id => throw _privateConstructorUsedError;
+  @JsonKey(name: 'outfit_id')
+  String get outfitId => throw _privateConstructorUsedError;
+  @JsonKey(name: 'worn_at')
+  DateTime get wornAt => throw _privateConstructorUsedError;
+  String? get notes => throw _privateConstructorUsedError;
+  @JsonKey(name: 'created_at')
+  DateTime? get createdAt => throw _privateConstructorUsedError;
+
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+  @JsonKey(ignore: true)
+  $WearHistoryEntryCopyWith<WearHistoryEntry> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $WearHistoryEntryCopyWith<$Res> {
+  factory $WearHistoryEntryCopyWith(
+          WearHistoryEntry value, $Res Function(WearHistoryEntry) then) =
+      _$WearHistoryEntryCopyWithImpl<$Res, WearHistoryEntry>;
+  @useResult
+  $Res call(
+      {String id,
+      @JsonKey(name: 'outfit_id') String outfitId,
+      @JsonKey(name: 'worn_at') DateTime wornAt,
+      String? notes,
+      @JsonKey(name: 'created_at') DateTime? createdAt});
+}
+
+/// @nodoc
+class _$WearHistoryEntryCopyWithImpl<$Res, $Val extends WearHistoryEntry>
+    implements $WearHistoryEntryCopyWith<$Res> {
+  _$WearHistoryEntryCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? outfitId = null,
+    Object? wornAt = null,
+    Object? notes = freezed,
+    Object? createdAt = freezed,
+  }) {
+    return _then(_value.copyWith(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as String,
+      outfitId: null == outfitId
+          ? _value.outfitId
+          : outfitId // ignore: cast_nullable_to_non_nullable
+              as String,
+      wornAt: null == wornAt
+          ? _value.wornAt
+          : wornAt // ignore: cast_nullable_to_non_nullable
+              as DateTime,
+      notes: freezed == notes
+          ? _value.notes
+          : notes // ignore: cast_nullable_to_non_nullable
+              as String?,
+      createdAt: freezed == createdAt
+          ? _value.createdAt
+          : createdAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$WearHistoryEntryImplCopyWith<$Res>
+    implements $WearHistoryEntryCopyWith<$Res> {
+  factory _$$WearHistoryEntryImplCopyWith(_$WearHistoryEntryImpl value,
+          $Res Function(_$WearHistoryEntryImpl) then) =
+      __$$WearHistoryEntryImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String id,
+      @JsonKey(name: 'outfit_id') String outfitId,
+      @JsonKey(name: 'worn_at') DateTime wornAt,
+      String? notes,
+      @JsonKey(name: 'created_at') DateTime? createdAt});
+}
+
+/// @nodoc
+class __$$WearHistoryEntryImplCopyWithImpl<$Res>
+    extends _$WearHistoryEntryCopyWithImpl<$Res, _$WearHistoryEntryImpl>
+    implements _$$WearHistoryEntryImplCopyWith<$Res> {
+  __$$WearHistoryEntryImplCopyWithImpl(_$WearHistoryEntryImpl _value,
+      $Res Function(_$WearHistoryEntryImpl) _then)
+      : super(_value, _then);
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? outfitId = null,
+    Object? wornAt = null,
+    Object? notes = freezed,
+    Object? createdAt = freezed,
+  }) {
+    return _then(_$WearHistoryEntryImpl(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as String,
+      outfitId: null == outfitId
+          ? _value.outfitId
+          : outfitId // ignore: cast_nullable_to_non_nullable
+              as String,
+      wornAt: null == wornAt
+          ? _value.wornAt
+          : wornAt // ignore: cast_nullable_to_non_nullable
+              as DateTime,
+      notes: freezed == notes
+          ? _value.notes
+          : notes // ignore: cast_nullable_to_non_nullable
+              as String?,
+      createdAt: freezed == createdAt
+          ? _value.createdAt
+          : createdAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$WearHistoryEntryImpl implements _WearHistoryEntry {
+  const _$WearHistoryEntryImpl(
+      {required this.id,
+      @JsonKey(name: 'outfit_id') required this.outfitId,
+      @JsonKey(name: 'worn_at') required this.wornAt,
+      this.notes,
+      @JsonKey(name: 'created_at') this.createdAt});
+
+  factory _$WearHistoryEntryImpl.fromJson(Map<String, dynamic> json) =>
+      _$$WearHistoryEntryImplFromJson(json);
+
+  @override
+  final String id;
+  @override
+  @JsonKey(name: 'outfit_id')
+  final String outfitId;
+  @override
+  @JsonKey(name: 'worn_at')
+  final DateTime wornAt;
+  @override
+  final String? notes;
+  @override
+  @JsonKey(name: 'created_at')
+  final DateTime? createdAt;
+
+  @override
+  String toString() {
+    return 'WearHistoryEntry(id: $id, outfitId: $outfitId, wornAt: $wornAt, notes: $notes, createdAt: $createdAt)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$WearHistoryEntryImpl &&
+            (identical(other.id, id) || other.id == id) &&
+            (identical(other.outfitId, outfitId) ||
+                other.outfitId == outfitId) &&
+            (identical(other.wornAt, wornAt) || other.wornAt == wornAt) &&
+            (identical(other.notes, notes) || other.notes == notes) &&
+            (identical(other.createdAt, createdAt) ||
+                other.createdAt == createdAt));
+  }
+
+  @JsonKey(ignore: true)
+  @override
+  int get hashCode =>
+      Object.hash(runtimeType, id, outfitId, wornAt, notes, createdAt);
+
+  @JsonKey(ignore: true)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$WearHistoryEntryImplCopyWith<_$WearHistoryEntryImpl> get copyWith =>
+      __$$WearHistoryEntryImplCopyWithImpl<_$WearHistoryEntryImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$WearHistoryEntryImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _WearHistoryEntry implements WearHistoryEntry {
+  const factory _WearHistoryEntry(
+          {required final String id,
+          @JsonKey(name: 'outfit_id') required final String outfitId,
+          @JsonKey(name: 'worn_at') required final DateTime wornAt,
+          final String? notes,
+          @JsonKey(name: 'created_at') final DateTime? createdAt}) =
+      _$WearHistoryEntryImpl;
+
+  factory _WearHistoryEntry.fromJson(Map<String, dynamic> json) =
+      _$WearHistoryEntryImpl.fromJson;
+
+  @override
+  String get id;
+  @override
+  @JsonKey(name: 'outfit_id')
+  String get outfitId;
+  @override
+  @JsonKey(name: 'worn_at')
+  DateTime get wornAt;
+  @override
+  String? get notes;
+  @override
+  @JsonKey(name: 'created_at')
+  DateTime? get createdAt;
+  @override
+  @JsonKey(ignore: true)
+  _$$WearHistoryEntryImplCopyWith<_$WearHistoryEntryImpl> get copyWith =>
+      throw _privateConstructorUsedError;
 }

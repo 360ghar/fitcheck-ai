@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
@@ -190,20 +189,11 @@ class RecommendationCard extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(AppConstants.radius8),
                 child: imageUrl != null
-                    ? CachedNetworkImage(
+                    ? AppImage(
                         imageUrl: imageUrl,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: tokens.cardColor.withOpacity(0.5),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: tokens.cardColor.withOpacity(0.5),
-                          child: Icon(
-                            _getCategoryIcon(category),
-                            color: tokens.textMuted,
-                          ),
-                        ),
+                        fit: BoxFit.contain,
+                        enableZoom: false,
+                        errorIcon: _getCategoryIcon(category),
                       )
                     : Container(
                         color: tokens.cardColor.withOpacity(0.5),

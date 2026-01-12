@@ -8,9 +8,14 @@ import 'app_ui.dart';
 class AppBottomNavigationBar extends StatelessWidget {
   final int currentIndex;
 
+  /// Optional callback for tab changes. If provided, navigation is handled
+  /// by the parent (MainShellPage). If null, uses Get.offAllNamed().
+  final void Function(int index)? onTabChanged;
+
   const AppBottomNavigationBar({
     super.key,
     required this.currentIndex,
+    this.onTabChanged,
   });
 
   // Bottom navigation items
@@ -48,15 +53,22 @@ class AppBottomNavigationBar extends StatelessWidget {
   ];
 
   void _onTabTapped(int index) {
-    final route = navigationItems[index].route;
-
-    // If already on this route, don't navigate
-    if (Get.currentRoute == route) {
+    // If already on this tab, don't do anything
+    if (currentIndex == index) {
       return;
     }
 
-    // Use offAllNamed to replace the current route with target route
-    Get.offAllNamed(route);
+    // Use callback if provided (IndexedStack mode in MainShellPage)
+    if (onTabChanged != null) {
+      onTabChanged!(index);
+      return;
+    }
+
+    // Fallback to navigation (for pages outside the shell like "More" submenu)
+    final route = navigationItems[index].route;
+    if (Get.currentRoute != route) {
+      Get.offAllNamed(route);
+    }
   }
 
   @override

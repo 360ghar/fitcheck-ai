@@ -117,7 +117,7 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: AppConstants.spacing16),
                       _buildDivider(tokens),
                       const SizedBox(height: AppConstants.spacing16),
-                      _buildGoogleSignInButton(tokens),
+                      Obx(() => _buildGoogleSignInButton(authController, tokens)),
                     ],
                   ),
                 ),
@@ -245,11 +245,18 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _buildGoogleSignInButton(AuthUiTokens tokens) {
+  Widget _buildGoogleSignInButton(AuthController authController, AuthUiTokens tokens) {
+    final isLoading = authController.isGoogleSigningIn.value;
     return OutlinedButton.icon(
-      onPressed: _handleGoogleSignIn,
-      icon: const Icon(Icons.login),
-      label: const Text('Continue with Google'),
+      onPressed: isLoading ? null : _handleGoogleSignIn,
+      icon: isLoading
+          ? const SizedBox(
+              height: 18,
+              width: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.login),
+      label: Text(isLoading ? 'Signing in...' : 'Continue with Google'),
       style: OutlinedButton.styleFrom(
         foregroundColor: tokens.textColor,
         side: BorderSide(color: tokens.textColor.withOpacity(0.4)),

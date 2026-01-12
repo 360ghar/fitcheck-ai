@@ -129,6 +129,47 @@ class ItemRepository {
     }
   }
 
+  /// Batch create items with optional images
+  /// Creates multiple items in parallel for efficiency
+  Future<List<ItemModel>> batchCreateItems(
+    List<CreateItemRequest> requests, {
+    Map<String, String>? itemImageBase64s,
+  }) async {
+    try {
+      final results = await Future.wait(
+        requests.asMap().entries.map((entry) async {
+          final index = entry.key;
+          final request = entry.value;
+
+          // Create the item first
+          final item = await createItem(request);
+
+          // If there's a corresponding base64 image, upload it
+          if (itemImageBase64s != null && itemImageBase64s.containsKey('$index')) {
+            try {
+              await _apiClient.post(
+                '${ApiConstants.items}/${item.id}/images',
+                data: {'image': itemImageBase64s['$index']},
+              );
+              // Return refreshed item with image
+              return getItem(item.id);
+            } catch (e) {
+              // Return item even if image upload failed
+              return item;
+            }
+          }
+
+          return item;
+        }),
+        eagerError: false,
+      );
+
+      return results.whereType<ItemModel>().toList();
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    }
+  }
+
   /// Toggle item favorite
   Future<ItemModel> toggleFavorite(String itemId) async {
     try {

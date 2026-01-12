@@ -43,7 +43,7 @@ class ErrorHandler {
     Get.snackbar(
       title ?? 'Error',
       message,
-      snackPosition: SnackPosition.BOTTOM,
+      snackPosition: SnackPosition.TOP,
       backgroundColor: Colors.red.shade50,
       colorText: Colors.red.shade900,
       duration: const Duration(seconds: 4),
@@ -59,7 +59,7 @@ class ErrorHandler {
     Get.snackbar(
       title ?? 'Success',
       message,
-      snackPosition: SnackPosition.BOTTOM,
+      snackPosition: SnackPosition.TOP,
       backgroundColor: Colors.green.shade50,
       colorText: Colors.green.shade900,
       duration: const Duration(seconds: 2),
@@ -75,7 +75,7 @@ class ErrorHandler {
     Get.snackbar(
       title ?? 'Info',
       message,
-      snackPosition: SnackPosition.BOTTOM,
+      snackPosition: SnackPosition.TOP,
       backgroundColor: Colors.blue.shade50,
       colorText: Colors.blue.shade900,
       duration: const Duration(seconds: 2),
@@ -91,7 +91,7 @@ class ErrorHandler {
     Get.snackbar(
       title ?? 'Warning',
       message,
-      snackPosition: SnackPosition.BOTTOM,
+      snackPosition: SnackPosition.TOP,
       backgroundColor: Colors.orange.shade50,
       colorText: Colors.orange.shade900,
       duration: const Duration(seconds: 3),

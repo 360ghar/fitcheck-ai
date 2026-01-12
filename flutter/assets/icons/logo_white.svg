@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- FitCheck AI Logo - White version for colored backgrounds -->
+
+  <!-- Hanger shoulders (V-shape) -->
+  <path
+    d="M108 360 L256 220 L404 360"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="42"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Hook connecting to hanger -->
+  <path
+    d="M256 220 Q256 170 230 140"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="42"
+    stroke-linecap="round"
+  />
+
+  <!-- Checkmark integrated with hook -->
+  <path
+    d="M185 165 L230 140 L310 90"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="42"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

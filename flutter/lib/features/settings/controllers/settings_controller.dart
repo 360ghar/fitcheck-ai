@@ -15,6 +15,11 @@ class SettingsController extends GetxController {
   final RxBool isSaving = false.obs;
   final RxString error = ''.obs;
 
+  // Action-specific loading states
+  final RxBool isChangingPassword = false.obs;
+  final RxBool isExportingData = false.obs;
+  final RxBool isDeletingAccount = false.obs;
+
   // Getters
   bool get hasError => error.value.isNotEmpty;
   bool get hasPreferences => preferences.value != null;
@@ -151,7 +156,7 @@ class SettingsController extends GetxController {
       Get.snackbar(
         'Saved',
         'Your preferences have been updated',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 1),
       );
     } catch (e) {
@@ -159,7 +164,7 @@ class SettingsController extends GetxController {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     } finally {
       isSaving.value = false;
@@ -168,44 +173,52 @@ class SettingsController extends GetxController {
 
   /// Change password
   Future<void> changePassword(String currentPassword, String newPassword) async {
+    isChangingPassword.value = true;
     try {
       await _repository.updatePassword(currentPassword, newPassword);
       Get.back();
       Get.snackbar(
         'Success',
         'Password updated successfully',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 1),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
+      rethrow;
+    } finally {
+      isChangingPassword.value = false;
     }
   }
 
   /// Request data export
   Future<void> exportData() async {
+    isExportingData.value = true;
     try {
       final exportUrl = await _repository.requestDataExport();
       Get.snackbar(
         'Export Started',
         'Your data export is being prepared. You will receive an email when it\'s ready.',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
+    } finally {
+      isExportingData.value = false;
     }
   }
 
   /// Delete account
   Future<void> deleteAccount() async {
+    isDeletingAccount.value = true;
     try {
       await _repository.deleteAccount();
       await _authController.logout();
@@ -213,8 +226,11 @@ class SettingsController extends GetxController {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
+      rethrow;
+    } finally {
+      isDeletingAccount.value = false;
     }
   }
 

@@ -1,12 +1,27 @@
+import 'package:flutter/foundation.dart';
 import '../config/env_config.dart';
 
 /// API endpoint constants
 class ApiConstants {
   ApiConstants._();
 
+  /// Get base URL - fails explicitly in release builds if not configured
   static String get baseUrl {
     final envUrl = EnvConfig.apiBaseUrl;
-    return envUrl.isNotEmpty ? envUrl : 'https://api.fitcheckaiapp.com';
+    if (envUrl.isNotEmpty) {
+      return envUrl;
+    }
+
+    // In debug mode, fall back to localhost for development
+    if (kDebugMode) {
+      return 'http://localhost:8000';
+    }
+
+    // In release builds, fail explicitly if not configured
+    throw StateError(
+      'API_BASE_URL is not configured. '
+      'Please set API_BASE_URL in your .env file or via --dart-define.',
+    );
   }
 
   /// Get base URL for development (defaults to localhost if not set)
@@ -30,6 +45,15 @@ class ApiConstants {
   static const String aiSettings = '$apiVersion/ai/settings';
   static const String users = '$apiVersion/users';
   static const String waitlist = '$apiVersion/waitlist';
+
+  // Batch Extraction Endpoints
+  static const String aiBatchExtract = '$apiVersion/ai/batch-extract';
+  static String aiBatchExtractEvents(String jobId) =>
+      '$aiBatchExtract/$jobId/events';
+  static String aiBatchExtractCancel(String jobId) =>
+      '$aiBatchExtract/$jobId/cancel';
+  static String aiBatchExtractStatus(String jobId) =>
+      '$aiBatchExtract/$jobId/status';
 
   // Auth Endpoints
   static const String login = '/login';

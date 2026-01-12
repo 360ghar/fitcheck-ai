@@ -100,7 +100,7 @@ class CalendarConnectionWidget extends StatelessWidget {
     Get.snackbar(
       'Coming Soon',
       'Apple Calendar integration will be available soon',
-      snackPosition: SnackPosition.BOTTOM,
+      snackPosition: SnackPosition.TOP,
     );
   }
 }

@@ -240,6 +240,21 @@ class OutfitRepository {
     }
   }
 
+  /// Get wear history for an outfit
+  Future<List<WearHistoryEntry>> getWearHistory(String outfitId) async {
+    try {
+      final response = await _apiClient.get('${ApiConstants.outfits}/$outfitId/wear-history');
+      final data = _extractDataMap(response.data);
+      final historyList = data['wear_history'] as List? ?? [];
+      return historyList
+          .whereType<Map<String, dynamic>>()
+          .map((e) => WearHistoryEntry.fromJson(e))
+          .toList();
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    }
+  }
+
   /// Get public shared outfit
   Future<SharedOutfitModel> getSharedOutfit(String shareId) async {
     try {

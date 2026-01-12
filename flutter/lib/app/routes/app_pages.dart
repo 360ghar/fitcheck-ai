@@ -6,15 +6,12 @@ import '../../features/auth/views/login_page.dart';
 import '../../features/auth/controllers/auth_controller.dart';
 import '../../features/auth/views/register_page.dart';
 import '../../features/auth/views/forgot_password_page.dart';
-import '../../features/wardrobe/views/wardrobe_page.dart';
 import '../../features/wardrobe/views/item_add_page.dart';
 import '../../features/wardrobe/views/item_detail_page.dart';
 import '../../features/wardrobe/views/item_edit_page.dart';
-import '../../features/outfits/views/outfits_page.dart';
 import '../../features/outfits/views/outfit_builder_page.dart';
 import '../../features/outfits/views/outfit_detail_page.dart';
 import '../../features/outfits/views/outfit_edit_page.dart';
-import '../../features/dashboard/views/dashboard_page.dart';
 import '../../features/profile/views/profile_page.dart';
 import '../../features/profile/views/profile_edit_page.dart';
 import '../../features/profile/views/body_profiles_page.dart';
@@ -23,10 +20,11 @@ import '../../features/calendar/views/calendar_page.dart';
 import '../../features/settings/views/settings_page.dart';
 import '../../features/settings/views/ai_settings_page.dart';
 import '../../features/recommendations/views/recommendations_page.dart';
-import '../../features/tryon/views/tryon_page.dart';
 import '../../features/gamification/views/gamification_page.dart';
-import '../../features/dashboard/views/more_page.dart';
 import '../../features/social/views/shared_outfit_page.dart';
+import '../../features/shell/views/main_shell_page.dart';
+import '../../features/shell/bindings/main_shell_binding.dart';
+import '../../features/shell/controllers/main_shell_controller.dart';
 import '../bindings/auth_binding.dart';
 import '../bindings/wardrobe_binding.dart';
 import '../bindings/outfit_binding.dart';
@@ -34,9 +32,12 @@ import '../bindings/home_binding.dart';
 import '../bindings/calendar_binding.dart';
 import '../bindings/settings_binding.dart';
 import '../bindings/ai_settings_binding.dart';
+import '../bindings/batch_extraction_binding.dart';
 import '../../features/recommendations/bindings/recommendations_binding.dart';
-import '../../features/tryon/bindings/tryon_binding.dart';
 import '../../features/gamification/bindings/gamification_binding.dart';
+import '../../features/wardrobe/views/batch_image_selector_page.dart';
+import '../../features/wardrobe/views/batch_extraction_progress_page.dart';
+import '../../features/wardrobe/views/batch_item_review_page.dart';
 import 'app_routes.dart';
 
 /// Route pages configuration
@@ -69,23 +70,62 @@ class AppPages {
       binding: AuthBinding(),
     ),
 
-    // Main App (Protected Routes)
+    // Main App (Protected Routes) - Shell with IndexedStack for main tabs
     GetPage(
       name: Routes.home,
-      page: () => const DashboardPage(),
-      binding: HomeBinding(),
+      page: () => const MainShellPage(),
+      binding: MainShellBinding(),
       middlewares: [AuthMiddleware()],
     ),
+    // Deep link routes - redirect to shell with correct tab
     GetPage(
       name: Routes.wardrobe,
-      page: () => const WardrobePage(),
-      binding: WardrobeBinding(),
-      middlewares: [AuthMiddleware()],
+      page: () => const MainShellPage(),
+      binding: MainShellBinding(),
+      middlewares: [AuthMiddleware(), TabRedirectMiddleware(1)],
     ),
+    GetPage(
+      name: Routes.outfits,
+      page: () => const MainShellPage(),
+      binding: MainShellBinding(),
+      middlewares: [AuthMiddleware(), TabRedirectMiddleware(2)],
+    ),
+    GetPage(
+      name: Routes.tryOn,
+      page: () => const MainShellPage(),
+      binding: MainShellBinding(),
+      middlewares: [AuthMiddleware(), TabRedirectMiddleware(3)],
+    ),
+    GetPage(
+      name: Routes.more,
+      page: () => const MainShellPage(),
+      binding: MainShellBinding(),
+      middlewares: [AuthMiddleware(), TabRedirectMiddleware(4)],
+    ),
+    // Sub-routes that push on top of shell
     GetPage(
       name: Routes.wardrobeAdd,
       page: () => const ItemAddPage(),
       binding: WardrobeBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    // Batch extraction routes
+    GetPage(
+      name: Routes.wardrobeBatchAdd,
+      page: () => const BatchImageSelectorPage(),
+      binding: BatchExtractionBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
+      name: Routes.wardrobeBatchProgress,
+      page: () => const BatchExtractionProgressPage(),
+      binding: BatchExtractionBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
+      name: Routes.wardrobeBatchReview,
+      page: () => const BatchItemReviewPage(),
+      binding: BatchExtractionBinding(),
       middlewares: [AuthMiddleware()],
     ),
     GetPage(
@@ -98,12 +138,6 @@ class AppPages {
       name: Routes.wardrobeItemEdit,
       page: () => ItemEditPage(itemId: Get.parameters['id'] ?? ''),
       binding: WardrobeBinding(),
-      middlewares: [AuthMiddleware()],
-    ),
-    GetPage(
-      name: Routes.outfits,
-      page: () => const OutfitsPage(),
-      binding: OutfitBinding(),
       middlewares: [AuthMiddleware()],
     ),
     GetPage(
@@ -124,6 +158,7 @@ class AppPages {
       binding: OutfitBinding(),
       middlewares: [AuthMiddleware()],
     ),
+    // "More" submenu pages (keep their own navbar)
     GetPage(
       name: Routes.calendar,
       page: () => const CalendarPage(),
@@ -152,17 +187,6 @@ class AppPages {
       name: Routes.recommendations,
       page: () => const RecommendationsPage(),
       binding: RecommendationsBinding(),
-      middlewares: [AuthMiddleware()],
-    ),
-    GetPage(
-      name: Routes.tryOn,
-      page: () => const TryOnPage(),
-      binding: TryOnBinding(),
-      middlewares: [AuthMiddleware()],
-    ),
-    GetPage(
-      name: Routes.more,
-      page: () => const MorePage(),
       middlewares: [AuthMiddleware()],
     ),
     GetPage(
@@ -221,5 +245,23 @@ class AuthMiddleware extends GetMiddleware {
     }
 
     return null;
+  }
+}
+
+/// Middleware to set initial tab index for deep links to main tabs
+class TabRedirectMiddleware extends GetMiddleware {
+  final int tabIndex;
+
+  TabRedirectMiddleware(this.tabIndex);
+
+  @override
+  GetPage? onPageCalled(GetPage? page) {
+    // After page loads, set the correct tab
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (Get.isRegistered<MainShellController>()) {
+        Get.find<MainShellController>().changeTab(tabIndex);
+      }
+    });
+    return page;
   }
 }

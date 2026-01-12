@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
@@ -6,7 +5,8 @@ import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/style.dart';
 import '../../../domain/enums/season.dart';
-import '../controllers/outfit_controller.dart';
+import '../controllers/outfit_list_controller.dart';
+import '../controllers/outfit_generation_controller.dart';
 
 /// Outfits page
 class OutfitsPage extends StatefulWidget {
@@ -17,7 +17,8 @@ class OutfitsPage extends StatefulWidget {
 }
 
 class _OutfitsPageState extends State<OutfitsPage> {
-  final OutfitsController controller = Get.find<OutfitsController>();
+  final OutfitListController controller = Get.find<OutfitListController>();
+  final OutfitGenerationController generationController = Get.find<OutfitGenerationController>();
 
   @override
   Widget build(BuildContext context) {
@@ -153,16 +154,16 @@ class _OutfitsPageState extends State<OutfitsPage> {
             // Outfit image/items preview
             Positioned.fill(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppConstants.radius16),
+                borderRadius: BorderRadius.circular(AppConstants.radius16 - 1),
                 child: outfit.outfitImages != null && outfit.outfitImages!.isNotEmpty
-                    ? CachedNetworkImage(
+                    ? AppImage(
                         imageUrl: outfit.outfitImages!.first.url,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: tokens.cardColor.withOpacity(0.6),
-                        ),
-                        errorWidget: (context, url, error) =>
-                            _buildPlaceholder(),
+                        fit: BoxFit.contain,
+                        enableZoom: false,
+                        galleryUrls: outfit.outfitImages!.map<String>((img) => img.url as String).toList(),
+                        backgroundColor: tokens.isDarkMode
+                            ? Colors.black.withOpacity(0.3)
+                            : Colors.grey.withOpacity(0.1),
                       )
                     : _buildPlaceholder(),
               ),
@@ -494,7 +495,7 @@ class _OutfitsPageState extends State<OutfitsPage> {
                 title: const Text('Share'),
                 onTap: () {
                   Get.back();
-                  controller.shareOutfit(outfit.id);
+                  generationController.shareOutfit(outfit.id);
                 },
               ),
               ListTile(
@@ -517,7 +518,7 @@ class _OutfitsPageState extends State<OutfitsPage> {
     Get.snackbar(
       'Coming Soon',
       'Outfit creation will be available soon',
-      snackPosition: SnackPosition.BOTTOM,
+      snackPosition: SnackPosition.TOP,
     );
   }
 

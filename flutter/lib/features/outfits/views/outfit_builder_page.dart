@@ -1,15 +1,11 @@
-import 'dart:convert';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../../../domain/enums/style.dart';
 import '../../../domain/enums/season.dart';
 import '../controllers/outfit_builder_controller.dart';
-import '../widgets/outfit_canvas_item_card.dart';
 
 /// Outfit builder page - Create and visualize outfits
 class OutfitBuilderPage extends StatelessWidget {
@@ -44,25 +40,45 @@ class OutfitBuilderPage extends StatelessWidget {
       body: AppPageBackground(
         child: Column(
           children: [
-            // Outfit details form
-            _buildOutfitDetails(controller, tokens),
-
-            // Canvas and wardrobe panel
+            // Scrollable content
             Expanded(
               child: Obx(() {
                 if (controller.isLoading.value && controller.availableItems.isEmpty) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                return _buildMainContent(context, controller, tokens);
+                return SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Outfit details form
+                      _buildOutfitDetails(context, controller, tokens),
+
+                      // Section header
+                      _buildSectionHeader(context, controller, tokens),
+
+                      // Selected items thumbnail row
+                      _buildSelectedItemsRow(context, controller, tokens),
+
+                      // Search and filter
+                      _buildSearchFilter(context, controller, tokens),
+
+                      // Wardrobe items grid
+                      _buildWardrobeGrid(context, controller, tokens),
+                    ],
+                  ),
+                );
               }),
             ),
+
+            // Sticky bottom bar
+            _buildBottomBar(context, controller, tokens),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildOutfitDetails(OutfitBuilderController controller, AppUiTokens tokens) {
+  Widget _buildOutfitDetails(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
     return Container(
       padding: const EdgeInsets.all(AppConstants.spacing16),
       child: Column(
@@ -149,30 +165,53 @@ class OutfitBuilderPage extends StatelessWidget {
     );
   }
 
-  Widget _buildMainContent(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
-    return Row(
-      children: [
-        // Canvas area (left side - larger)
-        Expanded(
-          flex: 2,
-          child: _buildCanvasArea(context, controller, tokens),
-        ),
-
-        // Wardrobe panel (right side)
-        SizedBox(
-          width: 280,
-          child: _buildWardrobePanel(context, controller, tokens),
-        ),
-      ],
+  Widget _buildSectionHeader(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Add items to your outfit',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          Obx(() => controller.selectedItems.isNotEmpty
+              ? Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.spacing12,
+                    vertical: AppConstants.spacing4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: tokens.brandColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(AppConstants.radius16),
+                  ),
+                  child: Text(
+                    '${controller.selectedItems.length} selected',
+                    style: TextStyle(
+                      color: tokens.brandColor,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 12,
+                    ),
+                  ),
+                )
+              : const SizedBox.shrink()),
+        ],
+      ),
     );
   }
 
-  Widget _buildCanvasArea(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
+  Widget _buildSelectedItemsRow(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
     return Container(
-      margin: const EdgeInsets.all(AppConstants.spacing16),
+      height: 100,
+      margin: const EdgeInsets.symmetric(
+        horizontal: AppConstants.spacing16,
+        vertical: AppConstants.spacing12,
+      ),
       decoration: BoxDecoration(
         color: tokens.cardColor.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(AppConstants.radius16),
+        borderRadius: BorderRadius.circular(AppConstants.radius12),
         border: Border.all(
           color: tokens.cardBorderColor,
           style: BorderStyle.solid,
@@ -181,24 +220,17 @@ class OutfitBuilderPage extends StatelessWidget {
       child: Obx(() {
         if (controller.selectedItems.isEmpty) {
           return Center(
-            child: Column(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  Icons.add_circle_outline,
-                  size: 64,
+                  Icons.touch_app_outlined,
                   color: tokens.textMuted,
+                  size: 20,
                 ),
-                const SizedBox(height: AppConstants.spacing16),
+                const SizedBox(width: AppConstants.spacing8),
                 Text(
-                  'Add items to your outfit',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: tokens.textMuted,
-                      ),
-                ),
-                const SizedBox(height: AppConstants.spacing8),
-                Text(
-                  'Select items from the wardrobe panel',
+                  'Tap items below to add',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: tokens.textMuted,
                       ),
@@ -208,217 +240,185 @@ class OutfitBuilderPage extends StatelessWidget {
           );
         }
 
-        return Stack(
-          children: [
-            // Outfit items on canvas
-            ...controller.selectedItems.map((outfitItem) {
-              return Positioned(
-                left: outfitItem.position.dx,
-                top: outfitItem.position.dy,
-                child: OutfitCanvasItemCard(
-                  outfitItem: outfitItem,
-                  isVisible: outfitItem.isVisible,
-                  layer: outfitItem.layer,
-                  onTap: () {},
-                  onRemove: () => controller.removeItem(outfitItem.id),
-                  onToggleVisibility: () => controller.toggleVisibility(outfitItem.id),
-                  onMoveLayer: (up) => controller.moveLayer(outfitItem.id, up),
-                ),
-              );
-            }),
-
-            // Generated image overlay
-            if (controller.generatedImageUrl.value.isNotEmpty)
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.8),
-                    borderRadius: BorderRadius.circular(AppConstants.radius12),
-                  ),
-                  child: Stack(
-                    children: [
-                      Center(
-                        child: _buildGeneratedImage(
-                          controller.generatedImageUrl.value,
-                        ),
-                      ),
-                      Positioned(
-                        top: AppConstants.spacing16,
-                        right: AppConstants.spacing16,
-                        child: IconButton(
-                          onPressed: () => controller.generatedImageUrl.value = '',
-                          icon: const Icon(Icons.close, color: Colors.white),
-                          style: IconButton.styleFrom(
-                            backgroundColor: Colors.black54,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
+        return ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.all(AppConstants.spacing12),
+          itemCount: controller.selectedItems.length,
+          itemBuilder: (context, index) {
+            final outfitItem = controller.selectedItems[index];
+            return _buildSelectedThumbnail(context, outfitItem, controller, tokens);
+          },
         );
       }),
     );
   }
 
-  Widget _buildWardrobePanel(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
+  Widget _buildSelectedThumbnail(
+    BuildContext context,
+    OutfitBuilderItem outfitItem,
+    OutfitBuilderController controller,
+    AppUiTokens tokens,
+  ) {
     return Container(
-      decoration: BoxDecoration(
-        color: tokens.cardColor.withOpacity(0.5),
-        border: Border(
-          left: BorderSide(color: tokens.cardBorderColor),
-        ),
-      ),
-      child: Column(
+      width: 70,
+      margin: const EdgeInsets.only(right: AppConstants.spacing8),
+      child: Stack(
         children: [
-          // Search and filter
+          // Item image
           Container(
-            padding: const EdgeInsets.all(AppConstants.spacing16),
-            child: Column(
-              children: [
-                // Search
-                TextField(
-                  onChanged: (value) => controller.searchQuery.value = value,
+            width: 70,
+            height: 70,
+            decoration: BoxDecoration(
+              color: tokens.cardColor,
+              borderRadius: BorderRadius.circular(AppConstants.radius8),
+              border: Border.all(color: tokens.brandColor, width: 2),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppConstants.radius8 - 2),
+              child: outfitItem.item.itemImages != null &&
+                      outfitItem.item.itemImages!.isNotEmpty
+                  ? AppImage(
+                      imageUrl: outfitItem.item.itemImages!.first.url,
+                      fit: BoxFit.cover,
+                      enableZoom: false,
+                      errorIcon: _getCategoryIcon(outfitItem.item.category),
+                    )
+                  : Icon(
+                      _getCategoryIcon(outfitItem.item.category),
+                      color: tokens.textMuted,
+                      size: 24,
+                    ),
+            ),
+          ),
+
+          // Remove button
+          Positioned(
+            top: -4,
+            right: -4,
+            child: GestureDetector(
+              onTap: () => controller.removeItem(outfitItem.id),
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: tokens.cardColor, width: 2),
+                ),
+                child: const Icon(
+                  Icons.close,
+                  color: Colors.white,
+                  size: 12,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchFilter(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
+      child: Row(
+        children: [
+          // Search field
+          Expanded(
+            flex: 2,
+            child: TextField(
+              onChanged: (value) => controller.searchQuery.value = value,
+              decoration: InputDecoration(
+                hintText: 'Search items...',
+                filled: true,
+                fillColor: tokens.cardColor.withOpacity(0.5),
+                prefixIcon: const Icon(Icons.search, size: 20),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppConstants.radius12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.spacing12,
+                  vertical: AppConstants.spacing12,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: AppConstants.spacing12),
+
+          // Category filter
+          Expanded(
+            child: Obx(() => DropdownButtonFormField<String>(
+                  value: controller.categoryFilter.value,
                   decoration: InputDecoration(
-                    hintText: 'Search items...',
                     filled: true,
-                    fillColor: tokens.cardColor,
-                    prefixIcon: const Icon(Icons.search),
+                    fillColor: tokens.cardColor.withOpacity(0.5),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(AppConstants.radius12),
                       borderSide: BorderSide.none,
                     ),
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.spacing16,
-                      vertical: AppConstants.spacing12,
+                      horizontal: AppConstants.spacing12,
+                      vertical: AppConstants.spacing8,
                     ),
                   ),
-                ),
-
-                const SizedBox(height: AppConstants.spacing12),
-
-                // Category filter
-                Obx(() => DropdownButtonFormField<String>(
-                      value: controller.categoryFilter.value,
-                      decoration: InputDecoration(
-                        labelText: 'Category',
-                        filled: true,
-                        fillColor: tokens.cardColor,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppConstants.radius12),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: AppConstants.spacing12,
-                          vertical: AppConstants.spacing8,
-                        ),
-                      ),
-                      items: [
-                        const DropdownMenuItem(value: 'all', child: Text('All Categories')),
-                        ...Category.values.map((cat) {
-                          return DropdownMenuItem(
-                            value: cat.name,
-                            child: Text(cat.displayName),
-                          );
-                        }),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) controller.categoryFilter.value = value;
-                      },
-                    )),
-              ],
-            ),
-          ),
-
-          // Items list
-          Expanded(
-            child: Obx(() {
-              final items = controller.filteredItems;
-
-              if (items.isEmpty) {
-                return Center(
-                  child: Text(
-                    'No items available',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: tokens.textMuted,
-                        ),
-                  ),
-                );
-              }
-
-              return GridView.builder(
-                padding: const EdgeInsets.all(AppConstants.spacing8),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: AppConstants.spacing8,
-                  crossAxisSpacing: AppConstants.spacing8,
-                  childAspectRatio: 0.75,
-                ),
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  return _buildWardrobeItemCard(context, item, controller, tokens);
-                },
-              );
-            }),
-          ),
-
-          // Action buttons
-          Obx(() => Container(
-                padding: const EdgeInsets.all(AppConstants.spacing16),
-                child: Column(
-                  children: [
-                    // Generate AI button
-                    if (controller.selectedItems.isNotEmpty)
-                      ElevatedButton.icon(
-                        onPressed: controller.isGenerating.value
-                            ? null
-                            : () => controller.generateAIOutfit(),
-                        icon: controller.isGenerating.value
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.auto_awesome),
-                        label: Text(controller.isGenerating.value
-                            ? 'Generating...'
-                            : 'Generate AI Preview'),
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(44),
-                        ),
-                      ),
-
-                    if (controller.selectedItems.isNotEmpty)
-                      const SizedBox(height: AppConstants.spacing8),
-
-                    // Selected count
-                    if (controller.selectedItems.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppConstants.spacing12,
-                          vertical: AppConstants.spacing8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: tokens.brandColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(AppConstants.radius8),
-                        ),
-                        child: Text(
-                          '${controller.selectedItems.length} item(s) selected',
-                          style: TextStyle(
-                            color: tokens.brandColor,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
+                  isExpanded: true,
+                  items: [
+                    const DropdownMenuItem(value: 'all', child: Text('All')),
+                    ...Category.values.map((cat) {
+                      return DropdownMenuItem(
+                        value: cat.name,
+                        child: Text(cat.displayName),
+                      );
+                    }),
                   ],
-                ),
-              )),
+                  onChanged: (value) {
+                    if (value != null) controller.categoryFilter.value = value;
+                  },
+                )),
+          ),
         ],
       ),
     );
+  }
+
+  Widget _buildWardrobeGrid(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
+    return Obx(() {
+      final items = controller.filteredItems;
+
+      if (items.isEmpty) {
+        return Container(
+          height: 200,
+          alignment: Alignment.center,
+          child: Text(
+            'No items available',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: tokens.textMuted,
+                ),
+          ),
+        );
+      }
+
+      return Padding(
+        padding: const EdgeInsets.all(AppConstants.spacing16),
+        child: GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            mainAxisSpacing: AppConstants.spacing12,
+            crossAxisSpacing: AppConstants.spacing12,
+            childAspectRatio: 0.75,
+          ),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return _buildWardrobeItemCard(context, item, controller, tokens);
+          },
+        ),
+      );
+    });
   }
 
   Widget _buildWardrobeItemCard(
@@ -427,61 +427,165 @@ class OutfitBuilderPage extends StatelessWidget {
     OutfitBuilderController controller,
     AppUiTokens tokens,
   ) {
-    return InkWell(
-      onTap: () => controller.addItem(item),
-      borderRadius: BorderRadius.circular(AppConstants.radius12),
-      child: Container(
+    return Obx(() {
+      final isSelected = controller.isItemSelected(item.id);
+
+      return InkWell(
+        onTap: () => controller.toggleItem(item),
+        borderRadius: BorderRadius.circular(AppConstants.radius12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: tokens.cardColor,
+            borderRadius: BorderRadius.circular(AppConstants.radius12),
+            border: Border.all(
+              color: isSelected ? tokens.brandColor : tokens.cardBorderColor,
+              width: isSelected ? 2 : 1,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: tokens.brandColor.withOpacity(0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Stack(
+            children: [
+              Column(
+                children: [
+                  // Item image
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(AppConstants.radius12),
+                      ),
+                      child: item.itemImages != null && item.itemImages!.isNotEmpty
+                          ? AppImage(
+                              imageUrl: item.itemImages!.first.url,
+                              fit: BoxFit.contain,
+                              enableZoom: false,
+                              errorIcon: _getCategoryIcon(item.category),
+                            )
+                          : Container(
+                              color: tokens.cardColor.withOpacity(0.5),
+                              child: Icon(
+                                _getCategoryIcon(item.category),
+                                color: tokens.textMuted,
+                              ),
+                            ),
+                    ),
+                  ),
+
+                  // Item name
+                  Padding(
+                    padding: const EdgeInsets.all(AppConstants.spacing8),
+                    child: Text(
+                      item.name,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+
+              // Selection indicator
+              if (isSelected)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: tokens.brandColor,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+
+  Widget _buildBottomBar(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
+    return Obx(() {
+      if (controller.selectedItems.isEmpty) {
+        return const SizedBox.shrink();
+      }
+
+      return Container(
+        padding: EdgeInsets.only(
+          left: AppConstants.spacing16,
+          right: AppConstants.spacing16,
+          top: AppConstants.spacing12,
+          bottom: AppConstants.spacing12 + MediaQuery.of(context).padding.bottom,
+        ),
         decoration: BoxDecoration(
           color: tokens.cardColor,
-          borderRadius: BorderRadius.circular(AppConstants.radius12),
-          border: Border.all(color: tokens.cardBorderColor),
+          border: Border(
+            top: BorderSide(color: tokens.cardBorderColor),
+          ),
         ),
-        child: Column(
+        child: Row(
           children: [
-            // Item image
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(AppConstants.radius12),
+            // Selected count
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppConstants.spacing12,
+                vertical: AppConstants.spacing8,
+              ),
+              decoration: BoxDecoration(
+                color: tokens.brandColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppConstants.radius8),
+              ),
+              child: Text(
+                '${controller.selectedItems.length} item${controller.selectedItems.length > 1 ? 's' : ''}',
+                style: TextStyle(
+                  color: tokens.brandColor,
+                  fontWeight: FontWeight.w500,
                 ),
-                child: item.itemImages != null && item.itemImages!.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: item.itemImages!.first.url,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: tokens.cardColor.withOpacity(0.5),
-                        ),
-                        errorWidget: (context, url, error) => Icon(
-                          _getCategoryIcon(item.category),
-                          color: tokens.textMuted,
-                        ),
-                      )
-                    : Container(
-                        color: tokens.cardColor.withOpacity(0.5),
-                        child: Icon(
-                          _getCategoryIcon(item.category),
-                          color: tokens.textMuted,
-                        ),
-                      ),
               ),
             ),
 
-            // Item name
-            Padding(
-              padding: const EdgeInsets.all(AppConstants.spacing8),
-              child: Text(
-                item.name,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            const SizedBox(width: AppConstants.spacing12),
+
+            // Generate AI Preview button
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: controller.isGenerating.value
+                    ? null
+                    : () => controller.generateAIOutfit(),
+                icon: controller.isGenerating.value
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.auto_awesome),
+                label: Text(controller.isGenerating.value
+                    ? 'Generating...'
+                    : 'Generate AI Preview'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
               ),
             ),
           ],
         ),
-      ),
-    );
+      );
+    });
   }
 
   IconData _getCategoryIcon(Category category) {
@@ -503,19 +607,5 @@ class OutfitBuilderPage extends StatelessWidget {
       case Category.other:
         return Icons.help;
     }
-  }
-
-  Widget _buildGeneratedImage(String source) {
-    if (source.startsWith('data:image')) {
-      final base64Data = source.split(',').last;
-      return Image.memory(
-        base64Decode(base64Data),
-        fit: BoxFit.contain,
-      );
-    }
-    return Image.network(
-      source,
-      fit: BoxFit.contain,
-    );
   }
 }

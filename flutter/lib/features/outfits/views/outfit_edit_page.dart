@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../../core/constants/app_constants.dart';
@@ -8,8 +7,7 @@ import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../../../domain/enums/style.dart';
 import '../../../domain/enums/season.dart';
-import '../controllers/outfit_controller.dart';
-import '../controllers/outfit_builder_controller.dart';
+import '../controllers/outfit_list_controller.dart';
 import '../models/outfit_model.dart';
 
 /// Edit page for an existing outfit
@@ -27,7 +25,7 @@ class OutfitEditPage extends StatefulWidget {
 
 class _OutfitEditPageState extends State<OutfitEditPage> {
   final _formKey = GlobalKey<FormState>();
-  final OutfitsController _outfitsController = Get.find<OutfitsController>();
+  final OutfitListController _outfitsController = Get.find<OutfitListController>();
 
   late TextEditingController _nameController;
   late TextEditingController _descriptionController;
@@ -141,14 +139,14 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
       Get.snackbar(
         'Success',
         'Outfit updated successfully',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 2),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     } finally {
       isSaving.value = false;
@@ -397,13 +395,17 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(AppConstants.radius8),
-                          child: CachedNetworkImage(
-                            imageUrl: image.url,
+                          child: SizedBox(
                             width: 100,
                             height: 100,
-                            fit: BoxFit.cover,
-                            color: isDeleting ? Colors.black.withOpacity(0.5) : null,
-                            colorBlendMode: isDeleting ? BlendMode.srcOver : null,
+                            child: AppImage(
+                              imageUrl: image.url,
+                              fit: BoxFit.contain,
+                              enableZoom: false,
+                              backgroundColor: isDeleting
+                                  ? Colors.black.withOpacity(0.5)
+                                  : null,
+                            ),
                           ),
                         ),
                         Positioned(
@@ -516,13 +518,13 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
                 Get.snackbar(
                   'Deleted',
                   'Outfit removed successfully',
-                  snackPosition: SnackPosition.BOTTOM,
+                  snackPosition: SnackPosition.TOP,
                 );
               } catch (e) {
                 Get.snackbar(
                   'Error',
                   e.toString().replaceAll('Exception: ', ''),
-                  snackPosition: SnackPosition.BOTTOM,
+                  snackPosition: SnackPosition.TOP,
                 );
               }
             },

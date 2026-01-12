@@ -1,11 +1,14 @@
 import 'package:get/get.dart';
 import '../../features/settings/controllers/settings_controller.dart';
 
-/// Settings binding - registers SettingsController
+/// Settings binding - provides settings controller
+/// Uses standardized lazy loading with fenix for automatic recreation
 class SettingsBinding extends Bindings {
   @override
   void dependencies() {
-    // Register SettingsController immediately (not lazy) so Get.find() works in the page
-    Get.put(SettingsController());
+    Get.lazyPut<SettingsController>(
+      () => SettingsController(),
+      fenix: true,
+    );
   }
 }

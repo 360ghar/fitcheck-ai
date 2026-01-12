@@ -176,7 +176,7 @@ class HelpPage extends StatelessWidget {
     Get.snackbar(
       'Contact',
       'Opening support form...',
-      snackPosition: SnackPosition.BOTTOM,
+      snackPosition: SnackPosition.TOP,
     );
   }
 
@@ -184,7 +184,7 @@ class HelpPage extends StatelessWidget {
     Get.snackbar(
       'Chat',
       'Live chat opening soon...',
-      snackPosition: SnackPosition.BOTTOM,
+      snackPosition: SnackPosition.TOP,
     );
   }
 
@@ -193,7 +193,7 @@ class HelpPage extends StatelessWidget {
     Get.snackbar(
       'Docs',
       'Opening documentation...',
-      snackPosition: SnackPosition.BOTTOM,
+      snackPosition: SnackPosition.TOP,
     );
   }
 }

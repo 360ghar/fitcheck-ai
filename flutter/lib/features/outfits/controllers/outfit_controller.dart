@@ -121,7 +121,7 @@ class OutfitsController extends GetxController {
       Get.snackbar(
         'Error',
         error.value,
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     } finally {
       isLoading.value = false;
@@ -199,7 +199,7 @@ class OutfitsController extends GetxController {
       Get.snackbar(
         'No Items',
         'Please select at least one item for your outfit',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
       return;
     }
@@ -208,7 +208,7 @@ class OutfitsController extends GetxController {
       Get.snackbar(
         'No Name',
         'Please give your outfit a name',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
       return;
     }
@@ -237,7 +237,7 @@ class OutfitsController extends GetxController {
       Get.snackbar(
         'Outfit Created',
         'Your outfit has been saved',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 2),
       );
     } catch (e) {
@@ -245,7 +245,7 @@ class OutfitsController extends GetxController {
       Get.snackbar(
         'Error',
         error.value,
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     } finally {
       isCreating.value = false;
@@ -275,14 +275,14 @@ class OutfitsController extends GetxController {
       Get.snackbar(
         'Updated',
         'Outfit updated successfully',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 1),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     }
   }
@@ -302,14 +302,14 @@ class OutfitsController extends GetxController {
       Get.snackbar(
         'Deleted',
         'Outfit removed',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 1),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     }
   }
@@ -337,14 +337,14 @@ class OutfitsController extends GetxController {
       Get.snackbar(
         '',
         updatedOutfit.isFavorite ? 'Added to Favorites' : 'Removed from Favorites',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 1),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     }
   }
@@ -372,14 +372,14 @@ class OutfitsController extends GetxController {
       Get.snackbar(
         'Great outfit!',
         'Marked as worn',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 1),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     }
   }
@@ -394,14 +394,14 @@ class OutfitsController extends GetxController {
       Get.snackbar(
         'Duplicated',
         'Outfit duplicated successfully',
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 1),
       );
     } catch (e) {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     }
   }
@@ -439,7 +439,7 @@ class OutfitsController extends GetxController {
         Get.snackbar(
           'Generation Failed',
           result.error ?? 'An error occurred',
-          snackPosition: SnackPosition.BOTTOM,
+          snackPosition: SnackPosition.TOP,
         );
         return;
       }
@@ -454,7 +454,7 @@ class OutfitsController extends GetxController {
         Get.snackbar(
           'Complete!',
           'Your outfit has been generated',
-          snackPosition: SnackPosition.BOTTOM,
+          snackPosition: SnackPosition.TOP,
           backgroundColor: Colors.green.shade50,
           colorText: Colors.green.shade900,
         );
@@ -469,7 +469,7 @@ class OutfitsController extends GetxController {
       Get.snackbar(
         'Generation Failed',
         error.value,
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     }
   }
@@ -486,7 +486,7 @@ class OutfitsController extends GetxController {
         Get.snackbar(
           'Timeout',
           'Generation is taking longer than expected',
-          snackPosition: SnackPosition.BOTTOM,
+          snackPosition: SnackPosition.TOP,
         );
         return false;
       }
@@ -508,7 +508,7 @@ class OutfitsController extends GetxController {
           Get.snackbar(
             'Complete!',
             'Your outfit has been generated',
-            snackPosition: SnackPosition.BOTTOM,
+            snackPosition: SnackPosition.TOP,
             backgroundColor: Colors.green.shade50,
             colorText: Colors.green.shade900,
           );
@@ -520,7 +520,7 @@ class OutfitsController extends GetxController {
           Get.snackbar(
             'Generation Failed',
             status.error ?? 'An error occurred',
-            snackPosition: SnackPosition.BOTTOM,
+            snackPosition: SnackPosition.TOP,
           );
           return false;
         }
@@ -563,7 +563,7 @@ class OutfitsController extends GetxController {
       Get.snackbar(
         'Error',
         e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.BOTTOM,
+        snackPosition: SnackPosition.TOP,
       );
     }
   }

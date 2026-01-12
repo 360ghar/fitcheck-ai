@@ -1,6 +1,7 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import '../../../domain/enums/style.dart';
 import '../../../domain/enums/season.dart';
+import '../../wardrobe/models/item_model.dart';
 
 part 'outfit_model.freezed.dart';
 part 'outfit_model.g.dart';
@@ -24,6 +25,7 @@ class OutfitModel with _$OutfitModel {
     @JsonKey(name: 'worn_count') @Default(0) int wornCount,
     @JsonKey(name: 'last_worn_at') DateTime? lastWornAt,
     @JsonKey(name: 'outfit_images') List<OutfitImage>? outfitImages,
+    List<ItemModel>? items,
     @JsonKey(name: 'created_at') DateTime? createdAt,
     @JsonKey(name: 'updated_at') DateTime? updatedAt,
   }) = _OutfitModel;
@@ -170,4 +172,19 @@ class OutfitVisualizationResult with _$OutfitVisualizationResult {
 
   factory OutfitVisualizationResult.fromJson(Map<String, dynamic> json) =>
       _$OutfitVisualizationResultFromJson(json);
+}
+
+/// Wear history entry model
+@freezed
+class WearHistoryEntry with _$WearHistoryEntry {
+  const factory WearHistoryEntry({
+    required String id,
+    @JsonKey(name: 'outfit_id') required String outfitId,
+    @JsonKey(name: 'worn_at') required DateTime wornAt,
+    String? notes,
+    @JsonKey(name: 'created_at') DateTime? createdAt,
+  }) = _WearHistoryEntry;
+
+  factory WearHistoryEntry.fromJson(Map<String, dynamic> json) =>
+      _$WearHistoryEntryFromJson(json);
 }

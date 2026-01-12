@@ -1,11 +1,11 @@
 {
-    "name": "fitcheck_ai",
-    "short_name": "fitcheck_ai",
+    "name": "FitCheck AI",
+    "short_name": "FitCheck AI",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FF6B6B",
+    "theme_color": "#FF6B6B",
+    "description": "AI-Powered Wardrobe & Outfit Manager",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

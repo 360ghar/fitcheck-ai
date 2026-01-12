@@ -49,6 +49,16 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  Future<void> _handleGoogleSignIn() async {
+    final authController = Get.find<AuthController>();
+
+    try {
+      await authController.signInWithGoogle();
+    } catch (e) {
+      // Error is already handled by controller
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authController = Get.find<AuthController>();
@@ -103,6 +113,10 @@ class _RegisterPageState extends State<RegisterPage> {
                       _buildConfirmPasswordField(tokens),
                       const SizedBox(height: AppConstants.spacing24),
                       Obx(() => _buildRegisterButton(authController, tokens)),
+                      const SizedBox(height: AppConstants.spacing16),
+                      _buildDivider(tokens),
+                      const SizedBox(height: AppConstants.spacing16),
+                      _buildGoogleSignInButton(tokens),
                     ],
                   ),
                 ),
@@ -261,6 +275,54 @@ class _RegisterPageState extends State<RegisterPage> {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : const Text('Create Account'),
+    );
+  }
+
+  Widget _buildDivider(AuthUiTokens tokens) {
+    return Row(
+      children: [
+        Expanded(
+          child: Divider(color: tokens.textColor.withOpacity(0.2)),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
+          child: Text(
+            'OR',
+            style: TextStyle(
+              color: tokens.textColor.withOpacity(0.6),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Divider(color: tokens.textColor.withOpacity(0.2)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGoogleSignInButton(AuthUiTokens tokens) {
+    return OutlinedButton.icon(
+      onPressed: _handleGoogleSignIn,
+      icon: const Icon(Icons.login),
+      label: const Text('Continue with Google'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: tokens.textColor,
+        side: BorderSide(color: tokens.textColor.withOpacity(0.4)),
+        padding: const EdgeInsets.symmetric(
+          vertical: AppConstants.spacing16,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.radius16),
+        ),
+        textStyle: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.3,
+        ),
+      ),
     );
   }
 

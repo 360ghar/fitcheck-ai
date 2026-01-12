@@ -14,6 +14,9 @@ class Routes {
   static const home = '/home';
   static const wardrobe = '/wardrobe';
   static const wardrobeAdd = '/wardrobe/add';
+  static const wardrobeBatchAdd = '/wardrobe/batch-add';
+  static const wardrobeBatchProgress = '/wardrobe/batch-progress';
+  static const wardrobeBatchReview = '/wardrobe/batch-review';
   static const wardrobeItemDetail = '/wardrobe/:id';
   static const wardrobeItemEdit = '/wardrobe/:id/edit';
   static const outfits = '/outfits';

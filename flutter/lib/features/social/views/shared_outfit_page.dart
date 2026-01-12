@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 
@@ -30,7 +29,9 @@ class SharedOutfitPage extends StatelessWidget {
           ),
         ),
         child: SafeArea(
-          child: FutureBuilder(
+          child: Stack(
+            children: [
+              FutureBuilder(
             future: _fetchSharedOutfit(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -80,9 +81,11 @@ class SharedOutfitPage extends StatelessWidget {
                     backgroundColor: Colors.transparent,
                     flexibleSpace: FlexibleSpaceBar(
                       background: images.isNotEmpty
-                          ? CachedNetworkImage(
+                          ? AppImage(
                               imageUrl: images.first.toString(),
-                              fit: BoxFit.cover,
+                              fit: BoxFit.contain,
+                              enableZoom: true,
+                              galleryUrls: images.map((i) => i.toString()).toList(),
                             )
                           : Container(
                               color: tokens.cardColor,
@@ -150,6 +153,23 @@ class SharedOutfitPage extends StatelessWidget {
                 ],
               );
             },
+          ),
+              // Back button
+              Positioned(
+                top: AppConstants.spacing8,
+                left: AppConstants.spacing8,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: tokens.cardColor.withOpacity(0.9),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => Get.back(),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

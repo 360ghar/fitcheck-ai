@@ -151,7 +151,9 @@ class SupabaseService extends GetxService {
         redirectTo: 'fitcheck.ai://login-callback',
       );
       return true;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('Google Sign-In Error: $e');
+      debugPrint('Stack trace: $stackTrace');
       return false;
     }
   }

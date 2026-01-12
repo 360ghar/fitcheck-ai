@@ -405,7 +405,6 @@ class _SettingsPageState extends State<SettingsPage> {
     final currentPasswordController = TextEditingController();
     final newPasswordController = TextEditingController();
     final confirmPasswordController = TextEditingController();
-    final isLoading = false.obs;
 
     Get.dialog(
       Obx(() => AlertDialog(
@@ -420,6 +419,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 border: OutlineInputBorder(),
               ),
               obscureText: true,
+              enabled: !controller.isChangingPassword.value,
             ),
             const SizedBox(height: AppConstants.spacing12),
             TextField(
@@ -429,6 +429,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 border: OutlineInputBorder(),
               ),
               obscureText: true,
+              enabled: !controller.isChangingPassword.value,
             ),
             const SizedBox(height: AppConstants.spacing12),
             TextField(
@@ -438,18 +439,19 @@ class _SettingsPageState extends State<SettingsPage> {
                 border: OutlineInputBorder(),
               ),
               obscureText: true,
+              enabled: !controller.isChangingPassword.value,
             ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: isLoading.value ? null : () => Get.back(),
+            onPressed: controller.isChangingPassword.value ? null : () => Get.back(),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: isLoading.value
+            onPressed: controller.isChangingPassword.value
                 ? null
-                : () {
+                : () async {
                     if (currentPasswordController.text.isEmpty) {
                       Get.snackbar('Error', 'Please enter your current password');
                       return;
@@ -462,14 +464,16 @@ class _SettingsPageState extends State<SettingsPage> {
                       Get.snackbar('Error', 'Passwords do not match');
                       return;
                     }
-                    isLoading.value = true;
-                    controller.changePassword(
-                      currentPasswordController.text,
-                      newPasswordController.text,
-                    );
-                    Get.back();
+                    try {
+                      await controller.changePassword(
+                        currentPasswordController.text,
+                        newPasswordController.text,
+                      );
+                    } catch (e) {
+                      // Error handled by controller
+                    }
                   },
-            child: isLoading.value
+            child: controller.isChangingPassword.value
                 ? const SizedBox(
                     width: 16,
                     height: 16,
@@ -479,58 +483,80 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ],
       )),
+      barrierDismissible: false,
     );
   }
 
   void _showExportDataDialog() {
     Get.dialog(
-      AlertDialog(
+      Obx(() => AlertDialog(
         title: const Text('Export Data'),
         content: const Text(
           'We will prepare a download link with all your data. You will receive an email when it\'s ready.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Get.back(),
+            onPressed: controller.isExportingData.value ? null : () => Get.back(),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
-              Get.back();
-              controller.exportData();
-            },
-            child: const Text('Export'),
+            onPressed: controller.isExportingData.value
+                ? null
+                : () async {
+                    await controller.exportData();
+                    Get.back();
+                  },
+            child: controller.isExportingData.value
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Export'),
           ),
         ],
-      ),
+      )),
+      barrierDismissible: false,
     );
   }
 
   void _showDeleteAccountDialog() {
     Get.dialog(
-      AlertDialog(
+      Obx(() => AlertDialog(
         title: const Text('Delete Account?'),
         content: const Text(
           'This action cannot be undone. All your data will be permanently deleted.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Get.back(),
+            onPressed: controller.isDeletingAccount.value ? null : () => Get.back(),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
-              Get.back();
-              controller.deleteAccount();
-            },
+            onPressed: controller.isDeletingAccount.value
+                ? null
+                : () async {
+                    try {
+                      await controller.deleteAccount();
+                    } catch (e) {
+                      // Error handled by controller
+                    }
+                  },
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
               foregroundColor: Theme.of(context).colorScheme.onError,
             ),
-            child: const Text('Delete'),
+            child: controller.isDeletingAccount.value
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('Delete'),
           ),
         ],
-      ),
+      )),
+      barrierDismissible: false,
     );
   }
 
