@@ -14,8 +14,8 @@ const tiers = [
     price: { monthly: 0, yearly: 0 },
     description: 'Perfect for getting started',
     features: [
-      'Up to 50 clothing items',
-      '5 AI generations/month',
+      '25 item extractions/month',
+      '50 outfit visualizations/month',
       'Basic wardrobe management',
       'Weather-based suggestions',
       'Mobile app access',
@@ -25,21 +25,22 @@ const tiers = [
   },
   {
     name: 'Pro',
-    price: { monthly: 9.99, yearly: 89.99 },
+    price: { monthly: 20, yearly: 200 },
     description: 'For the fashion-forward',
     features: [
-      'Unlimited clothing items',
-      'Unlimited AI generations',
+      '200 item extractions/month',
+      '1,000 outfit visualizations/month',
       'Virtual try-on visualization',
       'Advanced wardrobe analytics',
       'Calendar integration',
       'Priority support',
-      'Style recommendations',
-      'Social sharing features',
+      'AI style recommendations',
+      'Early access to new features',
     ],
-    cta: 'Start Free Trial',
+    cta: 'Upgrade to Pro',
     highlighted: true,
-    badge: 'Most Popular',
+    badge: 'Best Value',
+    savings: 40,
   },
 ]
 
@@ -161,7 +162,7 @@ export default function Pricing() {
               >
                 Yearly
                 <Badge className="bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300 border-0">
-                  Save 25%
+                  Save $40
                 </Badge>
               </span>
             </div>

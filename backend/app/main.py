@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.logging_config import setup_session_logging
 from app.core.exceptions import FitCheckException
 from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, get_correlation_id
-from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing
+from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, referral, feedback
 from app.db.connection import SupabaseDB
 from postgrest.exceptions import APIError as PostgrestAPIError
 
@@ -40,6 +40,13 @@ REQUIRED_TABLES = (
     "share_feedback",
     "user_streaks",
     "user_achievements",
+    # Subscription + referral
+    "subscriptions",
+    "subscription_usage",
+    "referral_codes",
+    "referral_redemptions",
+    # Support tickets
+    "support_tickets",
 )
 
 REQUIRED_COLUMNS = (
@@ -201,6 +208,15 @@ app.include_router(waitlist.router, prefix="/api/v1/waitlist", tags=["Waitlist"]
 
 # Demo routes (public, no auth required - IP rate limited)
 app.include_router(demo.router, prefix="/api/v1/demo", tags=["Demo"])
+
+# Subscription routes (requires auth, except webhook)
+app.include_router(subscription.router, prefix="/api/v1/subscription", tags=["Subscription"])
+
+# Referral routes (requires auth, except validate)
+app.include_router(referral.router, prefix="/api/v1/referral", tags=["Referral"])
+
+# Feedback routes (public for submit, auth for ticket history)
+app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"])
 
 
 # ============================================================================

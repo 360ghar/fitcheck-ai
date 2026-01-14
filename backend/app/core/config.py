@@ -96,13 +96,39 @@ class Settings(BaseSettings):
     AI_CUSTOM_VISION_MODEL: str = "gemini-3-flash-preview"
     AI_CUSTOM_IMAGE_MODEL: str = "gemini-3-pro-image-preview"
 
-    # Rate Limiting
+    # Rate Limiting (legacy daily limits - used as fallback)
     AI_DAILY_EXTRACTION_LIMIT: int = 100
     AI_DAILY_GENERATION_LIMIT: int = 50
     AI_DAILY_EMBEDDING_LIMIT: int = 500
 
     # Encryption key for storing user API keys (generate with: openssl rand -hex 32)
     AI_ENCRYPTION_KEY: Optional[str] = None
+
+    # ==========================================================================
+    # Subscription Plan Configuration
+    # ==========================================================================
+
+    # Stripe Configuration
+    STRIPE_SECRET_KEY: Optional[str] = None
+    STRIPE_WEBHOOK_SECRET: Optional[str] = None
+    STRIPE_PRO_MONTHLY_PRICE_ID: Optional[str] = None
+    STRIPE_PRO_YEARLY_PRICE_ID: Optional[str] = None
+
+    # Plan Limits (monthly)
+    PLAN_FREE_MONTHLY_EXTRACTIONS: int = 25
+    PLAN_FREE_MONTHLY_GENERATIONS: int = 50
+    PLAN_FREE_MONTHLY_EMBEDDINGS: int = 200
+
+    PLAN_PRO_MONTHLY_EXTRACTIONS: int = 200
+    PLAN_PRO_MONTHLY_GENERATIONS: int = 1000
+    PLAN_PRO_MONTHLY_EMBEDDINGS: int = 5000
+
+    # Plan Pricing (for display purposes)
+    PLAN_PRO_MONTHLY_PRICE: float = 20.00
+    PLAN_PRO_YEARLY_PRICE: float = 200.00
+
+    # Referral Configuration
+    REFERRAL_CREDIT_MONTHS: int = 1  # Months of Pro given to both referrer and referred
 
     # Weather (OpenWeatherMap)
     WEATHER_API_KEY: Optional[str] = None

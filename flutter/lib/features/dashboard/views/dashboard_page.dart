@@ -5,7 +5,9 @@ import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../../subscription/controllers/subscription_controller.dart';
 import '../controllers/dashboard_controller.dart';
+import '../widgets/referral_promo_banner.dart';
 import '../widgets/snapshot_card.dart';
 import '../widgets/quick_actions_section.dart';
 import '../widgets/suggestions_section.dart';
@@ -55,6 +57,32 @@ class _DashboardPageState extends State<DashboardPage> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             _buildErrorBanner(),
+                            const SizedBox(height: AppConstants.spacing16),
+                          ],
+                        );
+                      }),
+                      // Referral promo banner
+                      Obx(() {
+                        // Safety check for controller availability
+                        if (!Get.isRegistered<SubscriptionController>()) {
+                          return const SizedBox.shrink();
+                        }
+
+                        final subController = Get.find<SubscriptionController>();
+                        final shouldShow = !dashboardController.referralBannerDismissed.value ||
+                            subController.isNearLimit;
+
+                        if (!shouldShow) return const SizedBox.shrink();
+
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ReferralPromoBanner(
+                              isUrgent: subController.isNearLimit,
+                              onDismiss: () => dashboardController.dismissReferralBanner(),
+                              onCopyLink: () => subController.copyReferralLink(),
+                              onShare: () => subController.shareReferralLink(),
+                            ),
                             const SizedBox(height: AppConstants.spacing16),
                           ],
                         );

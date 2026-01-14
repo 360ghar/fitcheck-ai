@@ -82,6 +82,8 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: AppConstants.spacing24),
         _buildAiSection(),
         const SizedBox(height: AppConstants.spacing24),
+        _buildSubscriptionSection(),
+        const SizedBox(height: AppConstants.spacing24),
         _buildAccountSection(),
       ]),
     );
@@ -226,6 +228,28 @@ class _SettingsPageState extends State<SettingsPage> {
           subtitle: const Text('Configure AI extraction and generation'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Get.toNamed(Routes.aiSettings),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubscriptionSection() {
+    return _buildSection(
+      title: 'Subscription',
+      children: [
+        ListTile(
+          leading: const Icon(Icons.credit_card),
+          title: const Text('Manage Subscription'),
+          subtitle: const Text('View plan, usage, and upgrade'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Get.toNamed(Routes.subscription),
+        ),
+        ListTile(
+          leading: const Icon(Icons.card_giftcard),
+          title: const Text('Refer a Friend'),
+          subtitle: const Text('Get 1 month free for each referral'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Get.toNamed(Routes.referral),
         ),
       ],
     );

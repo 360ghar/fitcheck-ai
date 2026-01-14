@@ -1,17 +1,19 @@
 /**
  * Register Page
- * New user registration
+ * New user registration with referral code support
  */
 
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
-import { Mail, Lock, User, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
+import { Mail, Lock, User, AlertCircle, CheckCircle, Loader2, Gift, Check } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
+import { validateReferralCode } from '@/api/subscription'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const register = useAuthStore((state) => state.register)
   const signInWithGoogle = useAuthStore((state) => state.signInWithGoogle)
   const isLoading = useAuthStore((state) => state.isLoading)
@@ -25,6 +27,61 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+
+  // Referral code state
+  const [referralCode, setReferralCode] = useState('')
+  const [referralValid, setReferralValid] = useState<boolean | null>(null)
+  const [referralReferrer, setReferralReferrer] = useState<string | null>(null)
+  const [validatingReferral, setValidatingReferral] = useState(false)
+
+  // Check for referral code in URL or localStorage on mount
+  useEffect(() => {
+    const refParam = searchParams.get('ref')
+    const storedRef = localStorage.getItem('pending_referral_code')
+
+    if (refParam) {
+      setReferralCode(refParam)
+      validateReferral(refParam)
+    } else if (storedRef) {
+      setReferralCode(storedRef)
+      validateReferral(storedRef)
+    }
+  }, [searchParams])
+
+  // Validate referral code
+  const validateReferral = async (code: string) => {
+    if (!code.trim()) {
+      setReferralValid(null)
+      setReferralReferrer(null)
+      return
+    }
+
+    setValidatingReferral(true)
+    try {
+      const result = await validateReferralCode(code.trim())
+      setReferralValid(result.valid)
+      setReferralReferrer(result.referrer_name || null)
+    } catch {
+      setReferralValid(false)
+      setReferralReferrer(null)
+    } finally {
+      setValidatingReferral(false)
+    }
+  }
+
+  // Handle referral code input change with debounce
+  const handleReferralChange = (value: string) => {
+    setReferralCode(value)
+    setReferralValid(null)
+    setReferralReferrer(null)
+  }
+
+  // Validate referral on blur
+  const handleReferralBlur = () => {
+    if (referralCode.trim()) {
+      validateReferral(referralCode)
+    }
+  }
 
   // Password strength validation
   const getPasswordStrength = (pwd: string) => {
@@ -52,7 +109,12 @@ export default function RegisterPage() {
     if (!isFormValid) return
 
     try {
-      const auth = await register(email, password, fullName)
+      const auth = await register(
+        email,
+        password,
+        fullName,
+        referralCode.trim() || undefined
+      )
 
       if (!auth?.access_token) {
         // Email confirmation required
@@ -64,6 +126,15 @@ export default function RegisterPage() {
         return
       }
 
+      // Show toast if referral was processed by backend
+      if (auth?.referral) {
+        toast({
+          title: auth.referral.success ? 'Welcome!' : 'Referral not applied',
+          description: auth.referral.message,
+          variant: auth.referral.success ? undefined : 'destructive',
+        })
+      }
+
       navigate('/dashboard')
     } catch {
       // Registration error is handled by the store and displayed in UI
@@ -73,6 +144,12 @@ export default function RegisterPage() {
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true)
     clearError()
+
+    // Save referral code before OAuth redirect
+    if (referralCode.trim()) {
+      localStorage.setItem('pending_referral_code', referralCode.trim())
+    }
+
     try {
       await signInWithGoogle()
       // User will be redirected to Google
@@ -307,6 +384,47 @@ export default function RegisterPage() {
               </div>
               {!passwordsMatch && confirmPassword.length > 0 && (
                 <p className="mt-1 text-sm text-destructive">Passwords do not match</p>
+              )}
+            </div>
+
+            {/* Referral Code (Optional) */}
+            <div>
+              <label htmlFor="referralCode" className="block text-sm font-medium text-foreground">
+                Referral code <span className="text-muted-foreground">(optional)</span>
+              </label>
+              <div className="mt-1 relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Gift className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <input
+                  id="referralCode"
+                  name="referralCode"
+                  type="text"
+                  value={referralCode}
+                  onChange={(e) => handleReferralChange(e.target.value)}
+                  onBlur={handleReferralBlur}
+                  className="block w-full h-12 pl-10 pr-10 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
+                  placeholder="e.g., john-abc123"
+                />
+                {(validatingReferral || referralValid !== null) && (
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                    {validatingReferral ? (
+                      <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
+                    ) : referralValid ? (
+                      <Check className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5 text-destructive" />
+                    )}
+                  </div>
+                )}
+              </div>
+              {referralValid && referralReferrer && (
+                <p className="mt-1 text-sm text-green-600 dark:text-green-400">
+                  Referred by {referralReferrer} - you both get 1 month of Pro free!
+                </p>
+              )}
+              {referralValid === false && referralCode.length > 0 && (
+                <p className="mt-1 text-sm text-destructive">Invalid referral code</p>
               )}
             </div>
 

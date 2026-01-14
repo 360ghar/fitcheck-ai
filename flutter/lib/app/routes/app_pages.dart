@@ -35,6 +35,11 @@ import '../bindings/ai_settings_binding.dart';
 import '../bindings/batch_extraction_binding.dart';
 import '../../features/recommendations/bindings/recommendations_binding.dart';
 import '../../features/gamification/bindings/gamification_binding.dart';
+import '../../features/subscription/views/subscription_page.dart';
+import '../../features/subscription/views/referral_page.dart';
+import '../../features/subscription/bindings/subscription_binding.dart';
+import '../../features/feedback/views/feedback_page.dart';
+import '../../features/feedback/bindings/feedback_binding.dart';
 import '../../features/wardrobe/views/batch_image_selector_page.dart';
 import '../../features/wardrobe/views/batch_extraction_progress_page.dart';
 import '../../features/wardrobe/views/batch_item_review_page.dart';
@@ -196,6 +201,18 @@ class AppPages {
       middlewares: [AuthMiddleware()],
     ),
     GetPage(
+      name: Routes.subscription,
+      page: () => const SubscriptionPage(),
+      binding: SubscriptionBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
+      name: Routes.referral,
+      page: () => const ReferralPage(),
+      binding: SubscriptionBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
       name: Routes.profileEdit,
       page: () => const ProfileEditPage(),
       binding: HomeBinding(),
@@ -211,6 +228,12 @@ class AppPages {
       name: Routes.help,
       page: () => const HelpPage(),
       binding: HomeBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
+      name: Routes.feedback,
+      page: () => const FeedbackPage(),
+      binding: FeedbackBinding(),
       middlewares: [AuthMiddleware()],
     ),
     GetPage(

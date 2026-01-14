@@ -6,6 +6,7 @@ Used to provide weather-based outfit recommendations.
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone, timedelta
 from collections import Counter, defaultdict
+import re
 
 import httpx
 
@@ -54,6 +55,33 @@ class WeatherService:
         self.api_key = getattr(settings, 'WEATHER_API_KEY', None)
         self.base_url = "https://api.openweathermap.org/data/2.5"
 
+    @staticmethod
+    def _parse_coordinates(location: str) -> Optional[tuple[float, float]]:
+        if not location or "," not in location:
+            return None
+
+        parts = [part.strip() for part in location.split(",")]
+        if len(parts) != 2:
+            return None
+
+        try:
+            lat = float(parts[0])
+            lon = float(parts[1])
+        except ValueError:
+            return None
+
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return None
+
+        return lat, lon
+
+    @staticmethod
+    def _looks_like_zip(location: str) -> bool:
+        # OpenWeatherMap zip format: "zip" or "zip,country_code"
+        if not location:
+            return False
+        return bool(re.fullmatch(r"\d{4,10}(?:,\s*[a-zA-Z]{2})?", location.strip()))
+
     async def get_weather(
         self,
         location: str,
@@ -79,12 +107,16 @@ class WeatherService:
             raise WeatherServiceError("Weather API key not configured. Set WEATHER_API_KEY in environment.")
 
         try:
+            coords = self._parse_coordinates(location)
+            if coords:
+                return await self.get_weather_by_coordinates(lat=coords[0], lon=coords[1], units=units)
+
             async with httpx.AsyncClient() as client:
-                params = {
-                    "q": location,
-                    "appid": self.api_key,
-                    "units": units
-                }
+                params: Dict[str, Any] = {"appid": self.api_key, "units": units}
+                if self._looks_like_zip(location):
+                    params["zip"] = location.strip()
+                else:
+                    params["q"] = location
 
                 response = await client.get(
                     f"{self.base_url}/weather",
@@ -106,7 +138,15 @@ class WeatherService:
                         status_code=response.status_code,
                         response_text=response.text[:200],
                     )
-                    raise WeatherServiceError(f"Weather API error: {response.status_code}")
+                    detail = None
+                    try:
+                        detail = (response.json() or {}).get("message")
+                    except Exception:
+                        detail = None
+                    message = f"Weather API error: {response.status_code}"
+                    if detail:
+                        message = f"{message} - {detail}"
+                    raise WeatherServiceError(message)
 
         except WeatherServiceError:
             raise
@@ -176,7 +216,15 @@ class WeatherService:
                         status_code=response.status_code,
                         response_text=response.text[:200],
                     )
-                    raise WeatherServiceError(f"Weather API error: {response.status_code}")
+                    detail = None
+                    try:
+                        detail = (response.json() or {}).get("message")
+                    except Exception:
+                        detail = None
+                    message = f"Weather API error: {response.status_code}"
+                    if detail:
+                        message = f"{message} - {detail}"
+                    raise WeatherServiceError(message)
 
         except WeatherServiceError:
             raise
@@ -228,6 +276,11 @@ class WeatherService:
         days = max(1, min(days, 5))
 
         try:
+            if lat is None or lon is None:
+                coords = self._parse_coordinates(location)
+                if coords:
+                    lat, lon = coords
+
             async with httpx.AsyncClient() as client:
                 params: Dict[str, Any] = {"appid": self.api_key, "units": units}
 
@@ -251,7 +304,15 @@ class WeatherService:
                         status_code=response.status_code,
                         response_text=response.text[:200],
                     )
-                    raise WeatherServiceError(f"Forecast API error: {response.status_code}")
+                    detail = None
+                    try:
+                        detail = (response.json() or {}).get("message")
+                    except Exception:
+                        detail = None
+                    message = f"Forecast API error: {response.status_code}"
+                    if detail:
+                        message = f"{message} - {detail}"
+                    raise WeatherServiceError(message)
 
                 logger.info(
                     "Fetched forecast data",

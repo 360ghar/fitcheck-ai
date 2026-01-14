@@ -23,6 +23,7 @@ from app.core.exceptions import (
     SchemaNotInitializedError,
     DatabaseError,
 )
+from app.services.referral_service import ReferralService
 from supabase import Client
 from supabase_auth.errors import AuthApiError
 from postgrest.exceptions import APIError as PostgrestAPIError
@@ -103,6 +104,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100)
     full_name: Optional[str] = Field(None, max_length=255)
+    referral_code: Optional[str] = Field(None, max_length=50)
 
     @field_validator('password')
     @classmethod
@@ -179,6 +181,7 @@ class OAuthSyncRequest(BaseModel):
     """Optional metadata from OAuth provider for profile sync."""
     full_name: Optional[str] = Field(None, max_length=255)
     avatar_url: Optional[str] = None
+    referral_code: Optional[str] = Field(None, max_length=50)
 
 
 # ============================================================================
@@ -280,6 +283,20 @@ async def register(
             except Exception as e:
                 logger.debug(f"User settings upsert skipped (may exist from trigger): {e}")
 
+            # Process referral code if provided
+            referral_result = None
+            if request.referral_code:
+                try:
+                    referral_result = await ReferralService.redeem_referral(
+                        referred_user_id=user_id,
+                        code=request.referral_code,
+                        db=db,
+                    )
+                    if referral_result.success:
+                        logger.info(f"Referral code redeemed during registration", user_id=user_id, code=request.referral_code)
+                except Exception as e:
+                    logger.warning(f"Failed to redeem referral code during registration: {e}")
+
         except PostgrestAPIError as e:
             error_info = getattr(e, 'json', lambda: {})() or {}
             code = error_info.get('code') or getattr(e, 'code', None)
@@ -305,22 +322,33 @@ async def register(
             )
 
         logger.info("User registered successfully", user_id=user_id, email=request.email)
-        return {
-            "data": {
-                "user": {
-                    "id": user_id,
-                    "email": request.email,
-                    "full_name": request.full_name,
-                    "avatar_url": None,
-                    "gender": None,
-                    "is_active": True,
-                    "email_verified": False,
-                    "created_at": profile_payload.get("created_at"),
-                },
-                "access_token": session.access_token if session else "",
-                "refresh_token": session.refresh_token if session else "",
-                "requires_email_confirmation": requires_email_confirmation,
+
+        response_data = {
+            "user": {
+                "id": user_id,
+                "email": request.email,
+                "full_name": request.full_name,
+                "avatar_url": None,
+                "gender": None,
+                "is_active": True,
+                "email_verified": False,
+                "created_at": profile_payload.get("created_at"),
             },
+            "access_token": session.access_token if session else "",
+            "refresh_token": session.refresh_token if session else "",
+            "requires_email_confirmation": requires_email_confirmation,
+        }
+
+        # Add referral info to response if applicable
+        if request.referral_code and referral_result:
+            response_data["referral"] = {
+                "success": referral_result.success,
+                "message": referral_result.message,
+                "credit_months": referral_result.credit_months,
+            }
+
+        return {
+            "data": response_data,
             "message": "Registered",
         }
 
@@ -691,6 +719,20 @@ async def oauth_sync(
             except Exception as e:
                 logger.debug(f"User settings upsert skipped: {e}")
 
+            # Process referral code if provided (for new OAuth users)
+            referral_result = None
+            if request and request.referral_code:
+                try:
+                    referral_result = await ReferralService.redeem_referral(
+                        referred_user_id=user_id,
+                        code=request.referral_code,
+                        db=db,
+                    )
+                    if referral_result.success:
+                        logger.info(f"Referral code redeemed during OAuth sync", user_id=user_id, code=request.referral_code)
+                except Exception as e:
+                    logger.warning(f"Failed to redeem referral code during OAuth sync: {e}")
+
             logger.info("Created user profile via OAuth sync", user_id=user_id)
 
             # Fetch the created profile
@@ -704,23 +746,34 @@ async def oauth_sync(
 
             user_data = existing.data[0]
             logger.info("OAuth sync for existing user", user_id=user_id)
+            referral_result = None  # No referral processing for existing users
+
+        response_data = {
+            "user": {
+                "id": user_id,
+                "email": user_email,
+                "full_name": user_data.get("full_name"),
+                "avatar_url": user_data.get("avatar_url"),
+                "gender": user_data.get("gender"),
+                "is_active": user_data.get("is_active", True),
+                "email_verified": user_data.get("email_verified", True),
+                "created_at": user_data.get("created_at"),
+                "updated_at": user_data.get("updated_at"),
+                "last_login_at": user_data.get("last_login_at"),
+            },
+            "is_new_user": is_new_user,
+        }
+
+        # Add referral info to response if applicable
+        if is_new_user and request and request.referral_code and referral_result:
+            response_data["referral"] = {
+                "success": referral_result.success,
+                "message": referral_result.message,
+                "credit_months": referral_result.credit_months,
+            }
 
         return {
-            "data": {
-                "user": {
-                    "id": user_id,
-                    "email": user_email,
-                    "full_name": user_data.get("full_name"),
-                    "avatar_url": user_data.get("avatar_url"),
-                    "gender": user_data.get("gender"),
-                    "is_active": user_data.get("is_active", True),
-                    "email_verified": user_data.get("email_verified", True),
-                    "created_at": user_data.get("created_at"),
-                    "updated_at": user_data.get("updated_at"),
-                    "last_login_at": user_data.get("last_login_at"),
-                },
-                "is_new_user": is_new_user,
-            },
+            "data": response_data,
             "message": "OK",
         }
 

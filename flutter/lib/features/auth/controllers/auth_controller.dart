@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/services/analytics_service.dart';
+import '../../subscription/repositories/subscription_repository.dart';
 import '../models/user_model.dart';
 
 /// Authentication controller using Supabase
 class AuthController extends GetxController {
   final SupabaseService _supabase = SupabaseService.instance;
+  final SubscriptionRepository _subscriptionRepo = SubscriptionRepository();
+
+  // Key for storing pending referral code
+  static const String _pendingReferralKey = 'pending_referral_code';
 
   // Workers for cleanup (prevent memory leaks)
   final List<Worker> _workers = [];
@@ -53,6 +59,8 @@ class AuthController extends GetxController {
           return;
         }
         await _loadUserData();
+        // Check for pending referral code from OAuth flow
+        await handleOAuthCallback();
       }),
     );
   }
@@ -165,7 +173,7 @@ class AuthController extends GetxController {
   }
 
   /// Register new user using Supabase
-  Future<void> register(String email, String password, {String? fullName}) async {
+  Future<void> register(String email, String password, {String? fullName, String? referralCode}) async {
     try {
       isLoading.value = true;
       error.value = '';
@@ -181,7 +189,13 @@ class AuthController extends GetxController {
         await _loadUserData(supabaseUser: response.user);
         AnalyticsService.instance.track('auth_register', properties: {
           'method': 'email',
+          'has_referral': referralCode != null && referralCode.isNotEmpty,
         });
+
+        // Redeem referral code if provided
+        if (referralCode != null && referralCode.isNotEmpty) {
+          await _redeemReferralCode(referralCode);
+        }
 
         Get.snackbar(
           'Welcome to Fit Check!',
@@ -372,4 +386,47 @@ class AuthController extends GetxController {
 
   /// Get current access token for API calls
   String? get accessToken => _supabase.currentAccessToken;
+
+  /// Store pending referral code for OAuth flow
+  Future<void> setPendingReferralCode(String code) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pendingReferralKey, code);
+  }
+
+  /// Get and clear pending referral code
+  Future<String?> _getAndClearPendingReferralCode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final code = prefs.getString(_pendingReferralKey);
+    if (code != null) {
+      await prefs.remove(_pendingReferralKey);
+    }
+    return code;
+  }
+
+  /// Redeem a referral code after registration
+  Future<void> _redeemReferralCode(String code) async {
+    try {
+      await _subscriptionRepo.redeemReferralCode(code);
+      Get.snackbar(
+        'Referral Applied!',
+        'You and your friend both get 1 month of Pro free!',
+        snackPosition: SnackPosition.TOP,
+        backgroundColor: Colors.green.shade50,
+        colorText: Colors.green.shade900,
+        duration: const Duration(seconds: 4),
+      );
+    } catch (e) {
+      // Don't fail registration if referral redemption fails
+      debugPrint('Failed to redeem referral code: $e');
+    }
+  }
+
+  /// Handle OAuth callback and check for pending referral
+  Future<void> handleOAuthCallback() async {
+    // Check for pending referral code from before OAuth redirect
+    final pendingCode = await _getAndClearPendingReferralCode();
+    if (pendingCode != null && pendingCode.isNotEmpty) {
+      await _redeemReferralCode(pendingCode);
+    }
+  }
 }

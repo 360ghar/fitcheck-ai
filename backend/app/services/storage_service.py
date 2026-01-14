@@ -25,6 +25,7 @@ logger = get_context_logger(__name__)
 BUCKET_ITEMS = "items"
 BUCKET_OUTFITS = "outfits"
 BUCKET_AVATARS = "avatars"
+BUCKET_FEEDBACK = "feedback"
 
 # Allowed file extensions
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
@@ -441,6 +442,65 @@ class StorageService:
                 error=str(e),
             )
             raise StorageServiceError(f"Failed to move image: {str(e)}")
+
+    @staticmethod
+    async def upload_feedback_attachment(
+        db: Client,
+        user_id: str,
+        filename: str,
+        file_data: bytes,
+    ) -> dict:
+        """Upload a feedback attachment to Supabase Storage.
+
+        Args:
+            db: Supabase client
+            user_id: User ID or 'anonymous'
+            filename: Original filename
+            file_data: Raw file bytes
+
+        Returns:
+            Dict with image_url and metadata
+
+        Raises:
+            FileTooLargeError: If file exceeds size limit
+            UnsupportedMediaTypeError: If file type not allowed
+            StorageServiceError: If upload fails
+        """
+        # Validate the image (raises on failure)
+        StorageService._validate_image(file_data, filename)
+
+        storage_path = StorageService._generate_filename(user_id, filename, "feedback")
+
+        try:
+            bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_FEEDBACK
+            db.storage.from_(bucket).upload(
+                path=storage_path,
+                file=file_data
+            )
+
+            image_url = db.storage.from_(bucket).get_public_url(storage_path)
+
+            logger.info(
+                "Uploaded feedback attachment",
+                user_id=user_id,
+                storage_path=storage_path,
+                file_size=len(file_data),
+            )
+
+            return {
+                "image_url": image_url,
+                "storage_path": storage_path,
+            }
+
+        except Exception as e:
+            logger.error(
+                "Failed to upload feedback attachment",
+                user_id=user_id,
+                filename=filename,
+                file_size=len(file_data),
+                error=str(e),
+            )
+            raise StorageServiceError(f"Failed to upload attachment: {str(e)}")
 
 
 # ============================================================================

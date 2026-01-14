@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { useWardrobeStore } from '../stores/wardrobeStore'
 import { useOutfitStore } from '../stores/outfitStore'
 import { useUserDisplayName } from '../stores/authStore'
+import { useIsNearLimit } from '../stores/subscriptionStore'
 import {
   Shirt,
   Layers,
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { StatCard } from '@/components/dashboard/StatCard'
+import { ReferralBanner, useReferralBannerDismissal } from '@/components/dashboard/ReferralBanner'
 import { ItemUpload, type ItemUploadResult } from '@/components/wardrobe/ItemUpload'
 import { cn } from '@/lib/utils'
 
@@ -33,6 +35,13 @@ export default function DashboardPage() {
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const navigate = useNavigate()
+
+  // Referral banner state
+  const { isDismissed: isBannerDismissed, dismiss: dismissBanner } = useReferralBannerDismissal()
+  const nearLimit = useIsNearLimit()
+  const isNearLimit = nearLimit.extractions || nearLimit.generations
+  // Show banner if: not dismissed OR near limit (urgent overrides dismissal)
+  const shouldShowReferralBanner = !isBannerDismissed || isNearLimit
 
   useEffect(() => {
     fetchItems(true)
@@ -120,6 +129,16 @@ export default function DashboardPage() {
           Here's what's happening with your wardrobe today.
         </p>
       </div>
+
+      {/* Referral Banner */}
+      {shouldShowReferralBanner && (
+        <div className="mb-4 md:mb-6">
+          <ReferralBanner
+            variant={isNearLimit ? 'urgent' : 'default'}
+            onDismiss={dismissBanner}
+          />
+        </div>
+      )}
 
       {/* Stats cards - responsive grid */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4 lg:gap-5 mb-6 md:mb-8">

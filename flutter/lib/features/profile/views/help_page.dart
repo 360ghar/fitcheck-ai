@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 
@@ -172,28 +174,17 @@ class HelpPage extends StatelessWidget {
   }
 
   void _contactSupport() {
-    // Open email or support form
-    Get.snackbar(
-      'Contact',
-      'Opening support form...',
-      snackPosition: SnackPosition.TOP,
-    );
+    Get.toNamed(Routes.feedback);
   }
 
   void _openChat() {
-    Get.snackbar(
-      'Chat',
-      'Live chat opening soon...',
-      snackPosition: SnackPosition.TOP,
-    );
+    Get.toNamed(Routes.feedback);
   }
 
-  void _openDocs() {
-    // Open documentation URL
-    Get.snackbar(
-      'Docs',
-      'Opening documentation...',
-      snackPosition: SnackPosition.TOP,
-    );
+  void _openDocs() async {
+    final url = Uri.parse('https://fitcheck.ai/docs');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
   }
 }

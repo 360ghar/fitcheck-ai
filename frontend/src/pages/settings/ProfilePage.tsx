@@ -5,21 +5,21 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useAuthStore, useCurrentUser, useUserDisplayName, useUserAvatar } from '../../stores/authStore'
-import { User, Mail, Camera, Shield, Bell, Palette, Cpu, Sun, Moon, Monitor, MapPin } from 'lucide-react'
+import { User, Mail, Camera, Shield, Bell, Palette, Cpu, Sun, Moon, Monitor, MapPin, CreditCard, MessageSquarePlus } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { ScrollableTabs } from '@/components/ui/scrollable-tabs'
 import { updateCurrentUser, uploadAvatar, getUserPreferences, updateUserPreferences, getUserSettings, updateUserSettings, deleteAccount } from '@/api/users'
 import { requestPasswordReset } from '@/api/auth'
-import { AISettingsPanel, LocationInput } from '@/components/settings'
+import { AISettingsPanel, LocationInput, SubscriptionPanel, SupportPanel } from '@/components/settings'
 import { useTheme } from '@/components/theme'
 import { THEMES } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import type { UserPreferences, UserSettings } from '@/types'
 
-type TabType = 'profile' | 'preferences' | 'settings' | 'ai' | 'security'
+type TabType = 'profile' | 'preferences' | 'settings' | 'ai' | 'subscription' | 'support' | 'security'
 
 const themeIcons = {
   light: Sun,
@@ -110,6 +110,8 @@ export default function ProfilePage() {
     { id: 'preferences' as TabType, name: 'Preferences', icon: Palette },
     { id: 'settings' as TabType, name: 'Settings', icon: Bell },
     { id: 'ai' as TabType, name: 'AI Settings', icon: Cpu },
+    { id: 'subscription' as TabType, name: 'Subscription', icon: CreditCard },
+    { id: 'support' as TabType, name: 'Support', icon: MessageSquarePlus },
     { id: 'security' as TabType, name: 'Security', icon: Shield },
   ]
 
@@ -687,6 +689,14 @@ export default function ProfilePage() {
 
           {activeTab === 'ai' && (
             <AISettingsPanel />
+          )}
+
+          {activeTab === 'subscription' && (
+            <SubscriptionPanel />
+          )}
+
+          {activeTab === 'support' && (
+            <SupportPanel />
           )}
 
           {activeTab === 'security' && (

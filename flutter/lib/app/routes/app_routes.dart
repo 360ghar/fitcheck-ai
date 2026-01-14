@@ -32,7 +32,10 @@ class Routes {
   static const tryOn = '/try-on';
   static const more = '/more';
   static const gamification = '/gamification';
+  static const subscription = '/subscription';
+  static const referral = '/referral';
   static const bodyProfiles = '/profile/body-profiles';
   static const help = '/help';
+  static const feedback = '/feedback';
   static const sharedOutfit = '/shared/:id';
 }

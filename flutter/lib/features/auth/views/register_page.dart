@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../controllers/auth_controller.dart';
+import '../../subscription/repositories/subscription_repository.dart';
 import 'widgets/auth_ui.dart';
 
 /// Register page
@@ -19,8 +21,12 @@ class _RegisterPageState extends State<RegisterPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _referralCodeController = TextEditingController();
   final _isPasswordVisible = false.obs;
   final _isConfirmPasswordVisible = false.obs;
+  final _referralValid = Rxn<bool>();
+  final _referralReferrerName = Rxn<String>();
+  Timer? _referralDebounce;
 
   @override
   void dispose() {
@@ -28,6 +34,8 @@ class _RegisterPageState extends State<RegisterPage> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _referralCodeController.dispose();
+    _referralDebounce?.cancel();
     super.dispose();
   }
 
@@ -37,12 +45,14 @@ class _RegisterPageState extends State<RegisterPage> {
     }
 
     final authController = Get.find<AuthController>();
+    final referralCode = _referralCodeController.text.trim();
 
     try {
       await authController.register(
         _emailController.text.trim(),
         _passwordController.text,
         fullName: _nameController.text.trim(),
+        referralCode: referralCode.isNotEmpty ? referralCode : null,
       );
     } catch (e) {
       // Error is already handled by controller
@@ -51,6 +61,12 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Future<void> _handleGoogleSignIn() async {
     final authController = Get.find<AuthController>();
+    final referralCode = _referralCodeController.text.trim();
+
+    // Save referral code before OAuth redirect
+    if (referralCode.isNotEmpty) {
+      await authController.setPendingReferralCode(referralCode);
+    }
 
     try {
       await authController.signInWithGoogle();
@@ -111,6 +127,8 @@ class _RegisterPageState extends State<RegisterPage> {
                       _buildPasswordField(tokens),
                       const SizedBox(height: AppConstants.spacing16),
                       _buildConfirmPasswordField(tokens),
+                      const SizedBox(height: AppConstants.spacing16),
+                      _buildReferralCodeField(tokens),
                       const SizedBox(height: AppConstants.spacing24),
                       Obx(() => _buildRegisterButton(authController, tokens)),
                       const SizedBox(height: AppConstants.spacing16),
@@ -247,6 +265,64 @@ class _RegisterPageState extends State<RegisterPage> {
             }
             return null;
           },
+        ));
+  }
+
+  Widget _buildReferralCodeField(AuthUiTokens tokens) {
+    return Obx(() => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextFormField(
+              controller: _referralCodeController,
+              textInputAction: TextInputAction.done,
+              style: TextStyle(color: tokens.textColor),
+              cursorColor: tokens.brandColor,
+              decoration: AuthFormStyles.inputDecoration(
+                context: context,
+                label: 'Referral Code (Optional)',
+                hint: 'Enter referral code',
+                icon: Icons.card_giftcard,
+                suffixIcon: _referralValid.value == null
+                    ? null
+                    : Icon(
+                        _referralValid.value! ? Icons.check_circle : Icons.error,
+                        color: _referralValid.value! ? Colors.green : Colors.red,
+                      ),
+              ),
+              onChanged: (value) {
+                // Reset validation state when typing
+                _referralValid.value = null;
+                _referralReferrerName.value = null;
+
+                // Debounced validation
+                _referralDebounce?.cancel();
+                final trimmedValue = value.trim();
+                if (trimmedValue.isNotEmpty) {
+                  _referralDebounce = Timer(const Duration(milliseconds: 500), () async {
+                    try {
+                      final repo = SubscriptionRepository();
+                      final result = await repo.validateReferralCode(trimmedValue);
+                      _referralValid.value = result.valid;
+                      _referralReferrerName.value = result.referrerName;
+                    } catch (e) {
+                      _referralValid.value = false;
+                    }
+                  });
+                }
+              },
+            ),
+            if (_referralValid.value == true && _referralReferrerName.value != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, left: 12),
+                child: Text(
+                  'Referred by ${_referralReferrerName.value}. You both get 1 month free!',
+                  style: TextStyle(
+                    color: Colors.green.shade700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+          ],
         ));
   }
 

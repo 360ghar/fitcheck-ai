@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { toast } from '../components/ui/use-toast';
 import type { User, AuthTokens, AuthResponse } from '../types';
 import * as authApi from '../api/auth';
 import { getCurrentUser } from '../api/users';
@@ -26,7 +27,7 @@ interface AuthState {
 
   // Actions
   login: (email: string, password: string) => Promise<AuthResponse>;
-  register: (email: string, password: string, fullName?: string) => Promise<AuthResponse>;
+  register: (email: string, password: string, fullName?: string, referralCode?: string) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
   clearError: () => void;
@@ -88,13 +89,14 @@ export const useAuthStore = create<AuthState>()(
       },
 
       // Register action
-      register: async (email: string, password: string, fullName?: string) => {
+      register: async (email: string, password: string, fullName?: string, referralCode?: string) => {
         set({ isLoading: true, error: null });
         try {
           const response = await authApi.register({
             email,
             password,
             full_name: fullName,
+            referral_code: referralCode,
           });
           const hasTokens = Boolean(response.access_token && response.refresh_token);
           set({
@@ -228,8 +230,17 @@ export const useAuthStore = create<AuthState>()(
           if (error) throw error;
           if (!session) throw new Error('No session found');
 
+          // Get pending referral code from localStorage (saved before OAuth redirect)
+          const pendingReferralCode = localStorage.getItem('pending_referral_code');
+          if (pendingReferralCode) {
+            localStorage.removeItem('pending_referral_code');
+          }
+
           // Sync profile with backend
-          const { user, is_new_user } = await authApi.syncOAuthProfile(session.access_token);
+          const { user, is_new_user, referral } = await authApi.syncOAuthProfile(
+            session.access_token,
+            pendingReferralCode || undefined
+          );
 
           const tokens = {
             access_token: session.access_token,
@@ -249,6 +260,14 @@ export const useAuthStore = create<AuthState>()(
 
           authApi.storeUser(user);
           resetForcedLogoutFlag();
+
+          // Show toast for successful referral redemption
+          if (referral?.success) {
+            toast({
+              title: 'Referral bonus applied!',
+              description: referral.message || 'You both get 1 month of Pro free.',
+            });
+          }
 
           return { ...tokens, user, is_new_user };
         } catch (error: unknown) {

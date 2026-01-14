@@ -7,6 +7,7 @@ import '../../outfits/controllers/outfit_creation_controller.dart';
 import '../../outfits/controllers/outfit_generation_controller.dart';
 import '../../tryon/controllers/tryon_controller.dart';
 import '../../settings/controllers/settings_controller.dart';
+import '../../subscription/controllers/subscription_controller.dart';
 
 /// Binding for MainShellPage - initializes shell and all tab controllers
 class MainShellBinding extends Bindings {
@@ -18,6 +19,7 @@ class MainShellBinding extends Bindings {
     // Dashboard tab controllers
     Get.lazyPut<DashboardController>(() => DashboardController(), fenix: true);
     Get.lazyPut<SettingsController>(() => SettingsController(), fenix: true);
+    Get.put<SubscriptionController>(SubscriptionController());
 
     // Wardrobe tab
     Get.lazyPut<WardrobeController>(() => WardrobeController(), fenix: true);

@@ -160,13 +160,26 @@ export function clearUser(): void {
  * Sync OAuth profile with backend after OAuth authentication
  * Creates user profile if it doesn't exist
  */
-export async function syncOAuthProfile(accessToken: string): Promise<{
+export async function syncOAuthProfile(accessToken: string, referralCode?: string): Promise<{
   user: User;
   is_new_user: boolean;
+  referral?: {
+    success: boolean;
+    message: string;
+    credit_months: number;
+  };
 }> {
-  const response = await apiClient.post<ApiEnvelope<{ user: User; is_new_user: boolean }>>(
+  const response = await apiClient.post<ApiEnvelope<{
+    user: User;
+    is_new_user: boolean;
+    referral?: {
+      success: boolean;
+      message: string;
+      credit_months: number;
+    };
+  }>>(
     '/api/v1/auth/oauth/sync',
-    {},
+    { referral_code: referralCode },
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,

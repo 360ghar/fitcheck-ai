@@ -294,6 +294,7 @@ export interface RegisterRequest {
   email: string;
   password: string;
   full_name?: string;
+  referral_code?: string;
 }
 
 export interface AuthResponse {
@@ -301,6 +302,11 @@ export interface AuthResponse {
   refresh_token: string;
   user: User;
   requires_email_confirmation?: boolean;
+  referral?: {
+    success: boolean;
+    message: string;
+    credit_months: number;
+  };
 }
 
 // ============================================================================
@@ -797,4 +803,106 @@ export interface BatchExtractionState {
 
   /** Error message if any */
   error: string | null;
+}
+
+// ============================================================================
+// SUBSCRIPTION TYPES
+// ============================================================================
+
+export type PlanType = 'free' | 'pro_monthly' | 'pro_yearly';
+
+export type SubscriptionStatus = 'active' | 'cancelled' | 'past_due' | 'trial';
+
+export interface Subscription {
+  id: UUID;
+  user_id: UUID;
+  plan_type: PlanType;
+  status: SubscriptionStatus;
+  current_period_start: string;
+  current_period_end?: string;
+  cancel_at_period_end: boolean;
+  trial_end?: string;
+  referral_credit_months: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UsageLimits {
+  monthly_extractions: number;
+  monthly_extractions_limit: number;
+  monthly_extractions_remaining: number;
+  monthly_generations: number;
+  monthly_generations_limit: number;
+  monthly_generations_remaining: number;
+  monthly_embeddings: number;
+  monthly_embeddings_limit: number;
+  monthly_embeddings_remaining: number;
+  period_start: string;
+  period_end: string;
+}
+
+export interface SubscriptionWithUsage {
+  subscription: Subscription;
+  usage: UsageLimits;
+}
+
+export interface ReferralCode {
+  code: string;
+  share_url: string;
+  times_used: number;
+  created_at: string;
+}
+
+export interface ReferredUser {
+  email: string;
+  full_name?: string;
+  redeemed_at: string;
+  credit_applied: boolean;
+}
+
+export interface ReferralStats {
+  code: string;
+  share_url: string;
+  times_used: number;
+  credits_earned: number;
+  referred_users: ReferredUser[];
+}
+
+export interface ValidateReferralResponse {
+  valid: boolean;
+  referrer_name?: string;
+  message: string;
+}
+
+export interface RedeemReferralResponse {
+  success: boolean;
+  message: string;
+  credit_months: number;
+}
+
+export interface CheckoutSession {
+  checkout_url: string;
+  session_id: string;
+}
+
+export interface PortalSession {
+  portal_url: string;
+}
+
+export interface PlanDetails {
+  id: string;
+  name: string;
+  price_monthly: number;
+  price_yearly: number;
+  savings_yearly?: number;
+  limits: {
+    monthly_extractions: number;
+    monthly_generations: number;
+    monthly_embeddings: number;
+  };
+  features: string[];
+}
+
+export interface PlansResponse {
+  plans: PlanDetails[];
 }
