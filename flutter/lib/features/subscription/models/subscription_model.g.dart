@@ -6,15 +6,15 @@ part of 'subscription_model.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$SubscriptionModelImpl _$$SubscriptionModelImplFromJson(
-        Map<String, dynamic> json) =>
-    _$SubscriptionModelImpl(
+_SubscriptionModel _$SubscriptionModelFromJson(Map<String, dynamic> json) =>
+    _SubscriptionModel(
       userId: json['user_id'] as String,
-      planType: $enumDecodeNullable(_$PlanTypeEnumMap, json['plan_type']) ??
+      planType:
+          $enumDecodeNullable(_$PlanTypeEnumMap, json['plan_type']) ??
           PlanType.free,
       status:
           $enumDecodeNullable(_$SubscriptionStatusEnumMap, json['status']) ??
-              SubscriptionStatus.active,
+          SubscriptionStatus.active,
       currentPeriodStart: json['current_period_start'] == null
           ? null
           : DateTime.parse(json['current_period_start'] as String),
@@ -29,8 +29,7 @@ _$SubscriptionModelImpl _$$SubscriptionModelImplFromJson(
           (json['referral_credit_months'] as num?)?.toInt() ?? 0,
     );
 
-Map<String, dynamic> _$$SubscriptionModelImplToJson(
-        _$SubscriptionModelImpl instance) =>
+Map<String, dynamic> _$SubscriptionModelToJson(_SubscriptionModel instance) =>
     <String, dynamic>{
       'user_id': instance.userId,
       'plan_type': _$PlanTypeEnumMap[instance.planType]!,
@@ -55,9 +54,8 @@ const _$SubscriptionStatusEnumMap = {
   SubscriptionStatus.pastDue: 'past_due',
 };
 
-_$UsageLimitsModelImpl _$$UsageLimitsModelImplFromJson(
-        Map<String, dynamic> json) =>
-    _$UsageLimitsModelImpl(
+_UsageLimitsModel _$UsageLimitsModelFromJson(Map<String, dynamic> json) =>
+    _UsageLimitsModel(
       monthlyExtractions: (json['monthly_extractions'] as num?)?.toInt() ?? 0,
       monthlyExtractionsLimit:
           (json['monthly_extractions_limit'] as num?)?.toInt() ?? 25,
@@ -72,8 +70,7 @@ _$UsageLimitsModelImpl _$$UsageLimitsModelImplFromJson(
           : DateTime.parse(json['period_end'] as String),
     );
 
-Map<String, dynamic> _$$UsageLimitsModelImplToJson(
-        _$UsageLimitsModelImpl instance) =>
+Map<String, dynamic> _$UsageLimitsModelToJson(_UsageLimitsModel instance) =>
     <String, dynamic>{
       'monthly_extractions': instance.monthlyExtractions,
       'monthly_extractions_limit': instance.monthlyExtractionsLimit,
@@ -83,32 +80,31 @@ Map<String, dynamic> _$$UsageLimitsModelImplToJson(
       'period_end': instance.periodEnd?.toIso8601String(),
     };
 
-_$SubscriptionWithUsageImpl _$$SubscriptionWithUsageImplFromJson(
-        Map<String, dynamic> json) =>
-    _$SubscriptionWithUsageImpl(
-      subscription: SubscriptionModel.fromJson(
-          json['subscription'] as Map<String, dynamic>),
-      usage: UsageLimitsModel.fromJson(json['usage'] as Map<String, dynamic>),
-    );
+_SubscriptionWithUsage _$SubscriptionWithUsageFromJson(
+  Map<String, dynamic> json,
+) => _SubscriptionWithUsage(
+  subscription: SubscriptionModel.fromJson(
+    json['subscription'] as Map<String, dynamic>,
+  ),
+  usage: UsageLimitsModel.fromJson(json['usage'] as Map<String, dynamic>),
+);
 
-Map<String, dynamic> _$$SubscriptionWithUsageImplToJson(
-        _$SubscriptionWithUsageImpl instance) =>
-    <String, dynamic>{
-      'subscription': instance.subscription,
-      'usage': instance.usage,
-    };
+Map<String, dynamic> _$SubscriptionWithUsageToJson(
+  _SubscriptionWithUsage instance,
+) => <String, dynamic>{
+  'subscription': instance.subscription,
+  'usage': instance.usage,
+};
 
-_$ReferralCodeModelImpl _$$ReferralCodeModelImplFromJson(
-        Map<String, dynamic> json) =>
-    _$ReferralCodeModelImpl(
+_ReferralCodeModel _$ReferralCodeModelFromJson(Map<String, dynamic> json) =>
+    _ReferralCodeModel(
       code: json['code'] as String,
       shareUrl: json['share_url'] as String,
       timesUsed: (json['times_used'] as num?)?.toInt() ?? 0,
       referrerName: json['referrer_name'] as String?,
     );
 
-Map<String, dynamic> _$$ReferralCodeModelImplToJson(
-        _$ReferralCodeModelImpl instance) =>
+Map<String, dynamic> _$ReferralCodeModelToJson(_ReferralCodeModel instance) =>
     <String, dynamic>{
       'code': instance.code,
       'share_url': instance.shareUrl,
@@ -116,17 +112,15 @@ Map<String, dynamic> _$$ReferralCodeModelImplToJson(
       'referrer_name': instance.referrerName,
     };
 
-_$ReferralStatsModelImpl _$$ReferralStatsModelImplFromJson(
-        Map<String, dynamic> json) =>
-    _$ReferralStatsModelImpl(
+_ReferralStatsModel _$ReferralStatsModelFromJson(Map<String, dynamic> json) =>
+    _ReferralStatsModel(
       totalReferrals: (json['total_referrals'] as num?)?.toInt() ?? 0,
       successfulReferrals: (json['successful_referrals'] as num?)?.toInt() ?? 0,
       pendingReferrals: (json['pending_referrals'] as num?)?.toInt() ?? 0,
       monthsEarned: (json['months_earned'] as num?)?.toInt() ?? 0,
     );
 
-Map<String, dynamic> _$$ReferralStatsModelImplToJson(
-        _$ReferralStatsModelImpl instance) =>
+Map<String, dynamic> _$ReferralStatsModelToJson(_ReferralStatsModel instance) =>
     <String, dynamic>{
       'total_referrals': instance.totalReferrals,
       'successful_referrals': instance.successfulReferrals,
@@ -134,9 +128,8 @@ Map<String, dynamic> _$$ReferralStatsModelImplToJson(
       'months_earned': instance.monthsEarned,
     };
 
-_$PlanDetailsModelImpl _$$PlanDetailsModelImplFromJson(
-        Map<String, dynamic> json) =>
-    _$PlanDetailsModelImpl(
+_PlanDetailsModel _$PlanDetailsModelFromJson(Map<String, dynamic> json) =>
+    _PlanDetailsModel(
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String?,
@@ -144,14 +137,14 @@ _$PlanDetailsModelImpl _$$PlanDetailsModelImplFromJson(
       priceYearly: (json['price_yearly'] as num?)?.toDouble() ?? 0.0,
       monthlyExtractions: (json['monthly_extractions'] as num?)?.toInt() ?? 25,
       monthlyGenerations: (json['monthly_generations'] as num?)?.toInt() ?? 50,
-      features: (json['features'] as List<dynamic>?)
+      features:
+          (json['features'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
           const [],
     );
 
-Map<String, dynamic> _$$PlanDetailsModelImplToJson(
-        _$PlanDetailsModelImpl instance) =>
+Map<String, dynamic> _$PlanDetailsModelToJson(_PlanDetailsModel instance) =>
     <String, dynamic>{
       'id': instance.id,
       'name': instance.name,
@@ -163,32 +156,32 @@ Map<String, dynamic> _$$PlanDetailsModelImplToJson(
       'features': instance.features,
     };
 
-_$CheckoutSessionModelImpl _$$CheckoutSessionModelImplFromJson(
-        Map<String, dynamic> json) =>
-    _$CheckoutSessionModelImpl(
-      checkoutUrl: json['checkout_url'] as String,
-      sessionId: json['session_id'] as String,
-    );
+_CheckoutSessionModel _$CheckoutSessionModelFromJson(
+  Map<String, dynamic> json,
+) => _CheckoutSessionModel(
+  checkoutUrl: json['checkout_url'] as String,
+  sessionId: json['session_id'] as String,
+);
 
-Map<String, dynamic> _$$CheckoutSessionModelImplToJson(
-        _$CheckoutSessionModelImpl instance) =>
-    <String, dynamic>{
-      'checkout_url': instance.checkoutUrl,
-      'session_id': instance.sessionId,
-    };
+Map<String, dynamic> _$CheckoutSessionModelToJson(
+  _CheckoutSessionModel instance,
+) => <String, dynamic>{
+  'checkout_url': instance.checkoutUrl,
+  'session_id': instance.sessionId,
+};
 
-_$ValidateReferralResponseImpl _$$ValidateReferralResponseImplFromJson(
-        Map<String, dynamic> json) =>
-    _$ValidateReferralResponseImpl(
-      valid: json['valid'] as bool? ?? false,
-      referrerName: json['referrer_name'] as String?,
-      error: json['error'] as String?,
-    );
+_ValidateReferralResponse _$ValidateReferralResponseFromJson(
+  Map<String, dynamic> json,
+) => _ValidateReferralResponse(
+  valid: json['valid'] as bool? ?? false,
+  referrerName: json['referrer_name'] as String?,
+  error: json['error'] as String?,
+);
 
-Map<String, dynamic> _$$ValidateReferralResponseImplToJson(
-        _$ValidateReferralResponseImpl instance) =>
-    <String, dynamic>{
-      'valid': instance.valid,
-      'referrer_name': instance.referrerName,
-      'error': instance.error,
-    };
+Map<String, dynamic> _$ValidateReferralResponseToJson(
+  _ValidateReferralResponse instance,
+) => <String, dynamic>{
+  'valid': instance.valid,
+  'referrer_name': instance.referrerName,
+  'error': instance.error,
+};

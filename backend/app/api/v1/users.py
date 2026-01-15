@@ -150,7 +150,7 @@ async def upload_avatar(
     except (UserNotFoundError, ValidationError, DatabaseError, UnsupportedMediaTypeError, StorageServiceError):
         raise
     except Exception as e:
-        logger.error("Failed to upload avatar", user_id=user_id, filename=file.filename, error=str(e))
+        logger.error("Failed to upload avatar", user_id=user_id, file_name=file.filename, error=str(e))
         raise StorageServiceError("Failed to upload avatar")
 
 

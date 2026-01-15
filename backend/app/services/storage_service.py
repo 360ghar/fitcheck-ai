@@ -75,7 +75,7 @@ class StorageService:
         if len(file_data) > MAX_FILE_SIZE:
             logger.warning(
                 "File size exceeds limit",
-                filename=filename,
+                file_name=filename,
                 file_size=len(file_data),
                 max_size=MAX_FILE_SIZE,
             )
@@ -86,7 +86,7 @@ class StorageService:
         if ext not in ALLOWED_IMAGE_EXTENSIONS:
             logger.warning(
                 "Unsupported file type",
-                filename=filename,
+                file_name=filename,
                 extension=ext,
                 allowed_extensions=list(ALLOWED_IMAGE_EXTENSIONS),
             )
@@ -162,7 +162,7 @@ class StorageService:
             logger.error(
                 "Failed to upload item image",
                 user_id=user_id,
-                filename=filename,
+                file_name=filename,
                 file_size=len(file_data),
                 error=str(e),
             )
@@ -232,7 +232,7 @@ class StorageService:
             logger.error(
                 "Failed to upload outfit image",
                 user_id=user_id,
-                filename=filename,
+                file_name=filename,
                 file_size=len(file_data),
                 generation_type=generation_type,
                 error=str(e),
@@ -287,7 +287,7 @@ class StorageService:
             logger.error(
                 "Failed to upload avatar",
                 user_id=user_id,
-                filename=filename,
+                file_name=filename,
                 file_size=len(file_data),
                 error=str(e),
             )
@@ -496,7 +496,7 @@ class StorageService:
             logger.error(
                 "Failed to upload feedback attachment",
                 user_id=user_id,
-                filename=filename,
+                file_name=filename,
                 file_size=len(file_data),
                 error=str(e),
             )

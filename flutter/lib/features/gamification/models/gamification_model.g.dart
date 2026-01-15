@@ -6,17 +6,16 @@ part of 'gamification_model.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$StreakModelImpl _$$StreakModelImplFromJson(Map<String, dynamic> json) =>
-    _$StreakModelImpl(
-      currentStreak: (json['currentStreak'] as num?)?.toInt() ?? 0,
-      longestStreak: (json['longestStreak'] as num?)?.toInt() ?? 0,
-      nextMilestone: (json['nextMilestone'] as num?)?.toInt(),
-      lastActiveAt: json['last_active_at'] == null
-          ? null
-          : DateTime.parse(json['last_active_at'] as String),
-    );
+_StreakModel _$StreakModelFromJson(Map<String, dynamic> json) => _StreakModel(
+  currentStreak: (json['currentStreak'] as num?)?.toInt() ?? 0,
+  longestStreak: (json['longestStreak'] as num?)?.toInt() ?? 0,
+  nextMilestone: (json['nextMilestone'] as num?)?.toInt(),
+  lastActiveAt: json['last_active_at'] == null
+      ? null
+      : DateTime.parse(json['last_active_at'] as String),
+);
 
-Map<String, dynamic> _$$StreakModelImplToJson(_$StreakModelImpl instance) =>
+Map<String, dynamic> _$StreakModelToJson(_StreakModel instance) =>
     <String, dynamic>{
       'currentStreak': instance.currentStreak,
       'longestStreak': instance.longestStreak,
@@ -24,9 +23,8 @@ Map<String, dynamic> _$$StreakModelImplToJson(_$StreakModelImpl instance) =>
       'last_active_at': instance.lastActiveAt?.toIso8601String(),
     };
 
-_$AchievementModelImpl _$$AchievementModelImplFromJson(
-        Map<String, dynamic> json) =>
-    _$AchievementModelImpl(
+_AchievementModel _$AchievementModelFromJson(Map<String, dynamic> json) =>
+    _AchievementModel(
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String?,
@@ -39,8 +37,7 @@ _$AchievementModelImpl _$$AchievementModelImplFromJson(
           : DateTime.parse(json['unlocked_at'] as String),
     );
 
-Map<String, dynamic> _$$AchievementModelImplToJson(
-        _$AchievementModelImpl instance) =>
+Map<String, dynamic> _$AchievementModelToJson(_AchievementModel instance) =>
     <String, dynamic>{
       'id': instance.id,
       'name': instance.name,
@@ -52,9 +49,8 @@ Map<String, dynamic> _$$AchievementModelImplToJson(
       'unlocked_at': instance.unlockedAt?.toIso8601String(),
     };
 
-_$LeaderboardEntryImpl _$$LeaderboardEntryImplFromJson(
-        Map<String, dynamic> json) =>
-    _$LeaderboardEntryImpl(
+_LeaderboardEntry _$LeaderboardEntryFromJson(Map<String, dynamic> json) =>
+    _LeaderboardEntry(
       userId: json['userId'] as String,
       username: json['username'] as String,
       points: (json['points'] as num).toInt(),
@@ -62,8 +58,7 @@ _$LeaderboardEntryImpl _$$LeaderboardEntryImplFromJson(
       rank: (json['rank'] as num?)?.toInt() ?? 0,
     );
 
-Map<String, dynamic> _$$LeaderboardEntryImplToJson(
-        _$LeaderboardEntryImpl instance) =>
+Map<String, dynamic> _$LeaderboardEntryToJson(_LeaderboardEntry instance) =>
     <String, dynamic>{
       'userId': instance.userId,
       'username': instance.username,

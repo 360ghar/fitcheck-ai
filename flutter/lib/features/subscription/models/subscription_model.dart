@@ -27,7 +27,7 @@ enum SubscriptionStatus {
 
 /// Subscription model
 @freezed
-class SubscriptionModel with _$SubscriptionModel {
+abstract class SubscriptionModel with _$SubscriptionModel {
   const factory SubscriptionModel({
     @JsonKey(name: 'user_id') required String userId,
     @JsonKey(name: 'plan_type') @Default(PlanType.free) PlanType planType,
@@ -45,7 +45,7 @@ class SubscriptionModel with _$SubscriptionModel {
 
 /// Usage limits model
 @freezed
-class UsageLimitsModel with _$UsageLimitsModel {
+abstract class UsageLimitsModel with _$UsageLimitsModel {
   const factory UsageLimitsModel({
     @JsonKey(name: 'monthly_extractions') @Default(0) int monthlyExtractions,
     @JsonKey(name: 'monthly_extractions_limit') @Default(25) int monthlyExtractionsLimit,
@@ -61,7 +61,7 @@ class UsageLimitsModel with _$UsageLimitsModel {
 
 /// Combined subscription with usage
 @freezed
-class SubscriptionWithUsage with _$SubscriptionWithUsage {
+abstract class SubscriptionWithUsage with _$SubscriptionWithUsage {
   const factory SubscriptionWithUsage({
     required SubscriptionModel subscription,
     required UsageLimitsModel usage,
@@ -73,7 +73,7 @@ class SubscriptionWithUsage with _$SubscriptionWithUsage {
 
 /// Referral code model
 @freezed
-class ReferralCodeModel with _$ReferralCodeModel {
+abstract class ReferralCodeModel with _$ReferralCodeModel {
   const factory ReferralCodeModel({
     required String code,
     @JsonKey(name: 'share_url') required String shareUrl,
@@ -87,7 +87,7 @@ class ReferralCodeModel with _$ReferralCodeModel {
 
 /// Referral stats model
 @freezed
-class ReferralStatsModel with _$ReferralStatsModel {
+abstract class ReferralStatsModel with _$ReferralStatsModel {
   const factory ReferralStatsModel({
     @JsonKey(name: 'total_referrals') @Default(0) int totalReferrals,
     @JsonKey(name: 'successful_referrals') @Default(0) int successfulReferrals,
@@ -101,7 +101,7 @@ class ReferralStatsModel with _$ReferralStatsModel {
 
 /// Plan details model
 @freezed
-class PlanDetailsModel with _$PlanDetailsModel {
+abstract class PlanDetailsModel with _$PlanDetailsModel {
   const factory PlanDetailsModel({
     required String id,
     required String name,
@@ -119,7 +119,7 @@ class PlanDetailsModel with _$PlanDetailsModel {
 
 /// Checkout session model
 @freezed
-class CheckoutSessionModel with _$CheckoutSessionModel {
+abstract class CheckoutSessionModel with _$CheckoutSessionModel {
   const factory CheckoutSessionModel({
     @JsonKey(name: 'checkout_url') required String checkoutUrl,
     @JsonKey(name: 'session_id') required String sessionId,
@@ -131,7 +131,7 @@ class CheckoutSessionModel with _$CheckoutSessionModel {
 
 /// Validate referral response
 @freezed
-class ValidateReferralResponse with _$ValidateReferralResponse {
+abstract class ValidateReferralResponse with _$ValidateReferralResponse {
   const factory ValidateReferralResponse({
     @Default(false) bool valid,
     @JsonKey(name: 'referrer_name') String? referrerName,

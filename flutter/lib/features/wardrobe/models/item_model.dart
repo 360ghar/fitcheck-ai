@@ -7,7 +7,7 @@ part 'item_model.g.dart';
 
 /// Item model for wardrobe items
 @freezed
-class ItemModel with _$ItemModel {
+abstract class ItemModel with _$ItemModel {
   const factory ItemModel({
     required String id,
     @JsonKey(name: 'user_id') required String userId,
@@ -38,7 +38,7 @@ class ItemModel with _$ItemModel {
 
 /// Item image model
 @freezed
-class ItemImage with _$ItemImage {
+abstract class ItemImage with _$ItemImage {
   const factory ItemImage({
     required String id,
     required String url,
@@ -54,7 +54,7 @@ class ItemImage with _$ItemImage {
 
 /// Create item request model
 @freezed
-class CreateItemRequest with _$CreateItemRequest {
+abstract class CreateItemRequest with _$CreateItemRequest {
   const factory CreateItemRequest({
     required String name,
     String? description,
@@ -77,7 +77,7 @@ class CreateItemRequest with _$CreateItemRequest {
 
 /// Update item request model
 @freezed
-class UpdateItemRequest with _$UpdateItemRequest {
+abstract class UpdateItemRequest with _$UpdateItemRequest {
   const factory UpdateItemRequest({
     String? name,
     String? description,
@@ -100,7 +100,7 @@ class UpdateItemRequest with _$UpdateItemRequest {
 
 /// Items list response model
 @freezed
-class ItemsListResponse with _$ItemsListResponse {
+abstract class ItemsListResponse with _$ItemsListResponse {
   const factory ItemsListResponse({
     required List<ItemModel> items,
     required int total,
@@ -115,7 +115,7 @@ class ItemsListResponse with _$ItemsListResponse {
 
 /// Extracted item from AI model
 @freezed
-class ExtractedItem with _$ExtractedItem {
+abstract class ExtractedItem with _$ExtractedItem {
   const factory ExtractedItem({
     required String name,
     required Category category,
@@ -132,7 +132,7 @@ class ExtractedItem with _$ExtractedItem {
 
 /// AI extraction response model
 @freezed
-class ExtractionResponse with _$ExtractionResponse {
+abstract class ExtractionResponse with _$ExtractionResponse {
   const factory ExtractionResponse({
     required String id,
     required String status,

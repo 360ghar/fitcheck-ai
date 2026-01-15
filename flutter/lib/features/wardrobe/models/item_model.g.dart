@@ -6,43 +6,41 @@ part of 'item_model.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$ItemModelImpl _$$ItemModelImplFromJson(Map<String, dynamic> json) =>
-    _$ItemModelImpl(
-      id: json['id'] as String,
-      userId: json['user_id'] as String,
-      name: json['name'] as String,
-      description: json['description'] as String?,
-      category: $enumDecode(_$CategoryEnumMap, json['category']),
-      colors:
-          (json['colors'] as List<dynamic>?)?.map((e) => e as String).toList(),
-      brand: json['brand'] as String?,
-      size: json['size'] as String?,
-      material: json['material'] as String?,
-      pattern: json['pattern'] as String?,
-      condition: $enumDecode(_$ConditionEnumMap, json['condition']),
-      price: (json['price'] as num?)?.toDouble(),
-      purchaseDate: json['purchase_date'] == null
-          ? null
-          : DateTime.parse(json['purchase_date'] as String),
-      location: json['location'] as String?,
-      isFavorite: json['is_favorite'] as bool? ?? false,
-      tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList(),
-      itemImages: (json['item_images'] as List<dynamic>?)
-          ?.map((e) => ItemImage.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      wornCount: (json['worn_count'] as num?)?.toInt() ?? 0,
-      lastWornAt: json['last_worn_at'] == null
-          ? null
-          : DateTime.parse(json['last_worn_at'] as String),
-      createdAt: json['created_at'] == null
-          ? null
-          : DateTime.parse(json['created_at'] as String),
-      updatedAt: json['updated_at'] == null
-          ? null
-          : DateTime.parse(json['updated_at'] as String),
-    );
+_ItemModel _$ItemModelFromJson(Map<String, dynamic> json) => _ItemModel(
+  id: json['id'] as String,
+  userId: json['user_id'] as String,
+  name: json['name'] as String,
+  description: json['description'] as String?,
+  category: $enumDecode(_$CategoryEnumMap, json['category']),
+  colors: (json['colors'] as List<dynamic>?)?.map((e) => e as String).toList(),
+  brand: json['brand'] as String?,
+  size: json['size'] as String?,
+  material: json['material'] as String?,
+  pattern: json['pattern'] as String?,
+  condition: $enumDecode(_$ConditionEnumMap, json['condition']),
+  price: (json['price'] as num?)?.toDouble(),
+  purchaseDate: json['purchase_date'] == null
+      ? null
+      : DateTime.parse(json['purchase_date'] as String),
+  location: json['location'] as String?,
+  isFavorite: json['is_favorite'] as bool? ?? false,
+  tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList(),
+  itemImages: (json['item_images'] as List<dynamic>?)
+      ?.map((e) => ItemImage.fromJson(e as Map<String, dynamic>))
+      .toList(),
+  wornCount: (json['worn_count'] as num?)?.toInt() ?? 0,
+  lastWornAt: json['last_worn_at'] == null
+      ? null
+      : DateTime.parse(json['last_worn_at'] as String),
+  createdAt: json['created_at'] == null
+      ? null
+      : DateTime.parse(json['created_at'] as String),
+  updatedAt: json['updated_at'] == null
+      ? null
+      : DateTime.parse(json['updated_at'] as String),
+);
 
-Map<String, dynamic> _$$ItemModelImplToJson(_$ItemModelImpl instance) =>
+Map<String, dynamic> _$ItemModelToJson(_ItemModel instance) =>
     <String, dynamic>{
       'id': instance.id,
       'user_id': instance.userId,
@@ -86,17 +84,16 @@ const _$ConditionEnumMap = {
   Condition.donate: 'donate',
 };
 
-_$ItemImageImpl _$$ItemImageImplFromJson(Map<String, dynamic> json) =>
-    _$ItemImageImpl(
-      id: json['id'] as String,
-      url: json['url'] as String,
-      isPrimary: json['is_primary'] as bool? ?? false,
-      width: (json['width'] as num?)?.toInt(),
-      height: (json['height'] as num?)?.toInt(),
-      blurhash: json['blurhash'] as String?,
-    );
+_ItemImage _$ItemImageFromJson(Map<String, dynamic> json) => _ItemImage(
+  id: json['id'] as String,
+  url: json['url'] as String,
+  isPrimary: json['is_primary'] as bool? ?? false,
+  width: (json['width'] as num?)?.toInt(),
+  height: (json['height'] as num?)?.toInt(),
+  blurhash: json['blurhash'] as String?,
+);
 
-Map<String, dynamic> _$$ItemImageImplToJson(_$ItemImageImpl instance) =>
+Map<String, dynamic> _$ItemImageToJson(_ItemImage instance) =>
     <String, dynamic>{
       'id': instance.id,
       'url': instance.url,
@@ -106,19 +103,20 @@ Map<String, dynamic> _$$ItemImageImplToJson(_$ItemImageImpl instance) =>
       'blurhash': instance.blurhash,
     };
 
-_$CreateItemRequestImpl _$$CreateItemRequestImplFromJson(
-        Map<String, dynamic> json) =>
-    _$CreateItemRequestImpl(
+_CreateItemRequest _$CreateItemRequestFromJson(Map<String, dynamic> json) =>
+    _CreateItemRequest(
       name: json['name'] as String,
       description: json['description'] as String?,
       category: $enumDecode(_$CategoryEnumMap, json['category']),
-      colors:
-          (json['colors'] as List<dynamic>?)?.map((e) => e as String).toList(),
+      colors: (json['colors'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
       brand: json['brand'] as String?,
       size: json['size'] as String?,
       material: json['material'] as String?,
       pattern: json['pattern'] as String?,
-      condition: $enumDecodeNullable(_$ConditionEnumMap, json['condition']) ??
+      condition:
+          $enumDecodeNullable(_$ConditionEnumMap, json['condition']) ??
           Condition.clean,
       price: (json['price'] as num?)?.toDouble(),
       purchaseDate: json['purchase_date'] == null
@@ -128,8 +126,7 @@ _$CreateItemRequestImpl _$$CreateItemRequestImplFromJson(
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList(),
     );
 
-Map<String, dynamic> _$$CreateItemRequestImplToJson(
-        _$CreateItemRequestImpl instance) =>
+Map<String, dynamic> _$CreateItemRequestToJson(_CreateItemRequest instance) =>
     <String, dynamic>{
       'name': instance.name,
       'description': instance.description,
@@ -146,14 +143,14 @@ Map<String, dynamic> _$$CreateItemRequestImplToJson(
       'tags': instance.tags,
     };
 
-_$UpdateItemRequestImpl _$$UpdateItemRequestImplFromJson(
-        Map<String, dynamic> json) =>
-    _$UpdateItemRequestImpl(
+_UpdateItemRequest _$UpdateItemRequestFromJson(Map<String, dynamic> json) =>
+    _UpdateItemRequest(
       name: json['name'] as String?,
       description: json['description'] as String?,
       category: $enumDecodeNullable(_$CategoryEnumMap, json['category']),
-      colors:
-          (json['colors'] as List<dynamic>?)?.map((e) => e as String).toList(),
+      colors: (json['colors'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
       brand: json['brand'] as String?,
       size: json['size'] as String?,
       material: json['material'] as String?,
@@ -167,8 +164,7 @@ _$UpdateItemRequestImpl _$$UpdateItemRequestImplFromJson(
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList(),
     );
 
-Map<String, dynamic> _$$UpdateItemRequestImplToJson(
-        _$UpdateItemRequestImpl instance) =>
+Map<String, dynamic> _$UpdateItemRequestToJson(_UpdateItemRequest instance) =>
     <String, dynamic>{
       'name': instance.name,
       'description': instance.description,
@@ -185,9 +181,8 @@ Map<String, dynamic> _$$UpdateItemRequestImplToJson(
       'tags': instance.tags,
     };
 
-_$ItemsListResponseImpl _$$ItemsListResponseImplFromJson(
-        Map<String, dynamic> json) =>
-    _$ItemsListResponseImpl(
+_ItemsListResponse _$ItemsListResponseFromJson(Map<String, dynamic> json) =>
+    _ItemsListResponse(
       items: (json['items'] as List<dynamic>)
           .map((e) => ItemModel.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -197,8 +192,7 @@ _$ItemsListResponseImpl _$$ItemsListResponseImplFromJson(
       hasMore: json['has_more'] as bool,
     );
 
-Map<String, dynamic> _$$ItemsListResponseImplToJson(
-        _$ItemsListResponseImpl instance) =>
+Map<String, dynamic> _$ItemsListResponseToJson(_ItemsListResponse instance) =>
     <String, dynamic>{
       'items': instance.items,
       'total': instance.total,
@@ -207,19 +201,20 @@ Map<String, dynamic> _$$ItemsListResponseImplToJson(
       'has_more': instance.hasMore,
     };
 
-_$ExtractedItemImpl _$$ExtractedItemImplFromJson(Map<String, dynamic> json) =>
-    _$ExtractedItemImpl(
+_ExtractedItem _$ExtractedItemFromJson(Map<String, dynamic> json) =>
+    _ExtractedItem(
       name: json['name'] as String,
       category: $enumDecode(_$CategoryEnumMap, json['category']),
-      colors:
-          (json['colors'] as List<dynamic>?)?.map((e) => e as String).toList(),
+      colors: (json['colors'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
       material: json['material'] as String?,
       pattern: json['pattern'] as String?,
       description: json['description'] as String?,
       boundingBox: json['bounding_box'] as Map<String, dynamic>?,
     );
 
-Map<String, dynamic> _$$ExtractedItemImplToJson(_$ExtractedItemImpl instance) =>
+Map<String, dynamic> _$ExtractedItemToJson(_ExtractedItem instance) =>
     <String, dynamic>{
       'name': instance.name,
       'category': _$CategoryEnumMap[instance.category]!,
@@ -230,9 +225,8 @@ Map<String, dynamic> _$$ExtractedItemImplToJson(_$ExtractedItemImpl instance) =>
       'bounding_box': instance.boundingBox,
     };
 
-_$ExtractionResponseImpl _$$ExtractionResponseImplFromJson(
-        Map<String, dynamic> json) =>
-    _$ExtractionResponseImpl(
+_ExtractionResponse _$ExtractionResponseFromJson(Map<String, dynamic> json) =>
+    _ExtractionResponse(
       id: json['id'] as String,
       status: json['status'] as String,
       items: (json['items'] as List<dynamic>?)
@@ -245,8 +239,7 @@ _$ExtractionResponseImpl _$$ExtractionResponseImplFromJson(
           : DateTime.parse(json['created_at'] as String),
     );
 
-Map<String, dynamic> _$$ExtractionResponseImplToJson(
-        _$ExtractionResponseImpl instance) =>
+Map<String, dynamic> _$ExtractionResponseToJson(_ExtractionResponse instance) =>
     <String, dynamic>{
       'id': instance.id,
       'status': instance.status,

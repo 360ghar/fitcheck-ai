@@ -57,6 +57,13 @@ class Settings(BaseSettings):
     # Supabase API Keys (sb_publishable_... and sb_secret_...)
     SUPABASE_URL: str
     SUPABASE_PUBLISHABLE_KEY: str
+
+    @field_validator("SUPABASE_URL", mode="after")
+    @classmethod
+    def _ensure_supabase_url_trailing_slash(cls, value: str) -> str:
+        if value and not value.endswith("/"):
+            return value + "/"
+        return value
     SUPABASE_SECRET_KEY: str
     SUPABASE_JWT_SECRET: str
     SUPABASE_STORAGE_BUCKET: str = "fitcheck-images"

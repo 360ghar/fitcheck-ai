@@ -6,15 +6,14 @@ part of 'feedback_model.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$DeviceInfoImpl _$$DeviceInfoImplFromJson(Map<String, dynamic> json) =>
-    _$DeviceInfoImpl(
-      platform: json['platform'] as String?,
-      osVersion: json['os_version'] as String?,
-      deviceModel: json['device_model'] as String?,
-      screenSize: json['screen_size'] as String?,
-    );
+_DeviceInfo _$DeviceInfoFromJson(Map<String, dynamic> json) => _DeviceInfo(
+  platform: json['platform'] as String?,
+  osVersion: json['os_version'] as String?,
+  deviceModel: json['device_model'] as String?,
+  screenSize: json['screen_size'] as String?,
+);
 
-Map<String, dynamic> _$$DeviceInfoImplToJson(_$DeviceInfoImpl instance) =>
+Map<String, dynamic> _$DeviceInfoToJson(_DeviceInfo instance) =>
     <String, dynamic>{
       'platform': instance.platform,
       'os_version': instance.osVersion,
@@ -22,9 +21,8 @@ Map<String, dynamic> _$$DeviceInfoImplToJson(_$DeviceInfoImpl instance) =>
       'screen_size': instance.screenSize,
     };
 
-_$FeedbackResponseImpl _$$FeedbackResponseImplFromJson(
-        Map<String, dynamic> json) =>
-    _$FeedbackResponseImpl(
+_FeedbackResponse _$FeedbackResponseFromJson(Map<String, dynamic> json) =>
+    _FeedbackResponse(
       id: json['id'] as String,
       category: $enumDecode(_$TicketCategoryEnumMap, json['category']),
       subject: json['subject'] as String,
@@ -33,8 +31,7 @@ _$FeedbackResponseImpl _$$FeedbackResponseImplFromJson(
       message: json['message'] as String,
     );
 
-Map<String, dynamic> _$$FeedbackResponseImplToJson(
-        _$FeedbackResponseImpl instance) =>
+Map<String, dynamic> _$FeedbackResponseToJson(_FeedbackResponse instance) =>
     <String, dynamic>{
       'id': instance.id,
       'category': _$TicketCategoryEnumMap[instance.category]!,
@@ -58,8 +55,8 @@ const _$TicketStatusEnumMap = {
   TicketStatus.closed: 'closed',
 };
 
-_$TicketListItemImpl _$$TicketListItemImplFromJson(Map<String, dynamic> json) =>
-    _$TicketListItemImpl(
+_TicketListItem _$TicketListItemFromJson(Map<String, dynamic> json) =>
+    _TicketListItem(
       id: json['id'] as String,
       category: $enumDecode(_$TicketCategoryEnumMap, json['category']),
       subject: json['subject'] as String,
@@ -67,8 +64,7 @@ _$TicketListItemImpl _$$TicketListItemImplFromJson(Map<String, dynamic> json) =>
       createdAt: DateTime.parse(json['created_at'] as String),
     );
 
-Map<String, dynamic> _$$TicketListItemImplToJson(
-        _$TicketListItemImpl instance) =>
+Map<String, dynamic> _$TicketListItemToJson(_TicketListItem instance) =>
     <String, dynamic>{
       'id': instance.id,
       'category': _$TicketCategoryEnumMap[instance.category]!,

@@ -5,7 +5,7 @@ part 'user_model.g.dart';
 
 /// User model
 @freezed
-class UserModel with _$UserModel {
+abstract class UserModel with _$UserModel {
   const factory UserModel({
     required String id,
     required String email,
@@ -23,7 +23,7 @@ class UserModel with _$UserModel {
 
 /// User preferences
 @freezed
-class UserPreferences with _$UserPreferences {
+abstract class UserPreferences with _$UserPreferences {
   const factory UserPreferences({
     @JsonKey(name: 'favorite_colors') List<String>? favoriteColors,
     List<String>? styles,
@@ -38,7 +38,7 @@ class UserPreferences with _$UserPreferences {
 
 /// User settings
 @freezed
-class UserSettings with _$UserSettings {
+abstract class UserSettings with _$UserSettings {
   const factory UserSettings({
     String? location,
     String? timezone,

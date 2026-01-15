@@ -5,7 +5,7 @@ part 'gamification_model.g.dart';
 
 /// Streak model
 @freezed
-class StreakModel with _$StreakModel {
+abstract class StreakModel with _$StreakModel {
   const factory StreakModel({
     @Default(0) int currentStreak,
     @Default(0) int longestStreak,
@@ -19,7 +19,7 @@ class StreakModel with _$StreakModel {
 
 /// Achievement model
 @freezed
-class AchievementModel with _$AchievementModel {
+abstract class AchievementModel with _$AchievementModel {
   const factory AchievementModel({
     required String id,
     required String name,
@@ -37,7 +37,7 @@ class AchievementModel with _$AchievementModel {
 
 /// Leaderboard entry model
 @freezed
-class LeaderboardEntry with _$LeaderboardEntry {
+abstract class LeaderboardEntry with _$LeaderboardEntry {
   const factory LeaderboardEntry({
     required String userId,
     required String username,

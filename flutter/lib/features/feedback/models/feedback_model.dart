@@ -29,7 +29,7 @@ enum TicketStatus {
 
 /// Device info for context
 @freezed
-class DeviceInfo with _$DeviceInfo {
+abstract class DeviceInfo with _$DeviceInfo {
   const factory DeviceInfo({
     String? platform,
     @JsonKey(name: 'os_version') String? osVersion,
@@ -43,7 +43,7 @@ class DeviceInfo with _$DeviceInfo {
 
 /// Response after creating feedback
 @freezed
-class FeedbackResponse with _$FeedbackResponse {
+abstract class FeedbackResponse with _$FeedbackResponse {
   const factory FeedbackResponse({
     required String id,
     required TicketCategory category,
@@ -59,7 +59,7 @@ class FeedbackResponse with _$FeedbackResponse {
 
 /// Ticket in list view
 @freezed
-class TicketListItem with _$TicketListItem {
+abstract class TicketListItem with _$TicketListItem {
   const factory TicketListItem({
     required String id,
     required TicketCategory category,

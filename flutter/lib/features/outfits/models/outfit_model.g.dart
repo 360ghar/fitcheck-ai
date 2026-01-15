@@ -6,40 +6,38 @@ part of 'outfit_model.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$OutfitModelImpl _$$OutfitModelImplFromJson(Map<String, dynamic> json) =>
-    _$OutfitModelImpl(
-      id: json['id'] as String,
-      userId: json['user_id'] as String,
-      name: json['name'] as String,
-      description: json['description'] as String?,
-      itemIds:
-          (json['item_ids'] as List<dynamic>).map((e) => e as String).toList(),
-      style: $enumDecodeNullable(_$StyleEnumMap, json['style']),
-      season: $enumDecodeNullable(_$SeasonEnumMap, json['season']),
-      occasion: json['occasion'] as String?,
-      tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList(),
-      isFavorite: json['is_favorite'] as bool? ?? false,
-      isDraft: json['is_draft'] as bool? ?? false,
-      isPublic: json['is_public'] as bool? ?? false,
-      wornCount: (json['worn_count'] as num?)?.toInt() ?? 0,
-      lastWornAt: json['last_worn_at'] == null
-          ? null
-          : DateTime.parse(json['last_worn_at'] as String),
-      outfitImages: (json['outfit_images'] as List<dynamic>?)
-          ?.map((e) => OutfitImage.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      items: (json['items'] as List<dynamic>?)
-          ?.map((e) => ItemModel.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      createdAt: json['created_at'] == null
-          ? null
-          : DateTime.parse(json['created_at'] as String),
-      updatedAt: json['updated_at'] == null
-          ? null
-          : DateTime.parse(json['updated_at'] as String),
-    );
+_OutfitModel _$OutfitModelFromJson(Map<String, dynamic> json) => _OutfitModel(
+  id: json['id'] as String,
+  userId: json['user_id'] as String,
+  name: json['name'] as String,
+  description: json['description'] as String?,
+  itemIds: (json['item_ids'] as List<dynamic>).map((e) => e as String).toList(),
+  style: $enumDecodeNullable(_$StyleEnumMap, json['style']),
+  season: $enumDecodeNullable(_$SeasonEnumMap, json['season']),
+  occasion: json['occasion'] as String?,
+  tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList(),
+  isFavorite: json['is_favorite'] as bool? ?? false,
+  isDraft: json['is_draft'] as bool? ?? false,
+  isPublic: json['is_public'] as bool? ?? false,
+  wornCount: (json['worn_count'] as num?)?.toInt() ?? 0,
+  lastWornAt: json['last_worn_at'] == null
+      ? null
+      : DateTime.parse(json['last_worn_at'] as String),
+  outfitImages: (json['outfit_images'] as List<dynamic>?)
+      ?.map((e) => OutfitImage.fromJson(e as Map<String, dynamic>))
+      .toList(),
+  items: (json['items'] as List<dynamic>?)
+      ?.map((e) => ItemModel.fromJson(e as Map<String, dynamic>))
+      .toList(),
+  createdAt: json['created_at'] == null
+      ? null
+      : DateTime.parse(json['created_at'] as String),
+  updatedAt: json['updated_at'] == null
+      ? null
+      : DateTime.parse(json['updated_at'] as String),
+);
 
-Map<String, dynamic> _$$OutfitModelImplToJson(_$OutfitModelImpl instance) =>
+Map<String, dynamic> _$OutfitModelToJson(_OutfitModel instance) =>
     <String, dynamic>{
       'id': instance.id,
       'user_id': instance.userId,
@@ -85,21 +83,20 @@ const _$SeasonEnumMap = {
   Season.allSeason: 'allSeason',
 };
 
-_$OutfitImageImpl _$$OutfitImageImplFromJson(Map<String, dynamic> json) =>
-    _$OutfitImageImpl(
-      id: json['id'] as String,
-      url: json['url'] as String,
-      type: json['type'] as String?,
-      pose: json['pose'] as String?,
-      lighting: json['lighting'] as String?,
-      bodyProfileId: json['body_profile_id'] as String?,
-      isGenerated: json['is_generated'] as bool? ?? false,
-      width: (json['width'] as num?)?.toInt(),
-      height: (json['height'] as num?)?.toInt(),
-      blurhash: json['blurhash'] as String?,
-    );
+_OutfitImage _$OutfitImageFromJson(Map<String, dynamic> json) => _OutfitImage(
+  id: json['id'] as String,
+  url: json['url'] as String,
+  type: json['type'] as String?,
+  pose: json['pose'] as String?,
+  lighting: json['lighting'] as String?,
+  bodyProfileId: json['body_profile_id'] as String?,
+  isGenerated: json['is_generated'] as bool? ?? false,
+  width: (json['width'] as num?)?.toInt(),
+  height: (json['height'] as num?)?.toInt(),
+  blurhash: json['blurhash'] as String?,
+);
 
-Map<String, dynamic> _$$OutfitImageImplToJson(_$OutfitImageImpl instance) =>
+Map<String, dynamic> _$OutfitImageToJson(_OutfitImage instance) =>
     <String, dynamic>{
       'id': instance.id,
       'url': instance.url,
@@ -113,38 +110,38 @@ Map<String, dynamic> _$$OutfitImageImplToJson(_$OutfitImageImpl instance) =>
       'blurhash': instance.blurhash,
     };
 
-_$CreateOutfitRequestImpl _$$CreateOutfitRequestImplFromJson(
-        Map<String, dynamic> json) =>
-    _$CreateOutfitRequestImpl(
+_CreateOutfitRequest _$CreateOutfitRequestFromJson(Map<String, dynamic> json) =>
+    _CreateOutfitRequest(
       name: json['name'] as String,
       description: json['description'] as String?,
-      itemIds:
-          (json['itemIds'] as List<dynamic>).map((e) => e as String).toList(),
+      itemIds: (json['itemIds'] as List<dynamic>)
+          .map((e) => e as String)
+          .toList(),
       style: $enumDecodeNullable(_$StyleEnumMap, json['style']),
       season: $enumDecodeNullable(_$SeasonEnumMap, json['season']),
       occasion: json['occasion'] as String?,
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList(),
     );
 
-Map<String, dynamic> _$$CreateOutfitRequestImplToJson(
-        _$CreateOutfitRequestImpl instance) =>
-    <String, dynamic>{
-      'name': instance.name,
-      'description': instance.description,
-      'itemIds': instance.itemIds,
-      'style': _$StyleEnumMap[instance.style],
-      'season': _$SeasonEnumMap[instance.season],
-      'occasion': instance.occasion,
-      'tags': instance.tags,
-    };
+Map<String, dynamic> _$CreateOutfitRequestToJson(
+  _CreateOutfitRequest instance,
+) => <String, dynamic>{
+  'name': instance.name,
+  'description': instance.description,
+  'itemIds': instance.itemIds,
+  'style': _$StyleEnumMap[instance.style],
+  'season': _$SeasonEnumMap[instance.season],
+  'occasion': instance.occasion,
+  'tags': instance.tags,
+};
 
-_$UpdateOutfitRequestImpl _$$UpdateOutfitRequestImplFromJson(
-        Map<String, dynamic> json) =>
-    _$UpdateOutfitRequestImpl(
+_UpdateOutfitRequest _$UpdateOutfitRequestFromJson(Map<String, dynamic> json) =>
+    _UpdateOutfitRequest(
       name: json['name'] as String?,
       description: json['description'] as String?,
-      itemIds:
-          (json['itemIds'] as List<dynamic>?)?.map((e) => e as String).toList(),
+      itemIds: (json['itemIds'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
       style: $enumDecodeNullable(_$StyleEnumMap, json['style']),
       season: $enumDecodeNullable(_$SeasonEnumMap, json['season']),
       occasion: json['occasion'] as String?,
@@ -154,24 +151,23 @@ _$UpdateOutfitRequestImpl _$$UpdateOutfitRequestImplFromJson(
       isPublic: json['isPublic'] as bool?,
     );
 
-Map<String, dynamic> _$$UpdateOutfitRequestImplToJson(
-        _$UpdateOutfitRequestImpl instance) =>
-    <String, dynamic>{
-      'name': instance.name,
-      'description': instance.description,
-      'itemIds': instance.itemIds,
-      'style': _$StyleEnumMap[instance.style],
-      'season': _$SeasonEnumMap[instance.season],
-      'occasion': instance.occasion,
-      'tags': instance.tags,
-      'isFavorite': instance.isFavorite,
-      'isDraft': instance.isDraft,
-      'isPublic': instance.isPublic,
-    };
+Map<String, dynamic> _$UpdateOutfitRequestToJson(
+  _UpdateOutfitRequest instance,
+) => <String, dynamic>{
+  'name': instance.name,
+  'description': instance.description,
+  'itemIds': instance.itemIds,
+  'style': _$StyleEnumMap[instance.style],
+  'season': _$SeasonEnumMap[instance.season],
+  'occasion': instance.occasion,
+  'tags': instance.tags,
+  'isFavorite': instance.isFavorite,
+  'isDraft': instance.isDraft,
+  'isPublic': instance.isPublic,
+};
 
-_$OutfitsListResponseImpl _$$OutfitsListResponseImplFromJson(
-        Map<String, dynamic> json) =>
-    _$OutfitsListResponseImpl(
+_OutfitsListResponse _$OutfitsListResponseFromJson(Map<String, dynamic> json) =>
+    _OutfitsListResponse(
       outfits: (json['outfits'] as List<dynamic>)
           .map((e) => OutfitModel.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -181,37 +177,35 @@ _$OutfitsListResponseImpl _$$OutfitsListResponseImplFromJson(
       hasMore: json['has_more'] as bool,
     );
 
-Map<String, dynamic> _$$OutfitsListResponseImplToJson(
-        _$OutfitsListResponseImpl instance) =>
-    <String, dynamic>{
-      'outfits': instance.outfits,
-      'total': instance.total,
-      'page': instance.page,
-      'limit': instance.limit,
-      'has_more': instance.hasMore,
-    };
+Map<String, dynamic> _$OutfitsListResponseToJson(
+  _OutfitsListResponse instance,
+) => <String, dynamic>{
+  'outfits': instance.outfits,
+  'total': instance.total,
+  'page': instance.page,
+  'limit': instance.limit,
+  'has_more': instance.hasMore,
+};
 
-_$AIGenerationRequestImpl _$$AIGenerationRequestImplFromJson(
-        Map<String, dynamic> json) =>
-    _$AIGenerationRequestImpl(
+_AIGenerationRequest _$AIGenerationRequestFromJson(Map<String, dynamic> json) =>
+    _AIGenerationRequest(
       outfitId: json['outfit_id'] as String,
       pose: json['pose'] as String?,
       lighting: json['lighting'] as String?,
       bodyProfileId: json['body_profile_id'] as String?,
     );
 
-Map<String, dynamic> _$$AIGenerationRequestImplToJson(
-        _$AIGenerationRequestImpl instance) =>
-    <String, dynamic>{
-      'outfit_id': instance.outfitId,
-      'pose': instance.pose,
-      'lighting': instance.lighting,
-      'body_profile_id': instance.bodyProfileId,
-    };
+Map<String, dynamic> _$AIGenerationRequestToJson(
+  _AIGenerationRequest instance,
+) => <String, dynamic>{
+  'outfit_id': instance.outfitId,
+  'pose': instance.pose,
+  'lighting': instance.lighting,
+  'body_profile_id': instance.bodyProfileId,
+};
 
-_$GenerationStatusImpl _$$GenerationStatusImplFromJson(
-        Map<String, dynamic> json) =>
-    _$GenerationStatusImpl(
+_GenerationStatus _$GenerationStatusFromJson(Map<String, dynamic> json) =>
+    _GenerationStatus(
       id: json['id'] as String,
       status: json['status'] as String,
       progress: (json['progress'] as num?)?.toDouble(),
@@ -226,8 +220,7 @@ _$GenerationStatusImpl _$$GenerationStatusImplFromJson(
           : DateTime.parse(json['completed_at'] as String),
     );
 
-Map<String, dynamic> _$$GenerationStatusImplToJson(
-        _$GenerationStatusImpl instance) =>
+Map<String, dynamic> _$GenerationStatusToJson(_GenerationStatus instance) =>
     <String, dynamic>{
       'id': instance.id,
       'status': instance.status,
@@ -239,9 +232,8 @@ Map<String, dynamic> _$$GenerationStatusImplToJson(
       'completed_at': instance.completedAt?.toIso8601String(),
     };
 
-_$SharedOutfitModelImpl _$$SharedOutfitModelImplFromJson(
-        Map<String, dynamic> json) =>
-    _$SharedOutfitModelImpl(
+_SharedOutfitModel _$SharedOutfitModelFromJson(Map<String, dynamic> json) =>
+    _SharedOutfitModel(
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String?,
@@ -258,8 +250,7 @@ _$SharedOutfitModelImpl _$$SharedOutfitModelImplFromJson(
       viewCount: (json['view_count'] as num?)?.toInt() ?? 0,
     );
 
-Map<String, dynamic> _$$SharedOutfitModelImplToJson(
-        _$SharedOutfitModelImpl instance) =>
+Map<String, dynamic> _$SharedOutfitModelToJson(_SharedOutfitModel instance) =>
     <String, dynamic>{
       'id': instance.id,
       'name': instance.name,
@@ -273,33 +264,32 @@ Map<String, dynamic> _$$SharedOutfitModelImplToJson(
       'view_count': instance.viewCount,
     };
 
-_$OutfitVisualizationResultImpl _$$OutfitVisualizationResultImplFromJson(
-        Map<String, dynamic> json) =>
-    _$OutfitVisualizationResultImpl(
-      id: json['id'] as String,
-      status: json['status'] as String,
-      imageUrl: json['imageUrl'] as String?,
-      imageBase64: json['image_base64'] as String?,
-      error: json['error'] as String?,
-      createdAt: json['created_at'] == null
-          ? null
-          : DateTime.parse(json['created_at'] as String),
-    );
+_OutfitVisualizationResult _$OutfitVisualizationResultFromJson(
+  Map<String, dynamic> json,
+) => _OutfitVisualizationResult(
+  id: json['id'] as String,
+  status: json['status'] as String,
+  imageUrl: json['imageUrl'] as String?,
+  imageBase64: json['image_base64'] as String?,
+  error: json['error'] as String?,
+  createdAt: json['created_at'] == null
+      ? null
+      : DateTime.parse(json['created_at'] as String),
+);
 
-Map<String, dynamic> _$$OutfitVisualizationResultImplToJson(
-        _$OutfitVisualizationResultImpl instance) =>
-    <String, dynamic>{
-      'id': instance.id,
-      'status': instance.status,
-      'imageUrl': instance.imageUrl,
-      'image_base64': instance.imageBase64,
-      'error': instance.error,
-      'created_at': instance.createdAt?.toIso8601String(),
-    };
+Map<String, dynamic> _$OutfitVisualizationResultToJson(
+  _OutfitVisualizationResult instance,
+) => <String, dynamic>{
+  'id': instance.id,
+  'status': instance.status,
+  'imageUrl': instance.imageUrl,
+  'image_base64': instance.imageBase64,
+  'error': instance.error,
+  'created_at': instance.createdAt?.toIso8601String(),
+};
 
-_$WearHistoryEntryImpl _$$WearHistoryEntryImplFromJson(
-        Map<String, dynamic> json) =>
-    _$WearHistoryEntryImpl(
+_WearHistoryEntry _$WearHistoryEntryFromJson(Map<String, dynamic> json) =>
+    _WearHistoryEntry(
       id: json['id'] as String,
       outfitId: json['outfit_id'] as String,
       wornAt: DateTime.parse(json['worn_at'] as String),
@@ -309,8 +299,7 @@ _$WearHistoryEntryImpl _$$WearHistoryEntryImplFromJson(
           : DateTime.parse(json['created_at'] as String),
     );
 
-Map<String, dynamic> _$$WearHistoryEntryImplToJson(
-        _$WearHistoryEntryImpl instance) =>
+Map<String, dynamic> _$WearHistoryEntryToJson(_WearHistoryEntry instance) =>
     <String, dynamic>{
       'id': instance.id,
       'outfit_id': instance.outfitId,

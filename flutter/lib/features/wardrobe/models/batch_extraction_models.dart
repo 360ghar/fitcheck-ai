@@ -28,7 +28,7 @@ enum BatchJobStatus {
 
 /// Image in a batch extraction job
 @freezed
-class BatchImage with _$BatchImage {
+abstract class BatchImage with _$BatchImage {
   const factory BatchImage({
     required String id,
     required String filePath,
@@ -45,7 +45,7 @@ class BatchImage with _$BatchImage {
 
 /// Batch extraction job state
 @freezed
-class BatchExtractionJob with _$BatchExtractionJob {
+abstract class BatchExtractionJob with _$BatchExtractionJob {
   const factory BatchExtractionJob({
     required String jobId,
     required BatchJobStatus status,
@@ -66,7 +66,7 @@ class BatchExtractionJob with _$BatchExtractionJob {
 
 /// Extracted item from batch processing with source reference
 @freezed
-class BatchExtractedItem with _$BatchExtractedItem {
+abstract class BatchExtractedItem with _$BatchExtractedItem {
   const factory BatchExtractedItem({
     required String id,
     required String sourceImageId,
@@ -99,7 +99,7 @@ enum BatchItemStatus {
 
 /// SSE event from batch extraction
 @freezed
-class SSEEvent with _$SSEEvent {
+abstract class SSEEvent with _$SSEEvent {
   const factory SSEEvent({
     required String type,
     Map<String, dynamic>? data,
@@ -111,7 +111,7 @@ class SSEEvent with _$SSEEvent {
 
 /// Request to start batch extraction
 @freezed
-class BatchExtractionRequest with _$BatchExtractionRequest {
+abstract class BatchExtractionRequest with _$BatchExtractionRequest {
   const factory BatchExtractionRequest({
     required List<BatchImageInput> images,
     @JsonKey(name: 'auto_generate') @Default(true) bool autoGenerate,
@@ -124,7 +124,7 @@ class BatchExtractionRequest with _$BatchExtractionRequest {
 
 /// Input image for batch extraction request
 @freezed
-class BatchImageInput with _$BatchImageInput {
+abstract class BatchImageInput with _$BatchImageInput {
   const factory BatchImageInput({
     required String id,
     @JsonKey(name: 'image_base64') required String imageBase64,
@@ -136,7 +136,7 @@ class BatchImageInput with _$BatchImageInput {
 
 /// Response from starting batch extraction
 @freezed
-class BatchExtractionResponse with _$BatchExtractionResponse {
+abstract class BatchExtractionResponse with _$BatchExtractionResponse {
   const factory BatchExtractionResponse({
     @JsonKey(name: 'job_id') required String jobId,
     required String status,
@@ -150,7 +150,7 @@ class BatchExtractionResponse with _$BatchExtractionResponse {
 
 /// Status response for batch extraction job
 @freezed
-class BatchJobStatusResponse with _$BatchJobStatusResponse {
+abstract class BatchJobStatusResponse with _$BatchJobStatusResponse {
   const factory BatchJobStatusResponse({
     @JsonKey(name: 'job_id') required String jobId,
     required String status,
@@ -171,7 +171,7 @@ class BatchJobStatusResponse with _$BatchJobStatusResponse {
 
 /// Result for a single image in batch
 @freezed
-class BatchImageResult with _$BatchImageResult {
+abstract class BatchImageResult with _$BatchImageResult {
   const factory BatchImageResult({
     required String id,
     required String status,

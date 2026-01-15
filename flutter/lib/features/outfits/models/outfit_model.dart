@@ -8,7 +8,7 @@ part 'outfit_model.g.dart';
 
 /// Outfit model
 @freezed
-class OutfitModel with _$OutfitModel {
+abstract class OutfitModel with _$OutfitModel {
   const factory OutfitModel({
     required String id,
     @JsonKey(name: 'user_id') required String userId,
@@ -36,7 +36,7 @@ class OutfitModel with _$OutfitModel {
 
 /// Outfit image model
 @freezed
-class OutfitImage with _$OutfitImage {
+abstract class OutfitImage with _$OutfitImage {
   const factory OutfitImage({
     required String id,
     required String url,
@@ -56,7 +56,7 @@ class OutfitImage with _$OutfitImage {
 
 /// Create outfit request model
 @freezed
-class CreateOutfitRequest with _$CreateOutfitRequest {
+abstract class CreateOutfitRequest with _$CreateOutfitRequest {
   const factory CreateOutfitRequest({
     required String name,
     String? description,
@@ -73,7 +73,7 @@ class CreateOutfitRequest with _$CreateOutfitRequest {
 
 /// Update outfit request model
 @freezed
-class UpdateOutfitRequest with _$UpdateOutfitRequest {
+abstract class UpdateOutfitRequest with _$UpdateOutfitRequest {
   const factory UpdateOutfitRequest({
     String? name,
     String? description,
@@ -93,7 +93,7 @@ class UpdateOutfitRequest with _$UpdateOutfitRequest {
 
 /// Outfits list response model
 @freezed
-class OutfitsListResponse with _$OutfitsListResponse {
+abstract class OutfitsListResponse with _$OutfitsListResponse {
   const factory OutfitsListResponse({
     required List<OutfitModel> outfits,
     required int total,
@@ -108,7 +108,7 @@ class OutfitsListResponse with _$OutfitsListResponse {
 
 /// AI generation request model
 @freezed
-class AIGenerationRequest with _$AIGenerationRequest {
+abstract class AIGenerationRequest with _$AIGenerationRequest {
   const factory AIGenerationRequest({
     @JsonKey(name: 'outfit_id') required String outfitId,
     String? pose,
@@ -122,7 +122,7 @@ class AIGenerationRequest with _$AIGenerationRequest {
 
 /// AI generation status model
 @freezed
-class GenerationStatus with _$GenerationStatus {
+abstract class GenerationStatus with _$GenerationStatus {
   const factory GenerationStatus({
     required String id,
     required String status,
@@ -140,7 +140,7 @@ class GenerationStatus with _$GenerationStatus {
 
 /// Shared outfit model
 @freezed
-class SharedOutfitModel with _$SharedOutfitModel {
+abstract class SharedOutfitModel with _$SharedOutfitModel {
   const factory SharedOutfitModel({
     required String id,
     required String name,
@@ -160,7 +160,7 @@ class SharedOutfitModel with _$SharedOutfitModel {
 
 /// Outfit visualization result from AI
 @freezed
-class OutfitVisualizationResult with _$OutfitVisualizationResult {
+abstract class OutfitVisualizationResult with _$OutfitVisualizationResult {
   const factory OutfitVisualizationResult({
     required String id,
     required String status,
@@ -176,7 +176,7 @@ class OutfitVisualizationResult with _$OutfitVisualizationResult {
 
 /// Wear history entry model
 @freezed
-class WearHistoryEntry with _$WearHistoryEntry {
+abstract class WearHistoryEntry with _$WearHistoryEntry {
   const factory WearHistoryEntry({
     required String id,
     @JsonKey(name: 'outfit_id') required String outfitId,

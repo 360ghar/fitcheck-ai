@@ -5,7 +5,7 @@ part 'body_profile_model.g.dart';
 
 /// Body profile model
 @freezed
-class BodyProfileModel with _$BodyProfileModel {
+abstract class BodyProfileModel with _$BodyProfileModel {
   const factory BodyProfileModel({
     required String id,
     @JsonKey(name: 'user_id') required String userId,
@@ -25,7 +25,7 @@ class BodyProfileModel with _$BodyProfileModel {
 
 /// Request model for creating a body profile
 @freezed
-class CreateBodyProfileRequest with _$CreateBodyProfileRequest {
+abstract class CreateBodyProfileRequest with _$CreateBodyProfileRequest {
   const factory CreateBodyProfileRequest({
     required String name,
     @JsonKey(name: 'height_cm') required double heightCm,
@@ -41,7 +41,7 @@ class CreateBodyProfileRequest with _$CreateBodyProfileRequest {
 
 /// Request model for updating a body profile
 @freezed
-class UpdateBodyProfileRequest with _$UpdateBodyProfileRequest {
+abstract class UpdateBodyProfileRequest with _$UpdateBodyProfileRequest {
   const factory UpdateBodyProfileRequest({
     String? name,
     @JsonKey(name: 'height_cm') double? heightCm,

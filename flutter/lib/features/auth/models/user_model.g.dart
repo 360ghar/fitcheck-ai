@@ -6,28 +6,26 @@ part of 'user_model.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$UserModelImpl _$$UserModelImplFromJson(Map<String, dynamic> json) =>
-    _$UserModelImpl(
-      id: json['id'] as String,
-      email: json['email'] as String,
-      fullName: json['fullName'] as String?,
-      avatarUrl: json['avatarUrl'] as String?,
-      createdAt: json['created_at'] == null
-          ? null
-          : DateTime.parse(json['created_at'] as String),
-      updatedAt: json['updated_at'] == null
-          ? null
-          : DateTime.parse(json['updated_at'] as String),
-      preferences: json['preferences'] == null
-          ? null
-          : UserPreferences.fromJson(
-              json['preferences'] as Map<String, dynamic>),
-      settings: json['settings'] == null
-          ? null
-          : UserSettings.fromJson(json['settings'] as Map<String, dynamic>),
-    );
+_UserModel _$UserModelFromJson(Map<String, dynamic> json) => _UserModel(
+  id: json['id'] as String,
+  email: json['email'] as String,
+  fullName: json['fullName'] as String?,
+  avatarUrl: json['avatarUrl'] as String?,
+  createdAt: json['created_at'] == null
+      ? null
+      : DateTime.parse(json['created_at'] as String),
+  updatedAt: json['updated_at'] == null
+      ? null
+      : DateTime.parse(json['updated_at'] as String),
+  preferences: json['preferences'] == null
+      ? null
+      : UserPreferences.fromJson(json['preferences'] as Map<String, dynamic>),
+  settings: json['settings'] == null
+      ? null
+      : UserSettings.fromJson(json['settings'] as Map<String, dynamic>),
+);
 
-Map<String, dynamic> _$$UserModelImplToJson(_$UserModelImpl instance) =>
+Map<String, dynamic> _$UserModelToJson(_UserModel instance) =>
     <String, dynamic>{
       'id': instance.id,
       'email': instance.email,
@@ -39,24 +37,21 @@ Map<String, dynamic> _$$UserModelImplToJson(_$UserModelImpl instance) =>
       'settings': instance.settings,
     };
 
-_$UserPreferencesImpl _$$UserPreferencesImplFromJson(
-        Map<String, dynamic> json) =>
-    _$UserPreferencesImpl(
-      favoriteColors: (json['favorite_colors'] as List<dynamic>?)
-          ?.map((e) => e as String)
-          .toList(),
-      styles:
-          (json['styles'] as List<dynamic>?)?.map((e) => e as String).toList(),
-      brands:
-          (json['brands'] as List<dynamic>?)?.map((e) => e as String).toList(),
-      occasions: (json['occasions'] as List<dynamic>?)
-          ?.map((e) => e as String)
-          .toList(),
-      additionalData: json['additionalData'] as Map<String, dynamic>?,
-    );
+_UserPreferences _$UserPreferencesFromJson(
+  Map<String, dynamic> json,
+) => _UserPreferences(
+  favoriteColors: (json['favorite_colors'] as List<dynamic>?)
+      ?.map((e) => e as String)
+      .toList(),
+  styles: (json['styles'] as List<dynamic>?)?.map((e) => e as String).toList(),
+  brands: (json['brands'] as List<dynamic>?)?.map((e) => e as String).toList(),
+  occasions: (json['occasions'] as List<dynamic>?)
+      ?.map((e) => e as String)
+      .toList(),
+  additionalData: json['additionalData'] as Map<String, dynamic>?,
+);
 
-Map<String, dynamic> _$$UserPreferencesImplToJson(
-        _$UserPreferencesImpl instance) =>
+Map<String, dynamic> _$UserPreferencesToJson(_UserPreferences instance) =>
     <String, dynamic>{
       'favorite_colors': instance.favoriteColors,
       'styles': instance.styles,
@@ -65,8 +60,8 @@ Map<String, dynamic> _$$UserPreferencesImplToJson(
       'additionalData': instance.additionalData,
     };
 
-_$UserSettingsImpl _$$UserSettingsImplFromJson(Map<String, dynamic> json) =>
-    _$UserSettingsImpl(
+_UserSettings _$UserSettingsFromJson(Map<String, dynamic> json) =>
+    _UserSettings(
       location: json['location'] as String?,
       timezone: json['timezone'] as String?,
       units: json['units'] as String?,
@@ -75,7 +70,7 @@ _$UserSettingsImpl _$$UserSettingsImplFromJson(Map<String, dynamic> json) =>
       additionalData: json['additionalData'] as Map<String, dynamic>?,
     );
 
-Map<String, dynamic> _$$UserSettingsImplToJson(_$UserSettingsImpl instance) =>
+Map<String, dynamic> _$UserSettingsToJson(_UserSettings instance) =>
     <String, dynamic>{
       'location': instance.location,
       'timezone': instance.timezone,
