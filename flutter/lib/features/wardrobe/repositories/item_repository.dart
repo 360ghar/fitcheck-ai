@@ -84,8 +84,11 @@ class ItemRepository {
   }) async {
     try {
       final created = await createItem(request);
-      await uploadImages(created.id, [image]);
-      return getItem(created.id);
+      final uploadedImages = await uploadImages(created.id, [image]);
+      if (uploadedImages.isNotEmpty) {
+        return created.copyWith(itemImages: uploadedImages);
+      }
+      return created;
     } on DioException catch (e) {
       throw handleDioException(e);
     }
@@ -306,11 +309,16 @@ class ItemRepository {
   }
 
   /// Get AI generation status
+  /// Note: The backend extraction API is synchronous, so polling is not needed.
+  /// This method exists for compatibility but should not be called in normal flow.
   Future<ExtractionResponse> getGenerationStatus(String generationId) async {
+    // Backend extraction is synchronous - return completed status
+    // to prevent polling from triggering errors
     return ExtractionResponse(
       id: generationId,
-      status: 'failed',
-      error: 'Extraction polling is not supported',
+      status: 'completed',
+      items: [],
+      error: null,
     );
   }
 
@@ -468,7 +476,9 @@ class ItemRepository {
             .map(_mapExtractedItem)
             .toList()
         : <ExtractedItem>[];
-    final status = data['status']?.toString() ?? 'completed';
+    // Backend extraction is synchronous - always set completed when we have a response
+    // This prevents the broken polling flow from triggering
+    final status = 'completed';
     final id = data['id']?.toString() ??
         data['extraction_id']?.toString() ??
         'extraction-${DateTime.now().millisecondsSinceEpoch}';

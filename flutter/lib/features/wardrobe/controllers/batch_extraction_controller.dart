@@ -13,6 +13,7 @@ import '../models/batch_extraction_models.dart';
 import '../models/item_model.dart';
 import '../repositories/batch_extraction_repository.dart';
 import '../repositories/item_repository.dart';
+import '../utils/extraction_image_utils.dart';
 
 /// Controller for batch image extraction flow
 ///
@@ -542,10 +543,12 @@ class BatchExtractionController extends GetxController {
           (img) => img.id == item.sourceImageId,
         );
 
+        final imageFile = await _resolveImageFileForItem(item, sourceImage);
+
         ItemModel created;
-        if (sourceImage != null) {
+        if (imageFile != null) {
           created = await _itemRepo.createItemWithImage(
-            image: File(sourceImage.filePath),
+            image: imageFile,
             request: request,
           );
         } else {
@@ -561,6 +564,28 @@ class BatchExtractionController extends GetxController {
     }
 
     return savedItems;
+  }
+
+  Future<File?> _resolveImageFileForItem(
+    BatchExtractedItem item,
+    BatchImage? sourceImage,
+  ) async {
+    if (sourceImage == null) {
+      return null;
+    }
+
+    final originalFile = File(sourceImage.filePath);
+    final boundingBox = item.boundingBox;
+    if (boundingBox == null || boundingBox.isEmpty) {
+      return originalFile;
+    }
+
+    final croppedFile = await ExtractionImageUtils.cropToTempFile(
+      originalFile,
+      boundingBox,
+      filenameSuffix: '${item.id}_${DateTime.now().millisecondsSinceEpoch}',
+    );
+    return croppedFile ?? originalFile;
   }
 
   /// Reset the controller state

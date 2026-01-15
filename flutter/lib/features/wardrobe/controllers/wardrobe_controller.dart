@@ -132,6 +132,20 @@ class WardrobeController extends GetxController {
     }
   }
 
+  /// Add newly created items to the list
+  void addItems(List<ItemModel> newItems) {
+    if (newItems.isEmpty) return;
+
+    final existingIds = items.map((item) => item.id).toSet();
+    final uniqueItems =
+        newItems.where((item) => !existingIds.contains(item.id)).toList();
+    if (uniqueItems.isEmpty) return;
+
+    items.insertAll(0, uniqueItems);
+    totalItems.value += uniqueItems.length;
+    applyFilters();
+  }
+
   /// Apply filters and sort
   void applyFilters() {
     filteredItems.value = items.where((item) {

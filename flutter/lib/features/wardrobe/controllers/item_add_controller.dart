@@ -1,11 +1,10 @@
-import 'dart:async';
 import 'dart:io';
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../../domain/enums/condition.dart' as app_condition;
 import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
+import '../utils/extraction_image_utils.dart';
+import 'wardrobe_controller.dart';
 
 /// Controller for item add page
 /// Handles image processing, AI extraction, and item creation
@@ -17,15 +16,13 @@ class ItemAddController extends GetxController {
   final RxBool isProcessing = false.obs;
   final Rx<ExtractionResponse?> extractionResult = Rx<ExtractionResponse?>(null);
   final RxBool showManualEntry = false.obs;
+  final RxBool isSaving = false.obs;
   final RxList<ItemModel> createdItems = <ItemModel>[].obs;
   final RxString error = ''.obs;
 
-  // Polling timer for extraction status
-  Timer? _pollingTimer;
 
   @override
   void onClose() {
-    _pollingTimer?.cancel();
     super.onClose();
   }
 
@@ -36,26 +33,27 @@ class ItemAddController extends GetxController {
     error.value = '';
 
     try {
-      // Start AI extraction
+      // Start AI extraction - backend returns results synchronously
       final response = await _itemRepository.extractItemsFromImage(image);
       extractionResult.value = response;
+      extractionResult.refresh(); // Force reactivity for complex object
 
-      // If status is processing, poll for completion
-      if (response.status == 'processing' || response.status == 'pending') {
-        _pollExtractionStatus(response.id);
-      } else if (response.status == 'completed' && response.items != null) {
-        isProcessing.value = false;
-      } else if (response.status == 'failed') {
-        isProcessing.value = false;
-        error.value = response.error ?? 'Extraction failed';
+      // Backend extraction is synchronous, so we always get the result immediately
+      isProcessing.value = false;
+
+      // Check if extraction returned any items
+      if (response.items == null || response.items!.isEmpty) {
+        // No items detected - show manual entry option
         Get.snackbar(
-          'Extraction Failed',
-          error.value,
+          'No Items Detected',
+          'AI could not detect items. You can add them manually.',
           snackPosition: SnackPosition.TOP,
+          duration: const Duration(seconds: 3),
         );
       }
     } catch (e) {
       isProcessing.value = false;
+      extractionResult.value = null; // Clear on error
       error.value = e.toString().replaceAll('Exception: ', '');
       Get.snackbar(
         'Error',
@@ -65,85 +63,109 @@ class ItemAddController extends GetxController {
     }
   }
 
-  /// Poll extraction status until completion
-  void _pollExtractionStatus(String generationId) async {
-    _pollingTimer?.cancel();
-    var attempts = 0;
-    const maxAttempts = 60; // ~2 minutes
-    _pollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
-      try {
-        attempts++;
-        if (attempts >= maxAttempts) {
-          timer.cancel();
-          isProcessing.value = false;
-          error.value = 'Extraction is taking longer than expected';
-          Get.snackbar(
-            'Taking Too Long',
-            error.value,
-            snackPosition: SnackPosition.TOP,
-          );
-          return;
-        }
-        final status = await _itemRepository.getGenerationStatus(generationId);
-        extractionResult.value = status;
+  /// Crop image for a specific item using its bounding box
+  /// Returns original image if no bounding box is available
+  Future<File> _cropImageForItem(File originalImage, ExtractedItem item, int index) async {
+    if (item.boundingBox == null || item.boundingBox!.isEmpty) {
+      return originalImage;
+    }
 
-        if (status.status == 'completed') {
-          timer.cancel();
-          isProcessing.value = false;
-        } else if (status.status == 'failed') {
-          timer.cancel();
-          isProcessing.value = false;
-          error.value = status.error ?? 'Extraction failed';
-          Get.snackbar(
-            'Extraction Failed',
-            error.value,
-            snackPosition: SnackPosition.TOP,
-          );
-        }
-      } catch (e) {
-        timer.cancel();
-        isProcessing.value = false;
+    try {
+      final croppedFile = await ExtractionImageUtils.cropToTempFile(
+        originalImage,
+        item.boundingBox,
+        filenameSuffix: '${DateTime.now().millisecondsSinceEpoch}_$index',
+      );
+      if (croppedFile == null) {
+        return originalImage;
       }
-    });
+
+      return croppedFile;
+    } catch (e) {
+      return originalImage;
+    }
   }
 
   /// Save extracted items to wardrobe
+  /// Each item gets its own cropped image based on bounding box
   Future<void> saveExtractedItems(List<ExtractedItem> items) async {
-    if (selectedImage.value == null) return;
+    if (selectedImage.value == null || items.isEmpty) return;
+    if (isSaving.value) return;
+
+    isSaving.value = true;
+    error.value = '';
 
     try {
-      for (final item in items) {
-        final request = CreateItemRequest(
-          name: item.name,
-          category: item.category,
-          colors: item.colors,
-          material: item.material,
-          pattern: item.pattern,
-          description: item.description,
-          condition: app_condition.Condition.clean,
-        );
+      final futures = <Future<ItemModel?>>[];
+      for (int i = 0; i < items.length; i++) {
+        futures.add(_createItemFromExtraction(items[i], i));
+      }
 
-        final created = await _itemRepository.createItemWithImage(
-          image: selectedImage.value!,
-          request: request,
-        );
+      final results = await Future.wait(futures, eagerError: false);
+      final created = results.whereType<ItemModel>().toList();
+      createdItems.assignAll(created);
 
-        createdItems.add(created);
+      if (created.isEmpty) {
+        Get.snackbar(
+          'Error',
+          'Unable to save items. Please try again.',
+          snackPosition: SnackPosition.TOP,
+        );
+        return;
+      }
+
+      if (Get.isRegistered<WardrobeController>()) {
+        Get.find<WardrobeController>().addItems(created);
       }
 
       Get.back(); // Close item add page
+
+      final failedCount = items.length - created.length;
+      final message = failedCount > 0
+          ? 'Added ${created.length} of ${items.length} items. ${failedCount} failed.'
+          : '${created.length} item(s) added to your wardrobe';
+
       Get.snackbar(
         'Success',
-        '${items.length} item(s) added to your wardrobe',
+        message,
         snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 2),
       );
     } catch (e) {
+      error.value = e.toString().replaceAll('Exception: ', '');
       Get.snackbar(
         'Error',
-        e.toString().replaceAll('Exception: ', ''),
+        error.value,
         snackPosition: SnackPosition.TOP,
       );
+    } finally {
+      isSaving.value = false;
+    }
+  }
+
+  Future<ItemModel?> _createItemFromExtraction(
+    ExtractedItem item,
+    int index,
+  ) async {
+    try {
+      final croppedImage =
+          await _cropImageForItem(selectedImage.value!, item, index);
+      final request = CreateItemRequest(
+        name: item.name,
+        category: item.category,
+        colors: item.colors,
+        material: item.material,
+        pattern: item.pattern,
+        description: item.description,
+        condition: app_condition.Condition.clean,
+      );
+
+      return await _itemRepository.createItemWithImage(
+        image: croppedImage,
+        request: request,
+      );
+    } catch (e) {
+      return null;
     }
   }
 
@@ -158,7 +180,8 @@ class ItemAddController extends GetxController {
     isProcessing.value = false;
     extractionResult.value = null;
     showManualEntry.value = false;
+    isSaving.value = false;
     error.value = '';
-    _pollingTimer?.cancel();
   }
 }
+

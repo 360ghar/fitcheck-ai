@@ -79,7 +79,7 @@ class _SplashPageState extends State<SplashPage>
 
   Future<void> _initializeApp() async {
     final authController = Get.find<AuthController>();
-    const minSplashDuration = Duration(milliseconds: 900);
+    const minSplashDuration = Duration(seconds: 3);
     await Future.wait([
       authController.initializeAuth(),
       Future.delayed(minSplashDuration),

@@ -70,22 +70,24 @@ class _ItemAddPageState extends State<ItemAddPage> {
       body: AppPageBackground(
         child: SafeArea(
           child: Obx(() {
-            // Show AI extraction when processing
-            if (controller.isProcessing.value && controller.selectedImage.value != null) {
+            if (controller.showManualEntry.value) {
+              return ManualEntryForm(
+                imageFile: controller.selectedImage.value,
+              );
+            }
+
+            // Show AI extraction when processing OR when we have extraction results
+            // This ensures the widget stays visible after extraction completes
+            if (controller.selectedImage.value != null &&
+                (controller.isProcessing.value || controller.extractionResult.value != null)) {
               return AIExtractionWidget(
                 imageFile: controller.selectedImage.value!,
                 extractionResult: controller.extractionResult.value,
                 isProcessing: controller.isProcessing.value,
+                isSaving: controller.isSaving.value,
                 onRetake: () => controller.reset(),
                 onSaveExtracted: (items) => controller.saveExtractedItems(items),
                 onManualEntry: () => controller.proceedToManualEntry(),
-              );
-            }
-
-            // Show manual entry form when user skipped AI
-            if (controller.showManualEntry.value) {
-              return ManualEntryForm(
-                imageFile: controller.selectedImage.value,
               );
             }
 

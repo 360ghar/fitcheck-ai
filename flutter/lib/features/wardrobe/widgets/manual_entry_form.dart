@@ -6,7 +6,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../../../domain/enums/condition.dart' as domain;
-import '../controllers/item_add_controller.dart';
+import '../controllers/wardrobe_controller.dart';
 import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
 
@@ -57,8 +57,6 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
     isSaving.value = true;
 
     try {
-      final controller = Get.find<ItemAddController>();
-
       // Use provided image or additional image
       final imageToUse = widget.imageFile ?? additionalImage.value;
 
@@ -105,6 +103,10 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
         image: imageToUse,
         request: request,
       );
+
+      if (Get.isRegistered<WardrobeController>()) {
+        Get.find<WardrobeController>().addItems([created]);
+      }
 
       Get.back(); // Close form
       Get.back(); // Close item add page
