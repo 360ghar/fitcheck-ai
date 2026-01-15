@@ -64,9 +64,10 @@ class OutfitRepository {
   /// Create new outfit
   Future<OutfitModel> createOutfit(CreateOutfitRequest request) async {
     try {
+      final payload = _normalizeOutfitPayload(request.toJson());
       final response = await _apiClient.post(
         ApiConstants.outfits,
-        data: request.toJson(),
+        data: payload,
       );
       return _parseOutfit(response.data);
     } on DioException catch (e) {
@@ -80,9 +81,19 @@ class OutfitRepository {
     UpdateOutfitRequest request,
   ) async {
     try {
+      final payload = _normalizeOutfitPayload(
+        request.toJson(),
+        allowNullKeys: {
+          'description',
+          'occasion',
+          'tags',
+          'style',
+          'season',
+        },
+      );
       final response = await _apiClient.put(
         '${ApiConstants.outfits}/$outfitId',
-        data: request.toJson(),
+        data: payload,
       );
       return _parseOutfit(response.data);
     } on DioException catch (e) {
@@ -381,6 +392,33 @@ class OutfitRepository {
           .toList();
     }
     return normalized;
+  }
+
+  Map<String, dynamic> _normalizeOutfitPayload(
+    Map<String, dynamic> payload, {
+    Set<String>? allowNullKeys,
+  }) {
+    final normalized = Map<String, dynamic>.from(payload);
+    _remapKey(normalized, 'itemIds', 'item_ids');
+    _remapKey(normalized, 'isFavorite', 'is_favorite');
+    _remapKey(normalized, 'isDraft', 'is_draft');
+    _remapKey(normalized, 'isPublic', 'is_public');
+    if (allowNullKeys == null || allowNullKeys.isEmpty) {
+      normalized.removeWhere((key, value) => value == null);
+    } else {
+      normalized.removeWhere(
+        (key, value) => value == null && !allowNullKeys.contains(key),
+      );
+    }
+    return normalized;
+  }
+
+  void _remapKey(Map<String, dynamic> payload, String from, String to) {
+    if (!payload.containsKey(from)) return;
+    final value = payload.remove(from);
+    if (value != null) {
+      payload[to] = value;
+    }
   }
 
   Map<String, dynamic> _normalizeOutfitImageJson(Map<String, dynamic> json) {

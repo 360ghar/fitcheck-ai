@@ -521,9 +521,7 @@ class OutfitBuilderPage extends StatelessWidget {
 
   Widget _buildBottomBar(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
     return Obx(() {
-      if (controller.selectedItems.isEmpty) {
-        return const SizedBox.shrink();
-      }
+      final hasSelection = controller.selectedItems.isNotEmpty;
 
       return Container(
         padding: EdgeInsets.only(
@@ -547,13 +545,14 @@ class OutfitBuilderPage extends StatelessWidget {
                 vertical: AppConstants.spacing8,
               ),
               decoration: BoxDecoration(
-                color: tokens.brandColor.withOpacity(0.1),
+                color: (hasSelection ? tokens.brandColor : tokens.textMuted)
+                    .withOpacity(0.12),
                 borderRadius: BorderRadius.circular(AppConstants.radius8),
               ),
               child: Text(
                 '${controller.selectedItems.length} item${controller.selectedItems.length > 1 ? 's' : ''}',
                 style: TextStyle(
-                  color: tokens.brandColor,
+                  color: hasSelection ? tokens.brandColor : tokens.textMuted,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -564,7 +563,7 @@ class OutfitBuilderPage extends StatelessWidget {
             // Generate AI Preview button
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: controller.isGenerating.value
+                onPressed: controller.isGenerating.value || !hasSelection
                     ? null
                     : () => controller.generateAIOutfit(),
                 icon: controller.isGenerating.value
@@ -576,7 +575,9 @@ class OutfitBuilderPage extends StatelessWidget {
                     : const Icon(Icons.auto_awesome),
                 label: Text(controller.isGenerating.value
                     ? 'Generating...'
-                    : 'Generate AI Preview'),
+                    : hasSelection
+                        ? 'Generate AI Preview'
+                        : 'Select items to generate'),
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size.fromHeight(48),
                 ),

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
 
 /// Base exception class for all app exceptions
@@ -368,6 +369,23 @@ AppException handleDioException(DioException error) {
       );
 
     case DioExceptionType.connectionError:
+      final rootError = error.error;
+      if (rootError is SocketException) {
+        final message = rootError.message.toLowerCase();
+        if (message.contains('connection refused')) {
+          return const NetworkException(
+            message: 'Unable to reach server. Please try again shortly.',
+            errorCode: 'CONNECTION_REFUSED',
+          );
+        }
+        if (message.contains('failed host lookup') ||
+            message.contains('name or service not known')) {
+          return const NetworkException(
+            message: 'Server address unavailable. Please try again.',
+            errorCode: 'HOST_LOOKUP_FAILED',
+          );
+        }
+      }
       return NetworkException.noConnection();
 
     case DioExceptionType.unknown:

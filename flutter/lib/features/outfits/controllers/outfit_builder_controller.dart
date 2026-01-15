@@ -6,6 +6,7 @@ import '../models/outfit_model.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../repositories/outfit_repository.dart';
 import '../../wardrobe/repositories/item_repository.dart';
+import 'outfit_list_controller.dart';
 
 /// Controller for outfit builder
 /// Manages outfit creation, item selection, and AI generation
@@ -229,6 +230,10 @@ class OutfitBuilderController extends GetxController {
       // Upload generated image if available
       if (generatedImageUrl.value.isNotEmpty) {
         // Could save the generated image here
+      }
+
+      if (Get.isRegistered<OutfitListController>()) {
+        Get.find<OutfitListController>().addOutfit(outfit);
       }
 
       Get.back(result: outfit);

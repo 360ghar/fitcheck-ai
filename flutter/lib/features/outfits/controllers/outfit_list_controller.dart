@@ -367,7 +367,13 @@ class OutfitListController extends GetxController {
 
   /// Add newly created outfit to list
   void addOutfit(OutfitModel outfit) {
-    outfits.insert(0, outfit);
+    final index = outfits.indexWhere((o) => o.id == outfit.id);
+    if (index == -1) {
+      outfits.insert(0, outfit);
+      totalOutfits.value += 1;
+    } else {
+      outfits[index] = outfit;
+    }
     applyFilters();
   }
 
