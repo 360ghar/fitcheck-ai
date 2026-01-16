@@ -94,6 +94,39 @@ class ApiClient {
     );
   }
 
+  /// Make a POST request with extended timeout for AI operations
+  /// AI operations can take longer, so we use a 5-minute connection timeout
+  Future<Response<T>> postWithExtendedTimeout<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
+  }) async {
+    // Create options with extended timeout for AI operations
+    final extendedOptions = Options(
+      sendTimeout: const Duration(minutes: 5),
+      receiveTimeout: const Duration(minutes: 10),
+      // Note: connectTimeout is set via BaseOptions in the Dio instance
+      // We override sendTimeout and receiveTimeout here
+      headers: options?.headers,
+      contentType: options?.contentType,
+      responseType: options?.responseType,
+    );
+
+    return dio.post<T>(
+      path,
+      data: data,
+      queryParameters: queryParameters,
+      options: extendedOptions,
+      cancelToken: cancelToken,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
+    );
+  }
+
   /// Make a PUT request
   Future<Response<T>> put<T>(
     String path, {

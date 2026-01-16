@@ -248,3 +248,48 @@ Map<String, dynamic> _$ExtractionResponseToJson(_ExtractionResponse instance) =>
       'error': instance.error,
       'created_at': instance.createdAt?.toIso8601String(),
     };
+
+_BoundingBox _$BoundingBoxFromJson(Map<String, dynamic> json) => _BoundingBox(
+  x: (json['x'] as num).toDouble(),
+  y: (json['y'] as num).toDouble(),
+  width: (json['width'] as num).toDouble(),
+  height: (json['height'] as num).toDouble(),
+);
+
+Map<String, dynamic> _$BoundingBoxToJson(_BoundingBox instance) =>
+    <String, dynamic>{
+      'x': instance.x,
+      'y': instance.y,
+      'width': instance.width,
+      'height': instance.height,
+    };
+
+_ProductImageGenerationRequest _$ProductImageGenerationRequestFromJson(
+  Map<String, dynamic> json,
+) => _ProductImageGenerationRequest(
+  itemDescription: json['itemDescription'] as String,
+  category: json['category'] as String,
+  subCategory: json['subCategory'] as String?,
+  colors: (json['colors'] as List<dynamic>?)?.map((e) => e as String).toList(),
+  material: json['material'] as String?,
+  pattern: json['pattern'] as String?,
+  background: json['background'] as String? ?? 'white',
+  viewAngle: json['viewAngle'] as String? ?? 'front',
+  includeShadows: json['includeShadows'] as bool? ?? false,
+  saveToStorage: json['saveToStorage'] as bool? ?? false,
+);
+
+Map<String, dynamic> _$ProductImageGenerationRequestToJson(
+  _ProductImageGenerationRequest instance,
+) => <String, dynamic>{
+  'itemDescription': instance.itemDescription,
+  'category': instance.category,
+  'subCategory': instance.subCategory,
+  'colors': instance.colors,
+  'material': instance.material,
+  'pattern': instance.pattern,
+  'background': instance.background,
+  'viewAngle': instance.viewAngle,
+  'includeShadows': instance.includeShadows,
+  'saveToStorage': instance.saveToStorage,
+};

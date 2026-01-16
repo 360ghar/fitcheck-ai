@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
@@ -27,24 +28,27 @@ class _OutfitsPageState extends State<OutfitsPage> {
     return Scaffold(
       body: AppPageBackground(
         child: SafeArea(
-          child: CustomScrollView(
-            slivers: [
-              _buildAppBar(),
-              SliverPadding(
-                padding: const EdgeInsets.all(AppConstants.spacing16),
-                sliver: Obx(() {
-                  if (controller.isLoading.value && controller.outfits.isEmpty) {
-                    return _buildLoadingGrid();
-                  }
+          child: RefreshIndicator(
+            onRefresh: () => controller.fetchOutfits(refresh: true),
+            child: CustomScrollView(
+              slivers: [
+                _buildAppBar(),
+                SliverPadding(
+                  padding: const EdgeInsets.all(AppConstants.spacing16),
+                  sliver: Obx(() {
+                    if (controller.isLoading.value && controller.outfits.isEmpty) {
+                      return _buildLoadingGrid();
+                    }
 
-                  if (controller.filteredOutfits.isEmpty) {
-                    return _buildEmptyState();
-                  }
+                    if (controller.filteredOutfits.isEmpty) {
+                      return _buildEmptyState();
+                    }
 
-                  return _buildOutfitsGrid();
-                }),
-              ),
-            ],
+                    return _buildOutfitsGrid();
+                  }),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -67,6 +71,11 @@ class _OutfitsPageState extends State<OutfitsPage> {
             ),
       ),
       actions: [
+        IconButton(
+          icon: const Icon(Icons.folder_outlined),
+          onPressed: () => Get.toNamed(Routes.outfitCollections),
+          tooltip: 'Collections',
+        ),
         IconButton(
           icon: const Icon(Icons.search),
           onPressed: () => _showSearchDialog(),
@@ -514,11 +523,116 @@ class _OutfitsPageState extends State<OutfitsPage> {
   }
 
   void _showCreateOutfitDialog() {
-    // TODO: Implement outfit creation dialog
-    Get.snackbar(
-      'Coming Soon',
-      'Outfit creation will be available soon',
-      snackPosition: SnackPosition.TOP,
+    final tokens = AppUiTokens.of(context);
+
+    Get.dialog(
+      AlertDialog(
+        title: const Text('Create Outfit'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Choose how you want to create your outfit',
+              style: TextStyle(
+                color: tokens.textSecondary,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: AppConstants.spacing16),
+            _buildCreationOption(
+              icon: Icons.auto_awesome,
+              title: 'AI Suggestion',
+              description: 'Let AI suggest outfits based on your wardrobe',
+              onTap: () {
+                Get.back();
+                Get.toNamed('/outfits/build?mode=ai');
+              },
+              tokens: tokens,
+            ),
+            const SizedBox(height: AppConstants.spacing12),
+            _buildCreationOption(
+              icon: Icons.build,
+              title: 'Manual Builder',
+              description: 'Create your own outfit manually',
+              onTap: () {
+                Get.back();
+                Get.toNamed('/outfits/build');
+              },
+              tokens: tokens,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCreationOption({
+    required IconData icon,
+    required String title,
+    required String description,
+    required VoidCallback onTap,
+    required AppUiTokens tokens,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppConstants.radius12),
+      child: Container(
+        padding: const EdgeInsets.all(AppConstants.spacing12),
+        decoration: BoxDecoration(
+          color: tokens.cardColor,
+          borderRadius: BorderRadius.circular(AppConstants.radius12),
+          border: Border.all(color: tokens.cardBorderColor),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppConstants.spacing8),
+              decoration: BoxDecoration(
+                color: tokens.brandColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppConstants.radius8),
+              ),
+              child: Icon(
+                icon,
+                color: tokens.brandColor,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: AppConstants.spacing12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: tokens.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: tokens.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: tokens.textMuted,
+            ),
+          ],
+        ),
+      ),
     );
   }
 

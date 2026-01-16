@@ -71,6 +71,17 @@ abstract class CreateOutfitRequest with _$CreateOutfitRequest {
       _$CreateOutfitRequestFromJson(json);
 }
 
+/// Extension to provide toJson that excludes null values
+extension CreateOutfitRequestExtension on CreateOutfitRequest {
+  /// Convert to JSON, excluding null values
+  Map<String, dynamic> toNonNullJson() {
+    final json = toJson();
+    // Remove null values from the JSON
+    json.removeWhere((key, value) => value == null);
+    return json;
+  }
+}
+
 /// Update outfit request model
 @freezed
 abstract class UpdateOutfitRequest with _$UpdateOutfitRequest {

@@ -142,7 +142,9 @@ class OutfitBuilderController extends GetxController {
     return availableItems.where((item) {
       // Category filter
       if (categoryFilter.value != 'all' &&
-          item.category.name != categoryFilter.value) return false;
+          item.category.name != categoryFilter.value) {
+        return false;
+      }
 
       // Search filter
       if (searchQuery.value.isNotEmpty) {
@@ -221,14 +223,24 @@ class OutfitBuilderController extends GetxController {
         itemIds: selectedItems.map((oi) => oi.item.id).toList(),
         style: selectedStyle.value,
         season: selectedSeason.value,
-        tags: tags.isEmpty ? null : tags.toList(),
+        tags: tags.isEmpty ? [] : tags.toList(),
       );
 
       final outfit = await _outfitRepository.createOutfit(request);
 
-      // Upload generated image if available
+      // Upload generated image if available (automatic save like web version)
       if (generatedImageUrl.value.isNotEmpty) {
-        // Could save the generated image here
+        try {
+          await _outfitRepository.uploadOutfitImageFromBase64(
+            outfit.id,
+            generatedImageUrl.value,
+            isPrimary: true,
+            pose: 'front',
+          );
+        } catch (e) {
+          // Log error but don't fail the outfit save
+          debugPrint('Error uploading generated image: $e');
+        }
       }
 
       Get.back(result: outfit);

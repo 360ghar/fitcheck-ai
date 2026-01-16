@@ -41,7 +41,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
   final RxSet<String> selectedColors = <String>{}.obs;
   final RxSet<String> selectedTags = <String>{}.obs;
   final RxBool isSaving = false.obs;
-  final Rx<File?> additionalImage = Rx<File?>(null);
+  final RxList<File> additionalImages = <File>[].obs;
 
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -59,8 +59,9 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
     try {
       final controller = Get.find<ItemAddController>();
 
-      // Use provided image or additional image
-      final imageToUse = widget.imageFile ?? additionalImage.value;
+      // Use provided image or first additional image
+      final imageToUse = widget.imageFile ??
+          (additionalImages.isNotEmpty ? additionalImages.first : null);
 
       if (imageToUse == null) {
         Get.snackbar(
@@ -106,6 +107,21 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
         request: request,
       );
 
+      // Upload additional images if any (excluding the one already used)
+      if (additionalImages.length > 1) {
+        final imagesToUpload = widget.imageFile == null
+            ? additionalImages.skip(1).toList()
+            : additionalImages.toList();
+
+        for (final img in imagesToUpload) {
+          try {
+            await ItemRepository().uploadImages(created.id, [img]);
+          } catch (e) {
+            // Continue uploading other images even if one fails
+          }
+        }
+      }
+
       Get.back(); // Close form
       Get.back(); // Close item add page
       Get.snackbar(
@@ -126,16 +142,32 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
   }
 
   Future<void> _pickAdditionalImage() async {
-    final XFile? image = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1920,
-      maxHeight: 1920,
+    // Use pickMultipleMedia to select multiple images at once
+    final List<XFile> images = await _imagePicker.pickMultipleMedia(
       imageQuality: 85,
     );
 
-    if (image != null) {
-      additionalImage.value = File(image.path);
+    for (final image in images) {
+      // Only add image files
+      if (image.path.endsWith('.jpg') ||
+          image.path.endsWith('.jpeg') ||
+          image.path.endsWith('.png')) {
+        additionalImages.add(File(image.path));
+      }
     }
+
+    if (images.isNotEmpty && mounted) {
+      Get.snackbar(
+        'Images Added',
+        '${images.length} additional image(s) added',
+        snackPosition: SnackPosition.TOP,
+        duration: const Duration(seconds: 2),
+      );
+    }
+  }
+
+  void _removeAdditionalImage(int index) {
+    additionalImages.removeAt(index);
   }
 
   @override
@@ -339,31 +371,124 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
   }
 
   Widget _buildImagePreview(AppUiTokens tokens) {
-    final image = widget.imageFile ?? additionalImage.value;
+    final hasMainImage = widget.imageFile != null;
+    final hasAdditionalImages = additionalImages.isNotEmpty;
 
-    if (image != null) {
-      return Stack(
+    if (hasMainImage || hasAdditionalImages) {
+      // Build list of all images to display
+      final List<File> allImages = [];
+      if (hasMainImage) allImages.add(widget.imageFile!);
+      allImages.addAll(additionalImages);
+
+      return Column(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppConstants.radius12),
-            child: Image.file(
-              image,
-              width: double.infinity,
-              height: 200,
-              fit: BoxFit.cover,
-            ),
-          ),
-          Positioned(
-            top: AppConstants.spacing8,
-            right: AppConstants.spacing8,
-            child: CircleAvatar(
-              backgroundColor: tokens.cardColor,
-              child: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: widget.imageFile != null
-                    ? null
-                    : () => additionalImage.value = null,
+          // Main image preview
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppConstants.radius12),
+                child: Image.file(
+                  widget.imageFile ?? additionalImages.first,
+                  width: double.infinity,
+                  height: 200,
+                  fit: BoxFit.cover,
+                ),
               ),
+              if (hasAdditionalImages)
+                Positioned(
+                  top: AppConstants.spacing8,
+                  left: AppConstants.spacing8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppConstants.spacing8,
+                      vertical: AppConstants.spacing4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: tokens.cardColor.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(AppConstants.radius12),
+                    ),
+                    child: Text(
+                      '+${additionalImages.length} more',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: tokens.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+              if (!hasMainImage && allImages.isNotEmpty)
+                Positioned(
+                  top: AppConstants.spacing8,
+                  right: AppConstants.spacing8,
+                  child: CircleAvatar(
+                    backgroundColor: tokens.cardColor,
+                    child: IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => additionalImages.clear(),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+
+          // Show additional images as thumbnails
+          if (hasAdditionalImages && allImages.length > 1)
+            Container(
+              height: 80,
+              margin: const EdgeInsets.only(top: AppConstants.spacing8),
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: additionalImages.length,
+                itemBuilder: (context, index) {
+                  return Container(
+                    width: 80,
+                    margin: const EdgeInsets.only(right: AppConstants.spacing8),
+                    child: Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(AppConstants.radius8),
+                          child: Image.file(
+                            additionalImages[index],
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: GestureDetector(
+                            onTap: () => _removeAdditionalImage(index),
+                            child: Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: tokens.cardColor.withOpacity(0.8),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.close,
+                                size: 16,
+                                color: tokens.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+
+          // Add more images button
+          const SizedBox(height: AppConstants.spacing8),
+          OutlinedButton.icon(
+            onPressed: _pickAdditionalImage,
+            icon: const Icon(Icons.add_photo_alternate),
+            label: const Text('Add More Photos'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(40),
             ),
           ),
         ],
@@ -395,7 +520,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
             ),
             const SizedBox(height: AppConstants.spacing8),
             Text(
-              'Add Photo',
+              'Add Photo (Multiple)',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: tokens.brandColor,
                   ),

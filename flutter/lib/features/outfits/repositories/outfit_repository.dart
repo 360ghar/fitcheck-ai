@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../models/outfit_model.dart';
 import '../../../core/network/api_client.dart';
@@ -66,7 +67,7 @@ class OutfitRepository {
     try {
       final response = await _apiClient.post(
         ApiConstants.outfits,
-        data: request.toJson(),
+        data: request.toNonNullJson(), // Use toNonNullJson to exclude null values
       );
       return _parseOutfit(response.data);
     } on DioException catch (e) {
@@ -174,6 +175,48 @@ class OutfitRepository {
     }
   }
 
+  /// Upload outfit image from base64 (for AI-generated images)
+  Future<OutfitImage?> uploadOutfitImageFromBase64(
+    String outfitId,
+    String base64Image, {
+    bool isPrimary = true,
+    String? pose,
+  }) async {
+    try {
+      // Remove data URL prefix if present
+      final cleanBase64 = base64Image.replaceFirst('data:image/png;base64,', '')
+          .replaceFirst('data:image/jpeg;base64,', '');
+
+      // Convert base64 string to bytes
+      final bytes = base64Decode(cleanBase64);
+
+      // Create multipart form data with 'file' field (backend expects this name)
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(
+          bytes,
+          filename: 'generated_outfit_$outfitId.png',
+          contentType: DioMediaType.parse('image/png'),
+        ),
+        if (isPrimary) 'is_primary': true,
+        if (pose != null) 'pose': pose,
+        'is_generated': true,
+      });
+
+      final response = await _apiClient.post(
+        '${ApiConstants.outfits}/$outfitId/images',
+        data: formData,
+      );
+
+      final dataMap = _extractDataMap(response.data);
+      if (dataMap.isNotEmpty) {
+        return OutfitImage.fromJson(_normalizeOutfitImageJson(dataMap));
+      }
+      return null;
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    }
+  }
+
   /// Generate AI outfit visualization
   Future<OutfitVisualizationResult> generateOutfitVisualization(
     List<dynamic> items, {
@@ -181,7 +224,8 @@ class OutfitRepository {
     String? background,
   }) async {
     try {
-      final response = await _apiClient.post(
+      // Use extended timeout for AI generation (can take up to 5 minutes)
+      final response = await _apiClient.postWithExtendedTimeout(
         '${ApiConstants.ai}/generate-outfit',
         data: {
           'items': items,
@@ -298,6 +342,65 @@ class OutfitRepository {
         },
       );
       return _extractDataMap(response.data);
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    }
+  }
+
+  /// Update collection
+  Future<Map<String, dynamic>> updateCollection(
+    String collectionId,
+    String name,
+    List<String> outfitIds,
+  ) async {
+    try {
+      final response = await _apiClient.put(
+        '${ApiConstants.outfits}/collections/$collectionId',
+        data: {
+          'name': name,
+          'outfit_ids': outfitIds,
+        },
+      );
+      return _extractDataMap(response.data);
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    }
+  }
+
+  /// Delete collection
+  Future<void> deleteCollection(String collectionId) async {
+    try {
+      await _apiClient.delete('${ApiConstants.outfits}/collections/$collectionId');
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    }
+  }
+
+  /// Add outfit to collection
+  Future<Map<String, dynamic>> addOutfitToCollection(
+    String collectionId,
+    String outfitId,
+  ) async {
+    try {
+      final response = await _apiClient.post(
+        '${ApiConstants.outfits}/collections/$collectionId/outfits',
+        data: {'outfit_id': outfitId},
+      );
+      return _extractDataMap(response.data);
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    }
+  }
+
+  /// Remove outfit from collection
+  Future<void> removeOutfitFromCollection(
+    String collectionId,
+    String outfitId,
+  ) async {
+    try {
+      await _apiClient.delete(
+        '${ApiConstants.outfits}/collections/$collectionId/outfits/$outfitId',
+      );
     } on DioException catch (e) {
       throw handleDioException(e);
     }

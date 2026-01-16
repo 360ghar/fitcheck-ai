@@ -27,29 +27,32 @@ class _WardrobePageState extends State<WardrobePage> {
     return Scaffold(
       body: AppPageBackground(
         child: SafeArea(
-          child: CustomScrollView(
-            slivers: [
-              // App bar
-              _buildAppBar(),
+          child: RefreshIndicator(
+            onRefresh: () => controller.fetchItems(refresh: true),
+            child: CustomScrollView(
+              slivers: [
+                // App bar
+                _buildAppBar(),
 
-              // Content
-              SliverPadding(
-                padding: const EdgeInsets.all(AppConstants.spacing16),
-                sliver: Obx(() {
-                  if (controller.isLoading.value && controller.items.isEmpty) {
-                    return _buildLoadingGrid();
-                  }
+                // Content
+                SliverPadding(
+                  padding: const EdgeInsets.all(AppConstants.spacing16),
+                  sliver: Obx(() {
+                    if (controller.isLoading.value && controller.items.isEmpty) {
+                      return _buildLoadingGrid();
+                    }
 
-                  if (controller.filteredItems.isEmpty) {
-                    return _buildEmptyState();
-                  }
+                    if (controller.filteredItems.isEmpty) {
+                      return _buildEmptyState();
+                    }
 
-                  return controller.viewMode.value == 'grid'
-                      ? _buildItemsGrid()
-                      : _buildItemsList();
-                }),
-              ),
-            ],
+                    return controller.viewMode.value == 'grid'
+                        ? _buildItemsGrid()
+                        : _buildItemsList();
+                  }),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -72,6 +75,13 @@ class _WardrobePageState extends State<WardrobePage> {
             ),
       ),
       actions: [
+        // Stats button
+        if (controller.selectedIds.isEmpty)
+          IconButton(
+            icon: const Icon(Icons.bar_chart),
+            onPressed: () => Get.toNamed(Routes.wardrobeStats),
+            tooltip: 'Wardrobe Stats',
+          ),
         Obx(() => controller.selectedIds.isNotEmpty
             ? IconButton(
                 icon: const Icon(Icons.delete),
@@ -171,22 +181,60 @@ class _WardrobePageState extends State<WardrobePage> {
           final item = controller.filteredItems[index];
           final isSelected = controller.selectedIds.contains(item.id);
 
-          return GestureDetector(
-            onTap: () {
+          return Dismissible(
+            key: Key(item.id),
+            direction: DismissDirection.endToStart,
+            confirmDismiss: (direction) async {
               if (controller.selectedIds.isNotEmpty) {
-                controller.toggleItemSelection(item);
-              } else {
-                Get.toNamed('/wardrobe/${item.id}');
+                // Don't allow swipe when in selection mode
+                return false;
               }
+              return true;
             },
-            onLongPress: () {
-              controller.setSelectedItem(item);
-              _showItemOptions(item);
+            onDismissed: (direction) {
+              // Swipe to delete
+              controller.deleteItem(item.id);
             },
-            child: _buildListItemCard(item, isSelected),
+            background: _buildSwipeBackground(context, isDelete: true),
+            secondaryBackground: _buildSwipeBackground(context, isDelete: true),
+            dismissThresholds: const {
+              DismissDirection.endToStart: 0.7,
+            },
+            child: GestureDetector(
+              onTap: () {
+                if (controller.selectedIds.isNotEmpty) {
+                  controller.toggleItemSelection(item);
+                } else {
+                  Get.toNamed('/wardrobe/${item.id}');
+                }
+              },
+              onLongPress: () {
+                controller.setSelectedItem(item);
+                _showItemOptions(item);
+              },
+              child: _buildListItemCard(item, isSelected),
+            ),
           );
         },
         childCount: controller.filteredItems.length,
+      ),
+    );
+  }
+
+  Widget _buildSwipeBackground(BuildContext context, {bool isDelete = true, bool isFavorite = false}) {
+    final tokens = AppUiTokens.of(context);
+
+    return Container(
+      alignment: isDelete ? Alignment.centerRight : Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing20),
+      decoration: BoxDecoration(
+        color: isDelete ? Colors.red : Colors.pink,
+        borderRadius: BorderRadius.circular(AppConstants.radius16),
+      ),
+      child: Icon(
+        isDelete ? Icons.delete : Icons.favorite,
+        color: Colors.white,
+        size: 28,
       ),
     );
   }
