@@ -1,7 +1,10 @@
 import 'package:get/get.dart';
 import '../../../../domain/enums/style.dart';
 import '../../../../domain/enums/season.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/services/haptic_service.dart';
+import '../../../core/services/network_service.dart' show RetryHelper, NetworkService;
 import '../models/outfit_model.dart';
 import '../repositories/outfit_repository.dart';
 
@@ -9,6 +12,7 @@ import '../repositories/outfit_repository.dart';
 /// Focused responsibility: Managing the outfit list and filters
 class OutfitListController extends GetxController {
   final OutfitRepository _repository = OutfitRepository();
+  final NetworkService _networkService = Get.find<NetworkService>();
 
   // Workers for cleanup
   final List<Worker> _workers = [];
@@ -48,6 +52,9 @@ class OutfitListController extends GetxController {
   final RxMap<String, List<WearHistoryEntry>> wearHistoryCache = <String, List<WearHistoryEntry>>{}.obs;
   final RxBool isLoadingWearHistory = false.obs;
 
+  // Offline state
+  final RxBool isOffline = false.obs;
+
   // Getters
   bool get hasError => error.value.isNotEmpty;
   bool get isSelectionActive => selectedIds.isNotEmpty;
@@ -64,6 +71,8 @@ class OutfitListController extends GetxController {
     super.onInit();
     fetchOutfits();
     _setupFilters();
+    _setupNetworkMonitoring();
+    _setupRouteListener();
   }
 
   @override
@@ -76,16 +85,17 @@ class OutfitListController extends GetxController {
   }
 
   void _setupFilters() {
+    // Debounce all filter changes to avoid excessive API calls
     _workers.addAll([
-      ever(searchQuery, (_) => applyFilters()),
-      ever(selectedStyles, (_) => applyFilters()),
-      ever(selectedSeasons, (_) => applyFilters()),
-      ever(favoritesOnly, (_) => applyFilters()),
-      ever(draftsOnly, (_) => applyFilters()),
+      debounce(searchQuery, (_) => fetchOutfits(refresh: true), time: const Duration(milliseconds: 500)),
+      debounce(selectedStyles, (_) => fetchOutfits(refresh: true), time: const Duration(milliseconds: 100)),
+      debounce(selectedSeasons, (_) => fetchOutfits(refresh: true), time: const Duration(milliseconds: 100)),
+      debounce(favoritesOnly, (_) => fetchOutfits(refresh: true), time: const Duration(milliseconds: 100)),
+      debounce(draftsOnly, (_) => fetchOutfits(refresh: true), time: const Duration(milliseconds: 100)),
     ]);
   }
 
-  /// Fetch outfits from server
+  /// Fetch outfits from server with filters
   Future<void> fetchOutfits({bool refresh = false}) async {
     if (refresh) {
       currentPage.value = 1;
@@ -103,9 +113,22 @@ class OutfitListController extends GetxController {
       }
       error.value = '';
 
-      final response = await _repository.getOutfits(
-        page: currentPage.value,
-        limit: 20,
+      // Build filter parameters for server-side filtering
+      final response = await RetryHelper.execute(
+        operation: () => _repository.getOutfits(
+          page: currentPage.value,
+          limit: 20,
+          search: searchQuery.value.isEmpty ? null : searchQuery.value,
+          styles: selectedStyles.isEmpty
+              ? null
+              : selectedStyles.map((s) => s.name.toLowerCase()).toList(),
+          seasons: selectedSeasons.isEmpty
+              ? null
+              : selectedSeasons.map((s) => s.name.toLowerCase()).toList(),
+          favoritesOnly: favoritesOnly.value ? true : null,
+          draftsOnly: draftsOnly.value ? true : null,
+        ),
+        maxAttempts: 3,
       );
 
       if (refresh) {
@@ -117,7 +140,8 @@ class OutfitListController extends GetxController {
       hasMore.value = response.hasMore;
       currentPage.value++;
 
-      applyFilters();
+      // Server-side filtering - no client-side filtering needed
+      filteredOutfits.value = outfits.toList();
     } catch (e) {
       error.value = e.toString().replaceAll('Exception: ', '');
       NotificationService.instance.showError(error.value);
@@ -148,7 +172,7 @@ class OutfitListController extends GetxController {
       } else {
         outfits[existingIndex] = outfit;
       }
-      applyFilters();
+      _syncFilteredOutfits();
 
       return outfit;
     } catch (e) {
@@ -194,42 +218,14 @@ class OutfitListController extends GetxController {
     }
   }
 
-  /// Apply filters to the outfit list
+  /// Apply filters - triggers server refetch with current filters
   void applyFilters() {
-    filteredOutfits.value = outfits.where((outfit) {
-      // Search query filter
-      if (searchQuery.value.isNotEmpty) {
-        final query = searchQuery.value.toLowerCase();
-        if (!outfit.name.toLowerCase().contains(query) &&
-            !(outfit.description?.toLowerCase().contains(query) ?? false)) {
-          return false;
-        }
-      }
+    fetchOutfits(refresh: true);
+  }
 
-      // Style filter
-      if (selectedStyles.isNotEmpty &&
-          (outfit.style == null || !selectedStyles.contains(outfit.style))) {
-        return false;
-      }
-
-      // Season filter
-      if (selectedSeasons.isNotEmpty &&
-          (outfit.season == null || !selectedSeasons.contains(outfit.season))) {
-        return false;
-      }
-
-      // Favorites filter
-      if (favoritesOnly.value && !outfit.isFavorite) {
-        return false;
-      }
-
-      // Drafts filter
-      if (draftsOnly.value && !outfit.isDraft) {
-        return false;
-      }
-
-      return true;
-    }).toList();
+  /// Sync filtered outfits with the outfits list (after local changes)
+  void _syncFilteredOutfits() {
+    filteredOutfits.value = outfits.toList();
   }
 
   /// Set selected outfit for detail view
@@ -239,6 +235,7 @@ class OutfitListController extends GetxController {
 
   /// Toggle selection for multi-select mode
   void toggleSelection(String outfitId) {
+    HapticService.selectionClick();
     if (selectedIds.contains(outfitId)) {
       selectedIds.remove(outfitId);
     } else {
@@ -253,6 +250,7 @@ class OutfitListController extends GetxController {
 
   /// Toggle outfit favorite
   Future<void> toggleFavorite(String outfitId) async {
+    HapticService.favorite();
     isFavoritingMap[outfitId] = true;
     try {
       final updatedOutfit = await _repository.toggleFavorite(outfitId);
@@ -272,6 +270,7 @@ class OutfitListController extends GetxController {
 
   /// Mark outfit as worn
   Future<void> markAsWorn(String outfitId) async {
+    HapticService.lightImpact();
     isMarkingWornMap[outfitId] = true;
     try {
       final updatedOutfit = await _repository.markAsWorn(outfitId);
@@ -305,12 +304,13 @@ class OutfitListController extends GetxController {
 
   /// Delete outfit
   Future<void> deleteOutfit(String outfitId) async {
+    HapticService.delete();
     isDeletingMap[outfitId] = true;
     try {
       await _repository.deleteOutfit(outfitId);
 
       outfits.removeWhere((outfit) => outfit.id == outfitId);
-      applyFilters();
+      _syncFilteredOutfits();
 
       if (selectedOutfit.value?.id == outfitId) {
         selectedOutfit.value = null;
@@ -333,7 +333,7 @@ class OutfitListController extends GetxController {
     try {
       final duplicated = await _repository.duplicateOutfit(outfitId);
       outfits.insert(0, duplicated);
-      applyFilters();
+      _syncFilteredOutfits();
 
       NotificationService.instance.showSuccess(
         'Outfit duplicated successfully',
@@ -368,7 +368,7 @@ class OutfitListController extends GetxController {
   /// Add newly created outfit to list
   void addOutfit(OutfitModel outfit) {
     outfits.insert(0, outfit);
-    applyFilters();
+    _syncFilteredOutfits();
   }
 
   /// Clear filters
@@ -399,5 +399,42 @@ class OutfitListController extends GetxController {
     if (selectedOutfit.value?.id == outfitId) {
       selectedOutfit.value = updatedOutfit;
     }
+  }
+
+  /// Setup network monitoring
+  void _setupNetworkMonitoring() {
+    // Update offline state based on network connectivity
+    ever(_networkService.isConnected, (connected) {
+      isOffline.value = !connected;
+      if (connected && outfits.isEmpty && !isLoading.value) {
+        // Network recovered and we have no outfits, try fetching
+        fetchOutfits();
+      }
+    });
+
+    // Initial state
+    isOffline.value = !_networkService.isConnected.value;
+  }
+
+  /// Setup route listener to refresh when returning to this page
+  void _setupRouteListener() {
+    // Listen to route changes using routing observable
+    _workers.add(
+      debounce(
+        Get.routing.obs,
+        (_) {
+          final currentRoute = Get.currentRoute;
+          if (currentRoute == Routes.outfits || currentRoute == Routes.home) {
+            // Slight delay to ensure page is fully visible
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (outfits.isEmpty && !isLoading.value) {
+                fetchOutfits();
+              }
+            });
+          }
+        },
+        time: const Duration(milliseconds: 100),
+      ),
+    );
   }
 }
