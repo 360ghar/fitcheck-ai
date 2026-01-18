@@ -147,19 +147,22 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
       imageQuality: 85,
     );
 
+    var addedCount = 0;
     for (final image in images) {
-      // Only add image files
-      if (image.path.endsWith('.jpg') ||
-          image.path.endsWith('.jpeg') ||
-          image.path.endsWith('.png')) {
+      // Only add image files (case-insensitive check)
+      final path = image.path.toLowerCase();
+      if (path.endsWith('.jpg') ||
+          path.endsWith('.jpeg') ||
+          path.endsWith('.png')) {
         additionalImages.add(File(image.path));
+        addedCount++;
       }
     }
 
-    if (images.isNotEmpty && mounted) {
+    if (addedCount > 0 && mounted) {
       Get.snackbar(
         'Images Added',
-        '${images.length} additional image(s) added',
+        '$addedCount additional image(s) added',
         snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 2),
       );
@@ -373,6 +376,10 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
   Widget _buildImagePreview(AppUiTokens tokens) {
     final hasMainImage = widget.imageFile != null;
     final hasAdditionalImages = additionalImages.isNotEmpty;
+    // When no main image, the first additional image is shown as preview
+    final extraCount = hasMainImage
+        ? additionalImages.length
+        : (additionalImages.length - 1);
 
     if (hasMainImage || hasAdditionalImages) {
       // Build list of all images to display
@@ -394,7 +401,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
                   fit: BoxFit.cover,
                 ),
               ),
-              if (hasAdditionalImages)
+              if (extraCount > 0)
                 Positioned(
                   top: AppConstants.spacing8,
                   left: AppConstants.spacing8,
@@ -408,7 +415,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
                       borderRadius: BorderRadius.circular(AppConstants.radius12),
                     ),
                     child: Text(
-                      '+${additionalImages.length} more',
+                      '+$extraCount more',
                       style: TextStyle(
                         fontWeight: FontWeight.w500,
                         color: tokens.textPrimary,

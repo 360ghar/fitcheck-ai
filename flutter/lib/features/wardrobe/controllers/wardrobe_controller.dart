@@ -407,13 +407,13 @@ class WardrobeController extends GetxController {
   /// Setup network monitoring
   void _setupNetworkMonitoring() {
     // Update offline state based on network connectivity
-    ever(_networkService.isConnected, (connected) {
+    _workers.add(ever(_networkService.isConnected, (connected) {
       isOffline.value = !connected;
       if (connected && items.isEmpty && !isLoading.value) {
         // Network recovered and we have no items, try fetching
         fetchItems();
       }
-    });
+    }));
 
     // Initial state
     isOffline.value = !_networkService.isConnected.value;

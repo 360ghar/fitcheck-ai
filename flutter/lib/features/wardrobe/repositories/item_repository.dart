@@ -394,7 +394,7 @@ class ItemRepository {
     }
   }
 
-  /// Generate product images for all detected items in parallel
+  /// Generate product images for all detected items sequentially
   /// Returns a list of DetectedItemDataWithImage with generated images
   Future<List<DetectedItemDataWithImage>> generateProductImagesForItems(
     List<DetectedItemData> items,

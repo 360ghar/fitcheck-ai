@@ -88,19 +88,22 @@ class _ItemEditPageState extends State<ItemEditPage> {
       imageQuality: 85,
     );
 
+    var addedCount = 0;
     for (final image in images) {
-      // Only add image files
-      if (image.path.endsWith('.jpg') ||
-          image.path.endsWith('.jpeg') ||
-          image.path.endsWith('.png')) {
+      // Only add image files (case-insensitive check)
+      final path = image.path.toLowerCase();
+      if (path.endsWith('.jpg') ||
+          path.endsWith('.jpeg') ||
+          path.endsWith('.png')) {
         newImages.add(File(image.path));
+        addedCount++;
       }
     }
 
-    if (images.isNotEmpty && mounted) {
+    if (addedCount > 0 && mounted) {
       Get.snackbar(
         'Images Added',
-        '${images.length} image(s) added',
+        '$addedCount image(s) added',
         snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 2),
       );

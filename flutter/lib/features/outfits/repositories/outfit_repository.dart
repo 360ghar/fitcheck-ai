@@ -183,9 +183,16 @@ class OutfitRepository {
     String? pose,
   }) async {
     try {
+      // Detect image format from data URL prefix and determine MIME type/extension
+      final dataUrlRegex = RegExp(r'^data:image/(\w+);base64,', caseSensitive: false);
+      final match = dataUrlRegex.firstMatch(base64Image);
+      final format = (match?.group(1) ?? 'png').toLowerCase();
+      final isJpeg = format == 'jpeg' || format == 'jpg';
+      final mimeType = isJpeg ? 'image/jpeg' : 'image/png';
+      final extension = isJpeg ? 'jpg' : 'png';
+
       // Remove data URL prefix if present
-      final cleanBase64 = base64Image.replaceFirst('data:image/png;base64,', '')
-          .replaceFirst('data:image/jpeg;base64,', '');
+      final cleanBase64 = base64Image.replaceFirst(dataUrlRegex, '');
 
       // Convert base64 string to bytes
       final bytes = base64Decode(cleanBase64);
@@ -194,10 +201,10 @@ class OutfitRepository {
       final formData = FormData.fromMap({
         'file': MultipartFile.fromBytes(
           bytes,
-          filename: 'generated_outfit_$outfitId.png',
-          contentType: DioMediaType.parse('image/png'),
+          filename: 'generated_outfit_$outfitId.$extension',
+          contentType: DioMediaType.parse(mimeType),
         ),
-        if (isPrimary) 'is_primary': true,
+        'is_primary': isPrimary,
         if (pose != null) 'pose': pose,
         'is_generated': true,
       });
@@ -331,14 +338,16 @@ class OutfitRepository {
   /// Create collection
   Future<Map<String, dynamic>> createCollection(
     String name,
-    List<String> outfitIds,
-  ) async {
+    List<String> outfitIds, {
+    String? description,
+  }) async {
     try {
       final response = await _apiClient.post(
         '${ApiConstants.outfits}/collections',
         data: {
           'name': name,
           'outfit_ids': outfitIds,
+          if (description != null && description.isNotEmpty) 'description': description,
         },
       );
       return _extractDataMap(response.data);
@@ -351,14 +360,16 @@ class OutfitRepository {
   Future<Map<String, dynamic>> updateCollection(
     String collectionId,
     String name,
-    List<String> outfitIds,
-  ) async {
+    List<String> outfitIds, {
+    String? description,
+  }) async {
     try {
       final response = await _apiClient.put(
         '${ApiConstants.outfits}/collections/$collectionId',
         data: {
           'name': name,
           'outfit_ids': outfitIds,
+          if (description != null) 'description': description,
         },
       );
       return _extractDataMap(response.data);

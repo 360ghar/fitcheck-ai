@@ -75,13 +75,14 @@ class _WardrobePageState extends State<WardrobePage> {
             ),
       ),
       actions: [
-        // Stats button
-        if (controller.selectedIds.isEmpty)
-          IconButton(
-            icon: const Icon(Icons.bar_chart),
-            onPressed: () => Get.toNamed(Routes.wardrobeStats),
-            tooltip: 'Wardrobe Stats',
-          ),
+        // Stats button (reactive)
+        Obx(() => controller.selectedIds.isEmpty
+            ? IconButton(
+                icon: const Icon(Icons.bar_chart),
+                onPressed: () => Get.toNamed(Routes.wardrobeStats),
+                tooltip: 'Wardrobe Stats',
+              )
+            : const SizedBox.shrink()),
         Obx(() => controller.selectedIds.isNotEmpty
             ? IconButton(
                 icon: const Icon(Icons.delete),

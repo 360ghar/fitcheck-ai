@@ -222,8 +222,9 @@ class ItemAddController extends GetxController {
           final created = await _itemRepository.createItem(request);
 
           // Upload the generated product image
-          // Convert data URL back to base64 for upload
-          final base64Data = itemWithImage.generatedImageUrl!.replaceFirst('data:image/png;base64,', '');
+          // Convert data URL back to base64 for upload (handle different image formats)
+          final dataUrlRegex = RegExp(r'^data:image/\w+;base64,', caseSensitive: false);
+          final base64Data = itemWithImage.generatedImageUrl!.replaceFirst(dataUrlRegex, '');
           await _itemRepository.uploadImageFromBase64(created.id, base64Data);
 
           // Fetch the complete item with images

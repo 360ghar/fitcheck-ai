@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -795,19 +796,7 @@ class _GeneratedItemCard extends StatelessWidget {
           children: [
             // Generated product image
             Positioned.fill(
-              child: Image.network(
-                item.generatedImageUrl!,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: tokens.cardColor,
-                    child: Icon(
-                      Icons.broken_image,
-                      color: tokens.textMuted,
-                    ),
-                  );
-                },
-              ),
+              child: _buildGeneratedImage(tokens, item.generatedImageUrl!),
             ),
 
             // Gradient overlay at bottom
@@ -908,6 +897,38 @@ class _GeneratedItemCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  /// Builds an image widget that handles both data URLs and network URLs.
+  Widget _buildGeneratedImage(AppUiTokens tokens, String url) {
+    final isDataUrl = url.startsWith('data:image');
+
+    Widget errorWidget() => Container(
+      color: tokens.cardColor,
+      child: Icon(
+        Icons.broken_image,
+        color: tokens.textMuted,
+      ),
+    );
+
+    if (isDataUrl) {
+      try {
+        final base64Data = url.split(',').last;
+        return Image.memory(
+          base64Decode(base64Data),
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => errorWidget(),
+        );
+      } catch (e) {
+        return errorWidget();
+      }
+    }
+
+    return Image.network(
+      url,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) => errorWidget(),
     );
   }
 }

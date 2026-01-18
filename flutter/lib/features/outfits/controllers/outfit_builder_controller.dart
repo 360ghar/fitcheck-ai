@@ -229,11 +229,13 @@ class OutfitBuilderController extends GetxController {
       final outfit = await _outfitRepository.createOutfit(request);
 
       // Upload generated image if available (automatic save like web version)
-      if (generatedImageUrl.value.isNotEmpty) {
+      // Only upload if it's a data URL (base64), not a remote URL
+      if (generatedImageUrl.value.startsWith('data:image/')) {
+        final base64Data = generatedImageUrl.value.split(',').last;
         try {
           await _outfitRepository.uploadOutfitImageFromBase64(
             outfit.id,
-            generatedImageUrl.value,
+            base64Data,
             isPrimary: true,
             pose: 'front',
           );
@@ -241,6 +243,8 @@ class OutfitBuilderController extends GetxController {
           // Log error but don't fail the outfit save
           debugPrint('Error uploading generated image: $e');
         }
+      } else if (generatedImageUrl.value.isNotEmpty) {
+        debugPrint('Skipping generated image upload: not a base64 data URI.');
       }
 
       Get.back(result: outfit);

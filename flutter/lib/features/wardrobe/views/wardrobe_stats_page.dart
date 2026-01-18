@@ -181,11 +181,14 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
     final totalValue = (statistics['total_value'] as num?)?.toDouble() ?? 0.0;
     final mostWorn = statistics['most_worn_items'] as List? ?? [];
     final leastWorn = statistics['least_worn_items'] as List? ?? [];
+    // Use server-derived total for consistency with itemsByCategory
+    final totalItems = (statistics['total_items'] as int?) ??
+        itemsByCategory.values.fold<int>(0, (sum, count) => sum + ((count as int?) ?? 0));
 
     return SliverList(
       delegate: SliverChildListDelegate([
         // Total Items Card
-        _buildTotalItemsCard(wardrobeController.items.length, itemsByCategory),
+        _buildTotalItemsCard(totalItems, itemsByCategory),
 
         const SizedBox(height: AppConstants.spacing12),
 
@@ -195,7 +198,7 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
         const SizedBox(height: AppConstants.spacing12),
 
         // Category Breakdown
-        _buildCategoryBreakdown(itemsByCategory),
+        _buildCategoryBreakdown(itemsByCategory, totalItems),
 
         const SizedBox(height: AppConstants.spacing12),
 
@@ -354,7 +357,7 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
     );
   }
 
-  Widget _buildCategoryBreakdown(Map<String, dynamic> itemsByCategory) {
+  Widget _buildCategoryBreakdown(Map<String, dynamic> itemsByCategory, int totalItems) {
     final tokens = AppUiTokens.of(context);
 
     return AppGlassCard(
@@ -373,7 +376,7 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
           ...Category.values.map((category) {
             final count = itemsByCategory[category.displayName] as int? ?? 0;
             if (count == 0) return const SizedBox.shrink();
-            return _buildCategoryBar(category, count, wardrobeController.items.length, tokens);
+            return _buildCategoryBar(category, count, totalItems, tokens);
           }).toList(),
         ],
       ),

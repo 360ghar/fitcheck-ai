@@ -412,6 +412,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
                 await _outfitRepository.createCollection(
                   nameController.text.trim(),
                   [],
+                  description: descriptionController.text.trim(),
                 );
                 Get.snackbar(
                   'Success',
@@ -679,6 +680,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
         collectionId,
         name,
         outfitIds.cast<String>(),
+        description: description,
       );
       Get.snackbar(
         'Success',
