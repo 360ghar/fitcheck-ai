@@ -13,6 +13,8 @@ enum PhotoshootUseCase {
   modelPortfolio,
   @JsonValue('instagram')
   instagram,
+  @JsonValue('aesthetic')
+  aesthetic,
   @JsonValue('custom')
   custom,
 }
@@ -30,6 +32,8 @@ extension PhotoshootUseCaseExtension on PhotoshootUseCase {
         return 'model_portfolio';
       case PhotoshootUseCase.instagram:
         return 'instagram';
+      case PhotoshootUseCase.aesthetic:
+        return 'aesthetic';
       case PhotoshootUseCase.custom:
         return 'custom';
     }
@@ -45,6 +49,8 @@ extension PhotoshootUseCaseExtension on PhotoshootUseCase {
         return 'Model Portfolio';
       case PhotoshootUseCase.instagram:
         return 'Instagram Content';
+      case PhotoshootUseCase.aesthetic:
+        return 'Aesthetic';
       case PhotoshootUseCase.custom:
         return 'Custom Prompt';
     }
@@ -60,6 +66,8 @@ extension PhotoshootUseCaseExtension on PhotoshootUseCase {
         return 'High-fashion editorial style shots';
       case PhotoshootUseCase.instagram:
         return 'Trendy lifestyle and aesthetic content';
+      case PhotoshootUseCase.aesthetic:
+        return 'Artistic and visually striking photos';
       case PhotoshootUseCase.custom:
         return 'Write your own prompt for unique results';
     }
@@ -75,6 +83,8 @@ extension PhotoshootUseCaseExtension on PhotoshootUseCase {
         return '📸';
       case PhotoshootUseCase.instagram:
         return '✨';
+      case PhotoshootUseCase.aesthetic:
+        return '🎭';
       case PhotoshootUseCase.custom:
         return '🎨';
     }

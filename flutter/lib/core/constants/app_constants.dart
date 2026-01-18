@@ -3,7 +3,7 @@ class AppConstants {
   AppConstants._();
 
   // App Info
-  static const String appName = 'Fit Check AI';
+  static const String appName = 'FitCheck AI';
   static const String appVersion = '1.0.0';
 
   // Pagination

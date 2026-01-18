@@ -8,7 +8,7 @@ This document provides a complete specification for all FastAPI endpoints, inclu
 
 ```
 Development: http://localhost:8000/api/v1
-Production: https://api.fitcheck.ai/api/v1
+Production: https://api.fitcheckaiapp.com/api/v1
 ```
 
 ## Authentication
@@ -1461,7 +1461,7 @@ Enable public sharing for an outfit and return a share URL.
 {
   "data": {
     "share_link": {
-      "url": "https://fitcheck.ai/shared/outfits/outfit_uuid",
+      "url": "https://fitcheckaiapp.com/shared/outfits/outfit_uuid",
       "qr_code_url": null,
       "expires_at": null,
       "views": 0
@@ -2458,7 +2458,7 @@ X-RateLimit-Reset: 1704240000
 ### Connect to WS
 
 ```
-wss://api.fitcheck.ai/ws
+wss://api.fitcheckaiapp.com/ws
 ```
 
 ### Events

@@ -38,6 +38,7 @@ class Routes {
   static const referral = '/referral';
   static const bodyProfiles = '/profile/body-profiles';
   static const help = '/help';
+  static const legal = '/legal';
   static const feedback = '/feedback';
   static const sharedOutfit = '/shared/:id';
   static const outfitCollections = '/outfits/collections';

@@ -1,12 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import 'package:gal/gal.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../models/photoshoot_models.dart';
@@ -27,6 +29,12 @@ class PhotoshootController extends GetxController {
 
   // TextEditingController for custom prompt field
   final TextEditingController customPromptController = TextEditingController();
+
+  // Cancel token for long-running API calls
+  CancelToken? _generateCancelToken;
+
+  // Timer for animated progress
+  Timer? _progressTimer;
 
   // Current step in the flow
   final Rx<PhotoshootStep> currentStep = PhotoshootStep.upload.obs;
@@ -80,7 +88,33 @@ class PhotoshootController extends GetxController {
   @override
   void onClose() {
     customPromptController.dispose();
+    _cancelGeneration();
     super.onClose();
+  }
+
+  /// Cancel ongoing generation request
+  void _cancelGeneration() {
+    _progressTimer?.cancel();
+    _progressTimer = null;
+    _generateCancelToken?.cancel('User cancelled or navigated away');
+    _generateCancelToken = null;
+  }
+
+  /// Start animated progress during API call
+  void _startProgressAnimation() {
+    _progressTimer?.cancel();
+    // Animate progress from 20% to 90% over ~4 minutes
+    _progressTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (generationProgress.value < 90) {
+        generationProgress.value += 2;
+      }
+    });
+  }
+
+  /// Stop animated progress
+  void _stopProgressAnimation() {
+    _progressTimer?.cancel();
+    _progressTimer = null;
   }
 
   /// Fetch current usage stats
@@ -232,11 +266,17 @@ class PhotoshootController extends GetxController {
   Future<void> generatePhotoshoot() async {
     if (!canGenerate) return;
 
+    // Cancel any existing request
+    _cancelGeneration();
+
     isGenerating.value = true;
     error.value = '';
     generationProgress.value = 0;
     generationStatus.value = 'Preparing your photos...';
     currentStep.value = PhotoshootStep.generating;
+
+    // Create new cancel token for this request
+    _generateCancelToken = CancelToken();
 
     try {
       // Convert photos to base64
@@ -251,7 +291,10 @@ class PhotoshootController extends GetxController {
       generationStatus.value = 'Generating ${numImages.value} images...';
       generationProgress.value = 20;
 
-      // Make API call
+      // Start animated progress while waiting for API
+      _startProgressAnimation();
+
+      // Make API call with cancel token
       final result = await _repository.generate(
         photos: photosBase64,
         useCase: selectedUseCase.value,
@@ -259,8 +302,10 @@ class PhotoshootController extends GetxController {
             ? customPrompt.value
             : null,
         numImages: numImages.value,
+        cancelToken: _generateCancelToken,
       );
 
+      _stopProgressAnimation();
       generationProgress.value = 100;
       sessionId.value = result.sessionId;
       generatedImages.value = result.images;
@@ -276,7 +321,17 @@ class PhotoshootController extends GetxController {
         '${generatedImages.length} images generated!',
         snackPosition: SnackPosition.TOP,
       );
+    } on DioException catch (e) {
+      _stopProgressAnimation();
+      if (e.type == DioExceptionType.cancel) {
+        // Request was cancelled, don't show error
+        return;
+      }
+      error.value = e.message ?? 'Network error occurred';
+      Get.snackbar('Generation Failed', error.value);
+      currentStep.value = PhotoshootStep.configure;
     } catch (e) {
+      _stopProgressAnimation();
       error.value = e.toString().replaceAll('Exception: ', '');
 
       // Check if limit exceeded
@@ -289,6 +344,7 @@ class PhotoshootController extends GetxController {
       currentStep.value = PhotoshootStep.configure;
     } finally {
       isGenerating.value = false;
+      _generateCancelToken = null;
     }
   }
 
@@ -304,17 +360,12 @@ class PhotoshootController extends GetxController {
       final image = generatedImages[index];
       final bytes = await _getImageBytes(image);
 
-      final result = await ImageGallerySaverPlus.saveImage(
+      await Gal.putImageBytes(
         Uint8List.fromList(bytes),
-        quality: 100,
         name: 'photoshoot_${sessionId.value}_$index',
       );
 
-      if (result['isSuccess'] == true) {
-        Get.snackbar('Saved', 'Image saved to gallery');
-      } else {
-        Get.snackbar('Error', 'Failed to save image');
-      }
+      Get.snackbar('Saved', 'Image saved to gallery');
     } catch (e) {
       Get.snackbar('Error', 'Failed to save image: $e');
     } finally {
@@ -329,29 +380,35 @@ class PhotoshootController extends GetxController {
     if (isDownloading.value) return;
 
     isDownloading.value = true;
+    final List<int> failedIndices = [];
 
     try {
       int savedCount = 0;
       for (int i = 0; i < generatedImages.length; i++) {
         downloadingIndex.value = i;
         final image = generatedImages[i];
-        final bytes = await _getImageBytes(image);
 
-        final result = await ImageGallerySaverPlus.saveImage(
-          Uint8List.fromList(bytes),
-          quality: 100,
-          name: 'photoshoot_${sessionId.value}_$i',
-        );
-
-        if (result['isSuccess'] == true) {
+        try {
+          final bytes = await _getImageBytes(image);
+          await Gal.putImageBytes(
+            Uint8List.fromList(bytes),
+            name: 'photoshoot_${sessionId.value}_$i',
+          );
           savedCount++;
+        } catch (e) {
+          failedIndices.add(i + 1);
+          debugPrint('Failed to save image $i: $e');
         }
       }
 
-      Get.snackbar(
-        'Saved',
-        '$savedCount of ${generatedImages.length} images saved to gallery',
-      );
+      if (failedIndices.isEmpty) {
+        Get.snackbar('Saved', 'All $savedCount images saved to gallery');
+      } else {
+        Get.snackbar(
+          'Partially Saved',
+          '$savedCount of ${generatedImages.length} saved. Failed: ${failedIndices.join(", ")}',
+        );
+      }
     } catch (e) {
       Get.snackbar('Error', 'Failed to save images: $e');
     } finally {
@@ -368,7 +425,9 @@ class PhotoshootController extends GetxController {
 
     final url = image.imageUrl;
     if (url != null && url.isNotEmpty) {
-      final response = await http.get(Uri.parse(url));
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 30));
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return response.bodyBytes;
       }

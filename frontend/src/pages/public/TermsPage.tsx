@@ -123,8 +123,8 @@ export default function TermsPage() {
               <p>
                 If you have any questions about these Terms, please contact us at:
                 <br />
-                <a href="mailto:legal@fitcheckai.com" className="text-indigo-600 hover:text-indigo-500">
-                  legal@fitcheckai.com
+                <a href="mailto:legal@fitcheckaiapp.com" className="text-indigo-600 hover:text-indigo-500">
+                  legal@fitcheckaiapp.com
                 </a>
               </p>
             </div>

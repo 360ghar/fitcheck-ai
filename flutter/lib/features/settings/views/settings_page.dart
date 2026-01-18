@@ -84,6 +84,8 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: AppConstants.spacing24),
         _buildSubscriptionSection(),
         const SizedBox(height: AppConstants.spacing24),
+        _buildLegalSection(),
+        const SizedBox(height: AppConstants.spacing24),
         _buildAccountSection(),
       ]),
     );
@@ -250,6 +252,21 @@ class _SettingsPageState extends State<SettingsPage> {
           subtitle: const Text('Get 1 month free for each referral'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Get.toNamed(Routes.referral),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLegalSection() {
+    return _buildSection(
+      title: 'Legal',
+      children: [
+        ListTile(
+          leading: const Icon(Icons.shield_outlined),
+          title: const Text('Privacy & Terms'),
+          subtitle: const Text('Privacy policy and terms of service'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Get.toNamed(Routes.legal),
         ),
       ],
     );

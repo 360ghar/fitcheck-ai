@@ -28,6 +28,11 @@ class AuthController extends GetxController {
   // Action-specific loading states
   final RxBool isLoggingOut = false.obs;
   final RxBool isGoogleSigningIn = false.obs;
+  final RxBool isResendingVerification = false.obs;
+
+  // Email verification state for login page
+  final RxBool showEmailNotVerifiedError = false.obs;
+  final RxString unverifiedEmail = RxString('');
 
   // Getters
   bool get isAuthenticated => _supabase.isAuthenticated.value && user.value != null;
@@ -121,6 +126,7 @@ class AuthController extends GetxController {
     try {
       isLoading.value = true;
       error.value = '';
+      showEmailNotVerifiedError.value = false;
 
       final response = await _supabase.signInWithEmail(
         email: email,
@@ -149,13 +155,20 @@ class AuthController extends GetxController {
       }
     } on AuthException catch (e) {
       error.value = e.message;
-      Get.snackbar(
-        'Login Failed',
-        e.message,
-        snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red.shade50,
-        colorText: Colors.red.shade900,
-      );
+      // Check for email not confirmed error
+      if (e.message.toLowerCase().contains('email not confirmed')) {
+        showEmailNotVerifiedError.value = true;
+        unverifiedEmail.value = email;
+        // Don't show snackbar for this error, we show inline UI instead
+      } else {
+        Get.snackbar(
+          'Login Failed',
+          e.message,
+          snackPosition: SnackPosition.TOP,
+          backgroundColor: Colors.red.shade50,
+          colorText: Colors.red.shade900,
+        );
+      }
       rethrow;
     } catch (e) {
       error.value = e.toString().replaceAll('Exception: ', '');
@@ -382,6 +395,52 @@ class AuthController extends GetxController {
   /// Clear error
   void clearError() {
     error.value = '';
+  }
+
+  /// Clear email verification error state
+  void clearEmailVerificationError() {
+    showEmailNotVerifiedError.value = false;
+    unverifiedEmail.value = '';
+  }
+
+  /// Resend verification email
+  Future<void> resendVerificationEmail() async {
+    if (unverifiedEmail.value.isEmpty) return;
+
+    try {
+      isResendingVerification.value = true;
+      error.value = '';
+
+      await _supabase.resendVerificationEmail(unverifiedEmail.value);
+
+      Get.snackbar(
+        'Email Sent',
+        'Verification email has been sent. Please check your inbox.',
+        snackPosition: SnackPosition.TOP,
+        backgroundColor: Colors.green.shade50,
+        colorText: Colors.green.shade900,
+      );
+    } on AuthException catch (e) {
+      error.value = e.message;
+      Get.snackbar(
+        'Failed to Send Email',
+        e.message,
+        snackPosition: SnackPosition.TOP,
+        backgroundColor: Colors.red.shade50,
+        colorText: Colors.red.shade900,
+      );
+    } catch (e) {
+      error.value = e.toString().replaceAll('Exception: ', '');
+      Get.snackbar(
+        'Failed to Send Email',
+        error.value,
+        snackPosition: SnackPosition.TOP,
+        backgroundColor: Colors.red.shade50,
+        colorText: Colors.red.shade900,
+      );
+    } finally {
+      isResendingVerification.value = false;
+    }
   }
 
   /// Get current access token for API calls

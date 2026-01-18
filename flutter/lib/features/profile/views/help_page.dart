@@ -123,7 +123,7 @@ class HelpPage extends StatelessWidget {
                       ListTile(
                         leading: const Icon(Icons.email),
                         title: const Text('Email Support'),
-                        subtitle: const Text('support@fitcheck.ai'),
+                        subtitle: const Text('support@fitcheckaiapp.com'),
                         onTap: () => _contactSupport(),
                       ),
                       ListTile(
@@ -182,7 +182,7 @@ class HelpPage extends StatelessWidget {
   }
 
   void _openDocs() async {
-    final url = Uri.parse('https://fitcheck.ai/docs');
+    final url = Uri.parse('https://fitcheckaiapp.com/docs');
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     }

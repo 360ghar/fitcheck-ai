@@ -65,6 +65,7 @@ const _$PhotoshootUseCaseEnumMap = {
   PhotoshootUseCase.datingApp: 'dating_app',
   PhotoshootUseCase.modelPortfolio: 'model_portfolio',
   PhotoshootUseCase.instagram: 'instagram',
+  PhotoshootUseCase.aesthetic: 'aesthetic',
   PhotoshootUseCase.custom: 'custom',
 };
 

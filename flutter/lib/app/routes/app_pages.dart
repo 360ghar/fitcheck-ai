@@ -18,6 +18,7 @@ import '../../features/profile/views/profile_page.dart';
 import '../../features/profile/views/profile_edit_page.dart';
 import '../../features/profile/views/body_profiles_page.dart';
 import '../../features/profile/views/help_page.dart';
+import '../../features/legal/views/legal_page.dart';
 import '../../features/calendar/views/calendar_page.dart';
 import '../../features/settings/views/settings_page.dart';
 import '../../features/settings/views/ai_settings_page.dart';
@@ -249,6 +250,12 @@ class AppPages {
     GetPage(
       name: Routes.help,
       page: () => const HelpPage(),
+      binding: HomeBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
+      name: Routes.legal,
+      page: () => const LegalPage(),
       binding: HomeBinding(),
       middlewares: [AuthMiddleware()],
     ),

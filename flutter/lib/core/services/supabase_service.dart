@@ -182,4 +182,12 @@ class SupabaseService extends GetxService {
   Future<void> refreshSession() async {
     await _client.auth.refreshSession();
   }
+
+  /// Resend verification email
+  Future<void> resendVerificationEmail(String email) async {
+    await _client.auth.resend(
+      type: OtpType.signup,
+      email: email,
+    );
+  }
 }

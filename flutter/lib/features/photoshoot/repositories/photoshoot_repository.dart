@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
 import '../models/photoshoot_models.dart';
@@ -31,8 +33,9 @@ class PhotoshootRepository {
     required PhotoshootUseCase useCase,
     String? customPrompt,
     int numImages = 10,
+    CancelToken? cancelToken,
   }) async {
-    final response = await _apiClient.post(
+    final response = await _apiClient.postWithExtendedTimeout(
       '$_baseEndpoint/generate',
       data: {
         'photos': photos,
@@ -41,6 +44,7 @@ class PhotoshootRepository {
           'custom_prompt': customPrompt,
         'num_images': numImages,
       },
+      cancelToken: cancelToken,
     );
 
     final data = _extractDataMap(response.data);

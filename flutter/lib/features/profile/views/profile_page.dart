@@ -416,9 +416,14 @@ class ProfilePage extends StatelessWidget {
             context,
             icon: Icons.help,
             title: 'Help & Support',
-            onTap: () {
-              // TODO: Navigate to help
-            },
+            onTap: () => Get.toNamed(Routes.help),
+          ),
+          _buildDivider(context),
+          _buildMenuItem(
+            context,
+            icon: Icons.shield_outlined,
+            title: 'Privacy & Terms',
+            onTap: () => Get.toNamed(Routes.legal),
           ),
           _buildDivider(context),
           _buildMenuItem(
