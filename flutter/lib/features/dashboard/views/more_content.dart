@@ -14,6 +14,12 @@ class MoreContent extends StatelessWidget {
 
     final destinations = [
       _MoreDestination(
+        icon: Icons.accessibility_new,
+        title: 'Try-On',
+        subtitle: 'Virtual try-on with AI',
+        route: Routes.tryOn,
+      ),
+      _MoreDestination(
         icon: Icons.recommend,
         title: 'For You',
         subtitle: 'AI recommendations and looks',

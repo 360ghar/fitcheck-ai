@@ -30,14 +30,28 @@ logger = get_context_logger(__name__)
 
 NEGATIVE_PROMPTS = """
 AVOID these issues:
-- Do NOT distort or change facial features from the reference image
+
+FACE IDENTITY (CRITICAL):
+- Do NOT change any facial features from the reference image - face must be IDENTICAL
+- Do NOT alter eye shape, eye color, eye spacing, eyebrows, or eyelid appearance
+- Do NOT modify nose shape, nose size, nostril shape, or nose bridge
+- Do NOT change lip shape, lip fullness, mouth width, or smile characteristics
+- Do NOT alter face shape, jawline, chin, cheekbones, or bone structure
+- Do NOT change apparent age - maintain exact same age appearance
+- Do NOT change or ambiguate gender presentation
+- Do NOT smooth, filter, or idealize skin - preserve exact texture and features
+- Do NOT remove or add moles, freckles, scars, or distinguishing marks
+
+SKIN AND BODY:
 - Do NOT alter skin tone - match reference exactly
 - Do NOT generate extra limbs, fingers, or distorted body parts
+- AVOID uncanny valley effects or plastic-looking skin
+- AVOID inconsistent lighting between face and body
+
+TECHNICAL:
 - Do NOT create floating or disconnected clothing
 - Do NOT blend face features unnaturally
 - Do NOT generate text, watermarks, or logos
-- AVOID uncanny valley effects or plastic-looking skin
-- AVOID inconsistent lighting between face and body
 """
 
 
@@ -180,13 +194,24 @@ Style specifications:
             return await self._generate_image(prompt)
 
         elif user_avatar_base64:
-            # Use Try-On style prompt with identity preservation
+            # Use Try-On style prompt with comprehensive face identity preservation
             base_prompt = f"""Create a photorealistic fashion photograph showing the person from the reference image wearing a cohesive {style} outfit featuring: {items_list}.
 
 CRITICAL REQUIREMENTS:
-1. PRESERVE THE PERSON'S IDENTITY: The face, facial features, skin tone, hair style, hair color, and body proportions must match the reference image EXACTLY. This is the most important requirement.
+1. PRESERVE EXACT FACE IDENTITY (MOST IMPORTANT):
+   - This must look like the EXACT SAME PERSON from the reference image
+   - Maintain identical facial structure: face shape, jawline, chin, cheekbones
+   - Preserve exact eye features: eye shape, color, spacing, eyebrows, eyelids
+   - Keep identical nose: shape, bridge, nostrils, size, proportions
+   - Maintain exact mouth: lip shape, fullness, width, smile characteristics
+   - Preserve exact skin tone, texture, and any distinguishing marks (moles, freckles)
+   - Keep the same apparent age and gender presentation
+   - Match hair color, style, texture, and hairline exactly
+
 2. CLOTHING ACCURACY: Render the outfit items exactly as described with accurate colors, patterns, textures, and styling.
+
 3. NATURAL INTEGRATION: The clothing should fit naturally on the person's body with realistic draping, shadows, and fabric behavior.
+
 4. SINGLE OUTPUT: Generate one cohesive image of the person wearing the complete outfit.
 {body_desc}
 
@@ -508,9 +533,20 @@ Photography specifications:
         prompt = f"""Create a photorealistic fashion photograph showing the person from the first image wearing the clothing item shown in the second image.
 
 CRITICAL REQUIREMENTS:
-1. PRESERVE THE PERSON'S IDENTITY: The face, facial features, skin tone, hair style, hair color, and body proportions must match the first image (reference photo) EXACTLY. This is the most important requirement.
+1. PRESERVE EXACT FACE IDENTITY (MOST IMPORTANT):
+   - This must look like the EXACT SAME PERSON from the first (reference) image
+   - Maintain identical facial structure: face shape, jawline, chin, cheekbones
+   - Preserve exact eye features: eye shape, color, spacing, eyebrows, eyelids
+   - Keep identical nose: shape, bridge, nostrils, size, proportions
+   - Maintain exact mouth: lip shape, fullness, width, smile characteristics
+   - Preserve exact skin tone, texture, and any distinguishing marks (moles, freckles)
+   - Keep the same apparent age and gender presentation
+   - Match hair color, style, texture, and hairline exactly
+
 2. CLOTHING ACCURACY: The clothing item must be rendered exactly as shown in the second image - same colors, patterns, textures, style, and fit.
+
 3. NATURAL INTEGRATION: The clothing should fit naturally on the person's body with realistic draping, shadows, and fabric behavior.
+
 4. SINGLE OUTPUT: Generate one cohesive image of the person wearing the clothes.
 
 Style specifications:
@@ -520,7 +556,9 @@ Style specifications:
 - Lighting: {lighting}
 - Image quality: High-end editorial fashion photography, sharp focus, realistic fabric textures, accurate colors{clothing_desc}
 
-Output a single, high-quality photorealistic image that looks like a professional fashion photograph of this specific person wearing these specific clothes."""
+{NEGATIVE_PROMPTS}
+
+Output a single, high-quality photorealistic image that looks like a professional fashion photograph of THIS EXACT PERSON wearing these specific clothes."""
 
         try:
             # Use chat_with_vision for multi-image input with image generation

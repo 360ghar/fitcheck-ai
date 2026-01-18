@@ -6,7 +6,7 @@ import '../controllers/main_shell_controller.dart';
 import '../../dashboard/views/dashboard_content.dart';
 import '../../wardrobe/views/wardrobe_content.dart';
 import '../../outfits/views/outfits_content.dart';
-import '../../tryon/views/tryon_content.dart';
+import '../../photoshoot/views/photoshoot_content.dart';
 import '../../dashboard/views/more_content.dart';
 
 /// Main shell page with persistent navbar and IndexedStack for tab switching.
@@ -23,9 +23,9 @@ class MainShellPage extends StatelessWidget {
             index: controller.currentIndex.value,
             children: const [
               DashboardContent(),
+              PhotoshootContent(),
               WardrobeContent(),
               OutfitsContent(),
-              TryOnContent(),
               MoreContent(),
             ],
           )),
@@ -39,13 +39,13 @@ class MainShellPage extends StatelessWidget {
 
   Widget _buildFloatingActionButton(int currentIndex) {
     switch (currentIndex) {
-      case 1: // Wardrobe
+      case 2: // Wardrobe
         return FloatingActionButton.extended(
           onPressed: () => Get.toNamed(Routes.wardrobeAdd),
           icon: const Icon(Icons.add),
           label: const Text('Add Item'),
         );
-      case 2: // Outfits
+      case 3: // Outfits
         return FloatingActionButton.extended(
           onPressed: () => Get.toNamed(Routes.outfitBuilder),
           icon: const Icon(Icons.add),

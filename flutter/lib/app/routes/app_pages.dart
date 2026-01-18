@@ -25,6 +25,8 @@ import '../../features/social/views/shared_outfit_page.dart';
 import '../../features/shell/views/main_shell_page.dart';
 import '../../features/shell/bindings/main_shell_binding.dart';
 import '../../features/shell/controllers/main_shell_controller.dart';
+import '../../features/tryon/views/tryon_page.dart';
+import '../../features/tryon/bindings/tryon_binding.dart';
 import '../bindings/auth_binding.dart';
 import '../bindings/wardrobe_binding.dart';
 import '../bindings/outfit_binding.dart';
@@ -84,22 +86,28 @@ class AppPages {
     ),
     // Deep link routes - redirect to shell with correct tab
     GetPage(
-      name: Routes.wardrobe,
+      name: Routes.photoshoot,
       page: () => const MainShellPage(),
       binding: MainShellBinding(),
       middlewares: [AuthMiddleware(), TabRedirectMiddleware(1)],
     ),
     GetPage(
-      name: Routes.outfits,
+      name: Routes.wardrobe,
       page: () => const MainShellPage(),
       binding: MainShellBinding(),
       middlewares: [AuthMiddleware(), TabRedirectMiddleware(2)],
     ),
     GetPage(
-      name: Routes.tryOn,
+      name: Routes.outfits,
       page: () => const MainShellPage(),
       binding: MainShellBinding(),
       middlewares: [AuthMiddleware(), TabRedirectMiddleware(3)],
+    ),
+    GetPage(
+      name: Routes.tryOn,
+      page: () => const TryOnPage(),
+      binding: TryOnBinding(),
+      middlewares: [AuthMiddleware()],
     ),
     GetPage(
       name: Routes.more,

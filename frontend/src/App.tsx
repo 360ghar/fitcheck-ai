@@ -33,6 +33,7 @@ import CalendarPage from './pages/calendar/CalendarPage'
 import GamificationPage from './pages/gamification/GamificationPage'
 import SharedOutfitPage from './pages/shared/SharedOutfitPage'
 import TryOnPage from './pages/try-on/TryOnPage'
+import PhotoshootPage from './pages/photoshoot/PhotoshootPage'
 
 // Loading spinner for hydration state
 function LoadingSpinner() {
@@ -164,6 +165,7 @@ function App() {
         <Route path="/outfits/:id" element={<OutfitsPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/recommendations" element={<RecommendationsPage />} />
+        <Route path="/photoshoot" element={<PhotoshootPage />} />
         <Route path="/try-on" element={<TryOnPage />} />
         <Route path="/gamification" element={<GamificationPage />} />
         <Route path="/profile" element={<ProfilePage />} />

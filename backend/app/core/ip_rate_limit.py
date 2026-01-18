@@ -3,6 +3,13 @@ IP-based rate limiting for demo features.
 
 Provides rate limiting for anonymous users based on IP address.
 Uses in-memory storage with configurable limits.
+
+LIMITATIONS:
+- In-memory storage: Rate limit state is lost on server restart and not shared
+  across multiple server instances. For production, consider using Redis.
+- IP spoofing: When behind a reverse proxy, we trust X-Forwarded-For which can
+  be spoofed by direct clients. This rate limiting is best-effort for demos.
+  For critical rate limiting, use authenticated user-based limits instead.
 """
 
 import asyncio
@@ -29,6 +36,7 @@ _lock = asyncio.Lock()
 DEMO_RATE_LIMITS = {
     "extraction": 3,  # 3 extractions per day per IP
     "try_on": 2,  # 2 try-ons per day per IP
+    "photoshoot": 1,  # 1 demo photoshoot per day per IP (2 images per generation)
 }
 
 RATE_LIMIT_WINDOW = timedelta(hours=24)
@@ -39,21 +47,35 @@ def get_client_ip(request: Request) -> str:
     Extract client IP from request, handling proxies.
 
     Checks common proxy headers before falling back to direct client IP.
+
+    Note: This trusts X-Forwarded-For headers which can be spoofed by clients
+    connecting directly (not through a trusted reverse proxy). This is acceptable
+    for demo rate limiting where the goal is friction, not strict enforcement.
+    For production-critical rate limiting, use authenticated user-based limits.
     """
+    # Fall back to direct client IP first if no proxy headers
+    # This prevents spoofing when clients connect directly
+    client_ip = request.client.host if request.client else None
+
     # Check X-Forwarded-For header (for reverse proxies)
+    # Only trust if we have a valid direct connection
     forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        # Take the first IP (original client)
-        return forwarded.split(",")[0].strip()
+    if forwarded and client_ip:
+        # Take the first IP (original client from proxy chain)
+        forwarded_ip = forwarded.split(",")[0].strip()
+        # Basic validation: ensure it looks like an IP
+        if forwarded_ip and "." in forwarded_ip or ":" in forwarded_ip:
+            return forwarded_ip
 
     # Check X-Real-IP header
     real_ip = request.headers.get("X-Real-IP")
-    if real_ip:
-        return real_ip
+    if real_ip and client_ip:
+        if "." in real_ip or ":" in real_ip:
+            return real_ip
 
     # Fall back to direct client IP
-    if request.client:
-        return request.client.host
+    if client_ip:
+        return client_ip
 
     return "unknown"
 

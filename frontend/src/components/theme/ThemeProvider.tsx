@@ -32,7 +32,7 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({
   children,
-  defaultTheme = 'system',
+  defaultTheme = 'light',
 }: ThemeProviderProps) {
   // Initialize from localStorage or default
   const [theme, setThemeState] = useState<Theme>(() => {

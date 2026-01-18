@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.logging_config import setup_session_logging
 from app.core.exceptions import FitCheckException
 from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, get_correlation_id
-from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, referral, feedback
+from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, referral, feedback, photoshoot
 from app.db.connection import SupabaseDB
 from postgrest.exceptions import APIError as PostgrestAPIError
 
@@ -217,6 +217,9 @@ app.include_router(referral.router, prefix="/api/v1/referral", tags=["Referral"]
 
 # Feedback routes (public for submit, auth for ticket history)
 app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"])
+
+# Photoshoot routes (auth for generate, public for demo and use-cases)
+app.include_router(photoshoot.router, prefix="/api/v1/photoshoot", tags=["Photoshoot"])
 
 
 # ============================================================================

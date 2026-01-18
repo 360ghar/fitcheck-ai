@@ -72,6 +72,14 @@ The docs intentionally avoid duplicating full table DDL in Markdown to prevent d
 
 - **`public.user_streaks`**, **`public.user_achievements`**, **`public.challenges`**, **`public.challenge_participations`**
 
+### Photoshoot Usage
+
+Photoshoot usage is tracked in the `subscription_usage` table with additional columns:
+- `daily_photoshoot_images` (INTEGER): Number of photoshoot images generated today
+- `last_photoshoot_reset` (DATE): Date of last daily reset
+
+Demo photoshoot usage is tracked via IP-based rate limiting in the backend (in-memory per backend process).
+
 ### RLS + Triggers
 
 RLS is enabled on all user-data tables with policies ensuring users can only read/write their own records (exceptions: public challenge reads and feedback inserts). `updated_at` triggers are defined for key tables; see `backend/db/supabase/migrations/001_full_schema.sql`.
@@ -121,4 +129,3 @@ Apply it in the Supabase SQL Editor before running the app. The backend `/health
 - **Uploads:** backend enforces max file size and supported MIME types; Storage paths are tracked on image rows
 
 Canonical validation lives in Pydantic models and request handlers; see `backend/app/models/` and `backend/app/api/v1/`.
-

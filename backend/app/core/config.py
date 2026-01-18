@@ -137,6 +137,10 @@ class Settings(BaseSettings):
     # Referral Configuration
     REFERRAL_CREDIT_MONTHS: int = 1  # Months of Pro given to both referrer and referred
 
+    # Photoshoot Generator Configuration
+    PLAN_FREE_DAILY_PHOTOSHOOT_IMAGES: int = 10
+    PLAN_PRO_DAILY_PHOTOSHOOT_IMAGES: int = 50
+
     # Weather (OpenWeatherMap)
     WEATHER_API_KEY: Optional[str] = None
 

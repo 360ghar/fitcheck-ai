@@ -48,6 +48,7 @@ class ApiConstants {
   static const String subscription = '$apiVersion/subscription';
   static const String referral = '$apiVersion/referral';
   static const String feedback = '$apiVersion/feedback';
+  static const String photoshoot = '$apiVersion/photoshoot';
 
   // Batch Extraction Endpoints
   static const String aiBatchExtract = '$apiVersion/ai/batch-extract';

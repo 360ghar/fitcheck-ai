@@ -4,12 +4,14 @@
  * Interactive demo section for the landing page featuring:
  * - Try Extraction: Upload photo to see AI item extraction
  * - Try On: Upload person + outfit photos for virtual try-on
+ * - AI Photoshoot: Generate professional-styled images
  */
 
 import { Badge } from '@/components/ui/badge'
 import { AnimatedSection } from './AnimatedSection'
 import { ExtractionDemo } from './ExtractionDemo'
 import { TryOnDemo } from './TryOnDemo'
+import { PhotoshootDemo } from './PhotoshootDemo'
 import { Sparkles } from 'lucide-react'
 
 export default function DemoSection() {
@@ -34,14 +36,18 @@ export default function DemoSection() {
           </div>
         </AnimatedSection>
 
-        {/* Two-column layout for demos */}
-        <div className="grid md:grid-cols-2 gap-8">
+        {/* Three-column layout for demos */}
+        <div className="grid md:grid-cols-3 gap-8">
           <AnimatedSection delay={100}>
             <ExtractionDemo />
           </AnimatedSection>
 
           <AnimatedSection delay={200}>
             <TryOnDemo />
+          </AnimatedSection>
+
+          <AnimatedSection delay={300}>
+            <PhotoshootDemo />
           </AnimatedSection>
         </div>
       </div>

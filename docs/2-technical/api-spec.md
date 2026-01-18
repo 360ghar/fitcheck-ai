@@ -2240,6 +2240,142 @@ days=7
 
 ---
 
+## Photoshoot Endpoints
+
+### POST /photoshoot/generate
+
+Generate AI photoshoot images (authenticated users).
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Request:**
+```json
+{
+  "photos": ["base64_encoded_image_1", "base64_encoded_image_2"],
+  "use_case": "linkedin",
+  "custom_prompt": null,
+  "num_images": 10
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "session_id": "ps_abc123",
+    "status": "complete",
+    "images": [
+      {
+        "id": "img_1",
+        "index": 0,
+        "image_base64": "base64_encoded_result",
+        "image_url": "https://..."
+      }
+    ],
+    "usage": {
+      "used_today": 10,
+      "limit_today": 10,
+      "remaining": 0,
+      "plan_type": "free",
+      "resets_at": "2026-01-17T00:00:00Z"
+    }
+  }
+}
+```
+
+**Errors:**
+- `400`: Invalid request (bad photos, invalid use case)
+- `429`: Daily limit exceeded
+
+---
+
+### POST /photoshoot/demo
+
+Generate demo photoshoot images (anonymous, IP-limited).
+
+**Request:**
+```json
+{
+  "photo": "base64_encoded_image",
+  "use_case": "linkedin"
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "session_id": "ps_demo_xyz",
+    "status": "complete",
+    "images": [
+      {
+        "id": "img_1",
+        "index": 0,
+        "image_base64": "base64_encoded_result",
+        "image_url": "https://..."
+      }
+    ],
+    "remaining_today": 0,
+    "signup_cta": "Sign up for 10 free images per day!"
+  }
+}
+```
+
+**Errors:**
+- `400`: Invalid request
+- `429`: Demo rate limit exceeded (1 generation/day per IP)
+
+---
+
+### GET /photoshoot/usage
+
+Get current user's photoshoot usage stats.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "used_today": 5,
+    "limit_today": 10,
+    "remaining": 5,
+    "plan_type": "free",
+    "resets_at": "2026-01-17T00:00:00Z"
+  }
+}
+```
+
+---
+
+### GET /photoshoot/use-cases
+
+Get available photoshoot use cases.
+
+**Response (200):**
+```json
+{
+  "data": {
+    "use_cases": [
+      {
+        "id": "linkedin",
+        "name": "LinkedIn Profile",
+        "description": "Professional headshots for LinkedIn and business profiles",
+        "example_prompts": ["Professional headshot in modern office"]
+      }
+    ]
+  }
+}
+```
+
+---
+
 ## Error Response Examples
 
 ### 400 Bad Request

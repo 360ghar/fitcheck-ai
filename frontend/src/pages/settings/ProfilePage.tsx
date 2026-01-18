@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuthStore, useCurrentUser, useUserDisplayName, useUserAvatar } from '../../stores/authStore'
 import { User, Mail, Camera, Shield, Bell, Palette, Cpu, Sun, Moon, Monitor, MapPin, CreditCard, MessageSquarePlus } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
@@ -77,6 +78,7 @@ export default function ProfilePage() {
   const userAvatar = useUserAvatar()
   const logout = useAuthStore((state) => state.logout)
   const setUser = useAuthStore((state) => state.setUser)
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [activeTab, setActiveTab] = useState<TabType>('profile')
   const [isEditing, setIsEditing] = useState(false)
@@ -104,6 +106,26 @@ export default function ProfilePage() {
   const { state: geoState, requestLocation } = useGeolocation()
 
   const { toast } = useToast()
+
+  const isValidTab = (value: string): value is TabType =>
+    ['profile', 'preferences', 'settings', 'ai', 'subscription', 'support', 'security'].includes(value)
+
+  // Sync tab selection from URL (?tab=subscription) to enable deep linking (e.g. upgrade CTAs)
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam && isValidTab(tabParam) && tabParam !== activeTab) {
+      setActiveTab(tabParam)
+    }
+  }, [activeTab, searchParams])
+
+  // Keep URL in sync when user clicks tabs, while preserving other query params
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam === activeTab) return
+    const next = new URLSearchParams(searchParams)
+    next.set('tab', activeTab)
+    setSearchParams(next, { replace: true })
+  }, [activeTab, searchParams, setSearchParams])
 
   const tabs = [
     { id: 'profile' as TabType, name: 'Profile', icon: User },
