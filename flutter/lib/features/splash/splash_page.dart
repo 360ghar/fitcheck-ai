@@ -13,7 +13,7 @@ class SplashPage extends StatefulWidget {
 
 class _SplashPageState extends State<SplashPage>
     with SingleTickerProviderStateMixin {
-  static const String _titleText = 'FitCheckAI';
+  static const String _titleText = 'FitCheck AI';
   late final AnimationController _controller;
   late final List<Animation<double>> _letterAnimations;
   late final Animation<double> _cursorAnimation;

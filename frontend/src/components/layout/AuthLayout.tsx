@@ -30,7 +30,16 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
         {children}
 
         {/* Footer links */}
-        <div className="mt-6 text-center">
+        <div className="mt-6 text-center space-y-2">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            <Link to="/privacy" className="hover:text-gray-900 dark:hover:text-gray-200">
+              Privacy Policy
+            </Link>
+            {' · '}
+            <Link to="/terms" className="hover:text-gray-900 dark:hover:text-gray-200">
+              Terms of Service
+            </Link>
+          </p>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             © {new Date().getFullYear()} FitCheck AI. All rights reserved.
           </p>

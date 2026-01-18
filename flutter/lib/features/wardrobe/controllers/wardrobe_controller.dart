@@ -1,13 +1,16 @@
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../../domain/enums/category.dart';
 import '../../../../domain/enums/condition.dart' as domain;
+import '../../../app/routes/app_routes.dart';
 import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
+import '../../../core/services/haptic_service.dart';
+import '../../../core/services/network_service.dart' show RetryHelper, NetworkService;
 
 /// Wardrobe controller
 class WardrobeController extends GetxController {
   final ItemRepository _itemRepository = ItemRepository();
+  final NetworkService _networkService = Get.find<NetworkService>();
 
   // Workers for cleanup
   final List<Worker> _workers = [];
@@ -20,6 +23,7 @@ class WardrobeController extends GetxController {
   final RxString error = ''.obs;
   final Rx<ItemModel?> selectedItem = Rx<ItemModel?>(null);
   final RxSet<String> selectedIds = <String>{}.obs;
+  final RxBool isOffline = false.obs;
 
   // Filters
   final RxString searchQuery = ''.obs;
@@ -55,6 +59,8 @@ class WardrobeController extends GetxController {
     super.onInit();
     fetchItems();
     _setupFilters();
+    _setupNetworkMonitoring();
+    _setupRouteListener();
   }
 
   @override
@@ -68,25 +74,25 @@ class WardrobeController extends GetxController {
   }
 
   void _setupFilters() {
-    // Debounce search query to avoid excessive filtering on every keystroke
+    // Debounce all filter changes to avoid excessive API calls
     _workers.add(
       debounce(
         searchQuery,
-        (_) => applyFilters(),
-        time: const Duration(milliseconds: 300),
+        (_) => fetchItems(refresh: true),
+        time: const Duration(milliseconds: 500),
       ),
     );
 
-    // Other filters apply immediately (they're not changed rapidly like search)
+    // Other filters trigger refetch with debounce
     _workers.addAll([
-      ever(selectedCategories, (_) => applyFilters()),
-      ever(selectedConditions, (_) => applyFilters()),
-      ever(selectedColors, (_) => applyFilters()),
-      ever(sortType, (_) => applyFilters()),
+      debounce(selectedCategories, (_) => fetchItems(refresh: true), time: const Duration(milliseconds: 100)),
+      debounce(selectedConditions, (_) => fetchItems(refresh: true), time: const Duration(milliseconds: 100)),
+      debounce(selectedColors, (_) => fetchItems(refresh: true), time: const Duration(milliseconds: 100)),
+      debounce(sortType, (_) => fetchItems(refresh: true), time: const Duration(milliseconds: 100)),
     ]);
   }
 
-  /// Fetch items from server
+  /// Fetch items from server with filters
   Future<void> fetchItems({bool refresh = false}) async {
     if (refresh) {
       currentPage.value = 1;
@@ -104,9 +110,23 @@ class WardrobeController extends GetxController {
       }
       error.value = '';
 
-      final response = await _itemRepository.getItems(
-        page: currentPage.value,
-        limit: 20,
+      // Build filter parameters for server-side filtering
+      final response = await RetryHelper.execute(
+        operation: () => _itemRepository.getItems(
+          page: currentPage.value,
+          limit: 20,
+          search: searchQuery.value.isEmpty ? null : searchQuery.value,
+          categories: selectedCategories.isEmpty
+              ? null
+              : selectedCategories.map((c) => c.name.toLowerCase()).toList(),
+          colors: selectedColors.isEmpty ? null : selectedColors.toList(),
+          conditions: selectedConditions.isEmpty
+              ? null
+              : selectedConditions.map((c) => c.name.toLowerCase()).toList(),
+          sortBy: _mapSortTypeToApi(sortType.value),
+          sortOrder: _getSortOrder(sortType.value),
+        ),
+        maxAttempts: 3,
       );
 
       if (refresh) {
@@ -118,7 +138,8 @@ class WardrobeController extends GetxController {
       hasMore.value = response.hasMore;
       currentPage.value++;
 
-      applyFilters();
+      // Server-side filtering - no client-side filtering needed
+      filteredItems.value = items.toList();
     } catch (e) {
       error.value = e.toString().replaceAll('Exception: ', '');
       Get.snackbar(
@@ -132,76 +153,41 @@ class WardrobeController extends GetxController {
     }
   }
 
-  /// Apply filters and sort
-  void applyFilters() {
-    filteredItems.value = items.where((item) {
-      // Search query filter
-      if (searchQuery.value.isNotEmpty) {
-        final query = searchQuery.value.toLowerCase();
-        if (!item.name.toLowerCase().contains(query) &&
-            !(item.brand?.toLowerCase().contains(query) ?? false)) {
-          return false;
-        }
-      }
-
-      // Category filter
-      if (selectedCategories.isNotEmpty &&
-          !selectedCategories.contains(item.category)) {
-        return false;
-      }
-
-      // Condition filter
-      if (selectedConditions.isNotEmpty &&
-          !selectedConditions.contains(item.condition)) {
-        return false;
-      }
-
-      // Color filter
-      if (selectedColors.isNotEmpty) {
-        final colors = item.colors ?? const <String>[];
-        if (colors.isEmpty ||
-            !selectedColors.any((c) => colors.contains(c))) {
-          return false;
-        }
-      }
-
-      return true;
-    }).toList();
-
-    _sortItems();
+  /// Map sort type to API sort_by parameter
+  String _mapSortTypeToApi(String sortType) {
+    switch (sortType) {
+      case 'newest':
+      case 'oldest':
+        return 'created_at';
+      case 'name':
+        return 'name';
+      case 'most_worn':
+        return 'worn_count';
+      case 'favorite':
+        return 'is_favorite';
+      default:
+        return 'created_at';
+    }
   }
 
-  void _sortItems() {
-    switch (sortType.value) {
-      case 'newest':
-        filteredItems.sort((a, b) =>
-            (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
-        break;
+  /// Get sort order based on sort type
+  String _getSortOrder(String sortType) {
+    switch (sortType) {
       case 'oldest':
-        filteredItems.sort((a, b) =>
-            (a.createdAt ?? DateTime.now()).compareTo(b.createdAt ?? DateTime.now()));
-        break;
-      case 'name':
-        filteredItems.sort((a, b) => a.name.compareTo(b.name));
-        break;
-      case 'most_worn':
-        filteredItems.sort((a, b) => b.wornCount.compareTo(a.wornCount));
-        break;
-      case 'favorite':
-        // Sort favorites first, then non-favorites
-        filteredItems.sort((a, b) {
-          if (a.isFavorite == b.isFavorite) {
-            return (b.createdAt ?? DateTime(0))
-                .compareTo(a.createdAt ?? DateTime(0));
-          }
-          return a.isFavorite ? -1 : 1;
-        });
-        break;
+        return 'asc';
+      default:
+        return 'desc';
     }
+  }
+
+  /// Apply filters - triggers server refetch with current filters
+  void applyFilters() {
+    fetchItems(refresh: true);
   }
 
   /// Select/deselect item
   void toggleItemSelection(ItemModel item) {
+    HapticService.selectionClick();
     if (selectedIds.contains(item.id)) {
       selectedIds.remove(item.id);
     } else {
@@ -274,6 +260,7 @@ class WardrobeController extends GetxController {
 
   /// Toggle item favorite
   Future<void> toggleFavorite(String itemId) async {
+    HapticService.favorite();
     isFavoritingMap[itemId] = true;
     try {
       final updatedItem = await _itemRepository.toggleFavorite(itemId);
@@ -312,6 +299,7 @@ class WardrobeController extends GetxController {
 
   /// Mark item as worn
   Future<void> markAsWorn(String itemId) async {
+    HapticService.lightImpact();
     isMarkingWornMap[itemId] = true;
     try {
       final updatedItem = await _itemRepository.markAsWorn(itemId);
@@ -350,6 +338,7 @@ class WardrobeController extends GetxController {
 
   /// Delete item
   Future<void> deleteItem(String itemId) async {
+    HapticService.delete();
     isDeletingMap[itemId] = true;
     try {
       await _itemRepository.deleteItem(itemId);
@@ -413,5 +402,59 @@ class WardrobeController extends GetxController {
   /// Clear error
   void clearError() {
     error.value = '';
+  }
+
+  /// Setup network monitoring
+  void _setupNetworkMonitoring() {
+    // Update offline state based on network connectivity
+    _workers.add(ever(_networkService.isConnected, (connected) {
+      isOffline.value = !connected;
+      if (connected && items.isEmpty && !isLoading.value) {
+        // Network recovered and we have no items, try fetching
+        fetchItems();
+      }
+    }));
+
+    // Initial state
+    isOffline.value = !_networkService.isConnected.value;
+  }
+
+  /// Setup route listener to refresh when returning to this page
+  void _setupRouteListener() {
+    // Track previous route to detect when we're coming back from item add/edit
+    String? previousRoute;
+    bool shouldRefreshOnWardrobe = false;
+
+    _workers.add(
+      ever(Get.routing.obs, (routing) {
+        final currentRoute = Get.currentRoute;
+
+        // Mark that we should refresh when we come back to wardrobe
+        // after being on item add, batch add, or item edit pages
+        if (previousRoute != null &&
+            (previousRoute == Routes.wardrobeAdd ||
+                previousRoute == Routes.wardrobeBatchAdd ||
+                previousRoute == Routes.wardrobeBatchReview ||
+                previousRoute == Routes.wardrobeBatchProgress ||
+                previousRoute?.startsWith(Routes.wardrobeItemEdit) == true ||
+                previousRoute == Routes.outfitBuilder)) {
+          shouldRefreshOnWardrobe = true;
+        }
+
+        // When navigating to wardrobe/home and we marked that we should refresh
+        if ((currentRoute == Routes.wardrobe || currentRoute == Routes.home) &&
+            shouldRefreshOnWardrobe) {
+          shouldRefreshOnWardrobe = false;
+          // Give UI time to settle before refreshing
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (!isLoading.value && !isLoadingMore.value) {
+              fetchItems(refresh: true);
+            }
+          });
+        }
+
+        previousRoute = currentRoute;
+      }),
+    );
   }
 }

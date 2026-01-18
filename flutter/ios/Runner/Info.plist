@@ -45,6 +45,10 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>FitCheck AI needs camera access to take photos of your outfits and wardrobe items.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>FitCheck AI needs photo library access to select images of your outfits and wardrobe items.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

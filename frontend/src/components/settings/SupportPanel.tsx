@@ -16,6 +16,9 @@ import {
   Loader2,
   CheckCircle,
   Clock,
+  Shield,
+  ExternalLink,
+  Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -350,6 +353,48 @@ export function SupportPanel() {
           </CardContent>
         </Card>
       )}
+
+      {/* Legal Links */}
+      <Card>
+        <CardHeader className="px-4 py-4 md:px-6 md:py-6">
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5 text-indigo-500" />
+            Legal
+          </CardTitle>
+          <CardDescription>
+            Privacy policy and terms of service
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
+          <div className="space-y-2">
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Privacy Policy
+            </a>
+            <a
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Terms of Service
+            </a>
+            <a
+              href="mailto:info@fitcheckaiapp.com?subject=Account%20Deletion%20Request&body=Please%20delete%20my%20account%20and%20all%20associated%20data."
+              className="flex items-center gap-2 text-sm text-destructive/80 hover:text-destructive transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+              Request Account Deletion
+            </a>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

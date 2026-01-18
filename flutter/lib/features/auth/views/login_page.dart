@@ -20,7 +20,22 @@ class _LoginPageState extends State<LoginPage> {
   final _isPasswordVisible = false.obs;
 
   @override
+  void initState() {
+    super.initState();
+    // Clear email verification error when email changes
+    _emailController.addListener(_onEmailChanged);
+  }
+
+  void _onEmailChanged() {
+    final authController = Get.find<AuthController>();
+    if (authController.showEmailNotVerifiedError.value) {
+      authController.clearEmailVerificationError();
+    }
+  }
+
+  @override
   void dispose() {
+    _emailController.removeListener(_onEmailChanged);
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -114,6 +129,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: AppConstants.spacing8),
                       Obx(() => _buildLoginButton(authController, tokens)),
+                      Obx(() => _buildEmailVerificationError(authController, tokens)),
                       const SizedBox(height: AppConstants.spacing16),
                       _buildDivider(tokens),
                       const SizedBox(height: AppConstants.spacing16),
@@ -217,6 +233,78 @@ class _LoginPageState extends State<LoginPage> {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : const Text('Sign In'),
+    );
+  }
+
+  Widget _buildEmailVerificationError(AuthController authController, AuthUiTokens tokens) {
+    if (!authController.showEmailNotVerifiedError.value) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      children: [
+        const SizedBox(height: AppConstants.spacing16),
+        Container(
+          padding: const EdgeInsets.all(AppConstants.spacing12),
+          decoration: BoxDecoration(
+            color: Colors.orange.shade50,
+            borderRadius: BorderRadius.circular(AppConstants.radius12),
+            border: Border.all(color: Colors.orange.shade200),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.orange.shade700,
+                    size: 20,
+                  ),
+                  const SizedBox(width: AppConstants.spacing8),
+                  Expanded(
+                    child: Text(
+                      'Please verify your email address before you log in.',
+                      style: TextStyle(
+                        color: Colors.orange.shade900,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppConstants.spacing12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: authController.isResendingVerification.value
+                      ? null
+                      : () => authController.resendVerificationEmail(),
+                  icon: authController.isResendingVerification.value
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(Icons.email_outlined, color: Colors.orange.shade700),
+                  label: Text(
+                    authController.isResendingVerification.value
+                        ? 'Sending...'
+                        : 'Resend Verification Email',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.orange.shade700,
+                    side: BorderSide(color: Colors.orange.shade300),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppConstants.spacing12,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

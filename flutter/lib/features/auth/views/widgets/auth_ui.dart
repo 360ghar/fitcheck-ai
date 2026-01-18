@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_constants.dart';
 
 class AuthUiTokens {
@@ -239,17 +240,38 @@ class AuthFooterText extends StatelessWidget {
 
   final Color textColor;
 
+  static const String privacyPolicyUrl = 'https://fitcheckaiapp.com/privacy';
+  static const String termsOfServiceUrl = 'https://fitcheckaiapp.com/terms';
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Text(
-      'PRIVACY POLICY  |  TERMS OF SERVICE',
-      textAlign: TextAlign.center,
-      style: TextStyle(
-        color: textColor.withOpacity(0.65),
-        fontSize: 12,
-        letterSpacing: 1.2,
-        fontWeight: FontWeight.w500,
-      ),
+    final linkStyle = TextStyle(
+      color: textColor.withOpacity(0.65),
+      fontSize: 12,
+      letterSpacing: 1.2,
+      fontWeight: FontWeight.w500,
+    );
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        GestureDetector(
+          onTap: () => _openUrl(privacyPolicyUrl),
+          child: Text('PRIVACY POLICY', style: linkStyle),
+        ),
+        Text('  |  ', style: linkStyle),
+        GestureDetector(
+          onTap: () => _openUrl(termsOfServiceUrl),
+          child: Text('TERMS OF SERVICE', style: linkStyle),
+        ),
+      ],
     );
   }
 }

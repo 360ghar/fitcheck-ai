@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' hide Category;
 import '../models/item_model.dart';
 import '../../../domain/enums/category.dart';
 import '../../../core/network/api_client.dart';
@@ -219,6 +220,42 @@ class ItemRepository {
     }
   }
 
+  /// Upload an image from base64 string (for AI-generated product images)
+  /// Converts base64 to bytes and sends as multipart/form-data with 'file' field
+  Future<ItemImage?> uploadImageFromBase64(
+    String itemId,
+    String base64Image,
+  ) async {
+    try {
+      // Convert base64 string to bytes
+      final bytes = base64Decode(base64Image);
+
+      // Create multipart form data with 'file' field (backend expects this name)
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(
+          bytes,
+          filename: 'generated_image.png',
+          contentType: DioMediaType.parse('image/png'),
+        ),
+      });
+
+      final response = await _apiClient.post(
+        '${ApiConstants.items}/$itemId/images',
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      final dataMap = _extractDataMap(response.data);
+      if (dataMap.isNotEmpty) {
+        return ItemImage.fromJson(_normalizeItemImageJson(dataMap));
+      }
+      return null;
+    } on DioException catch (e) {
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   /// Delete item image
   Future<void> deleteItemImage(String itemId, String imageId) async {
     try {
@@ -287,31 +324,158 @@ class ItemRepository {
     }
   }
 
-  /// Extract items from image using AI
-  Future<ExtractionResponse> extractItemsFromImage(File image) async {
+  /// Extract items from image using AI (SYNCHRONOUS)
+  /// Backend returns items immediately - no polling needed for single item extraction
+  /// Use batch extraction endpoints for async processing with multiple images
+  Future<SyncExtractionResponse> extractItemsFromImage(File image) async {
     try {
       final bytes = await image.readAsBytes();
       final imageBase64 = base64Encode(bytes);
 
       final response = await _apiClient.post(
-        '${ApiConstants.ai}/extract-items',
+        ApiConstants.aiExtractItems,
         data: {'image': imageBase64},
       );
 
+      // Backend returns { "data": { "items": [...], "overall_confidence": 0.8, ... }, "message": "..." }
       final data = _extractDataMap(response.data);
-      return _parseExtractionResponse(data);
+
+      return SyncExtractionResponse.fromJson(data);
     } on DioException catch (e) {
       throw handleDioException(e);
+    } catch (e) {
+      rethrow;
     }
   }
 
-  /// Get AI generation status
+  /// Generate a product image for a detected clothing item
+  /// This creates an isolated product-style image of just the clothing item
+  /// without the person/background, suitable for catalog display
+  Future<ProductImageGenerationResponse> generateProductImage({
+    required String itemDescription,
+    required String category,
+    String? subCategory,
+    List<String>? colors,
+    String? material,
+    String? pattern,
+    String background = 'white',
+    String viewAngle = 'front',
+    bool includeShadows = false,
+    bool saveToStorage = false,
+  }) async {
+    try {
+      final response = await _apiClient.post(
+        ApiConstants.aiGenerateProductImage,
+        data: {
+          'item_description': itemDescription,
+          'category': category,
+          if (subCategory != null) 'sub_category': subCategory,
+          'colors': colors ?? [],
+          if (material != null) 'material': material,
+          if (pattern != null) 'pattern': pattern,
+          'background': background,
+          'view_angle': viewAngle,
+          'include_shadows': includeShadows,
+          'save_to_storage': saveToStorage,
+        },
+        options: Options(
+          receiveTimeout: const Duration(minutes: 5), // AI generation can take time
+        ),
+      );
+
+      final data = _extractDataMap(response.data);
+      final result = ProductImageGenerationResponse.fromJson(data);
+
+      return result;
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Generate product images for all detected items sequentially
+  /// Returns a list of DetectedItemDataWithImage with generated images
+  Future<List<DetectedItemDataWithImage>> generateProductImagesForItems(
+    List<DetectedItemData> items,
+  ) async {
+    final results = <DetectedItemDataWithImage>[];
+
+    // Process items sequentially to avoid overwhelming the API
+    // (parallel processing could be added later with rate limiting)
+    for (final item in items) {
+      try {
+        final response = await generateProductImage(
+          itemDescription: item.detailedDescription ?? item.subCategory ?? item.category,
+          category: item.category,
+          subCategory: item.subCategory,
+          colors: item.colors,
+          material: item.material,
+          pattern: item.pattern,
+        );
+
+        // Convert base64 to data URL for display
+        final dataUrl = 'data:image/png;base64,${response.imageBase64}';
+
+        results.add(DetectedItemDataWithImage(
+          tempId: item.tempId,
+          category: item.category,
+          subCategory: item.subCategory,
+          colors: item.colors,
+          material: item.material,
+          pattern: item.pattern,
+          brand: item.brand,
+          confidence: item.confidence,
+          detailedDescription: item.detailedDescription,
+          status: 'generated',
+          generatedImageUrl: dataUrl,
+          name: item.subCategory ?? item.category,
+        ));
+      } catch (e) {
+        // Add item with error status
+        results.add(DetectedItemDataWithImage(
+          tempId: item.tempId,
+          category: item.category,
+          subCategory: item.subCategory,
+          colors: item.colors,
+          material: item.material,
+          pattern: item.pattern,
+          brand: item.brand,
+          confidence: item.confidence,
+          detailedDescription: item.detailedDescription,
+          status: 'generation_failed',
+          generationError: e.toString().replaceAll('Exception: ', ''),
+          name: item.subCategory ?? item.category,
+        ));
+      }
+    }
+
+    return results;
+  }
+
+  /// Get batch extraction job status
+  /// ONLY use this for batch extraction jobs started via /api/v1/ai/batch-extract
+  /// Single item extraction is synchronous and does not need polling
   Future<ExtractionResponse> getGenerationStatus(String generationId) async {
-    return ExtractionResponse(
-      id: generationId,
-      status: 'failed',
-      error: 'Extraction polling is not supported',
-    );
+    try {
+      // Try the batch extraction status endpoint first
+      final response = await _apiClient.get(
+        ApiConstants.aiBatchExtractStatus(generationId),
+      );
+      final data = _extractDataMap(response.data);
+      return _parseExtractionResponse(data);
+    } on DioException catch (e) {
+      // If batch endpoint fails, try the extraction items endpoint
+      try {
+        final response = await _apiClient.get(
+          '${ApiConstants.ai}/extract-items/$generationId',  // interpolation needed here
+        );
+        final data = _extractDataMap(response.data);
+        return _parseExtractionResponse(data);
+      } catch (_) {
+        throw handleDioException(e);
+      }
+    }
   }
 
   Map<String, dynamic> _extractDataMap(dynamic payload) {
@@ -323,19 +487,6 @@ class ItemRepository {
       return payload;
     }
     return <String, dynamic>{};
-  }
-
-  List<dynamic> _extractDataList(dynamic payload) {
-    if (payload is Map<String, dynamic>) {
-      final data = payload['data'];
-      if (data is List) {
-        return data;
-      }
-    }
-    if (payload is List) {
-      return payload;
-    }
-    return const [];
   }
 
   ItemsListResponse _parseItemsList(

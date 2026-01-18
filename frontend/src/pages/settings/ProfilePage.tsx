@@ -72,6 +72,9 @@ function toCsv(value: string[] | undefined | null): string {
   return (value || []).join(', ')
 }
 
+const isValidTab = (value: string): value is TabType =>
+  ['profile', 'preferences', 'settings', 'ai', 'subscription', 'support', 'security'].includes(value)
+
 export default function ProfilePage() {
   const user = useCurrentUser()
   const userDisplayName = useUserDisplayName()
@@ -80,7 +83,11 @@ export default function ProfilePage() {
   const setUser = useAuthStore((state) => state.setUser)
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const [activeTab, setActiveTab] = useState<TabType>('profile')
+  // Initialize activeTab from URL or default to 'profile'
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    const tabParam = searchParams.get('tab')
+    return tabParam && isValidTab(tabParam) ? tabParam : 'profile'
+  })
   const [isEditing, setIsEditing] = useState(false)
   const [fullName, setFullName] = useState(user?.full_name || '')
   const [gender, setGender] = useState<string>(user?.gender || '')
@@ -107,25 +114,15 @@ export default function ProfilePage() {
 
   const { toast } = useToast()
 
-  const isValidTab = (value: string): value is TabType =>
-    ['profile', 'preferences', 'settings', 'ai', 'subscription', 'support', 'security'].includes(value)
-
-  // Sync tab selection from URL (?tab=subscription) to enable deep linking (e.g. upgrade CTAs)
-  useEffect(() => {
-    const tabParam = searchParams.get('tab')
-    if (tabParam && isValidTab(tabParam) && tabParam !== activeTab) {
-      setActiveTab(tabParam)
-    }
-  }, [activeTab, searchParams])
-
   // Keep URL in sync when user clicks tabs, while preserving other query params
   useEffect(() => {
-    const tabParam = searchParams.get('tab')
-    if (tabParam === activeTab) return
+    const currentTab = searchParams.get('tab')
+    if (currentTab === activeTab) return
     const next = new URLSearchParams(searchParams)
     next.set('tab', activeTab)
     setSearchParams(next, { replace: true })
-  }, [activeTab, searchParams, setSearchParams])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]) // Only react to activeTab changes, not searchParams
 
   const tabs = [
     { id: 'profile' as TabType, name: 'Profile', icon: User },

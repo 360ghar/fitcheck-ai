@@ -59,6 +59,17 @@ class ApiConstants {
   static String aiBatchExtractStatus(String jobId) =>
       '$aiBatchExtract/$jobId/status';
 
+  // AI Extraction Endpoints
+  static const String aiExtractItems = '$ai/extract-items';
+  static const String aiExtractSingleItem = '$ai/extract-single-item';
+  static const String aiGenerateOutfit = '$ai/generate-outfit';
+  static const String aiGenerateProductImage = '$ai/generate-product-image';
+  static const String aiTryOn = '$ai/try-on';
+  static const String aiEmbeddings = '$ai/embeddings';
+  static const String aiEmbeddingsBatch = '$ai/embeddings/batch';
+  static const String aiEmbeddingsSearch = '$ai/embeddings/search';
+  static const String aiModels = '$ai/models';
+
   // Auth Endpoints
   static const String login = '/login';
   static const String register = '/register';
@@ -70,7 +81,8 @@ class ApiConstants {
   static const String verifyEmail = '/verify-email';
 
   // Timeout durations
-  static const Duration connectionTimeout = Duration(seconds: 30);
+  // Increased connection timeout to handle AI operations that take longer to respond
+  static const Duration connectionTimeout = Duration(minutes: 3);
   static const Duration receiveTimeout = Duration(minutes: 10); // For AI operations
-  static const Duration sendTimeout = Duration(seconds: 30);
+  static const Duration sendTimeout = Duration(minutes: 3);
 }

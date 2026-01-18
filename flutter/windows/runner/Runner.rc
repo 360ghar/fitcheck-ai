@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.fitcheck" "\0"
-            VALUE "FileDescription", "fitcheck_ai" "\0"
+            VALUE "FileDescription", "FitCheck AI" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "fitcheck_ai" "\0"
+            VALUE "InternalName", "FitCheck AI" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.fitcheck. All rights reserved." "\0"
             VALUE "OriginalFilename", "fitcheck_ai.exe" "\0"
-            VALUE "ProductName", "fitcheck_ai" "\0"
+            VALUE "ProductName", "FitCheck AI" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

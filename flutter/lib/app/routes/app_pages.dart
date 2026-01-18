@@ -9,13 +9,16 @@ import '../../features/auth/views/forgot_password_page.dart';
 import '../../features/wardrobe/views/item_add_page.dart';
 import '../../features/wardrobe/views/item_detail_page.dart';
 import '../../features/wardrobe/views/item_edit_page.dart';
+import '../../features/wardrobe/views/wardrobe_stats_page.dart';
 import '../../features/outfits/views/outfit_builder_page.dart';
 import '../../features/outfits/views/outfit_detail_page.dart';
 import '../../features/outfits/views/outfit_edit_page.dart';
+import '../../features/outfits/views/outfit_collections_page.dart';
 import '../../features/profile/views/profile_page.dart';
 import '../../features/profile/views/profile_edit_page.dart';
 import '../../features/profile/views/body_profiles_page.dart';
 import '../../features/profile/views/help_page.dart';
+import '../../features/legal/views/legal_page.dart';
 import '../../features/calendar/views/calendar_page.dart';
 import '../../features/settings/views/settings_page.dart';
 import '../../features/settings/views/ai_settings_page.dart';
@@ -154,6 +157,12 @@ class AppPages {
       middlewares: [AuthMiddleware()],
     ),
     GetPage(
+      name: Routes.wardrobeStats,
+      page: () => const WardrobeStatsPage(),
+      binding: WardrobeBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
       name: Routes.outfitBuilder,
       page: () => const OutfitBuilderPage(),
       binding: OutfitBinding(),
@@ -168,6 +177,12 @@ class AppPages {
     GetPage(
       name: Routes.outfitEdit,
       page: () => OutfitEditPage(outfitId: Get.parameters['id'] ?? ''),
+      binding: OutfitBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
+      name: Routes.outfitCollections,
+      page: () => const OutfitCollectionsPage(),
       binding: OutfitBinding(),
       middlewares: [AuthMiddleware()],
     ),
@@ -235,6 +250,12 @@ class AppPages {
     GetPage(
       name: Routes.help,
       page: () => const HelpPage(),
+      binding: HomeBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
+      name: Routes.legal,
+      page: () => const LegalPage(),
       binding: HomeBinding(),
       middlewares: [AuthMiddleware()],
     ),

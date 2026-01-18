@@ -2130,4 +2130,1734 @@ as DateTime?,
 
 }
 
+
+/// @nodoc
+mixin _$BoundingBox {
+
+ double get x; double get y; double get width; double get height;
+/// Create a copy of BoundingBox
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$BoundingBoxCopyWith<BoundingBox> get copyWith => _$BoundingBoxCopyWithImpl<BoundingBox>(this as BoundingBox, _$identity);
+
+  /// Serializes this BoundingBox to a JSON map.
+  Map<String, dynamic> toJson();
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is BoundingBox&&(identical(other.x, x) || other.x == x)&&(identical(other.y, y) || other.y == y)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,x,y,width,height);
+
+@override
+String toString() {
+  return 'BoundingBox(x: $x, y: $y, width: $width, height: $height)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $BoundingBoxCopyWith<$Res>  {
+  factory $BoundingBoxCopyWith(BoundingBox value, $Res Function(BoundingBox) _then) = _$BoundingBoxCopyWithImpl;
+@useResult
+$Res call({
+ double x, double y, double width, double height
+});
+
+
+
+
+}
+/// @nodoc
+class _$BoundingBoxCopyWithImpl<$Res>
+    implements $BoundingBoxCopyWith<$Res> {
+  _$BoundingBoxCopyWithImpl(this._self, this._then);
+
+  final BoundingBox _self;
+  final $Res Function(BoundingBox) _then;
+
+/// Create a copy of BoundingBox
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? x = null,Object? y = null,Object? width = null,Object? height = null,}) {
+  return _then(_self.copyWith(
+x: null == x ? _self.x : x // ignore: cast_nullable_to_non_nullable
+as double,y: null == y ? _self.y : y // ignore: cast_nullable_to_non_nullable
+as double,width: null == width ? _self.width : width // ignore: cast_nullable_to_non_nullable
+as double,height: null == height ? _self.height : height // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [BoundingBox].
+extension BoundingBoxPatterns on BoundingBox {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _BoundingBox value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _BoundingBox() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _BoundingBox value)  $default,){
+final _that = this;
+switch (_that) {
+case _BoundingBox():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _BoundingBox value)?  $default,){
+final _that = this;
+switch (_that) {
+case _BoundingBox() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( double x,  double y,  double width,  double height)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _BoundingBox() when $default != null:
+return $default(_that.x,_that.y,_that.width,_that.height);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( double x,  double y,  double width,  double height)  $default,) {final _that = this;
+switch (_that) {
+case _BoundingBox():
+return $default(_that.x,_that.y,_that.width,_that.height);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( double x,  double y,  double width,  double height)?  $default,) {final _that = this;
+switch (_that) {
+case _BoundingBox() when $default != null:
+return $default(_that.x,_that.y,_that.width,_that.height);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+@JsonSerializable()
+
+class _BoundingBox implements BoundingBox {
+  const _BoundingBox({required this.x, required this.y, required this.width, required this.height});
+  factory _BoundingBox.fromJson(Map<String, dynamic> json) => _$BoundingBoxFromJson(json);
+
+@override final  double x;
+@override final  double y;
+@override final  double width;
+@override final  double height;
+
+/// Create a copy of BoundingBox
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$BoundingBoxCopyWith<_BoundingBox> get copyWith => __$BoundingBoxCopyWithImpl<_BoundingBox>(this, _$identity);
+
+@override
+Map<String, dynamic> toJson() {
+  return _$BoundingBoxToJson(this, );
+}
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _BoundingBox&&(identical(other.x, x) || other.x == x)&&(identical(other.y, y) || other.y == y)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,x,y,width,height);
+
+@override
+String toString() {
+  return 'BoundingBox(x: $x, y: $y, width: $width, height: $height)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$BoundingBoxCopyWith<$Res> implements $BoundingBoxCopyWith<$Res> {
+  factory _$BoundingBoxCopyWith(_BoundingBox value, $Res Function(_BoundingBox) _then) = __$BoundingBoxCopyWithImpl;
+@override @useResult
+$Res call({
+ double x, double y, double width, double height
+});
+
+
+
+
+}
+/// @nodoc
+class __$BoundingBoxCopyWithImpl<$Res>
+    implements _$BoundingBoxCopyWith<$Res> {
+  __$BoundingBoxCopyWithImpl(this._self, this._then);
+
+  final _BoundingBox _self;
+  final $Res Function(_BoundingBox) _then;
+
+/// Create a copy of BoundingBox
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? x = null,Object? y = null,Object? width = null,Object? height = null,}) {
+  return _then(_BoundingBox(
+x: null == x ? _self.x : x // ignore: cast_nullable_to_non_nullable
+as double,y: null == y ? _self.y : y // ignore: cast_nullable_to_non_nullable
+as double,width: null == width ? _self.width : width // ignore: cast_nullable_to_non_nullable
+as double,height: null == height ? _self.height : height // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+
+}
+
+/// @nodoc
+mixin _$DetectedItemData {
+
+ String get tempId; String get category;@JsonKey(name: 'sub_category') String? get subCategory; List<String>? get colors; String? get material; String? get pattern; String? get brand; double get confidence;@JsonKey(name: 'detailed_description') String? get detailedDescription; String get status;
+/// Create a copy of DetectedItemData
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$DetectedItemDataCopyWith<DetectedItemData> get copyWith => _$DetectedItemDataCopyWithImpl<DetectedItemData>(this as DetectedItemData, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is DetectedItemData&&(identical(other.tempId, tempId) || other.tempId == tempId)&&(identical(other.category, category) || other.category == category)&&(identical(other.subCategory, subCategory) || other.subCategory == subCategory)&&const DeepCollectionEquality().equals(other.colors, colors)&&(identical(other.material, material) || other.material == material)&&(identical(other.pattern, pattern) || other.pattern == pattern)&&(identical(other.brand, brand) || other.brand == brand)&&(identical(other.confidence, confidence) || other.confidence == confidence)&&(identical(other.detailedDescription, detailedDescription) || other.detailedDescription == detailedDescription)&&(identical(other.status, status) || other.status == status));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,tempId,category,subCategory,const DeepCollectionEquality().hash(colors),material,pattern,brand,confidence,detailedDescription,status);
+
+@override
+String toString() {
+  return 'DetectedItemData(tempId: $tempId, category: $category, subCategory: $subCategory, colors: $colors, material: $material, pattern: $pattern, brand: $brand, confidence: $confidence, detailedDescription: $detailedDescription, status: $status)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $DetectedItemDataCopyWith<$Res>  {
+  factory $DetectedItemDataCopyWith(DetectedItemData value, $Res Function(DetectedItemData) _then) = _$DetectedItemDataCopyWithImpl;
+@useResult
+$Res call({
+ String tempId, String category,@JsonKey(name: 'sub_category') String? subCategory, List<String>? colors, String? material, String? pattern, String? brand, double confidence,@JsonKey(name: 'detailed_description') String? detailedDescription, String status
+});
+
+
+
+
+}
+/// @nodoc
+class _$DetectedItemDataCopyWithImpl<$Res>
+    implements $DetectedItemDataCopyWith<$Res> {
+  _$DetectedItemDataCopyWithImpl(this._self, this._then);
+
+  final DetectedItemData _self;
+  final $Res Function(DetectedItemData) _then;
+
+/// Create a copy of DetectedItemData
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? tempId = null,Object? category = null,Object? subCategory = freezed,Object? colors = freezed,Object? material = freezed,Object? pattern = freezed,Object? brand = freezed,Object? confidence = null,Object? detailedDescription = freezed,Object? status = null,}) {
+  return _then(_self.copyWith(
+tempId: null == tempId ? _self.tempId : tempId // ignore: cast_nullable_to_non_nullable
+as String,category: null == category ? _self.category : category // ignore: cast_nullable_to_non_nullable
+as String,subCategory: freezed == subCategory ? _self.subCategory : subCategory // ignore: cast_nullable_to_non_nullable
+as String?,colors: freezed == colors ? _self.colors : colors // ignore: cast_nullable_to_non_nullable
+as List<String>?,material: freezed == material ? _self.material : material // ignore: cast_nullable_to_non_nullable
+as String?,pattern: freezed == pattern ? _self.pattern : pattern // ignore: cast_nullable_to_non_nullable
+as String?,brand: freezed == brand ? _self.brand : brand // ignore: cast_nullable_to_non_nullable
+as String?,confidence: null == confidence ? _self.confidence : confidence // ignore: cast_nullable_to_non_nullable
+as double,detailedDescription: freezed == detailedDescription ? _self.detailedDescription : detailedDescription // ignore: cast_nullable_to_non_nullable
+as String?,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as String,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [DetectedItemData].
+extension DetectedItemDataPatterns on DetectedItemData {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _DetectedItemData value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _DetectedItemData() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _DetectedItemData value)  $default,){
+final _that = this;
+switch (_that) {
+case _DetectedItemData():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _DetectedItemData value)?  $default,){
+final _that = this;
+switch (_that) {
+case _DetectedItemData() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String tempId,  String category, @JsonKey(name: 'sub_category')  String? subCategory,  List<String>? colors,  String? material,  String? pattern,  String? brand,  double confidence, @JsonKey(name: 'detailed_description')  String? detailedDescription,  String status)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _DetectedItemData() when $default != null:
+return $default(_that.tempId,_that.category,_that.subCategory,_that.colors,_that.material,_that.pattern,_that.brand,_that.confidence,_that.detailedDescription,_that.status);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String tempId,  String category, @JsonKey(name: 'sub_category')  String? subCategory,  List<String>? colors,  String? material,  String? pattern,  String? brand,  double confidence, @JsonKey(name: 'detailed_description')  String? detailedDescription,  String status)  $default,) {final _that = this;
+switch (_that) {
+case _DetectedItemData():
+return $default(_that.tempId,_that.category,_that.subCategory,_that.colors,_that.material,_that.pattern,_that.brand,_that.confidence,_that.detailedDescription,_that.status);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String tempId,  String category, @JsonKey(name: 'sub_category')  String? subCategory,  List<String>? colors,  String? material,  String? pattern,  String? brand,  double confidence, @JsonKey(name: 'detailed_description')  String? detailedDescription,  String status)?  $default,) {final _that = this;
+switch (_that) {
+case _DetectedItemData() when $default != null:
+return $default(_that.tempId,_that.category,_that.subCategory,_that.colors,_that.material,_that.pattern,_that.brand,_that.confidence,_that.detailedDescription,_that.status);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _DetectedItemData implements DetectedItemData {
+  const _DetectedItemData({required this.tempId, required this.category, @JsonKey(name: 'sub_category') this.subCategory, final  List<String>? colors, this.material, this.pattern, this.brand, required this.confidence, @JsonKey(name: 'detailed_description') this.detailedDescription, this.status = 'detected'}): _colors = colors;
+  
+
+@override final  String tempId;
+@override final  String category;
+@override@JsonKey(name: 'sub_category') final  String? subCategory;
+ final  List<String>? _colors;
+@override List<String>? get colors {
+  final value = _colors;
+  if (value == null) return null;
+  if (_colors is EqualUnmodifiableListView) return _colors;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(value);
+}
+
+@override final  String? material;
+@override final  String? pattern;
+@override final  String? brand;
+@override final  double confidence;
+@override@JsonKey(name: 'detailed_description') final  String? detailedDescription;
+@override@JsonKey() final  String status;
+
+/// Create a copy of DetectedItemData
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$DetectedItemDataCopyWith<_DetectedItemData> get copyWith => __$DetectedItemDataCopyWithImpl<_DetectedItemData>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _DetectedItemData&&(identical(other.tempId, tempId) || other.tempId == tempId)&&(identical(other.category, category) || other.category == category)&&(identical(other.subCategory, subCategory) || other.subCategory == subCategory)&&const DeepCollectionEquality().equals(other._colors, _colors)&&(identical(other.material, material) || other.material == material)&&(identical(other.pattern, pattern) || other.pattern == pattern)&&(identical(other.brand, brand) || other.brand == brand)&&(identical(other.confidence, confidence) || other.confidence == confidence)&&(identical(other.detailedDescription, detailedDescription) || other.detailedDescription == detailedDescription)&&(identical(other.status, status) || other.status == status));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,tempId,category,subCategory,const DeepCollectionEquality().hash(_colors),material,pattern,brand,confidence,detailedDescription,status);
+
+@override
+String toString() {
+  return 'DetectedItemData(tempId: $tempId, category: $category, subCategory: $subCategory, colors: $colors, material: $material, pattern: $pattern, brand: $brand, confidence: $confidence, detailedDescription: $detailedDescription, status: $status)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$DetectedItemDataCopyWith<$Res> implements $DetectedItemDataCopyWith<$Res> {
+  factory _$DetectedItemDataCopyWith(_DetectedItemData value, $Res Function(_DetectedItemData) _then) = __$DetectedItemDataCopyWithImpl;
+@override @useResult
+$Res call({
+ String tempId, String category,@JsonKey(name: 'sub_category') String? subCategory, List<String>? colors, String? material, String? pattern, String? brand, double confidence,@JsonKey(name: 'detailed_description') String? detailedDescription, String status
+});
+
+
+
+
+}
+/// @nodoc
+class __$DetectedItemDataCopyWithImpl<$Res>
+    implements _$DetectedItemDataCopyWith<$Res> {
+  __$DetectedItemDataCopyWithImpl(this._self, this._then);
+
+  final _DetectedItemData _self;
+  final $Res Function(_DetectedItemData) _then;
+
+/// Create a copy of DetectedItemData
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? tempId = null,Object? category = null,Object? subCategory = freezed,Object? colors = freezed,Object? material = freezed,Object? pattern = freezed,Object? brand = freezed,Object? confidence = null,Object? detailedDescription = freezed,Object? status = null,}) {
+  return _then(_DetectedItemData(
+tempId: null == tempId ? _self.tempId : tempId // ignore: cast_nullable_to_non_nullable
+as String,category: null == category ? _self.category : category // ignore: cast_nullable_to_non_nullable
+as String,subCategory: freezed == subCategory ? _self.subCategory : subCategory // ignore: cast_nullable_to_non_nullable
+as String?,colors: freezed == colors ? _self._colors : colors // ignore: cast_nullable_to_non_nullable
+as List<String>?,material: freezed == material ? _self.material : material // ignore: cast_nullable_to_non_nullable
+as String?,pattern: freezed == pattern ? _self.pattern : pattern // ignore: cast_nullable_to_non_nullable
+as String?,brand: freezed == brand ? _self.brand : brand // ignore: cast_nullable_to_non_nullable
+as String?,confidence: null == confidence ? _self.confidence : confidence // ignore: cast_nullable_to_non_nullable
+as double,detailedDescription: freezed == detailedDescription ? _self.detailedDescription : detailedDescription // ignore: cast_nullable_to_non_nullable
+as String?,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as String,
+  ));
+}
+
+
+}
+
+/// @nodoc
+mixin _$SyncExtractionResponse {
+
+ List<DetectedItemData> get items;@JsonKey(name: 'overall_confidence') double get overallConfidence;@JsonKey(name: 'image_description') String? get imageDescription;@JsonKey(name: 'item_count') int get itemCount;@JsonKey(name: 'requires_review') bool get requiresReview;
+/// Create a copy of SyncExtractionResponse
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$SyncExtractionResponseCopyWith<SyncExtractionResponse> get copyWith => _$SyncExtractionResponseCopyWithImpl<SyncExtractionResponse>(this as SyncExtractionResponse, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SyncExtractionResponse&&const DeepCollectionEquality().equals(other.items, items)&&(identical(other.overallConfidence, overallConfidence) || other.overallConfidence == overallConfidence)&&(identical(other.imageDescription, imageDescription) || other.imageDescription == imageDescription)&&(identical(other.itemCount, itemCount) || other.itemCount == itemCount)&&(identical(other.requiresReview, requiresReview) || other.requiresReview == requiresReview));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(items),overallConfidence,imageDescription,itemCount,requiresReview);
+
+@override
+String toString() {
+  return 'SyncExtractionResponse(items: $items, overallConfidence: $overallConfidence, imageDescription: $imageDescription, itemCount: $itemCount, requiresReview: $requiresReview)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $SyncExtractionResponseCopyWith<$Res>  {
+  factory $SyncExtractionResponseCopyWith(SyncExtractionResponse value, $Res Function(SyncExtractionResponse) _then) = _$SyncExtractionResponseCopyWithImpl;
+@useResult
+$Res call({
+ List<DetectedItemData> items,@JsonKey(name: 'overall_confidence') double overallConfidence,@JsonKey(name: 'image_description') String? imageDescription,@JsonKey(name: 'item_count') int itemCount,@JsonKey(name: 'requires_review') bool requiresReview
+});
+
+
+
+
+}
+/// @nodoc
+class _$SyncExtractionResponseCopyWithImpl<$Res>
+    implements $SyncExtractionResponseCopyWith<$Res> {
+  _$SyncExtractionResponseCopyWithImpl(this._self, this._then);
+
+  final SyncExtractionResponse _self;
+  final $Res Function(SyncExtractionResponse) _then;
+
+/// Create a copy of SyncExtractionResponse
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? items = null,Object? overallConfidence = null,Object? imageDescription = freezed,Object? itemCount = null,Object? requiresReview = null,}) {
+  return _then(_self.copyWith(
+items: null == items ? _self.items : items // ignore: cast_nullable_to_non_nullable
+as List<DetectedItemData>,overallConfidence: null == overallConfidence ? _self.overallConfidence : overallConfidence // ignore: cast_nullable_to_non_nullable
+as double,imageDescription: freezed == imageDescription ? _self.imageDescription : imageDescription // ignore: cast_nullable_to_non_nullable
+as String?,itemCount: null == itemCount ? _self.itemCount : itemCount // ignore: cast_nullable_to_non_nullable
+as int,requiresReview: null == requiresReview ? _self.requiresReview : requiresReview // ignore: cast_nullable_to_non_nullable
+as bool,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [SyncExtractionResponse].
+extension SyncExtractionResponsePatterns on SyncExtractionResponse {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _SyncExtractionResponse value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _SyncExtractionResponse() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _SyncExtractionResponse value)  $default,){
+final _that = this;
+switch (_that) {
+case _SyncExtractionResponse():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _SyncExtractionResponse value)?  $default,){
+final _that = this;
+switch (_that) {
+case _SyncExtractionResponse() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<DetectedItemData> items, @JsonKey(name: 'overall_confidence')  double overallConfidence, @JsonKey(name: 'image_description')  String? imageDescription, @JsonKey(name: 'item_count')  int itemCount, @JsonKey(name: 'requires_review')  bool requiresReview)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _SyncExtractionResponse() when $default != null:
+return $default(_that.items,_that.overallConfidence,_that.imageDescription,_that.itemCount,_that.requiresReview);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<DetectedItemData> items, @JsonKey(name: 'overall_confidence')  double overallConfidence, @JsonKey(name: 'image_description')  String? imageDescription, @JsonKey(name: 'item_count')  int itemCount, @JsonKey(name: 'requires_review')  bool requiresReview)  $default,) {final _that = this;
+switch (_that) {
+case _SyncExtractionResponse():
+return $default(_that.items,_that.overallConfidence,_that.imageDescription,_that.itemCount,_that.requiresReview);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<DetectedItemData> items, @JsonKey(name: 'overall_confidence')  double overallConfidence, @JsonKey(name: 'image_description')  String? imageDescription, @JsonKey(name: 'item_count')  int itemCount, @JsonKey(name: 'requires_review')  bool requiresReview)?  $default,) {final _that = this;
+switch (_that) {
+case _SyncExtractionResponse() when $default != null:
+return $default(_that.items,_that.overallConfidence,_that.imageDescription,_that.itemCount,_that.requiresReview);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _SyncExtractionResponse implements SyncExtractionResponse {
+  const _SyncExtractionResponse({required final  List<DetectedItemData> items, @JsonKey(name: 'overall_confidence') required this.overallConfidence, @JsonKey(name: 'image_description') this.imageDescription, @JsonKey(name: 'item_count') required this.itemCount, @JsonKey(name: 'requires_review') this.requiresReview = true}): _items = items;
+  
+
+ final  List<DetectedItemData> _items;
+@override List<DetectedItemData> get items {
+  if (_items is EqualUnmodifiableListView) return _items;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_items);
+}
+
+@override@JsonKey(name: 'overall_confidence') final  double overallConfidence;
+@override@JsonKey(name: 'image_description') final  String? imageDescription;
+@override@JsonKey(name: 'item_count') final  int itemCount;
+@override@JsonKey(name: 'requires_review') final  bool requiresReview;
+
+/// Create a copy of SyncExtractionResponse
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$SyncExtractionResponseCopyWith<_SyncExtractionResponse> get copyWith => __$SyncExtractionResponseCopyWithImpl<_SyncExtractionResponse>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SyncExtractionResponse&&const DeepCollectionEquality().equals(other._items, _items)&&(identical(other.overallConfidence, overallConfidence) || other.overallConfidence == overallConfidence)&&(identical(other.imageDescription, imageDescription) || other.imageDescription == imageDescription)&&(identical(other.itemCount, itemCount) || other.itemCount == itemCount)&&(identical(other.requiresReview, requiresReview) || other.requiresReview == requiresReview));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_items),overallConfidence,imageDescription,itemCount,requiresReview);
+
+@override
+String toString() {
+  return 'SyncExtractionResponse(items: $items, overallConfidence: $overallConfidence, imageDescription: $imageDescription, itemCount: $itemCount, requiresReview: $requiresReview)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$SyncExtractionResponseCopyWith<$Res> implements $SyncExtractionResponseCopyWith<$Res> {
+  factory _$SyncExtractionResponseCopyWith(_SyncExtractionResponse value, $Res Function(_SyncExtractionResponse) _then) = __$SyncExtractionResponseCopyWithImpl;
+@override @useResult
+$Res call({
+ List<DetectedItemData> items,@JsonKey(name: 'overall_confidence') double overallConfidence,@JsonKey(name: 'image_description') String? imageDescription,@JsonKey(name: 'item_count') int itemCount,@JsonKey(name: 'requires_review') bool requiresReview
+});
+
+
+
+
+}
+/// @nodoc
+class __$SyncExtractionResponseCopyWithImpl<$Res>
+    implements _$SyncExtractionResponseCopyWith<$Res> {
+  __$SyncExtractionResponseCopyWithImpl(this._self, this._then);
+
+  final _SyncExtractionResponse _self;
+  final $Res Function(_SyncExtractionResponse) _then;
+
+/// Create a copy of SyncExtractionResponse
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? items = null,Object? overallConfidence = null,Object? imageDescription = freezed,Object? itemCount = null,Object? requiresReview = null,}) {
+  return _then(_SyncExtractionResponse(
+items: null == items ? _self._items : items // ignore: cast_nullable_to_non_nullable
+as List<DetectedItemData>,overallConfidence: null == overallConfidence ? _self.overallConfidence : overallConfidence // ignore: cast_nullable_to_non_nullable
+as double,imageDescription: freezed == imageDescription ? _self.imageDescription : imageDescription // ignore: cast_nullable_to_non_nullable
+as String?,itemCount: null == itemCount ? _self.itemCount : itemCount // ignore: cast_nullable_to_non_nullable
+as int,requiresReview: null == requiresReview ? _self.requiresReview : requiresReview // ignore: cast_nullable_to_non_nullable
+as bool,
+  ));
+}
+
+
+}
+
+
+/// @nodoc
+mixin _$ProductImageGenerationRequest {
+
+ String get itemDescription; String get category; String? get subCategory; List<String>? get colors; String? get material; String? get pattern; String get background; String get viewAngle; bool get includeShadows; bool get saveToStorage;
+/// Create a copy of ProductImageGenerationRequest
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$ProductImageGenerationRequestCopyWith<ProductImageGenerationRequest> get copyWith => _$ProductImageGenerationRequestCopyWithImpl<ProductImageGenerationRequest>(this as ProductImageGenerationRequest, _$identity);
+
+  /// Serializes this ProductImageGenerationRequest to a JSON map.
+  Map<String, dynamic> toJson();
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ProductImageGenerationRequest&&(identical(other.itemDescription, itemDescription) || other.itemDescription == itemDescription)&&(identical(other.category, category) || other.category == category)&&(identical(other.subCategory, subCategory) || other.subCategory == subCategory)&&const DeepCollectionEquality().equals(other.colors, colors)&&(identical(other.material, material) || other.material == material)&&(identical(other.pattern, pattern) || other.pattern == pattern)&&(identical(other.background, background) || other.background == background)&&(identical(other.viewAngle, viewAngle) || other.viewAngle == viewAngle)&&(identical(other.includeShadows, includeShadows) || other.includeShadows == includeShadows)&&(identical(other.saveToStorage, saveToStorage) || other.saveToStorage == saveToStorage));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,itemDescription,category,subCategory,const DeepCollectionEquality().hash(colors),material,pattern,background,viewAngle,includeShadows,saveToStorage);
+
+@override
+String toString() {
+  return 'ProductImageGenerationRequest(itemDescription: $itemDescription, category: $category, subCategory: $subCategory, colors: $colors, material: $material, pattern: $pattern, background: $background, viewAngle: $viewAngle, includeShadows: $includeShadows, saveToStorage: $saveToStorage)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $ProductImageGenerationRequestCopyWith<$Res>  {
+  factory $ProductImageGenerationRequestCopyWith(ProductImageGenerationRequest value, $Res Function(ProductImageGenerationRequest) _then) = _$ProductImageGenerationRequestCopyWithImpl;
+@useResult
+$Res call({
+ String itemDescription, String category, String? subCategory, List<String>? colors, String? material, String? pattern, String background, String viewAngle, bool includeShadows, bool saveToStorage
+});
+
+
+
+
+}
+/// @nodoc
+class _$ProductImageGenerationRequestCopyWithImpl<$Res>
+    implements $ProductImageGenerationRequestCopyWith<$Res> {
+  _$ProductImageGenerationRequestCopyWithImpl(this._self, this._then);
+
+  final ProductImageGenerationRequest _self;
+  final $Res Function(ProductImageGenerationRequest) _then;
+
+/// Create a copy of ProductImageGenerationRequest
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? itemDescription = null,Object? category = null,Object? subCategory = freezed,Object? colors = freezed,Object? material = freezed,Object? pattern = freezed,Object? background = null,Object? viewAngle = null,Object? includeShadows = null,Object? saveToStorage = null,}) {
+  return _then(_self.copyWith(
+itemDescription: null == itemDescription ? _self.itemDescription : itemDescription // ignore: cast_nullable_to_non_nullable
+as String,category: null == category ? _self.category : category // ignore: cast_nullable_to_non_nullable
+as String,subCategory: freezed == subCategory ? _self.subCategory : subCategory // ignore: cast_nullable_to_non_nullable
+as String?,colors: freezed == colors ? _self.colors : colors // ignore: cast_nullable_to_non_nullable
+as List<String>?,material: freezed == material ? _self.material : material // ignore: cast_nullable_to_non_nullable
+as String?,pattern: freezed == pattern ? _self.pattern : pattern // ignore: cast_nullable_to_non_nullable
+as String?,background: null == background ? _self.background : background // ignore: cast_nullable_to_non_nullable
+as String,viewAngle: null == viewAngle ? _self.viewAngle : viewAngle // ignore: cast_nullable_to_non_nullable
+as String,includeShadows: null == includeShadows ? _self.includeShadows : includeShadows // ignore: cast_nullable_to_non_nullable
+as bool,saveToStorage: null == saveToStorage ? _self.saveToStorage : saveToStorage // ignore: cast_nullable_to_non_nullable
+as bool,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [ProductImageGenerationRequest].
+extension ProductImageGenerationRequestPatterns on ProductImageGenerationRequest {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _ProductImageGenerationRequest value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _ProductImageGenerationRequest() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _ProductImageGenerationRequest value)  $default,){
+final _that = this;
+switch (_that) {
+case _ProductImageGenerationRequest():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _ProductImageGenerationRequest value)?  $default,){
+final _that = this;
+switch (_that) {
+case _ProductImageGenerationRequest() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String itemDescription,  String category,  String? subCategory,  List<String>? colors,  String? material,  String? pattern,  String background,  String viewAngle,  bool includeShadows,  bool saveToStorage)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _ProductImageGenerationRequest() when $default != null:
+return $default(_that.itemDescription,_that.category,_that.subCategory,_that.colors,_that.material,_that.pattern,_that.background,_that.viewAngle,_that.includeShadows,_that.saveToStorage);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String itemDescription,  String category,  String? subCategory,  List<String>? colors,  String? material,  String? pattern,  String background,  String viewAngle,  bool includeShadows,  bool saveToStorage)  $default,) {final _that = this;
+switch (_that) {
+case _ProductImageGenerationRequest():
+return $default(_that.itemDescription,_that.category,_that.subCategory,_that.colors,_that.material,_that.pattern,_that.background,_that.viewAngle,_that.includeShadows,_that.saveToStorage);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String itemDescription,  String category,  String? subCategory,  List<String>? colors,  String? material,  String? pattern,  String background,  String viewAngle,  bool includeShadows,  bool saveToStorage)?  $default,) {final _that = this;
+switch (_that) {
+case _ProductImageGenerationRequest() when $default != null:
+return $default(_that.itemDescription,_that.category,_that.subCategory,_that.colors,_that.material,_that.pattern,_that.background,_that.viewAngle,_that.includeShadows,_that.saveToStorage);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+@JsonSerializable()
+
+class _ProductImageGenerationRequest implements ProductImageGenerationRequest {
+  const _ProductImageGenerationRequest({required this.itemDescription, required this.category, this.subCategory, final  List<String>? colors, this.material, this.pattern, this.background = 'white', this.viewAngle = 'front', this.includeShadows = false, this.saveToStorage = false}): _colors = colors;
+  factory _ProductImageGenerationRequest.fromJson(Map<String, dynamic> json) => _$ProductImageGenerationRequestFromJson(json);
+
+@override final  String itemDescription;
+@override final  String category;
+@override final  String? subCategory;
+ final  List<String>? _colors;
+@override List<String>? get colors {
+  final value = _colors;
+  if (value == null) return null;
+  if (_colors is EqualUnmodifiableListView) return _colors;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(value);
+}
+
+@override final  String? material;
+@override final  String? pattern;
+@override@JsonKey() final  String background;
+@override@JsonKey() final  String viewAngle;
+@override@JsonKey() final  bool includeShadows;
+@override@JsonKey() final  bool saveToStorage;
+
+/// Create a copy of ProductImageGenerationRequest
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$ProductImageGenerationRequestCopyWith<_ProductImageGenerationRequest> get copyWith => __$ProductImageGenerationRequestCopyWithImpl<_ProductImageGenerationRequest>(this, _$identity);
+
+@override
+Map<String, dynamic> toJson() {
+  return _$ProductImageGenerationRequestToJson(this, );
+}
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ProductImageGenerationRequest&&(identical(other.itemDescription, itemDescription) || other.itemDescription == itemDescription)&&(identical(other.category, category) || other.category == category)&&(identical(other.subCategory, subCategory) || other.subCategory == subCategory)&&const DeepCollectionEquality().equals(other._colors, _colors)&&(identical(other.material, material) || other.material == material)&&(identical(other.pattern, pattern) || other.pattern == pattern)&&(identical(other.background, background) || other.background == background)&&(identical(other.viewAngle, viewAngle) || other.viewAngle == viewAngle)&&(identical(other.includeShadows, includeShadows) || other.includeShadows == includeShadows)&&(identical(other.saveToStorage, saveToStorage) || other.saveToStorage == saveToStorage));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,itemDescription,category,subCategory,const DeepCollectionEquality().hash(_colors),material,pattern,background,viewAngle,includeShadows,saveToStorage);
+
+@override
+String toString() {
+  return 'ProductImageGenerationRequest(itemDescription: $itemDescription, category: $category, subCategory: $subCategory, colors: $colors, material: $material, pattern: $pattern, background: $background, viewAngle: $viewAngle, includeShadows: $includeShadows, saveToStorage: $saveToStorage)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$ProductImageGenerationRequestCopyWith<$Res> implements $ProductImageGenerationRequestCopyWith<$Res> {
+  factory _$ProductImageGenerationRequestCopyWith(_ProductImageGenerationRequest value, $Res Function(_ProductImageGenerationRequest) _then) = __$ProductImageGenerationRequestCopyWithImpl;
+@override @useResult
+$Res call({
+ String itemDescription, String category, String? subCategory, List<String>? colors, String? material, String? pattern, String background, String viewAngle, bool includeShadows, bool saveToStorage
+});
+
+
+
+
+}
+/// @nodoc
+class __$ProductImageGenerationRequestCopyWithImpl<$Res>
+    implements _$ProductImageGenerationRequestCopyWith<$Res> {
+  __$ProductImageGenerationRequestCopyWithImpl(this._self, this._then);
+
+  final _ProductImageGenerationRequest _self;
+  final $Res Function(_ProductImageGenerationRequest) _then;
+
+/// Create a copy of ProductImageGenerationRequest
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? itemDescription = null,Object? category = null,Object? subCategory = freezed,Object? colors = freezed,Object? material = freezed,Object? pattern = freezed,Object? background = null,Object? viewAngle = null,Object? includeShadows = null,Object? saveToStorage = null,}) {
+  return _then(_ProductImageGenerationRequest(
+itemDescription: null == itemDescription ? _self.itemDescription : itemDescription // ignore: cast_nullable_to_non_nullable
+as String,category: null == category ? _self.category : category // ignore: cast_nullable_to_non_nullable
+as String,subCategory: freezed == subCategory ? _self.subCategory : subCategory // ignore: cast_nullable_to_non_nullable
+as String?,colors: freezed == colors ? _self._colors : colors // ignore: cast_nullable_to_non_nullable
+as List<String>?,material: freezed == material ? _self.material : material // ignore: cast_nullable_to_non_nullable
+as String?,pattern: freezed == pattern ? _self.pattern : pattern // ignore: cast_nullable_to_non_nullable
+as String?,background: null == background ? _self.background : background // ignore: cast_nullable_to_non_nullable
+as String,viewAngle: null == viewAngle ? _self.viewAngle : viewAngle // ignore: cast_nullable_to_non_nullable
+as String,includeShadows: null == includeShadows ? _self.includeShadows : includeShadows // ignore: cast_nullable_to_non_nullable
+as bool,saveToStorage: null == saveToStorage ? _self.saveToStorage : saveToStorage // ignore: cast_nullable_to_non_nullable
+as bool,
+  ));
+}
+
+
+}
+
+/// @nodoc
+mixin _$ProductImageGenerationResponse {
+
+@JsonKey(name: 'image_base64') String get imageBase64; String? get imageUrl; String? get storagePath; String get prompt; String get model; String get provider;
+/// Create a copy of ProductImageGenerationResponse
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$ProductImageGenerationResponseCopyWith<ProductImageGenerationResponse> get copyWith => _$ProductImageGenerationResponseCopyWithImpl<ProductImageGenerationResponse>(this as ProductImageGenerationResponse, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ProductImageGenerationResponse&&(identical(other.imageBase64, imageBase64) || other.imageBase64 == imageBase64)&&(identical(other.imageUrl, imageUrl) || other.imageUrl == imageUrl)&&(identical(other.storagePath, storagePath) || other.storagePath == storagePath)&&(identical(other.prompt, prompt) || other.prompt == prompt)&&(identical(other.model, model) || other.model == model)&&(identical(other.provider, provider) || other.provider == provider));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,imageBase64,imageUrl,storagePath,prompt,model,provider);
+
+@override
+String toString() {
+  return 'ProductImageGenerationResponse(imageBase64: $imageBase64, imageUrl: $imageUrl, storagePath: $storagePath, prompt: $prompt, model: $model, provider: $provider)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $ProductImageGenerationResponseCopyWith<$Res>  {
+  factory $ProductImageGenerationResponseCopyWith(ProductImageGenerationResponse value, $Res Function(ProductImageGenerationResponse) _then) = _$ProductImageGenerationResponseCopyWithImpl;
+@useResult
+$Res call({
+@JsonKey(name: 'image_base64') String imageBase64, String? imageUrl, String? storagePath, String prompt, String model, String provider
+});
+
+
+
+
+}
+/// @nodoc
+class _$ProductImageGenerationResponseCopyWithImpl<$Res>
+    implements $ProductImageGenerationResponseCopyWith<$Res> {
+  _$ProductImageGenerationResponseCopyWithImpl(this._self, this._then);
+
+  final ProductImageGenerationResponse _self;
+  final $Res Function(ProductImageGenerationResponse) _then;
+
+/// Create a copy of ProductImageGenerationResponse
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? imageBase64 = null,Object? imageUrl = freezed,Object? storagePath = freezed,Object? prompt = null,Object? model = null,Object? provider = null,}) {
+  return _then(_self.copyWith(
+imageBase64: null == imageBase64 ? _self.imageBase64 : imageBase64 // ignore: cast_nullable_to_non_nullable
+as String,imageUrl: freezed == imageUrl ? _self.imageUrl : imageUrl // ignore: cast_nullable_to_non_nullable
+as String?,storagePath: freezed == storagePath ? _self.storagePath : storagePath // ignore: cast_nullable_to_non_nullable
+as String?,prompt: null == prompt ? _self.prompt : prompt // ignore: cast_nullable_to_non_nullable
+as String,model: null == model ? _self.model : model // ignore: cast_nullable_to_non_nullable
+as String,provider: null == provider ? _self.provider : provider // ignore: cast_nullable_to_non_nullable
+as String,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [ProductImageGenerationResponse].
+extension ProductImageGenerationResponsePatterns on ProductImageGenerationResponse {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _ProductImageGenerationResponse value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _ProductImageGenerationResponse() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _ProductImageGenerationResponse value)  $default,){
+final _that = this;
+switch (_that) {
+case _ProductImageGenerationResponse():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _ProductImageGenerationResponse value)?  $default,){
+final _that = this;
+switch (_that) {
+case _ProductImageGenerationResponse() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'image_base64')  String imageBase64,  String? imageUrl,  String? storagePath,  String prompt,  String model,  String provider)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _ProductImageGenerationResponse() when $default != null:
+return $default(_that.imageBase64,_that.imageUrl,_that.storagePath,_that.prompt,_that.model,_that.provider);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'image_base64')  String imageBase64,  String? imageUrl,  String? storagePath,  String prompt,  String model,  String provider)  $default,) {final _that = this;
+switch (_that) {
+case _ProductImageGenerationResponse():
+return $default(_that.imageBase64,_that.imageUrl,_that.storagePath,_that.prompt,_that.model,_that.provider);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'image_base64')  String imageBase64,  String? imageUrl,  String? storagePath,  String prompt,  String model,  String provider)?  $default,) {final _that = this;
+switch (_that) {
+case _ProductImageGenerationResponse() when $default != null:
+return $default(_that.imageBase64,_that.imageUrl,_that.storagePath,_that.prompt,_that.model,_that.provider);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _ProductImageGenerationResponse implements ProductImageGenerationResponse {
+  const _ProductImageGenerationResponse({@JsonKey(name: 'image_base64') required this.imageBase64, this.imageUrl, this.storagePath, required this.prompt, required this.model, required this.provider});
+  
+
+@override@JsonKey(name: 'image_base64') final  String imageBase64;
+@override final  String? imageUrl;
+@override final  String? storagePath;
+@override final  String prompt;
+@override final  String model;
+@override final  String provider;
+
+/// Create a copy of ProductImageGenerationResponse
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$ProductImageGenerationResponseCopyWith<_ProductImageGenerationResponse> get copyWith => __$ProductImageGenerationResponseCopyWithImpl<_ProductImageGenerationResponse>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ProductImageGenerationResponse&&(identical(other.imageBase64, imageBase64) || other.imageBase64 == imageBase64)&&(identical(other.imageUrl, imageUrl) || other.imageUrl == imageUrl)&&(identical(other.storagePath, storagePath) || other.storagePath == storagePath)&&(identical(other.prompt, prompt) || other.prompt == prompt)&&(identical(other.model, model) || other.model == model)&&(identical(other.provider, provider) || other.provider == provider));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,imageBase64,imageUrl,storagePath,prompt,model,provider);
+
+@override
+String toString() {
+  return 'ProductImageGenerationResponse(imageBase64: $imageBase64, imageUrl: $imageUrl, storagePath: $storagePath, prompt: $prompt, model: $model, provider: $provider)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$ProductImageGenerationResponseCopyWith<$Res> implements $ProductImageGenerationResponseCopyWith<$Res> {
+  factory _$ProductImageGenerationResponseCopyWith(_ProductImageGenerationResponse value, $Res Function(_ProductImageGenerationResponse) _then) = __$ProductImageGenerationResponseCopyWithImpl;
+@override @useResult
+$Res call({
+@JsonKey(name: 'image_base64') String imageBase64, String? imageUrl, String? storagePath, String prompt, String model, String provider
+});
+
+
+
+
+}
+/// @nodoc
+class __$ProductImageGenerationResponseCopyWithImpl<$Res>
+    implements _$ProductImageGenerationResponseCopyWith<$Res> {
+  __$ProductImageGenerationResponseCopyWithImpl(this._self, this._then);
+
+  final _ProductImageGenerationResponse _self;
+  final $Res Function(_ProductImageGenerationResponse) _then;
+
+/// Create a copy of ProductImageGenerationResponse
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? imageBase64 = null,Object? imageUrl = freezed,Object? storagePath = freezed,Object? prompt = null,Object? model = null,Object? provider = null,}) {
+  return _then(_ProductImageGenerationResponse(
+imageBase64: null == imageBase64 ? _self.imageBase64 : imageBase64 // ignore: cast_nullable_to_non_nullable
+as String,imageUrl: freezed == imageUrl ? _self.imageUrl : imageUrl // ignore: cast_nullable_to_non_nullable
+as String?,storagePath: freezed == storagePath ? _self.storagePath : storagePath // ignore: cast_nullable_to_non_nullable
+as String?,prompt: null == prompt ? _self.prompt : prompt // ignore: cast_nullable_to_non_nullable
+as String,model: null == model ? _self.model : model // ignore: cast_nullable_to_non_nullable
+as String,provider: null == provider ? _self.provider : provider // ignore: cast_nullable_to_non_nullable
+as String,
+  ));
+}
+
+
+}
+
+/// @nodoc
+mixin _$DetectedItemDataWithImage {
+
+ String get tempId; String get category;@JsonKey(name: 'sub_category') String? get subCategory; List<String>? get colors; String? get material; String? get pattern; String? get brand; double get confidence;@JsonKey(name: 'detailed_description') String? get detailedDescription; String get status;/// Generated product image (data URL format: data:image/png;base64,...)
+ String? get generatedImageUrl;/// Error message if generation failed
+ String? get generationError;/// User-editable name
+ String? get name;/// User-editable tags
+ List<String>? get tags;
+/// Create a copy of DetectedItemDataWithImage
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$DetectedItemDataWithImageCopyWith<DetectedItemDataWithImage> get copyWith => _$DetectedItemDataWithImageCopyWithImpl<DetectedItemDataWithImage>(this as DetectedItemDataWithImage, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is DetectedItemDataWithImage&&(identical(other.tempId, tempId) || other.tempId == tempId)&&(identical(other.category, category) || other.category == category)&&(identical(other.subCategory, subCategory) || other.subCategory == subCategory)&&const DeepCollectionEquality().equals(other.colors, colors)&&(identical(other.material, material) || other.material == material)&&(identical(other.pattern, pattern) || other.pattern == pattern)&&(identical(other.brand, brand) || other.brand == brand)&&(identical(other.confidence, confidence) || other.confidence == confidence)&&(identical(other.detailedDescription, detailedDescription) || other.detailedDescription == detailedDescription)&&(identical(other.status, status) || other.status == status)&&(identical(other.generatedImageUrl, generatedImageUrl) || other.generatedImageUrl == generatedImageUrl)&&(identical(other.generationError, generationError) || other.generationError == generationError)&&(identical(other.name, name) || other.name == name)&&const DeepCollectionEquality().equals(other.tags, tags));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,tempId,category,subCategory,const DeepCollectionEquality().hash(colors),material,pattern,brand,confidence,detailedDescription,status,generatedImageUrl,generationError,name,const DeepCollectionEquality().hash(tags));
+
+@override
+String toString() {
+  return 'DetectedItemDataWithImage(tempId: $tempId, category: $category, subCategory: $subCategory, colors: $colors, material: $material, pattern: $pattern, brand: $brand, confidence: $confidence, detailedDescription: $detailedDescription, status: $status, generatedImageUrl: $generatedImageUrl, generationError: $generationError, name: $name, tags: $tags)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $DetectedItemDataWithImageCopyWith<$Res>  {
+  factory $DetectedItemDataWithImageCopyWith(DetectedItemDataWithImage value, $Res Function(DetectedItemDataWithImage) _then) = _$DetectedItemDataWithImageCopyWithImpl;
+@useResult
+$Res call({
+ String tempId, String category,@JsonKey(name: 'sub_category') String? subCategory, List<String>? colors, String? material, String? pattern, String? brand, double confidence,@JsonKey(name: 'detailed_description') String? detailedDescription, String status, String? generatedImageUrl, String? generationError, String? name, List<String>? tags
+});
+
+
+
+
+}
+/// @nodoc
+class _$DetectedItemDataWithImageCopyWithImpl<$Res>
+    implements $DetectedItemDataWithImageCopyWith<$Res> {
+  _$DetectedItemDataWithImageCopyWithImpl(this._self, this._then);
+
+  final DetectedItemDataWithImage _self;
+  final $Res Function(DetectedItemDataWithImage) _then;
+
+/// Create a copy of DetectedItemDataWithImage
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? tempId = null,Object? category = null,Object? subCategory = freezed,Object? colors = freezed,Object? material = freezed,Object? pattern = freezed,Object? brand = freezed,Object? confidence = null,Object? detailedDescription = freezed,Object? status = null,Object? generatedImageUrl = freezed,Object? generationError = freezed,Object? name = freezed,Object? tags = freezed,}) {
+  return _then(_self.copyWith(
+tempId: null == tempId ? _self.tempId : tempId // ignore: cast_nullable_to_non_nullable
+as String,category: null == category ? _self.category : category // ignore: cast_nullable_to_non_nullable
+as String,subCategory: freezed == subCategory ? _self.subCategory : subCategory // ignore: cast_nullable_to_non_nullable
+as String?,colors: freezed == colors ? _self.colors : colors // ignore: cast_nullable_to_non_nullable
+as List<String>?,material: freezed == material ? _self.material : material // ignore: cast_nullable_to_non_nullable
+as String?,pattern: freezed == pattern ? _self.pattern : pattern // ignore: cast_nullable_to_non_nullable
+as String?,brand: freezed == brand ? _self.brand : brand // ignore: cast_nullable_to_non_nullable
+as String?,confidence: null == confidence ? _self.confidence : confidence // ignore: cast_nullable_to_non_nullable
+as double,detailedDescription: freezed == detailedDescription ? _self.detailedDescription : detailedDescription // ignore: cast_nullable_to_non_nullable
+as String?,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as String,generatedImageUrl: freezed == generatedImageUrl ? _self.generatedImageUrl : generatedImageUrl // ignore: cast_nullable_to_non_nullable
+as String?,generationError: freezed == generationError ? _self.generationError : generationError // ignore: cast_nullable_to_non_nullable
+as String?,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+as String?,tags: freezed == tags ? _self.tags : tags // ignore: cast_nullable_to_non_nullable
+as List<String>?,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [DetectedItemDataWithImage].
+extension DetectedItemDataWithImagePatterns on DetectedItemDataWithImage {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _DetectedItemDataWithImage value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _DetectedItemDataWithImage() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _DetectedItemDataWithImage value)  $default,){
+final _that = this;
+switch (_that) {
+case _DetectedItemDataWithImage():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _DetectedItemDataWithImage value)?  $default,){
+final _that = this;
+switch (_that) {
+case _DetectedItemDataWithImage() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String tempId,  String category, @JsonKey(name: 'sub_category')  String? subCategory,  List<String>? colors,  String? material,  String? pattern,  String? brand,  double confidence, @JsonKey(name: 'detailed_description')  String? detailedDescription,  String status,  String? generatedImageUrl,  String? generationError,  String? name,  List<String>? tags)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _DetectedItemDataWithImage() when $default != null:
+return $default(_that.tempId,_that.category,_that.subCategory,_that.colors,_that.material,_that.pattern,_that.brand,_that.confidence,_that.detailedDescription,_that.status,_that.generatedImageUrl,_that.generationError,_that.name,_that.tags);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String tempId,  String category, @JsonKey(name: 'sub_category')  String? subCategory,  List<String>? colors,  String? material,  String? pattern,  String? brand,  double confidence, @JsonKey(name: 'detailed_description')  String? detailedDescription,  String status,  String? generatedImageUrl,  String? generationError,  String? name,  List<String>? tags)  $default,) {final _that = this;
+switch (_that) {
+case _DetectedItemDataWithImage():
+return $default(_that.tempId,_that.category,_that.subCategory,_that.colors,_that.material,_that.pattern,_that.brand,_that.confidence,_that.detailedDescription,_that.status,_that.generatedImageUrl,_that.generationError,_that.name,_that.tags);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String tempId,  String category, @JsonKey(name: 'sub_category')  String? subCategory,  List<String>? colors,  String? material,  String? pattern,  String? brand,  double confidence, @JsonKey(name: 'detailed_description')  String? detailedDescription,  String status,  String? generatedImageUrl,  String? generationError,  String? name,  List<String>? tags)?  $default,) {final _that = this;
+switch (_that) {
+case _DetectedItemDataWithImage() when $default != null:
+return $default(_that.tempId,_that.category,_that.subCategory,_that.colors,_that.material,_that.pattern,_that.brand,_that.confidence,_that.detailedDescription,_that.status,_that.generatedImageUrl,_that.generationError,_that.name,_that.tags);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _DetectedItemDataWithImage implements DetectedItemDataWithImage {
+  const _DetectedItemDataWithImage({required this.tempId, required this.category, @JsonKey(name: 'sub_category') this.subCategory, final  List<String>? colors, this.material, this.pattern, this.brand, required this.confidence, @JsonKey(name: 'detailed_description') this.detailedDescription, this.status = 'detected', this.generatedImageUrl, this.generationError, this.name, final  List<String>? tags}): _colors = colors,_tags = tags;
+  
+
+@override final  String tempId;
+@override final  String category;
+@override@JsonKey(name: 'sub_category') final  String? subCategory;
+ final  List<String>? _colors;
+@override List<String>? get colors {
+  final value = _colors;
+  if (value == null) return null;
+  if (_colors is EqualUnmodifiableListView) return _colors;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(value);
+}
+
+@override final  String? material;
+@override final  String? pattern;
+@override final  String? brand;
+@override final  double confidence;
+@override@JsonKey(name: 'detailed_description') final  String? detailedDescription;
+@override@JsonKey() final  String status;
+/// Generated product image (data URL format: data:image/png;base64,...)
+@override final  String? generatedImageUrl;
+/// Error message if generation failed
+@override final  String? generationError;
+/// User-editable name
+@override final  String? name;
+/// User-editable tags
+ final  List<String>? _tags;
+/// User-editable tags
+@override List<String>? get tags {
+  final value = _tags;
+  if (value == null) return null;
+  if (_tags is EqualUnmodifiableListView) return _tags;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(value);
+}
+
+
+/// Create a copy of DetectedItemDataWithImage
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$DetectedItemDataWithImageCopyWith<_DetectedItemDataWithImage> get copyWith => __$DetectedItemDataWithImageCopyWithImpl<_DetectedItemDataWithImage>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _DetectedItemDataWithImage&&(identical(other.tempId, tempId) || other.tempId == tempId)&&(identical(other.category, category) || other.category == category)&&(identical(other.subCategory, subCategory) || other.subCategory == subCategory)&&const DeepCollectionEquality().equals(other._colors, _colors)&&(identical(other.material, material) || other.material == material)&&(identical(other.pattern, pattern) || other.pattern == pattern)&&(identical(other.brand, brand) || other.brand == brand)&&(identical(other.confidence, confidence) || other.confidence == confidence)&&(identical(other.detailedDescription, detailedDescription) || other.detailedDescription == detailedDescription)&&(identical(other.status, status) || other.status == status)&&(identical(other.generatedImageUrl, generatedImageUrl) || other.generatedImageUrl == generatedImageUrl)&&(identical(other.generationError, generationError) || other.generationError == generationError)&&(identical(other.name, name) || other.name == name)&&const DeepCollectionEquality().equals(other._tags, _tags));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,tempId,category,subCategory,const DeepCollectionEquality().hash(_colors),material,pattern,brand,confidence,detailedDescription,status,generatedImageUrl,generationError,name,const DeepCollectionEquality().hash(_tags));
+
+@override
+String toString() {
+  return 'DetectedItemDataWithImage(tempId: $tempId, category: $category, subCategory: $subCategory, colors: $colors, material: $material, pattern: $pattern, brand: $brand, confidence: $confidence, detailedDescription: $detailedDescription, status: $status, generatedImageUrl: $generatedImageUrl, generationError: $generationError, name: $name, tags: $tags)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$DetectedItemDataWithImageCopyWith<$Res> implements $DetectedItemDataWithImageCopyWith<$Res> {
+  factory _$DetectedItemDataWithImageCopyWith(_DetectedItemDataWithImage value, $Res Function(_DetectedItemDataWithImage) _then) = __$DetectedItemDataWithImageCopyWithImpl;
+@override @useResult
+$Res call({
+ String tempId, String category,@JsonKey(name: 'sub_category') String? subCategory, List<String>? colors, String? material, String? pattern, String? brand, double confidence,@JsonKey(name: 'detailed_description') String? detailedDescription, String status, String? generatedImageUrl, String? generationError, String? name, List<String>? tags
+});
+
+
+
+
+}
+/// @nodoc
+class __$DetectedItemDataWithImageCopyWithImpl<$Res>
+    implements _$DetectedItemDataWithImageCopyWith<$Res> {
+  __$DetectedItemDataWithImageCopyWithImpl(this._self, this._then);
+
+  final _DetectedItemDataWithImage _self;
+  final $Res Function(_DetectedItemDataWithImage) _then;
+
+/// Create a copy of DetectedItemDataWithImage
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? tempId = null,Object? category = null,Object? subCategory = freezed,Object? colors = freezed,Object? material = freezed,Object? pattern = freezed,Object? brand = freezed,Object? confidence = null,Object? detailedDescription = freezed,Object? status = null,Object? generatedImageUrl = freezed,Object? generationError = freezed,Object? name = freezed,Object? tags = freezed,}) {
+  return _then(_DetectedItemDataWithImage(
+tempId: null == tempId ? _self.tempId : tempId // ignore: cast_nullable_to_non_nullable
+as String,category: null == category ? _self.category : category // ignore: cast_nullable_to_non_nullable
+as String,subCategory: freezed == subCategory ? _self.subCategory : subCategory // ignore: cast_nullable_to_non_nullable
+as String?,colors: freezed == colors ? _self._colors : colors // ignore: cast_nullable_to_non_nullable
+as List<String>?,material: freezed == material ? _self.material : material // ignore: cast_nullable_to_non_nullable
+as String?,pattern: freezed == pattern ? _self.pattern : pattern // ignore: cast_nullable_to_non_nullable
+as String?,brand: freezed == brand ? _self.brand : brand // ignore: cast_nullable_to_non_nullable
+as String?,confidence: null == confidence ? _self.confidence : confidence // ignore: cast_nullable_to_non_nullable
+as double,detailedDescription: freezed == detailedDescription ? _self.detailedDescription : detailedDescription // ignore: cast_nullable_to_non_nullable
+as String?,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as String,generatedImageUrl: freezed == generatedImageUrl ? _self.generatedImageUrl : generatedImageUrl // ignore: cast_nullable_to_non_nullable
+as String?,generationError: freezed == generationError ? _self.generationError : generationError // ignore: cast_nullable_to_non_nullable
+as String?,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+as String?,tags: freezed == tags ? _self._tags : tags // ignore: cast_nullable_to_non_nullable
+as List<String>?,
+  ));
+}
+
+
+}
+
 // dart format on

@@ -1,4 +1,29 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- INTERNET: Required for API calls, Supabase auth, analytics -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- CAMERA: User captures wardrobe items, outfit photos, profile pictures,
+         photoshoot selfies, try-on photos, and feedback screenshots -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- READ_MEDIA_IMAGES: Android 13+ gallery access for selecting wardrobe photos -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+    <!-- READ_EXTERNAL_STORAGE: Android 12 and below gallery access -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- WRITE_EXTERNAL_STORAGE: Save AI-generated photoshoot images to gallery -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+
+    <!-- Camera feature optional - allows install on tablets without cameras -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
     <application
         android:label="FitCheck AI"
         android:name="${applicationName}"

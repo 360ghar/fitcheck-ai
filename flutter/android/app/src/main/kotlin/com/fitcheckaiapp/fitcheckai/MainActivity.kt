@@ -1,4 +1,4 @@
-package com.fitcheck.fitcheck_ai
+package com.fitcheckaiapp.fitcheckai
 
 import io.flutter.embedding.android.FlutterActivity
 

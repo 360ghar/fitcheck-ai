@@ -83,15 +83,30 @@ class _ItemEditPageState extends State<ItemEditPage> {
   }
 
   Future<void> _pickImage() async {
-    final XFile? image = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1920,
-      maxHeight: 1920,
+    // Use pickMultipleMedia to select multiple images at once
+    final List<XFile> images = await _imagePicker.pickMultipleMedia(
       imageQuality: 85,
     );
 
-    if (image != null) {
-      newImages.add(File(image.path));
+    var addedCount = 0;
+    for (final image in images) {
+      // Only add image files (case-insensitive check)
+      final path = image.path.toLowerCase();
+      if (path.endsWith('.jpg') ||
+          path.endsWith('.jpeg') ||
+          path.endsWith('.png')) {
+        newImages.add(File(image.path));
+        addedCount++;
+      }
+    }
+
+    if (addedCount > 0 && mounted) {
+      Get.snackbar(
+        'Images Added',
+        '$addedCount image(s) added',
+        snackPosition: SnackPosition.TOP,
+        duration: const Duration(seconds: 2),
+      );
     }
   }
 
