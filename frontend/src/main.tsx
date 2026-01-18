@@ -54,7 +54,7 @@ createRoot(document.getElementById('root')!).render(
     >
       <HelmetProvider>
         <ErrorBoundary>
-          <ThemeProvider defaultTheme="system">
+          <ThemeProvider defaultTheme="light">
             <QueryClientProvider client={queryClient}>
               <BrowserRouter>
                 <TooltipProvider delayDuration={0}>

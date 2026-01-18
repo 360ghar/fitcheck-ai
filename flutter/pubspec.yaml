@@ -24,6 +24,7 @@ dependencies:
   image_picker: ^1.0.7
   photo_view: ^0.15.0
   flutter_image_compress: ^2.1.0
+  image_gallery_saver_plus: ^3.0.5
 
   # Icons - using community package for remix icons
   # For now, using Material Icons. To use Remix icons, add:

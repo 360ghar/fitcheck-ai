@@ -31,6 +31,7 @@ class Routes {
   static const settings = '/settings';
   static const aiSettings = '/settings/ai';
   static const tryOn = '/try-on';
+  static const photoshoot = '/photoshoot';
   static const more = '/more';
   static const gamification = '/gamification';
   static const subscription = '/subscription';

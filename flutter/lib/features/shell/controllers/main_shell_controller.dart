@@ -9,9 +9,9 @@ class MainShellController extends GetxController {
   /// Tab routes in order
   static const List<String> tabRoutes = [
     Routes.home,
+    Routes.photoshoot,
     Routes.wardrobe,
     Routes.outfits,
-    Routes.tryOn,
     Routes.more,
   ];
 
@@ -28,6 +28,7 @@ class MainShellController extends GetxController {
 
     // Handle "More" submenu routes
     const moreRoutes = {
+      Routes.tryOn,
       Routes.recommendations,
       Routes.calendar,
       Routes.gamification,

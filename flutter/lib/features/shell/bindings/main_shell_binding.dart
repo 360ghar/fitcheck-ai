@@ -5,6 +5,7 @@ import '../../wardrobe/controllers/wardrobe_controller.dart';
 import '../../outfits/controllers/outfit_list_controller.dart';
 import '../../outfits/controllers/outfit_creation_controller.dart';
 import '../../outfits/controllers/outfit_generation_controller.dart';
+import '../../photoshoot/controllers/photoshoot_controller.dart';
 import '../../tryon/controllers/tryon_controller.dart';
 import '../../settings/controllers/settings_controller.dart';
 import '../../subscription/controllers/subscription_controller.dart';
@@ -29,7 +30,10 @@ class MainShellBinding extends Bindings {
     Get.lazyPut<OutfitCreationController>(() => OutfitCreationController(), fenix: true);
     Get.lazyPut<OutfitGenerationController>(() => OutfitGenerationController(), fenix: true);
 
-    // Try-On tab
+    // Photoshoot tab (replacing Try-On in bottom nav)
+    Get.lazyPut<PhotoshootController>(() => PhotoshootController(), fenix: true);
+
+    // Try-On (available from More menu)
     Get.lazyPut<TryOnController>(() => TryOnController(), fenix: true);
   }
 }

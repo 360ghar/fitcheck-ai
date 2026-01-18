@@ -27,6 +27,12 @@ class AppBottomNavigationBar extends StatelessWidget {
       route: Routes.home,
     ),
     NavigationItem(
+      icon: Icons.camera_enhance,
+      activeIcon: Icons.camera_enhance,
+      label: 'Photoshoot',
+      route: Routes.photoshoot,
+    ),
+    NavigationItem(
       icon: Icons.checkroom,
       activeIcon: Icons.checkroom,
       label: 'Wardrobe',
@@ -37,12 +43,6 @@ class AppBottomNavigationBar extends StatelessWidget {
       activeIcon: Icons.auto_awesome,
       label: 'Outfits',
       route: Routes.outfits,
-    ),
-    NavigationItem(
-      icon: Icons.accessibility_new,
-      activeIcon: Icons.accessibility_new,
-      label: 'Try-On',
-      route: Routes.tryOn,
     ),
     NavigationItem(
       icon: Icons.more_horiz,
@@ -151,6 +151,7 @@ class AppBottomNavigationBar extends StatelessWidget {
   static int getIndexForRoute(String route) {
     final normalized = route.split('?').first;
     const moreRoutes = {
+      Routes.tryOn,
       Routes.recommendations,
       Routes.calendar,
       Routes.gamification,

@@ -47,6 +47,19 @@ export interface DemoTryOnResult {
   prompt: string;
 }
 
+export interface DemoPhotoshootResult {
+  session_id: string;
+  status: 'pending' | 'generating' | 'complete' | 'failed';
+  images: Array<{
+    id: string;
+    index: number;
+    image_url?: string;
+    image_base64?: string;
+  }>;
+  remaining_today: number;
+  signup_cta: string;
+}
+
 export interface DemoApiError {
   message: string;
   code?: string;
@@ -162,6 +175,35 @@ export async function demoTryOn(
         clothing_image: clothingBase64,
         clothing_description: clothingDescription,
         style,
+      }
+    );
+
+    return response.data.data;
+  } catch (error) {
+    throw getDemoError(error);
+  }
+}
+
+/**
+ * Generate a demo photoshoot (2 images for anonymous users).
+ *
+ * @param photo - Single photo file for the demo
+ * @param useCase - Optional use case for the photoshoot (defaults to aesthetic on backend)
+ * @returns Generated images
+ * @throws DemoApiError on failure
+ */
+export async function demoPhotoshoot(
+  photo: File,
+  useCase?: 'linkedin' | 'dating_app' | 'model_portfolio' | 'instagram' | 'aesthetic'
+): Promise<DemoPhotoshootResult> {
+  try {
+    const photoBase64 = await fileToBase64(photo);
+
+    const response = await demoClient.post<{ data: DemoPhotoshootResult }>(
+      '/api/v1/photoshoot/demo',
+      {
+        photo: photoBase64,
+        ...(useCase && { use_case: useCase }),
       }
     );
 

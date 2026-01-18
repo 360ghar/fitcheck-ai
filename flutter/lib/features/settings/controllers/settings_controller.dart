@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../models/user_preferences_model.dart';
 import '../repositories/settings_repository.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../../../core/services/theme_service.dart';
 
 /// Settings controller - manages settings and preferences state
 class SettingsController extends GetxController {
@@ -36,14 +37,16 @@ class SettingsController extends GetxController {
       isLoading.value = true;
       error.value = '';
       preferences.value = await _repository.getPreferences();
-      _applyThemeMode(preferences.value?.themeMode);
+
+      // Sync theme from backend to ThemeService
+      final themeService = Get.find<ThemeService>();
+      themeService.syncFromBackend(preferences.value?.themeMode);
     } catch (e) {
       error.value = e.toString();
       // If preferences don't exist yet, use defaults
       if (preferences.value == null) {
         preferences.value = UserPreferencesModel();
       }
-      _applyThemeMode(preferences.value?.themeMode);
     } finally {
       isLoading.value = false;
     }
@@ -55,7 +58,12 @@ class SettingsController extends GetxController {
 
     final updated = current.copyWith(themeMode: mode);
     preferences.value = updated;
-    _applyThemeMode(mode);
+
+    // Update ThemeService (handles local storage and applies theme)
+    final themeService = Get.find<ThemeService>();
+    await themeService.setThemeMode(mode);
+
+    // Save to backend
     await savePreferences(updated);
   }
 
@@ -237,23 +245,4 @@ class SettingsController extends GetxController {
   void clearError() {
     error.value = '';
   }
-
-  void _applyThemeMode(AppThemeMode? mode) {
-    final ThemeMode targetMode;
-    switch (mode) {
-      case AppThemeMode.light:
-        targetMode = ThemeMode.light;
-        break;
-      case AppThemeMode.dark:
-        targetMode = ThemeMode.dark;
-        break;
-      case AppThemeMode.system:
-      default:
-        targetMode = ThemeMode.system;
-        break;
-    }
-
-    Get.changeThemeMode(targetMode);
-  }
-
 }

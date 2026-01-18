@@ -5,6 +5,7 @@ import '../../core/services/network_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/services/offline_queue_service.dart';
+import '../../core/services/theme_service.dart';
 import '../../features/auth/controllers/auth_controller.dart';
 
 /// Initial binding - sets up global services and singletons
@@ -13,6 +14,9 @@ class InitialBinding extends Bindings {
   void dependencies() {
     // Initialize Supabase service (must be first)
     Get.put(SupabaseService.instance);
+
+    // Initialize ThemeService early for immediate theme loading
+    Get.put(ThemeService());
 
     // Initialize NetworkService for connectivity monitoring
     Get.put(NetworkService());
