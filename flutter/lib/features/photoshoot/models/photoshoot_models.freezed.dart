@@ -1419,4 +1419,590 @@ as List<String>,
 
 }
 
+
+/// @nodoc
+mixin _$PhotoshootJobResponse {
+
+@JsonKey(name: 'job_id') String get jobId; String get status; String? get message;
+/// Create a copy of PhotoshootJobResponse
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$PhotoshootJobResponseCopyWith<PhotoshootJobResponse> get copyWith => _$PhotoshootJobResponseCopyWithImpl<PhotoshootJobResponse>(this as PhotoshootJobResponse, _$identity);
+
+  /// Serializes this PhotoshootJobResponse to a JSON map.
+  Map<String, dynamic> toJson();
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is PhotoshootJobResponse&&(identical(other.jobId, jobId) || other.jobId == jobId)&&(identical(other.status, status) || other.status == status)&&(identical(other.message, message) || other.message == message));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,jobId,status,message);
+
+@override
+String toString() {
+  return 'PhotoshootJobResponse(jobId: $jobId, status: $status, message: $message)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $PhotoshootJobResponseCopyWith<$Res>  {
+  factory $PhotoshootJobResponseCopyWith(PhotoshootJobResponse value, $Res Function(PhotoshootJobResponse) _then) = _$PhotoshootJobResponseCopyWithImpl;
+@useResult
+$Res call({
+@JsonKey(name: 'job_id') String jobId, String status, String? message
+});
+
+
+
+
+}
+/// @nodoc
+class _$PhotoshootJobResponseCopyWithImpl<$Res>
+    implements $PhotoshootJobResponseCopyWith<$Res> {
+  _$PhotoshootJobResponseCopyWithImpl(this._self, this._then);
+
+  final PhotoshootJobResponse _self;
+  final $Res Function(PhotoshootJobResponse) _then;
+
+/// Create a copy of PhotoshootJobResponse
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? jobId = null,Object? status = null,Object? message = freezed,}) {
+  return _then(_self.copyWith(
+jobId: null == jobId ? _self.jobId : jobId // ignore: cast_nullable_to_non_nullable
+as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as String,message: freezed == message ? _self.message : message // ignore: cast_nullable_to_non_nullable
+as String?,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [PhotoshootJobResponse].
+extension PhotoshootJobResponsePatterns on PhotoshootJobResponse {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _PhotoshootJobResponse value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _PhotoshootJobResponse() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _PhotoshootJobResponse value)  $default,){
+final _that = this;
+switch (_that) {
+case _PhotoshootJobResponse():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _PhotoshootJobResponse value)?  $default,){
+final _that = this;
+switch (_that) {
+case _PhotoshootJobResponse() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'job_id')  String jobId,  String status,  String? message)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _PhotoshootJobResponse() when $default != null:
+return $default(_that.jobId,_that.status,_that.message);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'job_id')  String jobId,  String status,  String? message)  $default,) {final _that = this;
+switch (_that) {
+case _PhotoshootJobResponse():
+return $default(_that.jobId,_that.status,_that.message);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'job_id')  String jobId,  String status,  String? message)?  $default,) {final _that = this;
+switch (_that) {
+case _PhotoshootJobResponse() when $default != null:
+return $default(_that.jobId,_that.status,_that.message);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+@JsonSerializable()
+
+class _PhotoshootJobResponse implements PhotoshootJobResponse {
+  const _PhotoshootJobResponse({@JsonKey(name: 'job_id') required this.jobId, required this.status, this.message});
+  factory _PhotoshootJobResponse.fromJson(Map<String, dynamic> json) => _$PhotoshootJobResponseFromJson(json);
+
+@override@JsonKey(name: 'job_id') final  String jobId;
+@override final  String status;
+@override final  String? message;
+
+/// Create a copy of PhotoshootJobResponse
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$PhotoshootJobResponseCopyWith<_PhotoshootJobResponse> get copyWith => __$PhotoshootJobResponseCopyWithImpl<_PhotoshootJobResponse>(this, _$identity);
+
+@override
+Map<String, dynamic> toJson() {
+  return _$PhotoshootJobResponseToJson(this, );
+}
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PhotoshootJobResponse&&(identical(other.jobId, jobId) || other.jobId == jobId)&&(identical(other.status, status) || other.status == status)&&(identical(other.message, message) || other.message == message));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,jobId,status,message);
+
+@override
+String toString() {
+  return 'PhotoshootJobResponse(jobId: $jobId, status: $status, message: $message)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$PhotoshootJobResponseCopyWith<$Res> implements $PhotoshootJobResponseCopyWith<$Res> {
+  factory _$PhotoshootJobResponseCopyWith(_PhotoshootJobResponse value, $Res Function(_PhotoshootJobResponse) _then) = __$PhotoshootJobResponseCopyWithImpl;
+@override @useResult
+$Res call({
+@JsonKey(name: 'job_id') String jobId, String status, String? message
+});
+
+
+
+
+}
+/// @nodoc
+class __$PhotoshootJobResponseCopyWithImpl<$Res>
+    implements _$PhotoshootJobResponseCopyWith<$Res> {
+  __$PhotoshootJobResponseCopyWithImpl(this._self, this._then);
+
+  final _PhotoshootJobResponse _self;
+  final $Res Function(_PhotoshootJobResponse) _then;
+
+/// Create a copy of PhotoshootJobResponse
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? jobId = null,Object? status = null,Object? message = freezed,}) {
+  return _then(_PhotoshootJobResponse(
+jobId: null == jobId ? _self.jobId : jobId // ignore: cast_nullable_to_non_nullable
+as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as String,message: freezed == message ? _self.message : message // ignore: cast_nullable_to_non_nullable
+as String?,
+  ));
+}
+
+
+}
+
+
+/// @nodoc
+mixin _$PhotoshootJobStatusResponse {
+
+@JsonKey(name: 'job_id') String get jobId; String get status;@JsonKey(name: 'generated_count') int get generatedCount;@JsonKey(name: 'total_count') int get totalCount;@JsonKey(name: 'current_batch') int get currentBatch;@JsonKey(name: 'total_batches') int get totalBatches; List<GeneratedImage> get images; PhotoshootUsage? get usage; String? get error;
+/// Create a copy of PhotoshootJobStatusResponse
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$PhotoshootJobStatusResponseCopyWith<PhotoshootJobStatusResponse> get copyWith => _$PhotoshootJobStatusResponseCopyWithImpl<PhotoshootJobStatusResponse>(this as PhotoshootJobStatusResponse, _$identity);
+
+  /// Serializes this PhotoshootJobStatusResponse to a JSON map.
+  Map<String, dynamic> toJson();
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is PhotoshootJobStatusResponse&&(identical(other.jobId, jobId) || other.jobId == jobId)&&(identical(other.status, status) || other.status == status)&&(identical(other.generatedCount, generatedCount) || other.generatedCount == generatedCount)&&(identical(other.totalCount, totalCount) || other.totalCount == totalCount)&&(identical(other.currentBatch, currentBatch) || other.currentBatch == currentBatch)&&(identical(other.totalBatches, totalBatches) || other.totalBatches == totalBatches)&&const DeepCollectionEquality().equals(other.images, images)&&(identical(other.usage, usage) || other.usage == usage)&&(identical(other.error, error) || other.error == error));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,jobId,status,generatedCount,totalCount,currentBatch,totalBatches,const DeepCollectionEquality().hash(images),usage,error);
+
+@override
+String toString() {
+  return 'PhotoshootJobStatusResponse(jobId: $jobId, status: $status, generatedCount: $generatedCount, totalCount: $totalCount, currentBatch: $currentBatch, totalBatches: $totalBatches, images: $images, usage: $usage, error: $error)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $PhotoshootJobStatusResponseCopyWith<$Res>  {
+  factory $PhotoshootJobStatusResponseCopyWith(PhotoshootJobStatusResponse value, $Res Function(PhotoshootJobStatusResponse) _then) = _$PhotoshootJobStatusResponseCopyWithImpl;
+@useResult
+$Res call({
+@JsonKey(name: 'job_id') String jobId, String status,@JsonKey(name: 'generated_count') int generatedCount,@JsonKey(name: 'total_count') int totalCount,@JsonKey(name: 'current_batch') int currentBatch,@JsonKey(name: 'total_batches') int totalBatches, List<GeneratedImage> images, PhotoshootUsage? usage, String? error
+});
+
+
+$PhotoshootUsageCopyWith<$Res>? get usage;
+
+}
+/// @nodoc
+class _$PhotoshootJobStatusResponseCopyWithImpl<$Res>
+    implements $PhotoshootJobStatusResponseCopyWith<$Res> {
+  _$PhotoshootJobStatusResponseCopyWithImpl(this._self, this._then);
+
+  final PhotoshootJobStatusResponse _self;
+  final $Res Function(PhotoshootJobStatusResponse) _then;
+
+/// Create a copy of PhotoshootJobStatusResponse
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? jobId = null,Object? status = null,Object? generatedCount = null,Object? totalCount = null,Object? currentBatch = null,Object? totalBatches = null,Object? images = null,Object? usage = freezed,Object? error = freezed,}) {
+  return _then(_self.copyWith(
+jobId: null == jobId ? _self.jobId : jobId // ignore: cast_nullable_to_non_nullable
+as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as String,generatedCount: null == generatedCount ? _self.generatedCount : generatedCount // ignore: cast_nullable_to_non_nullable
+as int,totalCount: null == totalCount ? _self.totalCount : totalCount // ignore: cast_nullable_to_non_nullable
+as int,currentBatch: null == currentBatch ? _self.currentBatch : currentBatch // ignore: cast_nullable_to_non_nullable
+as int,totalBatches: null == totalBatches ? _self.totalBatches : totalBatches // ignore: cast_nullable_to_non_nullable
+as int,images: null == images ? _self.images : images // ignore: cast_nullable_to_non_nullable
+as List<GeneratedImage>,usage: freezed == usage ? _self.usage : usage // ignore: cast_nullable_to_non_nullable
+as PhotoshootUsage?,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
+as String?,
+  ));
+}
+/// Create a copy of PhotoshootJobStatusResponse
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$PhotoshootUsageCopyWith<$Res>? get usage {
+    if (_self.usage == null) {
+    return null;
+  }
+
+  return $PhotoshootUsageCopyWith<$Res>(_self.usage!, (value) {
+    return _then(_self.copyWith(usage: value));
+  });
+}
+}
+
+
+/// Adds pattern-matching-related methods to [PhotoshootJobStatusResponse].
+extension PhotoshootJobStatusResponsePatterns on PhotoshootJobStatusResponse {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _PhotoshootJobStatusResponse value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _PhotoshootJobStatusResponse() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _PhotoshootJobStatusResponse value)  $default,){
+final _that = this;
+switch (_that) {
+case _PhotoshootJobStatusResponse():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _PhotoshootJobStatusResponse value)?  $default,){
+final _that = this;
+switch (_that) {
+case _PhotoshootJobStatusResponse() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'generated_count')  int generatedCount, @JsonKey(name: 'total_count')  int totalCount, @JsonKey(name: 'current_batch')  int currentBatch, @JsonKey(name: 'total_batches')  int totalBatches,  List<GeneratedImage> images,  PhotoshootUsage? usage,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _PhotoshootJobStatusResponse() when $default != null:
+return $default(_that.jobId,_that.status,_that.generatedCount,_that.totalCount,_that.currentBatch,_that.totalBatches,_that.images,_that.usage,_that.error);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'generated_count')  int generatedCount, @JsonKey(name: 'total_count')  int totalCount, @JsonKey(name: 'current_batch')  int currentBatch, @JsonKey(name: 'total_batches')  int totalBatches,  List<GeneratedImage> images,  PhotoshootUsage? usage,  String? error)  $default,) {final _that = this;
+switch (_that) {
+case _PhotoshootJobStatusResponse():
+return $default(_that.jobId,_that.status,_that.generatedCount,_that.totalCount,_that.currentBatch,_that.totalBatches,_that.images,_that.usage,_that.error);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'generated_count')  int generatedCount, @JsonKey(name: 'total_count')  int totalCount, @JsonKey(name: 'current_batch')  int currentBatch, @JsonKey(name: 'total_batches')  int totalBatches,  List<GeneratedImage> images,  PhotoshootUsage? usage,  String? error)?  $default,) {final _that = this;
+switch (_that) {
+case _PhotoshootJobStatusResponse() when $default != null:
+return $default(_that.jobId,_that.status,_that.generatedCount,_that.totalCount,_that.currentBatch,_that.totalBatches,_that.images,_that.usage,_that.error);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+@JsonSerializable()
+
+class _PhotoshootJobStatusResponse implements PhotoshootJobStatusResponse {
+  const _PhotoshootJobStatusResponse({@JsonKey(name: 'job_id') required this.jobId, required this.status, @JsonKey(name: 'generated_count') this.generatedCount = 0, @JsonKey(name: 'total_count') this.totalCount = 0, @JsonKey(name: 'current_batch') this.currentBatch = 0, @JsonKey(name: 'total_batches') this.totalBatches = 0, final  List<GeneratedImage> images = const [], this.usage, this.error}): _images = images;
+  factory _PhotoshootJobStatusResponse.fromJson(Map<String, dynamic> json) => _$PhotoshootJobStatusResponseFromJson(json);
+
+@override@JsonKey(name: 'job_id') final  String jobId;
+@override final  String status;
+@override@JsonKey(name: 'generated_count') final  int generatedCount;
+@override@JsonKey(name: 'total_count') final  int totalCount;
+@override@JsonKey(name: 'current_batch') final  int currentBatch;
+@override@JsonKey(name: 'total_batches') final  int totalBatches;
+ final  List<GeneratedImage> _images;
+@override@JsonKey() List<GeneratedImage> get images {
+  if (_images is EqualUnmodifiableListView) return _images;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_images);
+}
+
+@override final  PhotoshootUsage? usage;
+@override final  String? error;
+
+/// Create a copy of PhotoshootJobStatusResponse
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$PhotoshootJobStatusResponseCopyWith<_PhotoshootJobStatusResponse> get copyWith => __$PhotoshootJobStatusResponseCopyWithImpl<_PhotoshootJobStatusResponse>(this, _$identity);
+
+@override
+Map<String, dynamic> toJson() {
+  return _$PhotoshootJobStatusResponseToJson(this, );
+}
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PhotoshootJobStatusResponse&&(identical(other.jobId, jobId) || other.jobId == jobId)&&(identical(other.status, status) || other.status == status)&&(identical(other.generatedCount, generatedCount) || other.generatedCount == generatedCount)&&(identical(other.totalCount, totalCount) || other.totalCount == totalCount)&&(identical(other.currentBatch, currentBatch) || other.currentBatch == currentBatch)&&(identical(other.totalBatches, totalBatches) || other.totalBatches == totalBatches)&&const DeepCollectionEquality().equals(other._images, _images)&&(identical(other.usage, usage) || other.usage == usage)&&(identical(other.error, error) || other.error == error));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,jobId,status,generatedCount,totalCount,currentBatch,totalBatches,const DeepCollectionEquality().hash(_images),usage,error);
+
+@override
+String toString() {
+  return 'PhotoshootJobStatusResponse(jobId: $jobId, status: $status, generatedCount: $generatedCount, totalCount: $totalCount, currentBatch: $currentBatch, totalBatches: $totalBatches, images: $images, usage: $usage, error: $error)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$PhotoshootJobStatusResponseCopyWith<$Res> implements $PhotoshootJobStatusResponseCopyWith<$Res> {
+  factory _$PhotoshootJobStatusResponseCopyWith(_PhotoshootJobStatusResponse value, $Res Function(_PhotoshootJobStatusResponse) _then) = __$PhotoshootJobStatusResponseCopyWithImpl;
+@override @useResult
+$Res call({
+@JsonKey(name: 'job_id') String jobId, String status,@JsonKey(name: 'generated_count') int generatedCount,@JsonKey(name: 'total_count') int totalCount,@JsonKey(name: 'current_batch') int currentBatch,@JsonKey(name: 'total_batches') int totalBatches, List<GeneratedImage> images, PhotoshootUsage? usage, String? error
+});
+
+
+@override $PhotoshootUsageCopyWith<$Res>? get usage;
+
+}
+/// @nodoc
+class __$PhotoshootJobStatusResponseCopyWithImpl<$Res>
+    implements _$PhotoshootJobStatusResponseCopyWith<$Res> {
+  __$PhotoshootJobStatusResponseCopyWithImpl(this._self, this._then);
+
+  final _PhotoshootJobStatusResponse _self;
+  final $Res Function(_PhotoshootJobStatusResponse) _then;
+
+/// Create a copy of PhotoshootJobStatusResponse
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? jobId = null,Object? status = null,Object? generatedCount = null,Object? totalCount = null,Object? currentBatch = null,Object? totalBatches = null,Object? images = null,Object? usage = freezed,Object? error = freezed,}) {
+  return _then(_PhotoshootJobStatusResponse(
+jobId: null == jobId ? _self.jobId : jobId // ignore: cast_nullable_to_non_nullable
+as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as String,generatedCount: null == generatedCount ? _self.generatedCount : generatedCount // ignore: cast_nullable_to_non_nullable
+as int,totalCount: null == totalCount ? _self.totalCount : totalCount // ignore: cast_nullable_to_non_nullable
+as int,currentBatch: null == currentBatch ? _self.currentBatch : currentBatch // ignore: cast_nullable_to_non_nullable
+as int,totalBatches: null == totalBatches ? _self.totalBatches : totalBatches // ignore: cast_nullable_to_non_nullable
+as int,images: null == images ? _self._images : images // ignore: cast_nullable_to_non_nullable
+as List<GeneratedImage>,usage: freezed == usage ? _self.usage : usage // ignore: cast_nullable_to_non_nullable
+as PhotoshootUsage?,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
+as String?,
+  ));
+}
+
+/// Create a copy of PhotoshootJobStatusResponse
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$PhotoshootUsageCopyWith<$Res>? get usage {
+    if (_self.usage == null) {
+    return null;
+  }
+
+  return $PhotoshootUsageCopyWith<$Res>(_self.usage!, (value) {
+    return _then(_self.copyWith(usage: value));
+  });
+}
+}
+
 // dart format on

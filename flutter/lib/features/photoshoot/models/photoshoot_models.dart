@@ -91,6 +91,85 @@ extension PhotoshootUseCaseExtension on PhotoshootUseCase {
   }
 }
 
+/// Available aspect ratios for generated images
+enum PhotoshootAspectRatio {
+  @JsonValue('1:1')
+  square,
+  @JsonValue('9:16')
+  portrait,
+  @JsonValue('16:9')
+  landscape,
+  @JsonValue('3:4')
+  portrait34,
+  @JsonValue('4:3')
+  landscape43,
+}
+
+/// Extension for aspect ratio display and API values
+extension PhotoshootAspectRatioExtension on PhotoshootAspectRatio {
+  /// Returns the API value for this aspect ratio
+  String get apiValue {
+    switch (this) {
+      case PhotoshootAspectRatio.square:
+        return '1:1';
+      case PhotoshootAspectRatio.portrait:
+        return '9:16';
+      case PhotoshootAspectRatio.landscape:
+        return '16:9';
+      case PhotoshootAspectRatio.portrait34:
+        return '3:4';
+      case PhotoshootAspectRatio.landscape43:
+        return '4:3';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case PhotoshootAspectRatio.square:
+        return 'Square';
+      case PhotoshootAspectRatio.portrait:
+        return 'Portrait';
+      case PhotoshootAspectRatio.landscape:
+        return 'Landscape';
+      case PhotoshootAspectRatio.portrait34:
+        return 'Portrait 3:4';
+      case PhotoshootAspectRatio.landscape43:
+        return 'Landscape 4:3';
+    }
+  }
+
+  String get ratio {
+    switch (this) {
+      case PhotoshootAspectRatio.square:
+        return '1:1';
+      case PhotoshootAspectRatio.portrait:
+        return '9:16';
+      case PhotoshootAspectRatio.landscape:
+        return '16:9';
+      case PhotoshootAspectRatio.portrait34:
+        return '3:4';
+      case PhotoshootAspectRatio.landscape43:
+        return '4:3';
+    }
+  }
+
+  /// Returns the aspect ratio as a double (width/height)
+  double get aspectRatioValue {
+    switch (this) {
+      case PhotoshootAspectRatio.square:
+        return 1.0;
+      case PhotoshootAspectRatio.portrait:
+        return 9.0 / 16.0;
+      case PhotoshootAspectRatio.landscape:
+        return 16.0 / 9.0;
+      case PhotoshootAspectRatio.portrait34:
+        return 3.0 / 4.0;
+      case PhotoshootAspectRatio.landscape43:
+        return 4.0 / 3.0;
+    }
+  }
+}
+
 /// Photoshoot generation status
 enum PhotoshootStatus {
   @JsonValue('pending')
@@ -173,4 +252,36 @@ abstract class UseCaseInfo with _$UseCaseInfo {
 
   factory UseCaseInfo.fromJson(Map<String, dynamic> json) =>
       _$UseCaseInfoFromJson(json);
+}
+
+/// Initial response from startGeneration
+@freezed
+abstract class PhotoshootJobResponse with _$PhotoshootJobResponse {
+  const factory PhotoshootJobResponse({
+    @JsonKey(name: 'job_id') required String jobId,
+    required String status,
+    String? message,
+  }) = _PhotoshootJobResponse;
+
+  factory PhotoshootJobResponse.fromJson(Map<String, dynamic> json) =>
+      _$PhotoshootJobResponseFromJson(json);
+}
+
+/// Job status response for polling fallback
+@freezed
+abstract class PhotoshootJobStatusResponse with _$PhotoshootJobStatusResponse {
+  const factory PhotoshootJobStatusResponse({
+    @JsonKey(name: 'job_id') required String jobId,
+    required String status,
+    @JsonKey(name: 'generated_count') @Default(0) int generatedCount,
+    @JsonKey(name: 'total_count') @Default(0) int totalCount,
+    @JsonKey(name: 'current_batch') @Default(0) int currentBatch,
+    @JsonKey(name: 'total_batches') @Default(0) int totalBatches,
+    @Default([]) List<GeneratedImage> images,
+    PhotoshootUsage? usage,
+    String? error,
+  }) = _PhotoshootJobStatusResponse;
+
+  factory PhotoshootJobStatusResponse.fromJson(Map<String, dynamic> json) =>
+      _$PhotoshootJobStatusResponseFromJson(json);
 }

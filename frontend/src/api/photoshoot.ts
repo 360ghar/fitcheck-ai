@@ -77,11 +77,12 @@ export async function getPhotoshootUsage(): Promise<PhotoshootUsage> {
 }
 
 /**
- * Generate photoshoot images
+ * Generate photoshoot images (synchronous mode)
+ * Uses sync=true to wait for all images before returning.
  */
 export async function generatePhotoshoot(request: PhotoshootRequest): Promise<PhotoshootResult> {
   try {
-    const response = await apiClient.post<ApiEnvelope<PhotoshootResult>>('/api/v1/photoshoot/generate', {
+    const response = await apiClient.post<ApiEnvelope<PhotoshootResult>>('/api/v1/photoshoot/generate?sync=true', {
       photos: request.photos,
       use_case: request.use_case,
       custom_prompt: request.custom_prompt,

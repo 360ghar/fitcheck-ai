@@ -118,3 +118,53 @@ Map<String, dynamic> _$UseCaseInfoToJson(_UseCaseInfo instance) =>
       'description': instance.description,
       'example_prompts': instance.examplePrompts,
     };
+
+_PhotoshootJobResponse _$PhotoshootJobResponseFromJson(
+  Map<String, dynamic> json,
+) => _PhotoshootJobResponse(
+  jobId: json['job_id'] as String,
+  status: json['status'] as String,
+  message: json['message'] as String?,
+);
+
+Map<String, dynamic> _$PhotoshootJobResponseToJson(
+  _PhotoshootJobResponse instance,
+) => <String, dynamic>{
+  'job_id': instance.jobId,
+  'status': instance.status,
+  'message': instance.message,
+};
+
+_PhotoshootJobStatusResponse _$PhotoshootJobStatusResponseFromJson(
+  Map<String, dynamic> json,
+) => _PhotoshootJobStatusResponse(
+  jobId: json['job_id'] as String,
+  status: json['status'] as String,
+  generatedCount: (json['generated_count'] as num?)?.toInt() ?? 0,
+  totalCount: (json['total_count'] as num?)?.toInt() ?? 0,
+  currentBatch: (json['current_batch'] as num?)?.toInt() ?? 0,
+  totalBatches: (json['total_batches'] as num?)?.toInt() ?? 0,
+  images:
+      (json['images'] as List<dynamic>?)
+          ?.map((e) => GeneratedImage.fromJson(e as Map<String, dynamic>))
+          .toList() ??
+      const [],
+  usage: json['usage'] == null
+      ? null
+      : PhotoshootUsage.fromJson(json['usage'] as Map<String, dynamic>),
+  error: json['error'] as String?,
+);
+
+Map<String, dynamic> _$PhotoshootJobStatusResponseToJson(
+  _PhotoshootJobStatusResponse instance,
+) => <String, dynamic>{
+  'job_id': instance.jobId,
+  'status': instance.status,
+  'generated_count': instance.generatedCount,
+  'total_count': instance.totalCount,
+  'current_batch': instance.currentBatch,
+  'total_batches': instance.totalBatches,
+  'images': instance.images,
+  'usage': instance.usage,
+  'error': instance.error,
+};

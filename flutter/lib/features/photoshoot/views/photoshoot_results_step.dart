@@ -19,33 +19,57 @@ class PhotoshootResultsStep extends GetView<PhotoshootController> {
         // Action bar
         Padding(
           padding: const EdgeInsets.all(AppConstants.spacing16),
-          child: Row(
+          child: Column(
             children: [
-              Expanded(
-                child: Obx(() => ElevatedButton.icon(
-                      onPressed: controller.generatedImages.isNotEmpty &&
-                              !controller.isDownloading.value
-                          ? controller.downloadAll
-                          : null,
-                      icon: controller.isDownloading.value
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.download),
-                      label: Text(controller.isDownloading.value
-                          ? 'Downloading ${controller.downloadingIndex.value + 1}/${controller.generatedImages.length}'
-                          : 'Download All (${controller.generatedImages.length})'),
-                    )),
-              ),
-              const SizedBox(width: AppConstants.spacing12),
-              OutlinedButton(
-                onPressed: controller.reset,
-                child: const Text('New'),
+              // Download All button
+              Obx(() => ElevatedButton.icon(
+                    onPressed: controller.generatedImages.isNotEmpty &&
+                            !controller.isDownloading.value
+                        ? controller.downloadAll
+                        : null,
+                    icon: controller.isDownloading.value
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.download),
+                    label: Text(controller.isDownloading.value
+                        ? 'Downloading ${controller.downloadingIndex.value + 1}/${controller.generatedImages.length}'
+                        : 'Download All (${controller.generatedImages.length})'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                  )),
+              const SizedBox(height: AppConstants.spacing12),
+              // New Style and New Photos buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: controller.resetForNewGeneration,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('New Style'),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(0, 44),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppConstants.spacing12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: controller.reset,
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: const Text('New Photos'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 44),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

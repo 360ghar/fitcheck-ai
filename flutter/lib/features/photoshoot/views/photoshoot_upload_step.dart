@@ -18,8 +18,14 @@ class PhotoshootUploadStep extends GetView<PhotoshootController> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Photo grid
-          Obx(() => _buildPhotoGrid(context, tokens)),
+          // Photo upload area - conditional based on selection
+          Obx(() {
+            final photos = controller.selectedPhotos;
+            if (photos.isEmpty) {
+              return _buildUploadPlaceholder(context, tokens);
+            }
+            return _buildPhotoPreview(context, tokens);
+          }),
 
           const SizedBox(height: AppConstants.spacing24),
 
@@ -94,62 +100,115 @@ class PhotoshootUploadStep extends GetView<PhotoshootController> {
     );
   }
 
-  Widget _buildPhotoGrid(BuildContext context, AppUiTokens tokens) {
-    final photos = controller.selectedPhotos;
-    final maxPhotos = PhotoshootController.maxPhotos;
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: AppConstants.spacing12,
-        mainAxisSpacing: AppConstants.spacing12,
-        childAspectRatio: 1,
+  /// Compact upload placeholder shown when no photos selected
+  Widget _buildUploadPlaceholder(BuildContext context, AppUiTokens tokens) {
+    return InkWell(
+      onTap: controller.pickPhotos,
+      borderRadius: BorderRadius.circular(AppConstants.radius16),
+      child: Container(
+        height: 160,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppConstants.radius16),
+          border: Border.all(
+            color: tokens.textMuted.withOpacity(0.3),
+            width: 2,
+          ),
+          color: tokens.cardColor.withOpacity(0.5),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.add_photo_alternate_outlined,
+              size: 48,
+              color: tokens.textMuted,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Upload 1-4 photos',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: tokens.textMuted,
+                    fontWeight: FontWeight.w500,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Tap to select from gallery',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: tokens.textMuted.withOpacity(0.7),
+                  ),
+            ),
+          ],
+        ),
       ),
-      itemCount: maxPhotos,
-      itemBuilder: (context, index) {
-        final hasPhoto = index < photos.length;
-
-        return AppGlassCard(
-          padding: EdgeInsets.zero,
-          child: hasPhoto
-              ? _buildPhotoTile(context, tokens, photos[index], index)
-              : _buildEmptyTile(context, tokens, index),
-        );
-      },
     );
   }
 
-  Widget _buildPhotoTile(
+  /// Horizontal photo preview shown when photos are selected
+  Widget _buildPhotoPreview(BuildContext context, AppUiTokens tokens) {
+    final photos = controller.selectedPhotos;
+    final canAddMore = photos.length < PhotoshootController.maxPhotos;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Count indicator
+        Text(
+          '${photos.length}/${PhotoshootController.maxPhotos} photos',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: tokens.textMuted,
+              ),
+        ),
+        const SizedBox(height: 8),
+        // Horizontal scrollable thumbnails
+        SizedBox(
+          height: 100,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: photos.length + (canAddMore ? 1 : 0),
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              if (index < photos.length) {
+                return _buildThumbnail(context, tokens, photos[index], index);
+              }
+              return _buildAddMoreTile(context, tokens);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Individual photo thumbnail with remove button
+  Widget _buildThumbnail(
     BuildContext context,
     AppUiTokens tokens,
     File photo,
     int index,
   ) {
     return Stack(
-      fit: StackFit.expand,
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(AppConstants.radius12),
           child: Image.file(
             photo,
+            width: 100,
+            height: 100,
             fit: BoxFit.cover,
           ),
         ),
         Positioned(
           top: 4,
           right: 4,
-          child: Material(
-            color: Colors.black54,
-            shape: const CircleBorder(),
-            child: InkWell(
-              onTap: () => controller.removePhoto(index),
-              customBorder: const CircleBorder(),
-              child: const Padding(
-                padding: EdgeInsets.all(4),
-                child: Icon(Icons.close, color: Colors.white, size: 16),
+          child: GestureDetector(
+            onTap: () => controller.removePhoto(index),
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
               ),
+              child: const Icon(Icons.close, color: Colors.white, size: 14),
             ),
           ),
         ),
@@ -157,27 +216,30 @@ class PhotoshootUploadStep extends GetView<PhotoshootController> {
     );
   }
 
-  Widget _buildEmptyTile(BuildContext context, AppUiTokens tokens, int index) {
+  /// Add more photos tile
+  Widget _buildAddMoreTile(BuildContext context, AppUiTokens tokens) {
     return InkWell(
       onTap: controller.pickPhotos,
       borderRadius: BorderRadius.circular(AppConstants.radius12),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.add_photo_alternate,
-            size: 32,
-            color: tokens.textMuted.withOpacity(0.5),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Photo ${index + 1}',
-            style: TextStyle(
-              fontSize: 12,
-              color: tokens.textMuted.withOpacity(0.5),
+      child: Container(
+        width: 100,
+        height: 100,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppConstants.radius12),
+          border: Border.all(color: tokens.cardBorderColor),
+          color: tokens.cardColor,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add, color: tokens.textMuted, size: 28),
+            const SizedBox(height: 4),
+            Text(
+              'Add',
+              style: TextStyle(fontSize: 12, color: tokens.textMuted),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

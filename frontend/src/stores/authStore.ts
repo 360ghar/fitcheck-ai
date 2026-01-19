@@ -287,6 +287,12 @@ export const useAuthStore = create<AuthState>()(
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
+
+        // Sync tokens to client.ts storage on rehydration to keep both storages in sync
+        if (state?.tokens?.access_token && state?.tokens?.refresh_token) {
+          setTokens(state.tokens);
+        }
+
         // Sync user data with server to ensure avatar_url and other fields are fresh
         if (state?.isAuthenticated && state?.tokens?.access_token) {
           getCurrentUser()

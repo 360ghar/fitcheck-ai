@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -11,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:gal/gal.dart';
 
 import '../../../app/routes/app_routes.dart';
+import '../../../core/services/sse_service.dart';
 import '../models/photoshoot_models.dart';
 import '../repositories/photoshoot_repository.dart';
 
@@ -30,11 +30,8 @@ class PhotoshootController extends GetxController {
   // TextEditingController for custom prompt field
   final TextEditingController customPromptController = TextEditingController();
 
-  // Cancel token for long-running API calls
-  CancelToken? _generateCancelToken;
-
-  // Timer for animated progress
-  Timer? _progressTimer;
+  // SSE subscription for real-time progress
+  StreamSubscription<ServerSentEvent>? _sseSubscription;
 
   // Current step in the flow
   final Rx<PhotoshootStep> currentStep = PhotoshootStep.upload.obs;
@@ -45,10 +42,13 @@ class PhotoshootController extends GetxController {
 
   // Configuration state
   final Rx<PhotoshootUseCase> selectedUseCase = PhotoshootUseCase.linkedin.obs;
+  final Rx<PhotoshootAspectRatio> selectedAspectRatio =
+      PhotoshootAspectRatio.square.obs;
   final RxString customPrompt = ''.obs;
   final RxInt numImages = 10.obs;
   static const int minImages = 1;
   static const int maxImages = 10;
+  static const int batchSize = 10;
 
   // Usage state
   final Rx<PhotoshootUsage?> usage = Rx<PhotoshootUsage?>(null);
@@ -58,6 +58,9 @@ class PhotoshootController extends GetxController {
   final RxBool isGenerating = false.obs;
   final RxInt generationProgress = 0.obs;
   final RxString generationStatus = ''.obs;
+  final RxString jobId = ''.obs;
+  final RxInt currentBatch = 0.obs;
+  final RxInt totalBatches = 0.obs;
 
   // Results state
   final RxList<GeneratedImage> generatedImages = <GeneratedImage>[].obs;
@@ -87,34 +90,9 @@ class PhotoshootController extends GetxController {
 
   @override
   void onClose() {
+    _sseSubscription?.cancel();
     customPromptController.dispose();
-    _cancelGeneration();
     super.onClose();
-  }
-
-  /// Cancel ongoing generation request
-  void _cancelGeneration() {
-    _progressTimer?.cancel();
-    _progressTimer = null;
-    _generateCancelToken?.cancel('User cancelled or navigated away');
-    _generateCancelToken = null;
-  }
-
-  /// Start animated progress during API call
-  void _startProgressAnimation() {
-    _progressTimer?.cancel();
-    // Animate progress from 20% to 90% over ~4 minutes
-    _progressTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      if (generationProgress.value < 90) {
-        generationProgress.value += 2;
-      }
-    });
-  }
-
-  /// Stop animated progress
-  void _stopProgressAnimation() {
-    _progressTimer?.cancel();
-    _progressTimer = null;
   }
 
   /// Fetch current usage stats
@@ -210,6 +188,11 @@ class PhotoshootController extends GetxController {
     numImages.value = count.clamp(minImages, effectiveMaxImages);
   }
 
+  /// Update aspect ratio
+  void setAspectRatio(PhotoshootAspectRatio ratio) {
+    selectedAspectRatio.value = ratio;
+  }
+
   /// Navigate to next step
   void nextStep() {
     switch (currentStep.value) {
@@ -262,21 +245,19 @@ class PhotoshootController extends GetxController {
     }
   }
 
-  /// Generate photoshoot images
+  /// Generate photoshoot images with SSE progress
   Future<void> generatePhotoshoot() async {
     if (!canGenerate) return;
 
-    // Cancel any existing request
-    _cancelGeneration();
+    // Cancel any existing SSE subscription
+    _sseSubscription?.cancel();
 
     isGenerating.value = true;
     error.value = '';
     generationProgress.value = 0;
     generationStatus.value = 'Preparing your photos...';
     currentStep.value = PhotoshootStep.generating;
-
-    // Create new cancel token for this request
-    _generateCancelToken = CancelToken();
+    generatedImages.clear();
 
     try {
       // Convert photos to base64
@@ -288,53 +269,28 @@ class PhotoshootController extends GetxController {
         }),
       );
 
-      generationStatus.value = 'Generating ${numImages.value} images...';
-      generationProgress.value = 20;
+      generationStatus.value = 'Starting generation...';
+      generationProgress.value = 10;
 
-      // Start animated progress while waiting for API
-      _startProgressAnimation();
-
-      // Make API call with cancel token
-      final result = await _repository.generate(
+      // Start generation job
+      final response = await _repository.startGeneration(
         photos: photosBase64,
         useCase: selectedUseCase.value,
         customPrompt: selectedUseCase.value == PhotoshootUseCase.custom
             ? customPrompt.value
             : null,
         numImages: numImages.value,
-        cancelToken: _generateCancelToken,
+        batchSize: batchSize,
+        aspectRatio: selectedAspectRatio.value,
       );
 
-      _stopProgressAnimation();
-      generationProgress.value = 100;
-      sessionId.value = result.sessionId;
-      generatedImages.value = result.images;
+      jobId.value = response.jobId;
 
-      if (result.usage != null) {
-        usage.value = result.usage;
-      }
-
-      currentStep.value = PhotoshootStep.results;
-
-      Get.snackbar(
-        'Success',
-        '${generatedImages.length} images generated!',
-        snackPosition: SnackPosition.TOP,
-      );
-    } on DioException catch (e) {
-      _stopProgressAnimation();
-      if (e.type == DioExceptionType.cancel) {
-        // Request was cancelled, don't show error
-        return;
-      }
-      error.value = e.message ?? 'Network error occurred';
-      Get.snackbar('Generation Failed', error.value);
-      currentStep.value = PhotoshootStep.configure;
+      // Subscribe to SSE events for real-time progress
+      _subscribeToEvents(response.jobId);
     } catch (e) {
-      _stopProgressAnimation();
       error.value = e.toString().replaceAll('Exception: ', '');
 
-      // Check if limit exceeded
       if (error.value.contains('limit') || error.value.contains('exceeded')) {
         _showReferralPrompt();
       } else {
@@ -342,10 +298,182 @@ class PhotoshootController extends GetxController {
       }
 
       currentStep.value = PhotoshootStep.configure;
-    } finally {
       isGenerating.value = false;
-      _generateCancelToken = null;
     }
+  }
+
+  /// Subscribe to SSE events for real-time progress
+  void _subscribeToEvents(String id) {
+    _sseSubscription?.cancel();
+    _sseSubscription = _repository.subscribeToEvents(id).listen(
+      _handleSSEEvent,
+      onError: (e) {
+        debugPrint('SSE error: $e');
+        // Fallback to polling if SSE fails
+        _pollJobStatus(id);
+      },
+      onDone: () {
+        debugPrint('SSE stream ended');
+        // If still generating, stream ended unexpectedly - fallback to polling
+        if (isGenerating.value && currentStep.value == PhotoshootStep.generating) {
+          _pollJobStatus(id);
+        }
+      },
+    );
+  }
+
+  /// Handle incoming SSE events
+  void _handleSSEEvent(ServerSentEvent event) {
+    debugPrint('Photoshoot SSE: ${event.type}');
+
+    switch (event.type) {
+      case 'connected':
+      case 'heartbeat':
+        break;
+
+      case 'generation_started':
+        generationStatus.value = 'Generating images...';
+        totalBatches.value = event.data?['total_batches'] ?? 1;
+        break;
+
+      case 'batch_started':
+        currentBatch.value = event.data?['batch_index'] ?? 0;
+        generationStatus.value =
+            'Processing batch ${currentBatch.value + 1}/${totalBatches.value}...';
+        break;
+
+      case 'image_complete':
+        final imageData = event.data;
+        if (imageData != null) {
+          final image = GeneratedImage.fromJson(imageData);
+          generatedImages.add(image);
+          // Update progress: 10% for upload, 90% for generation
+          generationProgress.value =
+              10 + ((generatedImages.length / numImages.value) * 90).toInt();
+          generationStatus.value =
+              'Generated ${generatedImages.length}/${numImages.value} images...';
+        }
+        break;
+
+      case 'image_failed':
+        debugPrint('Image generation failed: ${event.data?['error']}');
+        break;
+
+      case 'batch_complete':
+        break;
+
+      case 'job_complete':
+        _handleJobComplete(event.data);
+        break;
+
+      case 'job_failed':
+        error.value = event.data?['error'] ?? 'Generation failed';
+        Get.snackbar('Generation Failed', error.value);
+        currentStep.value = PhotoshootStep.configure;
+        isGenerating.value = false;
+        _sseSubscription?.cancel();
+        break;
+
+      case 'job_cancelled':
+        currentStep.value = PhotoshootStep.configure;
+        isGenerating.value = false;
+        _sseSubscription?.cancel();
+        break;
+
+      case 'error':
+        // SSE connection error, fallback to polling
+        _pollJobStatus(jobId.value);
+        break;
+    }
+  }
+
+  /// Handle job completion
+  void _handleJobComplete(Map<String, dynamic>? data) {
+    generationProgress.value = 100;
+    generationStatus.value = 'Complete!';
+
+    if (data?['session_id'] != null) {
+      sessionId.value = data!['session_id'];
+    } else {
+      sessionId.value = jobId.value;
+    }
+
+    if (data?['usage'] != null) {
+      usage.value = PhotoshootUsage.fromJson(data!['usage']);
+    }
+
+    currentStep.value = PhotoshootStep.results;
+    isGenerating.value = false;
+    _sseSubscription?.cancel();
+
+    Get.snackbar(
+      'Success',
+      '${generatedImages.length} images generated!',
+      snackPosition: SnackPosition.TOP,
+    );
+  }
+
+  /// Fallback polling if SSE fails
+  Future<void> _pollJobStatus(String id) async {
+    if (id.isEmpty) return;
+
+    try {
+      final status = await _repository.getJobStatus(id);
+
+      generatedImages.assignAll(status.images);
+      if (status.totalCount > 0) {
+        generationProgress.value =
+            10 + ((status.generatedCount / status.totalCount) * 90).toInt();
+      }
+
+      switch (status.status) {
+        case 'pending':
+        case 'processing':
+          await Future.delayed(const Duration(seconds: 2));
+          if (isGenerating.value) {
+            _pollJobStatus(id);
+          }
+          break;
+        case 'complete':
+          _handleJobComplete({
+            'session_id': status.jobId,
+            if (status.usage != null) 'usage': status.usage!.toJson(),
+          });
+          break;
+        case 'failed':
+          error.value = status.error ?? 'Generation failed';
+          Get.snackbar('Generation Failed', error.value);
+          currentStep.value = PhotoshootStep.configure;
+          isGenerating.value = false;
+          break;
+        case 'cancelled':
+          currentStep.value = PhotoshootStep.configure;
+          isGenerating.value = false;
+          break;
+      }
+    } catch (e) {
+      debugPrint('Poll status error: $e');
+      // Retry after delay
+      await Future.delayed(const Duration(seconds: 3));
+      if (isGenerating.value) {
+        _pollJobStatus(id);
+      }
+    }
+  }
+
+  /// Cancel generation job
+  Future<void> cancelGeneration() async {
+    if (jobId.value.isEmpty) return;
+
+    try {
+      await _repository.cancelJob(jobId.value);
+    } catch (e) {
+      debugPrint('Failed to cancel job: $e');
+    }
+
+    _sseSubscription?.cancel();
+    currentStep.value = PhotoshootStep.configure;
+    isGenerating.value = false;
   }
 
   /// Download a single image to gallery
@@ -456,18 +584,48 @@ class PhotoshootController extends GetxController {
 
   /// Reset to initial state for new generation
   void reset() {
+    _sseSubscription?.cancel();
     selectedPhotos.clear();
     customPrompt.value = '';
     customPromptController.clear();
+    selectedUseCase.value = PhotoshootUseCase.linkedin;
+    selectedAspectRatio.value = PhotoshootAspectRatio.square;
     numImages.value = effectiveMaxImages.clamp(minImages, maxImages);
     generatedImages.clear();
     sessionId.value = '';
+    jobId.value = '';
+    currentBatch.value = 0;
+    totalBatches.value = 0;
     error.value = '';
     generationProgress.value = 0;
     generationStatus.value = '';
     isDownloading.value = false;
     downloadingIndex.value = -1;
     currentStep.value = PhotoshootStep.upload;
+    fetchUsage();
+  }
+
+  /// Reset for new generation with same photos
+  /// Clears results and config but keeps selected photos
+  void resetForNewGeneration() {
+    _sseSubscription?.cancel();
+    // Keep selectedPhotos - don't clear
+    customPrompt.value = '';
+    customPromptController.clear();
+    selectedUseCase.value = PhotoshootUseCase.linkedin;
+    selectedAspectRatio.value = PhotoshootAspectRatio.square;
+    numImages.value = effectiveMaxImages.clamp(minImages, maxImages);
+    generatedImages.clear();
+    sessionId.value = '';
+    jobId.value = '';
+    currentBatch.value = 0;
+    totalBatches.value = 0;
+    error.value = '';
+    generationProgress.value = 0;
+    generationStatus.value = '';
+    isDownloading.value = false;
+    downloadingIndex.value = -1;
+    currentStep.value = PhotoshootStep.configure;
     fetchUsage();
   }
 }

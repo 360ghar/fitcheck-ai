@@ -27,6 +27,19 @@ class PhotoshootStatus(str, Enum):
     FAILED = "failed"
 
 
+class PhotoshootJobStatus(str, Enum):
+    """Status of a photoshoot generation job (for SSE streaming)."""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETE = "complete"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+# Valid aspect ratios for image generation
+VALID_ASPECT_RATIOS = {"1:1", "9:16", "16:9", "3:4", "4:3"}
+
+
 # =============================================================================
 # Request Models
 # =============================================================================
@@ -59,6 +72,16 @@ class StartPhotoshootRequest(BaseModel):
         le=10,
         description="Number of images to generate (1-10)",
     )
+    batch_size: int = Field(
+        default=10,
+        ge=1,
+        le=10,
+        description="Number of images per batch for SSE progress updates",
+    )
+    aspect_ratio: str = Field(
+        default="1:1",
+        description="Aspect ratio for generated images: 1:1, 9:16, 16:9, 3:4, 4:3",
+    )
 
     @field_validator("photos")
     @classmethod
@@ -69,6 +92,16 @@ class StartPhotoshootRequest(BaseModel):
                 raise ValueError(
                     f"Photo {i + 1} exceeds maximum size of 10MB"
                 )
+        return v
+
+    @field_validator("aspect_ratio")
+    @classmethod
+    def validate_aspect_ratio(cls, v: str) -> str:
+        """Validate aspect ratio is one of the allowed values."""
+        if v not in VALID_ASPECT_RATIOS:
+            raise ValueError(
+                f"Invalid aspect ratio. Must be one of: {', '.join(VALID_ASPECT_RATIOS)}"
+            )
         return v
 
 
@@ -160,3 +193,28 @@ class PhotoshootPrompt(BaseModel):
 class GeneratedPromptsResponse(BaseModel):
     """Response from LLM prompt generation."""
     prompts: List[PhotoshootPrompt]
+
+
+# =============================================================================
+# Job/SSE Response Models
+# =============================================================================
+
+
+class PhotoshootJobResponse(BaseModel):
+    """Response when starting an async photoshoot job."""
+    job_id: str
+    status: str
+    message: str
+
+
+class PhotoshootJobStatusResponse(BaseModel):
+    """Full job status response for polling fallback."""
+    job_id: str
+    status: str
+    generated_count: int = Field(default=0, ge=0)
+    total_count: int = Field(default=0, ge=0)
+    current_batch: int = Field(default=0, ge=0)
+    total_batches: int = Field(default=0, ge=0)
+    images: List[GeneratedImage] = Field(default_factory=list)
+    usage: Optional[PhotoshootUsage] = None
+    error: Optional[str] = None

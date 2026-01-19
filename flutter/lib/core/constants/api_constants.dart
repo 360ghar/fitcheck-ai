@@ -49,6 +49,9 @@ class ApiConstants {
   static const String referral = '$apiVersion/referral';
   static const String feedback = '$apiVersion/feedback';
   static const String photoshoot = '$apiVersion/photoshoot';
+  static String photoshootEvents(String jobId) => '$photoshoot/$jobId/events';
+  static String photoshootCancel(String jobId) => '$photoshoot/$jobId/cancel';
+  static String photoshootStatus(String jobId) => '$photoshoot/$jobId/status';
 
   // Batch Extraction Endpoints
   static const String aiBatchExtract = '$apiVersion/ai/batch-extract';

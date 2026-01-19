@@ -338,8 +338,11 @@ class PhotoshootService:
         custom_prompt: Optional[str] = None,
         reference_photo: Optional[str] = None,
     ) -> List[PhotoshootPrompt]:
-        """Generate diverse prompts for photoshoot images using LLM."""
-        from app.services.ai_provider_service import ChatMessage, get_ai_service, quick_vision
+        """Generate diverse prompts for photoshoot images using a single multimodal LLM call.
+
+        This combines subject analysis and prompt generation into one API call for efficiency.
+        """
+        from app.services.ai_provider_service import ChatMessage, get_ai_service
 
         # Get the prompt guidance for this use case
         if use_case == PhotoshootUseCase.CUSTOM and custom_prompt:
@@ -348,92 +351,92 @@ class PhotoshootService:
             template = USE_CASE_TEMPLATES.get(use_case, USE_CASE_TEMPLATES[PhotoshootUseCase.LINKEDIN])
             guidance = template["prompt_guidance"]
 
-        subject_hint = ""
-        if reference_photo:
-            try:
-                photo = reference_photo
-                if "," in photo and photo.strip().lower().startswith("data:"):
-                    photo = photo.split(",", 1)[1]
-                subject_hint = await quick_vision(
-                    prompt=(
-                        "Analyze this person's appearance in detail for photoshoot generation. "
-                        "Provide a comprehensive description including:\n"
-                        "1. FACE: Face shape (oval/round/square/heart/oblong), jawline definition, chin shape, cheekbone prominence\n"
-                        "2. EYES: Eye shape, eye color, eye spacing, eyebrow shape and thickness, eyelid type\n"
-                        "3. NOSE: Nose shape, nose bridge (high/low/straight/curved), nostril shape, nose size\n"
-                        "4. MOUTH: Lip shape, lip fullness, mouth width, any distinctive smile characteristics\n"
-                        "5. SKIN: Skin tone (specific shade), skin texture, any visible marks, moles, freckles, or scars\n"
-                        "6. HAIR: Hair color (specific shade), hair texture (straight/wavy/curly), hairstyle, hairline, facial hair if any\n"
-                        "7. GENDER & AGE: Apparent gender presentation, approximate age range\n"
-                        "8. BUILD: Body type, build, approximate proportions\n"
-                        "9. DISTINCTIVE FEATURES: Any other unique or distinguishing characteristics\n\n"
-                        "Be specific and detailed - this description will be used to ensure the generated images "
-                        "look exactly like this person, not just someone similar."
-                    ),
-                    image_base64=photo,
-                )
-            except Exception as e:
-                logger.debug(f"Failed to extract subject hint from reference photo: {e}")
-                subject_hint = ""
-
+        # Combined system prompt that does both subject analysis and prompt generation
         system_prompt = f"""You are a professional fashion photographer planning a photoshoot.
-Generate exactly {num_prompts} diverse, detailed image generation prompts.
 
-IMPORTANT: You will receive a detailed description of the person from the reference photo.
-You MUST include this complete person description at the START of every full_prompt.
+TASK: Analyze the person in the reference image AND generate {num_prompts} diverse photoshoot prompts.
 
-Return a JSON array with this exact structure:
-[
-  {{
-    "index": 0,
-    "setting": "Description of the location/background",
-    "outfit": "Description of the clothing/attire",
-    "pose": "Description of the pose and body position",
-    "lighting": "Description of the lighting setup",
-    "style": "Overall style category",
-    "mood": "The emotional tone/mood",
-    "full_prompt": "Complete detailed prompt - MUST start with the person description, then the scene"
-  }}
-]
+STEP 1 - ANALYZE THE PERSON:
+First, carefully analyze the person in the provided reference image. Create a detailed description including:
+1. FACE: Face shape, jawline definition, chin shape, cheekbone prominence
+2. EYES: Eye shape, eye color, eye spacing, eyebrow shape and thickness
+3. NOSE: Nose shape, nose bridge, nostril shape, nose size
+4. MOUTH: Lip shape, lip fullness, mouth width, smile characteristics
+5. SKIN: Skin tone (specific shade), skin texture, any visible marks, moles, freckles
+6. HAIR: Hair color, hair texture (straight/wavy/curly), hairstyle, hairline, facial hair if any
+7. GENDER & AGE: Apparent gender presentation, approximate age range
+8. BUILD: Body type, build, approximate proportions
+9. DISTINCTIVE FEATURES: Any unique or distinguishing characteristics
 
-Each prompt should be unique and cover different aspects of the use case.
-The full_prompt should be a detailed, cohesive description suitable for an AI image generator.
+STEP 2 - GENERATE PROMPTS:
+Generate exactly {num_prompts} diverse, detailed image generation prompts for this person.
+Each full_prompt MUST start with the complete person description from Step 1.
 
-CRITICAL - PERSON DESCRIPTION REQUIREMENT:
-Each full_prompt MUST begin with the complete person description provided in Subject notes.
-This ensures every generated image depicts the EXACT SAME PERSON with identical:
-- Facial features (face shape, eyes, nose, mouth, jawline)
-- Skin tone and texture
-- Hair color, style, and texture
-- Apparent age and gender
-- Body type and proportions
-- Any distinguishing marks or features
+Return a JSON object with this exact structure:
+{{
+  "subject_description": "The complete detailed description of the person from Step 1",
+  "prompts": [
+    {{
+      "index": 0,
+      "setting": "Description of the location/background",
+      "outfit": "Description of the clothing/attire",
+      "pose": "Description of the pose and body position",
+      "lighting": "Description of the lighting setup",
+      "style": "Overall style category",
+      "mood": "The emotional tone/mood",
+      "full_prompt": "Complete detailed prompt - MUST start with the person description, then the scene"
+    }}
+  ]
+}}
 
-The scene description (setting, outfit, pose, etc.) comes AFTER the person description.
+CRITICAL REQUIREMENTS:
+- Each full_prompt MUST begin with the complete person description
+- This ensures every generated image depicts the EXACT SAME PERSON with identical features
+- The scene description (setting, outfit, pose, etc.) comes AFTER the person description
+- Each prompt should be unique and cover different aspects of the use case
 """
+
+        subject_hint = ""  # Will be extracted from response if available
 
         try:
             ai_service = await get_ai_service()
             try:
-                if subject_hint:
-                    user_prompt = f"""{guidance}
+                # Build the message content - multimodal if we have a reference photo
+                if reference_photo:
+                    # Normalize the photo (strip data URL prefix if present)
+                    photo = reference_photo
+                    if "," in photo and photo.strip().lower().startswith("data:"):
+                        photo = photo.split(",", 1)[1]
 
-=== PERSON DESCRIPTION (from reference photo) ===
-{subject_hint}
-=== END PERSON DESCRIPTION ===
+                    # Create multimodal content with image + text
+                    ref_url = f"data:image/jpeg;base64,{photo}" if not photo.startswith("data:") else photo
+                    user_content = [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": ref_url}
+                        },
+                        {
+                            "type": "text",
+                            "text": f"Use case guidance:\n{guidance}\n\nAnalyze this person and generate {num_prompts} photoshoot prompts following the instructions above."
+                        }
+                    ]
 
-IMPORTANT: Include this complete person description at the START of every full_prompt you generate.
-"""
+                    response = await ai_service.chat(
+                        messages=[
+                            ChatMessage(role="system", content=system_prompt),
+                            ChatMessage(role="user", content=user_content),
+                        ],
+                        temperature=0.8,
+                    )
                 else:
-                    user_prompt = guidance
-
-                response = await ai_service.chat(
-                    messages=[
-                        ChatMessage(role="system", content=system_prompt),
-                        ChatMessage(role="user", content=user_prompt),
-                    ],
-                    temperature=0.8,
-                )
+                    # No reference photo - use text-only prompt with fallback
+                    response = await ai_service.chat(
+                        messages=[
+                            ChatMessage(role="system", content=system_prompt),
+                            ChatMessage(role="user", content=guidance),
+                        ],
+                        temperature=0.8,
+                    )
             finally:
                 await ai_service.close()
 
@@ -441,10 +444,18 @@ IMPORTANT: Include this complete person description at the START of every full_p
             if not content:
                 raise AIServiceError("Prompt generation returned empty response")
 
-            json_str = PhotoshootService._extract_json_array(content)
-            prompts_data = json.loads(json_str)
-            if not isinstance(prompts_data, list):
-                raise AIServiceError("Prompt generation response was not a JSON array")
+            # Extract JSON object from response
+            json_str = PhotoshootService._extract_json_object(content)
+            response_data = json.loads(json_str)
+
+            # Handle both old array format and new object format
+            if isinstance(response_data, list):
+                prompts_data = response_data
+            elif isinstance(response_data, dict):
+                subject_hint = response_data.get("subject_description", "")
+                prompts_data = response_data.get("prompts", [])
+            else:
+                raise AIServiceError("Prompt generation response was not valid JSON")
 
             prompts: List[PhotoshootPrompt] = []
             for i, p in enumerate(prompts_data[:num_prompts]):
@@ -499,9 +510,9 @@ IMPORTANT: Include this complete person description at the START of every full_p
             )
 
     @staticmethod
-    def _extract_json_array(text: str) -> str:
+    def _extract_json_object(text: str) -> str:
         """
-        Extract the first top-level JSON array from a model response.
+        Extract the first top-level JSON object or array from a model response.
 
         Handles responses wrapped in markdown fences or with extra prose.
         """
@@ -513,21 +524,32 @@ IMPORTANT: Include this complete person description at the START of every full_p
         if fenced:
             text = fenced.group(1)
 
-        start = text.find("[")
-        if start < 0:
-            raise AIServiceError("Prompt generation response did not contain a JSON array")
+        # Try to find JSON object first, then array
+        obj_start = text.find("{")
+        arr_start = text.find("[")
+
+        if obj_start < 0 and arr_start < 0:
+            raise AIServiceError("Prompt generation response did not contain JSON")
+
+        # Use whichever comes first (object or array)
+        if obj_start >= 0 and (arr_start < 0 or obj_start < arr_start):
+            start = obj_start
+            open_char, close_char = "{", "}"
+        else:
+            start = arr_start
+            open_char, close_char = "[", "]"
 
         depth = 0
         for i in range(start, len(text)):
             ch = text[i]
-            if ch == "[":
+            if ch == open_char:
                 depth += 1
-            elif ch == "]":
+            elif ch == close_char:
                 depth -= 1
                 if depth == 0:
                     return text[start : i + 1]
 
-        raise AIServiceError("Unterminated JSON array in prompt generation response")
+        raise AIServiceError("Unterminated JSON in prompt generation response")
 
     @staticmethod
     def _fallback_prompts(
@@ -791,3 +813,293 @@ Generate a single high-quality photorealistic image of THIS EXACT PERSON."""
         except Exception as e:
             logger.exception(f"Error in photoshoot generation for user {user_id}: {e}")
             raise ServiceError("Photoshoot generation failed", service_name="photoshoot")
+
+
+# =============================================================================
+# Streaming Photoshoot Service (SSE-based for Flutter app)
+# =============================================================================
+
+
+class PhotoshootStreamingService:
+    """Service for streaming photoshoot generation with SSE updates.
+
+    This service manages the async generation pipeline and broadcasts
+    progress events to SSE subscribers via PhotoshootJobService.
+    """
+
+    def __init__(self, user_id: str, db: Client):
+        self.user_id = user_id
+        self.db = db
+
+    async def run_pipeline(self, job: "PhotoshootJob") -> None:
+        """Run the photoshoot generation pipeline with SSE updates.
+
+        1. Validate and check limits
+        2. Generate prompts
+        3. Generate images in batches, broadcasting each completion
+        4. Update usage and broadcast completion
+        """
+        from app.services.photoshoot_job_service import (
+            PhotoshootJob,
+            PhotoshootJobService,
+            PhotoshootJobStatus,
+        )
+
+        try:
+            await PhotoshootJobService.update_status(job.job_id, PhotoshootJobStatus.PROCESSING)
+
+            # Check daily limit
+            allowed, usage = await PhotoshootService.check_daily_limit(
+                self.user_id, job.num_images, self.db
+            )
+            if not allowed:
+                raise RateLimitError(
+                    message=f"Daily limit exceeded. You have {usage.remaining} images remaining today.",
+                    retry_after=86400,
+                )
+
+            # Broadcast generation started
+            await PhotoshootJobService.broadcast_event(job.job_id, "generation_started", {
+                "job_id": job.job_id,
+                "total_images": job.num_images,
+                "total_batches": job.total_batches,
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+
+            # Generate prompts
+            prompts = await PhotoshootService.generate_prompts(
+                use_case=PhotoshootUseCase(job.use_case),
+                num_prompts=job.num_images,
+                custom_prompt=job.custom_prompt,
+                reference_photo=job.photos[0] if job.photos else None,
+            )
+
+            # Generate images in batches with streaming
+            await self._generate_images_streaming(job, prompts)
+
+            # Check cancellation
+            if job.is_cancelled():
+                return
+
+            # Increment usage for successfully generated images
+            generated_count = job.generated_count
+            if generated_count > 0:
+                await PhotoshootService.increment_usage(self.user_id, generated_count, self.db)
+
+            # Get updated usage
+            updated_usage = await PhotoshootService.get_usage(self.user_id, self.db)
+            usage_dict = updated_usage.model_dump(mode="json")
+            await PhotoshootJobService.set_usage(job.job_id, usage_dict)
+
+            # Mark complete
+            await PhotoshootJobService.update_status(job.job_id, PhotoshootJobStatus.COMPLETE)
+
+            # Broadcast completion
+            await PhotoshootJobService.broadcast_event(job.job_id, "job_complete", {
+                "job_id": job.job_id,
+                "session_id": job.session_id,
+                "generated_count": generated_count,
+                "failed_count": job.failed_count,
+                "usage": usage_dict,
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+
+        except RateLimitError as e:
+            from app.services.photoshoot_job_service import PhotoshootJobService
+            await PhotoshootJobService.set_error(job.job_id, str(e))
+            await PhotoshootJobService.broadcast_event(job.job_id, "job_failed", {
+                "job_id": job.job_id,
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+        except Exception as e:
+            from app.services.photoshoot_job_service import PhotoshootJobService
+            logger.exception(f"Photoshoot pipeline failed: {e}")
+            await PhotoshootJobService.set_error(job.job_id, str(e))
+            await PhotoshootJobService.broadcast_event(job.job_id, "job_failed", {
+                "job_id": job.job_id,
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+
+    async def _generate_images_streaming(
+        self,
+        job: "PhotoshootJob",
+        prompts: List[PhotoshootPrompt],
+    ) -> None:
+        """Generate images in batches, broadcasting progress via SSE."""
+        from app.services.ai_settings_service import AISettingsService
+        from app.services.photoshoot_job_service import PhotoshootJobService
+
+        # Get AI service
+        ai_service = await AISettingsService.get_ai_service_for_user(self.user_id, self.db)
+
+        try:
+            # Normalize reference photos
+            normalized_refs = []
+            for photo in job.photos:
+                if photo and "," in photo and photo.strip().lower().startswith("data:"):
+                    normalized_refs.append(photo.split(",", 1)[1])
+                else:
+                    normalized_refs.append(photo.strip() if photo else "")
+            normalized_refs = [p for p in normalized_refs if p]
+
+            # Process in batches
+            batch_size = job.batch_size
+            for batch_num in range(job.total_batches):
+                if job.is_cancelled():
+                    return
+
+                start_idx = batch_num * batch_size
+                end_idx = min(start_idx + batch_size, len(prompts))
+                batch_prompts = prompts[start_idx:end_idx]
+
+                # Update current batch
+                await PhotoshootJobService.update_current_batch(job.job_id, batch_num + 1)
+
+                # Broadcast batch start
+                await PhotoshootJobService.broadcast_event(job.job_id, "batch_started", {
+                    "job_id": job.job_id,
+                    "batch_index": batch_num,
+                    "batch_number": batch_num + 1,
+                    "total_batches": job.total_batches,
+                    "images_in_batch": len(batch_prompts),
+                    "timestamp": datetime.utcnow().isoformat(),
+                })
+
+                # Generate batch images concurrently
+                concurrency_limit = getattr(settings, 'PHOTOSHOOT_CONCURRENCY_LIMIT', 3)
+                semaphore = asyncio.Semaphore(concurrency_limit)
+
+                async def generate_single(prompt: PhotoshootPrompt):
+                    async with semaphore:
+                        if job.is_cancelled():
+                            return None
+                        return await self._generate_single_image(
+                            job, prompt, ai_service, normalized_refs
+                        )
+
+                tasks = [generate_single(p) for p in batch_prompts]
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+                # Broadcast batch complete
+                # Refresh job state to get current counts
+                updated_job = await PhotoshootJobService.get_job_by_id(job.job_id)
+                generated_count = updated_job.generated_count if updated_job else 0
+
+                await PhotoshootJobService.broadcast_event(job.job_id, "batch_complete", {
+                    "job_id": job.job_id,
+                    "batch_index": batch_num,
+                    "batch_number": batch_num + 1,
+                    "total_batches": job.total_batches,
+                    "generated_count": generated_count,
+                    "timestamp": datetime.utcnow().isoformat(),
+                })
+        finally:
+            await ai_service.close()
+
+    async def _generate_single_image(
+        self,
+        job: "PhotoshootJob",
+        prompt: PhotoshootPrompt,
+        ai_service,
+        normalized_refs: List[str],
+    ) -> Optional[GeneratedImage]:
+        """Generate a single image and broadcast result."""
+        from app.services.ai_provider_service import ChatMessage
+        from app.services.photoshoot_job_service import PhotoshootJobService
+
+        try:
+            # Build multi-image content
+            content = []
+            for ref_photo in normalized_refs:
+                ref_url = f"data:image/jpeg;base64,{ref_photo}" if not ref_photo.startswith("data:") else ref_photo
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": ref_url}
+                })
+
+            # Enhanced prompt with face adherence requirements
+            enhanced_prompt = f"""{prompt.full_prompt}
+
+CRITICAL FACE ADHERENCE REQUIREMENTS:
+This is a photoshoot of the EXACT SAME PERSON shown in the reference image(s).
+The generated image MUST be this specific individual - not someone who looks similar.
+
+FACE IDENTITY - MANDATORY EXACT MATCH:
+- EXACT facial structure: face shape, jawline, chin, cheekbones must be identical
+- EXACT eye features: eye shape, eye color, eye spacing, eyebrows, eyelid shape
+- EXACT nose: nose shape, nose bridge, nostril shape, nose size and proportions
+- EXACT mouth: lip shape, lip fullness, mouth width, smile characteristics
+- EXACT skin: skin tone, skin texture, any visible marks, moles, or features
+- EXACT hair: hair color, hair texture, hairstyle, hairline, facial hair if any
+
+Generate a single high-quality photorealistic image of THIS EXACT PERSON."""
+
+            content.append({"type": "text", "text": enhanced_prompt})
+            messages = [ChatMessage(role="user", content=content)]
+
+            response = await ai_service.chat(
+                messages=messages,
+                model=ai_service.config.get_image_gen_model(),
+                response_modalities=["TEXT", "IMAGE"],
+            )
+
+            if not response.images:
+                raise ServiceError(f"No image generated for prompt {prompt.index}")
+
+            image_id = f"img_{uuid.uuid4().hex[:8]}"
+            image_base64 = response.images[0]
+
+            # Add to job
+            await PhotoshootJobService.add_generated_image(
+                job.job_id,
+                image_id,
+                prompt.index,
+                image_base64=image_base64,
+            )
+
+            # Get updated job state for accurate counts
+            updated_job = await PhotoshootJobService.get_job_by_id(job.job_id)
+            generated_count = updated_job.generated_count if updated_job else 0
+
+            # Broadcast success
+            await PhotoshootJobService.broadcast_event(job.job_id, "image_complete", {
+                "job_id": job.job_id,
+                "id": image_id,
+                "index": prompt.index,
+                "image_base64": image_base64,
+                "image_url": None,
+                "generated_count": generated_count,
+                "total_count": job.num_images,
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+
+            return GeneratedImage(
+                id=image_id,
+                index=prompt.index,
+                image_base64=image_base64,
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to generate image {prompt.index}: {e}")
+
+            await PhotoshootJobService.mark_image_failed(job.job_id, prompt.index, str(e))
+
+            # Get updated job state for accurate counts
+            updated_job = await PhotoshootJobService.get_job_by_id(job.job_id)
+            generated_count = updated_job.generated_count if updated_job else 0
+            failed_count = updated_job.failed_count if updated_job else 0
+
+            # Broadcast failure
+            await PhotoshootJobService.broadcast_event(job.job_id, "image_failed", {
+                "job_id": job.job_id,
+                "index": prompt.index,
+                "error": str(e),
+                "generated_count": generated_count,
+                "failed_count": failed_count,
+                "total_count": job.num_images,
+                "timestamp": datetime.utcnow().isoformat(),
+            })
+
+            return None

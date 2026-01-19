@@ -140,6 +140,7 @@ class Settings(BaseSettings):
     # Photoshoot Generator Configuration
     PLAN_FREE_DAILY_PHOTOSHOOT_IMAGES: int = 10
     PLAN_PRO_DAILY_PHOTOSHOOT_IMAGES: int = 50
+    PHOTOSHOOT_CONCURRENCY_LIMIT: int = 10  # Max concurrent image generations
 
     # Weather (OpenWeatherMap)
     WEATHER_API_KEY: Optional[str] = None
