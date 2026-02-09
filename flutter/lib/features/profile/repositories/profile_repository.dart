@@ -23,12 +23,18 @@ class ProfileRepository {
     String? fullName,
     String? avatarUrl,
     String? gender,
+    String? birthDate,
+    String? birthTime,
+    String? birthPlace,
   }) async {
     try {
       final data = <String, dynamic>{};
       if (fullName != null) data['full_name'] = fullName;
       if (avatarUrl != null) data['avatar_url'] = avatarUrl;
       if (gender != null) data['gender'] = gender;
+      if (birthDate != null) data['birth_date'] = birthDate;
+      if (birthTime != null) data['birth_time'] = birthTime;
+      if (birthPlace != null) data['birth_place'] = birthPlace;
 
       final response = await _apiClient.put(
         '${ApiConstants.users}/me',

@@ -43,55 +43,48 @@ class _DashboardContentState extends State<DashboardContent> {
                   AppConstants.spacing16,
                   AppConstants.spacing32,
                 ),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    // Consolidated error section Obx
-                    Obx(() {
-                      if (dashboardController.error.value.isEmpty) {
-                        return const SizedBox.shrink();
-                      }
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildErrorBanner(),
-                          const SizedBox(height: AppConstants.spacing16),
-                        ],
-                      );
-                    }),
-                    // Referral promo banner
-                    Obx(() {
-                      if (!Get.isRegistered<SubscriptionController>()) {
-                        return const SizedBox.shrink();
-                      }
+                sliver: Obx(() {
+                  // Show skeleton loaders when loading and no data
+                  if (dashboardController.isLoading.value &&
+                      dashboardController.dashboard.value == null) {
+                    return SliverList(
+                      delegate: SliverChildListDelegate([
+                        const ShimmerProfileHeader(),
+                        const SizedBox(height: AppConstants.spacing16),
+                        const ShimmerStatsRow(itemCount: 3),
+                        const SizedBox(height: AppConstants.spacing16),
+                        const ShimmerCard(height: 120),
+                        const SizedBox(height: AppConstants.spacing16),
+                        const ShimmerCard(height: 100),
+                        const SizedBox(height: AppConstants.spacing16),
+                        const ShimmerListLoader(itemCount: 3),
+                      ]),
+                    );
+                  }
 
-                      final subController = Get.find<SubscriptionController>();
-                      final shouldShow = !dashboardController.referralBannerDismissed.value ||
-                          subController.isNearLimit;
-
-                      if (!shouldShow) return const SizedBox.shrink();
-
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ReferralPromoBanner(
-                            isUrgent: subController.isNearLimit,
-                            onDismiss: () => dashboardController.dismissReferralBanner(),
-                            onCopyLink: () => subController.copyReferralLink(),
-                            onShare: () => subController.shareReferralLink(),
-                          ),
-                          const SizedBox(height: AppConstants.spacing16),
-                        ],
-                      );
-                    }),
-                    const SnapshotCard(),
-                    const SizedBox(height: AppConstants.spacing16),
-                    const QuickActionsSection(),
-                    const SizedBox(height: AppConstants.spacing16),
-                    const SuggestionsSection(),
-                    const SizedBox(height: AppConstants.spacing16),
-                    const ActivityFeed(),
-                  ]),
-                ),
+                  return SliverList(
+                    delegate: SliverChildListDelegate([
+                      // Consolidated error section
+                      if (dashboardController.error.value.isNotEmpty)
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildErrorBanner(),
+                            const SizedBox(height: AppConstants.spacing16),
+                          ],
+                        ),
+                      // Referral promo banner
+                      _buildReferralBanner(),
+                      const SnapshotCard(),
+                      const SizedBox(height: AppConstants.spacing16),
+                      const QuickActionsSection(),
+                      const SizedBox(height: AppConstants.spacing16),
+                      const SuggestionsSection(),
+                      const SizedBox(height: AppConstants.spacing16),
+                      const ActivityFeed(),
+                    ]),
+                  );
+                }),
               ),
             ],
           ),
@@ -156,8 +149,12 @@ class _DashboardContentState extends State<DashboardContent> {
                     user?.avatarUrl != null ? NetworkImage(user!.avatarUrl!) : null,
                 child: user?.avatarUrl == null
                     ? Text(
-                        user?.fullName?.substring(0, 1).toUpperCase() ??
-                            user?.email.substring(0, 1).toUpperCase() ??
+                        (user?.fullName?.isNotEmpty == true
+                                ? user!.fullName!.substring(0, 1).toUpperCase()
+                                : null) ??
+                            (user?.email?.isNotEmpty == true
+                                ? user!.email.substring(0, 1).toUpperCase()
+                                : null) ??
                             'U',
                         style: TextStyle(
                           color: tokens.brandColor,
@@ -196,6 +193,31 @@ class _DashboardContentState extends State<DashboardContent> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildReferralBanner() {
+    if (!Get.isRegistered<SubscriptionController>()) {
+      return const SizedBox.shrink();
+    }
+
+    final subController = Get.find<SubscriptionController>();
+    final shouldShow = !dashboardController.referralBannerDismissed.value ||
+        subController.isNearLimit;
+
+    if (!shouldShow) return const SizedBox.shrink();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ReferralPromoBanner(
+          isUrgent: subController.isNearLimit,
+          onDismiss: () => dashboardController.dismissReferralBanner(),
+          onCopyLink: () => subController.copyReferralLink(),
+          onShare: () => subController.shareReferralLink(),
+        ),
+        const SizedBox(height: AppConstants.spacing16),
+      ],
     );
   }
 

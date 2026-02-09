@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../domain/constants/use_cases.dart';
 import '../controllers/item_add_controller.dart';
 import '../models/item_model.dart';
 
@@ -45,6 +46,8 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
     with SingleTickerProviderStateMixin {
   late AnimationController _progressController;
   late Animation<double> _progressAnimation;
+  final TextEditingController _customUseCaseController =
+      TextEditingController();
 
   @override
   void initState() {
@@ -61,6 +64,7 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
   @override
   void dispose() {
     _progressController.dispose();
+    _customUseCaseController.dispose();
     super.dispose();
   }
 
@@ -148,16 +152,16 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                 Text(
                   'Saving to Wardrobe...',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.green[700],
-                        fontWeight: FontWeight.w600,
-                      ),
+                    color: Colors.green[700],
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: AppConstants.spacing8),
                 Text(
                   'Please wait while we save your items',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
               ],
             );
@@ -167,7 +171,10 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
     );
   }
 
-  Widget _buildGeneratingStatus(AppUiTokens tokens, ItemAddController controller) {
+  Widget _buildGeneratingStatus(
+    AppUiTokens tokens,
+    ItemAddController controller,
+  ) {
     return Column(
       children: [
         // Animated progress indicator with image generation theme
@@ -209,18 +216,18 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                 Text(
                   'Creating Product Images...',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.purple[700],
-                        fontWeight: FontWeight.w600,
-                      ),
+                    color: Colors.purple[700],
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: AppConstants.spacing8),
                 Text(
                   widget.currentGenerationStatus.isEmpty
                       ? 'AI is generating catalog-style images of your clothes'
                       : widget.currentGenerationStatus,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   textAlign: TextAlign.center,
                 ),
                 if (controller.generatedItems.isNotEmpty) ...[
@@ -228,9 +235,9 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                   Text(
                     '${controller.generatedItems.length} items ready',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.green,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      color: Colors.green,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ],
@@ -351,15 +358,15 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                     Text(
                       'Items Detected!',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Colors.green[700],
-                            fontWeight: FontWeight.w600,
-                          ),
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     Text(
                       'Found ${items.length} item(s) in your photo',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.green[600],
-                          ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.green[600]),
                     ),
                   ],
                 ),
@@ -374,9 +381,9 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
         Text(
           'Detected Items',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
         ),
         const SizedBox(height: AppConstants.spacing12),
 
@@ -399,18 +406,14 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.auto_awesome,
-                color: tokens.brandColor,
-                size: 20,
-              ),
+              Icon(Icons.auto_awesome, color: tokens.brandColor, size: 20),
               const SizedBox(width: AppConstants.spacing12),
               Expanded(
                 child: Text(
                   'AI will now create catalog-style product images for each item',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.brandColor,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.brandColor),
                 ),
               ),
             ],
@@ -419,9 +422,15 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
 
         const SizedBox(height: AppConstants.spacing24),
 
+        _buildUseCaseSelector(tokens, Get.find<ItemAddController>()),
+
+        const SizedBox(height: AppConstants.spacing16),
+
         // Action buttons
         ElevatedButton.icon(
-          onPressed: widget.isSaving ? null : () => widget.onSaveExtracted(items),
+          onPressed: widget.isSaving
+              ? null
+              : () => widget.onSaveExtracted(items),
           icon: widget.isSaving
               ? const SizedBox(
                   width: 20,
@@ -455,17 +464,47 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
           onPressed: widget.isSaving ? null : widget.onRetake,
           icon: const Icon(Icons.refresh),
           label: const Text('Start Over'),
-          style: TextButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
-          ),
+          style: TextButton.styleFrom(minimumSize: const Size.fromHeight(48)),
         ),
       ],
     );
   }
 
-  Widget _buildGeneratedItemsResults(AppUiTokens tokens, ItemAddController controller) {
+  Widget _buildGeneratedItemsResults(
+    AppUiTokens tokens,
+    ItemAddController controller,
+  ) {
     final generatedItems = controller.generatedItems;
-    final successfulItems = generatedItems.where((i) => i.generatedImageUrl != null).toList();
+    final successfulItems = generatedItems
+        .where((i) => i.generatedImageUrl != null)
+        .toList();
+    final includedCount = generatedItems
+        .where((item) => item.includeInWardrobe)
+        .length;
+
+    final personGroups = <String, _SingleFlowPersonGroup>{};
+    for (final item in generatedItems) {
+      final key = item.personId ?? 'unassigned';
+      final label = item.personLabel?.trim().isNotEmpty == true
+          ? item.personLabel!.trim()
+          : (item.isCurrentUserPerson ? 'You' : 'Person');
+      final existing = personGroups[key];
+      if (existing == null) {
+        personGroups[key] = _SingleFlowPersonGroup(
+          key: key,
+          label: label,
+          isCurrentUser: item.isCurrentUserPerson,
+          total: 1,
+          included: item.includeInWardrobe ? 1 : 0,
+        );
+      } else {
+        personGroups[key] = existing.copyWith(
+          isCurrentUser: existing.isCurrentUser || item.isCurrentUserPerson,
+          total: existing.total + 1,
+          included: existing.included + (item.includeInWardrobe ? 1 : 0),
+        );
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -489,15 +528,15 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                     Text(
                       'Product Images Generated!',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Colors.purple[700],
-                            fontWeight: FontWeight.w600,
-                          ),
+                        color: Colors.purple[700],
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     Text(
                       '${successfulItems.length} of ${generatedItems.length} images created',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.purple[600],
-                          ),
+                        color: Colors.purple[600],
+                      ),
                     ),
                   ],
                 ),
@@ -512,11 +551,102 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
         Text(
           'Generated Product Images',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
         ),
         const SizedBox(height: AppConstants.spacing12),
+
+        if (personGroups.isNotEmpty) ...[
+          Container(
+            padding: const EdgeInsets.all(AppConstants.spacing12),
+            decoration: BoxDecoration(
+              color: tokens.cardColor,
+              borderRadius: BorderRadius.circular(AppConstants.radius12),
+              border: Border.all(color: tokens.cardBorderColor),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'People in photo',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: AppConstants.spacing8),
+                Wrap(
+                  spacing: AppConstants.spacing8,
+                  runSpacing: AppConstants.spacing8,
+                  children: personGroups.values.map((group) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: tokens.navBackground,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: tokens.navBorder),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${group.label}${group.isCurrentUser ? ' (You)' : ''}',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: tokens.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${group.included}/${group.total}',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: tokens.textMuted),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => controller.setGeneratedPersonInclusion(
+                              group.key,
+                              true,
+                            ),
+                            child: Text(
+                              'Include',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: tokens.brandColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => controller.setGeneratedPersonInclusion(
+                              group.key,
+                              false,
+                            ),
+                            child: Text(
+                              'Exclude',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: tokens.textMuted,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppConstants.spacing12),
+        ],
 
         // Grid of generated images
         GridView.builder(
@@ -531,15 +661,26 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
           itemCount: generatedItems.length,
           itemBuilder: (context, index) {
             final item = generatedItems[index];
-            return _GeneratedItemCard(item: item, index: index + 1);
+            return _GeneratedItemCard(
+              item: item,
+              index: index + 1,
+              onToggleInclude: () =>
+                  controller.toggleGeneratedItemInclude(item.tempId),
+            );
           },
         ),
 
         const SizedBox(height: AppConstants.spacing16),
 
+        _buildUseCaseSelector(tokens, controller),
+
+        const SizedBox(height: AppConstants.spacing16),
+
         // Action buttons
         ElevatedButton.icon(
-          onPressed: widget.isSaving ? null : widget.onSaveGenerated,
+          onPressed: widget.isSaving || includedCount == 0
+              ? null
+              : widget.onSaveGenerated,
           icon: widget.isSaving
               ? const SizedBox(
                   width: 20,
@@ -550,7 +691,13 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                   ),
                 )
               : const Icon(Icons.save),
-          label: Text(widget.isSaving ? 'Saving...' : 'Save All Items to Wardrobe'),
+          label: Text(
+            widget.isSaving
+                ? 'Saving...'
+                : includedCount == 0
+                ? 'Select Items to Save'
+                : 'Save $includedCount Item${includedCount == 1 ? '' : 's'}',
+          ),
           style: ElevatedButton.styleFrom(
             minimumSize: const Size.fromHeight(48),
             backgroundColor: Colors.purple,
@@ -575,26 +722,22 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Icon(
-          Icons.search_off,
-          size: 64,
-          color: tokens.textMuted,
-        ),
+        Icon(Icons.search_off, size: 64, color: tokens.textMuted),
         const SizedBox(height: AppConstants.spacing16),
         Text(
           'No Items Detected',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: AppConstants.spacing8),
         Text(
           'We couldn\'t detect any items in this photo. You can enter the details manually.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: tokens.textMuted,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
           textAlign: TextAlign.center,
         ),
 
@@ -621,6 +764,92 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
         ),
       ],
     );
+  }
+
+  Widget _buildUseCaseSelector(
+    AppUiTokens tokens,
+    ItemAddController controller,
+  ) {
+    return Obx(
+      () => Container(
+        padding: const EdgeInsets.all(AppConstants.spacing12),
+        decoration: BoxDecoration(
+          color: tokens.cardColor,
+          borderRadius: BorderRadius.circular(AppConstants.radius12),
+          border: Border.all(color: tokens.cardBorderColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Use Cases (applied to all saved items)',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: AppConstants.spacing8),
+            Wrap(
+              spacing: AppConstants.spacing8,
+              runSpacing: AppConstants.spacing8,
+              children: UseCases.defaults.map((useCase) {
+                final isSelected = controller.selectedUseCases.contains(
+                  useCase,
+                );
+                return FilterChip(
+                  label: Text(UseCases.displayLabel(useCase)),
+                  selected: isSelected,
+                  onSelected: (_) => controller.toggleUseCase(useCase),
+                  selectedColor: tokens.brandColor.withOpacity(0.2),
+                  checkmarkColor: tokens.brandColor,
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: AppConstants.spacing8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _customUseCaseController,
+                    decoration: const InputDecoration(
+                      labelText: 'Custom use case',
+                      hintText: 'e.g., brunch',
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (_) => _addCustomUseCase(controller),
+                  ),
+                ),
+                const SizedBox(width: AppConstants.spacing8),
+                OutlinedButton(
+                  onPressed: () => _addCustomUseCase(controller),
+                  child: const Text('Add'),
+                ),
+              ],
+            ),
+            if (controller.selectedUseCases.isNotEmpty) ...[
+              const SizedBox(height: AppConstants.spacing8),
+              Wrap(
+                spacing: AppConstants.spacing8,
+                runSpacing: AppConstants.spacing8,
+                children: controller.selectedUseCases.map((useCase) {
+                  return Chip(
+                    label: Text(UseCases.displayLabel(useCase)),
+                    onDeleted: () => controller.toggleUseCase(useCase),
+                  );
+                }).toList(),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _addCustomUseCase(ItemAddController controller) {
+    final normalized = UseCases.normalize(_customUseCaseController.text);
+    if (normalized.isEmpty) return;
+    controller.toggleUseCase(normalized);
+    _customUseCaseController.clear();
   }
 }
 
@@ -655,9 +884,9 @@ class DetectedItemDataCard extends StatelessWidget {
               child: Text(
                 '$index',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -672,9 +901,9 @@ class DetectedItemDataCard extends StatelessWidget {
                 Text(
                   item.subCategory ?? item.category,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary,
-                      ),
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
                 ),
                 const SizedBox(height: AppConstants.spacing4),
                 Row(
@@ -690,9 +919,9 @@ class DetectedItemDataCard extends StatelessWidget {
                   const SizedBox(height: AppConstants.spacing4),
                   Text(
                     '${item.material ?? ''}${item.material != null && item.pattern != null ? ' / ' : ''}${item.pattern ?? ''}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: tokens.textMuted,
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   ),
                 ],
               ],
@@ -700,10 +929,7 @@ class DetectedItemDataCard extends StatelessWidget {
           ),
 
           // Checkmark icon
-          Icon(
-            Icons.check_circle_outline,
-            color: tokens.brandColor,
-          ),
+          Icon(Icons.check_circle_outline, color: tokens.brandColor),
         ],
       ),
     );
@@ -722,9 +948,9 @@ class DetectedItemDataCard extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: tokens.brandColor,
-              fontWeight: FontWeight.w500,
-            ),
+          color: tokens.brandColor,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
@@ -734,16 +960,19 @@ class DetectedItemDataCard extends StatelessWidget {
 class _GeneratedItemCard extends StatelessWidget {
   final DetectedItemDataWithImage item;
   final int index;
+  final VoidCallback? onToggleInclude;
 
   const _GeneratedItemCard({
     super.key,
     required this.item,
     required this.index,
+    this.onToggleInclude,
   });
 
   @override
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
+    final isIncluded = item.includeInWardrobe;
 
     if (item.generatedImageUrl == null) {
       // Failed generation
@@ -751,22 +980,41 @@ class _GeneratedItemCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: tokens.cardColor,
           borderRadius: BorderRadius.circular(AppConstants.radius16),
-          border: Border.all(color: Colors.red.withOpacity(0.3)),
+          border: Border.all(
+            color: isIncluded
+                ? Colors.red.withOpacity(0.3)
+                : tokens.cardBorderColor,
+          ),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.error_outline,
-              color: Colors.red,
-              size: 32,
-            ),
+            if (onToggleInclude != null)
+              Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                    top: AppConstants.spacing8,
+                    right: AppConstants.spacing8,
+                  ),
+                  child: GestureDetector(
+                    onTap: onToggleInclude,
+                    child: Icon(
+                      isIncluded
+                          ? Icons.check_box_rounded
+                          : Icons.check_box_outline_blank_rounded,
+                      color: isIncluded ? tokens.brandColor : tokens.textMuted,
+                    ),
+                  ),
+                ),
+              ),
+            Icon(Icons.error_outline, color: Colors.red, size: 32),
             const SizedBox(height: AppConstants.spacing8),
             Text(
               item.name ?? item.subCategory ?? item.category,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
               textAlign: TextAlign.center,
             ),
             if (item.generationError != null) ...[
@@ -774,11 +1022,11 @@ class _GeneratedItemCard extends StatelessWidget {
               Text(
                 'Failed to generate',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.red,
-                      fontSize: 10,
-                    ),
+                  color: Colors.red,
+                  fontSize: 10,
                 ),
-              ],
+              ),
+            ],
           ],
         ),
       );
@@ -788,7 +1036,11 @@ class _GeneratedItemCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: tokens.cardColor,
         borderRadius: BorderRadius.circular(AppConstants.radius16),
-        border: Border.all(color: Colors.purple.withOpacity(0.3)),
+        border: Border.all(
+          color: isIncluded
+              ? Colors.purple.withOpacity(0.3)
+              : tokens.cardBorderColor,
+        ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppConstants.radius12),
@@ -877,23 +1129,56 @@ class _GeneratedItemCard extends StatelessWidget {
               ),
             ),
 
-            // Checkmark at top right
-            Positioned(
-              top: AppConstants.spacing8,
-              right: AppConstants.spacing8,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.9),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check,
-                  color: Colors.white,
-                  size: 14,
+            if (item.personLabel != null && item.personLabel!.isNotEmpty)
+              Positioned(
+                top: AppConstants.spacing8,
+                left: 40,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: item.isCurrentUserPerson
+                        ? Colors.green.withOpacity(0.85)
+                        : Colors.black.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    item.isCurrentUserPerson
+                        ? '${item.personLabel} (You)'
+                        : item.personLabel!,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
-            ),
+
+            if (onToggleInclude != null)
+              Positioned(
+                top: AppConstants.spacing8,
+                right: AppConstants.spacing8,
+                child: GestureDetector(
+                  onTap: onToggleInclude,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(
+                      isIncluded
+                          ? Icons.check_box_rounded
+                          : Icons.check_box_outline_blank_rounded,
+                      color: isIncluded ? Colors.white : Colors.white70,
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -906,10 +1191,7 @@ class _GeneratedItemCard extends StatelessWidget {
 
     Widget errorWidget() => Container(
       color: tokens.cardColor,
-      child: Icon(
-        Icons.broken_image,
-        color: tokens.textMuted,
-      ),
+      child: Icon(Icons.broken_image, color: tokens.textMuted),
     );
 
     if (isDataUrl) {
@@ -929,6 +1211,36 @@ class _GeneratedItemCard extends StatelessWidget {
       url,
       fit: BoxFit.contain,
       errorBuilder: (context, error, stackTrace) => errorWidget(),
+    );
+  }
+}
+
+class _SingleFlowPersonGroup {
+  final String key;
+  final String label;
+  final bool isCurrentUser;
+  final int total;
+  final int included;
+
+  const _SingleFlowPersonGroup({
+    required this.key,
+    required this.label,
+    required this.isCurrentUser,
+    required this.total,
+    required this.included,
+  });
+
+  _SingleFlowPersonGroup copyWith({
+    bool? isCurrentUser,
+    int? total,
+    int? included,
+  }) {
+    return _SingleFlowPersonGroup(
+      key: key,
+      label: label,
+      isCurrentUser: isCurrentUser ?? this.isCurrentUser,
+      total: total ?? this.total,
+      included: included ?? this.included,
     );
   }
 }

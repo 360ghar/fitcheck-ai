@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
-import '../../../domain/enums/condition.dart';
 import '../controllers/wardrobe_controller.dart';
 import '../models/item_model.dart';
 
@@ -11,15 +12,13 @@ import '../models/item_model.dart';
 class ItemDetailPage extends StatelessWidget {
   final String itemId;
 
-  const ItemDetailPage({
-    super.key,
-    required this.itemId,
-  });
+  const ItemDetailPage({super.key, required this.itemId});
 
   @override
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
-    final WardrobeController wardrobeController = Get.find<WardrobeController>();
+    final WardrobeController wardrobeController =
+        Get.find<WardrobeController>();
 
     return Scaffold(
       body: AppPageBackground(
@@ -33,7 +32,7 @@ class ItemDetailPage extends StatelessWidget {
                 );
 
                 if (item == null) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const ShimmerDetailPage();
                 }
 
                 return CustomScrollView(
@@ -64,18 +63,27 @@ class ItemDetailPage extends StatelessWidget {
                                   ),
                                 ),
                                 IconButton(
-                                  onPressed: wardrobeController.isFavoriting(item.id)
+                                  onPressed:
+                                      wardrobeController.isFavoriting(item.id)
                                       ? null
-                                      : () => wardrobeController.toggleFavorite(item.id),
+                                      : () => wardrobeController.toggleFavorite(
+                                          item.id,
+                                        ),
                                   icon: wardrobeController.isFavoriting(item.id)
                                       ? const SizedBox(
                                           width: 24,
                                           height: 24,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
                                         )
                                       : Icon(
-                                          item.isFavorite ? Icons.favorite : Icons.favorite_border,
-                                          color: item.isFavorite ? Colors.red : null,
+                                          item.isFavorite
+                                              ? Icons.favorite
+                                              : Icons.favorite_border,
+                                          color: item.isFavorite
+                                              ? Colors.red
+                                              : null,
                                           size: 28,
                                         ),
                                 ),
@@ -86,9 +94,8 @@ class ItemDetailPage extends StatelessWidget {
                               const SizedBox(height: AppConstants.spacing8),
                               Text(
                                 item.description!,
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      color: tokens.textMuted,
-                                    ),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(color: tokens.textMuted),
                               ),
                             ],
 
@@ -99,19 +106,34 @@ class ItemDetailPage extends StatelessWidget {
                               spacing: AppConstants.spacing8,
                               runSpacing: AppConstants.spacing8,
                               children: [
-                                _buildChip(context, item.category.displayName, tokens),
-                                _buildChip(context, item.condition.displayName, tokens),
-                                if (item.brand != null) _buildChip(context, item.brand!, tokens),
+                                _buildChip(
+                                  context,
+                                  item.category.displayName,
+                                  tokens,
+                                ),
+                                _buildChip(
+                                  context,
+                                  item.condition.displayName,
+                                  tokens,
+                                ),
+                                if (item.brand != null)
+                                  _buildChip(context, item.brand!, tokens),
                                 if (item.size != null)
-                                  _buildChip(context, 'Size: ${item.size!}', tokens),
+                                  _buildChip(
+                                    context,
+                                    'Size: ${item.size!}',
+                                    tokens,
+                                  ),
                               ],
                             ),
 
-                            if (item.colors != null && item.colors!.isNotEmpty) ...[
+                            if (item.colors != null &&
+                                item.colors!.isNotEmpty) ...[
                               const SizedBox(height: AppConstants.spacing16),
                               Text(
                                 'Colors',
-                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(
                                       fontWeight: FontWeight.w600,
                                       color: tokens.textPrimary,
                                     ),
@@ -121,7 +143,37 @@ class ItemDetailPage extends StatelessWidget {
                                 spacing: AppConstants.spacing8,
                                 runSpacing: AppConstants.spacing8,
                                 children: item.colors!
-                                    .map((color) => _buildChip(context, color, tokens))
+                                    .map(
+                                      (color) =>
+                                          _buildChip(context, color, tokens),
+                                    )
+                                    .toList(),
+                              ),
+                            ],
+
+                            if (item.occasionTags != null &&
+                                item.occasionTags!.isNotEmpty) ...[
+                              const SizedBox(height: AppConstants.spacing16),
+                              Text(
+                                'Use Cases',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: tokens.textPrimary,
+                                    ),
+                              ),
+                              const SizedBox(height: AppConstants.spacing8),
+                              Wrap(
+                                spacing: AppConstants.spacing8,
+                                runSpacing: AppConstants.spacing8,
+                                children: item.occasionTags!
+                                    .map(
+                                      (tag) => _buildChip(
+                                        context,
+                                        UseCases.displayLabel(tag),
+                                        tokens,
+                                      ),
+                                    )
                                     .toList(),
                               ),
                             ],
@@ -134,7 +186,12 @@ class ItemDetailPage extends StatelessWidget {
                             const SizedBox(height: AppConstants.spacing24),
 
                             // Stats section
-                            _buildStatsSection(context, item, tokens, wardrobeController),
+                            _buildStatsSection(
+                              context,
+                              item,
+                              tokens,
+                              wardrobeController,
+                            ),
 
                             const SizedBox(height: AppConstants.spacing24),
 
@@ -142,7 +199,8 @@ class ItemDetailPage extends StatelessWidget {
                             if (item.tags != null && item.tags!.isNotEmpty) ...[
                               Text(
                                 'Tags',
-                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(
                                       fontWeight: FontWeight.w600,
                                       color: tokens.textPrimary,
                                     ),
@@ -154,8 +212,11 @@ class ItemDetailPage extends StatelessWidget {
                                 children: item.tags!.map((tag) {
                                   return Chip(
                                     label: Text(tag),
-                                    backgroundColor: tokens.brandColor.withOpacity(0.1),
-                                    labelStyle: TextStyle(color: tokens.brandColor),
+                                    backgroundColor: tokens.brandColor
+                                        .withOpacity(0.1),
+                                    labelStyle: TextStyle(
+                                      color: tokens.brandColor,
+                                    ),
                                   );
                                 }).toList(),
                               ),
@@ -165,7 +226,9 @@ class ItemDetailPage extends StatelessWidget {
                             // Metadata
                             _buildMetadataSection(context, item, tokens),
 
-                            const SizedBox(height: 100), // Space for bottom actions
+                            const SizedBox(
+                              height: 100,
+                            ), // Space for bottom actions
                           ],
                         ),
                       ),
@@ -254,9 +317,9 @@ class ItemDetailPage extends StatelessWidget {
         Text(
           'Details',
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
         ),
         const SizedBox(height: AppConstants.spacing12),
         AppGlassCard(
@@ -299,18 +362,18 @@ class ItemDetailPage extends StatelessWidget {
             width: 100,
             child: Text(
               label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: tokens.textMuted,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
             ),
           ),
           Expanded(
             child: Text(
               value,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: tokens.textPrimary,
-                    fontWeight: FontWeight.w500,
-                  ),
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
@@ -330,9 +393,9 @@ class ItemDetailPage extends StatelessWidget {
         Text(
           'Usage Stats',
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
         ),
         const SizedBox(height: AppConstants.spacing12),
         AppGlassCard(
@@ -347,11 +410,7 @@ class ItemDetailPage extends StatelessWidget {
                   tokens,
                 ),
               ),
-              Container(
-                width: 1,
-                height: 40,
-                color: tokens.cardBorderColor,
-              ),
+              Container(width: 1, height: 40, color: tokens.cardBorderColor),
               Expanded(
                 child: _buildStatCard(
                   context,
@@ -386,15 +445,15 @@ class ItemDetailPage extends StatelessWidget {
           Text(
             value,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: tokens.textPrimary,
-                ),
+              fontWeight: FontWeight.w700,
+              color: tokens.textPrimary,
+            ),
           ),
           Text(
             label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: tokens.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
         ],
       ),
@@ -412,20 +471,35 @@ class ItemDetailPage extends StatelessWidget {
         Text(
           'Information',
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
         ),
         const SizedBox(height: AppConstants.spacing12),
         AppGlassCard(
           child: Column(
             children: [
               if (item.purchaseDate != null)
-                _buildDetailRow(context, 'Purchased', _formatDate(item.purchaseDate!), tokens),
+                _buildDetailRow(
+                  context,
+                  'Purchased',
+                  _formatDate(item.purchaseDate!),
+                  tokens,
+                ),
               if (item.createdAt != null)
-                _buildDetailRow(context, 'Added', _formatDate(item.createdAt!), tokens),
+                _buildDetailRow(
+                  context,
+                  'Added',
+                  _formatDate(item.createdAt!),
+                  tokens,
+                ),
               if (item.updatedAt != null)
-                _buildDetailRow(context, 'Updated', _formatDate(item.updatedAt!), tokens),
+                _buildDetailRow(
+                  context,
+                  'Updated',
+                  _formatDate(item.updatedAt!),
+                  tokens,
+                ),
             ],
           ),
         ),
@@ -456,7 +530,9 @@ class ItemDetailPage extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: () {
                   // Navigate to edit page
-                  Get.toNamed('/wardrobe/$itemId/edit');
+                  Get.toNamed(
+                    Routes.wardrobeItemEdit.replaceFirst(':id', itemId),
+                  );
                 },
                 icon: const Icon(Icons.edit),
                 label: const Text('Edit'),
@@ -464,19 +540,25 @@ class ItemDetailPage extends StatelessWidget {
             ),
             const SizedBox(width: AppConstants.spacing12),
             Expanded(
-              child: Obx(() => ElevatedButton.icon(
-                onPressed: controller.isMarkingWorn(itemId)
-                    ? null
-                    : () => controller.markAsWorn(itemId),
-                icon: controller.isMarkingWorn(itemId)
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.checkroom),
-                label: Text(controller.isMarkingWorn(itemId) ? 'Marking...' : 'Mark Worn'),
-              )),
+              child: Obx(
+                () => ElevatedButton.icon(
+                  onPressed: controller.isMarkingWorn(itemId)
+                      ? null
+                      : () => controller.markAsWorn(itemId),
+                  icon: controller.isMarkingWorn(itemId)
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.checkroom),
+                  label: Text(
+                    controller.isMarkingWorn(itemId)
+                        ? 'Marking...'
+                        : 'Mark Worn',
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -498,9 +580,9 @@ class ItemDetailPage extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: tokens.brandColor,
-              fontWeight: FontWeight.w500,
-            ),
+          color: tokens.brandColor,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
@@ -512,8 +594,10 @@ class ItemDetailPage extends StatelessWidget {
     if (difference.inDays == 0) return 'Today';
     if (difference.inDays == 1) return 'Yesterday';
     if (difference.inDays < 7) return '${difference.inDays} days ago';
-    if (difference.inDays < 30) return '${(difference.inDays / 7).floor()} weeks ago';
-    if (difference.inDays < 365) return '${(difference.inDays / 30).floor()} months ago';
+    if (difference.inDays < 30)
+      return '${(difference.inDays / 7).floor()} weeks ago';
+    if (difference.inDays < 365)
+      return '${(difference.inDays / 30).floor()} months ago';
     return '${(difference.inDays / 365).floor()} years ago';
   }
 

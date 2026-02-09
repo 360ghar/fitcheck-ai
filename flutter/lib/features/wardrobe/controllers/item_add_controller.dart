@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
 import '../../../domain/enums/condition.dart' as app_condition;
 import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
+import 'wardrobe_controller.dart';
 
 /// Controller for item add page
 /// Handles image processing, AI extraction, product image generation, and item creation
@@ -16,13 +18,19 @@ class ItemAddController extends GetxController {
   final RxBool isProcessing = false.obs;
   final RxBool isSaving = false.obs;
   final RxBool isGeneratingImages = false.obs;
-  final Rx<SyncExtractionResponse?> extractionResult = Rx<SyncExtractionResponse?>(null);
-  final RxList<DetectedItemDataWithImage> generatedItems = <DetectedItemDataWithImage>[].obs;
+  final Rx<SyncExtractionResponse?> extractionResult =
+      Rx<SyncExtractionResponse?>(null);
+  final RxList<DetectedItemDataWithImage> generatedItems =
+      <DetectedItemDataWithImage>[].obs;
   final RxDouble generationProgress = 0.0.obs;
   final RxString currentGenerationStatus = ''.obs;
   final RxBool showManualEntry = false.obs;
   final RxList<ItemModel> createdItems = <ItemModel>[].obs;
   final RxString error = ''.obs;
+  final RxSet<String> selectedUseCases = <String>{}.obs;
+
+  int get includedGeneratedCount =>
+      generatedItems.where((item) => item.includeInWardrobe).length;
 
   /// Process image for AI extraction (SYNCHRONOUS - no polling!)
   /// Backend returns items immediately from /api/v1/ai/extract-items
@@ -56,11 +64,13 @@ class ItemAddController extends GetxController {
 
       // Check if it's the backend validation error (bounding box issue)
       final errorMsg = e.toString();
-      if (errorMsg.contains('validation errors') || errorMsg.contains('bounding_box')) {
+      if (errorMsg.contains('validation errors') ||
+          errorMsg.contains('bounding_box')) {
         // Backend AI bug - show friendly message and offer manual entry
         Get.defaultDialog(
           title: 'AI Service Busy',
-          middleText: 'The AI analysis service is experiencing issues. You can enter your item details manually.',
+          middleText:
+              'The AI analysis service is experiencing issues. You can enter your item details manually.',
           textConfirm: 'Enter Manually',
           textCancel: 'Cancel',
           onConfirm: () {
@@ -90,13 +100,17 @@ class ItemAddController extends GetxController {
     currentGenerationStatus.value = 'Generating product images...';
 
     try {
-      final results = await _itemRepository.generateProductImagesForItems(items);
+      final results = await _itemRepository.generateProductImagesForItems(
+        items,
+      );
       generatedItems.value = results;
       generationProgress.value = 1.0;
       currentGenerationStatus.value = 'Complete!';
 
       // Count successful vs failed generations
-      final successful = results.where((r) => r.generatedImageUrl != null).length;
+      final successful = results
+          .where((r) => r.generatedImageUrl != null)
+          .length;
       final failed = results.where((r) => r.generationError != null).length;
 
       if (failed > 0) {
@@ -125,6 +139,10 @@ class ItemAddController extends GetxController {
   Future<void> saveExtractedItems(List<DetectedItemData> items) async {
     if (selectedImage.value == null) return;
 
+    final includedItems = items
+        .where((item) => item.includeInWardrobe)
+        .toList();
+
     // If we have generated images, use those instead
     if (generatedItems.isNotEmpty) {
       await saveGeneratedItems();
@@ -137,7 +155,7 @@ class ItemAddController extends GetxController {
 
     try {
       int savedCount = 0;
-      for (final item in items) {
+      for (final item in includedItems) {
         try {
           // Map DetectedItemData to CreateItemRequest
           final request = CreateItemRequest(
@@ -148,6 +166,9 @@ class ItemAddController extends GetxController {
             pattern: item.pattern,
             description: item.detailedDescription,
             condition: app_condition.Condition.clean,
+            occasionTags: selectedUseCases.isEmpty
+                ? null
+                : UseCases.normalizeList(selectedUseCases),
           );
 
           final created = await _itemRepository.createItemWithImage(
@@ -158,17 +179,22 @@ class ItemAddController extends GetxController {
           createdItems.add(created);
           savedCount++;
         } catch (e) {
-          // Continue with next item even if one fails
+          // Log error but continue with next item
+          debugPrint('Failed to save item ${item.category}: $e');
         }
       }
 
       isSaving.value = false;
 
       if (savedCount > 0) {
+        // Notify WardrobeController for immediate UI update
+        if (Get.isRegistered<WardrobeController>()) {
+          Get.find<WardrobeController>().addItems(createdItems.toList());
+        }
         Get.back(); // Close item add page
         Get.snackbar(
           'Success',
-          '$savedCount of ${items.length} item(s) added to your wardrobe',
+          '$savedCount of ${includedItems.length} item(s) added to your wardrobe',
           snackPosition: SnackPosition.TOP,
           duration: const Duration(seconds: 2),
           backgroundColor: Colors.green,
@@ -199,8 +225,12 @@ class ItemAddController extends GetxController {
     error.value = '';
 
     try {
+      final itemsToSave = generatedItems
+          .where((item) => item.includeInWardrobe)
+          .toList();
+
       int savedCount = 0;
-      for (final itemWithImage in generatedItems) {
+      for (final itemWithImage in itemsToSave) {
         try {
           // Skip items that don't have a generated image
           if (itemWithImage.generatedImageUrl == null) {
@@ -209,13 +239,19 @@ class ItemAddController extends GetxController {
 
           // Map DetectedItemDataWithImage to CreateItemRequest
           final request = CreateItemRequest(
-            name: itemWithImage.name ?? itemWithImage.subCategory ?? itemWithImage.category,
+            name:
+                itemWithImage.name ??
+                itemWithImage.subCategory ??
+                itemWithImage.category,
             category: Category.fromString(itemWithImage.category),
             colors: itemWithImage.colors,
             material: itemWithImage.material,
             pattern: itemWithImage.pattern,
             description: itemWithImage.detailedDescription,
             condition: app_condition.Condition.clean,
+            occasionTags: selectedUseCases.isEmpty
+                ? null
+                : UseCases.normalizeList(selectedUseCases),
           );
 
           // Create item first (without image - we'll upload the generated one separately)
@@ -223,8 +259,14 @@ class ItemAddController extends GetxController {
 
           // Upload the generated product image
           // Convert data URL back to base64 for upload (handle different image formats)
-          final dataUrlRegex = RegExp(r'^data:image/\w+;base64,', caseSensitive: false);
-          final base64Data = itemWithImage.generatedImageUrl!.replaceFirst(dataUrlRegex, '');
+          final dataUrlRegex = RegExp(
+            r'^data:image/\w+;base64,',
+            caseSensitive: false,
+          );
+          final base64Data = itemWithImage.generatedImageUrl!.replaceFirst(
+            dataUrlRegex,
+            '',
+          );
           await _itemRepository.uploadImageFromBase64(created.id, base64Data);
 
           // Fetch the complete item with images
@@ -232,17 +274,24 @@ class ItemAddController extends GetxController {
           createdItems.add(finalItem);
           savedCount++;
         } catch (e) {
-          // Continue with next item even if one fails
+          // Log error but continue with next item
+          debugPrint(
+            'Failed to save generated item ${itemWithImage.category}: $e',
+          );
         }
       }
 
       isSaving.value = false;
 
       if (savedCount > 0) {
+        // Notify WardrobeController for immediate UI update
+        if (Get.isRegistered<WardrobeController>()) {
+          Get.find<WardrobeController>().addItems(createdItems.toList());
+        }
         Get.back(); // Close item add page
         Get.snackbar(
           'Success',
-          '$savedCount of ${generatedItems.length} item(s) added to your wardrobe',
+          '$savedCount of ${itemsToSave.length} item(s) added to your wardrobe',
           snackPosition: SnackPosition.TOP,
           duration: const Duration(seconds: 2),
           backgroundColor: Colors.green,
@@ -266,6 +315,49 @@ class ItemAddController extends GetxController {
     }
   }
 
+  /// Toggle include/exclude for one generated item.
+  void toggleGeneratedItemInclude(String tempId) {
+    final index = generatedItems.indexWhere((item) => item.tempId == tempId);
+    if (index < 0) return;
+
+    final nextValue = !generatedItems[index].includeInWardrobe;
+    generatedItems[index] = generatedItems[index].copyWith(
+      includeInWardrobe: nextValue,
+    );
+  }
+
+  /// Include/exclude all generated items for one detected person.
+  void setGeneratedPersonInclusion(String personId, bool include) {
+    for (var i = 0; i < generatedItems.length; i++) {
+      final key = generatedItems[i].personId ?? 'unassigned';
+      if (key == personId) {
+        generatedItems[i] = generatedItems[i].copyWith(
+          includeInWardrobe: include,
+        );
+      }
+    }
+  }
+
+  /// Toggle one use-case tag in the apply-to-all selection.
+  void toggleUseCase(String useCase) {
+    final normalized = UseCases.normalize(useCase);
+    if (normalized.isEmpty) return;
+    if (selectedUseCases.contains(normalized)) {
+      selectedUseCases.remove(normalized);
+    } else {
+      selectedUseCases.add(normalized);
+    }
+    selectedUseCases.refresh();
+  }
+
+  /// Set the entire apply-to-all use-case selection.
+  void setUseCases(Iterable<String> useCases) {
+    selectedUseCases
+      ..clear()
+      ..addAll(UseCases.normalizeList(useCases));
+    selectedUseCases.refresh();
+  }
+
   /// Proceed to manual entry (user skipped AI or extraction had no results)
   void proceedToManualEntry() {
     showManualEntry.value = true;
@@ -283,5 +375,6 @@ class ItemAddController extends GetxController {
     currentGenerationStatus.value = '';
     showManualEntry.value = false;
     error.value = '';
+    selectedUseCases.clear();
   }
 }

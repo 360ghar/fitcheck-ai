@@ -7,6 +7,7 @@ import 'find_matches_controller.dart';
 import 'complete_look_controller.dart';
 import 'weather_recommendations_controller.dart';
 import 'shopping_recommendations_controller.dart';
+import 'astrology_recommendations_controller.dart';
 
 /// Recommendations controller - Slim coordinator for tab management
 /// Delegates tab-specific logic to focused controllers
@@ -33,11 +34,13 @@ class RecommendationsController extends GetxController
       Get.find<WeatherRecommendationsController>();
   ShoppingRecommendationsController get shoppingController =>
       Get.find<ShoppingRecommendationsController>();
+  AstrologyRecommendationsController get astrologyController =>
+      Get.find<AstrologyRecommendationsController>();
 
   @override
   void onInit() {
     super.onInit();
-    tabController = TabController(length: 4, vsync: this);
+    tabController = TabController(length: 5, vsync: this);
     _loadAvailableItems();
   }
 
@@ -93,6 +96,8 @@ class RecommendationsController extends GetxController
       case 2:
         return weatherController.isLoading.value;
       case 3:
+        return astrologyController.isLoading.value;
+      case 4:
         return shoppingController.isLoading.value;
       default:
         return false;
@@ -113,7 +118,10 @@ class RecommendationsController extends GetxController
         case 2: // Weather
           await weatherController.fetchRecommendations(availableItems);
           break;
-        case 3: // Shopping
+        case 3: // Astrology
+          await astrologyController.fetchRecommendations();
+          break;
+        case 4: // Shopping
           await shoppingController.fetchRecommendations();
           break;
       }
@@ -145,8 +153,10 @@ class RecommendationsController extends GetxController
   // Weather delegates
   RxString get weatherLocation => weatherController.location;
   Rx<Map<String, dynamic>?> get weatherData => weatherController.weatherData;
-  RxList<String> get preferredCategories => weatherController.preferredCategories;
-  RxList<ItemModel> get weatherRecommendations => weatherController.recommendations;
+  RxList<String> get preferredCategories =>
+      weatherController.preferredCategories;
+  RxList<ItemModel> get weatherRecommendations =>
+      weatherController.recommendations;
   RxBool get isLoadingWeather => weatherController.isLoading;
   RxString get weatherError => weatherController.error;
 
@@ -164,6 +174,16 @@ class RecommendationsController extends GetxController
 
   Future<void> fetchShoppingRecommendations() =>
       shoppingController.fetchRecommendations();
+
+  // Astrology delegates
+  RxString get astrologyMode => astrologyController.mode;
+  RxString get astrologyTargetDate => astrologyController.targetDate;
+  Rx<Map<String, dynamic>?> get astrologyData => astrologyController.data;
+  RxBool get isLoadingAstrology => astrologyController.isLoading;
+  RxString get astrologyError => astrologyController.error;
+
+  Future<void> fetchAstrologyRecommendations() =>
+      astrologyController.fetchRecommendations();
 
   // Complete look delegates
   Rx<dynamic> get completeLookStyle => completeLookController.selectedStyle;

@@ -23,6 +23,7 @@ interface WardrobeState {
   filters: {
     category: Category | 'all';
     color: string | 'all';
+    occasion: string;
     condition: Condition | 'all';
     search: string;
     isFavorite: boolean;
@@ -70,6 +71,7 @@ interface WardrobeState {
 const initialFilters: WardrobeState['filters'] = {
   category: 'all',
   color: 'all',
+  occasion: '',
   condition: 'all',
   search: '',
   isFavorite: false,
@@ -104,6 +106,14 @@ function applyFiltersAndSort(
   // Apply condition filter
   if (filters.condition !== 'all') {
     filtered = filtered.filter((item) => item.condition === filters.condition);
+  }
+
+  // Apply use-case filter
+  if (filters.occasion) {
+    const occasion = filters.occasion.toLowerCase();
+    filtered = filtered.filter((item) =>
+      (item.occasion_tags || []).some((tag) => tag.toLowerCase() === occasion)
+    );
   }
 
   // Apply favorite filter
@@ -192,6 +202,7 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
 
       if (filters.category !== 'all') apiFilters.category = filters.category;
       if (filters.color !== 'all') apiFilters.color = filters.color;
+      if (filters.occasion) apiFilters.occasion = filters.occasion;
       if (filters.condition !== 'all') apiFilters.condition = filters.condition;
       if (filters.search) apiFilters.search = filters.search;
       if (filters.isFavorite) apiFilters.is_favorite = true;

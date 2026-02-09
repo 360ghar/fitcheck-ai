@@ -31,7 +31,12 @@ class FindMatchesTab extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
           child: Obx(() {
             if (controller.isLoadingItems.value) {
-              return const Center(child: CircularProgressIndicator());
+              return Row(
+                children: List.generate(4, (index) => Padding(
+                  padding: const EdgeInsets.only(right: AppConstants.spacing12),
+                  child: ShimmerBox(width: 80, height: 80, borderRadius: AppConstants.radius8),
+                )),
+              );
             }
 
             if (controller.itemsError.value.isNotEmpty) {
@@ -146,7 +151,14 @@ class FindMatchesTab extends StatelessWidget {
         Expanded(
           child: Obx(() {
             if (controller.isLoadingMatches.value) {
-              return const Center(child: CircularProgressIndicator());
+              return Padding(
+                padding: const EdgeInsets.all(AppConstants.spacing16),
+                child: ShimmerGridLoaderBox(
+                  crossAxisCount: 2,
+                  itemCount: 6,
+                  childAspectRatio: 0.75,
+                ),
+              );
             }
 
             if (controller.matchesError.value.isNotEmpty) {
@@ -247,7 +259,14 @@ class FindMatchesTab extends StatelessWidget {
                 return RecommendationCard(
                   item: item,
                   onTap: () => _showItemDetails(item, context),
-                  onFavorite: () {},
+                  onFavorite: () {
+                  Get.snackbar(
+                    'Coming Soon',
+                    'Favoriting recommendations will be available in a future update',
+                    snackPosition: SnackPosition.TOP,
+                    duration: const Duration(seconds: 2),
+                  );
+                },
                 );
               },
             );

@@ -193,6 +193,7 @@ class AIProviderService:
         max_tokens: Optional[int] = None,
         temperature: float = 0.7,
         response_modalities: Optional[List[str]] = None,
+        response_format: Optional[Dict[str, Any]] = None,
     ) -> AIResponse:
         """
         Send a chat completion request.
@@ -203,6 +204,7 @@ class AIProviderService:
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature
             response_modalities: Response types ["TEXT", "IMAGE"] for image generation
+            response_format: Optional structured output format
 
         Returns:
             AIResponse with text and/or images
@@ -226,12 +228,17 @@ class AIProviderService:
         if response_modalities:
             payload["response_modalities"] = response_modalities
 
+        # Optional structured output contract
+        if response_format:
+            payload["response_format"] = response_format
+
         logger.debug(
             "Sending chat request",
             url=url,
             model=use_model,
             message_count=len(messages),
             has_response_modalities=bool(response_modalities),
+            has_response_format=bool(response_format),
         )
 
         # Log full request payload for debugging
@@ -241,12 +248,14 @@ class AIProviderService:
             payload=sanitize_for_logging(payload),
         )
 
-        try:
-            response = await client.post(url, json=payload)
+        async def _post_chat(req_payload: Dict[str, Any]) -> Dict[str, Any]:
+            response = await client.post(url, json=req_payload)
             response.raise_for_status()
-            data = response.json()
+            return response.json()
 
-            # Log full response for debugging
+        try:
+            data = await _post_chat(payload)
+
             logger.info(
                 "AI chat response received",
                 response_data=sanitize_for_logging(data),
@@ -261,6 +270,35 @@ class AIProviderService:
                 error_detail = error_data.get("error", {}).get("message", str(error_data))
             except Exception:
                 error_detail = e.response.text[:500]
+
+            if response_format and self._should_retry_without_response_format(
+                status_code=e.response.status_code,
+                error_detail=error_detail,
+            ):
+                logger.warning(
+                    "Provider rejected response_format, retrying without it",
+                    status_code=e.response.status_code,
+                    error=error_detail,
+                )
+
+                fallback_payload = dict(payload)
+                fallback_payload.pop("response_format", None)
+                try:
+                    data = await _post_chat(fallback_payload)
+                    logger.info(
+                        "AI chat response received after response_format fallback",
+                        response_data=sanitize_for_logging(data),
+                    )
+                    return self._parse_chat_response(data, use_model)
+                except httpx.HTTPStatusError as fallback_error:
+                    try:
+                        fallback_error_data = fallback_error.response.json()
+                        error_detail = fallback_error_data.get(
+                            "error", {}
+                        ).get("message", str(fallback_error_data))
+                    except Exception:
+                        error_detail = fallback_error.response.text[:500]
+                    e = fallback_error
 
             logger.error(
                 "Chat request failed",
@@ -363,12 +401,31 @@ class AIProviderService:
             raw_response=data,
         )
 
+    @staticmethod
+    def _should_retry_without_response_format(status_code: int, error_detail: str) -> bool:
+        """Detect provider incompatibility with response_format payload."""
+        if status_code not in {400, 404, 415, 422}:
+            return False
+
+        text = (error_detail or "").lower()
+        indicators = (
+            "response_format",
+            "json_schema",
+            "unsupported",
+            "unknown field",
+            "invalid field",
+            "unrecognized field",
+            "not support",
+        )
+        return any(indicator in text for indicator in indicators)
+
     async def chat_with_vision(
         self,
         prompt: str,
         images: List[str],
         model: Optional[str] = None,
         max_tokens: Optional[int] = None,
+        response_format: Optional[Dict[str, Any]] = None,
     ) -> AIResponse:
         """
         Send a chat completion request with images (vision).
@@ -378,6 +435,7 @@ class AIProviderService:
             images: List of base64-encoded images
             model: Vision model to use
             max_tokens: Maximum tokens in response
+            response_format: Optional structured output format
 
         Returns:
             AIResponse with text analysis
@@ -406,6 +464,7 @@ class AIProviderService:
             messages=messages,
             model=use_model,
             max_tokens=max_tokens,
+            response_format=response_format,
         )
 
     async def generate_image(

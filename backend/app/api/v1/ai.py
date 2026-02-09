@@ -7,6 +7,8 @@ All AI processing is done server-side using configurable providers.
 
 from typing import Any, Dict, List, Optional
 
+import base64
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from supabase import Client
@@ -44,6 +46,30 @@ logger = get_context_logger(__name__)
 router = APIRouter()
 
 
+async def _fetch_user_avatar_base64(user_id: str, db: Client) -> Optional[str]:
+    """Best-effort avatar fetch for profile-aware extraction and generation."""
+    try:
+        user_result = db.table("users").select("avatar_url").eq("id", user_id).single().execute()
+        if not user_result or not user_result.data:
+            return None
+
+        avatar_url = user_result.data.get("avatar_url")
+        if not avatar_url:
+            return None
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(avatar_url)
+            response.raise_for_status()
+            return base64.b64encode(response.content).decode("utf-8")
+    except Exception as e:
+        logger.warning(
+            "Failed to fetch user avatar for extraction",
+            user_id=user_id,
+            error=str(e),
+        )
+        return None
+
+
 # =============================================================================
 # ITEM EXTRACTION
 # =============================================================================
@@ -69,10 +95,14 @@ async def extract_items(
         async with rate_limited_operation(user_id, "extraction", db):
             # Get extraction agent
             agent = await get_item_extraction_agent(user_id=user_id, db=db)
+            user_avatar_base64 = await _fetch_user_avatar_base64(user_id=user_id, db=db)
 
             # Extract items with retry
             result = await with_retry(
-                lambda: agent.extract_multiple_items(image_base64=request.image),
+                lambda: agent.extract_multiple_items(
+                    image_base64=request.image,
+                    user_profile_image_base64=user_avatar_base64,
+                ),
                 max_retries=3,
                 initial_delay=2.0,
                 backoff_factor=2.0,
@@ -175,9 +205,6 @@ async def generate_outfit(
             body_profile = None
 
             if request.include_user_face:
-                import httpx
-                import base64 as b64
-
                 # Fetch user avatar_url and body_profile_id
                 user_result = (
                     db.table("users")
@@ -193,7 +220,7 @@ async def generate_outfit(
                         async with httpx.AsyncClient(timeout=30.0) as client:
                             resp = await client.get(avatar_url)
                             resp.raise_for_status()
-                            user_avatar_base64 = b64.b64encode(resp.content).decode("utf-8")
+                            user_avatar_base64 = base64.b64encode(resp.content).decode("utf-8")
                     except Exception as e:
                         logger.warning(
                             "Failed to fetch user avatar, falling back to generic model",
@@ -386,15 +413,22 @@ async def generate_try_on(
 
     Requires user to have uploaded a profile picture (avatar).
     """
-    import httpx
-    import base64
-
     try:
         # 1. Fetch user's avatar_url from database
         user_result = db.table("users").select("avatar_url").eq("id", user_id).single().execute()
+        if not user_result or not user_result.data:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": "User not found",
+                    "code": "USER_NOT_FOUND",
+                    "message": "User profile not found",
+                }
+            )
         user_data = user_result.data
 
-        if not user_data or not user_data.get("avatar_url"):
+        if not user_data.get("avatar_url"):
             from fastapi import HTTPException
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

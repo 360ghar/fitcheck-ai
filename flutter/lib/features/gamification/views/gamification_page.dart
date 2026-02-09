@@ -105,7 +105,7 @@ class GamificationPage extends StatelessWidget {
     final streak = controller.streak.value;
     if (streak == null) {
       if (controller.isLoading.value) {
-        return const Center(child: CircularProgressIndicator());
+        return const ShimmerCard(height: 140);
       }
       return AppGlassCard(
         padding: const EdgeInsets.all(AppConstants.spacing24),
@@ -254,7 +254,11 @@ class GamificationPage extends StatelessWidget {
         Obx(() {
           if (achievements.isEmpty) {
             if (controller.isLoading.value) {
-              return const Center(child: CircularProgressIndicator());
+              return ShimmerGridLoaderBox(
+                crossAxisCount: 3,
+                itemCount: 6,
+                childAspectRatio: 1,
+              );
             }
             return AppGlassCard(
               padding: const EdgeInsets.all(AppConstants.spacing24),

@@ -11,6 +11,7 @@ import {
   cancelBatchJob,
   fileToBase64,
 } from '@/api/batch';
+import { normalizeUseCases } from '@/lib/use-cases';
 import type {
   BatchExtractionState,
   BatchImageInput,
@@ -75,6 +76,10 @@ function generateItemName(item: {
 function convertToDetectedItem(
   apiItem: {
     temp_id: string;
+    person_id?: string;
+    person_label?: string;
+    is_current_user_person?: boolean;
+    include_in_wardrobe?: boolean;
     category: string;
     sub_category?: string;
     colors: string[];
@@ -88,12 +93,18 @@ function convertToDetectedItem(
     generated_image_base64?: string;
     generated_image_url?: string;
     generation_error?: string;
+    occasion_tags?: string[];
   },
   imageId?: string
 ): DetectedItem {
   return {
     tempId: apiItem.temp_id,
     sourceImageId: imageId,
+    personId: apiItem.person_id,
+    personLabel: apiItem.person_label,
+    isCurrentUserPerson: apiItem.is_current_user_person,
+    includeInWardrobe:
+      apiItem.include_in_wardrobe !== undefined ? apiItem.include_in_wardrobe : true,
     category: apiItem.category as Category,
     sub_category: apiItem.sub_category,
     colors: apiItem.colors || [],
@@ -118,6 +129,7 @@ function convertToDetectedItem(
       sub_category: apiItem.sub_category,
       category: apiItem.category,
     }),
+    occasion_tags: normalizeUseCases(apiItem.occasion_tags),
   };
 }
 

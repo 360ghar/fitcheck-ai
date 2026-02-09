@@ -79,7 +79,10 @@ async def get_streak(
     db: Client = Depends(get_db),
 ):
     try:
-        row = db.table("user_streaks").select("*").eq("user_id", user_id).maybe_single().execute().data
+        result = db.table("user_streaks").select("*").eq("user_id", user_id).maybe_single().execute()
+        if result is None:
+            raise DatabaseError("Database query returned None")
+        row = result.data
         if not row:
             now = _now()
             insert = {
@@ -91,7 +94,10 @@ async def get_streak(
                 "streak_skips_remaining": 1,
                 "updated_at": now,
             }
-            row = db.table("user_streaks").insert(insert).execute().data[0]
+            insert_result = db.table("user_streaks").insert(insert).execute()
+            if insert_result is None or not insert_result.data:
+                raise DatabaseError("Failed to insert streak record")
+            row = insert_result.data[0]
             logger.info(
                 "User streak record initialized",
                 user_id=user_id
@@ -149,7 +155,8 @@ async def get_achievements(
     ]
 
     try:
-        earned_rows = db.table("user_achievements").select("*").eq("user_id", user_id).order("earned_at", desc=True).execute().data or []
+        result = db.table("user_achievements").select("*").eq("user_id", user_id).order("earned_at", desc=True).execute()
+        earned_rows = result.data if result else []
         logger.debug(
             "Achievements retrieved",
             user_id=user_id,
@@ -173,27 +180,25 @@ async def get_leaderboard(
 ):
     try:
         # Minimal leaderboard by current streak
-        rows: List[Dict[str, Any]] = (
+        streaks_result = (
             db.table("user_streaks")
             .select("user_id,current_streak")
             .order("current_streak", desc=True)
             .limit(25)
             .execute()
-            .data
-            or []
         )
+        rows: List[Dict[str, Any]] = streaks_result.data if streaks_result else []
 
         user_ids = [r.get("user_id") for r in rows if r.get("user_id")]
         profiles: Dict[str, Dict[str, Any]] = {}
         if user_ids:
-            prof_rows = (
+            prof_result = (
                 db.table("users")
                 .select("id,full_name,avatar_url")
                 .in_("id", user_ids)
                 .execute()
-                .data
-                or []
             )
+            prof_rows = prof_result.data if prof_result else []
             profiles = {str(p.get("id")): p for p in prof_rows if p.get("id")}
 
         entries: List[Dict[str, Any]] = []
@@ -217,7 +222,8 @@ async def get_leaderboard(
         # User rank summary (best-effort)
         user_rank: Optional[Dict[str, Any]] = None
         try:
-            me_row = db.table("user_streaks").select("current_streak").eq("user_id", user_id).maybe_single().execute().data
+            me_result = db.table("user_streaks").select("current_streak").eq("user_id", user_id).maybe_single().execute()
+            me_row = me_result.data if me_result else None
             me_streak = _safe_int((me_row or {}).get("current_streak"), 0)
             higher = db.table("user_streaks").select("user_id", count="exact").gt("current_streak", me_streak).execute()
             higher_count = getattr(higher, "count", len(getattr(higher, "data", []) or [])) or 0

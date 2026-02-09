@@ -25,6 +25,7 @@ abstract class ItemModel with _$ItemModel {
     String? location,
     @JsonKey(name: 'is_favorite') @Default(false) bool isFavorite,
     List<String>? tags,
+    @JsonKey(name: 'occasion_tags') List<String>? occasionTags,
     @JsonKey(name: 'item_images') List<ItemImage>? itemImages,
     @JsonKey(name: 'worn_count') @Default(0) int wornCount,
     @JsonKey(name: 'last_worn_at') DateTime? lastWornAt,
@@ -69,6 +70,7 @@ abstract class CreateItemRequest with _$CreateItemRequest {
     @JsonKey(name: 'purchase_date') DateTime? purchaseDate,
     String? location,
     List<String>? tags,
+    @JsonKey(name: 'occasion_tags') List<String>? occasionTags,
   }) = _CreateItemRequest;
 
   factory CreateItemRequest.fromJson(Map<String, dynamic> json) =>
@@ -92,6 +94,7 @@ abstract class UpdateItemRequest with _$UpdateItemRequest {
     DateTime? purchaseDate,
     String? location,
     List<String>? tags,
+    @JsonKey(name: 'occasion_tags') List<String>? occasionTags,
   }) = _UpdateItemRequest;
 
   factory UpdateItemRequest.fromJson(Map<String, dynamic> json) =>
@@ -173,6 +176,12 @@ abstract class DetectedItemData with _$DetectedItemData {
     String? brand,
     required double confidence,
     @JsonKey(name: 'detailed_description') String? detailedDescription,
+    @JsonKey(name: 'person_id') String? personId,
+    @JsonKey(name: 'person_label') String? personLabel,
+    @JsonKey(name: 'is_current_user_person')
+    @Default(false)
+    bool isCurrentUserPerson,
+    @JsonKey(name: 'include_in_wardrobe') @Default(true) bool includeInWardrobe,
     @Default('detected') String status,
   }) = _DetectedItemData;
 
@@ -192,6 +201,12 @@ abstract class DetectedItemData with _$DetectedItemData {
       brand: json['brand']?.toString(),
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0.0,
       detailedDescription: json['detailed_description']?.toString(),
+      personId: json['person_id']?.toString(),
+      personLabel: json['person_label']?.toString(),
+      isCurrentUserPerson: json['is_current_user_person'] == true,
+      includeInWardrobe: json['include_in_wardrobe'] is bool
+          ? json['include_in_wardrobe'] as bool
+          : true,
       status: json['status']?.toString() ?? 'detected',
     );
   }
@@ -207,31 +222,47 @@ abstract class SyncExtractionResponse with _$SyncExtractionResponse {
     @JsonKey(name: 'image_description') String? imageDescription,
     @JsonKey(name: 'item_count') required int itemCount,
     @JsonKey(name: 'requires_review') @Default(true) bool requiresReview,
+    @JsonKey(name: 'has_profile_reference')
+    @Default(false)
+    bool hasProfileReference,
+    @JsonKey(name: 'profile_match_found')
+    @Default(false)
+    bool profileMatchFound,
   }) = _SyncExtractionResponse;
 
   factory SyncExtractionResponse.fromJson(Map<String, dynamic> json) {
     // Defensive parsing to handle backend inconsistencies
     final itemsList = json['items'] as List<dynamic>?;
-    final items = itemsList?.map((e) {
-      if (e is Map<String, dynamic>) {
-        return DetectedItemData.fromJson(e);
-      }
-      return null;
-    }).where((e) => e != null).cast<DetectedItemData>().toList() ?? [];
+    final items =
+        itemsList
+            ?.map((e) {
+              if (e is Map<String, dynamic>) {
+                return DetectedItemData.fromJson(e);
+              }
+              return null;
+            })
+            .where((e) => e != null)
+            .cast<DetectedItemData>()
+            .toList() ??
+        [];
 
     return SyncExtractionResponse(
       items: items,
-      overallConfidence: (json['overall_confidence'] as num?)?.toDouble() ?? 0.0,
+      overallConfidence:
+          (json['overall_confidence'] as num?)?.toDouble() ?? 0.0,
       imageDescription: json['image_description'] as String?,
       itemCount: (json['item_count'] as num?)?.toInt() ?? items.length,
       requiresReview: json['requires_review'] as bool? ?? true,
+      hasProfileReference: json['has_profile_reference'] as bool? ?? false,
+      profileMatchFound: json['profile_match_found'] as bool? ?? false,
     );
   }
 }
 
 /// Request to generate a product image for a detected item
 @freezed
-abstract class ProductImageGenerationRequest with _$ProductImageGenerationRequest {
+abstract class ProductImageGenerationRequest
+    with _$ProductImageGenerationRequest {
   const factory ProductImageGenerationRequest({
     required String itemDescription,
     required String category,
@@ -251,7 +282,8 @@ abstract class ProductImageGenerationRequest with _$ProductImageGenerationReques
 
 /// Response from product image generation API
 @freezed
-abstract class ProductImageGenerationResponse with _$ProductImageGenerationResponse {
+abstract class ProductImageGenerationResponse
+    with _$ProductImageGenerationResponse {
   const factory ProductImageGenerationResponse({
     @JsonKey(name: 'image_base64') required String imageBase64,
     String? imageUrl,
@@ -286,13 +318,23 @@ abstract class DetectedItemDataWithImage with _$DetectedItemDataWithImage {
     String? brand,
     required double confidence,
     @JsonKey(name: 'detailed_description') String? detailedDescription,
+    @JsonKey(name: 'person_id') String? personId,
+    @JsonKey(name: 'person_label') String? personLabel,
+    @JsonKey(name: 'is_current_user_person')
+    @Default(false)
+    bool isCurrentUserPerson,
+    @JsonKey(name: 'include_in_wardrobe') @Default(true) bool includeInWardrobe,
     @Default('detected') String status,
+
     /// Generated product image (data URL format: data:image/png;base64,...)
     String? generatedImageUrl,
+
     /// Error message if generation failed
     String? generationError,
+
     /// User-editable name
     String? name,
+
     /// User-editable tags
     List<String>? tags,
   }) = _DetectedItemDataWithImage;
@@ -312,9 +354,24 @@ abstract class DetectedItemDataWithImage with _$DetectedItemDataWithImage {
       brand: json['brand']?.toString(),
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0.0,
       detailedDescription: json['detailed_description']?.toString(),
+      personId: json['person_id']?.toString() ?? json['personId']?.toString(),
+      personLabel:
+          json['person_label']?.toString() ?? json['personLabel']?.toString(),
+      isCurrentUserPerson:
+          json['is_current_user_person'] == true ||
+          json['isCurrentUserPerson'] == true,
+      includeInWardrobe: json['include_in_wardrobe'] is bool
+          ? json['include_in_wardrobe'] as bool
+          : (json['includeInWardrobe'] is bool
+                ? json['includeInWardrobe'] as bool
+                : true),
       status: json['status']?.toString() ?? 'detected',
-      generatedImageUrl: json['generated_image_url']?.toString() ?? json['generatedImageUrl']?.toString(),
-      generationError: json['generation_error']?.toString() ?? json['generationError']?.toString(),
+      generatedImageUrl:
+          json['generated_image_url']?.toString() ??
+          json['generatedImageUrl']?.toString(),
+      generationError:
+          json['generation_error']?.toString() ??
+          json['generationError']?.toString(),
       name: json['name']?.toString(),
       tags: (json['tags'] as List<dynamic>?)
           ?.map((e) => e?.toString())

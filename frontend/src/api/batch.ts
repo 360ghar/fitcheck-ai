@@ -40,6 +40,10 @@ export interface BatchJobStatusResponse {
   items: Array<{
     temp_id: string;
     image_id: string;
+    person_id?: string;
+    person_label?: string;
+    is_current_user_person?: boolean;
+    include_in_wardrobe?: boolean;
     category: string;
     sub_category?: string;
     colors: string[];

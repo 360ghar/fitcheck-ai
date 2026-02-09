@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/widgets/app_ui.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/subscription_model.dart';
 import 'widgets/plan_card.dart';
@@ -21,7 +23,18 @@ class SubscriptionPage extends GetView<SubscriptionController> {
       ),
       body: Obx(() {
         if (controller.isLoading.value && controller.subscription.value == null) {
-          return const Center(child: CircularProgressIndicator());
+          return Padding(
+            padding: const EdgeInsets.all(AppConstants.spacing16),
+            child: Column(
+              children: const [
+                ShimmerCard(height: 140),
+                SizedBox(height: AppConstants.spacing24),
+                ShimmerCard(height: 180),
+                SizedBox(height: AppConstants.spacing24),
+                ShimmerCard(height: 120),
+              ],
+            ),
+          );
         }
 
         return RefreshIndicator(
@@ -65,105 +78,100 @@ class SubscriptionPage extends GetView<SubscriptionController> {
   Widget _buildCurrentPlanCard(BuildContext context, ThemeData theme) {
     final sub = controller.subscription.value;
 
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  controller.isPro ? Icons.star : Icons.person,
-                  color: controller.isPro ? Colors.amber : theme.colorScheme.primary,
-                  size: 28,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Current Plan',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withAlpha(153),
-                        ),
-                      ),
-                      Text(
-                        controller.planName,
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (controller.isPro)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF6366F1), Color(0xFF9333EA)],
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'PRO',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            if (controller.isCancelled && sub?.currentPeriodEnd != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withAlpha(26),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline, color: Colors.orange, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Subscription ends on ${_formatDate(sub!.currentPeriodEnd!)}',
-                        style: TextStyle(color: Colors.orange.shade800, fontSize: 13),
-                      ),
-                    ),
-                  ],
-                ),
+    return AppGlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                controller.isPro ? Icons.star : Icons.person,
+                color: controller.isPro ? Colors.amber : theme.colorScheme.primary,
+                size: 28,
               ),
-            ],
-            if (sub?.referralCreditMonths != null && sub!.referralCreditMonths > 0) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.green.withAlpha(26),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.card_giftcard, color: Colors.green, size: 20),
-                    const SizedBox(width: 8),
                     Text(
-                      '${sub.referralCreditMonths} month${sub.referralCreditMonths > 1 ? 's' : ''} of referral credit',
-                      style: TextStyle(color: Colors.green.shade800, fontSize: 13),
+                      'Current Plan',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withAlpha(153),
+                      ),
+                    ),
+                    Text(
+                      controller.planName,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
               ),
+              if (controller.isPro)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF6366F1), Color(0xFF9333EA)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'PRO',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
             ],
+          ),
+          if (controller.isCancelled && sub?.currentPeriodEnd != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withAlpha(26),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Subscription ends on ${_formatDate(sub!.currentPeriodEnd!)}',
+                      style: TextStyle(color: Colors.orange.shade800, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
-        ),
+          if (sub?.referralCreditMonths != null && sub!.referralCreditMonths > 0) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.withAlpha(26),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.card_giftcard, color: Colors.green, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${sub.referralCreditMonths} month${sub.referralCreditMonths > 1 ? 's' : ''} of referral credit',
+                    style: TextStyle(color: Colors.green.shade800, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -172,58 +180,53 @@ class SubscriptionPage extends GetView<SubscriptionController> {
     final usage = controller.usage.value;
     if (usage == null) return const SizedBox.shrink();
 
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Monthly Usage',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
+    return AppGlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Monthly Usage',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          UsageProgress(
+            label: 'Item Extractions',
+            current: usage.monthlyExtractions,
+            max: usage.monthlyExtractionsLimit,
+            icon: Icons.camera_alt,
+          ),
+          const SizedBox(height: 16),
+          UsageProgress(
+            label: 'Outfit Visualizations',
+            current: usage.monthlyGenerations,
+            max: usage.monthlyGenerationsLimit,
+            icon: Icons.auto_awesome,
+          ),
+          if (controller.isNearLimit && !controller.isPro) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.withAlpha(26),
+                borderRadius: BorderRadius.circular(8),
               ),
-            ),
-            const SizedBox(height: 16),
-            UsageProgress(
-              label: 'Item Extractions',
-              current: usage.monthlyExtractions,
-              max: usage.monthlyExtractionsLimit,
-              icon: Icons.camera_alt,
-            ),
-            const SizedBox(height: 16),
-            UsageProgress(
-              label: 'Outfit Visualizations',
-              current: usage.monthlyGenerations,
-              max: usage.monthlyGenerationsLimit,
-              icon: Icons.auto_awesome,
-            ),
-            if (controller.isNearLimit && !controller.isPro) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withAlpha(26),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.warning_amber, color: Colors.amber, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'You\'re approaching your usage limit. Upgrade for more!',
-                        style: TextStyle(color: Colors.amber.shade800, fontSize: 13),
-                      ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber, color: Colors.amber, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'You\'re approaching your usage limit. Upgrade for more!',
+                      style: TextStyle(color: Colors.amber.shade800, fontSize: 13),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -300,40 +303,34 @@ class SubscriptionPage extends GetView<SubscriptionController> {
   }
 
   Widget _buildCancelSection(BuildContext context, ThemeData theme) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Colors.red.withAlpha(13),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Cancel Subscription',
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: Colors.red.shade700,
-                fontWeight: FontWeight.bold,
-              ),
+    return AppGlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Cancel Subscription',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: Colors.red.shade700,
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(height: 8),
-            Text(
-              'You\'ll retain access until the end of your billing period.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: Colors.red.shade600,
-              ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'You\'ll retain access until the end of your billing period.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: Colors.red.shade600,
             ),
-            const SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: () => _showCancelDialog(context),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-                side: BorderSide(color: Colors.red.shade300),
-              ),
-              child: const Text('Cancel Subscription'),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton(
+            onPressed: () => _showCancelDialog(context),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red,
+              side: BorderSide(color: Colors.red.shade300),
             ),
-          ],
-        ),
+            child: const Text('Cancel Subscription'),
+          ),
+        ],
       ),
     );
   }

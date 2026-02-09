@@ -98,7 +98,7 @@ class Settings(BaseSettings):
 
     # Custom Proxy Defaults (e.g., local proxy at localhost:8317)
     AI_CUSTOM_API_URL: str = "http://localhost:8317/v1"
-    AI_CUSTOM_API_KEY: str = "***REMOVED***"
+    AI_CUSTOM_API_KEY: Optional[str] = None
     AI_CUSTOM_CHAT_MODEL: str = "gemini-3-flash-preview"
     AI_CUSTOM_VISION_MODEL: str = "gemini-3-flash-preview"
     AI_CUSTOM_IMAGE_MODEL: str = "gemini-3-pro-image-preview"
@@ -141,6 +141,17 @@ class Settings(BaseSettings):
     PLAN_FREE_DAILY_PHOTOSHOOT_IMAGES: int = 10
     PLAN_PRO_DAILY_PHOTOSHOOT_IMAGES: int = 50
     PHOTOSHOOT_CONCURRENCY_LIMIT: int = 10  # Max concurrent image generations
+
+    # Social Import
+    ENABLE_SOCIAL_IMPORT: bool = False
+    SOCIAL_IMPORT_MAX_CONCURRENT_JOBS: int = 1
+    SOCIAL_IMPORT_MAX_PHOTOS_PER_JOB: int = 2000
+    SOCIAL_IMPORT_AUTH_SESSION_TTL_MINUTES: int = 120
+    SOCIAL_IMPORT_DISCOVERY_PAGE_SIZE: int = 50
+
+    # Meta OAuth (optional for social import)
+    META_OAUTH_CLIENT_ID: Optional[str] = None
+    META_OAUTH_CLIENT_SECRET: Optional[str] = None
 
     # Weather (OpenWeatherMap)
     WEATHER_API_KEY: Optional[str] = None

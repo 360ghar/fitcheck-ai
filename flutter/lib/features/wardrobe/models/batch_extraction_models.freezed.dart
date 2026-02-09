@@ -595,7 +595,7 @@ as DateTime?,
 /// @nodoc
 mixin _$BatchExtractedItem {
 
- String get id; String get sourceImageId; String get name; Category get category; List<String>? get colors; String? get material; String? get pattern; String? get description;@JsonKey(name: 'bounding_box') Map<String, dynamic>? get boundingBox;@JsonKey(name: 'cropped_image_base64') String? get croppedImageBase64;@JsonKey(name: 'generated_image_url') String? get generatedImageUrl; double? get confidence; BatchItemStatus get status; bool get isSelected; String? get error;
+@JsonKey(name: 'temp_id') String get id;@JsonKey(name: 'image_id') String get sourceImageId; String get name; Category get category;@JsonKey(name: 'sub_category') String? get subCategory; List<String> get colors; String? get material; String? get pattern; String? get brand; String? get description;@JsonKey(name: 'bounding_box') Map<String, dynamic>? get boundingBox;@JsonKey(name: 'cropped_image_base64') String? get croppedImageBase64;@JsonKey(name: 'generated_image_base64') String? get generatedImageBase64;@JsonKey(name: 'generated_image_url') String? get generatedImageUrl; double? get confidence;@JsonKey(name: 'person_id') String? get personId;@JsonKey(name: 'person_label') String? get personLabel;@JsonKey(name: 'is_current_user_person') bool get isCurrentUserPerson;@JsonKey(name: 'include_in_wardrobe') bool get includeInWardrobe;@JsonKey(unknownEnumValue: BatchItemStatus.pending) BatchItemStatus get status; bool get isSelected; String? get error;
 /// Create a copy of BatchExtractedItem
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -608,16 +608,16 @@ $BatchExtractedItemCopyWith<BatchExtractedItem> get copyWith => _$BatchExtracted
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is BatchExtractedItem&&(identical(other.id, id) || other.id == id)&&(identical(other.sourceImageId, sourceImageId) || other.sourceImageId == sourceImageId)&&(identical(other.name, name) || other.name == name)&&(identical(other.category, category) || other.category == category)&&const DeepCollectionEquality().equals(other.colors, colors)&&(identical(other.material, material) || other.material == material)&&(identical(other.pattern, pattern) || other.pattern == pattern)&&(identical(other.description, description) || other.description == description)&&const DeepCollectionEquality().equals(other.boundingBox, boundingBox)&&(identical(other.croppedImageBase64, croppedImageBase64) || other.croppedImageBase64 == croppedImageBase64)&&(identical(other.generatedImageUrl, generatedImageUrl) || other.generatedImageUrl == generatedImageUrl)&&(identical(other.confidence, confidence) || other.confidence == confidence)&&(identical(other.status, status) || other.status == status)&&(identical(other.isSelected, isSelected) || other.isSelected == isSelected)&&(identical(other.error, error) || other.error == error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is BatchExtractedItem&&(identical(other.id, id) || other.id == id)&&(identical(other.sourceImageId, sourceImageId) || other.sourceImageId == sourceImageId)&&(identical(other.name, name) || other.name == name)&&(identical(other.category, category) || other.category == category)&&(identical(other.subCategory, subCategory) || other.subCategory == subCategory)&&const DeepCollectionEquality().equals(other.colors, colors)&&(identical(other.material, material) || other.material == material)&&(identical(other.pattern, pattern) || other.pattern == pattern)&&(identical(other.brand, brand) || other.brand == brand)&&(identical(other.description, description) || other.description == description)&&const DeepCollectionEquality().equals(other.boundingBox, boundingBox)&&(identical(other.croppedImageBase64, croppedImageBase64) || other.croppedImageBase64 == croppedImageBase64)&&(identical(other.generatedImageBase64, generatedImageBase64) || other.generatedImageBase64 == generatedImageBase64)&&(identical(other.generatedImageUrl, generatedImageUrl) || other.generatedImageUrl == generatedImageUrl)&&(identical(other.confidence, confidence) || other.confidence == confidence)&&(identical(other.personId, personId) || other.personId == personId)&&(identical(other.personLabel, personLabel) || other.personLabel == personLabel)&&(identical(other.isCurrentUserPerson, isCurrentUserPerson) || other.isCurrentUserPerson == isCurrentUserPerson)&&(identical(other.includeInWardrobe, includeInWardrobe) || other.includeInWardrobe == includeInWardrobe)&&(identical(other.status, status) || other.status == status)&&(identical(other.isSelected, isSelected) || other.isSelected == isSelected)&&(identical(other.error, error) || other.error == error));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,sourceImageId,name,category,const DeepCollectionEquality().hash(colors),material,pattern,description,const DeepCollectionEquality().hash(boundingBox),croppedImageBase64,generatedImageUrl,confidence,status,isSelected,error);
+int get hashCode => Object.hashAll([runtimeType,id,sourceImageId,name,category,subCategory,const DeepCollectionEquality().hash(colors),material,pattern,brand,description,const DeepCollectionEquality().hash(boundingBox),croppedImageBase64,generatedImageBase64,generatedImageUrl,confidence,personId,personLabel,isCurrentUserPerson,includeInWardrobe,status,isSelected,error]);
 
 @override
 String toString() {
-  return 'BatchExtractedItem(id: $id, sourceImageId: $sourceImageId, name: $name, category: $category, colors: $colors, material: $material, pattern: $pattern, description: $description, boundingBox: $boundingBox, croppedImageBase64: $croppedImageBase64, generatedImageUrl: $generatedImageUrl, confidence: $confidence, status: $status, isSelected: $isSelected, error: $error)';
+  return 'BatchExtractedItem(id: $id, sourceImageId: $sourceImageId, name: $name, category: $category, subCategory: $subCategory, colors: $colors, material: $material, pattern: $pattern, brand: $brand, description: $description, boundingBox: $boundingBox, croppedImageBase64: $croppedImageBase64, generatedImageBase64: $generatedImageBase64, generatedImageUrl: $generatedImageUrl, confidence: $confidence, personId: $personId, personLabel: $personLabel, isCurrentUserPerson: $isCurrentUserPerson, includeInWardrobe: $includeInWardrobe, status: $status, isSelected: $isSelected, error: $error)';
 }
 
 
@@ -628,7 +628,7 @@ abstract mixin class $BatchExtractedItemCopyWith<$Res>  {
   factory $BatchExtractedItemCopyWith(BatchExtractedItem value, $Res Function(BatchExtractedItem) _then) = _$BatchExtractedItemCopyWithImpl;
 @useResult
 $Res call({
- String id, String sourceImageId, String name, Category category, List<String>? colors, String? material, String? pattern, String? description,@JsonKey(name: 'bounding_box') Map<String, dynamic>? boundingBox,@JsonKey(name: 'cropped_image_base64') String? croppedImageBase64,@JsonKey(name: 'generated_image_url') String? generatedImageUrl, double? confidence, BatchItemStatus status, bool isSelected, String? error
+@JsonKey(name: 'temp_id') String id,@JsonKey(name: 'image_id') String sourceImageId, String name, Category category,@JsonKey(name: 'sub_category') String? subCategory, List<String> colors, String? material, String? pattern, String? brand, String? description,@JsonKey(name: 'bounding_box') Map<String, dynamic>? boundingBox,@JsonKey(name: 'cropped_image_base64') String? croppedImageBase64,@JsonKey(name: 'generated_image_base64') String? generatedImageBase64,@JsonKey(name: 'generated_image_url') String? generatedImageUrl, double? confidence,@JsonKey(name: 'person_id') String? personId,@JsonKey(name: 'person_label') String? personLabel,@JsonKey(name: 'is_current_user_person') bool isCurrentUserPerson,@JsonKey(name: 'include_in_wardrobe') bool includeInWardrobe,@JsonKey(unknownEnumValue: BatchItemStatus.pending) BatchItemStatus status, bool isSelected, String? error
 });
 
 
@@ -645,21 +645,28 @@ class _$BatchExtractedItemCopyWithImpl<$Res>
 
 /// Create a copy of BatchExtractedItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? sourceImageId = null,Object? name = null,Object? category = null,Object? colors = freezed,Object? material = freezed,Object? pattern = freezed,Object? description = freezed,Object? boundingBox = freezed,Object? croppedImageBase64 = freezed,Object? generatedImageUrl = freezed,Object? confidence = freezed,Object? status = null,Object? isSelected = null,Object? error = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? sourceImageId = null,Object? name = null,Object? category = null,Object? subCategory = freezed,Object? colors = null,Object? material = freezed,Object? pattern = freezed,Object? brand = freezed,Object? description = freezed,Object? boundingBox = freezed,Object? croppedImageBase64 = freezed,Object? generatedImageBase64 = freezed,Object? generatedImageUrl = freezed,Object? confidence = freezed,Object? personId = freezed,Object? personLabel = freezed,Object? isCurrentUserPerson = null,Object? includeInWardrobe = null,Object? status = null,Object? isSelected = null,Object? error = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,sourceImageId: null == sourceImageId ? _self.sourceImageId : sourceImageId // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,category: null == category ? _self.category : category // ignore: cast_nullable_to_non_nullable
-as Category,colors: freezed == colors ? _self.colors : colors // ignore: cast_nullable_to_non_nullable
-as List<String>?,material: freezed == material ? _self.material : material // ignore: cast_nullable_to_non_nullable
+as Category,subCategory: freezed == subCategory ? _self.subCategory : subCategory // ignore: cast_nullable_to_non_nullable
+as String?,colors: null == colors ? _self.colors : colors // ignore: cast_nullable_to_non_nullable
+as List<String>,material: freezed == material ? _self.material : material // ignore: cast_nullable_to_non_nullable
 as String?,pattern: freezed == pattern ? _self.pattern : pattern // ignore: cast_nullable_to_non_nullable
+as String?,brand: freezed == brand ? _self.brand : brand // ignore: cast_nullable_to_non_nullable
 as String?,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
 as String?,boundingBox: freezed == boundingBox ? _self.boundingBox : boundingBox // ignore: cast_nullable_to_non_nullable
 as Map<String, dynamic>?,croppedImageBase64: freezed == croppedImageBase64 ? _self.croppedImageBase64 : croppedImageBase64 // ignore: cast_nullable_to_non_nullable
+as String?,generatedImageBase64: freezed == generatedImageBase64 ? _self.generatedImageBase64 : generatedImageBase64 // ignore: cast_nullable_to_non_nullable
 as String?,generatedImageUrl: freezed == generatedImageUrl ? _self.generatedImageUrl : generatedImageUrl // ignore: cast_nullable_to_non_nullable
 as String?,confidence: freezed == confidence ? _self.confidence : confidence // ignore: cast_nullable_to_non_nullable
-as double?,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as double?,personId: freezed == personId ? _self.personId : personId // ignore: cast_nullable_to_non_nullable
+as String?,personLabel: freezed == personLabel ? _self.personLabel : personLabel // ignore: cast_nullable_to_non_nullable
+as String?,isCurrentUserPerson: null == isCurrentUserPerson ? _self.isCurrentUserPerson : isCurrentUserPerson // ignore: cast_nullable_to_non_nullable
+as bool,includeInWardrobe: null == includeInWardrobe ? _self.includeInWardrobe : includeInWardrobe // ignore: cast_nullable_to_non_nullable
+as bool,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as BatchItemStatus,isSelected: null == isSelected ? _self.isSelected : isSelected // ignore: cast_nullable_to_non_nullable
 as bool,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
 as String?,
@@ -747,10 +754,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String sourceImageId,  String name,  Category category,  List<String>? colors,  String? material,  String? pattern,  String? description, @JsonKey(name: 'bounding_box')  Map<String, dynamic>? boundingBox, @JsonKey(name: 'cropped_image_base64')  String? croppedImageBase64, @JsonKey(name: 'generated_image_url')  String? generatedImageUrl,  double? confidence,  BatchItemStatus status,  bool isSelected,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'temp_id')  String id, @JsonKey(name: 'image_id')  String sourceImageId,  String name,  Category category, @JsonKey(name: 'sub_category')  String? subCategory,  List<String> colors,  String? material,  String? pattern,  String? brand,  String? description, @JsonKey(name: 'bounding_box')  Map<String, dynamic>? boundingBox, @JsonKey(name: 'cropped_image_base64')  String? croppedImageBase64, @JsonKey(name: 'generated_image_base64')  String? generatedImageBase64, @JsonKey(name: 'generated_image_url')  String? generatedImageUrl,  double? confidence, @JsonKey(name: 'person_id')  String? personId, @JsonKey(name: 'person_label')  String? personLabel, @JsonKey(name: 'is_current_user_person')  bool isCurrentUserPerson, @JsonKey(name: 'include_in_wardrobe')  bool includeInWardrobe, @JsonKey(unknownEnumValue: BatchItemStatus.pending)  BatchItemStatus status,  bool isSelected,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _BatchExtractedItem() when $default != null:
-return $default(_that.id,_that.sourceImageId,_that.name,_that.category,_that.colors,_that.material,_that.pattern,_that.description,_that.boundingBox,_that.croppedImageBase64,_that.generatedImageUrl,_that.confidence,_that.status,_that.isSelected,_that.error);case _:
+return $default(_that.id,_that.sourceImageId,_that.name,_that.category,_that.subCategory,_that.colors,_that.material,_that.pattern,_that.brand,_that.description,_that.boundingBox,_that.croppedImageBase64,_that.generatedImageBase64,_that.generatedImageUrl,_that.confidence,_that.personId,_that.personLabel,_that.isCurrentUserPerson,_that.includeInWardrobe,_that.status,_that.isSelected,_that.error);case _:
   return orElse();
 
 }
@@ -768,10 +775,10 @@ return $default(_that.id,_that.sourceImageId,_that.name,_that.category,_that.col
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String sourceImageId,  String name,  Category category,  List<String>? colors,  String? material,  String? pattern,  String? description, @JsonKey(name: 'bounding_box')  Map<String, dynamic>? boundingBox, @JsonKey(name: 'cropped_image_base64')  String? croppedImageBase64, @JsonKey(name: 'generated_image_url')  String? generatedImageUrl,  double? confidence,  BatchItemStatus status,  bool isSelected,  String? error)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'temp_id')  String id, @JsonKey(name: 'image_id')  String sourceImageId,  String name,  Category category, @JsonKey(name: 'sub_category')  String? subCategory,  List<String> colors,  String? material,  String? pattern,  String? brand,  String? description, @JsonKey(name: 'bounding_box')  Map<String, dynamic>? boundingBox, @JsonKey(name: 'cropped_image_base64')  String? croppedImageBase64, @JsonKey(name: 'generated_image_base64')  String? generatedImageBase64, @JsonKey(name: 'generated_image_url')  String? generatedImageUrl,  double? confidence, @JsonKey(name: 'person_id')  String? personId, @JsonKey(name: 'person_label')  String? personLabel, @JsonKey(name: 'is_current_user_person')  bool isCurrentUserPerson, @JsonKey(name: 'include_in_wardrobe')  bool includeInWardrobe, @JsonKey(unknownEnumValue: BatchItemStatus.pending)  BatchItemStatus status,  bool isSelected,  String? error)  $default,) {final _that = this;
 switch (_that) {
 case _BatchExtractedItem():
-return $default(_that.id,_that.sourceImageId,_that.name,_that.category,_that.colors,_that.material,_that.pattern,_that.description,_that.boundingBox,_that.croppedImageBase64,_that.generatedImageUrl,_that.confidence,_that.status,_that.isSelected,_that.error);case _:
+return $default(_that.id,_that.sourceImageId,_that.name,_that.category,_that.subCategory,_that.colors,_that.material,_that.pattern,_that.brand,_that.description,_that.boundingBox,_that.croppedImageBase64,_that.generatedImageBase64,_that.generatedImageUrl,_that.confidence,_that.personId,_that.personLabel,_that.isCurrentUserPerson,_that.includeInWardrobe,_that.status,_that.isSelected,_that.error);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -788,10 +795,10 @@ return $default(_that.id,_that.sourceImageId,_that.name,_that.category,_that.col
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String sourceImageId,  String name,  Category category,  List<String>? colors,  String? material,  String? pattern,  String? description, @JsonKey(name: 'bounding_box')  Map<String, dynamic>? boundingBox, @JsonKey(name: 'cropped_image_base64')  String? croppedImageBase64, @JsonKey(name: 'generated_image_url')  String? generatedImageUrl,  double? confidence,  BatchItemStatus status,  bool isSelected,  String? error)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'temp_id')  String id, @JsonKey(name: 'image_id')  String sourceImageId,  String name,  Category category, @JsonKey(name: 'sub_category')  String? subCategory,  List<String> colors,  String? material,  String? pattern,  String? brand,  String? description, @JsonKey(name: 'bounding_box')  Map<String, dynamic>? boundingBox, @JsonKey(name: 'cropped_image_base64')  String? croppedImageBase64, @JsonKey(name: 'generated_image_base64')  String? generatedImageBase64, @JsonKey(name: 'generated_image_url')  String? generatedImageUrl,  double? confidence, @JsonKey(name: 'person_id')  String? personId, @JsonKey(name: 'person_label')  String? personLabel, @JsonKey(name: 'is_current_user_person')  bool isCurrentUserPerson, @JsonKey(name: 'include_in_wardrobe')  bool includeInWardrobe, @JsonKey(unknownEnumValue: BatchItemStatus.pending)  BatchItemStatus status,  bool isSelected,  String? error)?  $default,) {final _that = this;
 switch (_that) {
 case _BatchExtractedItem() when $default != null:
-return $default(_that.id,_that.sourceImageId,_that.name,_that.category,_that.colors,_that.material,_that.pattern,_that.description,_that.boundingBox,_that.croppedImageBase64,_that.generatedImageUrl,_that.confidence,_that.status,_that.isSelected,_that.error);case _:
+return $default(_that.id,_that.sourceImageId,_that.name,_that.category,_that.subCategory,_that.colors,_that.material,_that.pattern,_that.brand,_that.description,_that.boundingBox,_that.croppedImageBase64,_that.generatedImageBase64,_that.generatedImageUrl,_that.confidence,_that.personId,_that.personLabel,_that.isCurrentUserPerson,_that.includeInWardrobe,_that.status,_that.isSelected,_that.error);case _:
   return null;
 
 }
@@ -803,24 +810,24 @@ return $default(_that.id,_that.sourceImageId,_that.name,_that.category,_that.col
 @JsonSerializable()
 
 class _BatchExtractedItem implements BatchExtractedItem {
-  const _BatchExtractedItem({required this.id, required this.sourceImageId, required this.name, required this.category, final  List<String>? colors, this.material, this.pattern, this.description, @JsonKey(name: 'bounding_box') final  Map<String, dynamic>? boundingBox, @JsonKey(name: 'cropped_image_base64') this.croppedImageBase64, @JsonKey(name: 'generated_image_url') this.generatedImageUrl, this.confidence, this.status = BatchItemStatus.pending, this.isSelected = true, this.error}): _colors = colors,_boundingBox = boundingBox;
+  const _BatchExtractedItem({@JsonKey(name: 'temp_id') required this.id, @JsonKey(name: 'image_id') required this.sourceImageId, required this.name, required this.category, @JsonKey(name: 'sub_category') this.subCategory, final  List<String> colors = const [], this.material, this.pattern, this.brand, this.description, @JsonKey(name: 'bounding_box') final  Map<String, dynamic>? boundingBox, @JsonKey(name: 'cropped_image_base64') this.croppedImageBase64, @JsonKey(name: 'generated_image_base64') this.generatedImageBase64, @JsonKey(name: 'generated_image_url') this.generatedImageUrl, this.confidence, @JsonKey(name: 'person_id') this.personId, @JsonKey(name: 'person_label') this.personLabel, @JsonKey(name: 'is_current_user_person') this.isCurrentUserPerson = false, @JsonKey(name: 'include_in_wardrobe') this.includeInWardrobe = true, @JsonKey(unknownEnumValue: BatchItemStatus.pending) this.status = BatchItemStatus.pending, this.isSelected = true, this.error}): _colors = colors,_boundingBox = boundingBox;
   factory _BatchExtractedItem.fromJson(Map<String, dynamic> json) => _$BatchExtractedItemFromJson(json);
 
-@override final  String id;
-@override final  String sourceImageId;
+@override@JsonKey(name: 'temp_id') final  String id;
+@override@JsonKey(name: 'image_id') final  String sourceImageId;
 @override final  String name;
 @override final  Category category;
- final  List<String>? _colors;
-@override List<String>? get colors {
-  final value = _colors;
-  if (value == null) return null;
+@override@JsonKey(name: 'sub_category') final  String? subCategory;
+ final  List<String> _colors;
+@override@JsonKey() List<String> get colors {
   if (_colors is EqualUnmodifiableListView) return _colors;
   // ignore: implicit_dynamic_type
-  return EqualUnmodifiableListView(value);
+  return EqualUnmodifiableListView(_colors);
 }
 
 @override final  String? material;
 @override final  String? pattern;
+@override final  String? brand;
 @override final  String? description;
  final  Map<String, dynamic>? _boundingBox;
 @override@JsonKey(name: 'bounding_box') Map<String, dynamic>? get boundingBox {
@@ -832,9 +839,14 @@ class _BatchExtractedItem implements BatchExtractedItem {
 }
 
 @override@JsonKey(name: 'cropped_image_base64') final  String? croppedImageBase64;
+@override@JsonKey(name: 'generated_image_base64') final  String? generatedImageBase64;
 @override@JsonKey(name: 'generated_image_url') final  String? generatedImageUrl;
 @override final  double? confidence;
-@override@JsonKey() final  BatchItemStatus status;
+@override@JsonKey(name: 'person_id') final  String? personId;
+@override@JsonKey(name: 'person_label') final  String? personLabel;
+@override@JsonKey(name: 'is_current_user_person') final  bool isCurrentUserPerson;
+@override@JsonKey(name: 'include_in_wardrobe') final  bool includeInWardrobe;
+@override@JsonKey(unknownEnumValue: BatchItemStatus.pending) final  BatchItemStatus status;
 @override@JsonKey() final  bool isSelected;
 @override final  String? error;
 
@@ -851,16 +863,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _BatchExtractedItem&&(identical(other.id, id) || other.id == id)&&(identical(other.sourceImageId, sourceImageId) || other.sourceImageId == sourceImageId)&&(identical(other.name, name) || other.name == name)&&(identical(other.category, category) || other.category == category)&&const DeepCollectionEquality().equals(other._colors, _colors)&&(identical(other.material, material) || other.material == material)&&(identical(other.pattern, pattern) || other.pattern == pattern)&&(identical(other.description, description) || other.description == description)&&const DeepCollectionEquality().equals(other._boundingBox, _boundingBox)&&(identical(other.croppedImageBase64, croppedImageBase64) || other.croppedImageBase64 == croppedImageBase64)&&(identical(other.generatedImageUrl, generatedImageUrl) || other.generatedImageUrl == generatedImageUrl)&&(identical(other.confidence, confidence) || other.confidence == confidence)&&(identical(other.status, status) || other.status == status)&&(identical(other.isSelected, isSelected) || other.isSelected == isSelected)&&(identical(other.error, error) || other.error == error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _BatchExtractedItem&&(identical(other.id, id) || other.id == id)&&(identical(other.sourceImageId, sourceImageId) || other.sourceImageId == sourceImageId)&&(identical(other.name, name) || other.name == name)&&(identical(other.category, category) || other.category == category)&&(identical(other.subCategory, subCategory) || other.subCategory == subCategory)&&const DeepCollectionEquality().equals(other._colors, _colors)&&(identical(other.material, material) || other.material == material)&&(identical(other.pattern, pattern) || other.pattern == pattern)&&(identical(other.brand, brand) || other.brand == brand)&&(identical(other.description, description) || other.description == description)&&const DeepCollectionEquality().equals(other._boundingBox, _boundingBox)&&(identical(other.croppedImageBase64, croppedImageBase64) || other.croppedImageBase64 == croppedImageBase64)&&(identical(other.generatedImageBase64, generatedImageBase64) || other.generatedImageBase64 == generatedImageBase64)&&(identical(other.generatedImageUrl, generatedImageUrl) || other.generatedImageUrl == generatedImageUrl)&&(identical(other.confidence, confidence) || other.confidence == confidence)&&(identical(other.personId, personId) || other.personId == personId)&&(identical(other.personLabel, personLabel) || other.personLabel == personLabel)&&(identical(other.isCurrentUserPerson, isCurrentUserPerson) || other.isCurrentUserPerson == isCurrentUserPerson)&&(identical(other.includeInWardrobe, includeInWardrobe) || other.includeInWardrobe == includeInWardrobe)&&(identical(other.status, status) || other.status == status)&&(identical(other.isSelected, isSelected) || other.isSelected == isSelected)&&(identical(other.error, error) || other.error == error));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,sourceImageId,name,category,const DeepCollectionEquality().hash(_colors),material,pattern,description,const DeepCollectionEquality().hash(_boundingBox),croppedImageBase64,generatedImageUrl,confidence,status,isSelected,error);
+int get hashCode => Object.hashAll([runtimeType,id,sourceImageId,name,category,subCategory,const DeepCollectionEquality().hash(_colors),material,pattern,brand,description,const DeepCollectionEquality().hash(_boundingBox),croppedImageBase64,generatedImageBase64,generatedImageUrl,confidence,personId,personLabel,isCurrentUserPerson,includeInWardrobe,status,isSelected,error]);
 
 @override
 String toString() {
-  return 'BatchExtractedItem(id: $id, sourceImageId: $sourceImageId, name: $name, category: $category, colors: $colors, material: $material, pattern: $pattern, description: $description, boundingBox: $boundingBox, croppedImageBase64: $croppedImageBase64, generatedImageUrl: $generatedImageUrl, confidence: $confidence, status: $status, isSelected: $isSelected, error: $error)';
+  return 'BatchExtractedItem(id: $id, sourceImageId: $sourceImageId, name: $name, category: $category, subCategory: $subCategory, colors: $colors, material: $material, pattern: $pattern, brand: $brand, description: $description, boundingBox: $boundingBox, croppedImageBase64: $croppedImageBase64, generatedImageBase64: $generatedImageBase64, generatedImageUrl: $generatedImageUrl, confidence: $confidence, personId: $personId, personLabel: $personLabel, isCurrentUserPerson: $isCurrentUserPerson, includeInWardrobe: $includeInWardrobe, status: $status, isSelected: $isSelected, error: $error)';
 }
 
 
@@ -871,7 +883,7 @@ abstract mixin class _$BatchExtractedItemCopyWith<$Res> implements $BatchExtract
   factory _$BatchExtractedItemCopyWith(_BatchExtractedItem value, $Res Function(_BatchExtractedItem) _then) = __$BatchExtractedItemCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String sourceImageId, String name, Category category, List<String>? colors, String? material, String? pattern, String? description,@JsonKey(name: 'bounding_box') Map<String, dynamic>? boundingBox,@JsonKey(name: 'cropped_image_base64') String? croppedImageBase64,@JsonKey(name: 'generated_image_url') String? generatedImageUrl, double? confidence, BatchItemStatus status, bool isSelected, String? error
+@JsonKey(name: 'temp_id') String id,@JsonKey(name: 'image_id') String sourceImageId, String name, Category category,@JsonKey(name: 'sub_category') String? subCategory, List<String> colors, String? material, String? pattern, String? brand, String? description,@JsonKey(name: 'bounding_box') Map<String, dynamic>? boundingBox,@JsonKey(name: 'cropped_image_base64') String? croppedImageBase64,@JsonKey(name: 'generated_image_base64') String? generatedImageBase64,@JsonKey(name: 'generated_image_url') String? generatedImageUrl, double? confidence,@JsonKey(name: 'person_id') String? personId,@JsonKey(name: 'person_label') String? personLabel,@JsonKey(name: 'is_current_user_person') bool isCurrentUserPerson,@JsonKey(name: 'include_in_wardrobe') bool includeInWardrobe,@JsonKey(unknownEnumValue: BatchItemStatus.pending) BatchItemStatus status, bool isSelected, String? error
 });
 
 
@@ -888,21 +900,28 @@ class __$BatchExtractedItemCopyWithImpl<$Res>
 
 /// Create a copy of BatchExtractedItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? sourceImageId = null,Object? name = null,Object? category = null,Object? colors = freezed,Object? material = freezed,Object? pattern = freezed,Object? description = freezed,Object? boundingBox = freezed,Object? croppedImageBase64 = freezed,Object? generatedImageUrl = freezed,Object? confidence = freezed,Object? status = null,Object? isSelected = null,Object? error = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? sourceImageId = null,Object? name = null,Object? category = null,Object? subCategory = freezed,Object? colors = null,Object? material = freezed,Object? pattern = freezed,Object? brand = freezed,Object? description = freezed,Object? boundingBox = freezed,Object? croppedImageBase64 = freezed,Object? generatedImageBase64 = freezed,Object? generatedImageUrl = freezed,Object? confidence = freezed,Object? personId = freezed,Object? personLabel = freezed,Object? isCurrentUserPerson = null,Object? includeInWardrobe = null,Object? status = null,Object? isSelected = null,Object? error = freezed,}) {
   return _then(_BatchExtractedItem(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,sourceImageId: null == sourceImageId ? _self.sourceImageId : sourceImageId // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,category: null == category ? _self.category : category // ignore: cast_nullable_to_non_nullable
-as Category,colors: freezed == colors ? _self._colors : colors // ignore: cast_nullable_to_non_nullable
-as List<String>?,material: freezed == material ? _self.material : material // ignore: cast_nullable_to_non_nullable
+as Category,subCategory: freezed == subCategory ? _self.subCategory : subCategory // ignore: cast_nullable_to_non_nullable
+as String?,colors: null == colors ? _self._colors : colors // ignore: cast_nullable_to_non_nullable
+as List<String>,material: freezed == material ? _self.material : material // ignore: cast_nullable_to_non_nullable
 as String?,pattern: freezed == pattern ? _self.pattern : pattern // ignore: cast_nullable_to_non_nullable
+as String?,brand: freezed == brand ? _self.brand : brand // ignore: cast_nullable_to_non_nullable
 as String?,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
 as String?,boundingBox: freezed == boundingBox ? _self._boundingBox : boundingBox // ignore: cast_nullable_to_non_nullable
 as Map<String, dynamic>?,croppedImageBase64: freezed == croppedImageBase64 ? _self.croppedImageBase64 : croppedImageBase64 // ignore: cast_nullable_to_non_nullable
+as String?,generatedImageBase64: freezed == generatedImageBase64 ? _self.generatedImageBase64 : generatedImageBase64 // ignore: cast_nullable_to_non_nullable
 as String?,generatedImageUrl: freezed == generatedImageUrl ? _self.generatedImageUrl : generatedImageUrl // ignore: cast_nullable_to_non_nullable
 as String?,confidence: freezed == confidence ? _self.confidence : confidence // ignore: cast_nullable_to_non_nullable
-as double?,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as double?,personId: freezed == personId ? _self.personId : personId // ignore: cast_nullable_to_non_nullable
+as String?,personLabel: freezed == personLabel ? _self.personLabel : personLabel // ignore: cast_nullable_to_non_nullable
+as String?,isCurrentUserPerson: null == isCurrentUserPerson ? _self.isCurrentUserPerson : isCurrentUserPerson // ignore: cast_nullable_to_non_nullable
+as bool,includeInWardrobe: null == includeInWardrobe ? _self.includeInWardrobe : includeInWardrobe // ignore: cast_nullable_to_non_nullable
+as bool,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as BatchItemStatus,isSelected: null == isSelected ? _self.isSelected : isSelected // ignore: cast_nullable_to_non_nullable
 as bool,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
 as String?,
@@ -1465,7 +1484,7 @@ as int,
 /// @nodoc
 mixin _$BatchImageInput {
 
- String get id;@JsonKey(name: 'image_base64') String get imageBase64;
+@JsonKey(name: 'image_id') String get imageId;@JsonKey(name: 'image_base64') String get imageBase64;
 /// Create a copy of BatchImageInput
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1478,16 +1497,16 @@ $BatchImageInputCopyWith<BatchImageInput> get copyWith => _$BatchImageInputCopyW
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is BatchImageInput&&(identical(other.id, id) || other.id == id)&&(identical(other.imageBase64, imageBase64) || other.imageBase64 == imageBase64));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is BatchImageInput&&(identical(other.imageId, imageId) || other.imageId == imageId)&&(identical(other.imageBase64, imageBase64) || other.imageBase64 == imageBase64));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,imageBase64);
+int get hashCode => Object.hash(runtimeType,imageId,imageBase64);
 
 @override
 String toString() {
-  return 'BatchImageInput(id: $id, imageBase64: $imageBase64)';
+  return 'BatchImageInput(imageId: $imageId, imageBase64: $imageBase64)';
 }
 
 
@@ -1498,7 +1517,7 @@ abstract mixin class $BatchImageInputCopyWith<$Res>  {
   factory $BatchImageInputCopyWith(BatchImageInput value, $Res Function(BatchImageInput) _then) = _$BatchImageInputCopyWithImpl;
 @useResult
 $Res call({
- String id,@JsonKey(name: 'image_base64') String imageBase64
+@JsonKey(name: 'image_id') String imageId,@JsonKey(name: 'image_base64') String imageBase64
 });
 
 
@@ -1515,9 +1534,9 @@ class _$BatchImageInputCopyWithImpl<$Res>
 
 /// Create a copy of BatchImageInput
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? imageBase64 = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? imageId = null,Object? imageBase64 = null,}) {
   return _then(_self.copyWith(
-id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+imageId: null == imageId ? _self.imageId : imageId // ignore: cast_nullable_to_non_nullable
 as String,imageBase64: null == imageBase64 ? _self.imageBase64 : imageBase64 // ignore: cast_nullable_to_non_nullable
 as String,
   ));
@@ -1604,10 +1623,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'image_base64')  String imageBase64)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'image_id')  String imageId, @JsonKey(name: 'image_base64')  String imageBase64)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _BatchImageInput() when $default != null:
-return $default(_that.id,_that.imageBase64);case _:
+return $default(_that.imageId,_that.imageBase64);case _:
   return orElse();
 
 }
@@ -1625,10 +1644,10 @@ return $default(_that.id,_that.imageBase64);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'image_base64')  String imageBase64)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'image_id')  String imageId, @JsonKey(name: 'image_base64')  String imageBase64)  $default,) {final _that = this;
 switch (_that) {
 case _BatchImageInput():
-return $default(_that.id,_that.imageBase64);case _:
+return $default(_that.imageId,_that.imageBase64);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1645,10 +1664,10 @@ return $default(_that.id,_that.imageBase64);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id, @JsonKey(name: 'image_base64')  String imageBase64)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'image_id')  String imageId, @JsonKey(name: 'image_base64')  String imageBase64)?  $default,) {final _that = this;
 switch (_that) {
 case _BatchImageInput() when $default != null:
-return $default(_that.id,_that.imageBase64);case _:
+return $default(_that.imageId,_that.imageBase64);case _:
   return null;
 
 }
@@ -1660,10 +1679,10 @@ return $default(_that.id,_that.imageBase64);case _:
 @JsonSerializable()
 
 class _BatchImageInput implements BatchImageInput {
-  const _BatchImageInput({required this.id, @JsonKey(name: 'image_base64') required this.imageBase64});
+  const _BatchImageInput({@JsonKey(name: 'image_id') required this.imageId, @JsonKey(name: 'image_base64') required this.imageBase64});
   factory _BatchImageInput.fromJson(Map<String, dynamic> json) => _$BatchImageInputFromJson(json);
 
-@override final  String id;
+@override@JsonKey(name: 'image_id') final  String imageId;
 @override@JsonKey(name: 'image_base64') final  String imageBase64;
 
 /// Create a copy of BatchImageInput
@@ -1679,16 +1698,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _BatchImageInput&&(identical(other.id, id) || other.id == id)&&(identical(other.imageBase64, imageBase64) || other.imageBase64 == imageBase64));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _BatchImageInput&&(identical(other.imageId, imageId) || other.imageId == imageId)&&(identical(other.imageBase64, imageBase64) || other.imageBase64 == imageBase64));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,imageBase64);
+int get hashCode => Object.hash(runtimeType,imageId,imageBase64);
 
 @override
 String toString() {
-  return 'BatchImageInput(id: $id, imageBase64: $imageBase64)';
+  return 'BatchImageInput(imageId: $imageId, imageBase64: $imageBase64)';
 }
 
 
@@ -1699,7 +1718,7 @@ abstract mixin class _$BatchImageInputCopyWith<$Res> implements $BatchImageInput
   factory _$BatchImageInputCopyWith(_BatchImageInput value, $Res Function(_BatchImageInput) _then) = __$BatchImageInputCopyWithImpl;
 @override @useResult
 $Res call({
- String id,@JsonKey(name: 'image_base64') String imageBase64
+@JsonKey(name: 'image_id') String imageId,@JsonKey(name: 'image_base64') String imageBase64
 });
 
 
@@ -1716,9 +1735,9 @@ class __$BatchImageInputCopyWithImpl<$Res>
 
 /// Create a copy of BatchImageInput
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? imageBase64 = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? imageId = null,Object? imageBase64 = null,}) {
   return _then(_BatchImageInput(
-id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+imageId: null == imageId ? _self.imageId : imageId // ignore: cast_nullable_to_non_nullable
 as String,imageBase64: null == imageBase64 ? _self.imageBase64 : imageBase64 // ignore: cast_nullable_to_non_nullable
 as String,
   ));
@@ -2003,7 +2022,7 @@ as String?,
 /// @nodoc
 mixin _$BatchJobStatusResponse {
 
-@JsonKey(name: 'job_id') String get jobId; String get status;@JsonKey(name: 'total_images') int get totalImages;@JsonKey(name: 'extracted_count') int get extractedCount;@JsonKey(name: 'generated_count') int get generatedCount;@JsonKey(name: 'failed_count') int get failedCount;@JsonKey(name: 'current_batch') int get currentBatch;@JsonKey(name: 'total_batches') int get totalBatches; List<BatchImageResult>? get images;@JsonKey(name: 'detected_items') List<BatchExtractedItem>? get detectedItems; String? get error;
+@JsonKey(name: 'job_id') String get jobId; String get status;@JsonKey(name: 'total_images') int get totalImages;@JsonKey(name: 'extractions_completed') int get extractedCount;@JsonKey(name: 'generations_completed') int get generatedCount;@JsonKey(name: 'extractions_failed') int get failedCount;@JsonKey(name: 'generations_failed') int get generationFailedCount;@JsonKey(name: 'current_batch') int get currentBatch;@JsonKey(name: 'total_batches') int get totalBatches; List<BatchImageResult>? get images;@JsonKey(name: 'items') List<BatchExtractedItem>? get detectedItems; String? get error;
 /// Create a copy of BatchJobStatusResponse
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -2016,16 +2035,16 @@ $BatchJobStatusResponseCopyWith<BatchJobStatusResponse> get copyWith => _$BatchJ
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is BatchJobStatusResponse&&(identical(other.jobId, jobId) || other.jobId == jobId)&&(identical(other.status, status) || other.status == status)&&(identical(other.totalImages, totalImages) || other.totalImages == totalImages)&&(identical(other.extractedCount, extractedCount) || other.extractedCount == extractedCount)&&(identical(other.generatedCount, generatedCount) || other.generatedCount == generatedCount)&&(identical(other.failedCount, failedCount) || other.failedCount == failedCount)&&(identical(other.currentBatch, currentBatch) || other.currentBatch == currentBatch)&&(identical(other.totalBatches, totalBatches) || other.totalBatches == totalBatches)&&const DeepCollectionEquality().equals(other.images, images)&&const DeepCollectionEquality().equals(other.detectedItems, detectedItems)&&(identical(other.error, error) || other.error == error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is BatchJobStatusResponse&&(identical(other.jobId, jobId) || other.jobId == jobId)&&(identical(other.status, status) || other.status == status)&&(identical(other.totalImages, totalImages) || other.totalImages == totalImages)&&(identical(other.extractedCount, extractedCount) || other.extractedCount == extractedCount)&&(identical(other.generatedCount, generatedCount) || other.generatedCount == generatedCount)&&(identical(other.failedCount, failedCount) || other.failedCount == failedCount)&&(identical(other.generationFailedCount, generationFailedCount) || other.generationFailedCount == generationFailedCount)&&(identical(other.currentBatch, currentBatch) || other.currentBatch == currentBatch)&&(identical(other.totalBatches, totalBatches) || other.totalBatches == totalBatches)&&const DeepCollectionEquality().equals(other.images, images)&&const DeepCollectionEquality().equals(other.detectedItems, detectedItems)&&(identical(other.error, error) || other.error == error));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,jobId,status,totalImages,extractedCount,generatedCount,failedCount,currentBatch,totalBatches,const DeepCollectionEquality().hash(images),const DeepCollectionEquality().hash(detectedItems),error);
+int get hashCode => Object.hash(runtimeType,jobId,status,totalImages,extractedCount,generatedCount,failedCount,generationFailedCount,currentBatch,totalBatches,const DeepCollectionEquality().hash(images),const DeepCollectionEquality().hash(detectedItems),error);
 
 @override
 String toString() {
-  return 'BatchJobStatusResponse(jobId: $jobId, status: $status, totalImages: $totalImages, extractedCount: $extractedCount, generatedCount: $generatedCount, failedCount: $failedCount, currentBatch: $currentBatch, totalBatches: $totalBatches, images: $images, detectedItems: $detectedItems, error: $error)';
+  return 'BatchJobStatusResponse(jobId: $jobId, status: $status, totalImages: $totalImages, extractedCount: $extractedCount, generatedCount: $generatedCount, failedCount: $failedCount, generationFailedCount: $generationFailedCount, currentBatch: $currentBatch, totalBatches: $totalBatches, images: $images, detectedItems: $detectedItems, error: $error)';
 }
 
 
@@ -2036,7 +2055,7 @@ abstract mixin class $BatchJobStatusResponseCopyWith<$Res>  {
   factory $BatchJobStatusResponseCopyWith(BatchJobStatusResponse value, $Res Function(BatchJobStatusResponse) _then) = _$BatchJobStatusResponseCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: 'job_id') String jobId, String status,@JsonKey(name: 'total_images') int totalImages,@JsonKey(name: 'extracted_count') int extractedCount,@JsonKey(name: 'generated_count') int generatedCount,@JsonKey(name: 'failed_count') int failedCount,@JsonKey(name: 'current_batch') int currentBatch,@JsonKey(name: 'total_batches') int totalBatches, List<BatchImageResult>? images,@JsonKey(name: 'detected_items') List<BatchExtractedItem>? detectedItems, String? error
+@JsonKey(name: 'job_id') String jobId, String status,@JsonKey(name: 'total_images') int totalImages,@JsonKey(name: 'extractions_completed') int extractedCount,@JsonKey(name: 'generations_completed') int generatedCount,@JsonKey(name: 'extractions_failed') int failedCount,@JsonKey(name: 'generations_failed') int generationFailedCount,@JsonKey(name: 'current_batch') int currentBatch,@JsonKey(name: 'total_batches') int totalBatches, List<BatchImageResult>? images,@JsonKey(name: 'items') List<BatchExtractedItem>? detectedItems, String? error
 });
 
 
@@ -2053,7 +2072,7 @@ class _$BatchJobStatusResponseCopyWithImpl<$Res>
 
 /// Create a copy of BatchJobStatusResponse
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? jobId = null,Object? status = null,Object? totalImages = null,Object? extractedCount = null,Object? generatedCount = null,Object? failedCount = null,Object? currentBatch = null,Object? totalBatches = null,Object? images = freezed,Object? detectedItems = freezed,Object? error = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? jobId = null,Object? status = null,Object? totalImages = null,Object? extractedCount = null,Object? generatedCount = null,Object? failedCount = null,Object? generationFailedCount = null,Object? currentBatch = null,Object? totalBatches = null,Object? images = freezed,Object? detectedItems = freezed,Object? error = freezed,}) {
   return _then(_self.copyWith(
 jobId: null == jobId ? _self.jobId : jobId // ignore: cast_nullable_to_non_nullable
 as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
@@ -2061,6 +2080,7 @@ as String,totalImages: null == totalImages ? _self.totalImages : totalImages // 
 as int,extractedCount: null == extractedCount ? _self.extractedCount : extractedCount // ignore: cast_nullable_to_non_nullable
 as int,generatedCount: null == generatedCount ? _self.generatedCount : generatedCount // ignore: cast_nullable_to_non_nullable
 as int,failedCount: null == failedCount ? _self.failedCount : failedCount // ignore: cast_nullable_to_non_nullable
+as int,generationFailedCount: null == generationFailedCount ? _self.generationFailedCount : generationFailedCount // ignore: cast_nullable_to_non_nullable
 as int,currentBatch: null == currentBatch ? _self.currentBatch : currentBatch // ignore: cast_nullable_to_non_nullable
 as int,totalBatches: null == totalBatches ? _self.totalBatches : totalBatches // ignore: cast_nullable_to_non_nullable
 as int,images: freezed == images ? _self.images : images // ignore: cast_nullable_to_non_nullable
@@ -2151,10 +2171,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'total_images')  int totalImages, @JsonKey(name: 'extracted_count')  int extractedCount, @JsonKey(name: 'generated_count')  int generatedCount, @JsonKey(name: 'failed_count')  int failedCount, @JsonKey(name: 'current_batch')  int currentBatch, @JsonKey(name: 'total_batches')  int totalBatches,  List<BatchImageResult>? images, @JsonKey(name: 'detected_items')  List<BatchExtractedItem>? detectedItems,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'total_images')  int totalImages, @JsonKey(name: 'extractions_completed')  int extractedCount, @JsonKey(name: 'generations_completed')  int generatedCount, @JsonKey(name: 'extractions_failed')  int failedCount, @JsonKey(name: 'generations_failed')  int generationFailedCount, @JsonKey(name: 'current_batch')  int currentBatch, @JsonKey(name: 'total_batches')  int totalBatches,  List<BatchImageResult>? images, @JsonKey(name: 'items')  List<BatchExtractedItem>? detectedItems,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _BatchJobStatusResponse() when $default != null:
-return $default(_that.jobId,_that.status,_that.totalImages,_that.extractedCount,_that.generatedCount,_that.failedCount,_that.currentBatch,_that.totalBatches,_that.images,_that.detectedItems,_that.error);case _:
+return $default(_that.jobId,_that.status,_that.totalImages,_that.extractedCount,_that.generatedCount,_that.failedCount,_that.generationFailedCount,_that.currentBatch,_that.totalBatches,_that.images,_that.detectedItems,_that.error);case _:
   return orElse();
 
 }
@@ -2172,10 +2192,10 @@ return $default(_that.jobId,_that.status,_that.totalImages,_that.extractedCount,
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'total_images')  int totalImages, @JsonKey(name: 'extracted_count')  int extractedCount, @JsonKey(name: 'generated_count')  int generatedCount, @JsonKey(name: 'failed_count')  int failedCount, @JsonKey(name: 'current_batch')  int currentBatch, @JsonKey(name: 'total_batches')  int totalBatches,  List<BatchImageResult>? images, @JsonKey(name: 'detected_items')  List<BatchExtractedItem>? detectedItems,  String? error)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'total_images')  int totalImages, @JsonKey(name: 'extractions_completed')  int extractedCount, @JsonKey(name: 'generations_completed')  int generatedCount, @JsonKey(name: 'extractions_failed')  int failedCount, @JsonKey(name: 'generations_failed')  int generationFailedCount, @JsonKey(name: 'current_batch')  int currentBatch, @JsonKey(name: 'total_batches')  int totalBatches,  List<BatchImageResult>? images, @JsonKey(name: 'items')  List<BatchExtractedItem>? detectedItems,  String? error)  $default,) {final _that = this;
 switch (_that) {
 case _BatchJobStatusResponse():
-return $default(_that.jobId,_that.status,_that.totalImages,_that.extractedCount,_that.generatedCount,_that.failedCount,_that.currentBatch,_that.totalBatches,_that.images,_that.detectedItems,_that.error);case _:
+return $default(_that.jobId,_that.status,_that.totalImages,_that.extractedCount,_that.generatedCount,_that.failedCount,_that.generationFailedCount,_that.currentBatch,_that.totalBatches,_that.images,_that.detectedItems,_that.error);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -2192,10 +2212,10 @@ return $default(_that.jobId,_that.status,_that.totalImages,_that.extractedCount,
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'total_images')  int totalImages, @JsonKey(name: 'extracted_count')  int extractedCount, @JsonKey(name: 'generated_count')  int generatedCount, @JsonKey(name: 'failed_count')  int failedCount, @JsonKey(name: 'current_batch')  int currentBatch, @JsonKey(name: 'total_batches')  int totalBatches,  List<BatchImageResult>? images, @JsonKey(name: 'detected_items')  List<BatchExtractedItem>? detectedItems,  String? error)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'total_images')  int totalImages, @JsonKey(name: 'extractions_completed')  int extractedCount, @JsonKey(name: 'generations_completed')  int generatedCount, @JsonKey(name: 'extractions_failed')  int failedCount, @JsonKey(name: 'generations_failed')  int generationFailedCount, @JsonKey(name: 'current_batch')  int currentBatch, @JsonKey(name: 'total_batches')  int totalBatches,  List<BatchImageResult>? images, @JsonKey(name: 'items')  List<BatchExtractedItem>? detectedItems,  String? error)?  $default,) {final _that = this;
 switch (_that) {
 case _BatchJobStatusResponse() when $default != null:
-return $default(_that.jobId,_that.status,_that.totalImages,_that.extractedCount,_that.generatedCount,_that.failedCount,_that.currentBatch,_that.totalBatches,_that.images,_that.detectedItems,_that.error);case _:
+return $default(_that.jobId,_that.status,_that.totalImages,_that.extractedCount,_that.generatedCount,_that.failedCount,_that.generationFailedCount,_that.currentBatch,_that.totalBatches,_that.images,_that.detectedItems,_that.error);case _:
   return null;
 
 }
@@ -2207,15 +2227,16 @@ return $default(_that.jobId,_that.status,_that.totalImages,_that.extractedCount,
 @JsonSerializable()
 
 class _BatchJobStatusResponse implements BatchJobStatusResponse {
-  const _BatchJobStatusResponse({@JsonKey(name: 'job_id') required this.jobId, required this.status, @JsonKey(name: 'total_images') required this.totalImages, @JsonKey(name: 'extracted_count') this.extractedCount = 0, @JsonKey(name: 'generated_count') this.generatedCount = 0, @JsonKey(name: 'failed_count') this.failedCount = 0, @JsonKey(name: 'current_batch') this.currentBatch = 0, @JsonKey(name: 'total_batches') this.totalBatches = 0, final  List<BatchImageResult>? images, @JsonKey(name: 'detected_items') final  List<BatchExtractedItem>? detectedItems, this.error}): _images = images,_detectedItems = detectedItems;
+  const _BatchJobStatusResponse({@JsonKey(name: 'job_id') required this.jobId, required this.status, @JsonKey(name: 'total_images') required this.totalImages, @JsonKey(name: 'extractions_completed') this.extractedCount = 0, @JsonKey(name: 'generations_completed') this.generatedCount = 0, @JsonKey(name: 'extractions_failed') this.failedCount = 0, @JsonKey(name: 'generations_failed') this.generationFailedCount = 0, @JsonKey(name: 'current_batch') this.currentBatch = 0, @JsonKey(name: 'total_batches') this.totalBatches = 0, final  List<BatchImageResult>? images, @JsonKey(name: 'items') final  List<BatchExtractedItem>? detectedItems, this.error}): _images = images,_detectedItems = detectedItems;
   factory _BatchJobStatusResponse.fromJson(Map<String, dynamic> json) => _$BatchJobStatusResponseFromJson(json);
 
 @override@JsonKey(name: 'job_id') final  String jobId;
 @override final  String status;
 @override@JsonKey(name: 'total_images') final  int totalImages;
-@override@JsonKey(name: 'extracted_count') final  int extractedCount;
-@override@JsonKey(name: 'generated_count') final  int generatedCount;
-@override@JsonKey(name: 'failed_count') final  int failedCount;
+@override@JsonKey(name: 'extractions_completed') final  int extractedCount;
+@override@JsonKey(name: 'generations_completed') final  int generatedCount;
+@override@JsonKey(name: 'extractions_failed') final  int failedCount;
+@override@JsonKey(name: 'generations_failed') final  int generationFailedCount;
 @override@JsonKey(name: 'current_batch') final  int currentBatch;
 @override@JsonKey(name: 'total_batches') final  int totalBatches;
  final  List<BatchImageResult>? _images;
@@ -2228,7 +2249,7 @@ class _BatchJobStatusResponse implements BatchJobStatusResponse {
 }
 
  final  List<BatchExtractedItem>? _detectedItems;
-@override@JsonKey(name: 'detected_items') List<BatchExtractedItem>? get detectedItems {
+@override@JsonKey(name: 'items') List<BatchExtractedItem>? get detectedItems {
   final value = _detectedItems;
   if (value == null) return null;
   if (_detectedItems is EqualUnmodifiableListView) return _detectedItems;
@@ -2251,16 +2272,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _BatchJobStatusResponse&&(identical(other.jobId, jobId) || other.jobId == jobId)&&(identical(other.status, status) || other.status == status)&&(identical(other.totalImages, totalImages) || other.totalImages == totalImages)&&(identical(other.extractedCount, extractedCount) || other.extractedCount == extractedCount)&&(identical(other.generatedCount, generatedCount) || other.generatedCount == generatedCount)&&(identical(other.failedCount, failedCount) || other.failedCount == failedCount)&&(identical(other.currentBatch, currentBatch) || other.currentBatch == currentBatch)&&(identical(other.totalBatches, totalBatches) || other.totalBatches == totalBatches)&&const DeepCollectionEquality().equals(other._images, _images)&&const DeepCollectionEquality().equals(other._detectedItems, _detectedItems)&&(identical(other.error, error) || other.error == error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _BatchJobStatusResponse&&(identical(other.jobId, jobId) || other.jobId == jobId)&&(identical(other.status, status) || other.status == status)&&(identical(other.totalImages, totalImages) || other.totalImages == totalImages)&&(identical(other.extractedCount, extractedCount) || other.extractedCount == extractedCount)&&(identical(other.generatedCount, generatedCount) || other.generatedCount == generatedCount)&&(identical(other.failedCount, failedCount) || other.failedCount == failedCount)&&(identical(other.generationFailedCount, generationFailedCount) || other.generationFailedCount == generationFailedCount)&&(identical(other.currentBatch, currentBatch) || other.currentBatch == currentBatch)&&(identical(other.totalBatches, totalBatches) || other.totalBatches == totalBatches)&&const DeepCollectionEquality().equals(other._images, _images)&&const DeepCollectionEquality().equals(other._detectedItems, _detectedItems)&&(identical(other.error, error) || other.error == error));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,jobId,status,totalImages,extractedCount,generatedCount,failedCount,currentBatch,totalBatches,const DeepCollectionEquality().hash(_images),const DeepCollectionEquality().hash(_detectedItems),error);
+int get hashCode => Object.hash(runtimeType,jobId,status,totalImages,extractedCount,generatedCount,failedCount,generationFailedCount,currentBatch,totalBatches,const DeepCollectionEquality().hash(_images),const DeepCollectionEquality().hash(_detectedItems),error);
 
 @override
 String toString() {
-  return 'BatchJobStatusResponse(jobId: $jobId, status: $status, totalImages: $totalImages, extractedCount: $extractedCount, generatedCount: $generatedCount, failedCount: $failedCount, currentBatch: $currentBatch, totalBatches: $totalBatches, images: $images, detectedItems: $detectedItems, error: $error)';
+  return 'BatchJobStatusResponse(jobId: $jobId, status: $status, totalImages: $totalImages, extractedCount: $extractedCount, generatedCount: $generatedCount, failedCount: $failedCount, generationFailedCount: $generationFailedCount, currentBatch: $currentBatch, totalBatches: $totalBatches, images: $images, detectedItems: $detectedItems, error: $error)';
 }
 
 
@@ -2271,7 +2292,7 @@ abstract mixin class _$BatchJobStatusResponseCopyWith<$Res> implements $BatchJob
   factory _$BatchJobStatusResponseCopyWith(_BatchJobStatusResponse value, $Res Function(_BatchJobStatusResponse) _then) = __$BatchJobStatusResponseCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: 'job_id') String jobId, String status,@JsonKey(name: 'total_images') int totalImages,@JsonKey(name: 'extracted_count') int extractedCount,@JsonKey(name: 'generated_count') int generatedCount,@JsonKey(name: 'failed_count') int failedCount,@JsonKey(name: 'current_batch') int currentBatch,@JsonKey(name: 'total_batches') int totalBatches, List<BatchImageResult>? images,@JsonKey(name: 'detected_items') List<BatchExtractedItem>? detectedItems, String? error
+@JsonKey(name: 'job_id') String jobId, String status,@JsonKey(name: 'total_images') int totalImages,@JsonKey(name: 'extractions_completed') int extractedCount,@JsonKey(name: 'generations_completed') int generatedCount,@JsonKey(name: 'extractions_failed') int failedCount,@JsonKey(name: 'generations_failed') int generationFailedCount,@JsonKey(name: 'current_batch') int currentBatch,@JsonKey(name: 'total_batches') int totalBatches, List<BatchImageResult>? images,@JsonKey(name: 'items') List<BatchExtractedItem>? detectedItems, String? error
 });
 
 
@@ -2288,7 +2309,7 @@ class __$BatchJobStatusResponseCopyWithImpl<$Res>
 
 /// Create a copy of BatchJobStatusResponse
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? jobId = null,Object? status = null,Object? totalImages = null,Object? extractedCount = null,Object? generatedCount = null,Object? failedCount = null,Object? currentBatch = null,Object? totalBatches = null,Object? images = freezed,Object? detectedItems = freezed,Object? error = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? jobId = null,Object? status = null,Object? totalImages = null,Object? extractedCount = null,Object? generatedCount = null,Object? failedCount = null,Object? generationFailedCount = null,Object? currentBatch = null,Object? totalBatches = null,Object? images = freezed,Object? detectedItems = freezed,Object? error = freezed,}) {
   return _then(_BatchJobStatusResponse(
 jobId: null == jobId ? _self.jobId : jobId // ignore: cast_nullable_to_non_nullable
 as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
@@ -2296,6 +2317,7 @@ as String,totalImages: null == totalImages ? _self.totalImages : totalImages // 
 as int,extractedCount: null == extractedCount ? _self.extractedCount : extractedCount // ignore: cast_nullable_to_non_nullable
 as int,generatedCount: null == generatedCount ? _self.generatedCount : generatedCount // ignore: cast_nullable_to_non_nullable
 as int,failedCount: null == failedCount ? _self.failedCount : failedCount // ignore: cast_nullable_to_non_nullable
+as int,generationFailedCount: null == generationFailedCount ? _self.generationFailedCount : generationFailedCount // ignore: cast_nullable_to_non_nullable
 as int,currentBatch: null == currentBatch ? _self.currentBatch : currentBatch // ignore: cast_nullable_to_non_nullable
 as int,totalBatches: null == totalBatches ? _self.totalBatches : totalBatches // ignore: cast_nullable_to_non_nullable
 as int,images: freezed == images ? _self._images : images // ignore: cast_nullable_to_non_nullable
@@ -2312,7 +2334,7 @@ as String?,
 /// @nodoc
 mixin _$BatchImageResult {
 
- String get id; String get status;@JsonKey(name: 'item_count') int get itemCount; String? get error;
+@JsonKey(name: 'image_id') String get id; String get status;@JsonKey(name: 'item_count') int get itemCount; String? get error;
 /// Create a copy of BatchImageResult
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -2345,7 +2367,7 @@ abstract mixin class $BatchImageResultCopyWith<$Res>  {
   factory $BatchImageResultCopyWith(BatchImageResult value, $Res Function(BatchImageResult) _then) = _$BatchImageResultCopyWithImpl;
 @useResult
 $Res call({
- String id, String status,@JsonKey(name: 'item_count') int itemCount, String? error
+@JsonKey(name: 'image_id') String id, String status,@JsonKey(name: 'item_count') int itemCount, String? error
 });
 
 
@@ -2453,7 +2475,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String status, @JsonKey(name: 'item_count')  int itemCount,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'image_id')  String id,  String status, @JsonKey(name: 'item_count')  int itemCount,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _BatchImageResult() when $default != null:
 return $default(_that.id,_that.status,_that.itemCount,_that.error);case _:
@@ -2474,7 +2496,7 @@ return $default(_that.id,_that.status,_that.itemCount,_that.error);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String status, @JsonKey(name: 'item_count')  int itemCount,  String? error)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'image_id')  String id,  String status, @JsonKey(name: 'item_count')  int itemCount,  String? error)  $default,) {final _that = this;
 switch (_that) {
 case _BatchImageResult():
 return $default(_that.id,_that.status,_that.itemCount,_that.error);case _:
@@ -2494,7 +2516,7 @@ return $default(_that.id,_that.status,_that.itemCount,_that.error);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String status, @JsonKey(name: 'item_count')  int itemCount,  String? error)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'image_id')  String id,  String status, @JsonKey(name: 'item_count')  int itemCount,  String? error)?  $default,) {final _that = this;
 switch (_that) {
 case _BatchImageResult() when $default != null:
 return $default(_that.id,_that.status,_that.itemCount,_that.error);case _:
@@ -2509,10 +2531,10 @@ return $default(_that.id,_that.status,_that.itemCount,_that.error);case _:
 @JsonSerializable()
 
 class _BatchImageResult implements BatchImageResult {
-  const _BatchImageResult({required this.id, required this.status, @JsonKey(name: 'item_count') this.itemCount = 0, this.error});
+  const _BatchImageResult({@JsonKey(name: 'image_id') required this.id, required this.status, @JsonKey(name: 'item_count') this.itemCount = 0, this.error});
   factory _BatchImageResult.fromJson(Map<String, dynamic> json) => _$BatchImageResultFromJson(json);
 
-@override final  String id;
+@override@JsonKey(name: 'image_id') final  String id;
 @override final  String status;
 @override@JsonKey(name: 'item_count') final  int itemCount;
 @override final  String? error;
@@ -2550,7 +2572,7 @@ abstract mixin class _$BatchImageResultCopyWith<$Res> implements $BatchImageResu
   factory _$BatchImageResultCopyWith(_BatchImageResult value, $Res Function(_BatchImageResult) _then) = __$BatchImageResultCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String status,@JsonKey(name: 'item_count') int itemCount, String? error
+@JsonKey(name: 'image_id') String id, String status,@JsonKey(name: 'item_count') int itemCount, String? error
 });
 
 

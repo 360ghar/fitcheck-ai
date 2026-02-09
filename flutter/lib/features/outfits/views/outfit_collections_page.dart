@@ -50,28 +50,32 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
     return Scaffold(
       body: AppPageBackground(
         child: SafeArea(
-          child: CustomScrollView(
-            slivers: [
-              _buildAppBar(),
-              SliverPadding(
-                padding: const EdgeInsets.all(AppConstants.spacing16),
-                sliver: Obx(() {
-                  if (isLoading.value) {
-                    return _buildLoadingGrid();
-                  }
+          child: RefreshIndicator(
+            onRefresh: _loadCollections,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                _buildAppBar(),
+                SliverPadding(
+                  padding: const EdgeInsets.all(AppConstants.spacing16),
+                  sliver: Obx(() {
+                    if (isLoading.value) {
+                      return _buildLoadingGrid();
+                    }
 
-                  if (error.value.isNotEmpty) {
-                    return _buildErrorState();
-                  }
+                    if (error.value.isNotEmpty) {
+                      return _buildErrorState();
+                    }
 
-                  if (collections.isEmpty) {
-                    return _buildEmptyState();
-                  }
+                    if (collections.isEmpty) {
+                      return _buildEmptyState();
+                    }
 
-                  return _buildCollectionsGrid();
-                }),
-              ),
-            ],
+                    return _buildCollectionsGrid();
+                  }),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -103,27 +107,10 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
   }
 
   Widget _buildLoadingGrid() {
-    final tokens = AppUiTokens.of(context);
-
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: AppConstants.spacing12,
-        crossAxisSpacing: AppConstants.spacing12,
-        childAspectRatio: 1.0,
-      ),
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          return Container(
-            decoration: BoxDecoration(
-              color: tokens.cardColor.withOpacity(0.6),
-              borderRadius: BorderRadius.circular(AppConstants.radius16),
-              border: Border.all(color: tokens.cardBorderColor),
-            ),
-          );
-        },
-        childCount: 4,
-      ),
+    return ShimmerGridLoader(
+      crossAxisCount: 2,
+      itemCount: 4,
+      childAspectRatio: 1.0,
     );
   }
 

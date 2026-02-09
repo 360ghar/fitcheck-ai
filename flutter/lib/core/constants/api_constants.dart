@@ -17,11 +17,11 @@ class ApiConstants {
       return 'http://localhost:8000';
     }
 
-    // In release builds, fail explicitly if not configured
-    throw StateError(
-      'API_BASE_URL is not configured. '
-      'Please set API_BASE_URL in your .env file or via --dart-define.',
-    );
+    // In release builds, default to production
+    // Note: This fallback is intentional for release builds where
+    // API_BASE_URL is not explicitly configured
+    debugPrint('Warning: API_BASE_URL not configured, using production default');
+    return 'https://api.fitcheckaiapp.com';
   }
 
   /// Get base URL for development (defaults to localhost if not set)
@@ -78,7 +78,7 @@ class ApiConstants {
   static const String register = '/register';
   static const String logout = '/logout';
   static const String refresh = '/refresh';
-  static const String oauthSync = '/oauth-sync';
+  static const String oauthSync = '/oauth/sync';
   static const String resetPassword = '/reset-password';
   static const String resetPasswordConfirm = '/reset-password/confirm';
   static const String verifyEmail = '/verify-email';

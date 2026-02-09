@@ -6,6 +6,7 @@ For MVP we provide deterministic, fast recommendations using:
 - optional embeddings + Pinecone when configured
 """
 
+from datetime import date, datetime, time as dt_time
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
@@ -25,6 +26,7 @@ from app.core.security import get_current_user_id
 from app.db.connection import get_db
 from app.services.ai_service import AIService
 from app.services.ai_settings_service import AISettingsService
+from app.services.astrology_service import get_astrology_service
 from app.services.vector_service import get_vector_service
 from app.services.weather_service import get_weather_service
 
@@ -81,6 +83,42 @@ _COMPLEMENTARY: Dict[str, List[str]] = {
     "outerwear": ["tops", "bottoms", "shoes"],
     "accessories": ["tops", "bottoms", "shoes", "outerwear"],
 }
+
+_WEEKDAY_PLANET_LOOKUP = {
+    0: "Moon",
+    1: "Mars",
+    2: "Mercury",
+    3: "Jupiter",
+    4: "Venus",
+    5: "Saturn",
+    6: "Sun",
+}
+
+
+def _coerce_date(value: Any) -> Optional[date]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except ValueError:
+        return None
+
+
+def _coerce_time(value: Any) -> Optional[dt_time]:
+    if value is None:
+        return None
+    if isinstance(value, dt_time):
+        return value
+    for fmt in ("%H:%M:%S", "%H:%M"):
+        try:
+            return datetime.strptime(str(value), fmt).time()
+        except ValueError:
+            continue
+    return None
 
 
 def _score_match(source: Dict[str, Any], candidate: Dict[str, Any]) -> Tuple[float, List[str]]:
@@ -442,6 +480,143 @@ async def weather_recommendations(
         )
         raise WeatherServiceError(
             message="Failed to generate weather recommendations"
+        )
+
+
+# ============================================================================
+# ASTROLOGY RECOMMENDATIONS (Vedic-inspired deterministic rules)
+# ============================================================================
+
+
+@router.get("/astrology", response_model=Dict[str, Any])
+async def astrology_recommendations(
+    target_date: Optional[date] = Query(None),
+    mode: str = Query("daily"),
+    limit_per_category: int = Query(4, ge=1, le=8),
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """Return astrology-driven lucky colors with wardrobe-linked picks."""
+    try:
+        if mode not in {"daily", "important_meeting"}:
+            raise ValidationError(
+                message="Invalid mode",
+                details={"allowed": ["daily", "important_meeting"]},
+            )
+
+        user_row = (
+            db.table("users")
+            .select("id,birth_date,birth_time,birth_place")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        )
+        user_profile = user_row.data or {}
+
+        settings_timezone: Optional[str] = None
+        try:
+            settings_row = (
+                db.table("user_settings")
+                .select("timezone")
+                .eq("user_id", user_id)
+                .single()
+                .execute()
+            )
+            settings_timezone = (settings_row.data or {}).get("timezone")
+        except Exception:
+            settings_timezone = None
+
+        astrology_service = get_astrology_service()
+        birth_place = user_profile.get("birth_place")
+        effective_timezone = settings_timezone
+        if not effective_timezone and birth_place:
+            effective_timezone = await astrology_service.resolve_birth_timezone(str(birth_place))
+
+        effective_date = target_date or astrology_service.user_local_today(effective_timezone)
+
+        birth_date = _coerce_date(user_profile.get("birth_date"))
+        birth_time = _coerce_time(user_profile.get("birth_time"))
+        missing_fields: List[str] = []
+        if birth_date is None:
+            missing_fields.append("birth_date")
+
+        if missing_fields:
+            weekday = effective_date.strftime("%A")
+            return {
+                "data": {
+                    "status": "profile_required",
+                    "target_date": effective_date.isoformat(),
+                    "mode": mode,
+                    "astrology_mode": "vedic_lite",
+                    "missing_fields": missing_fields,
+                    "context": {
+                        "weekday": weekday,
+                        "ruling_planet": _WEEKDAY_PLANET_LOOKUP[effective_date.weekday()],
+                        "moon_sign": None,
+                        "ascendant": None,
+                    },
+                    "lucky_colors": [],
+                    "avoid_colors": [],
+                    "wardrobe_picks": [],
+                    "suggested_outfits": [],
+                    "notes": ["Add your date of birth in profile settings to unlock astrology recommendations."],
+                },
+                "message": "OK",
+            }
+
+        items_res = (
+            db.table("items")
+            .select("*, item_images(*)")
+            .eq("user_id", user_id)
+            .eq("is_deleted", False)
+            .not_.in_("condition", ["laundry", "repair", "donate"])
+            .limit(600)
+            .execute()
+        )
+        items = items_res.data or []
+
+        astrology_data = await astrology_service.generate_recommendation(
+            birth_date=birth_date,
+            birth_time=birth_time,
+            birth_place=str(birth_place).strip() if birth_place else None,
+            target_date=effective_date,
+            mode=mode,
+            items=items,
+            user_timezone=effective_timezone,
+            limit_per_category=limit_per_category,
+        )
+
+        logger.debug(
+            "Astrology recommendations generated",
+            user_id=user_id,
+            mode=mode,
+            target_date=effective_date.isoformat(),
+            astrology_mode=astrology_data.get("astrology_mode"),
+            lucky_colors=len(astrology_data.get("lucky_colors") or []),
+        )
+        return {
+            "data": {
+                "status": "ready",
+                "target_date": effective_date.isoformat(),
+                "mode": mode,
+                "missing_fields": [],
+                **astrology_data,
+            },
+            "message": "OK",
+        }
+    except ValidationError:
+        raise
+    except Exception as e:
+        logger.error(
+            "Astrology recommendations error",
+            user_id=user_id,
+            mode=mode,
+            target_date=str(target_date) if target_date else None,
+            error=str(e),
+        )
+        raise DatabaseError(
+            message="Failed to generate astrology recommendations",
+            operation="astrology_recommendations",
         )
 
 

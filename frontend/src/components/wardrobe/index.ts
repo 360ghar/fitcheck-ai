@@ -7,6 +7,10 @@
 // Main upload flow
 export { MultiItemExtractionFlow, type ItemUploadResult } from './MultiItemExtractionFlow'
 export { ItemUpload } from './ItemUpload'
+export { SocialImportUrlPane } from './SocialImportUrlPane'
+export { SocialImportAuthPrompt } from './SocialImportAuthPrompt'
+export { SocialImportQueueReview } from './SocialImportQueueReview'
+export { SocialImportProgress } from './SocialImportProgress'
 
 // Progress components
 export { DetectionProgress } from './DetectionProgress'

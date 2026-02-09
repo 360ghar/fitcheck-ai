@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../core/services/notification_service.dart';
@@ -68,7 +69,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
 
                 // Loading state
                 if (outfit == null && _controller.isFetchingSingle.value) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const ShimmerDetailPage();
                 }
 
                 // Error state
@@ -187,7 +188,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                                     onSelected: (value) {
                                       switch (value) {
                                         case 'edit':
-                                          Get.toNamed('/outfits/${outfit.id}/edit');
+                                          Get.toNamed(Routes.outfitEdit.replaceFirst(':id', outfit.id));
                                           break;
                                         case 'share':
                                           _shareOutfit(outfit);
@@ -438,7 +439,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                 final imageUrl = hasImage ? item.itemImages!.first.url : null;
 
                 return GestureDetector(
-                  onTap: () => Get.toNamed('/wardrobe/${item.id}'),
+                  onTap: () => Get.toNamed(Routes.wardrobeItemDetail.replaceFirst(':id', item.id)),
                   child: Container(
                     decoration: BoxDecoration(
                       color: tokens.cardColor.withOpacity(0.5),
@@ -604,12 +605,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
           }
 
           if (isLoading && history.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(AppConstants.spacing16),
-                child: CircularProgressIndicator(),
-              ),
-            );
+            return const ShimmerCard(height: 120);
           }
 
           if (history.isEmpty) {
@@ -925,6 +921,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
   }
 
   void _showDeleteDialog(OutfitModel outfit) {
+    final errorColor = Theme.of(Get.context ?? context).colorScheme.error;
     Get.dialog(
       Obx(() => AlertDialog(
         title: const Text('Delete Outfit?'),
@@ -945,7 +942,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(Get.context!).colorScheme.error,
+              backgroundColor: errorColor,
             ),
             child: _controller.isDeleting(outfit.id)
                 ? const SizedBox(

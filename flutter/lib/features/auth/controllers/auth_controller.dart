@@ -7,11 +7,13 @@ import '../../../core/services/supabase_service.dart';
 import '../../../core/services/analytics_service.dart';
 import '../../subscription/repositories/subscription_repository.dart';
 import '../models/user_model.dart';
+import '../repositories/auth_repository.dart';
 
 /// Authentication controller using Supabase
 class AuthController extends GetxController {
   final SupabaseService _supabase = SupabaseService.instance;
   final SubscriptionRepository _subscriptionRepo = SubscriptionRepository();
+  final AuthRepository _authRepository = AuthRepository();
 
   // Key for storing pending referral code
   static const String _pendingReferralKey = 'pending_referral_code';
@@ -35,7 +37,8 @@ class AuthController extends GetxController {
   final RxString unverifiedEmail = RxString('');
 
   // Getters
-  bool get isAuthenticated => _supabase.isAuthenticated.value && user.value != null;
+  bool get isAuthenticated =>
+      _supabase.isAuthenticated.value && user.value != null;
   bool get hasError => error.value.isNotEmpty;
 
   @override
@@ -99,6 +102,7 @@ class AuthController extends GetxController {
       if (resolvedUser == null) return;
 
       _setUserFromSupabase(resolvedUser);
+      await _mergeUserFromBackendProfile();
     } catch (e) {
       error.value = e.toString();
     }
@@ -110,6 +114,9 @@ class AuthController extends GetxController {
       email: supabaseUser.email ?? '',
       fullName: supabaseUser.userMetadata?['full_name'] as String?,
       avatarUrl: supabaseUser.userMetadata?['avatar_url'] as String?,
+      birthDate: supabaseUser.userMetadata?['birth_date'] as String?,
+      birthTime: supabaseUser.userMetadata?['birth_time'] as String?,
+      birthPlace: supabaseUser.userMetadata?['birth_place'] as String?,
       createdAt: DateTime.tryParse(supabaseUser.createdAt),
     );
     AnalyticsService.instance.identify(
@@ -119,6 +126,38 @@ class AuthController extends GetxController {
         'full_name': supabaseUser.userMetadata?['full_name'],
       },
     );
+  }
+
+  Future<void> _mergeUserFromBackendProfile() async {
+    try {
+      final backendUser = await _authRepository.getCurrentUserProfile();
+      final current = user.value;
+      if (current == null || backendUser.isEmpty) return;
+
+      String? toNullableString(dynamic value) {
+        if (value == null) return null;
+        final text = value.toString().trim();
+        return text.isEmpty ? null : text;
+      }
+
+      user.value = current.copyWith(
+        fullName:
+            toNullableString(backendUser['full_name']) ?? current.fullName,
+        avatarUrl:
+            toNullableString(backendUser['avatar_url']) ?? current.avatarUrl,
+        birthDate: toNullableString(backendUser['birth_date']),
+        birthTime: toNullableString(backendUser['birth_time']),
+        birthPlace: toNullableString(backendUser['birth_place']),
+        createdAt:
+            DateTime.tryParse(backendUser['created_at']?.toString() ?? '') ??
+            current.createdAt,
+        updatedAt:
+            DateTime.tryParse(backendUser['updated_at']?.toString() ?? '') ??
+            current.updatedAt,
+      );
+    } catch (e) {
+      debugPrint('Failed to merge backend profile: $e');
+    }
   }
 
   /// Login with email and password using Supabase
@@ -136,9 +175,10 @@ class AuthController extends GetxController {
       if (response.user != null) {
         _supabase.syncFromAuthResponse(response);
         await _loadUserData(supabaseUser: response.user);
-        AnalyticsService.instance.track('auth_login', properties: {
-          'method': 'email',
-        });
+        AnalyticsService.instance.track(
+          'auth_login',
+          properties: {'method': 'email'},
+        );
 
         Get.snackbar(
           'Welcome back!',
@@ -186,7 +226,12 @@ class AuthController extends GetxController {
   }
 
   /// Register new user using Supabase
-  Future<void> register(String email, String password, {String? fullName, String? referralCode}) async {
+  Future<void> register(
+    String email,
+    String password, {
+    String? fullName,
+    String? referralCode,
+  }) async {
     try {
       isLoading.value = true;
       error.value = '';
@@ -200,10 +245,13 @@ class AuthController extends GetxController {
       if (response.user != null) {
         _supabase.syncFromAuthResponse(response);
         await _loadUserData(supabaseUser: response.user);
-        AnalyticsService.instance.track('auth_register', properties: {
-          'method': 'email',
-          'has_referral': referralCode != null && referralCode.isNotEmpty,
-        });
+        AnalyticsService.instance.track(
+          'auth_register',
+          properties: {
+            'method': 'email',
+            'has_referral': referralCode != null && referralCode.isNotEmpty,
+          },
+        );
 
         // Redeem referral code if provided
         if (referralCode != null && referralCode.isNotEmpty) {
@@ -255,9 +303,10 @@ class AuthController extends GetxController {
       error.value = '';
 
       await _supabase.signInWithGoogle();
-      AnalyticsService.instance.track('auth_login', properties: {
-        'method': 'google',
-      });
+      AnalyticsService.instance.track(
+        'auth_login',
+        properties: {'method': 'google'},
+      );
       // OAuth flow will redirect - state will be updated via deep link
     } on AuthException catch (e) {
       error.value = e.message;
@@ -482,6 +531,14 @@ class AuthController extends GetxController {
 
   /// Handle OAuth callback and check for pending referral
   Future<void> handleOAuthCallback() async {
+    // Sync user profile with backend (creates user record, initializes preferences)
+    try {
+      await AuthRepository().syncOAuthProfile();
+    } catch (e) {
+      debugPrint('OAuth sync failed: $e');
+      // Non-fatal - continue with login
+    }
+
     // Check for pending referral code from before OAuth redirect
     final pendingCode = await _getAndClearPendingReferralCode();
     if (pendingCode != null && pendingCode.isNotEmpty) {

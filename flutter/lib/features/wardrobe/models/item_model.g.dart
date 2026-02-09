@@ -25,6 +25,9 @@ _ItemModel _$ItemModelFromJson(Map<String, dynamic> json) => _ItemModel(
   location: json['location'] as String?,
   isFavorite: json['is_favorite'] as bool? ?? false,
   tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList(),
+  occasionTags: (json['occasion_tags'] as List<dynamic>?)
+      ?.map((e) => e as String)
+      .toList(),
   itemImages: (json['item_images'] as List<dynamic>?)
       ?.map((e) => ItemImage.fromJson(e as Map<String, dynamic>))
       .toList(),
@@ -58,6 +61,7 @@ Map<String, dynamic> _$ItemModelToJson(_ItemModel instance) =>
       'location': instance.location,
       'is_favorite': instance.isFavorite,
       'tags': instance.tags,
+      'occasion_tags': instance.occasionTags,
       'item_images': instance.itemImages,
       'worn_count': instance.wornCount,
       'last_worn_at': instance.lastWornAt?.toIso8601String(),
@@ -124,6 +128,9 @@ _CreateItemRequest _$CreateItemRequestFromJson(Map<String, dynamic> json) =>
           : DateTime.parse(json['purchase_date'] as String),
       location: json['location'] as String?,
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList(),
+      occasionTags: (json['occasion_tags'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
     );
 
 Map<String, dynamic> _$CreateItemRequestToJson(_CreateItemRequest instance) =>
@@ -141,6 +148,7 @@ Map<String, dynamic> _$CreateItemRequestToJson(_CreateItemRequest instance) =>
       'purchase_date': instance.purchaseDate?.toIso8601String(),
       'location': instance.location,
       'tags': instance.tags,
+      'occasion_tags': instance.occasionTags,
     };
 
 _UpdateItemRequest _$UpdateItemRequestFromJson(Map<String, dynamic> json) =>
@@ -162,6 +170,9 @@ _UpdateItemRequest _$UpdateItemRequestFromJson(Map<String, dynamic> json) =>
           : DateTime.parse(json['purchaseDate'] as String),
       location: json['location'] as String?,
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList(),
+      occasionTags: (json['occasion_tags'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
     );
 
 Map<String, dynamic> _$UpdateItemRequestToJson(_UpdateItemRequest instance) =>
@@ -179,6 +190,7 @@ Map<String, dynamic> _$UpdateItemRequestToJson(_UpdateItemRequest instance) =>
       'purchaseDate': instance.purchaseDate?.toIso8601String(),
       'location': instance.location,
       'tags': instance.tags,
+      'occasion_tags': instance.occasionTags,
     };
 
 _ItemsListResponse _$ItemsListResponseFromJson(Map<String, dynamic> json) =>

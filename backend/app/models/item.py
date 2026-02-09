@@ -3,7 +3,7 @@ Item Pydantic models for validation and serialization.
 """
 
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List
+from typing import Any, Optional, List
 from uuid import UUID
 from datetime import datetime
 
@@ -16,6 +16,31 @@ VALID_CATEGORIES = [
 
 # Valid conditions for items
 VALID_CONDITIONS = ['clean', 'dirty', 'laundry', 'repair', 'donate']
+
+
+def normalize_tag_list(value: Any) -> List[str]:
+    """Normalize tag arrays by trimming, lowercasing, de-duping, and dropping empties."""
+    if value is None:
+        return []
+
+    if isinstance(value, str):
+        values = [value]
+    elif isinstance(value, (list, tuple, set)):
+        values = list(value)
+    else:
+        values = [value]
+
+    normalized: List[str] = []
+    seen = set()
+    for entry in values:
+        if entry is None:
+            continue
+        tag = str(entry).strip().lower()
+        if not tag or tag in seen:
+            continue
+        seen.add(tag)
+        normalized.append(tag)
+    return normalized
 
 
 # ============================================================================
@@ -99,6 +124,12 @@ class ItemBase(BaseModel):
             raise ValueError('Price must be non-negative')
         return v
 
+    @field_validator('occasion_tags', mode='before')
+    @classmethod
+    def validate_occasion_tags(cls, v: Any) -> List[str]:
+        """Normalize occasion tags."""
+        return normalize_tag_list(v)
+
 
 class ItemCreate(ItemBase):
     """Model for creating a new item."""
@@ -149,6 +180,14 @@ class ItemUpdate(BaseModel):
                 f'Invalid condition. Must be one of: {", ".join(VALID_CONDITIONS)}'
             )
         return v
+
+    @field_validator('occasion_tags', mode='before')
+    @classmethod
+    def validate_occasion_tags(cls, v: Any) -> Optional[List[str]]:
+        """Normalize occasion tags if provided."""
+        if v is None:
+            return None
+        return normalize_tag_list(v)
 
 
 class ItemResponse(ItemBase):

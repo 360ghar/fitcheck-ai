@@ -19,6 +19,7 @@ import {
   Heart,
   Check,
   X,
+  Plus,
   Calendar,
   DollarSign,
   Zap,
@@ -41,6 +42,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent } from '@/components/ui/card'
+import { DEFAULT_USE_CASES, formatUseCaseLabel, normalizeUseCase, normalizeUseCases } from '@/lib/use-cases'
 import type { Item, Category, Condition } from '@/types'
 
 // ============================================================================
@@ -92,6 +94,7 @@ export function ItemDetailModal({
 }: ItemDetailModalProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<Partial<Item>>({})
+  const [customUseCase, setCustomUseCase] = useState('')
 
   if (!item) return null
 
@@ -99,6 +102,7 @@ export function ItemDetailModal({
 
   const handleEdit = () => {
     setEditForm(item)
+    setCustomUseCase('')
     setIsEditing(true)
   }
 
@@ -110,11 +114,36 @@ export function ItemDetailModal({
   const handleCancel = () => {
     setIsEditing(false)
     setEditForm({})
+    setCustomUseCase('')
   }
 
   const updateField = <K extends keyof Item>(field: K, value: Item[K]) => {
     setEditForm((prev) => ({ ...prev, [field]: value }))
   }
+
+  const activeOccasionTags = (editForm.occasion_tags || item.occasion_tags || []) as string[]
+
+  const toggleOccasionTag = (value: string) => {
+    const normalized = normalizeUseCase(value)
+    if (!normalized) return
+
+    const updatedTags = activeOccasionTags.includes(normalized)
+      ? activeOccasionTags.filter((tag) => tag !== normalized)
+      : [...activeOccasionTags, normalized]
+
+    updateField('occasion_tags', normalizeUseCases(updatedTags))
+  }
+
+  const addCustomOccasionTag = () => {
+    const normalized = normalizeUseCase(customUseCase)
+    if (!normalized) return
+    updateField('occasion_tags', normalizeUseCases([...activeOccasionTags, normalized]))
+    setCustomUseCase('')
+  }
+
+  const customOccasionTags = activeOccasionTags.filter(
+    (tag) => !DEFAULT_USE_CASES.includes(tag as (typeof DEFAULT_USE_CASES)[number])
+  )
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -254,6 +283,59 @@ export function ItemDetailModal({
                           rows={3}
                         />
                       </div>
+
+                      <div>
+                        <Label className="mb-2 block">Use Cases</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {DEFAULT_USE_CASES.map((useCase) => (
+                            <Badge
+                              key={useCase}
+                              variant={activeOccasionTags.includes(useCase) ? 'default' : 'outline'}
+                              className="cursor-pointer"
+                              onClick={() => toggleOccasionTag(useCase)}
+                            >
+                              {formatUseCaseLabel(useCase)}
+                            </Badge>
+                          ))}
+                        </div>
+                        <div className="mt-2 flex gap-2">
+                          <Input
+                            value={customUseCase}
+                            onChange={(e) => setCustomUseCase(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                addCustomOccasionTag()
+                              }
+                            }}
+                            placeholder="Add custom use case"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={addCustomOccasionTag}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        {customOccasionTags.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {customOccasionTags.map((tag) => (
+                              <Badge key={tag} variant="secondary" className="gap-1">
+                                {formatUseCaseLabel(tag)}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleOccasionTag(tag)}
+                                  className="hover:text-foreground"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </>
                   ) : (
                     <>
@@ -304,6 +386,19 @@ export function ItemDetailModal({
                             {item.tags.map((tag) => (
                               <Badge key={tag} variant="secondary">
                                 {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {item.occasion_tags?.length > 0 && (
+                        <div>
+                          <Label className="text-sm text-gray-500 dark:text-gray-400">Use Cases</Label>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {item.occasion_tags.map((useCase) => (
+                              <Badge key={useCase} variant="outline">
+                                {formatUseCaseLabel(useCase)}
                               </Badge>
                             ))}
                           </div>

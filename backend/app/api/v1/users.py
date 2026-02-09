@@ -432,7 +432,7 @@ async def delete_body_profile(
                 .limit(1)
                 .execute()
             )
-            if remaining.data:
+            if remaining.data and len(remaining.data) > 0:
                 new_default_id = remaining.data[0]["id"]
                 db.table("body_profiles").update({"is_default": True, "updated_at": _now()}).eq("id", new_default_id).execute()
                 db.table("users").update({"body_profile_id": new_default_id}).eq("id", user_id).execute()
@@ -638,7 +638,7 @@ async def get_dashboard(
         weather_based = None
         try:
             settings_row = db.table("user_settings").select("default_location").eq("user_id", user_id).execute()
-            location = settings_row.data[0].get("default_location") if settings_row.data else None
+            location = settings_row.data[0].get("default_location") if (settings_row.data and len(settings_row.data) > 0) else None
             if location:
                 service = get_weather_service()
                 weather = await service.get_weather(location=str(location), units="imperial")

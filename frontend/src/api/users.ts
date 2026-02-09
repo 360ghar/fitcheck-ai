@@ -34,6 +34,9 @@ export async function updateCurrentUser(data: {
   full_name?: string;
   avatar_url?: string;
   gender?: string | null;
+  birth_date?: string | null;
+  birth_time?: string | null;
+  birth_place?: string | null;
 }): Promise<User> {
   try {
     const response = await apiClient.put<ApiEnvelope<User>>('/api/v1/users/me', data);

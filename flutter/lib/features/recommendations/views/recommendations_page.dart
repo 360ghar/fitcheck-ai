@@ -9,20 +9,25 @@ import '../widgets/find_matches_tab.dart';
 import '../widgets/complete_look_tab.dart';
 import '../widgets/weather_based_tab.dart';
 import '../widgets/shopping_tab.dart';
+import '../widgets/astrology_tab.dart';
 
-/// Recommendations page with 4 tabs:
+/// Recommendations page with 5 tabs:
 /// 1. Find Matches - Find items that match selected items
 /// 2. Complete Look - Generate complete outfit suggestions
 /// 3. Weather-Based - Get recommendations based on weather
-/// 4. Shopping - Get shopping suggestions for wardrobe gaps
+/// 4. Astrology - Get lucky color suggestions and wardrobe picks
+/// 5. Shopping - Get shopping suggestions for wardrobe gaps
 class RecommendationsPage extends StatelessWidget {
   const RecommendationsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
-    final RecommendationsController controller = Get.find<RecommendationsController>();
-    final currentIndex = AppBottomNavigationBar.getIndexForRoute(Get.currentRoute);
+    final RecommendationsController controller =
+        Get.find<RecommendationsController>();
+    final currentIndex = AppBottomNavigationBar.getIndexForRoute(
+      Get.currentRoute,
+    );
 
     return Scaffold(
       body: AppPageBackground(
@@ -40,6 +45,7 @@ class RecommendationsPage extends StatelessWidget {
                     FindMatchesTab(),
                     CompleteLookTab(),
                     WeatherBasedTab(),
+                    AstrologyTab(),
                     ShoppingTab(),
                   ],
                 ),
@@ -52,7 +58,11 @@ class RecommendationsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildAppBar(BuildContext context, RecommendationsController controller, AppUiTokens tokens) {
+  Widget _buildAppBar(
+    BuildContext context,
+    RecommendationsController controller,
+    AppUiTokens tokens,
+  ) {
     return Column(
       children: [
         // Header
@@ -63,23 +73,25 @@ class RecommendationsPage extends StatelessWidget {
               Text(
                 'Recommendations',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: tokens.textPrimary,
-                    ),
+                  fontWeight: FontWeight.w700,
+                  color: tokens.textPrimary,
+                ),
               ),
               const Spacer(),
-              Obx(() => IconButton(
-                    onPressed: controller.isLoading.value
-                        ? null
-                        : () => controller.refreshCurrentTab(),
-                    icon: controller.isLoading.value
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.refresh),
-                  )),
+              Obx(
+                () => IconButton(
+                  onPressed: controller.isLoading.value
+                      ? null
+                      : () => controller.refreshCurrentTab(),
+                  icon: controller.isLoading.value
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh),
+                ),
+              ),
             ],
           ),
         ),
@@ -95,6 +107,7 @@ class RecommendationsPage extends StatelessWidget {
             Tab(text: 'Find Matches', icon: Icon(Icons.search)),
             Tab(text: 'Complete Look', icon: Icon(Icons.checkroom)),
             Tab(text: 'Weather', icon: Icon(Icons.wb_sunny)),
+            Tab(text: 'Astrology', icon: Icon(Icons.auto_awesome)),
             Tab(text: 'Shopping', icon: Icon(Icons.shopping_bag)),
           ],
         ),
@@ -136,7 +149,8 @@ class SelectedItemsChips extends StatelessWidget {
               child: Chip(
                 label: Text(item.name),
                 avatar: CircleAvatar(
-                  backgroundImage: item.itemImages != null && item.itemImages!.isNotEmpty
+                  backgroundImage:
+                      item.itemImages != null && item.itemImages!.isNotEmpty
                       ? NetworkImage(item.itemImages!.first.url)
                       : null,
                   child: item.itemImages == null || item.itemImages!.isEmpty
@@ -234,9 +248,9 @@ class RecommendationCard extends StatelessWidget {
             Text(
               name,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -245,9 +259,9 @@ class RecommendationCard extends StatelessWidget {
               const SizedBox(height: AppConstants.spacing4),
               Text(
                 brand,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: tokens.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

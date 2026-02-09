@@ -10,6 +10,8 @@ import type {
   WeatherRecommendation,
   SimilarItemResult,
   SuggestedItem,
+  AstrologyRecommendation,
+  AstrologyRecommendationMode,
 } from '../types';
 
 // ============================================================================
@@ -97,6 +99,31 @@ export async function getWeatherRecommendations(
     const response = await apiClient.get<ApiEnvelope<WeatherRecommendation>>(
       `/api/v1/recommendations/weather${params}`
     );
+    return response.data.data;
+  } catch (error) {
+    throw getApiError(error);
+  }
+}
+
+/**
+ * Get astrology-based lucky colors and wardrobe picks
+ */
+export async function getAstrologyRecommendations(options?: {
+  target_date?: string;
+  mode?: AstrologyRecommendationMode;
+  limit_per_category?: number;
+}): Promise<AstrologyRecommendation> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.target_date) params.append('target_date', options.target_date);
+    if (options?.mode) params.append('mode', options.mode);
+    if (options?.limit_per_category) params.append('limit_per_category', String(options.limit_per_category));
+
+    const queryString = params.toString();
+    const endpoint = queryString
+      ? `/api/v1/recommendations/astrology?${queryString}`
+      : '/api/v1/recommendations/astrology';
+    const response = await apiClient.get<ApiEnvelope<AstrologyRecommendation>>(endpoint);
     return response.data.data;
   } catch (error) {
     throw getApiError(error);

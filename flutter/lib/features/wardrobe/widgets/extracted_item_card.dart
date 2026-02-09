@@ -58,42 +58,82 @@ class ExtractedItemCard extends StatelessWidget {
                       child: Text(
                         item.name,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: tokens.textPrimary,
-                            ),
+                          fontWeight: FontWeight.w600,
+                          color: tokens.textPrimary,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     if (onToggleSelection != null)
-                      GestureDetector(
-                        onTap: onToggleSelection,
-                        child: Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? tokens.brandColor
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: isSelected
-                                  ? tokens.brandColor
-                                  : tokens.textMuted,
-                              width: 2,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Include',
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: tokens.textMuted),
+                          ),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: onToggleSelection,
+                            child: Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? tokens.brandColor
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? tokens.brandColor
+                                      : tokens.textMuted,
+                                  width: 2,
+                                ),
+                              ),
+                              child: isSelected
+                                  ? const Icon(
+                                      Icons.check,
+                                      size: 16,
+                                      color: Colors.white,
+                                    )
+                                  : null,
                             ),
                           ),
-                          child: isSelected
-                              ? const Icon(
-                                  Icons.check,
-                                  size: 16,
-                                  color: Colors.white,
-                                )
-                              : null,
-                        ),
+                        ],
                       ),
                   ],
                 ),
+
+                if (item.personLabel != null &&
+                    item.personLabel!.isNotEmpty) ...[
+                  const SizedBox(height: AppConstants.spacing6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: item.isCurrentUserPerson
+                          ? Colors.green.withOpacity(0.12)
+                          : tokens.brandColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      item.isCurrentUserPerson
+                          ? '${item.personLabel} (You)'
+                          : item.personLabel!,
+                      style: TextStyle(
+                        color: item.isCurrentUserPerson
+                            ? Colors.green.shade700
+                            : tokens.brandColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: AppConstants.spacing4),
 
@@ -118,21 +158,19 @@ class ExtractedItemCard extends StatelessWidget {
                 ),
 
                 // Colors
-                if (item.colors != null && item.colors!.isNotEmpty) ...[
+                if (item.colors.isNotEmpty) ...[
                   const SizedBox(height: AppConstants.spacing8),
                   Wrap(
                     spacing: 4,
                     runSpacing: 4,
-                    children: item.colors!.take(4).map((color) {
+                    children: item.colors.take(4).map((color) {
                       return Container(
                         width: 16,
                         height: 16,
                         decoration: BoxDecoration(
                           color: _parseColor(color),
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: tokens.cardBorderColor,
-                          ),
+                          border: Border.all(color: tokens.cardBorderColor),
                         ),
                       );
                     }).toList(),
@@ -166,10 +204,7 @@ class ExtractedItemCard extends StatelessWidget {
                   const SizedBox(height: AppConstants.spacing4),
                   Text(
                     '${(item.confidence! * 100).toStringAsFixed(0)}% confidence',
-                    style: TextStyle(
-                      color: tokens.textMuted,
-                      fontSize: 11,
-                    ),
+                    style: TextStyle(color: tokens.textMuted, fontSize: 11),
                   ),
                 ],
               ],
@@ -270,10 +305,7 @@ class ExtractedItemCard extends StatelessWidget {
   Widget _buildSourceImage(AppUiTokens tokens) {
     final boundingBoxes = <Map<String, dynamic>>[];
     if (item.boundingBox != null) {
-      boundingBoxes.add({
-        ...item.boundingBox!,
-        'label': item.name,
-      });
+      boundingBoxes.add({...item.boundingBox!, 'label': item.name});
     }
 
     return BoundingBoxOverlay(

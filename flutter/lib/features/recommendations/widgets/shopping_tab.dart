@@ -148,7 +148,14 @@ class ShoppingTab extends StatelessWidget {
         Expanded(
           child: Obx(() {
             if (controller.isLoadingShopping.value) {
-              return const Center(child: CircularProgressIndicator());
+              return Padding(
+                padding: const EdgeInsets.all(AppConstants.spacing16),
+                child: ShimmerGridLoaderBox(
+                  crossAxisCount: 2,
+                  itemCount: 6,
+                  childAspectRatio: 0.75,
+                ),
+              );
             }
 
             if (controller.shoppingError.value.isNotEmpty) {

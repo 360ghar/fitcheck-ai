@@ -48,6 +48,10 @@ class DetectedItemData:
     confidence: float = 0.0
     bounding_box: Optional[Dict[str, float]] = None
     detailed_description: Optional[str] = None
+    person_id: Optional[str] = None
+    person_label: Optional[str] = None
+    is_current_user_person: bool = False
+    include_in_wardrobe: bool = True
     status: str = "detected"
     generated_image_base64: Optional[str] = None
     generated_image_url: Optional[str] = None
@@ -67,6 +71,10 @@ class DetectedItemData:
             "confidence": self.confidence,
             "bounding_box": self.bounding_box,
             "detailed_description": self.detailed_description,
+            "person_id": self.person_id,
+            "person_label": self.person_label,
+            "is_current_user_person": self.is_current_user_person,
+            "include_in_wardrobe": self.include_in_wardrobe,
             "status": self.status,
             "generated_image_base64": self.generated_image_base64,
             "generated_image_url": self.generated_image_url,
@@ -233,6 +241,10 @@ class BatchJobService:
                         confidence=item.get("confidence", 0.5),
                         bounding_box=item.get("bounding_box"),
                         detailed_description=item.get("detailed_description"),
+                        person_id=item.get("person_id"),
+                        person_label=item.get("person_label"),
+                        is_current_user_person=bool(item.get("is_current_user_person", False)),
+                        include_in_wardrobe=bool(item.get("include_in_wardrobe", True)),
                         status="detected",
                     )
                     job.detected_items.append(item_data)

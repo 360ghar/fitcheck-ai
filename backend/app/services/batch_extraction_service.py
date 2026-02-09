@@ -6,9 +6,12 @@ Handles parallel extraction of multiple images and batched generation.
 """
 
 import asyncio
+import base64
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+import httpx
 
 from app.agents.item_extraction_agent import get_item_extraction_agent
 from app.agents.image_generation_agent import get_image_generation_agent
@@ -89,12 +92,19 @@ class BatchExtractionService:
 
         # Get extraction agent
         agent = await get_item_extraction_agent(user_id=self.user_id, db=self.db)
+        user_profile_image_base64 = await self._fetch_user_avatar_base64()
 
         # Create tasks for all images
         tasks = []
         for image_id, image_data in job.images.items():
             task = asyncio.create_task(
-                self._extract_single_image(job, image_id, image_data.image_base64, agent)
+                self._extract_single_image(
+                    job,
+                    image_id,
+                    image_data.image_base64,
+                    agent,
+                    user_profile_image_base64=user_profile_image_base64,
+                )
             )
             tasks.append(task)
 
@@ -117,6 +127,7 @@ class BatchExtractionService:
         image_id: str,
         image_base64: str,
         agent,
+        user_profile_image_base64: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Extract items from a single image with semaphore and retry."""
         if job.is_cancelled():
@@ -129,7 +140,10 @@ class BatchExtractionService:
             try:
                 # Extract with retry
                 result = await with_retry(
-                    lambda: agent.extract_multiple_items(image_base64=image_base64),
+                    lambda: agent.extract_multiple_items(
+                        image_base64=image_base64,
+                        user_profile_image_base64=user_profile_image_base64,
+                    ),
                     max_retries=3,
                     initial_delay=2.0,
                     backoff_factor=2.0,
@@ -179,6 +193,34 @@ class BatchExtractionService:
                 })
 
                 return []
+
+    async def _fetch_user_avatar_base64(self) -> Optional[str]:
+        """Best-effort avatar fetch for profile-aware person matching."""
+        try:
+            user_result = (
+                self.db.table("users")
+                .select("avatar_url")
+                .eq("id", self.user_id)
+                .single()
+                .execute()
+            )
+            if not user_result or not user_result.data:
+                return None
+
+            avatar_url = user_result.data.get("avatar_url")
+            if not avatar_url:
+                return None
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(avatar_url)
+                response.raise_for_status()
+                return base64.b64encode(response.content).decode("utf-8")
+        except Exception as e:
+            logger.warning(
+                "Failed to fetch user avatar for batch extraction",
+                extra={"user_id": self.user_id, "error": str(e)},
+            )
+            return None
 
     async def _run_generation_phase(self, job: BatchJob) -> None:
         """

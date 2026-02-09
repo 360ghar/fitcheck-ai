@@ -5,7 +5,7 @@ User Pydantic models for validation and serialization.
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List, Dict, Any
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, date, time as dt_time, timezone
 
 
 # ============================================================================
@@ -19,7 +19,29 @@ class UserBase(BaseModel):
     full_name: Optional[str] = Field(None, max_length=255)
     avatar_url: Optional[str] = None
     gender: Optional[str] = None
+    birth_date: Optional[date] = None
+    birth_time: Optional[dt_time] = None
+    birth_place: Optional[str] = Field(None, max_length=255)
     is_active: bool = True
+
+    @field_validator('birth_date')
+    @classmethod
+    def validate_birth_date(cls, v: Optional[date]) -> Optional[date]:
+        """Birth date cannot be in the future."""
+        if v is not None and v > datetime.now(timezone.utc).date():
+            raise ValueError('birth_date cannot be in the future')
+        return v
+
+    @field_validator('birth_place', mode='before')
+    @classmethod
+    def normalize_birth_place(cls, v: Optional[str]) -> Optional[str]:
+        """Normalize blank birth place values to null."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            normalized = v.strip()
+            return normalized or None
+        return v
 
 
 class UserCreate(BaseModel):
@@ -34,6 +56,9 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, max_length=255)
     avatar_url: Optional[str] = None
     gender: Optional[str] = None
+    birth_date: Optional[date] = None
+    birth_time: Optional[dt_time] = None
+    birth_place: Optional[str] = Field(None, max_length=255)
     is_active: Optional[bool] = None
 
     @field_validator('gender')
@@ -43,6 +68,25 @@ class UserUpdate(BaseModel):
         valid_values = {'male', 'female', 'non_binary', 'prefer_not_to_say', None}
         if v is not None and v not in valid_values:
             raise ValueError('gender must be one of: male, female, non_binary, prefer_not_to_say')
+        return v
+
+    @field_validator('birth_date')
+    @classmethod
+    def validate_birth_date(cls, v: Optional[date]) -> Optional[date]:
+        """Birth date cannot be in the future."""
+        if v is not None and v > datetime.now(timezone.utc).date():
+            raise ValueError('birth_date cannot be in the future')
+        return v
+
+    @field_validator('birth_place', mode='before')
+    @classmethod
+    def normalize_birth_place(cls, v: Optional[str]) -> Optional[str]:
+        """Normalize blank birth place values to null."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            normalized = v.strip()
+            return normalized or None
         return v
 
 

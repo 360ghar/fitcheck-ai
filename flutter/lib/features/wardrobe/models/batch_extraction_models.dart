@@ -68,42 +68,46 @@ abstract class BatchExtractionJob with _$BatchExtractionJob {
 @freezed
 abstract class BatchExtractedItem with _$BatchExtractedItem {
   const factory BatchExtractedItem({
-    required String id,
-    required String sourceImageId,
+    @JsonKey(name: 'temp_id') required String id,
+    @JsonKey(name: 'image_id') required String sourceImageId,
     required String name,
     required Category category,
-    List<String>? colors,
+    @JsonKey(name: 'sub_category') String? subCategory,
+    @Default([]) List<String> colors,
     String? material,
     String? pattern,
+    String? brand,
     String? description,
     @JsonKey(name: 'bounding_box') Map<String, dynamic>? boundingBox,
     @JsonKey(name: 'cropped_image_base64') String? croppedImageBase64,
+    @JsonKey(name: 'generated_image_base64') String? generatedImageBase64,
     @JsonKey(name: 'generated_image_url') String? generatedImageUrl,
     double? confidence,
-    @Default(BatchItemStatus.pending) BatchItemStatus status,
+    @JsonKey(name: 'person_id') String? personId,
+    @JsonKey(name: 'person_label') String? personLabel,
+    @JsonKey(name: 'is_current_user_person')
+    @Default(false)
+    bool isCurrentUserPerson,
+    @JsonKey(name: 'include_in_wardrobe') @Default(true) bool includeInWardrobe,
+    @JsonKey(unknownEnumValue: BatchItemStatus.pending)
+    @Default(BatchItemStatus.pending)
+    BatchItemStatus status,
     @Default(true) bool isSelected,
     String? error,
   }) = _BatchExtractedItem;
 
   factory BatchExtractedItem.fromJson(Map<String, dynamic> json) =>
-      _$BatchExtractedItemFromJson(json);
+      _$BatchExtractedItemFromJson(_normalizeBatchExtractedItemJson(json));
 }
 
 /// Status for individual extracted items
-enum BatchItemStatus {
-  pending,
-  generating,
-  generated,
-  failed,
-}
+enum BatchItemStatus { detected, pending, generating, generated, failed }
 
 /// SSE event from batch extraction
 @freezed
 abstract class SSEEvent with _$SSEEvent {
-  const factory SSEEvent({
-    required String type,
-    Map<String, dynamic>? data,
-  }) = _SSEEvent;
+  const factory SSEEvent({required String type, Map<String, dynamic>? data}) =
+      _SSEEvent;
 
   factory SSEEvent.fromJson(Map<String, dynamic> json) =>
       _$SSEEventFromJson(json);
@@ -126,7 +130,7 @@ abstract class BatchExtractionRequest with _$BatchExtractionRequest {
 @freezed
 abstract class BatchImageInput with _$BatchImageInput {
   const factory BatchImageInput({
-    required String id,
+    @JsonKey(name: 'image_id') required String imageId,
     @JsonKey(name: 'image_base64') required String imageBase64,
   }) = _BatchImageInput;
 
@@ -155,13 +159,14 @@ abstract class BatchJobStatusResponse with _$BatchJobStatusResponse {
     @JsonKey(name: 'job_id') required String jobId,
     required String status,
     @JsonKey(name: 'total_images') required int totalImages,
-    @JsonKey(name: 'extracted_count') @Default(0) int extractedCount,
-    @JsonKey(name: 'generated_count') @Default(0) int generatedCount,
-    @JsonKey(name: 'failed_count') @Default(0) int failedCount,
+    @JsonKey(name: 'extractions_completed') @Default(0) int extractedCount,
+    @JsonKey(name: 'generations_completed') @Default(0) int generatedCount,
+    @JsonKey(name: 'extractions_failed') @Default(0) int failedCount,
+    @JsonKey(name: 'generations_failed') @Default(0) int generationFailedCount,
     @JsonKey(name: 'current_batch') @Default(0) int currentBatch,
     @JsonKey(name: 'total_batches') @Default(0) int totalBatches,
     List<BatchImageResult>? images,
-    @JsonKey(name: 'detected_items') List<BatchExtractedItem>? detectedItems,
+    @JsonKey(name: 'items') List<BatchExtractedItem>? detectedItems,
     String? error,
   }) = _BatchJobStatusResponse;
 
@@ -173,7 +178,7 @@ abstract class BatchJobStatusResponse with _$BatchJobStatusResponse {
 @freezed
 abstract class BatchImageResult with _$BatchImageResult {
   const factory BatchImageResult({
-    required String id,
+    @JsonKey(name: 'image_id') required String id,
     required String status,
     @JsonKey(name: 'item_count') @Default(0) int itemCount,
     String? error,
@@ -181,4 +186,44 @@ abstract class BatchImageResult with _$BatchImageResult {
 
   factory BatchImageResult.fromJson(Map<String, dynamic> json) =>
       _$BatchImageResultFromJson(json);
+}
+
+Map<String, dynamic> _normalizeBatchExtractedItemJson(
+  Map<String, dynamic> json,
+) {
+  final normalized = Map<String, dynamic>.from(json);
+
+  final category = normalized['category']?.toString().toLowerCase();
+  normalized['category'] = Category.fromString(category ?? 'other').value;
+
+  final rawStatus = normalized['status']?.toString().toLowerCase();
+  const validStatuses = {
+    'detected',
+    'pending',
+    'generating',
+    'generated',
+    'failed',
+  };
+  normalized['status'] = validStatuses.contains(rawStatus)
+      ? rawStatus
+      : 'detected';
+
+  normalized['name'] ??=
+      normalized['sub_category']?.toString() ??
+      normalized['category']?.toString() ??
+      'New Item';
+
+  if (normalized['description'] == null &&
+      normalized['detailed_description'] != null) {
+    normalized['description'] = normalized['detailed_description'];
+  }
+
+  final include = normalized['include_in_wardrobe'];
+  if (include is bool) {
+    normalized['isSelected'] = include;
+  } else if (normalized['isSelected'] == null) {
+    normalized['isSelected'] = true;
+  }
+
+  return normalized;
 }

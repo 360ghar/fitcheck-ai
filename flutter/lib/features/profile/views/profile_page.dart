@@ -23,8 +23,11 @@ class ProfilePage extends StatelessWidget {
     return Scaffold(
       body: AppPageBackground(
         child: SafeArea(
-          child: CustomScrollView(
-            slivers: [
+          child: RefreshIndicator(
+            onRefresh: () => dashboardController.fetchDashboard(showLoader: false),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(
@@ -87,6 +90,7 @@ class ProfilePage extends StatelessWidget {
                 ),
               ),
             ],
+            ),
           ),
         ),
       ),
@@ -183,11 +187,14 @@ class ProfilePage extends StatelessWidget {
   Widget _buildAvatarInitials(BuildContext context, dynamic user) {
     final initials = user?.fullName
             ?.split(' ')
+            .where((e) => e.isNotEmpty)
             .map((e) => e[0])
             .take(2)
             .join()
             .toUpperCase() ??
-        user?.email.substring(0, 1).toUpperCase() ??
+        (user?.email?.isNotEmpty == true
+            ? user!.email.substring(0, 1).toUpperCase()
+            : null) ??
         'U';
 
     return Center(

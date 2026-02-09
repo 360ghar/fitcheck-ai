@@ -4,9 +4,9 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
 import '../../../domain/enums/condition.dart' as domain;
-import '../controllers/item_add_controller.dart';
 import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
 
@@ -15,10 +15,7 @@ import '../repositories/item_repository.dart';
 class ManualEntryForm extends StatefulWidget {
   final File? imageFile;
 
-  const ManualEntryForm({
-    super.key,
-    this.imageFile,
-  });
+  const ManualEntryForm({super.key, this.imageFile});
 
   @override
   State<ManualEntryForm> createState() => _ManualEntryFormState();
@@ -35,11 +32,13 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
   final _priceController = TextEditingController();
   final _tagsController = TextEditingController();
   final _locationController = TextEditingController();
+  final _customUseCaseController = TextEditingController();
 
   final Rx<Category> selectedCategory = Category.tops.obs;
   final Rx<domain.Condition> selectedCondition = domain.Condition.clean.obs;
   final RxSet<String> selectedColors = <String>{}.obs;
   final RxSet<String> selectedTags = <String>{}.obs;
+  final RxSet<String> selectedUseCases = <String>{}.obs;
   final RxBool isSaving = false.obs;
   final RxList<File> additionalImages = <File>[].obs;
 
@@ -47,8 +46,20 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
 
   // Common color options
   static const List<String> commonColors = [
-    'Black', 'White', 'Gray', 'Red', 'Blue', 'Green', 'Yellow',
-    'Pink', 'Purple', 'Orange', 'Brown', 'Beige', 'Navy', 'Cream',
+    'Black',
+    'White',
+    'Gray',
+    'Red',
+    'Blue',
+    'Green',
+    'Yellow',
+    'Pink',
+    'Purple',
+    'Orange',
+    'Brown',
+    'Beige',
+    'Navy',
+    'Cream',
   ];
 
   void _submitForm() async {
@@ -57,10 +68,9 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
     isSaving.value = true;
 
     try {
-      final controller = Get.find<ItemAddController>();
-
       // Use provided image or first additional image
-      final imageToUse = widget.imageFile ??
+      final imageToUse =
+          widget.imageFile ??
           (additionalImages.isNotEmpty ? additionalImages.first : null);
 
       if (imageToUse == null) {
@@ -100,6 +110,9 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
             ? null
             : _locationController.text.trim(),
         tags: selectedTags.isEmpty ? null : selectedTags.toList(),
+        occasionTags: selectedUseCases.isEmpty
+            ? null
+            : UseCases.normalizeList(selectedUseCases),
       );
 
       final created = await ItemRepository().createItemWithImage(
@@ -184,6 +197,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
     _priceController.dispose();
     _tagsController.dispose();
     _locationController.dispose();
+    _customUseCaseController.dispose();
     super.dispose();
   }
 
@@ -192,10 +206,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
     final tokens = AppUiTokens.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add Item Details'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Add Item Details'), elevation: 0),
       body: AppPageBackground(
         child: SafeArea(
           child: SingleChildScrollView(
@@ -263,6 +274,11 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
 
                   // Colors
                   Obx(() => _buildColorSelector(tokens)),
+
+                  const SizedBox(height: AppConstants.spacing16),
+
+                  // Use cases
+                  Obx(() => _buildUseCaseSelector(tokens)),
 
                   const SizedBox(height: AppConstants.spacing16),
 
@@ -351,19 +367,21 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
                   const SizedBox(height: AppConstants.spacing24),
 
                   // Save button
-                  Obx(() => ElevatedButton(
-                        onPressed: isSaving.value ? null : _submitForm,
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                        ),
-                        child: isSaving.value
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Save Item'),
-                      )),
+                  Obx(
+                    () => ElevatedButton(
+                      onPressed: isSaving.value ? null : _submitForm,
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                      child: isSaving.value
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Save Item'),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -412,7 +430,9 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
                     ),
                     decoration: BoxDecoration(
                       color: tokens.cardColor.withOpacity(0.8),
-                      borderRadius: BorderRadius.circular(AppConstants.radius12),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radius12,
+                      ),
                     ),
                     child: Text(
                       '+$extraCount more',
@@ -453,7 +473,9 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
                     child: Stack(
                       children: [
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(AppConstants.radius8),
+                          borderRadius: BorderRadius.circular(
+                            AppConstants.radius8,
+                          ),
                           child: Image.file(
                             additionalImages[index],
                             width: 80,
@@ -520,17 +542,13 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.add_photo_alternate,
-              size: 48,
-              color: tokens.brandColor,
-            ),
+            Icon(Icons.add_photo_alternate, size: 48, color: tokens.brandColor),
             const SizedBox(height: AppConstants.spacing8),
             Text(
               'Add Photo (Multiple)',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: tokens.brandColor,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: tokens.brandColor),
             ),
           ],
         ),
@@ -544,9 +562,9 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
       child: Text(
         title,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: tokens.textMuted,
-              fontWeight: FontWeight.w600,
-            ),
+          color: tokens.textMuted,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -596,9 +614,9 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
         Text(
           'Colors',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: tokens.textPrimary,
-                fontWeight: FontWeight.w500,
-              ),
+            color: tokens.textPrimary,
+            fontWeight: FontWeight.w500,
+          ),
         ),
         const SizedBox(height: AppConstants.spacing8),
         Wrap(
@@ -624,5 +642,87 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
         ),
       ],
     );
+  }
+
+  Widget _buildUseCaseSelector(AppUiTokens tokens) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Use Cases',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: tokens.textPrimary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: AppConstants.spacing8),
+        Wrap(
+          spacing: AppConstants.spacing8,
+          runSpacing: AppConstants.spacing8,
+          children: UseCases.defaults.map((useCase) {
+            final isSelected = selectedUseCases.contains(useCase);
+            return FilterChip(
+              label: Text(UseCases.displayLabel(useCase)),
+              selected: isSelected,
+              onSelected: (selected) {
+                if (selected) {
+                  selectedUseCases.add(useCase);
+                } else {
+                  selectedUseCases.remove(useCase);
+                }
+                selectedUseCases.refresh();
+              },
+              selectedColor: tokens.brandColor.withOpacity(0.2),
+              checkmarkColor: tokens.brandColor,
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: AppConstants.spacing8),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _customUseCaseController,
+                decoration: const InputDecoration(
+                  labelText: 'Custom use case',
+                  hintText: 'e.g., brunch',
+                  border: OutlineInputBorder(),
+                ),
+                onFieldSubmitted: (_) => _addCustomUseCase(),
+              ),
+            ),
+            const SizedBox(width: AppConstants.spacing8),
+            OutlinedButton(
+              onPressed: _addCustomUseCase,
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+        if (selectedUseCases.isNotEmpty) ...[
+          const SizedBox(height: AppConstants.spacing8),
+          Wrap(
+            spacing: AppConstants.spacing8,
+            runSpacing: AppConstants.spacing8,
+            children: selectedUseCases.map((useCase) {
+              return Chip(
+                label: Text(UseCases.displayLabel(useCase)),
+                onDeleted: () {
+                  selectedUseCases.remove(useCase);
+                  selectedUseCases.refresh();
+                },
+              );
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _addCustomUseCase() {
+    final normalized = UseCases.normalize(_customUseCaseController.text);
+    if (normalized.isEmpty) return;
+    selectedUseCases.add(normalized);
+    selectedUseCases.refresh();
+    _customUseCaseController.clear();
   }
 }

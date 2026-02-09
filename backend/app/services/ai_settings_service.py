@@ -69,7 +69,12 @@ def encrypt_api_key(api_key: str) -> Optional[str]:
     """
     fernet_key = _get_encryption_key()
     if not fernet_key:
-        logger.warning("Encryption key not configured, storing API key in plaintext")
+        if not settings.DEBUG:
+            # In production, encryption key is required for API key storage
+            raise AIServiceError(
+                "AI_ENCRYPTION_KEY must be configured in production to store user API keys"
+            )
+        logger.warning("Encryption key not configured, storing API key in plaintext (DEBUG mode only)")
         # Return a marker so we know it's not encrypted
         return f"__PLAINTEXT__{api_key}"
 

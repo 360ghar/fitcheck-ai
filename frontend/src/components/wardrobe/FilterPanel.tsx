@@ -27,6 +27,7 @@ import {
   BottomSheetFooter,
   BottomSheetTrigger,
 } from '@/components/ui/bottom-sheet'
+import { DEFAULT_USE_CASES, formatUseCaseLabel, normalizeUseCase } from '@/lib/use-cases'
 import { cn } from '@/lib/utils'
 import type { Category, Condition } from '@/types'
 
@@ -38,6 +39,7 @@ export interface ItemFilters {
   search: string
   category: Category | 'all'
   color: string
+  occasion: string
   condition: Condition | 'all'
   isFavorite: boolean
 }
@@ -117,10 +119,12 @@ export function FilterPanel({
   onResetFilters,
 }: FilterPanelProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [customUseCase, setCustomUseCase] = useState('')
 
   const hasActiveFilters =
     filters.category !== 'all' ||
     filters.color !== '' ||
+    filters.occasion !== '' ||
     filters.condition !== 'all' ||
     filters.isFavorite ||
     filters.search
@@ -128,9 +132,21 @@ export function FilterPanel({
   const activeFilterCount = [
     filters.category !== 'all',
     filters.color !== '',
+    filters.occasion !== '',
     filters.condition !== 'all',
     filters.isFavorite,
   ].filter(Boolean).length
+
+  const setOccasionFilter = (value: string) => {
+    onFilterChange('occasion', normalizeUseCase(value))
+  }
+
+  const addCustomUseCase = () => {
+    const normalized = normalizeUseCase(customUseCase)
+    if (!normalized) return
+    setOccasionFilter(normalized)
+    setCustomUseCase('')
+  }
 
   return (
     <div className="bg-card shadow-sm rounded-xl p-3 md:p-4 mb-4 md:mb-6">
@@ -233,6 +249,54 @@ export function FilterPanel({
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Use Case Section */}
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-foreground">Use Case</label>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setOccasionFilter('')}
+                      className={cn(
+                        'px-3 py-2 rounded-full text-sm border transition-all duration-200',
+                        filters.occasion === ''
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border hover:border-primary/50'
+                      )}
+                    >
+                      All
+                    </button>
+                    {DEFAULT_USE_CASES.map((useCase) => (
+                      <button
+                        key={useCase}
+                        onClick={() => setOccasionFilter(useCase)}
+                        className={cn(
+                          'px-3 py-2 rounded-full text-sm border transition-all duration-200',
+                          filters.occasion === useCase
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border hover:border-primary/50'
+                        )}
+                      >
+                        {formatUseCaseLabel(useCase)}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Custom use case"
+                      value={customUseCase}
+                      onChange={(e) => setCustomUseCase(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          addCustomUseCase()
+                        }
+                      }}
+                    />
+                    <Button type="button" variant="outline" onClick={addCustomUseCase}>
+                      Add
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Favorites Toggle */}
@@ -434,6 +498,48 @@ export function FilterPanel({
         </div>
       </div>
 
+      <div className="hidden md:block mt-3 pt-3 border-t border-border">
+        <label className="text-sm font-medium text-foreground">Use Case</label>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant={filters.occasion === '' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setOccasionFilter('')}
+          >
+            All
+          </Button>
+          {DEFAULT_USE_CASES.map((useCase) => (
+            <Button
+              key={useCase}
+              type="button"
+              variant={filters.occasion === useCase ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setOccasionFilter(useCase)}
+            >
+              {formatUseCaseLabel(useCase)}
+            </Button>
+          ))}
+          <div className="flex items-center gap-2">
+            <Input
+              className="h-9 w-[180px]"
+              placeholder="Custom use case"
+              value={customUseCase}
+              onChange={(e) => setCustomUseCase(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  addCustomUseCase()
+                }
+              }}
+            />
+            <Button type="button" variant="outline" size="sm" onClick={addCustomUseCase}>
+              Add
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {/* Active filters */}
       {hasActiveFilters && (
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border overflow-x-auto scrollbar-hide">
@@ -459,6 +565,17 @@ export function FilterPanel({
                 {filters.color}
                 <button
                   onClick={() => onFilterChange('color', '')}
+                  className="hover:text-foreground touch-target flex items-center justify-center"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+            {filters.occasion && (
+              <Badge variant="secondary" className="gap-1 shrink-0">
+                {formatUseCaseLabel(filters.occasion)}
+                <button
+                  onClick={() => onFilterChange('occasion', '')}
                   className="hover:text-foreground touch-target flex items-center justify-center"
                 >
                   <X className="h-3 w-3" />

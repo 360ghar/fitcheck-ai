@@ -23,6 +23,7 @@ The docs intentionally avoid duplicating full table DDL in Markdown to prevent d
 - **`auth.users`**: Supabase Auth (email/password + session tokens)
 - **`public.users`**: Profile table keyed by `id` (FK -> `auth.users(id)`), including:
   - `avatar_url`, `full_name`, `email_verified`, `last_login_at`, `is_active`
+  - astrology profile fields: `birth_date` (DATE), `birth_time` (TIME), `birth_place` (VARCHAR)
   - **AI settings**: `ai_provider`, `ai_model`, `ai_api_key_encrypted`
 
 ### Preferences + Settings
@@ -114,11 +115,13 @@ Frontend types are centralized in:
 - `frontend/src/types/index.ts`
 
 These types reflect the JSON returned by the backend (snake_case) and the standard `{ data, message }` API envelope.
+Astrology recommendations are represented by `AstrologyRecommendation` and related interfaces in the same file.
 
 ## Database Migrations
 
 This repository uses a single consolidated migration:
 - `backend/db/supabase/migrations/001_full_schema.sql`
+- `backend/db/supabase/migrations/002_astrology_profile.sql`
 
 Apply it in the Supabase SQL Editor before running the app. The backend `/health` endpoint reports whether the schema is ready and lists missing tables/columns to help diagnose partial setups.
 

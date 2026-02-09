@@ -19,6 +19,10 @@ export interface BoundingBox {
 
 export interface DetectedItem {
   temp_id: string;
+  person_id?: string;
+  person_label?: string;
+  is_current_user_person?: boolean;
+  include_in_wardrobe?: boolean;
   category: string;
   sub_category?: string;
   colors: string[];
@@ -33,10 +37,18 @@ export interface DetectedItem {
 
 export interface ExtractItemsResult {
   items: DetectedItem[];
+  people?: Array<{
+    person_id: string;
+    person_label: string;
+    is_current_user_person: boolean;
+    confidence: number;
+  }>;
   overall_confidence: number;
   image_description: string;
   item_count: number;
   requires_review: boolean;
+  has_profile_reference?: boolean;
+  profile_match_found?: boolean;
 }
 
 export interface ExtractSingleItemResult {

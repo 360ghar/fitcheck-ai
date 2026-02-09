@@ -5,14 +5,14 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../../core/services/sse_service.dart';
 import '../../../core/utils/image_utils.dart';
-import '../../../domain/enums/category.dart';
+import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/condition.dart' as domain;
 import '../models/batch_extraction_models.dart';
 import '../models/item_model.dart';
 import '../repositories/batch_extraction_repository.dart';
 import '../repositories/item_repository.dart';
+import 'wardrobe_controller.dart';
 
 /// Controller for batch image extraction flow
 ///
@@ -50,6 +50,7 @@ class BatchExtractionController extends GetxController {
 
   // Extracted items for review
   final RxList<BatchExtractedItem> extractedItems = <BatchExtractedItem>[].obs;
+  final RxSet<String> selectedUseCases = <String>{}.obs;
 
   // SSE subscription
   StreamSubscription? _sseSubscription;
@@ -65,8 +66,9 @@ class BatchExtractionController extends GetxController {
   bool get isProcessing => isUploading || isExtracting || isGenerating;
   bool get hasImages => selectedImages.isNotEmpty;
   bool get hasError => error.value.isNotEmpty;
-  int get selectedItemCount =>
-      extractedItems.where((item) => item.isSelected).length;
+  int get selectedItemCount => extractedItems
+      .where((item) => item.isSelected && item.includeInWardrobe)
+      .length;
 
   @override
   void onClose() {
@@ -182,9 +184,7 @@ class BatchExtractionController extends GetxController {
         // Update image status
         _updateImageStatus(image.id, BatchImageStatus.uploading);
 
-        final base64 = await ImageUtils.compressAndEncode(
-          File(image.filePath),
-        );
+        final base64 = await ImageUtils.compressAndEncode(File(image.filePath));
 
         if (base64 == null) {
           _updateImageStatus(
@@ -195,10 +195,9 @@ class BatchExtractionController extends GetxController {
           continue;
         }
 
-        imageInputs.add(BatchImageInput(
-          id: image.id,
-          imageBase64: base64,
-        ));
+        imageInputs.add(
+          BatchImageInput(imageId: image.id, imageBase64: base64),
+        );
 
         // Update progress
         uploadProgress.value = (i + 1) / selectedImages.length;
@@ -230,21 +229,23 @@ class BatchExtractionController extends GetxController {
   /// Subscribe to SSE events for the job
   void _subscribeToEvents(String id) {
     _sseSubscription?.cancel();
-    _sseSubscription = _batchRepo.subscribeToEvents(id).listen(
-      _handleSSEEvent,
-      onError: (e) {
-        if (kDebugMode) {
-          print('SSE error: $e');
-        }
-        // Try to recover by polling status
-        _pollJobStatus(id);
-      },
-      onDone: () {
-        if (kDebugMode) {
-          print('SSE stream completed');
-        }
-      },
-    );
+    _sseSubscription = _batchRepo
+        .subscribeToEvents(id)
+        .listen(
+          _handleSSEEvent,
+          onError: (e) {
+            if (kDebugMode) {
+              print('SSE error: $e');
+            }
+            // Try to recover by polling status
+            _pollJobStatus(id);
+          },
+          onDone: () {
+            if (kDebugMode) {
+              print('SSE stream completed');
+            }
+          },
+        );
   }
 
   /// Handle incoming SSE events
@@ -280,13 +281,26 @@ class BatchExtractionController extends GetxController {
 
       case 'generation_started':
         jobStatus.value = BatchJobStatus.generating;
-        totalItems.value = extractedItems.length;
+        totalItems.value =
+            (event.data?['total_items'] as num?)?.toInt() ??
+            extractedItems.length;
         totalBatches.value =
-            (extractedItems.length / generationBatchSize).ceil();
+            (event.data?['total_batches'] as num?)?.toInt() ??
+            (extractedItems.isEmpty
+                ? 0
+                : (extractedItems.length / generationBatchSize).ceil());
+        for (var i = 0; i < selectedImages.length; i++) {
+          if (selectedImages[i].status != BatchImageStatus.failed) {
+            selectedImages[i] = selectedImages[i].copyWith(
+              status: BatchImageStatus.generating,
+            );
+          }
+        }
         break;
 
       case 'batch_generation_started':
-        currentBatch.value = event.data?['batch_index'] ?? 0;
+        currentBatch.value =
+            (event.data?['batch_number'] as num?)?.toInt() ?? 0;
         break;
 
       case 'item_generation_complete':
@@ -306,6 +320,25 @@ class BatchExtractionController extends GetxController {
         break;
 
       case 'job_complete':
+        final finalItems = event.data?['items'];
+        if (finalItems is List) {
+          final parsed = finalItems
+              .whereType<Map<String, dynamic>>()
+              .map(BatchExtractedItem.fromJson)
+              .toList();
+          extractedItems.assignAll(parsed);
+          totalItems.value = parsed.length;
+          generatedCount.value = parsed
+              .where((item) => item.status == BatchItemStatus.generated)
+              .length;
+        }
+        for (var i = 0; i < selectedImages.length; i++) {
+          if (selectedImages[i].status != BatchImageStatus.failed) {
+            selectedImages[i] = selectedImages[i].copyWith(
+              status: BatchImageStatus.generated,
+            );
+          }
+        }
         jobStatus.value = BatchJobStatus.complete;
         _sseSubscription?.cancel();
         break;
@@ -334,7 +367,9 @@ class BatchExtractionController extends GetxController {
     if (imageId == null) return;
 
     _updateImageStatus(imageId, BatchImageStatus.extracted);
-    extractedCount.value++;
+    extractedCount.value =
+        (data['completed_count'] as num?)?.toInt() ??
+        (extractedCount.value + 1);
 
     // Parse extracted items
     final items = _batchRepo.parseExtractedItems(data, imageId);
@@ -364,14 +399,15 @@ class BatchExtractionController extends GetxController {
         error: errorMsg ?? 'Extraction failed',
       );
     }
-    failedCount.value++;
+    failedCount.value =
+        (data['failed_count'] as num?)?.toInt() ?? (failedCount.value + 1);
   }
 
   void _handleItemGenerationComplete(Map<String, dynamic>? data) {
     if (data == null) return;
 
-    final itemId = data['item_id'] as String?;
-    final imageUrl = data['image_url'] as String?;
+    final itemId = data['temp_id'] as String?;
+    final generatedBase64 = data['generated_image_base64']?.toString();
 
     if (itemId == null) return;
 
@@ -379,16 +415,21 @@ class BatchExtractionController extends GetxController {
     if (itemIndex >= 0) {
       extractedItems[itemIndex] = extractedItems[itemIndex].copyWith(
         status: BatchItemStatus.generated,
-        generatedImageUrl: imageUrl,
+        generatedImageBase64: generatedBase64,
+        generatedImageUrl: generatedBase64 != null && generatedBase64.isNotEmpty
+            ? 'data:image/png;base64,$generatedBase64'
+            : extractedItems[itemIndex].generatedImageUrl,
       );
     }
-    generatedCount.value++;
+    generatedCount.value =
+        (data['completed_count'] as num?)?.toInt() ??
+        (generatedCount.value + 1);
   }
 
   void _handleItemGenerationFailed(Map<String, dynamic>? data) {
     if (data == null) return;
 
-    final itemId = data['item_id'] as String?;
+    final itemId = data['temp_id'] as String?;
     final errorMsg = data['error'] as String?;
 
     if (itemId == null) return;
@@ -424,9 +465,10 @@ class BatchExtractionController extends GetxController {
       // Update state from polled status
       extractedCount.value = status.extractedCount;
       generatedCount.value = status.generatedCount;
-      failedCount.value = status.failedCount;
+      failedCount.value = status.failedCount + status.generationFailedCount;
       currentBatch.value = status.currentBatch;
       totalBatches.value = status.totalBatches;
+      totalItems.value = status.detectedItems?.length ?? extractedItems.length;
 
       // Update detected items if available
       if (status.detectedItems != null) {
@@ -482,8 +524,10 @@ class BatchExtractionController extends GetxController {
   void toggleItemSelection(String itemId) {
     final index = extractedItems.indexWhere((item) => item.id == itemId);
     if (index >= 0) {
+      final nextValue = !extractedItems[index].isSelected;
       extractedItems[index] = extractedItems[index].copyWith(
-        isSelected: !extractedItems[index].isSelected,
+        isSelected: nextValue,
+        includeInWardrobe: nextValue,
       );
     }
   }
@@ -492,7 +536,10 @@ class BatchExtractionController extends GetxController {
   void selectAllItems() {
     for (var i = 0; i < extractedItems.length; i++) {
       if (!extractedItems[i].isSelected) {
-        extractedItems[i] = extractedItems[i].copyWith(isSelected: true);
+        extractedItems[i] = extractedItems[i].copyWith(
+          isSelected: true,
+          includeInWardrobe: true,
+        );
       }
     }
   }
@@ -501,7 +548,34 @@ class BatchExtractionController extends GetxController {
   void deselectAllItems() {
     for (var i = 0; i < extractedItems.length; i++) {
       if (extractedItems[i].isSelected) {
-        extractedItems[i] = extractedItems[i].copyWith(isSelected: false);
+        extractedItems[i] = extractedItems[i].copyWith(
+          isSelected: false,
+          includeInWardrobe: false,
+        );
+      }
+    }
+  }
+
+  /// Toggle include/exclude for a single item while keeping selection aligned.
+  void toggleItemInclude(String itemId) {
+    final index = extractedItems.indexWhere((item) => item.id == itemId);
+    if (index < 0) return;
+
+    final nextValue = !extractedItems[index].includeInWardrobe;
+    extractedItems[index] = extractedItems[index].copyWith(
+      includeInWardrobe: nextValue,
+      isSelected: nextValue,
+    );
+  }
+
+  /// Include/exclude all items for a specific person group.
+  void setPersonInclusion(String personId, bool include) {
+    for (var i = 0; i < extractedItems.length; i++) {
+      if ((extractedItems[i].personId ?? 'unassigned') == personId) {
+        extractedItems[i] = extractedItems[i].copyWith(
+          includeInWardrobe: include,
+          isSelected: include,
+        );
       }
     }
   }
@@ -514,9 +588,54 @@ class BatchExtractionController extends GetxController {
     }
   }
 
+  /// Toggle one apply-to-all use-case value.
+  void toggleUseCase(String useCase) {
+    final normalized = UseCases.normalize(useCase);
+    if (normalized.isEmpty) return;
+    if (selectedUseCases.contains(normalized)) {
+      selectedUseCases.remove(normalized);
+    } else {
+      selectedUseCases.add(normalized);
+    }
+    selectedUseCases.refresh();
+  }
+
+  /// Add one use-case tag without toggling.
+  void addUseCase(String useCase) {
+    final normalized = UseCases.normalize(useCase);
+    if (normalized.isEmpty || selectedUseCases.contains(normalized)) return;
+    selectedUseCases.add(normalized);
+    selectedUseCases.refresh();
+  }
+
+  /// Remove one use-case tag.
+  void removeUseCase(String useCase) {
+    final normalized = UseCases.normalize(useCase);
+    if (!selectedUseCases.contains(normalized)) return;
+    selectedUseCases.remove(normalized);
+    selectedUseCases.refresh();
+  }
+
+  /// Set the apply-to-all use-case value directly (single active value).
+  void setUseCaseFilter(String value) {
+    final normalized = UseCases.normalize(value);
+    selectedUseCases.clear();
+    if (normalized.isNotEmpty) {
+      selectedUseCases.add(normalized);
+    }
+    selectedUseCases.refresh();
+  }
+
   /// Save selected items to wardrobe
   Future<List<ItemModel>> saveSelectedItems() async {
-    final selected = extractedItems.where((item) => item.isSelected).toList();
+    final selected = extractedItems
+        .where(
+          (item) =>
+              item.isSelected &&
+              item.includeInWardrobe &&
+              item.status == BatchItemStatus.generated,
+        )
+        .toList();
     if (selected.isEmpty) {
       error.value = 'No items selected';
       return [];
@@ -528,36 +647,53 @@ class BatchExtractionController extends GetxController {
     for (final item in selected) {
       try {
         final request = CreateItemRequest(
-          name: item.name,
+          name: item.name.isNotEmpty
+              ? item.name
+              : (item.subCategory ?? item.category.name),
           category: item.category,
           colors: item.colors,
           material: item.material,
           pattern: item.pattern,
           description: item.description,
           condition: domain.Condition.clean,
+          occasionTags: selectedUseCases.isEmpty
+              ? null
+              : UseCases.normalizeList(selectedUseCases),
         );
 
-        // If we have a source image, create with image
-        final sourceImage = selectedImages.firstWhereOrNull(
-          (img) => img.id == item.sourceImageId,
-        );
+        final created = await _itemRepo.createItem(request);
 
-        ItemModel created;
-        if (sourceImage != null) {
-          created = await _itemRepo.createItemWithImage(
-            image: File(sourceImage.filePath),
-            request: request,
-          );
+        final generatedBase64 =
+            item.generatedImageBase64 ??
+            item.generatedImageUrl?.replaceFirst(
+              RegExp(r'^data:image/\w+;base64,', caseSensitive: false),
+              '',
+            );
+
+        if (generatedBase64 != null && generatedBase64.isNotEmpty) {
+          await _itemRepo.uploadImageFromBase64(created.id, generatedBase64);
         } else {
-          created = await _itemRepo.createItem(request);
+          final sourceImage = selectedImages.firstWhereOrNull(
+            (img) => img.id == item.sourceImageId,
+          );
+          if (sourceImage != null) {
+            await _itemRepo.uploadImages(created.id, [
+              File(sourceImage.filePath),
+            ]);
+          }
         }
 
-        savedItems.add(created);
+        savedItems.add(await _itemRepo.getItem(created.id));
       } catch (e) {
         if (kDebugMode) {
           print('Failed to save item ${item.name}: $e');
         }
       }
+    }
+
+    // Notify WardrobeController for immediate UI update
+    if (savedItems.isNotEmpty && Get.isRegistered<WardrobeController>()) {
+      Get.find<WardrobeController>().addItems(savedItems);
     }
 
     return savedItems;
@@ -579,5 +715,6 @@ class BatchExtractionController extends GetxController {
     totalBatches.value = 0;
     totalItems.value = 0;
     remainingSlots.value = maxImages;
+    selectedUseCases.clear();
   }
 }

@@ -160,9 +160,13 @@ class WeatherBasedTab extends StatelessWidget {
           // Recommendations
           Obx(() {
             if (controller.isLoadingWeather.value) {
-              return const Padding(
-                padding: EdgeInsets.only(top: AppConstants.spacing16),
-                child: Center(child: CircularProgressIndicator()),
+              return Padding(
+                padding: const EdgeInsets.all(AppConstants.spacing16),
+                child: ShimmerGridLoaderBox(
+                  crossAxisCount: 2,
+                  itemCount: 4,
+                  childAspectRatio: 0.75,
+                ),
               );
             }
 
