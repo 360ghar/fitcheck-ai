@@ -20,6 +20,7 @@ from app.models.social_import import (
     SocialImportItemStatus,
     SocialImportJobStatus,
     SocialImportPhotoStatus,
+    SocialPlatform,
 )
 from app.services.ai_service import AIService
 from app.services.ai_settings_service import AISettingsService
@@ -167,7 +168,7 @@ class SocialImportPipelineService:
             )
             result = await SocialScraperService.discover_profile_photos(
                 normalized_url=job["normalized_url"],
-                platform=job["platform"],
+                platform=SocialPlatform(job["platform"]),
                 auth_session=auth_session,
                 cursor=cursor,
             )
@@ -606,6 +607,7 @@ class SocialImportPipelineService:
                 if item.get("status") in {
                     SocialImportItemStatus.FAILED.value,
                     SocialImportItemStatus.DISCARDED.value,
+                    SocialImportItemStatus.SAVED.value,
                 }:
                     continue
                 saved_item_id = await self._save_item_from_social_item(item)
