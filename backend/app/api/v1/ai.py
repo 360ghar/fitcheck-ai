@@ -106,7 +106,7 @@ async def extract_items(
                 max_retries=3,
                 initial_delay=2.0,
                 backoff_factor=2.0,
-                retryable_exceptions=(AIServiceError, Exception),
+                retryable_exceptions=(AIServiceError,),
                 on_retry=lambda attempt, error, delay: logger.warning(
                     "Retrying extract_multiple_items",
                     attempt=attempt,
@@ -156,7 +156,7 @@ async def extract_single_item(
                 max_retries=3,
                 initial_delay=2.0,
                 backoff_factor=2.0,
-                retryable_exceptions=(AIServiceError, Exception),
+                retryable_exceptions=(AIServiceError,),
                 on_retry=lambda attempt, error, delay: logger.warning(
                     "Retrying extract_single_item",
                     attempt=attempt,
@@ -268,7 +268,7 @@ async def generate_outfit(
                 max_retries=3,
                 initial_delay=2.0,
                 backoff_factor=2.0,
-                retryable_exceptions=(AIServiceError, Exception),
+                retryable_exceptions=(AIServiceError,),
                 on_retry=lambda attempt, error, delay: logger.warning(
                     "Retrying generate_outfit",
                     attempt=attempt,
@@ -347,7 +347,7 @@ async def generate_product_image(
                 max_retries=3,
                 initial_delay=2.0,
                 backoff_factor=2.0,
-                retryable_exceptions=(AIServiceError, Exception),
+                retryable_exceptions=(AIServiceError,),
                 on_retry=lambda attempt, error, delay: logger.warning(
                     "Retrying generate_product_image",
                     attempt=attempt,
@@ -465,7 +465,7 @@ async def generate_try_on(
                 max_retries=3,
                 initial_delay=2.0,
                 backoff_factor=2.0,
-                retryable_exceptions=(AIServiceError, Exception),
+                retryable_exceptions=(AIServiceError,),
                 on_retry=lambda attempt, error, delay: logger.warning(
                     "Retrying generate_try_on",
                     attempt=attempt,

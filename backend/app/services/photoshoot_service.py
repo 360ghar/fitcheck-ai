@@ -22,6 +22,7 @@ from app.models.photoshoot import (
     PhotoshootStatus,
     PhotoshootPrompt,
     GeneratedImage,
+    ImageGenerationFailure,
     PhotoshootUsage,
     PhotoshootResultResponse,
     UseCaseInfo,
@@ -725,7 +726,7 @@ CRITICAL REQUIREMENTS:
         prompts: List[PhotoshootPrompt],
         user_id: Optional[str] = None,
         db: Optional[Client] = None,
-    ) -> List[GeneratedImage]:
+    ) -> Tuple[List[GeneratedImage], List[ImageGenerationFailure]]:
         """Generate photoshoot images using AIProviderService.
 
         Uses the existing image generation infrastructure with identity preservation
@@ -807,15 +808,21 @@ CRITICAL REQUIREMENTS:
             tasks = [generate_with_semaphore(p) for p in prompts]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Filter successful results
+            # Filter successful and failed results
             successful: List[GeneratedImage] = []
+            failures: List[ImageGenerationFailure] = []
             for i, result in enumerate(results):
+                prompt_index = prompts[i].index if i < len(prompts) else i
                 if isinstance(result, GeneratedImage):
                     successful.append(result)
                 elif isinstance(result, Exception):
-                    logger.error(f"Image {i} generation failed with exception: {result}")
+                    error_text = str(result).strip() or result.__class__.__name__
+                    logger.error(f"Image {prompt_index} generation failed with exception: {error_text}")
+                    failures.append(ImageGenerationFailure(index=prompt_index, error=error_text))
                 else:
-                    logger.warning(f"Image {i} generation returned None")
+                    error_text = "Image generation returned no result"
+                    logger.warning(f"Image {prompt_index} generation returned None")
+                    failures.append(ImageGenerationFailure(index=prompt_index, error=error_text))
 
             if not successful:
                 raise ServiceError("All image generations failed")
@@ -823,8 +830,10 @@ CRITICAL REQUIREMENTS:
             # Sort by index
             successful.sort(key=lambda img: img.index)
 
-            logger.info(f"Successfully generated {len(successful)}/{len(prompts)} images")
-            return successful
+            logger.info(
+                f"Successfully generated {len(successful)}/{len(prompts)} images"
+            )
+            return successful, failures
 
         finally:
             await ai_service.close()
@@ -870,7 +879,7 @@ CRITICAL REQUIREMENTS:
             )
 
             # Generate images using AIProviderService
-            images = await PhotoshootService.generate_images(
+            images, failures = await PhotoshootService.generate_images(
                 reference_photos=photos,
                 prompts=prompts,
                 user_id=user_id,
@@ -891,6 +900,10 @@ CRITICAL REQUIREMENTS:
                 images=images,
                 usage=updated_usage,
                 generation_time_seconds=round(generation_time, 2),
+                generated_count=len(images),
+                failed_count=len(failures),
+                image_failures=failures,
+                partial_success=len(failures) > 0,
             )
 
         except (ValidationError, RateLimitError, ServiceError, DatabaseError):
@@ -985,6 +998,8 @@ class PhotoshootStreamingService:
                 "session_id": job.session_id,
                 "generated_count": generated_count,
                 "failed_count": job.failed_count,
+                "failed_indices": sorted(job.failed_indices),
+                "partial_success": job.failed_count > 0,
                 "usage": usage_dict,
                 "timestamp": datetime.utcnow().isoformat(),
             })

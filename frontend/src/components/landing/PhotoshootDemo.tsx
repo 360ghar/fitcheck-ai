@@ -9,7 +9,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Camera, Loader2, Download, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Camera, Loader2, Download, AlertCircle, CheckCircle2, ArrowRight, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GlassCard } from './GlassCard';
 import { LoginPromptModal } from './LoginPromptModal';
@@ -33,6 +33,7 @@ export function PhotoshootDemo() {
   const [result, setResult] = useState<DemoPhotoshootResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [retryingFailedIndex, setRetryingFailedIndex] = useState<number | null>(null);
 
   // Cleanup object URL when photo changes or component unmounts
   useEffect(() => {
@@ -117,6 +118,49 @@ export function PhotoshootDemo() {
     setPhotoPreview(null);
     setResult(null);
     setError(null);
+    setRetryingFailedIndex(null);
+  };
+
+  const failedIndices = result?.image_failures?.map((f) => f.index).sort((a, b) => a - b) ?? [];
+  const failedCount = result?.failed_count ?? 0;
+
+  const retryFailedSlot = async (failedIndex: number) => {
+    if (!photo) return;
+
+    setRetryingFailedIndex(failedIndex);
+    setError(null);
+
+    try {
+      const retryResult = await demoPhotoshoot(photo);
+      const replacement = retryResult.images[0];
+
+      if (replacement && result) {
+        const nextImages = [...result.images, { ...replacement, index: failedIndex }]
+          .filter((img, i, arr) => arr.findIndex((x) => x.index === img.index) === i)
+          .sort((a, b) => a.index - b.index);
+
+        const nextFailed = failedIndices.filter((i) => i !== failedIndex);
+
+        setResult({
+          ...result,
+          images: nextImages,
+          failed_count: nextFailed.length,
+          partial_success: nextFailed.length > 0,
+          image_failures: nextFailed.map((index) => ({ index, error: '' })),
+          remaining_today: retryResult.remaining_today,
+        });
+      }
+    } catch (err) {
+      const errorMessage = isDemoApiError(err)
+        ? err.isRateLimit
+          ? 'Daily demo limit reached. Sign up for 10 free images per day!'
+          : err.message || 'Retry failed'
+        : 'Retry failed';
+      setError(errorMessage);
+      setState('error');
+    } finally {
+      setRetryingFailedIndex(null);
+    }
   };
 
   return (
@@ -220,6 +264,15 @@ export function PhotoshootDemo() {
             <span className="text-sm font-medium">{result.images.length} images generated!</span>
           </div>
 
+          {result.partial_success && failedCount > 0 && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4" />
+              <p className="text-xs">
+                {failedCount} slot{failedCount > 1 ? 's' : ''} failed. Retry each failed slot.
+              </p>
+            </div>
+          )}
+
           {/* Image Grid */}
           <div className="grid grid-cols-2 gap-3">
             {result.images.map((img, idx) => (
@@ -235,6 +288,30 @@ export function PhotoshootDemo() {
                 >
                   <Download className="w-4 h-4 text-gray-700" />
                 </button>
+              </div>
+            ))}
+
+            {failedIndices.map((failedIndex) => (
+              <div
+                key={`demo-failed-${failedIndex}`}
+                className="aspect-[3/4] rounded-lg border border-dashed border-amber-300 bg-amber-50/60 p-3 flex flex-col justify-between"
+              >
+                <div>
+                  <div className="mb-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+                    Failed #{failedIndex + 1}
+                  </div>
+                  <p className="text-xs text-amber-800">Retry to generate this slot.</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-300"
+                  disabled={retryingFailedIndex !== null}
+                  onClick={() => void retryFailedSlot(failedIndex)}
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  {retryingFailedIndex === failedIndex ? 'Retrying...' : 'Retry'}
+                </Button>
               </div>
             ))}
           </div>

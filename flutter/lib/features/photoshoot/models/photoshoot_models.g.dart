@@ -78,6 +78,14 @@ _PhotoshootResult _$PhotoshootResultFromJson(Map<String, dynamic> json) =>
               ?.map((e) => GeneratedImage.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const [],
+      generatedCount: (json['generated_count'] as num?)?.toInt() ?? 0,
+      failedCount: (json['failed_count'] as num?)?.toInt() ?? 0,
+      failedIndices:
+          (json['failed_indices'] as List<dynamic>?)
+              ?.map((e) => (e as num).toInt())
+              .toList() ??
+          const [],
+      partialSuccess: json['partial_success'] as bool? ?? false,
       usage: json['usage'] == null
           ? null
           : PhotoshootUsage.fromJson(json['usage'] as Map<String, dynamic>),
@@ -89,6 +97,10 @@ Map<String, dynamic> _$PhotoshootResultToJson(_PhotoshootResult instance) =>
       'session_id': instance.sessionId,
       'status': _$PhotoshootStatusEnumMap[instance.status]!,
       'images': instance.images,
+      'generated_count': instance.generatedCount,
+      'failed_count': instance.failedCount,
+      'failed_indices': instance.failedIndices,
+      'partial_success': instance.partialSuccess,
       'usage': instance.usage,
       'error': instance.error,
     };
@@ -141,6 +153,13 @@ _PhotoshootJobStatusResponse _$PhotoshootJobStatusResponseFromJson(
   jobId: json['job_id'] as String,
   status: json['status'] as String,
   generatedCount: (json['generated_count'] as num?)?.toInt() ?? 0,
+  failedCount: (json['failed_count'] as num?)?.toInt() ?? 0,
+  failedIndices:
+      (json['failed_indices'] as List<dynamic>?)
+          ?.map((e) => (e as num).toInt())
+          .toList() ??
+      const [],
+  partialSuccess: json['partial_success'] as bool? ?? false,
   totalCount: (json['total_count'] as num?)?.toInt() ?? 0,
   currentBatch: (json['current_batch'] as num?)?.toInt() ?? 0,
   totalBatches: (json['total_batches'] as num?)?.toInt() ?? 0,
@@ -161,6 +180,9 @@ Map<String, dynamic> _$PhotoshootJobStatusResponseToJson(
   'job_id': instance.jobId,
   'status': instance.status,
   'generated_count': instance.generatedCount,
+  'failed_count': instance.failedCount,
+  'failed_indices': instance.failedIndices,
+  'partial_success': instance.partialSuccess,
   'total_count': instance.totalCount,
   'current_batch': instance.currentBatch,
   'total_batches': instance.totalBatches,

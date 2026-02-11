@@ -840,7 +840,7 @@ as int,
 /// @nodoc
 mixin _$PhotoshootResult {
 
-@JsonKey(name: 'session_id') String get sessionId; PhotoshootStatus get status; List<GeneratedImage> get images; PhotoshootUsage? get usage; String? get error;
+@JsonKey(name: 'session_id') String get sessionId; PhotoshootStatus get status; List<GeneratedImage> get images;@JsonKey(name: 'generated_count') int get generatedCount;@JsonKey(name: 'failed_count') int get failedCount;@JsonKey(name: 'failed_indices') List<int> get failedIndices;@JsonKey(name: 'partial_success') bool get partialSuccess; PhotoshootUsage? get usage; String? get error;
 /// Create a copy of PhotoshootResult
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -853,16 +853,16 @@ $PhotoshootResultCopyWith<PhotoshootResult> get copyWith => _$PhotoshootResultCo
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PhotoshootResult&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.status, status) || other.status == status)&&const DeepCollectionEquality().equals(other.images, images)&&(identical(other.usage, usage) || other.usage == usage)&&(identical(other.error, error) || other.error == error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is PhotoshootResult&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.status, status) || other.status == status)&&const DeepCollectionEquality().equals(other.images, images)&&(identical(other.generatedCount, generatedCount) || other.generatedCount == generatedCount)&&(identical(other.failedCount, failedCount) || other.failedCount == failedCount)&&const DeepCollectionEquality().equals(other.failedIndices, failedIndices)&&(identical(other.partialSuccess, partialSuccess) || other.partialSuccess == partialSuccess)&&(identical(other.usage, usage) || other.usage == usage)&&(identical(other.error, error) || other.error == error));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,sessionId,status,const DeepCollectionEquality().hash(images),usage,error);
+int get hashCode => Object.hash(runtimeType,sessionId,status,const DeepCollectionEquality().hash(images),generatedCount,failedCount,const DeepCollectionEquality().hash(failedIndices),partialSuccess,usage,error);
 
 @override
 String toString() {
-  return 'PhotoshootResult(sessionId: $sessionId, status: $status, images: $images, usage: $usage, error: $error)';
+  return 'PhotoshootResult(sessionId: $sessionId, status: $status, images: $images, generatedCount: $generatedCount, failedCount: $failedCount, failedIndices: $failedIndices, partialSuccess: $partialSuccess, usage: $usage, error: $error)';
 }
 
 
@@ -873,7 +873,7 @@ abstract mixin class $PhotoshootResultCopyWith<$Res>  {
   factory $PhotoshootResultCopyWith(PhotoshootResult value, $Res Function(PhotoshootResult) _then) = _$PhotoshootResultCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: 'session_id') String sessionId, PhotoshootStatus status, List<GeneratedImage> images, PhotoshootUsage? usage, String? error
+@JsonKey(name: 'session_id') String sessionId, PhotoshootStatus status, List<GeneratedImage> images,@JsonKey(name: 'generated_count') int generatedCount,@JsonKey(name: 'failed_count') int failedCount,@JsonKey(name: 'failed_indices') List<int> failedIndices,@JsonKey(name: 'partial_success') bool partialSuccess, PhotoshootUsage? usage, String? error
 });
 
 
@@ -890,12 +890,16 @@ class _$PhotoshootResultCopyWithImpl<$Res>
 
 /// Create a copy of PhotoshootResult
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? sessionId = null,Object? status = null,Object? images = null,Object? usage = freezed,Object? error = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? sessionId = null,Object? status = null,Object? images = null,Object? generatedCount = null,Object? failedCount = null,Object? failedIndices = null,Object? partialSuccess = null,Object? usage = freezed,Object? error = freezed,}) {
   return _then(_self.copyWith(
 sessionId: null == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
 as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as PhotoshootStatus,images: null == images ? _self.images : images // ignore: cast_nullable_to_non_nullable
-as List<GeneratedImage>,usage: freezed == usage ? _self.usage : usage // ignore: cast_nullable_to_non_nullable
+as List<GeneratedImage>,generatedCount: null == generatedCount ? _self.generatedCount : generatedCount // ignore: cast_nullable_to_non_nullable
+as int,failedCount: null == failedCount ? _self.failedCount : failedCount // ignore: cast_nullable_to_non_nullable
+as int,failedIndices: null == failedIndices ? _self.failedIndices : failedIndices // ignore: cast_nullable_to_non_nullable
+as List<int>,partialSuccess: null == partialSuccess ? _self.partialSuccess : partialSuccess // ignore: cast_nullable_to_non_nullable
+as bool,usage: freezed == usage ? _self.usage : usage // ignore: cast_nullable_to_non_nullable
 as PhotoshootUsage?,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
@@ -994,10 +998,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'session_id')  String sessionId,  PhotoshootStatus status,  List<GeneratedImage> images,  PhotoshootUsage? usage,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'session_id')  String sessionId,  PhotoshootStatus status,  List<GeneratedImage> images, @JsonKey(name: 'generated_count')  int generatedCount, @JsonKey(name: 'failed_count')  int failedCount, @JsonKey(name: 'failed_indices')  List<int> failedIndices, @JsonKey(name: 'partial_success')  bool partialSuccess,  PhotoshootUsage? usage,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _PhotoshootResult() when $default != null:
-return $default(_that.sessionId,_that.status,_that.images,_that.usage,_that.error);case _:
+return $default(_that.sessionId,_that.status,_that.images,_that.generatedCount,_that.failedCount,_that.failedIndices,_that.partialSuccess,_that.usage,_that.error);case _:
   return orElse();
 
 }
@@ -1015,10 +1019,10 @@ return $default(_that.sessionId,_that.status,_that.images,_that.usage,_that.erro
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'session_id')  String sessionId,  PhotoshootStatus status,  List<GeneratedImage> images,  PhotoshootUsage? usage,  String? error)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'session_id')  String sessionId,  PhotoshootStatus status,  List<GeneratedImage> images, @JsonKey(name: 'generated_count')  int generatedCount, @JsonKey(name: 'failed_count')  int failedCount, @JsonKey(name: 'failed_indices')  List<int> failedIndices, @JsonKey(name: 'partial_success')  bool partialSuccess,  PhotoshootUsage? usage,  String? error)  $default,) {final _that = this;
 switch (_that) {
 case _PhotoshootResult():
-return $default(_that.sessionId,_that.status,_that.images,_that.usage,_that.error);case _:
+return $default(_that.sessionId,_that.status,_that.images,_that.generatedCount,_that.failedCount,_that.failedIndices,_that.partialSuccess,_that.usage,_that.error);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1035,10 +1039,10 @@ return $default(_that.sessionId,_that.status,_that.images,_that.usage,_that.erro
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'session_id')  String sessionId,  PhotoshootStatus status,  List<GeneratedImage> images,  PhotoshootUsage? usage,  String? error)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'session_id')  String sessionId,  PhotoshootStatus status,  List<GeneratedImage> images, @JsonKey(name: 'generated_count')  int generatedCount, @JsonKey(name: 'failed_count')  int failedCount, @JsonKey(name: 'failed_indices')  List<int> failedIndices, @JsonKey(name: 'partial_success')  bool partialSuccess,  PhotoshootUsage? usage,  String? error)?  $default,) {final _that = this;
 switch (_that) {
 case _PhotoshootResult() when $default != null:
-return $default(_that.sessionId,_that.status,_that.images,_that.usage,_that.error);case _:
+return $default(_that.sessionId,_that.status,_that.images,_that.generatedCount,_that.failedCount,_that.failedIndices,_that.partialSuccess,_that.usage,_that.error);case _:
   return null;
 
 }
@@ -1050,7 +1054,7 @@ return $default(_that.sessionId,_that.status,_that.images,_that.usage,_that.erro
 @JsonSerializable()
 
 class _PhotoshootResult implements PhotoshootResult {
-  const _PhotoshootResult({@JsonKey(name: 'session_id') required this.sessionId, required this.status, final  List<GeneratedImage> images = const [], this.usage, this.error}): _images = images;
+  const _PhotoshootResult({@JsonKey(name: 'session_id') required this.sessionId, required this.status, final  List<GeneratedImage> images = const [], @JsonKey(name: 'generated_count') this.generatedCount = 0, @JsonKey(name: 'failed_count') this.failedCount = 0, @JsonKey(name: 'failed_indices') final  List<int> failedIndices = const [], @JsonKey(name: 'partial_success') this.partialSuccess = false, this.usage, this.error}): _images = images,_failedIndices = failedIndices;
   factory _PhotoshootResult.fromJson(Map<String, dynamic> json) => _$PhotoshootResultFromJson(json);
 
 @override@JsonKey(name: 'session_id') final  String sessionId;
@@ -1062,6 +1066,16 @@ class _PhotoshootResult implements PhotoshootResult {
   return EqualUnmodifiableListView(_images);
 }
 
+@override@JsonKey(name: 'generated_count') final  int generatedCount;
+@override@JsonKey(name: 'failed_count') final  int failedCount;
+ final  List<int> _failedIndices;
+@override@JsonKey(name: 'failed_indices') List<int> get failedIndices {
+  if (_failedIndices is EqualUnmodifiableListView) return _failedIndices;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_failedIndices);
+}
+
+@override@JsonKey(name: 'partial_success') final  bool partialSuccess;
 @override final  PhotoshootUsage? usage;
 @override final  String? error;
 
@@ -1078,16 +1092,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PhotoshootResult&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.status, status) || other.status == status)&&const DeepCollectionEquality().equals(other._images, _images)&&(identical(other.usage, usage) || other.usage == usage)&&(identical(other.error, error) || other.error == error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PhotoshootResult&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.status, status) || other.status == status)&&const DeepCollectionEquality().equals(other._images, _images)&&(identical(other.generatedCount, generatedCount) || other.generatedCount == generatedCount)&&(identical(other.failedCount, failedCount) || other.failedCount == failedCount)&&const DeepCollectionEquality().equals(other._failedIndices, _failedIndices)&&(identical(other.partialSuccess, partialSuccess) || other.partialSuccess == partialSuccess)&&(identical(other.usage, usage) || other.usage == usage)&&(identical(other.error, error) || other.error == error));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,sessionId,status,const DeepCollectionEquality().hash(_images),usage,error);
+int get hashCode => Object.hash(runtimeType,sessionId,status,const DeepCollectionEquality().hash(_images),generatedCount,failedCount,const DeepCollectionEquality().hash(_failedIndices),partialSuccess,usage,error);
 
 @override
 String toString() {
-  return 'PhotoshootResult(sessionId: $sessionId, status: $status, images: $images, usage: $usage, error: $error)';
+  return 'PhotoshootResult(sessionId: $sessionId, status: $status, images: $images, generatedCount: $generatedCount, failedCount: $failedCount, failedIndices: $failedIndices, partialSuccess: $partialSuccess, usage: $usage, error: $error)';
 }
 
 
@@ -1098,7 +1112,7 @@ abstract mixin class _$PhotoshootResultCopyWith<$Res> implements $PhotoshootResu
   factory _$PhotoshootResultCopyWith(_PhotoshootResult value, $Res Function(_PhotoshootResult) _then) = __$PhotoshootResultCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: 'session_id') String sessionId, PhotoshootStatus status, List<GeneratedImage> images, PhotoshootUsage? usage, String? error
+@JsonKey(name: 'session_id') String sessionId, PhotoshootStatus status, List<GeneratedImage> images,@JsonKey(name: 'generated_count') int generatedCount,@JsonKey(name: 'failed_count') int failedCount,@JsonKey(name: 'failed_indices') List<int> failedIndices,@JsonKey(name: 'partial_success') bool partialSuccess, PhotoshootUsage? usage, String? error
 });
 
 
@@ -1115,12 +1129,16 @@ class __$PhotoshootResultCopyWithImpl<$Res>
 
 /// Create a copy of PhotoshootResult
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? sessionId = null,Object? status = null,Object? images = null,Object? usage = freezed,Object? error = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? sessionId = null,Object? status = null,Object? images = null,Object? generatedCount = null,Object? failedCount = null,Object? failedIndices = null,Object? partialSuccess = null,Object? usage = freezed,Object? error = freezed,}) {
   return _then(_PhotoshootResult(
 sessionId: null == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
 as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as PhotoshootStatus,images: null == images ? _self._images : images // ignore: cast_nullable_to_non_nullable
-as List<GeneratedImage>,usage: freezed == usage ? _self.usage : usage // ignore: cast_nullable_to_non_nullable
+as List<GeneratedImage>,generatedCount: null == generatedCount ? _self.generatedCount : generatedCount // ignore: cast_nullable_to_non_nullable
+as int,failedCount: null == failedCount ? _self.failedCount : failedCount // ignore: cast_nullable_to_non_nullable
+as int,failedIndices: null == failedIndices ? _self._failedIndices : failedIndices // ignore: cast_nullable_to_non_nullable
+as List<int>,partialSuccess: null == partialSuccess ? _self.partialSuccess : partialSuccess // ignore: cast_nullable_to_non_nullable
+as bool,usage: freezed == usage ? _self.usage : usage // ignore: cast_nullable_to_non_nullable
 as PhotoshootUsage?,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
@@ -1692,7 +1710,7 @@ as String?,
 /// @nodoc
 mixin _$PhotoshootJobStatusResponse {
 
-@JsonKey(name: 'job_id') String get jobId; String get status;@JsonKey(name: 'generated_count') int get generatedCount;@JsonKey(name: 'total_count') int get totalCount;@JsonKey(name: 'current_batch') int get currentBatch;@JsonKey(name: 'total_batches') int get totalBatches; List<GeneratedImage> get images; PhotoshootUsage? get usage; String? get error;
+@JsonKey(name: 'job_id') String get jobId; String get status;@JsonKey(name: 'generated_count') int get generatedCount;@JsonKey(name: 'failed_count') int get failedCount;@JsonKey(name: 'failed_indices') List<int> get failedIndices;@JsonKey(name: 'partial_success') bool get partialSuccess;@JsonKey(name: 'total_count') int get totalCount;@JsonKey(name: 'current_batch') int get currentBatch;@JsonKey(name: 'total_batches') int get totalBatches; List<GeneratedImage> get images; PhotoshootUsage? get usage; String? get error;
 /// Create a copy of PhotoshootJobStatusResponse
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1705,16 +1723,16 @@ $PhotoshootJobStatusResponseCopyWith<PhotoshootJobStatusResponse> get copyWith =
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PhotoshootJobStatusResponse&&(identical(other.jobId, jobId) || other.jobId == jobId)&&(identical(other.status, status) || other.status == status)&&(identical(other.generatedCount, generatedCount) || other.generatedCount == generatedCount)&&(identical(other.totalCount, totalCount) || other.totalCount == totalCount)&&(identical(other.currentBatch, currentBatch) || other.currentBatch == currentBatch)&&(identical(other.totalBatches, totalBatches) || other.totalBatches == totalBatches)&&const DeepCollectionEquality().equals(other.images, images)&&(identical(other.usage, usage) || other.usage == usage)&&(identical(other.error, error) || other.error == error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is PhotoshootJobStatusResponse&&(identical(other.jobId, jobId) || other.jobId == jobId)&&(identical(other.status, status) || other.status == status)&&(identical(other.generatedCount, generatedCount) || other.generatedCount == generatedCount)&&(identical(other.failedCount, failedCount) || other.failedCount == failedCount)&&const DeepCollectionEquality().equals(other.failedIndices, failedIndices)&&(identical(other.partialSuccess, partialSuccess) || other.partialSuccess == partialSuccess)&&(identical(other.totalCount, totalCount) || other.totalCount == totalCount)&&(identical(other.currentBatch, currentBatch) || other.currentBatch == currentBatch)&&(identical(other.totalBatches, totalBatches) || other.totalBatches == totalBatches)&&const DeepCollectionEquality().equals(other.images, images)&&(identical(other.usage, usage) || other.usage == usage)&&(identical(other.error, error) || other.error == error));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,jobId,status,generatedCount,totalCount,currentBatch,totalBatches,const DeepCollectionEquality().hash(images),usage,error);
+int get hashCode => Object.hash(runtimeType,jobId,status,generatedCount,failedCount,const DeepCollectionEquality().hash(failedIndices),partialSuccess,totalCount,currentBatch,totalBatches,const DeepCollectionEquality().hash(images),usage,error);
 
 @override
 String toString() {
-  return 'PhotoshootJobStatusResponse(jobId: $jobId, status: $status, generatedCount: $generatedCount, totalCount: $totalCount, currentBatch: $currentBatch, totalBatches: $totalBatches, images: $images, usage: $usage, error: $error)';
+  return 'PhotoshootJobStatusResponse(jobId: $jobId, status: $status, generatedCount: $generatedCount, failedCount: $failedCount, failedIndices: $failedIndices, partialSuccess: $partialSuccess, totalCount: $totalCount, currentBatch: $currentBatch, totalBatches: $totalBatches, images: $images, usage: $usage, error: $error)';
 }
 
 
@@ -1725,7 +1743,7 @@ abstract mixin class $PhotoshootJobStatusResponseCopyWith<$Res>  {
   factory $PhotoshootJobStatusResponseCopyWith(PhotoshootJobStatusResponse value, $Res Function(PhotoshootJobStatusResponse) _then) = _$PhotoshootJobStatusResponseCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: 'job_id') String jobId, String status,@JsonKey(name: 'generated_count') int generatedCount,@JsonKey(name: 'total_count') int totalCount,@JsonKey(name: 'current_batch') int currentBatch,@JsonKey(name: 'total_batches') int totalBatches, List<GeneratedImage> images, PhotoshootUsage? usage, String? error
+@JsonKey(name: 'job_id') String jobId, String status,@JsonKey(name: 'generated_count') int generatedCount,@JsonKey(name: 'failed_count') int failedCount,@JsonKey(name: 'failed_indices') List<int> failedIndices,@JsonKey(name: 'partial_success') bool partialSuccess,@JsonKey(name: 'total_count') int totalCount,@JsonKey(name: 'current_batch') int currentBatch,@JsonKey(name: 'total_batches') int totalBatches, List<GeneratedImage> images, PhotoshootUsage? usage, String? error
 });
 
 
@@ -1742,12 +1760,15 @@ class _$PhotoshootJobStatusResponseCopyWithImpl<$Res>
 
 /// Create a copy of PhotoshootJobStatusResponse
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? jobId = null,Object? status = null,Object? generatedCount = null,Object? totalCount = null,Object? currentBatch = null,Object? totalBatches = null,Object? images = null,Object? usage = freezed,Object? error = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? jobId = null,Object? status = null,Object? generatedCount = null,Object? failedCount = null,Object? failedIndices = null,Object? partialSuccess = null,Object? totalCount = null,Object? currentBatch = null,Object? totalBatches = null,Object? images = null,Object? usage = freezed,Object? error = freezed,}) {
   return _then(_self.copyWith(
 jobId: null == jobId ? _self.jobId : jobId // ignore: cast_nullable_to_non_nullable
 as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as String,generatedCount: null == generatedCount ? _self.generatedCount : generatedCount // ignore: cast_nullable_to_non_nullable
-as int,totalCount: null == totalCount ? _self.totalCount : totalCount // ignore: cast_nullable_to_non_nullable
+as int,failedCount: null == failedCount ? _self.failedCount : failedCount // ignore: cast_nullable_to_non_nullable
+as int,failedIndices: null == failedIndices ? _self.failedIndices : failedIndices // ignore: cast_nullable_to_non_nullable
+as List<int>,partialSuccess: null == partialSuccess ? _self.partialSuccess : partialSuccess // ignore: cast_nullable_to_non_nullable
+as bool,totalCount: null == totalCount ? _self.totalCount : totalCount // ignore: cast_nullable_to_non_nullable
 as int,currentBatch: null == currentBatch ? _self.currentBatch : currentBatch // ignore: cast_nullable_to_non_nullable
 as int,totalBatches: null == totalBatches ? _self.totalBatches : totalBatches // ignore: cast_nullable_to_non_nullable
 as int,images: null == images ? _self.images : images // ignore: cast_nullable_to_non_nullable
@@ -1850,10 +1871,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'generated_count')  int generatedCount, @JsonKey(name: 'total_count')  int totalCount, @JsonKey(name: 'current_batch')  int currentBatch, @JsonKey(name: 'total_batches')  int totalBatches,  List<GeneratedImage> images,  PhotoshootUsage? usage,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'generated_count')  int generatedCount, @JsonKey(name: 'failed_count')  int failedCount, @JsonKey(name: 'failed_indices')  List<int> failedIndices, @JsonKey(name: 'partial_success')  bool partialSuccess, @JsonKey(name: 'total_count')  int totalCount, @JsonKey(name: 'current_batch')  int currentBatch, @JsonKey(name: 'total_batches')  int totalBatches,  List<GeneratedImage> images,  PhotoshootUsage? usage,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _PhotoshootJobStatusResponse() when $default != null:
-return $default(_that.jobId,_that.status,_that.generatedCount,_that.totalCount,_that.currentBatch,_that.totalBatches,_that.images,_that.usage,_that.error);case _:
+return $default(_that.jobId,_that.status,_that.generatedCount,_that.failedCount,_that.failedIndices,_that.partialSuccess,_that.totalCount,_that.currentBatch,_that.totalBatches,_that.images,_that.usage,_that.error);case _:
   return orElse();
 
 }
@@ -1871,10 +1892,10 @@ return $default(_that.jobId,_that.status,_that.generatedCount,_that.totalCount,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'generated_count')  int generatedCount, @JsonKey(name: 'total_count')  int totalCount, @JsonKey(name: 'current_batch')  int currentBatch, @JsonKey(name: 'total_batches')  int totalBatches,  List<GeneratedImage> images,  PhotoshootUsage? usage,  String? error)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'generated_count')  int generatedCount, @JsonKey(name: 'failed_count')  int failedCount, @JsonKey(name: 'failed_indices')  List<int> failedIndices, @JsonKey(name: 'partial_success')  bool partialSuccess, @JsonKey(name: 'total_count')  int totalCount, @JsonKey(name: 'current_batch')  int currentBatch, @JsonKey(name: 'total_batches')  int totalBatches,  List<GeneratedImage> images,  PhotoshootUsage? usage,  String? error)  $default,) {final _that = this;
 switch (_that) {
 case _PhotoshootJobStatusResponse():
-return $default(_that.jobId,_that.status,_that.generatedCount,_that.totalCount,_that.currentBatch,_that.totalBatches,_that.images,_that.usage,_that.error);case _:
+return $default(_that.jobId,_that.status,_that.generatedCount,_that.failedCount,_that.failedIndices,_that.partialSuccess,_that.totalCount,_that.currentBatch,_that.totalBatches,_that.images,_that.usage,_that.error);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1891,10 +1912,10 @@ return $default(_that.jobId,_that.status,_that.generatedCount,_that.totalCount,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'generated_count')  int generatedCount, @JsonKey(name: 'total_count')  int totalCount, @JsonKey(name: 'current_batch')  int currentBatch, @JsonKey(name: 'total_batches')  int totalBatches,  List<GeneratedImage> images,  PhotoshootUsage? usage,  String? error)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'generated_count')  int generatedCount, @JsonKey(name: 'failed_count')  int failedCount, @JsonKey(name: 'failed_indices')  List<int> failedIndices, @JsonKey(name: 'partial_success')  bool partialSuccess, @JsonKey(name: 'total_count')  int totalCount, @JsonKey(name: 'current_batch')  int currentBatch, @JsonKey(name: 'total_batches')  int totalBatches,  List<GeneratedImage> images,  PhotoshootUsage? usage,  String? error)?  $default,) {final _that = this;
 switch (_that) {
 case _PhotoshootJobStatusResponse() when $default != null:
-return $default(_that.jobId,_that.status,_that.generatedCount,_that.totalCount,_that.currentBatch,_that.totalBatches,_that.images,_that.usage,_that.error);case _:
+return $default(_that.jobId,_that.status,_that.generatedCount,_that.failedCount,_that.failedIndices,_that.partialSuccess,_that.totalCount,_that.currentBatch,_that.totalBatches,_that.images,_that.usage,_that.error);case _:
   return null;
 
 }
@@ -1906,12 +1927,21 @@ return $default(_that.jobId,_that.status,_that.generatedCount,_that.totalCount,_
 @JsonSerializable()
 
 class _PhotoshootJobStatusResponse implements PhotoshootJobStatusResponse {
-  const _PhotoshootJobStatusResponse({@JsonKey(name: 'job_id') required this.jobId, required this.status, @JsonKey(name: 'generated_count') this.generatedCount = 0, @JsonKey(name: 'total_count') this.totalCount = 0, @JsonKey(name: 'current_batch') this.currentBatch = 0, @JsonKey(name: 'total_batches') this.totalBatches = 0, final  List<GeneratedImage> images = const [], this.usage, this.error}): _images = images;
+  const _PhotoshootJobStatusResponse({@JsonKey(name: 'job_id') required this.jobId, required this.status, @JsonKey(name: 'generated_count') this.generatedCount = 0, @JsonKey(name: 'failed_count') this.failedCount = 0, @JsonKey(name: 'failed_indices') final  List<int> failedIndices = const [], @JsonKey(name: 'partial_success') this.partialSuccess = false, @JsonKey(name: 'total_count') this.totalCount = 0, @JsonKey(name: 'current_batch') this.currentBatch = 0, @JsonKey(name: 'total_batches') this.totalBatches = 0, final  List<GeneratedImage> images = const [], this.usage, this.error}): _failedIndices = failedIndices,_images = images;
   factory _PhotoshootJobStatusResponse.fromJson(Map<String, dynamic> json) => _$PhotoshootJobStatusResponseFromJson(json);
 
 @override@JsonKey(name: 'job_id') final  String jobId;
 @override final  String status;
 @override@JsonKey(name: 'generated_count') final  int generatedCount;
+@override@JsonKey(name: 'failed_count') final  int failedCount;
+ final  List<int> _failedIndices;
+@override@JsonKey(name: 'failed_indices') List<int> get failedIndices {
+  if (_failedIndices is EqualUnmodifiableListView) return _failedIndices;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_failedIndices);
+}
+
+@override@JsonKey(name: 'partial_success') final  bool partialSuccess;
 @override@JsonKey(name: 'total_count') final  int totalCount;
 @override@JsonKey(name: 'current_batch') final  int currentBatch;
 @override@JsonKey(name: 'total_batches') final  int totalBatches;
@@ -1938,16 +1968,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PhotoshootJobStatusResponse&&(identical(other.jobId, jobId) || other.jobId == jobId)&&(identical(other.status, status) || other.status == status)&&(identical(other.generatedCount, generatedCount) || other.generatedCount == generatedCount)&&(identical(other.totalCount, totalCount) || other.totalCount == totalCount)&&(identical(other.currentBatch, currentBatch) || other.currentBatch == currentBatch)&&(identical(other.totalBatches, totalBatches) || other.totalBatches == totalBatches)&&const DeepCollectionEquality().equals(other._images, _images)&&(identical(other.usage, usage) || other.usage == usage)&&(identical(other.error, error) || other.error == error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PhotoshootJobStatusResponse&&(identical(other.jobId, jobId) || other.jobId == jobId)&&(identical(other.status, status) || other.status == status)&&(identical(other.generatedCount, generatedCount) || other.generatedCount == generatedCount)&&(identical(other.failedCount, failedCount) || other.failedCount == failedCount)&&const DeepCollectionEquality().equals(other._failedIndices, _failedIndices)&&(identical(other.partialSuccess, partialSuccess) || other.partialSuccess == partialSuccess)&&(identical(other.totalCount, totalCount) || other.totalCount == totalCount)&&(identical(other.currentBatch, currentBatch) || other.currentBatch == currentBatch)&&(identical(other.totalBatches, totalBatches) || other.totalBatches == totalBatches)&&const DeepCollectionEquality().equals(other._images, _images)&&(identical(other.usage, usage) || other.usage == usage)&&(identical(other.error, error) || other.error == error));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,jobId,status,generatedCount,totalCount,currentBatch,totalBatches,const DeepCollectionEquality().hash(_images),usage,error);
+int get hashCode => Object.hash(runtimeType,jobId,status,generatedCount,failedCount,const DeepCollectionEquality().hash(_failedIndices),partialSuccess,totalCount,currentBatch,totalBatches,const DeepCollectionEquality().hash(_images),usage,error);
 
 @override
 String toString() {
-  return 'PhotoshootJobStatusResponse(jobId: $jobId, status: $status, generatedCount: $generatedCount, totalCount: $totalCount, currentBatch: $currentBatch, totalBatches: $totalBatches, images: $images, usage: $usage, error: $error)';
+  return 'PhotoshootJobStatusResponse(jobId: $jobId, status: $status, generatedCount: $generatedCount, failedCount: $failedCount, failedIndices: $failedIndices, partialSuccess: $partialSuccess, totalCount: $totalCount, currentBatch: $currentBatch, totalBatches: $totalBatches, images: $images, usage: $usage, error: $error)';
 }
 
 
@@ -1958,7 +1988,7 @@ abstract mixin class _$PhotoshootJobStatusResponseCopyWith<$Res> implements $Pho
   factory _$PhotoshootJobStatusResponseCopyWith(_PhotoshootJobStatusResponse value, $Res Function(_PhotoshootJobStatusResponse) _then) = __$PhotoshootJobStatusResponseCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: 'job_id') String jobId, String status,@JsonKey(name: 'generated_count') int generatedCount,@JsonKey(name: 'total_count') int totalCount,@JsonKey(name: 'current_batch') int currentBatch,@JsonKey(name: 'total_batches') int totalBatches, List<GeneratedImage> images, PhotoshootUsage? usage, String? error
+@JsonKey(name: 'job_id') String jobId, String status,@JsonKey(name: 'generated_count') int generatedCount,@JsonKey(name: 'failed_count') int failedCount,@JsonKey(name: 'failed_indices') List<int> failedIndices,@JsonKey(name: 'partial_success') bool partialSuccess,@JsonKey(name: 'total_count') int totalCount,@JsonKey(name: 'current_batch') int currentBatch,@JsonKey(name: 'total_batches') int totalBatches, List<GeneratedImage> images, PhotoshootUsage? usage, String? error
 });
 
 
@@ -1975,12 +2005,15 @@ class __$PhotoshootJobStatusResponseCopyWithImpl<$Res>
 
 /// Create a copy of PhotoshootJobStatusResponse
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? jobId = null,Object? status = null,Object? generatedCount = null,Object? totalCount = null,Object? currentBatch = null,Object? totalBatches = null,Object? images = null,Object? usage = freezed,Object? error = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? jobId = null,Object? status = null,Object? generatedCount = null,Object? failedCount = null,Object? failedIndices = null,Object? partialSuccess = null,Object? totalCount = null,Object? currentBatch = null,Object? totalBatches = null,Object? images = null,Object? usage = freezed,Object? error = freezed,}) {
   return _then(_PhotoshootJobStatusResponse(
 jobId: null == jobId ? _self.jobId : jobId // ignore: cast_nullable_to_non_nullable
 as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as String,generatedCount: null == generatedCount ? _self.generatedCount : generatedCount // ignore: cast_nullable_to_non_nullable
-as int,totalCount: null == totalCount ? _self.totalCount : totalCount // ignore: cast_nullable_to_non_nullable
+as int,failedCount: null == failedCount ? _self.failedCount : failedCount // ignore: cast_nullable_to_non_nullable
+as int,failedIndices: null == failedIndices ? _self._failedIndices : failedIndices // ignore: cast_nullable_to_non_nullable
+as List<int>,partialSuccess: null == partialSuccess ? _self.partialSuccess : partialSuccess // ignore: cast_nullable_to_non_nullable
+as bool,totalCount: null == totalCount ? _self.totalCount : totalCount // ignore: cast_nullable_to_non_nullable
 as int,currentBatch: null == currentBatch ? _self.currentBatch : currentBatch // ignore: cast_nullable_to_non_nullable
 as int,totalBatches: null == totalBatches ? _self.totalBatches : totalBatches // ignore: cast_nullable_to_non_nullable
 as int,images: null == images ? _self._images : images // ignore: cast_nullable_to_non_nullable

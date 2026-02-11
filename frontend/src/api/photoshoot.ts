@@ -25,6 +25,10 @@ export interface PhotoshootResult {
   session_id: string;
   status: 'pending' | 'generating' | 'complete' | 'failed';
   images: GeneratedImage[];
+  generated_count?: number;
+  failed_count?: number;
+  image_failures?: Array<{ index: number; error: string }>;
+  partial_success?: boolean;
   usage?: PhotoshootUsage;
   error?: string;
 }

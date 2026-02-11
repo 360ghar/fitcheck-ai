@@ -22,28 +22,33 @@ class PhotoshootResultsStep extends GetView<PhotoshootController> {
           child: Column(
             children: [
               // Download All button
-              Obx(() => ElevatedButton.icon(
-                    onPressed: controller.generatedImages.isNotEmpty &&
-                            !controller.isDownloading.value
-                        ? controller.downloadAll
-                        : null,
-                    icon: controller.isDownloading.value
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.download),
-                    label: Text(controller.isDownloading.value
+              Obx(
+                () => ElevatedButton.icon(
+                  onPressed:
+                      controller.generatedImages.isNotEmpty &&
+                          !controller.isDownloading.value
+                      ? controller.downloadAll
+                      : null,
+                  icon: controller.isDownloading.value
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.download),
+                  label: Text(
+                    controller.isDownloading.value
                         ? 'Downloading ${controller.downloadingIndex.value + 1}/${controller.generatedImages.length}'
-                        : 'Download All (${controller.generatedImages.length})'),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 48),
-                    ),
-                  )),
+                        : 'Download All (${controller.generatedImages.length})',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
+                ),
+              ),
               const SizedBox(height: AppConstants.spacing12),
               // New Style and New Photos buttons
               Row(
@@ -75,29 +80,131 @@ class PhotoshootResultsStep extends GetView<PhotoshootController> {
           ),
         ),
 
+        Obx(() {
+          if (!controller.partialSuccess.value ||
+              controller.failedCount.value <= 0) {
+            return const SizedBox.shrink();
+          }
+
+          return Container(
+            margin: const EdgeInsets.symmetric(
+              horizontal: AppConstants.spacing16,
+              vertical: AppConstants.spacing8,
+            ),
+            padding: const EdgeInsets.all(AppConstants.spacing12),
+            decoration: BoxDecoration(
+              color: Colors.amber.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(AppConstants.radius12),
+              border: Border.all(color: Colors.amber.shade300),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  color: Colors.amber,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${controller.failedCount.value} image slot(s) failed. Retry each failed slot below.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+
         // Image grid
         Expanded(
-          child: Obx(() => GridView.builder(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppConstants.spacing16,
-                ),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: AppConstants.spacing12,
-                  mainAxisSpacing: AppConstants.spacing12,
-                  childAspectRatio: 0.75,
-                ),
-                itemCount: controller.generatedImages.length,
-                itemBuilder: (context, index) {
+          child: Obx(() {
+            final failed = controller.failedIndices.toList()..sort();
+            return GridView.builder(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppConstants.spacing16,
+              ),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: AppConstants.spacing12,
+                mainAxisSpacing: AppConstants.spacing12,
+                childAspectRatio: 0.75,
+              ),
+              itemCount: controller.generatedImages.length + failed.length,
+              itemBuilder: (context, index) {
+                if (index < controller.generatedImages.length) {
                   final image = controller.generatedImages[index];
                   return _buildImageCard(context, tokens, image, index);
-                },
-              )),
+                }
+
+                final failedIndex =
+                    failed[index - controller.generatedImages.length];
+                return _buildFailedSlotCard(context, failedIndex);
+              },
+            );
+          }),
         ),
 
         // Usage summary
         Obx(() => _buildUsageSummary(context, tokens)),
       ],
+    );
+  }
+
+  Widget _buildFailedSlotCard(BuildContext context, int failedIndex) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.amber.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppConstants.radius12),
+        border: Border.all(
+          color: Colors.amber.shade300,
+          style: BorderStyle.solid,
+        ),
+      ),
+      padding: const EdgeInsets.all(AppConstants.spacing12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.amber.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              'Failed slot #${failedIndex + 1}',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Generation failed for this slot. Retry to fill it.',
+            style: TextStyle(fontSize: 12),
+          ),
+          const Spacer(),
+          Obx(() {
+            final isRetrying =
+                controller.retryingFailedIndex.value == failedIndex;
+            return SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: controller.retryingFailedIndex.value == -1
+                    ? () => controller.retryFailedSlot(failedIndex)
+                    : null,
+                icon: isRetrying
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh, size: 16),
+                label: Text(isRetrying ? 'Retrying...' : 'Retry'),
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 
@@ -144,7 +251,8 @@ class PhotoshootResultsStep extends GetView<PhotoshootController> {
             bottom: 8,
             right: 8,
             child: Obx(() {
-              final isDownloadingThis = controller.isDownloading.value &&
+              final isDownloadingThis =
+                  controller.isDownloading.value &&
                   controller.downloadingIndex.value == index;
               return Material(
                 color: tokens.brandColor,
@@ -165,7 +273,11 @@ class PhotoshootResultsStep extends GetView<PhotoshootController> {
                               color: Colors.white,
                             ),
                           )
-                        : const Icon(Icons.download, color: Colors.white, size: 20),
+                        : const Icon(
+                            Icons.download,
+                            color: Colors.white,
+                            size: 20,
+                          ),
                   ),
                 ),
               );
@@ -199,7 +311,11 @@ class PhotoshootResultsStep extends GetView<PhotoshootController> {
             Center(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: _buildImageWidget(AppUiTokens.of(context), image, BoxFit.contain),
+                child: _buildImageWidget(
+                  AppUiTokens.of(context),
+                  image,
+                  BoxFit.contain,
+                ),
               ),
             ),
 
@@ -254,9 +370,9 @@ class PhotoshootResultsStep extends GetView<PhotoshootController> {
             const SizedBox(width: 8),
             Text(
               '${controller.generatedImages.length} images generated  •  ${usage.remaining} remaining today',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: tokens.textMuted,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
             ),
           ],
         ),
@@ -264,7 +380,11 @@ class PhotoshootResultsStep extends GetView<PhotoshootController> {
     );
   }
 
-  Widget _buildImageWidget(AppUiTokens tokens, GeneratedImage image, BoxFit fit) {
+  Widget _buildImageWidget(
+    AppUiTokens tokens,
+    GeneratedImage image,
+    BoxFit fit,
+  ) {
     final base64Data = image.imageBase64;
     if (base64Data != null && base64Data.isNotEmpty) {
       return Image.memory(
@@ -289,11 +409,7 @@ class PhotoshootResultsStep extends GetView<PhotoshootController> {
   Widget _brokenImage(AppUiTokens tokens) {
     return Container(
       color: tokens.cardColor,
-      child: Icon(
-        Icons.broken_image,
-        color: tokens.textMuted,
-        size: 48,
-      ),
+      child: Icon(Icons.broken_image, color: tokens.textMuted, size: 48),
     );
   }
 }

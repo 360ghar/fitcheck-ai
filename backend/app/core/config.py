@@ -140,7 +140,7 @@ class Settings(BaseSettings):
     # Photoshoot Generator Configuration
     PLAN_FREE_DAILY_PHOTOSHOOT_IMAGES: int = 10
     PLAN_PRO_DAILY_PHOTOSHOOT_IMAGES: int = 50
-    PHOTOSHOOT_CONCURRENCY_LIMIT: int = 10  # Max concurrent image generations
+    PHOTOSHOOT_CONCURRENCY_LIMIT: int = 3  # Max concurrent image generations
 
     # Social Import
     ENABLE_SOCIAL_IMPORT: bool = False

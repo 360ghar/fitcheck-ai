@@ -18,6 +18,7 @@ from datetime import datetime
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from supabase import Client
 
@@ -91,7 +92,7 @@ async def demo_photoshoot(
             )
 
             # Generate images
-            images = await PhotoshootService.generate_images(
+            images, failures = await PhotoshootService.generate_images(
                 reference_photos=[body.photo],
                 prompts=prompts,
             )
@@ -102,11 +103,22 @@ async def demo_photoshoot(
                 session_id=session_id,
                 status=PhotoshootStatus.COMPLETE,
                 images=images,
+                generated_count=len(images),
+                failed_count=len(failures),
+                image_failures=failures,
+                partial_success=len(failures) > 0,
                 remaining_today=max(0, rate_check["remaining"] - 1),
                 signup_cta="Sign up for 10 free images per day!",
             )
-
-            return {"data": response.model_dump(mode="json"), "message": "OK"}
+            status_code = (
+                status.HTTP_207_MULTI_STATUS
+                if response.partial_success
+                else status.HTTP_200_OK
+            )
+            return JSONResponse(
+                status_code=status_code,
+                content={"data": response.model_dump(mode="json"), "message": "OK"},
+            )
     except FitCheckException:
         raise
     except Exception as e:
@@ -160,7 +172,15 @@ async def generate_photoshoot(
             db=db,
             custom_prompt=body.custom_prompt,
         )
-        return {"data": result.model_dump(mode="json"), "message": "OK"}
+        status_code = (
+            status.HTTP_207_MULTI_STATUS
+            if result.partial_success
+            else status.HTTP_200_OK
+        )
+        return JSONResponse(
+            status_code=status_code,
+            content={"data": result.model_dump(mode="json"), "message": "OK"},
+        )
 
     # Async mode - return job_id immediately (Flutter app)
     # Check rate limit before creating job

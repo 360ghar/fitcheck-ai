@@ -26,16 +26,18 @@ Sample request format:
       }'
 """
 
-import base64
-import json
+import asyncio
+import random
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
+from urllib.parse import urlparse
 
 import httpx
 
 from app.core.config import settings
-from app.core.logging_config import get_context_logger, sanitize_for_logging
+from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
 
 logger = get_context_logger(__name__)
@@ -186,6 +188,46 @@ class AIProviderService:
                 return f"{base_url}/v1/chat/completions"
         return base_url
 
+    @staticmethod
+    def _count_image_inputs(messages: List[ChatMessage]) -> int:
+        count = 0
+        for message in messages:
+            content = message.content
+            if isinstance(content, list):
+                for part in content:
+                    if isinstance(part, dict) and part.get("type") == "image_url":
+                        count += 1
+        return count
+
+    @staticmethod
+    def _format_exception_message(exc: Exception) -> str:
+        detail = str(exc).strip()
+        if detail:
+            return f"{exc.__class__.__name__}: {detail}"
+        return exc.__class__.__name__
+
+    @staticmethod
+    def _is_transient_transport_error(exc: Exception) -> bool:
+        return isinstance(
+            exc,
+            (
+                httpx.ReadError,
+                httpx.ConnectError,
+                httpx.RemoteProtocolError,
+                httpx.WriteError,
+                httpx.PoolTimeout,
+                httpx.ConnectTimeout,
+                httpx.ReadTimeout,
+            ),
+        )
+
+    @staticmethod
+    def _retry_delay_seconds(attempt: int) -> float:
+        # Balanced retry profile: exponential backoff with jitter
+        base = 1.0 * (2 ** attempt)
+        jitter = random.random() * 0.5 * base
+        return min(base + jitter, 8.0)
+
     async def chat(
         self,
         messages: List[ChatMessage],
@@ -237,28 +279,59 @@ class AIProviderService:
             url=url,
             model=use_model,
             message_count=len(messages),
+            image_inputs=self._count_image_inputs(messages),
             has_response_modalities=bool(response_modalities),
             has_response_format=bool(response_format),
         )
 
-        # Log full request payload for debugging
+        parsed_url = urlparse(url)
         logger.info(
-            "AI chat request payload",
-            url=url,
-            payload=sanitize_for_logging(payload),
+            "AI chat request started",
+            provider_host=parsed_url.netloc,
+            endpoint=parsed_url.path,
+            model=use_model,
+            message_count=len(messages),
+            image_inputs=self._count_image_inputs(messages),
+            has_response_modalities=bool(response_modalities),
+            has_response_format=bool(response_format),
         )
 
-        async def _post_chat(req_payload: Dict[str, Any]) -> Dict[str, Any]:
-            response = await client.post(url, json=req_payload)
-            response.raise_for_status()
-            return response.json()
+        async def _post_chat(req_payload: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
+            max_retries = 3
+            attempt = 0
 
+            while True:
+                try:
+                    response = await client.post(url, json=req_payload)
+                    response.raise_for_status()
+                    return response.json(), response.status_code
+                except Exception as transport_error:
+                    if not self._is_transient_transport_error(transport_error):
+                        raise
+
+                    if attempt >= max_retries:
+                        raise
+
+                    delay = self._retry_delay_seconds(attempt)
+                    logger.warning(
+                        "Transient AI transport error, retrying",
+                        attempt=attempt + 1,
+                        max_retries=max_retries,
+                        delay_seconds=round(delay, 2),
+                        error=self._format_exception_message(transport_error),
+                    )
+                    attempt += 1
+                    await asyncio.sleep(delay)
+
+        started_at = time.monotonic()
         try:
-            data = await _post_chat(payload)
+            data, status_code = await _post_chat(payload)
 
             logger.info(
                 "AI chat response received",
-                response_data=sanitize_for_logging(data),
+                status_code=status_code,
+                latency_ms=round((time.monotonic() - started_at) * 1000, 2),
+                choices_count=len(data.get("choices", [])) if isinstance(data, dict) else 0,
             )
 
             return self._parse_chat_response(data, use_model)
@@ -284,10 +357,12 @@ class AIProviderService:
                 fallback_payload = dict(payload)
                 fallback_payload.pop("response_format", None)
                 try:
-                    data = await _post_chat(fallback_payload)
+                    data, status_code = await _post_chat(fallback_payload)
                     logger.info(
                         "AI chat response received after response_format fallback",
-                        response_data=sanitize_for_logging(data),
+                        status_code=status_code,
+                        latency_ms=round((time.monotonic() - started_at) * 1000, 2),
+                        choices_count=len(data.get("choices", [])) if isinstance(data, dict) else 0,
                     )
                     return self._parse_chat_response(data, use_model)
                 except httpx.HTTPStatusError as fallback_error:
@@ -307,13 +382,19 @@ class AIProviderService:
             )
             raise AIServiceError(f"AI request failed ({e.response.status_code}): {error_detail}")
 
-        except httpx.TimeoutException:
-            logger.error("Chat request timed out", timeout=self.config.timeout)
-            raise AIServiceError("AI request timed out. Please try again.")
-
         except Exception as e:
-            logger.error("Chat request error", error=str(e))
-            raise AIServiceError(f"AI request failed: {str(e)}")
+            if self._is_transient_transport_error(e):
+                error_message = self._format_exception_message(e)
+                logger.error(
+                    "Chat transport error after retries",
+                    timeout=self.config.timeout,
+                    error=error_message,
+                )
+                raise AIServiceError(f"AI transport request failed after retries: {error_message}")
+
+            error_message = self._format_exception_message(e)
+            logger.error("Chat request error", error=error_message)
+            raise AIServiceError(f"AI request failed: {error_message}")
 
     def _parse_chat_response(self, data: Dict[str, Any], model: str) -> AIResponse:
         """Parse the chat completion response."""
@@ -322,7 +403,7 @@ class AIProviderService:
 
         # Extract from choices
         choices = data.get("choices", [])
-        logger.info(
+        logger.debug(
             "Parsing chat response - choices",
             choices_count=len(choices),
             choices_keys=[list(c.keys()) if isinstance(c, dict) else type(c).__name__ for c in choices],
@@ -331,7 +412,7 @@ class AIProviderService:
             message = choices[0].get("message", {})
             content = message.get("content")
 
-            logger.info(
+            logger.debug(
                 "Parsing chat response - content",
                 content_type=type(content).__name__ if content else None,
                 message_keys=list(message.keys()) if isinstance(message, dict) else None,
@@ -386,7 +467,7 @@ class AIProviderService:
                 "total_tokens": data["usage"].get("total_tokens", 0),
             }
 
-        logger.info(
+        logger.debug(
             "Parsing chat response - result",
             has_text=text is not None,
             images_count=len(images),

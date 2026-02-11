@@ -3,7 +3,7 @@
  */
 
 import { useState } from 'react';
-import { Download, CheckCircle, RefreshCw, X } from 'lucide-react';
+import { Download, CheckCircle, RefreshCw, X, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { usePhotoshoot } from '@/stores/photoshootStore';
@@ -13,7 +13,17 @@ import { useToast } from '@/components/ui/use-toast';
 const PLACEHOLDER_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
 export function PhotoshootResultsStep() {
-  const { generatedImages, sessionId, usage, reset } = usePhotoshoot();
+  const {
+    generatedImages,
+    sessionId,
+    usage,
+    reset,
+    failedIndices,
+    failedCount,
+    partialSuccess,
+    retryFailedSlot,
+    retryingFailedIndex,
+  } = usePhotoshoot();
   const { toast } = useToast();
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
@@ -82,6 +92,16 @@ export function PhotoshootResultsStep() {
         </Button>
       </div>
 
+      {/* Partial success warning */}
+      {partialSuccess && failedCount > 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4" />
+          <p className="text-sm">
+            {failedCount} image{failedCount > 1 ? 's' : ''} couldn&apos;t be generated. You can retry each failed slot.
+          </p>
+        </div>
+      )}
+
       {/* Image Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {generatedImages.map((image, index) => (
@@ -111,6 +131,30 @@ export function PhotoshootResultsStep() {
             >
               <Download className="w-4 h-4" />
             </button>
+          </div>
+        ))}
+
+        {failedIndices.map((failedIndex) => (
+          <div
+            key={`failed-${failedIndex}`}
+            className="relative aspect-[3/4] rounded-lg overflow-hidden border border-dashed border-amber-300 bg-amber-50/60 p-3 flex flex-col justify-between"
+          >
+            <div>
+              <div className="mb-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+                Failed slot #{failedIndex + 1}
+              </div>
+              <p className="text-xs text-amber-800">Generation failed for this slot. Retry to fill it.</p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-amber-300"
+              disabled={retryingFailedIndex !== null}
+              onClick={() => void retryFailedSlot(failedIndex)}
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              {retryingFailedIndex === failedIndex ? 'Retrying...' : 'Retry'}
+            </Button>
           </div>
         ))}
       </div>

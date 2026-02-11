@@ -1,3 +1,5 @@
+// ignore_for_file: invalid_annotation_target
+
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'photoshoot_models.freezed.dart';
@@ -232,6 +234,10 @@ abstract class PhotoshootResult with _$PhotoshootResult {
     @JsonKey(name: 'session_id') required String sessionId,
     required PhotoshootStatus status,
     @Default([]) List<GeneratedImage> images,
+    @JsonKey(name: 'generated_count') @Default(0) int generatedCount,
+    @JsonKey(name: 'failed_count') @Default(0) int failedCount,
+    @JsonKey(name: 'failed_indices') @Default([]) List<int> failedIndices,
+    @JsonKey(name: 'partial_success') @Default(false) bool partialSuccess,
     PhotoshootUsage? usage,
     String? error,
   }) = _PhotoshootResult;
@@ -274,6 +280,9 @@ abstract class PhotoshootJobStatusResponse with _$PhotoshootJobStatusResponse {
     @JsonKey(name: 'job_id') required String jobId,
     required String status,
     @JsonKey(name: 'generated_count') @Default(0) int generatedCount,
+    @JsonKey(name: 'failed_count') @Default(0) int failedCount,
+    @JsonKey(name: 'failed_indices') @Default([]) List<int> failedIndices,
+    @JsonKey(name: 'partial_success') @Default(false) bool partialSuccess,
     @JsonKey(name: 'total_count') @Default(0) int totalCount,
     @JsonKey(name: 'current_batch') @Default(0) int currentBatch,
     @JsonKey(name: 'total_batches') @Default(0) int totalBatches,

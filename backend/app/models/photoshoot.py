@@ -132,6 +132,12 @@ class GeneratedImage(BaseModel):
     storage_path: Optional[str] = None
 
 
+class ImageGenerationFailure(BaseModel):
+    """Failure details for a single requested image index."""
+    index: int = Field(..., ge=0, le=9)
+    error: str
+
+
 class PhotoshootUsage(BaseModel):
     """User's photoshoot usage for the current day."""
     used_today: int = Field(..., ge=0)
@@ -148,6 +154,10 @@ class PhotoshootResultResponse(BaseModel):
     images: List[GeneratedImage] = Field(default_factory=list)
     usage: Optional[PhotoshootUsage] = None
     generation_time_seconds: Optional[float] = None
+    generated_count: int = Field(default=0, ge=0)
+    failed_count: int = Field(default=0, ge=0)
+    image_failures: List[ImageGenerationFailure] = Field(default_factory=list)
+    partial_success: bool = False
     error: Optional[str] = None
 
 
@@ -156,6 +166,10 @@ class DemoPhotoshootResponse(BaseModel):
     session_id: str
     status: PhotoshootStatus
     images: List[GeneratedImage] = Field(default_factory=list)
+    generated_count: int = Field(default=0, ge=0)
+    failed_count: int = Field(default=0, ge=0)
+    image_failures: List[ImageGenerationFailure] = Field(default_factory=list)
+    partial_success: bool = False
     remaining_today: int = Field(..., ge=0)
     signup_cta: str = "Sign up for 10 free images per day!"
 
@@ -215,6 +229,9 @@ class PhotoshootJobStatusResponse(BaseModel):
     total_count: int = Field(default=0, ge=0)
     current_batch: int = Field(default=0, ge=0)
     total_batches: int = Field(default=0, ge=0)
+    failed_count: int = Field(default=0, ge=0)
+    failed_indices: List[int] = Field(default_factory=list)
+    partial_success: bool = False
     images: List[GeneratedImage] = Field(default_factory=list)
     usage: Optional[PhotoshootUsage] = None
     error: Optional[str] = None
