@@ -83,6 +83,13 @@ def _extract_birth_patch(payload: Dict[str, Any]) -> Dict[str, Any]:
     return patch
 
 
+def _normalize_user_birth_fields(row: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(row or {})
+    if not normalized.get("birth_date") and normalized.get("date_of_birth"):
+        normalized["birth_date"] = normalized.get("date_of_birth")
+    return normalized
+
+
 def _get_auth_user_metadata(db: Client, user_id: str) -> Dict[str, Any]:
     try:
         admin = getattr(db.auth, "admin", None)
@@ -122,7 +129,7 @@ async def get_current_user(
         if not result.data:
             raise UserNotFoundError(user_id=user_id)
         # Let Pydantic validate/normalize
-        user = UserResponse.model_validate(result.data[0])
+        user = UserResponse.model_validate(_normalize_user_birth_fields(result.data[0]))
         user_data = user.model_dump(mode="json")
 
         # Fallback for projects that haven't applied astrology profile migration yet.
@@ -169,6 +176,15 @@ async def update_current_user(
                 missing_col = _extract_missing_users_column(e)
                 if not missing_col or missing_col not in update_payload:
                     raise
+                if missing_col == "birth_date":
+                    # Support legacy schema that still uses users.date_of_birth.
+                    update_payload["date_of_birth"] = update_payload.get("birth_date")
+                    update_payload.pop("birth_date", None)
+                    logger.warning(
+                        "users.birth_date missing, retrying update using users.date_of_birth",
+                        user_id=user_id,
+                    )
+                    continue
                 skipped_fields.append(missing_col)
                 update_payload.pop(missing_col, None)
                 logger.warning(
@@ -207,7 +223,7 @@ async def update_current_user(
                     error=str(metadata_error),
                 )
 
-        user = UserResponse.model_validate(row)
+        user = UserResponse.model_validate(_normalize_user_birth_fields(row))
         response: Dict[str, Any] = {"data": user.model_dump(mode="json"), "message": "Updated"}
         if skipped_fields:
             response["meta"] = {"skipped_fields": skipped_fields}

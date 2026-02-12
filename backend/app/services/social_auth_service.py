@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
@@ -28,11 +29,21 @@ from app.models.social_import import SocialAuthType
 class SocialAuthService:
     """Manage ephemeral encrypted auth sessions for social import jobs."""
 
+    _logger = logging.getLogger(__name__)
+    _warned_encryption_fallback = False
+
     @staticmethod
     def _fernet() -> Optional[Fernet]:
-        key = settings.AI_ENCRYPTION_KEY
+        key = settings.AI_ENCRYPTION_KEY or settings.SUPABASE_JWT_SECRET
         if not key:
             return None
+
+        if not settings.AI_ENCRYPTION_KEY:
+            if not SocialAuthService._warned_encryption_fallback:
+                SocialAuthService._logger.warning(
+                    "AI_ENCRYPTION_KEY is not set; falling back to SUPABASE_JWT_SECRET for social auth encryption"
+                )
+                SocialAuthService._warned_encryption_fallback = True
 
         if len(key) == 64:
             raw_key = bytes.fromhex(key)
@@ -84,12 +95,18 @@ class SocialAuthService:
         provider_access_token: str,
         provider_refresh_token: Optional[str],
         provider_user_id: Optional[str],
+        provider_page_access_token: Optional[str] = None,
+        provider_page_id: Optional[str] = None,
+        provider_username: Optional[str] = None,
         expires_at: Optional[datetime],
     ) -> Dict[str, Any]:
         payload = {
             "provider_access_token": provider_access_token,
             "provider_refresh_token": provider_refresh_token,
             "provider_user_id": provider_user_id,
+            "provider_page_access_token": provider_page_access_token,
+            "provider_page_id": provider_page_id,
+            "provider_username": provider_username,
             "provider_expires_at": expires_at.isoformat() if expires_at else None,
             "saved_at": datetime.now(timezone.utc).isoformat(),
         }

@@ -1,7 +1,7 @@
 import { apiClient, getAccessToken, getApiError } from './client'
 import type { SocialImportJobData, SocialImportItem, SocialImportSSEEvent } from '@/types'
 
-const API_BASE_URL =
+export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
   'http://localhost:8000'
@@ -18,6 +18,12 @@ export interface StartSocialImportResponse {
   source_url: string
   normalized_url: string
   message: string
+}
+
+export interface SocialImportOAuthConnectResponse {
+  auth_url: string
+  expires_in_seconds: number
+  provider: string
 }
 
 export async function startSocialImportJob(sourceUrl: string): Promise<StartSocialImportResponse> {
@@ -42,12 +48,28 @@ export async function getSocialImportStatus(jobId: string): Promise<SocialImport
   }
 }
 
+export async function getSocialImportOAuthConnectUrl(
+  jobId: string
+): Promise<SocialImportOAuthConnectResponse> {
+  try {
+    const response = await apiClient.post<ApiEnvelope<SocialImportOAuthConnectResponse>>(
+      `/api/v1/ai/social-import/jobs/${jobId}/auth/oauth/connect`
+    )
+    return response.data.data
+  } catch (error) {
+    throw getApiError(error)
+  }
+}
+
 export async function submitSocialImportOAuth(
   jobId: string,
   payload: {
     provider_access_token: string
     provider_refresh_token?: string
     provider_user_id?: string
+    provider_page_access_token?: string
+    provider_page_id?: string
+    provider_username?: string
     expires_at?: string
   }
 ): Promise<void> {

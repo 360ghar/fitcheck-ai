@@ -6,10 +6,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+from html import escape
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sse_starlette.sse import EventSourceResponse
 from supabase import Client
 
@@ -23,13 +26,16 @@ from app.models.social_import import (
     SocialImportItemPatchRequest,
     SocialImportJobResponse,
     SocialImportJobStatusResponse,
+    SocialImportOAuthConnectResponse,
     SocialImportOAuthAuthRequest,
     SocialImportScraperAuthRequest,
     SocialImportStartRequest,
+    SocialPlatform,
 )
 from app.services.social_import_event_service import SocialImportEventService
 from app.services.social_import_job_store import SocialImportJobStore
 from app.services.social_import_pipeline_service import SocialImportPipelineService
+from app.services.social_oauth_service import SocialOAuthService
 from app.services.social_url_service import SocialURLService
 
 router = APIRouter()
@@ -37,6 +43,81 @@ router = APIRouter()
 
 def _service(user_id: str, db: Client) -> SocialImportPipelineService:
     return SocialImportPipelineService(user_id=user_id, db=db)
+
+
+def _frontend_origin() -> str:
+    parsed = urlparse(settings.FRONTEND_URL or "")
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return (settings.FRONTEND_URL or "").rstrip("/")
+
+
+def _oauth_popup_response(
+    *,
+    job_id: str,
+    status_value: str,
+    message: str,
+    target_origin: Optional[str] = None,
+) -> HTMLResponse:
+    payload = {
+        "source": "fitcheck-social-oauth",
+        "job_id": job_id,
+        "status": status_value,
+        "message": message,
+    }
+    target_origin = (target_origin or _frontend_origin() or "*").rstrip("/")
+    payload_json = json.dumps(payload)
+    target_origin_json = json.dumps(target_origin)
+    safe_message = escape(message)
+
+    html = f"""<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Social Connect</title>
+  </head>
+  <body>
+    <p>{safe_message}</p>
+    <script>
+      (function () {{
+        var payload = {payload_json};
+        var targetOrigin = {target_origin_json};
+        try {{
+          if (window.opener && !window.opener.closed) {{
+            window.opener.postMessage(payload, targetOrigin);
+          }}
+        }} catch (err) {{
+          // Ignore and continue to close flow.
+        }}
+        window.setTimeout(function () {{
+          window.close();
+        }}, 150);
+      }})();
+    </script>
+    </body>
+</html>"""
+    return HTMLResponse(content=html)
+
+
+def _oauth_mobile_redirect_response(
+    *,
+    redirect_uri: str,
+    job_id: str,
+    status_value: str,
+    message: str,
+) -> RedirectResponse:
+    parsed = urlparse(redirect_uri)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query.update(
+        {
+            "source": "fitcheck-social-oauth",
+            "job_id": job_id,
+            "status": status_value,
+            "message": message,
+        }
+    )
+    target = urlunparse(parsed._replace(query=urlencode(query), fragment=""))
+    return RedirectResponse(url=target, status_code=status.HTTP_302_FOUND)
 
 
 @router.post(
@@ -162,6 +243,155 @@ async def social_import_events(
             await SocialImportEventService.remove_subscriber(job_id, queue)
 
     return EventSourceResponse(event_generator())
+
+
+@router.post("/social-import/jobs/{job_id}/auth/oauth/connect", response_model=Dict[str, Any])
+async def create_oauth_connect_url(
+    job_id: str,
+    request: Request,
+    mobile_redirect_uri: Optional[str] = Query(default=None),
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    if not settings.ENABLE_SOCIAL_IMPORT:
+        raise HTTPException(status_code=404, detail="Social import is disabled")
+
+    job = await SocialImportJobStore.get_job(db, job_id=job_id, user_id=user_id)
+    if not job:
+        raise SocialImportJobNotFoundError(job_id)
+
+    platform = SocialPlatform(job["platform"])
+    redirect_uri = str(request.url_for("social_oauth_callback"))
+    oauth_data = SocialOAuthService.build_authorize_url(
+        user_id=user_id,
+        job_id=job_id,
+        platform=platform,
+        redirect_uri=redirect_uri,
+        opener_origin=request.headers.get("origin"),
+        mobile_redirect_uri=mobile_redirect_uri,
+    )
+    response = SocialImportOAuthConnectResponse(**oauth_data)
+    return {"data": response.model_dump(), "message": "OK"}
+
+
+@router.get(
+    "/social-import/auth/oauth/callback",
+    response_class=HTMLResponse,
+    name="social_oauth_callback",
+)
+async def social_oauth_callback(
+    request: Request,
+    state: Optional[str] = Query(default=None),
+    code: Optional[str] = Query(default=None),
+    error: Optional[str] = Query(default=None),
+    error_description: Optional[str] = Query(default=None),
+    db: Client = Depends(get_db),
+):
+    if not settings.ENABLE_SOCIAL_IMPORT:
+        return _oauth_popup_response(
+            job_id="unknown",
+            status_value="error",
+            message="Social import is disabled",
+        )
+
+    if not state:
+        return _oauth_popup_response(
+            job_id="unknown",
+            status_value="error",
+            message="Missing OAuth state",
+        )
+
+    try:
+        state_payload = SocialOAuthService.parse_state(state)
+    except Exception as exc:
+        return _oauth_popup_response(
+            job_id="unknown",
+            status_value="error",
+            message=str(exc),
+        )
+
+    if error:
+        message = error_description or error
+        if state_payload.mobile_redirect_uri:
+            return _oauth_mobile_redirect_response(
+                redirect_uri=state_payload.mobile_redirect_uri,
+                job_id=state_payload.job_id,
+                status_value="error",
+                message=message,
+            )
+        return _oauth_popup_response(
+            job_id=state_payload.job_id,
+            status_value="error",
+            message=message,
+            target_origin=state_payload.opener_origin,
+        )
+
+    if not code:
+        if state_payload.mobile_redirect_uri:
+            return _oauth_mobile_redirect_response(
+                redirect_uri=state_payload.mobile_redirect_uri,
+                job_id=state_payload.job_id,
+                status_value="error",
+                message="Missing OAuth code",
+            )
+        return _oauth_popup_response(
+            job_id=state_payload.job_id,
+            status_value="error",
+            message="Missing OAuth code",
+            target_origin=state_payload.opener_origin,
+        )
+
+    try:
+        redirect_uri = str(request.url_for("social_oauth_callback"))
+        token_payload = await SocialOAuthService.exchange_code_for_token(
+            code=code,
+            redirect_uri=redirect_uri,
+        )
+        identity_payload = await SocialOAuthService.resolve_platform_identity(
+            platform=state_payload.platform,
+            access_token=token_payload["provider_access_token"],
+        )
+
+        payload = {
+            "provider_access_token": token_payload["provider_access_token"],
+            "provider_refresh_token": None,
+            "provider_user_id": identity_payload.get("provider_user_id"),
+            "provider_page_access_token": identity_payload.get("provider_page_access_token"),
+            "provider_page_id": identity_payload.get("provider_page_id"),
+            "provider_username": identity_payload.get("provider_username"),
+            "expires_at": token_payload.get("expires_at"),
+        }
+        service = _service(state_payload.user_id, db)
+        await service.accept_oauth_auth(state_payload.job_id, payload)
+    except Exception as exc:
+        if state_payload.mobile_redirect_uri:
+            return _oauth_mobile_redirect_response(
+                redirect_uri=state_payload.mobile_redirect_uri,
+                job_id=state_payload.job_id,
+                status_value="error",
+                message=str(exc),
+            )
+        return _oauth_popup_response(
+            job_id=state_payload.job_id,
+            status_value="error",
+            message=str(exc),
+            target_origin=state_payload.opener_origin,
+        )
+
+    if state_payload.mobile_redirect_uri:
+        return _oauth_mobile_redirect_response(
+            redirect_uri=state_payload.mobile_redirect_uri,
+            job_id=state_payload.job_id,
+            status_value="success",
+            message="Social account connected. Import resumed.",
+        )
+
+    return _oauth_popup_response(
+        job_id=state_payload.job_id,
+        status_value="success",
+        message="Social account connected. Import resumed.",
+        target_origin=state_payload.opener_origin,
+    )
 
 
 @router.post("/social-import/jobs/{job_id}/auth/oauth", response_model=Dict[str, Any])

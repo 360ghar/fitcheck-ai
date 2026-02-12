@@ -17,6 +17,8 @@ dependencies:
   dio: ^5.7.0
   http: ^1.2.2
   connectivity_plus: ^7.0.0
+  app_links: ^6.4.1
+  url_launcher: ^6.3.1
 
   # UI Components
   shimmer: ^3.0.0

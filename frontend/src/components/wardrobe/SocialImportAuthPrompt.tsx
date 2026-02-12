@@ -1,38 +1,34 @@
 import { useState } from 'react'
-import { KeyRound, ShieldCheck } from 'lucide-react'
+import { KeyRound, Link2, ShieldCheck } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import type { SocialPlatform } from '@/types'
 
 interface SocialImportAuthPromptProps {
+  platform: SocialPlatform
   isLoading?: boolean
   error?: string | null
-  onSubmitOAuth: (payload: {
-    provider_access_token: string
-    provider_refresh_token?: string
-    provider_user_id?: string
-  }) => Promise<void>
+  onStartOAuthConnect: () => Promise<void>
   onSubmitScraper: (payload: { username: string; password: string; otp_code?: string }) => Promise<void>
 }
 
 export function SocialImportAuthPrompt({
+  platform,
   isLoading = false,
   error,
-  onSubmitOAuth,
+  onStartOAuthConnect,
   onSubmitScraper,
 }: SocialImportAuthPromptProps) {
-  const [oauthToken, setOauthToken] = useState('')
-  const [oauthRefreshToken, setOauthRefreshToken] = useState('')
-  const [oauthUserId, setOauthUserId] = useState('')
-
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [otpCode, setOtpCode] = useState('')
+  const platformLabel = platform === 'instagram' ? 'Instagram' : 'Facebook'
 
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
-        This profile requires login. Choose Meta OAuth token import or scraper login fallback.
+        This profile requires login. Connect your {platformLabel} account to continue automatically.
       </div>
 
       {error && (
@@ -44,42 +40,15 @@ export function SocialImportAuthPrompt({
       <div className="grid gap-3 rounded-lg border border-border p-4">
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-indigo-500" />
-          <p className="text-sm font-semibold text-foreground">Meta OAuth Token</p>
+          <p className="text-sm font-semibold text-foreground">Direct Meta OAuth (Recommended)</p>
         </div>
-        <Input
-          value={oauthToken}
-          onChange={(e) => setOauthToken(e.target.value)}
-          placeholder="Provider access token"
-          disabled={isLoading}
-          autoComplete="off"
-        />
-        <Input
-          value={oauthRefreshToken}
-          onChange={(e) => setOauthRefreshToken(e.target.value)}
-          placeholder="Provider refresh token (optional)"
-          disabled={isLoading}
-          autoComplete="off"
-        />
-        <Input
-          value={oauthUserId}
-          onChange={(e) => setOauthUserId(e.target.value)}
-          placeholder="Provider user id (optional)"
-          disabled={isLoading}
-          autoComplete="off"
-        />
+        <p className="text-xs text-muted-foreground">
+          We will open Meta login so you can securely authorize {platformLabel} access. No manual token copy-paste required.
+        </p>
         <div className="flex justify-end">
-          <Button
-            variant="outline"
-            disabled={isLoading || !oauthToken.trim()}
-            onClick={() =>
-              onSubmitOAuth({
-                provider_access_token: oauthToken.trim(),
-                provider_refresh_token: oauthRefreshToken.trim() || undefined,
-                provider_user_id: oauthUserId.trim() || undefined,
-              })
-            }
-          >
-            Use OAuth Token
+          <Button variant="outline" disabled={isLoading} onClick={onStartOAuthConnect}>
+            <Link2 className="mr-2 h-4 w-4" />
+            Connect {platformLabel}
           </Button>
         </div>
       </div>
@@ -87,8 +56,11 @@ export function SocialImportAuthPrompt({
       <div className="grid gap-3 rounded-lg border border-border p-4">
         <div className="flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-indigo-500" />
-          <p className="text-sm font-semibold text-foreground">Scraper Login Fallback</p>
+          <p className="text-sm font-semibold text-foreground">Manual Login Fallback</p>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Only use this if OAuth is unavailable for your account.
+        </p>
         <Input
           value={username}
           onChange={(e) => setUsername(e.target.value)}

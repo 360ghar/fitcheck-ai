@@ -773,6 +773,9 @@ class SocialImportPipelineService:
                 provider_access_token=payload["provider_access_token"],
                 provider_refresh_token=payload.get("provider_refresh_token"),
                 provider_user_id=payload.get("provider_user_id"),
+                provider_page_access_token=payload.get("provider_page_access_token"),
+                provider_page_id=payload.get("provider_page_id"),
+                provider_username=payload.get("provider_username"),
                 expires_at=payload.get("expires_at"),
             )
             updated = await SocialImportJobStore.update_job(

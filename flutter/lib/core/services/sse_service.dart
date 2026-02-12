@@ -22,6 +22,7 @@ class SSEService {
     String path, {
     Map<String, String>? headers,
     int maxRetries = 3,
+    Set<String>? terminalEvents,
   }) async* {
     final url = '${ApiConstants.baseUrl}$path';
     int retryCount = 0;
@@ -33,7 +34,7 @@ class SSEService {
           yield event;
 
           // Check for terminal events
-          if (_isTerminalEvent(event.type)) {
+          if (_isTerminalEvent(event.type, terminalEvents)) {
             return;
           }
         }
@@ -53,7 +54,8 @@ class SSEService {
         }
         // Exponential backoff with jitter
         final delay = Duration(
-          milliseconds: (pow(2, retryCount) * 1000 + Random().nextInt(500)).toInt(),
+          milliseconds: (pow(2, retryCount) * 1000 + Random().nextInt(500))
+              .toInt(),
         );
         await Future.delayed(delay);
       }
@@ -61,12 +63,10 @@ class SSEService {
   }
 
   /// Check if the event type is terminal (no more events expected)
-  bool _isTerminalEvent(String type) {
-    return [
-      'job_complete',
-      'job_failed',
-      'job_cancelled',
-    ].contains(type);
+  bool _isTerminalEvent(String type, Set<String>? terminalEvents) {
+    final configured =
+        terminalEvents ?? const {'job_complete', 'job_failed', 'job_cancelled'};
+    return configured.contains(type);
   }
 
   /// Internal connection method
@@ -123,10 +123,13 @@ class SSEService {
   ServerSentEvent? _parseServerSentEvent(String eventStr) {
     String? eventType;
     String? dataStr;
+    int? eventId;
 
     for (final line in eventStr.split('\n')) {
       if (line.startsWith('event:')) {
         eventType = line.substring(6).trim();
+      } else if (line.startsWith('id:')) {
+        eventId = int.tryParse(line.substring(3).trim());
       } else if (line.startsWith('data:')) {
         dataStr = line.substring(5).trim();
       }
@@ -142,7 +145,7 @@ class SSEService {
           data = {'message': dataStr};
         }
       }
-      return ServerSentEvent(type: eventType, data: data);
+      return ServerSentEvent(type: eventType, data: data, id: eventId);
     }
     return null;
   }
@@ -167,14 +170,12 @@ class SSEService {
 class ServerSentEvent {
   final String type;
   final Map<String, dynamic>? data;
+  final int? id;
 
-  const ServerSentEvent({
-    required this.type,
-    this.data,
-  });
+  const ServerSentEvent({required this.type, this.data, this.id});
 
   @override
-  String toString() => 'ServerSentEvent(type: $type, data: $data)';
+  String toString() => 'ServerSentEvent(type: $type, id: $id, data: $data)';
 }
 
 /// SSE connection exception

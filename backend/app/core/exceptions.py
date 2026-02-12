@@ -393,6 +393,36 @@ class SocialImportEncryptionConfigError(SocialImportError):
         super().__init__(message=message)
 
 
+class SocialImportOAuthConfigError(SocialImportError):
+    """Raised when Meta OAuth is not configured."""
+
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    error_code = "SOCIAL_IMPORT_OAUTH_CONFIG_ERROR"
+
+    def __init__(self, message: str = "Meta OAuth is not configured"):
+        super().__init__(message=message)
+
+
+class SocialImportOAuthStateError(SocialImportError):
+    """Raised when OAuth callback state is invalid or expired."""
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    error_code = "SOCIAL_IMPORT_OAUTH_STATE_ERROR"
+
+    def __init__(self, message: str = "Invalid or expired OAuth session state"):
+        super().__init__(message=message)
+
+
+class SocialImportOAuthExchangeError(SocialImportError):
+    """Raised when code exchange with Meta OAuth fails."""
+
+    status_code = status.HTTP_502_BAD_GATEWAY
+    error_code = "SOCIAL_IMPORT_OAUTH_EXCHANGE_ERROR"
+
+    def __init__(self, message: str = "Failed to exchange OAuth code with Meta"):
+        super().__init__(message=message)
+
+
 # ============================================================================
 # DATABASE ERRORS
 # ============================================================================

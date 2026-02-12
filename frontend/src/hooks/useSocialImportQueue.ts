@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   approveSocialImportPhoto,
+  API_BASE_URL,
   cancelSocialImportJob,
   createSocialImportSSEConnection,
+  getSocialImportOAuthConnectUrl,
   getSocialImportStatus,
   patchSocialImportItem,
   rejectSocialImportPhoto,
@@ -13,6 +15,8 @@ import {
 import type { SocialImportJobData, SocialImportItem, SocialImportSSEEvent } from '@/types'
 
 const SOCIAL_IMPORT_ACTIVE_JOB_KEY = 'fitcheck.socialImport.activeJobId'
+const SOCIAL_IMPORT_OAUTH_MESSAGE_SOURCE = 'fitcheck-social-oauth'
+const SOCIAL_IMPORT_OAUTH_WINDOW_NAME = 'fitcheck-social-import-oauth'
 const TERMINAL_JOB_STATUSES: SocialImportJobData['status'][] = ['completed', 'cancelled', 'failed']
 
 interface SocialImportQueueState {
@@ -60,6 +64,7 @@ function setActiveJobId(jobId: string | null): void {
 export interface UseSocialImportQueue {
   state: SocialImportQueueState
   startJob: (sourceUrl: string) => Promise<void>
+  startOAuthConnect: () => Promise<void>
   refreshStatus: () => Promise<void>
   submitOAuthAuth: (payload: {
     provider_access_token: string
@@ -195,6 +200,89 @@ export function useSocialImportQueue(): UseSocialImportQueue {
     [applyJobData, connect]
   )
 
+  const startOAuthConnect = useCallback(async () => {
+    if (!state.jobId) return
+
+    const jobId = state.jobId
+    setState((prev) => ({ ...prev, isLoading: true, error: null }))
+
+    try {
+      const oauth = await getSocialImportOAuthConnectUrl(jobId)
+      const popup = window.open(
+        oauth.auth_url,
+        SOCIAL_IMPORT_OAUTH_WINDOW_NAME,
+        'width=520,height=740,noopener,noreferrer'
+      )
+      if (!popup) {
+        throw new Error('Popup blocked. Please allow popups to connect your social account.')
+      }
+      popup.focus()
+
+      await new Promise<void>((resolve, reject) => {
+        let settled = false
+        const expectedOrigin = new URL(API_BASE_URL).origin
+
+        const cleanup = () => {
+          if (settled) return
+          settled = true
+          window.clearTimeout(timeoutId)
+          window.clearInterval(closePollId)
+          window.removeEventListener('message', onMessage)
+        }
+
+        const onMessage = (event: MessageEvent) => {
+          if (event.origin !== expectedOrigin) return
+
+          const data = event.data as Record<string, unknown> | null
+          if (!data || data.source !== SOCIAL_IMPORT_OAUTH_MESSAGE_SOURCE) return
+
+          const eventJobId = typeof data.job_id === 'string' ? data.job_id : null
+          if (eventJobId && eventJobId !== jobId) return
+
+          cleanup()
+
+          const oauthStatus = typeof data.status === 'string' ? data.status : 'error'
+          const message =
+            typeof data.message === 'string'
+              ? data.message
+              : 'Social account authorization failed'
+          if (oauthStatus === 'success') {
+            resolve()
+            return
+          }
+          reject(new Error(message))
+        }
+
+        const timeoutId = window.setTimeout(() => {
+          cleanup()
+          reject(new Error('Social login timed out. Please retry.'))
+        }, 120000)
+
+        const closePollId = window.setInterval(() => {
+          if (popup.closed) {
+            cleanup()
+            reject(new Error('Social login window was closed before completion.'))
+          }
+        }, 300)
+
+        window.addEventListener('message', onMessage)
+      })
+
+      await refreshStatus()
+      connect(jobId)
+    } catch (error) {
+      setState((prev) => ({
+        ...prev,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to connect social account',
+      }))
+    } finally {
+      setState((prev) => ({ ...prev, isLoading: false }))
+    }
+  }, [connect, refreshStatus, state.jobId])
+
   const submitOAuthAuth = useCallback(
     async (payload: {
       provider_access_token: string
@@ -296,6 +384,7 @@ export function useSocialImportQueue(): UseSocialImportQueue {
   return {
     state,
     startJob,
+    startOAuthConnect,
     refreshStatus,
     submitOAuthAuth,
     submitScraperAuth,

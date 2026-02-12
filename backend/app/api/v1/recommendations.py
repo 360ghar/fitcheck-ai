@@ -7,6 +7,7 @@ For MVP we provide deterministic, fast recommendations using:
 """
 
 from datetime import date, datetime, time as dt_time
+import re
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
@@ -119,6 +120,52 @@ def _coerce_time(value: Any) -> Optional[dt_time]:
         except ValueError:
             continue
     return None
+
+
+def _extract_missing_users_column(err: Exception) -> Optional[str]:
+    code = getattr(err, "code", None)
+    text = str(err).lower()
+    if code not in {"42703", "PGRST204", "PGRST205"} and "42703" not in text:
+        return None
+
+    match = re.search(r"column\s+users\.([a-z0-9_]+)\s+does\s+not\s+exist", text)
+    if match:
+        return match.group(1)
+    match = re.search(r"could\s+not\s+find\s+the\s+'([a-z0-9_]+)'\s+column\s+of\s+'users'", text)
+    if match:
+        return match.group(1)
+    if code == "PGRST205":
+        return "__table__"
+    return None
+
+
+def _get_user_birth_profile(db: Client, user_id: str) -> Tuple[Dict[str, Any], bool]:
+    """Best-effort reader for canonical + legacy birth profile columns."""
+    profile: Dict[str, Any] = {}
+    users_profile_columns_missing = False
+
+    for column in ("birth_date", "birth_time", "birth_place", "date_of_birth"):
+        try:
+            row = (
+                db.table("users")
+                .select(column)
+                .eq("id", user_id)
+                .single()
+                .execute()
+            )
+            if row.data and column in row.data:
+                profile[column] = row.data.get(column)
+        except Exception as e:
+            missing_col = _extract_missing_users_column(e)
+            if missing_col in {column, "__table__"}:
+                users_profile_columns_missing = True
+                continue
+            raise
+
+    if not profile.get("birth_date") and profile.get("date_of_birth"):
+        profile["birth_date"] = profile.get("date_of_birth")
+
+    return profile, users_profile_columns_missing
 
 
 def _get_auth_birth_profile(db: Client, user_id: str) -> Dict[str, Any]:
@@ -516,17 +563,6 @@ async def astrology_recommendations(
     db: Client = Depends(get_db),
 ):
     """Return astrology-driven lucky colors with wardrobe-linked picks."""
-    def _is_missing_column_error(err: Exception, field_name: str) -> bool:
-        code = getattr(err, "code", None)
-        if code in {"42703", "PGRST204"}:
-            return True
-        text = str(err).lower()
-        return (
-            "42703" in text
-            or "could not find the" in text
-            or f"column users.{field_name}" in text
-        )
-
     try:
         if mode not in {"daily", "important_meeting"}:
             raise ValidationError(
@@ -534,26 +570,17 @@ async def astrology_recommendations(
                 details={"allowed": ["daily", "important_meeting"]},
             )
 
-        users_profile_columns_missing = False
-        try:
-            user_row = (
-                db.table("users")
-                .select("id,birth_date,birth_time,birth_place")
-                .eq("id", user_id)
-                .single()
-                .execute()
-            )
-        except Exception as e:
-            # Missing astrology columns on users table (migration not applied yet).
-            if _is_missing_column_error(e, "birth_date"):
-                users_profile_columns_missing = True
-                user_row = None
-            else:
-                raise
-
-        user_profile = user_row.data if user_row else {}
-        if users_profile_columns_missing:
-            user_profile = {**user_profile, **_get_auth_birth_profile(db, user_id)}
+        user_profile, users_profile_columns_missing = _get_user_birth_profile(db, user_id)
+        if (
+            users_profile_columns_missing
+            or not user_profile.get("birth_date")
+            or not user_profile.get("birth_time")
+            or not user_profile.get("birth_place")
+        ):
+            auth_profile = _get_auth_birth_profile(db, user_id)
+            user_profile["birth_date"] = user_profile.get("birth_date") or auth_profile.get("birth_date")
+            user_profile["birth_time"] = user_profile.get("birth_time") or auth_profile.get("birth_time")
+            user_profile["birth_place"] = user_profile.get("birth_place") or auth_profile.get("birth_place")
 
         settings_timezone: Optional[str] = None
         try:

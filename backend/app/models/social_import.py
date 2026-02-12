@@ -67,7 +67,16 @@ class SocialImportOAuthAuthRequest(BaseModel):
     provider_access_token: str = Field(..., min_length=10)
     provider_refresh_token: Optional[str] = None
     provider_user_id: Optional[str] = None
+    provider_page_access_token: Optional[str] = None
+    provider_page_id: Optional[str] = None
+    provider_username: Optional[str] = None
     expires_at: Optional[datetime] = None
+
+
+class SocialImportOAuthConnectResponse(BaseModel):
+    auth_url: str
+    expires_in_seconds: int
+    provider: str = "meta"
 
 
 class SocialImportScraperAuthRequest(BaseModel):

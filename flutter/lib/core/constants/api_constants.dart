@@ -20,7 +20,9 @@ class ApiConstants {
     // In release builds, default to production
     // Note: This fallback is intentional for release builds where
     // API_BASE_URL is not explicitly configured
-    debugPrint('Warning: API_BASE_URL not configured, using production default');
+    debugPrint(
+      'Warning: API_BASE_URL not configured, using production default',
+    );
     return 'https://api.fitcheckaiapp.com';
   }
 
@@ -62,6 +64,30 @@ class ApiConstants {
   static String aiBatchExtractStatus(String jobId) =>
       '$aiBatchExtract/$jobId/status';
 
+  // Social Import Endpoints
+  static const String aiSocialImportJobs = '$apiVersion/ai/social-import/jobs';
+  static String aiSocialImportStatus(String jobId) =>
+      '$aiSocialImportJobs/$jobId/status';
+  static String aiSocialImportEvents(String jobId) =>
+      '$aiSocialImportJobs/$jobId/events';
+  static String aiSocialImportOAuthConnect(String jobId) =>
+      '$aiSocialImportJobs/$jobId/auth/oauth/connect';
+  static String aiSocialImportOAuthSubmit(String jobId) =>
+      '$aiSocialImportJobs/$jobId/auth/oauth';
+  static String aiSocialImportScraperLogin(String jobId) =>
+      '$aiSocialImportJobs/$jobId/auth/scraper-login';
+  static String aiSocialImportPatchItem(
+    String jobId,
+    String photoId,
+    String itemId,
+  ) => '$aiSocialImportJobs/$jobId/photos/$photoId/items/$itemId';
+  static String aiSocialImportApprovePhoto(String jobId, String photoId) =>
+      '$aiSocialImportJobs/$jobId/photos/$photoId/approve';
+  static String aiSocialImportRejectPhoto(String jobId, String photoId) =>
+      '$aiSocialImportJobs/$jobId/photos/$photoId/reject';
+  static String aiSocialImportCancel(String jobId) =>
+      '$aiSocialImportJobs/$jobId/cancel';
+
   // AI Extraction Endpoints
   static const String aiExtractItems = '$ai/extract-items';
   static const String aiExtractSingleItem = '$ai/extract-single-item';
@@ -86,6 +112,8 @@ class ApiConstants {
   // Timeout durations
   // Increased connection timeout to handle AI operations that take longer to respond
   static const Duration connectionTimeout = Duration(minutes: 3);
-  static const Duration receiveTimeout = Duration(minutes: 10); // For AI operations
+  static const Duration receiveTimeout = Duration(
+    minutes: 10,
+  ); // For AI operations
   static const Duration sendTimeout = Duration(minutes: 3);
 }

@@ -473,8 +473,10 @@ export function BatchExtractionFlow({
 
                   {socialImport.state.job && socialImport.state.authRequired && (
                     <SocialImportAuthPrompt
+                      platform={socialImport.state.job.platform}
+                      isLoading={socialImport.state.isLoading}
                       error={socialImport.state.error}
-                      onSubmitOAuth={socialImport.submitOAuthAuth}
+                      onStartOAuthConnect={socialImport.startOAuthConnect}
                       onSubmitScraper={socialImport.submitScraperAuth}
                     />
                   )}

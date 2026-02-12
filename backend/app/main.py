@@ -60,10 +60,8 @@ SOCIAL_IMPORT_TABLES = (
 REQUIRED_COLUMNS = (
     # Preference profile (recommendations)
     ("user_preferences", "preferred_occasions"),
-    # Astrology profile fields
+    # Astrology profile base field (legacy-compatible via REQUIRED_COLUMN_ALTERNATIVES)
     ("users", "birth_date"),
-    ("users", "birth_time"),
-    ("users", "birth_place"),
     # Wardrobe enrichment (recommendations/categorization)
     ("items", "material"),
     ("item_images", "storage_path"),
@@ -72,6 +70,23 @@ REQUIRED_COLUMNS = (
     ("outfit_images", "storage_path"),
     ("outfit_collections", "is_favorite"),
 )
+
+REQUIRED_COLUMN_ALTERNATIVES = {
+    # Backward compatibility for environments that still use legacy DOB column.
+    ("users", "birth_date"): (("users", "date_of_birth"),),
+}
+
+
+def _column_exists(db, table: str, column: str) -> bool:
+    try:
+        db.table(table).select(column).limit(1).execute()
+        return True
+    except PostgrestAPIError as e:
+        if getattr(e, "code", None) in {"PGRST205", "42703"}:
+            return False
+        return False
+    except Exception:
+        return False
 
 
 def _schema_missing(db) -> list[str]:
@@ -94,16 +109,15 @@ def _schema_missing(db) -> list[str]:
 
     # Required columns (guarding against partial migrations)
     for table, column in REQUIRED_COLUMNS:
-        try:
-            db.table(table).select(column).limit(1).execute()
-        except PostgrestAPIError as e:
-            code = getattr(e, "code", None)
-            if code in {"PGRST205", "42703"}:
-                missing.append(f"{table}.{column}")
-            else:
-                missing.append(f"{table}.{column}")
-        except Exception:
-            missing.append(f"{table}.{column}")
+        if _column_exists(db, table, column):
+            continue
+
+        alternatives = REQUIRED_COLUMN_ALTERNATIVES.get((table, column), ())
+        has_alternative = any(_column_exists(db, alt_table, alt_column) for alt_table, alt_column in alternatives)
+        if has_alternative:
+            continue
+
+        missing.append(f"{table}.{column}")
 
     # De-dupe while preserving order
     seen = set()
