@@ -21,7 +21,8 @@ class DashboardContent extends StatefulWidget {
 }
 
 class _DashboardContentState extends State<DashboardContent> {
-  final DashboardController dashboardController = Get.find<DashboardController>();
+  final DashboardController dashboardController =
+      Get.find<DashboardController>();
   final AuthController authController = Get.find<AuthController>();
 
   @override
@@ -29,13 +30,12 @@ class _DashboardContentState extends State<DashboardContent> {
     return AppPageBackground(
       child: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () => dashboardController.fetchDashboard(showLoader: false),
+          onRefresh: () =>
+              dashboardController.fetchDashboard(showLoader: false),
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              SliverToBoxAdapter(
-                child: _buildHeader(),
-              ),
+              SliverToBoxAdapter(child: _buildHeader()),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(
                   AppConstants.spacing16,
@@ -57,7 +57,7 @@ class _DashboardContentState extends State<DashboardContent> {
                         const SizedBox(height: AppConstants.spacing16),
                         const ShimmerCard(height: 100),
                         const SizedBox(height: AppConstants.spacing16),
-                        const ShimmerListLoader(itemCount: 3),
+                        const ShimmerListLoaderBox(itemCount: 3),
                       ]),
                     );
                   }
@@ -111,9 +111,9 @@ class _DashboardContentState extends State<DashboardContent> {
               children: [
                 Text(
                   'Good ${_getGreeting()}',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
                 ),
                 const SizedBox(height: AppConstants.spacing4),
                 // User info wrapped in single Obx for efficiency
@@ -122,17 +122,17 @@ class _DashboardContentState extends State<DashboardContent> {
                   return Text(
                     user?.fullName ?? user?.email.split('@')[0] ?? 'Welcome',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: tokens.textPrimary,
-                        ),
+                      fontWeight: FontWeight.w700,
+                      color: tokens.textPrimary,
+                    ),
                   );
                 }),
                 const SizedBox(height: AppConstants.spacing4),
                 Text(
                   'Your AI wardrobe, tuned for today.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
               ],
             ),
@@ -145,14 +145,15 @@ class _DashboardContentState extends State<DashboardContent> {
               return CircleAvatar(
                 radius: 22,
                 backgroundColor: tokens.brandColor.withOpacity(0.15),
-                backgroundImage:
-                    user?.avatarUrl != null ? NetworkImage(user!.avatarUrl!) : null,
+                backgroundImage: user?.avatarUrl != null
+                    ? NetworkImage(user!.avatarUrl!)
+                    : null,
                 child: user?.avatarUrl == null
                     ? Text(
                         (user?.fullName?.isNotEmpty == true
                                 ? user!.fullName!.substring(0, 1).toUpperCase()
                                 : null) ??
-                            (user?.email?.isNotEmpty == true
+                            (user?.email.isNotEmpty == true
                                 ? user!.email.substring(0, 1).toUpperCase()
                                 : null) ??
                             'U',
@@ -182,13 +183,14 @@ class _DashboardContentState extends State<DashboardContent> {
           Expanded(
             child: Text(
               dashboardController.error.value,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: tokens.textSecondary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textSecondary),
             ),
           ),
           TextButton(
-            onPressed: () => dashboardController.fetchDashboard(showLoader: false),
+            onPressed: () =>
+                dashboardController.fetchDashboard(showLoader: false),
             child: const Text('Retry'),
           ),
         ],
@@ -202,7 +204,8 @@ class _DashboardContentState extends State<DashboardContent> {
     }
 
     final subController = Get.find<SubscriptionController>();
-    final shouldShow = !dashboardController.referralBannerDismissed.value ||
+    final shouldShow =
+        !dashboardController.referralBannerDismissed.value ||
         subController.isNearLimit;
 
     if (!shouldShow) return const SizedBox.shrink();

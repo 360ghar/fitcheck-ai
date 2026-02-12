@@ -116,6 +116,11 @@ class RecommendationsRepository {
               as Map<String, dynamic>? ??
           <String, dynamic>{};
     } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        throw Exception(
+          'Astrology API is not available on the current backend deployment. Please update the backend service.',
+        );
+      }
       throw handleDioException(e);
     }
   }

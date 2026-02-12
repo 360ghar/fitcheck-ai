@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { ScrollableTabs } from '@/components/ui/scrollable-tabs'
-import { updateCurrentUser, uploadAvatar, getUserPreferences, updateUserPreferences, getUserSettings, updateUserSettings, deleteAccount } from '@/api/users'
+import { getCurrentUser, updateCurrentUser, uploadAvatar, getUserPreferences, updateUserPreferences, getUserSettings, updateUserSettings, deleteAccount } from '@/api/users'
 import { requestPasswordReset } from '@/api/auth'
 import { AISettingsPanel, LocationInput, SubscriptionPanel, SupportPanel } from '@/components/settings'
 import { useTheme } from '@/components/theme'
@@ -202,16 +202,32 @@ export default function ProfilePage() {
     if (!user) return
     setIsSavingProfile(true)
     try {
-      const updated = await updateCurrentUser({
+      const result = await updateCurrentUser({
         full_name: fullName.trim() || undefined,
         gender: gender || null,
         birth_date: birthDate || null,
         birth_time: normalizeBirthTimeForApi(birthTime) || null,
         birth_place: birthPlace.trim() || null,
       })
-      setUser(updated)
+      const refreshedUser = await getCurrentUser().catch(() => result.user)
+      setUser(refreshedUser)
       setIsEditing(false)
-      toast({ title: 'Profile updated' })
+
+      const skippedBirthFields = result.skippedFields.filter(
+        (field) => field === 'birth_date' || field === 'birth_time' || field === 'birth_place'
+      )
+
+      if (skippedBirthFields.length > 0) {
+        toast({
+          title: 'Profile partially updated',
+          description:
+            'Birth details could not be saved to DB columns and were stored in fallback metadata. '
+            + 'Apply migrations 002/014 on production.',
+          variant: 'destructive',
+        })
+      } else {
+        toast({ title: 'Profile updated' })
+      }
     } catch (err) {
       toast({
         title: 'Failed to update profile',

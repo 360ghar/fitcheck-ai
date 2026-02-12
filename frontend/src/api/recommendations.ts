@@ -2,6 +2,8 @@
  * Recommendations API endpoints
  */
 
+import { isAxiosError } from 'axios';
+
 import { apiClient, getApiError } from './client';
 import type {
   ApiEnvelope,
@@ -126,6 +128,11 @@ export async function getAstrologyRecommendations(options?: {
     const response = await apiClient.get<ApiEnvelope<AstrologyRecommendation>>(endpoint);
     return response.data.data;
   } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) {
+      throw new Error(
+        'Astrology API is not available on the current backend deployment. Please update backend routes.',
+      );
+    }
     throw getApiError(error);
   }
 }

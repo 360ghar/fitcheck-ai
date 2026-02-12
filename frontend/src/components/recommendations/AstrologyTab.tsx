@@ -128,6 +128,13 @@ export function AstrologyTab({
               <div className="text-sm text-muted-foreground">
                 Add your date of birth to unlock astrology recommendations.
               </div>
+              {Array.isArray(data.notes) && data.notes.length > 0 && (
+                <div className="text-xs text-muted-foreground space-y-1">
+                  {data.notes.map((note, index) => (
+                    <p key={`${note}-${index}`}>{note}</p>
+                  ))}
+                </div>
+              )}
               <Button asChild>
                 <Link to="/settings?tab=profile">Complete Profile</Link>
               </Button>

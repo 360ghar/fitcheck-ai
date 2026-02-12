@@ -109,7 +109,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       }
 
       // Update profile
-      await _repository.updateProfile(
+      final result = await _repository.updateProfile(
         fullName: _nameController.text.trim(),
         avatarUrl: avatarUrl,
         birthDate: _birthDateController.text.trim().isEmpty
@@ -121,9 +121,36 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
             : _birthPlaceController.text.trim(),
       );
 
+      final meta = result['meta'];
+      final skippedFieldsRaw = meta is Map<String, dynamic>
+          ? meta['skipped_fields']
+          : null;
+      final skippedFields = skippedFieldsRaw is List
+          ? skippedFieldsRaw.map((e) => e.toString()).toList()
+          : const <String>[];
+      final skippedBirthFields = skippedFields
+          .where(
+            (field) =>
+                field == 'birth_date' ||
+                field == 'birth_time' ||
+                field == 'birth_place',
+          )
+          .toList();
+
       // Refresh user data in AuthController
       final authController = Get.find<AuthController>();
       await authController.refreshUser();
+
+      if (skippedBirthFields.isNotEmpty) {
+        Get.snackbar(
+          'Profile Partially Updated',
+          'Birth details could not be saved. Backend DB migration is missing '
+              '(run 002_astrology_profile.sql).',
+          snackPosition: SnackPosition.TOP,
+          duration: const Duration(seconds: 5),
+        );
+        return;
+      }
 
       Get.back();
       Get.snackbar(

@@ -121,6 +121,25 @@ def _coerce_time(value: Any) -> Optional[dt_time]:
     return None
 
 
+def _get_auth_birth_profile(db: Client, user_id: str) -> Dict[str, Any]:
+    """Read birth fields from Supabase Auth metadata as schema-migration fallback."""
+    try:
+        admin = getattr(db.auth, "admin", None)
+        if not admin or not hasattr(admin, "get_user_by_id"):
+            return {}
+        auth_user = admin.get_user_by_id(user_id)
+        if not auth_user or not getattr(auth_user, "user", None):
+            return {}
+        meta = getattr(auth_user.user, "user_metadata", {}) or {}
+        return {
+            "birth_date": meta.get("birth_date"),
+            "birth_time": meta.get("birth_time"),
+            "birth_place": meta.get("birth_place"),
+        }
+    except Exception:
+        return {}
+
+
 def _score_match(source: Dict[str, Any], candidate: Dict[str, Any]) -> Tuple[float, List[str]]:
     score = 0.5
     reasons: List[str] = []
@@ -497,6 +516,17 @@ async def astrology_recommendations(
     db: Client = Depends(get_db),
 ):
     """Return astrology-driven lucky colors with wardrobe-linked picks."""
+    def _is_missing_column_error(err: Exception, field_name: str) -> bool:
+        code = getattr(err, "code", None)
+        if code in {"42703", "PGRST204"}:
+            return True
+        text = str(err).lower()
+        return (
+            "42703" in text
+            or "could not find the" in text
+            or f"column users.{field_name}" in text
+        )
+
     try:
         if mode not in {"daily", "important_meeting"}:
             raise ValidationError(
@@ -504,14 +534,26 @@ async def astrology_recommendations(
                 details={"allowed": ["daily", "important_meeting"]},
             )
 
-        user_row = (
-            db.table("users")
-            .select("id,birth_date,birth_time,birth_place")
-            .eq("id", user_id)
-            .single()
-            .execute()
-        )
-        user_profile = user_row.data or {}
+        users_profile_columns_missing = False
+        try:
+            user_row = (
+                db.table("users")
+                .select("id,birth_date,birth_time,birth_place")
+                .eq("id", user_id)
+                .single()
+                .execute()
+            )
+        except Exception as e:
+            # Missing astrology columns on users table (migration not applied yet).
+            if _is_missing_column_error(e, "birth_date"):
+                users_profile_columns_missing = True
+                user_row = None
+            else:
+                raise
+
+        user_profile = user_row.data if user_row else {}
+        if users_profile_columns_missing:
+            user_profile = {**user_profile, **_get_auth_birth_profile(db, user_id)}
 
         settings_timezone: Optional[str] = None
         try:
@@ -542,6 +584,12 @@ async def astrology_recommendations(
 
         if missing_fields:
             weekday = effective_date.strftime("%A")
+            notes = ["Add your date of birth in profile settings to unlock astrology recommendations."]
+            if users_profile_columns_missing:
+                notes.append(
+                    "Database astrology columns are missing; using auth-metadata fallback for now. "
+                    "Run migration 002_astrology_profile.sql in Supabase."
+                )
             return {
                 "data": {
                     "status": "profile_required",
@@ -559,21 +607,25 @@ async def astrology_recommendations(
                     "avoid_colors": [],
                     "wardrobe_picks": [],
                     "suggested_outfits": [],
-                    "notes": ["Add your date of birth in profile settings to unlock astrology recommendations."],
+                    "notes": notes,
                 },
                 "message": "OK",
             }
 
-        items_res = (
-            db.table("items")
-            .select("*, item_images(*)")
-            .eq("user_id", user_id)
-            .eq("is_deleted", False)
-            .not_.in_("condition", ["laundry", "repair", "donate"])
-            .limit(600)
-            .execute()
-        )
-        items = items_res.data or []
+        try:
+            items_res = (
+                db.table("items")
+                .select("*, item_images(*)")
+                .eq("user_id", user_id)
+                .eq("is_deleted", False)
+                .not_.in_("condition", ["laundry", "repair", "donate"])
+                .limit(600)
+                .execute()
+            )
+            items = items_res.data or []
+        except Exception:
+            # Keep astrology colors usable even if related tables/columns are incomplete.
+            items = []
 
         astrology_data = await astrology_service.generate_recommendation(
             birth_date=birth_date,

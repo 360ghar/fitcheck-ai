@@ -11,6 +11,7 @@ Implements:
 """
 
 import uuid
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -52,6 +53,60 @@ def _now() -> str:
     return datetime.utcnow().isoformat()
 
 
+def _extract_missing_users_column(err: Exception) -> Optional[str]:
+    """Return missing users.<column> name when Postgres reports undefined column."""
+    code = getattr(err, "code", None)
+    text = str(err).lower()
+    has_missing_column_signal = (
+        code in {"42703", "PGRST204"}
+        or "42703" in text
+        or "could not find the" in text
+        or "column users." in text
+    )
+    if not has_missing_column_signal:
+        return None
+
+    match = re.search(r"column\s+users\.([a-z0-9_]+)\s+does\s+not\s+exist", text)
+    if match:
+        return match.group(1)
+    match = re.search(r"could\s+not\s+find\s+the\s+'([a-z0-9_]+)'\s+column\s+of\s+'users'", text)
+    if match:
+        return match.group(1)
+    return None
+
+
+def _extract_birth_patch(payload: Dict[str, Any]) -> Dict[str, Any]:
+    patch: Dict[str, Any] = {}
+    for field in ("birth_date", "birth_time", "birth_place"):
+        if field in payload:
+            patch[field] = payload.get(field)
+    return patch
+
+
+def _get_auth_user_metadata(db: Client, user_id: str) -> Dict[str, Any]:
+    try:
+        admin = getattr(db.auth, "admin", None)
+        if not admin or not hasattr(admin, "get_user_by_id"):
+            return {}
+        auth_user = admin.get_user_by_id(user_id)
+        if auth_user and getattr(auth_user, "user", None):
+            return dict(getattr(auth_user.user, "user_metadata", {}) or {})
+    except Exception:
+        return {}
+    return {}
+
+
+def _update_auth_user_metadata(db: Client, user_id: str, patch: Dict[str, Any]) -> None:
+    if not patch:
+        return
+    admin = getattr(db.auth, "admin", None)
+    if not admin or not hasattr(admin, "update_user_by_id"):
+        return
+    merged = _get_auth_user_metadata(db, user_id)
+    merged.update(patch)
+    admin.update_user_by_id(user_id, {"user_metadata": merged})
+
+
 # ============================================================================
 # PROFILE
 # ============================================================================
@@ -68,7 +123,20 @@ async def get_current_user(
             raise UserNotFoundError(user_id=user_id)
         # Let Pydantic validate/normalize
         user = UserResponse.model_validate(result.data[0])
-        return {"data": user.model_dump(mode="json"), "message": "OK"}
+        user_data = user.model_dump(mode="json")
+
+        # Fallback for projects that haven't applied astrology profile migration yet.
+        if (
+            not user_data.get("birth_date")
+            or not user_data.get("birth_time")
+            or not user_data.get("birth_place")
+        ):
+            meta = _get_auth_user_metadata(db, user_id)
+            user_data["birth_date"] = user_data.get("birth_date") or meta.get("birth_date")
+            user_data["birth_time"] = user_data.get("birth_time") or meta.get("birth_time")
+            user_data["birth_place"] = user_data.get("birth_place") or meta.get("birth_place")
+
+        return {"data": user_data, "message": "OK"}
     except (UserNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
@@ -83,17 +151,67 @@ async def update_current_user(
     db: Client = Depends(get_db),
 ):
     try:
-        update_dict = update_data.model_dump(exclude_unset=True)
+        update_dict = update_data.model_dump(mode="json", exclude_unset=True)
         if not update_dict:
             # No-op
             return await get_current_user(user_id=user_id, db=db)
-        update_dict["updated_at"] = _now()
-        result = db.table("users").update(update_dict).eq("id", user_id).execute()
+        birth_patch = _extract_birth_patch(update_dict)
+
+        update_payload = dict(update_dict)
+        skipped_fields: List[str] = []
+
+        while True:
+            update_payload["updated_at"] = _now()
+            try:
+                result = db.table("users").update(update_payload).eq("id", user_id).execute()
+                break
+            except Exception as e:
+                missing_col = _extract_missing_users_column(e)
+                if not missing_col or missing_col not in update_payload:
+                    raise
+                skipped_fields.append(missing_col)
+                update_payload.pop(missing_col, None)
+                logger.warning(
+                    "Skipping update for missing users column",
+                    user_id=user_id,
+                    skipped_column=missing_col,
+                )
+                # Avoid empty update (only updated_at left).
+                if set(update_payload.keys()) <= {"updated_at"}:
+                    if birth_patch:
+                        try:
+                            _update_auth_user_metadata(db, user_id, birth_patch)
+                        except Exception as metadata_error:
+                            logger.warning(
+                                "Failed to sync birth fields to auth metadata",
+                                user_id=user_id,
+                                error=str(metadata_error),
+                            )
+                    return {
+                        "data": (await get_current_user(user_id=user_id, db=db))["data"],
+                        "message": "No schema-compatible profile fields to update",
+                        "meta": {"skipped_fields": skipped_fields},
+                    }
+
         row = (result.data or [None])[0]
         if not row:
             raise DatabaseError("Failed to update user")
+
+        if birth_patch:
+            try:
+                _update_auth_user_metadata(db, user_id, birth_patch)
+            except Exception as metadata_error:
+                logger.warning(
+                    "Failed to sync birth fields to auth metadata",
+                    user_id=user_id,
+                    error=str(metadata_error),
+                )
+
         user = UserResponse.model_validate(row)
-        return {"data": user.model_dump(mode="json"), "message": "Updated"}
+        response: Dict[str, Any] = {"data": user.model_dump(mode="json"), "message": "Updated"}
+        if skipped_fields:
+            response["meta"] = {"skipped_fields": skipped_fields}
+        return response
     except (UserNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:

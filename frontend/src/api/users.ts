@@ -11,6 +11,11 @@ import type {
   BodyProfile,
 } from '../types';
 
+export interface UpdateCurrentUserResult {
+  user: User;
+  skippedFields: string[];
+}
+
 // ============================================================================
 // USERS API FUNCTIONS
 // ============================================================================
@@ -37,10 +42,22 @@ export async function updateCurrentUser(data: {
   birth_date?: string | null;
   birth_time?: string | null;
   birth_place?: string | null;
-}): Promise<User> {
+}): Promise<UpdateCurrentUserResult> {
   try {
     const response = await apiClient.put<ApiEnvelope<User>>('/api/v1/users/me', data);
-    return response.data.data;
+    const meta = response.data.meta;
+    const skippedFieldsRaw =
+      meta && typeof meta === 'object' && 'skipped_fields' in meta
+        ? (meta as { skipped_fields?: unknown }).skipped_fields
+        : undefined;
+    const skippedFields = Array.isArray(skippedFieldsRaw)
+      ? skippedFieldsRaw.map((field) => String(field))
+      : [];
+
+    return {
+      user: response.data.data,
+      skippedFields,
+    };
   } catch (error) {
     throw getApiError(error);
   }

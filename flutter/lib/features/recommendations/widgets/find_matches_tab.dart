@@ -31,11 +31,15 @@ class FindMatchesTab extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
           child: Obx(() {
             if (controller.isLoadingItems.value) {
-              return Row(
-                children: List.generate(4, (index) => Padding(
-                  padding: const EdgeInsets.only(right: AppConstants.spacing12),
-                  child: ShimmerBox(width: 80, height: 80, borderRadius: AppConstants.radius8),
-                )),
+              return ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: 4,
+                separatorBuilder: (context, index) => const SizedBox(width: AppConstants.spacing12),
+                itemBuilder: (context, index) => const ShimmerBox(
+                  width: 80,
+                  height: 80,
+                  borderRadius: AppConstants.radius8,
+                ),
               );
             }
 
@@ -114,7 +118,7 @@ class FindMatchesTab extends StatelessWidget {
                   decoration: InputDecoration(
                     hintText: 'Search matches...',
                     filled: true,
-                    fillColor: tokens.cardColor.withOpacity(0.5),
+                    fillColor: tokens.cardColor.withValues(alpha: 0.5),
                     prefixIcon: const Icon(Icons.search),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(AppConstants.radius12),

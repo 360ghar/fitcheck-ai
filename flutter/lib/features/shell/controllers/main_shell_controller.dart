@@ -5,6 +5,7 @@ import '../../../app/routes/app_routes.dart';
 class MainShellController extends GetxController {
   /// Current tab index (0-4)
   final RxInt currentIndex = 0.obs;
+  final RxSet<int> loadedTabs = <int>{0}.obs;
 
   /// Tab routes in order
   static const List<String> tabRoutes = [
@@ -15,12 +16,21 @@ class MainShellController extends GetxController {
     Routes.more,
   ];
 
+  @override
+  void onInit() {
+    super.onInit();
+    loadedTabs.add(currentIndex.value);
+  }
+
   /// Change the current tab
   void changeTab(int index) {
     if (index >= 0 && index < 5 && currentIndex.value != index) {
       currentIndex.value = index;
+      loadedTabs.add(index);
     }
   }
+
+  bool isTabLoaded(int index) => loadedTabs.contains(index);
 
   /// Get tab index for a route (for deep linking)
   static int getIndexForRoute(String route) {

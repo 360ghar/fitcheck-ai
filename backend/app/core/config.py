@@ -5,10 +5,16 @@ All settings can be overridden via environment variables.
 
 import json
 import re
+from pathlib import Path
 from typing import List, Optional
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
+
+_BACKEND_DIR = Path(__file__).resolve().parents[2]
+_REPO_ROOT_DIR = Path(__file__).resolve().parents[3]
+_BACKEND_ENV_FILE = _BACKEND_DIR / ".env"
+_ROOT_ENV_FILE = _REPO_ROOT_DIR / ".env"
 
 
 class Settings(BaseSettings):
@@ -176,7 +182,9 @@ class Settings(BaseSettings):
     LOG_DIR: str = "logs"
 
     class Config:
-        env_file = ".env"
+        # Load env keys regardless of whether process is started from repo root
+        # or from the backend folder.
+        env_file = (str(_BACKEND_ENV_FILE), str(_ROOT_ENV_FILE))
         case_sensitive = True
         enable_decoding = False
         extra = "ignore"

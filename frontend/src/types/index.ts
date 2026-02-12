@@ -11,6 +11,7 @@ export type UUID = string;
 export interface ApiEnvelope<T> {
   data: T;
   message?: string;
+  meta?: Record<string, unknown>;
 }
 
 export interface ApiErrorEnvelope {

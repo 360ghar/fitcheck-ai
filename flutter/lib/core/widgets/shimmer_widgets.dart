@@ -7,12 +7,7 @@ import 'app_ui.dart';
 
 /// Basic shimmer box - a rectangular placeholder with shimmer effect
 class ShimmerBox extends StatelessWidget {
-  const ShimmerBox({
-    super.key,
-    this.width,
-    this.height,
-    this.borderRadius,
-  });
+  const ShimmerBox({super.key, this.width, this.height, this.borderRadius});
 
   final double? width;
   final double? height;
@@ -42,10 +37,7 @@ class ShimmerBox extends StatelessWidget {
 
 /// Shimmer card - matches the style of grid items (wardrobe, outfits)
 class ShimmerGridItem extends StatelessWidget {
-  const ShimmerGridItem({
-    super.key,
-    this.aspectRatio = 0.75,
-  });
+  const ShimmerGridItem({super.key, this.aspectRatio = 0.75});
 
   final double aspectRatio;
 
@@ -126,8 +118,9 @@ class ShimmerListTile extends StatelessWidget {
                       height: 12,
                       decoration: BoxDecoration(
                         color: tokens.cardColor.withOpacity(0.6),
-                        borderRadius:
-                            BorderRadius.circular(AppConstants.radius8),
+                        borderRadius: BorderRadius.circular(
+                          AppConstants.radius8,
+                        ),
                       ),
                     ),
                   ],
@@ -154,10 +147,7 @@ class ShimmerListTile extends StatelessWidget {
 
 /// Shimmer card - for stat cards or info cards
 class ShimmerCard extends StatelessWidget {
-  const ShimmerCard({
-    super.key,
-    this.height = 100,
-  });
+  const ShimmerCard({super.key, this.height = 100});
 
   final double height;
 
@@ -240,6 +230,37 @@ class ShimmerListLoader extends StatelessWidget {
           hasTrailing: hasTrailing,
         ),
         childCount: itemCount,
+      ),
+    );
+  }
+}
+
+/// Non-sliver list loader (for use in regular Column/ListView children)
+class ShimmerListLoaderBox extends StatelessWidget {
+  const ShimmerListLoaderBox({
+    super.key,
+    this.itemCount = 5,
+    this.hasLeading = true,
+    this.hasSubtitle = true,
+    this.hasTrailing = false,
+  });
+
+  final int itemCount;
+  final bool hasLeading;
+  final bool hasSubtitle;
+  final bool hasTrailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(
+        itemCount,
+        (_) => ShimmerListTile(
+          hasLeading: hasLeading,
+          hasSubtitle: hasSubtitle,
+          hasTrailing: hasTrailing,
+        ),
       ),
     );
   }
@@ -337,10 +358,7 @@ class ShimmerProfileHeader extends StatelessWidget {
 
 /// Stats row skeleton (for dashboard stats)
 class ShimmerStatsRow extends StatelessWidget {
-  const ShimmerStatsRow({
-    super.key,
-    this.itemCount = 3,
-  });
+  const ShimmerStatsRow({super.key, this.itemCount = 3});
 
   final int itemCount;
 
@@ -430,7 +448,9 @@ class ShimmerDetailPage extends StatelessWidget {
                     height: 100,
                     decoration: BoxDecoration(
                       color: tokens.cardColor.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(AppConstants.radius12),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radius12,
+                      ),
                     ),
                   ),
                   const SizedBox(height: AppConstants.spacing12),
@@ -439,7 +459,9 @@ class ShimmerDetailPage extends StatelessWidget {
                     height: 100,
                     decoration: BoxDecoration(
                       color: tokens.cardColor.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(AppConstants.radius12),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radius12,
+                      ),
                     ),
                   ),
                 ],
@@ -454,10 +476,7 @@ class ShimmerDetailPage extends StatelessWidget {
 
 /// Loading indicator for bottom of lists (for "load more")
 class LoadingMoreIndicator extends StatelessWidget {
-  const LoadingMoreIndicator({
-    super.key,
-    this.isLoading = false,
-  });
+  const LoadingMoreIndicator({super.key, this.isLoading = false});
 
   final bool isLoading;
 
@@ -471,9 +490,7 @@ class LoadingMoreIndicator extends StatelessWidget {
       child: const SizedBox(
         width: 24,
         height: 24,
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-        ),
+        child: CircularProgressIndicator(strokeWidth: 2),
       ),
     );
   }
@@ -481,10 +498,7 @@ class LoadingMoreIndicator extends StatelessWidget {
 
 /// Sliver loading more indicator
 class SliverLoadingMoreIndicator extends StatelessWidget {
-  const SliverLoadingMoreIndicator({
-    super.key,
-    required this.isLoading,
-  });
+  const SliverLoadingMoreIndicator({super.key, required this.isLoading});
 
   final bool isLoading;
 

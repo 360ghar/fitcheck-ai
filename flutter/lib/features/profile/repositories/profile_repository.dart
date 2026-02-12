@@ -40,7 +40,10 @@ class ProfileRepository {
         '${ApiConstants.users}/me',
         data: data,
       );
-      return _extractData(response.data);
+      if (response.data is Map<String, dynamic>) {
+        return response.data as Map<String, dynamic>;
+      }
+      return <String, dynamic>{};
     } on DioException catch (e) {
       throw handleDioException(e);
     }

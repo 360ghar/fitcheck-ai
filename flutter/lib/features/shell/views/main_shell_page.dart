@@ -19,22 +19,46 @@ class MainShellPage extends StatelessWidget {
     final controller = Get.find<MainShellController>();
 
     return Scaffold(
-      body: Obx(() => IndexedStack(
-            index: controller.currentIndex.value,
-            children: const [
-              DashboardContent(),
-              PhotoshootContent(),
-              WardrobeContent(),
-              OutfitsContent(),
-              MoreContent(),
-            ],
-          )),
-      floatingActionButton: Obx(() => _buildFloatingActionButton(controller.currentIndex.value)),
-      bottomNavigationBar: Obx(() => AppBottomNavigationBar(
-            currentIndex: controller.currentIndex.value,
-            onTabChanged: controller.changeTab,
-          )),
+      body: Obx(
+        () => IndexedStack(
+          index: controller.currentIndex.value,
+          children: List.generate(
+            5,
+            (index) => _buildTabContent(index, controller),
+          ),
+        ),
+      ),
+      floatingActionButton: Obx(
+        () => _buildFloatingActionButton(controller.currentIndex.value),
+      ),
+      bottomNavigationBar: Obx(
+        () => AppBottomNavigationBar(
+          currentIndex: controller.currentIndex.value,
+          onTabChanged: controller.changeTab,
+        ),
+      ),
     );
+  }
+
+  Widget _buildTabContent(int index, MainShellController controller) {
+    if (!controller.isTabLoaded(index)) {
+      return const SizedBox.shrink();
+    }
+
+    switch (index) {
+      case 0:
+        return const DashboardContent();
+      case 1:
+        return const PhotoshootContent();
+      case 2:
+        return const WardrobeContent();
+      case 3:
+        return const OutfitsContent();
+      case 4:
+        return const MoreContent();
+      default:
+        return const SizedBox.shrink();
+    }
   }
 
   Widget _buildFloatingActionButton(int currentIndex) {
