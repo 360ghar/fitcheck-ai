@@ -83,6 +83,7 @@ class SocialImportScraperAuthRequest(BaseModel):
     username: str = Field(..., min_length=2, max_length=255)
     password: str = Field(..., min_length=1, max_length=255)
     otp_code: Optional[str] = Field(None, min_length=4, max_length=12)
+    two_factor_identifier: Optional[str] = Field(None, min_length=1, max_length=255)
 
 
 class SocialImportAuthResponse(BaseModel):
@@ -154,6 +155,9 @@ class SocialImportJobStatusResponse(BaseModel):
     auth_required: bool = False
     discovery_completed: bool = False
     error_message: Optional[str] = None
+    auth_reason: Optional[str] = None
+    two_factor_identifier: Optional[str] = None
+    checkpoint_url: Optional[str] = None
     awaiting_review_photo: Optional[SocialImportPhotoResponse] = None
     buffered_photo: Optional[SocialImportPhotoResponse] = None
     processing_photo: Optional[SocialImportPhotoResponse] = None

@@ -12,7 +12,11 @@ if "pinecone" not in sys.modules:
     pinecone_stub.ServerlessSpec = object
     sys.modules["pinecone"] = pinecone_stub
 
-from app.api.v1.recommendations import astrology_recommendations
+from app.api.v1.recommendations import (
+    _coerce_date,
+    _coerce_time,
+    astrology_recommendations,
+)
 
 
 class _FakeNotQuery:
@@ -206,3 +210,13 @@ async def test_astrology_endpoint_meeting_mode_changes_color_weighting():
     daily_lucky = [c["name"] for c in daily["data"]["lucky_colors"]]
     meeting_lucky = [c["name"] for c in meeting["data"]["lucky_colors"]]
     assert daily_lucky != meeting_lucky
+
+
+def test_coerce_birth_time_accepts_iso_and_fractional_strings():
+    assert _coerce_time("12:34:56.000000") is not None
+    assert _coerce_time("12:34:56+05:30") is not None
+    assert _coerce_time("2026-02-06T12:34:56+05:30") is not None
+
+
+def test_coerce_birth_date_accepts_datetime_like_strings():
+    assert _coerce_date("1995-01-14T00:00:00+00:00") == date(1995, 1, 14)

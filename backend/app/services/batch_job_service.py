@@ -108,6 +108,7 @@ class BatchJob:
 
     # SSE subscribers (queues for sending events)
     subscribers: List[asyncio.Queue] = field(default_factory=list)
+    event_history: List[Dict[str, Any]] = field(default_factory=list)
 
     # Error info
     error_message: Optional[str] = None
@@ -259,6 +260,75 @@ class BatchJobService:
                 job.extraction_failed[image_id] = error
 
     @classmethod
+    async def restore_cached_items(cls, job_id: str, items: List[Dict[str, Any]]) -> None:
+        """
+        Restore detected items from a cached single-image extraction result.
+
+        This hydrates a newly created in-memory job so SSE/status consumers can
+        read cached items through the normal batch job interfaces.
+        """
+        async with cls._lock:
+            job = cls._jobs.get(job_id)
+            if not job:
+                return
+
+            default_image_id = next(iter(job.images.keys()), "cached_image")
+            restored_items: List[DetectedItemData] = []
+
+            for raw in items:
+                if not isinstance(raw, dict):
+                    continue
+
+                raw_colors = raw.get("colors")
+                colors = [str(color) for color in raw_colors] if isinstance(raw_colors, list) else []
+
+                confidence_raw = raw.get("confidence")
+                try:
+                    confidence = float(confidence_raw) if confidence_raw is not None else 0.0
+                except (TypeError, ValueError):
+                    confidence = 0.0
+
+                include_raw = raw.get("include_in_wardrobe")
+                include_in_wardrobe = include_raw if isinstance(include_raw, bool) else True
+
+                restored_items.append(
+                    DetectedItemData(
+                        temp_id=str(raw.get("temp_id") or uuid4()),
+                        image_id=str(raw.get("image_id") or default_image_id),
+                        category=str(raw.get("category") or "other"),
+                        sub_category=raw.get("sub_category"),
+                        colors=colors,
+                        material=raw.get("material"),
+                        pattern=raw.get("pattern"),
+                        brand=raw.get("brand"),
+                        confidence=confidence,
+                        bounding_box=raw.get("bounding_box"),
+                        detailed_description=raw.get("detailed_description"),
+                        person_id=raw.get("person_id"),
+                        person_label=raw.get("person_label"),
+                        is_current_user_person=bool(raw.get("is_current_user_person", False)),
+                        include_in_wardrobe=include_in_wardrobe,
+                        status=str(raw.get("status") or "detected"),
+                        generated_image_base64=raw.get("generated_image_base64"),
+                        generated_image_url=raw.get("generated_image_url"),
+                        generation_error=raw.get("generation_error"),
+                    )
+                )
+
+            job.detected_items = restored_items
+            job.extraction_completed = set(job.images.keys())
+            job.extraction_failed = {}
+            job.generation_completed = set()
+            job.generation_failed = {}
+
+            for item in job.detected_items:
+                has_generated_image = bool(item.generated_image_base64) or bool(item.generated_image_url)
+                if item.status == "generated" or has_generated_image:
+                    job.generation_completed.add(item.temp_id)
+                elif item.status == "failed" or item.generation_error:
+                    job.generation_failed[item.temp_id] = item.generation_error or "Generation failed"
+
+    @classmethod
     async def update_item_generation(
         cls,
         job_id: str,
@@ -296,20 +366,39 @@ class BatchJobService:
     @classmethod
     async def broadcast_event(cls, job_id: str, event_type: str, data: Dict[str, Any]) -> None:
         """Send SSE event to all subscribers of a job."""
+        event = {"type": event_type, "data": data}
+
         async with cls._lock:
             job = cls._jobs.get(job_id)
             if not job:
                 return
 
+            # Store in event history for late-connecting subscribers
+            job.event_history.append(event)
+
             subscribers = list(job.subscribers)
 
-        event = {"type": event_type, "data": data}
+        # Log broadcasting activity
+        if subscribers:
+            queue_sizes = [queue.qsize() for queue in subscribers]
+            logger.debug(
+                f"Broadcasting {event_type} to {len(subscribers)} subscribers",
+                extra={"job_id": job_id, "queue_sizes": queue_sizes}
+            )
 
+        # Send to all subscribers - wait if queue is full (backpressure)
         for queue in subscribers:
             try:
                 await queue.put(event)
             except Exception as e:
                 logger.warning(f"Failed to send event to subscriber: {e}")
+
+        # Log completion
+        if subscribers:
+            logger.debug(
+                f"Broadcast complete for {event_type}",
+                extra={"job_id": job_id, "subscriber_count": len(subscribers)}
+            )
 
     @classmethod
     async def add_subscriber(cls, job_id: str, queue: asyncio.Queue) -> bool:
@@ -319,7 +408,27 @@ class BatchJobService:
             if not job:
                 return False
             job.subscribers.append(queue)
-            return True
+
+            # Replay event history to new subscriber
+            event_history = list(job.event_history)
+
+        # Replay outside the lock, bounded by queue capacity to avoid blocking attach.
+        if queue.maxsize > 0 and len(event_history) > queue.maxsize:
+            event_history = event_history[-queue.maxsize:]
+
+        for historical_event in event_history:
+            try:
+                queue.put_nowait(historical_event)
+            except asyncio.QueueFull:
+                logger.debug(
+                    "Replay queue full; dropping oldest replay tail",
+                    extra={"job_id": job_id, "queue_maxsize": queue.maxsize},
+                )
+                break
+            except Exception as e:
+                logger.warning(f"Failed to replay event: {e}")
+
+        return True
 
     @classmethod
     async def remove_subscriber(cls, job_id: str, queue: asyncio.Queue) -> None:

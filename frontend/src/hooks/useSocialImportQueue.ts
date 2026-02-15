@@ -77,13 +77,14 @@ export interface UseSocialImportQueue {
   approveAwaiting: () => Promise<void>
   rejectAwaiting: () => Promise<void>
   cancelJob: () => Promise<void>
-  reset: () => void
+  reset: (options?: { cancelActiveJob?: boolean }) => Promise<void>
 }
 
 export function useSocialImportQueue(): UseSocialImportQueue {
   const [state, setState] = useState<SocialImportQueueState>(initialState)
   const disconnectRef = useRef<(() => void) | null>(null)
   const reconnectAttempts = useRef(0)
+  const reconnectTimerRef = useRef<number | null>(null)
   const lastEventIdRef = useRef<number | null>(null)
 
   const applyJobData = useCallback((job: SocialImportJobData) => {
@@ -103,6 +104,10 @@ export function useSocialImportQueue(): UseSocialImportQueue {
   }, [])
 
   const disconnect = useCallback(() => {
+    if (reconnectTimerRef.current !== null && typeof window !== 'undefined') {
+      window.clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = null
+    }
     if (disconnectRef.current) {
       disconnectRef.current()
       disconnectRef.current = null
@@ -123,6 +128,7 @@ export function useSocialImportQueue(): UseSocialImportQueue {
       disconnectRef.current = createSocialImportSSEConnection(
         jobId,
         (event: SocialImportSSEEvent) => {
+          reconnectAttempts.current = 0
           if (typeof event.id === 'number') {
             lastEventIdRef.current = event.id
           }
@@ -164,7 +170,13 @@ export function useSocialImportQueue(): UseSocialImportQueue {
 
           if (reconnectAttempts.current < 3) {
             reconnectAttempts.current += 1
-            window.setTimeout(() => connect(jobId), 1000 * reconnectAttempts.current)
+            if (reconnectTimerRef.current !== null && typeof window !== 'undefined') {
+              window.clearTimeout(reconnectTimerRef.current)
+            }
+            reconnectTimerRef.current = window.setTimeout(
+              () => connect(jobId),
+              1000 * reconnectAttempts.current
+            )
           }
         },
         lastEventIdRef.current ?? undefined
@@ -211,7 +223,7 @@ export function useSocialImportQueue(): UseSocialImportQueue {
       const popup = window.open(
         oauth.auth_url,
         SOCIAL_IMPORT_OAUTH_WINDOW_NAME,
-        'width=520,height=740,noopener,noreferrer'
+        'width=520,height=740'
       )
       if (!popup) {
         throw new Error('Popup blocked. Please allow popups to connect your social account.')
@@ -301,9 +313,19 @@ export function useSocialImportQueue(): UseSocialImportQueue {
   const submitScraperAuth = useCallback(
     async (payload: { username: string; password: string; otp_code?: string }) => {
       if (!state.jobId) return
-      await submitSocialImportScraperLogin(state.jobId, payload)
-      await refreshStatus()
-      connect(state.jobId)
+      setState((prev) => ({ ...prev, isLoading: true, error: null }))
+      try {
+        await submitSocialImportScraperLogin(state.jobId, payload)
+        await refreshStatus()
+        connect(state.jobId)
+      } catch (error) {
+        setState((prev) => ({
+          ...prev,
+          error: error instanceof Error ? error.message : 'Failed to submit login details',
+        }))
+      } finally {
+        setState((prev) => ({ ...prev, isLoading: false }))
+      }
     },
     [connect, refreshStatus, state.jobId]
   )
@@ -311,8 +333,15 @@ export function useSocialImportQueue(): UseSocialImportQueue {
   const updateItem = useCallback(
     async (photoId: string, itemId: string, updates: Partial<SocialImportItem>) => {
       if (!state.jobId) return
-      await patchSocialImportItem(state.jobId, photoId, itemId, updates)
-      await refreshStatus()
+      try {
+        await patchSocialImportItem(state.jobId, photoId, itemId, updates)
+        await refreshStatus()
+      } catch (error) {
+        setState((prev) => ({
+          ...prev,
+          error: error instanceof Error ? error.message : 'Failed to update item',
+        }))
+      }
     },
     [refreshStatus, state.jobId]
   )
@@ -337,13 +366,28 @@ export function useSocialImportQueue(): UseSocialImportQueue {
     disconnect()
   }, [disconnect, refreshStatus, state.jobId])
 
-  const reset = useCallback(() => {
+  const reset = useCallback(async (options?: { cancelActiveJob?: boolean }) => {
+    const shouldCancel = options?.cancelActiveJob ?? true
+    const activeJobId = state.jobId
+    const activeStatus = state.status
+    if (shouldCancel && activeJobId && !isTerminalStatus(activeStatus)) {
+      try {
+        await cancelSocialImportJob(activeJobId)
+      } catch {
+        // Even if cancel fails, continue resetting local state to prevent stale UI.
+      }
+    }
+
     disconnect()
     reconnectAttempts.current = 0
+    if (reconnectTimerRef.current !== null && typeof window !== 'undefined') {
+      window.clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = null
+    }
     lastEventIdRef.current = null
     setActiveJobId(null)
     setState(initialState)
-  }, [disconnect])
+  }, [disconnect, state.jobId, state.status])
 
   useEffect(() => {
     lastEventIdRef.current = state.lastEventId

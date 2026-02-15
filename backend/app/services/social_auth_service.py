@@ -134,6 +134,10 @@ class SocialAuthService:
         username: str,
         password: str,
         otp_code: Optional[str],
+        two_factor_identifier: Optional[str] = None,
+        sessionid: Optional[str] = None,
+        csrftoken: Optional[str] = None,
+        ds_user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         # Basic placeholder validation hooks for scraper fallback.
         if not username or not password:
@@ -147,6 +151,10 @@ class SocialAuthService:
             "username": username,
             "password": password,
             "otp_code": otp_code,
+            "two_factor_identifier": two_factor_identifier,
+            "sessionid": sessionid,
+            "csrftoken": csrftoken,
+            "ds_user_id": ds_user_id,
             "saved_at": datetime.now(timezone.utc).isoformat(),
             "session_kind": "ephemeral_credentials",
         }

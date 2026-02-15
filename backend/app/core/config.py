@@ -183,6 +183,26 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = "logs"
 
+    # Token Refresh Configuration
+    TOKEN_REFRESH_CACHE_TTL_MINUTES: int = 55  # Cache refreshed tokens (5min buffer before 60min expiry)
+    TOKEN_REFRESH_LOCK_TIMEOUT_SECONDS: int = 10  # Max time to wait for lock acquisition
+
+    # AI Provider Health & Reliability Configuration
+    AI_PROVIDER_HEALTH_CHECK_ENABLED: bool = True
+    AI_PROVIDER_HEALTH_CHECK_TIMEOUT: float = 5.0
+    AI_PROVIDER_CIRCUIT_BREAKER_THRESHOLD: int = 3
+    AI_PROVIDER_CIRCUIT_BREAKER_RESET_TIMEOUT: int = 120
+
+    # Connection Pool Configuration
+    AI_CONNECTION_POOL_MAX_CONNECTIONS: int = 100
+    AI_CONNECTION_POOL_MAX_KEEPALIVE: int = 20
+
+    # Timeout Configuration (seconds)
+    AI_CONNECT_TIMEOUT: float = 5.0      # Connection establishment
+    AI_READ_TIMEOUT: float = 120.0       # Reading response
+    AI_WRITE_TIMEOUT: float = 30.0       # Sending request
+    AI_POOL_TIMEOUT: float = 10.0        # Pool acquisition
+
     class Config:
         # Load env keys regardless of whether process is started from repo root
         # or from the backend folder.

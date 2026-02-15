@@ -153,8 +153,17 @@ def _coerce_date(value: Any) -> Optional[date]:
         return value.date()
     if isinstance(value, date):
         return value
+    raw = str(value).strip()
+    if not raw:
+        return None
+    normalized = raw.replace("Z", "+00:00")
+    # Try full ISO datetime/date first, then a strict YYYY-MM-DD fallback.
     try:
-        return date.fromisoformat(str(value))
+        return datetime.fromisoformat(normalized).date()
+    except ValueError:
+        pass
+    try:
+        return date.fromisoformat(normalized[:10])
     except ValueError:
         return None
 
@@ -162,11 +171,37 @@ def _coerce_date(value: Any) -> Optional[date]:
 def _coerce_time(value: Any) -> Optional[dt_time]:
     if value is None:
         return None
+    if isinstance(value, datetime):
+        return value.time().replace(tzinfo=None)
     if isinstance(value, dt_time):
-        return value
+        return value.replace(tzinfo=None)
+    raw = str(value).strip()
+    if not raw:
+        return None
+    normalized = raw.replace("Z", "+00:00")
+    # Support ISO-ish time values such as 12:34:56.000000 or 12:34:56+05:30.
+    for candidate in (
+        normalized if "T" in normalized else f"1970-01-01T{normalized}",
+        f"1970-01-01T{normalized}",
+    ):
+        try:
+            parsed = datetime.fromisoformat(candidate)
+            return parsed.time().replace(tzinfo=None)
+        except ValueError:
+            continue
+    if "+" in normalized:
+        normalized = normalized.split("+", 1)[0]
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1]
+    # Strip timezone offsets that may use '-' after seconds (e.g., HH:MM:SS-05:00).
+    if "T" in normalized:
+        normalized = normalized.split("T", 1)[1]
+    tz_match = re.match(r"^(\d{2}:\d{2}(?::\d{2})?)(?:\.\d+)?(?:[+-].*)?$", normalized)
+    if tz_match:
+        normalized = tz_match.group(1)
     for fmt in ("%H:%M:%S", "%H:%M"):
         try:
-            return datetime.strptime(str(value), fmt).time()
+            return datetime.strptime(normalized, fmt).time()
         except ValueError:
             continue
     return None
@@ -344,6 +379,7 @@ async def match_items(
         db.table("items")
         .select("*")
         .eq("user_id", user_id)
+        .eq("is_deleted", False)
         .in_("id", source_ids)
         .execute()
     )
@@ -352,7 +388,13 @@ async def match_items(
         raise ItemNotFoundError()
 
     # Candidate pool: same wardrobe excluding sources
-    candidates_q = db.table("items").select("*").eq("user_id", user_id).not_.in_("id", source_ids)
+    candidates_q = (
+        db.table("items")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("is_deleted", False)
+        .not_.in_("id", source_ids)
+    )
     if category:
         candidates_q = candidates_q.eq("category", category)
     # Exclude laundry/repair/donate by default (docs)
@@ -426,7 +468,14 @@ async def complete_look(
             details={"field": "item_ids or start_item_id"}
         )
 
-    seed_res = db.table("items").select("*").eq("user_id", user_id).in_("id", seed_ids).execute()
+    seed_res = (
+        db.table("items")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("is_deleted", False)
+        .in_("id", seed_ids)
+        .execute()
+    )
     seeds = seed_res.data or []
     if not seeds:
         raise ItemNotFoundError()
@@ -475,6 +524,7 @@ async def personalized(
         db.table("items")
         .select("*")
         .eq("user_id", user_id)
+        .eq("is_deleted", False)
         .eq("is_favorite", True)
         .limit(limit)
         .execute()
@@ -484,6 +534,7 @@ async def personalized(
         db.table("items")
         .select("*")
         .eq("user_id", user_id)
+        .eq("is_deleted", False)
         .order("usage_times_worn", desc=False)
         .limit(limit)
         .execute()

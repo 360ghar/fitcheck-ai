@@ -279,3 +279,22 @@ Map<String, dynamic> _$BatchImageResultToJson(_BatchImageResult instance) =>
       'item_count': instance.itemCount,
       'error': instance.error,
     };
+
+_SingleExtractionJob _$SingleExtractionJobFromJson(Map<String, dynamic> json) =>
+    _SingleExtractionJob(
+      jobId: json['job_id'] as String,
+      status: json['status'] as String,
+      totalImages: (json['total_images'] as num).toInt(),
+      sseUrl: json['sse_url'] as String,
+      message: json['message'] as String?,
+    );
+
+Map<String, dynamic> _$SingleExtractionJobToJson(
+  _SingleExtractionJob instance,
+) => <String, dynamic>{
+  'job_id': instance.jobId,
+  'status': instance.status,
+  'total_images': instance.totalImages,
+  'sse_url': instance.sseUrl,
+  'message': instance.message,
+};

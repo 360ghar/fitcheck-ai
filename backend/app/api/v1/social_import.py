@@ -58,18 +58,33 @@ def _validate_target_origin(target_origin: Optional[str]) -> str:
         return _frontend_origin()
 
     target = target_origin.rstrip("/")
+    parsed_target = urlparse(target)
+    if parsed_target.scheme not in {"http", "https"} or not parsed_target.netloc:
+        return _frontend_origin() or "*"
+    target_host = parsed_target.hostname or ""
+
     allowed_origins = set(settings.BACKEND_CORS_ORIGINS or [])
     frontend = _frontend_origin()
     if frontend:
         allowed_origins.add(frontend)
 
-    # Allow exact match or subdomain match for netlify apps
     for allowed in allowed_origins:
+        allowed = allowed.rstrip("/")
         if target == allowed:
             return target
-        # Allow subdomains of fitcheckaiapp.com
-        if allowed.endswith("fitcheckaiapp.com"):
-            if target.endswith("fitcheckaiapp.com"):
+
+        parsed_allowed = urlparse(allowed)
+        allowed_host = parsed_allowed.hostname or ""
+        if not allowed_host:
+            continue
+
+        # Allow fitcheck first-party subdomains, but avoid suffix tricks
+        # such as evilfitcheckaiapp.com.
+        if (
+            allowed_host == "fitcheckaiapp.com"
+            or allowed_host.endswith(".fitcheckaiapp.com")
+        ):
+            if target_host == "fitcheckaiapp.com" or target_host.endswith(".fitcheckaiapp.com"):
                 return target
 
     # If no match, fall back to frontend_origin (don't allow arbitrary origins)
@@ -182,6 +197,17 @@ async def create_social_import_job(
 ):
     if not settings.ENABLE_SOCIAL_IMPORT:
         raise HTTPException(status_code=404, detail="Social import is disabled")
+
+    max_concurrent_jobs = max(1, int(settings.SOCIAL_IMPORT_MAX_CONCURRENT_JOBS or 1))
+    active_jobs = await SocialImportJobStore.count_active_jobs(db, user_id=user_id)
+    if active_jobs >= max_concurrent_jobs:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                "You already have the maximum number of active social imports. "
+                "Please finish or cancel an existing job before starting a new one."
+            ),
+        )
 
     normalized = SocialURLService.normalize_profile_url(body.source_url)
     job = await SocialImportJobStore.create_job(

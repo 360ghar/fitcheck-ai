@@ -3,8 +3,10 @@ import 'dart:io';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/utils/image_utils.dart';
@@ -39,6 +41,10 @@ class BatchExtractionController extends GetxController {
   static const int generationBatchSize = 5;
   static const String socialOAuthCallbackUri =
       'fitcheck.ai://social-import-callback';
+  static const String _socialPersistedJobIdKey =
+      'fitcheck.social_import.active_job_id';
+  static const String _socialPersistedLastEventIdKey =
+      'fitcheck.social_import.last_event_id';
 
   // Selected images
   final RxList<BatchImage> selectedImages = <BatchImage>[].obs;
@@ -73,6 +79,19 @@ class BatchExtractionController extends GetxController {
   final RxBool socialIsLoading = false.obs;
   final RxBool socialIsConnected = false.obs;
   final RxInt socialLastEventId = (-1).obs;
+  final RxBool showSocialDialogTrigger = false.obs;
+
+  // 2FA / Scraper auth state
+  final RxBool waitingForOtp = false.obs;
+  final RxString lastUsername = ''.obs;
+  final RxString lastPassword = ''.obs;
+  final RxString twoFactorIdentifier = ''.obs;
+
+  // URL input validation
+  final RxString socialUrlInput = ''.obs;
+  final RxString socialUrlError = ''.obs;
+  final RxBool isValidSocialUrl = false.obs;
+  final TextEditingController socialUrlController = TextEditingController();
 
   StreamSubscription? _socialSseSubscription;
   StreamSubscription<Uri>? _socialOAuthLinkSubscription;
@@ -118,10 +137,88 @@ class BatchExtractionController extends GetxController {
       .where((item) => item.isSelected && item.includeInWardrobe)
       .length;
 
+  void initializeSocialMode() {
+    inputMode.value = BatchInputMode.social;
+    showSocialDialogTrigger.value = true;
+  }
+
+  /// Validate social profile URL
+  void validateSocialUrl(String url) {
+    socialUrlInput.value = url.trim();
+
+    if (url.isEmpty) {
+      socialUrlError.value = '';
+      isValidSocialUrl.value = false;
+      return;
+    }
+
+    // Check for Instagram URL patterns
+    final instagramPatterns = [
+      RegExp(
+        r'^https?://(www\.)?instagram\.com/[^/]+/?$',
+        caseSensitive: false,
+      ),
+      RegExp(
+        r'^https?://(www\.)?instagram\.com/p/',
+        caseSensitive: false,
+      ), // Post URLs not supported
+    ];
+
+    // Check for Facebook URL patterns
+    final facebookPatterns = [
+      RegExp(r'^https?://(www\.)?facebook\.com/[^/]+/?$', caseSensitive: false),
+      RegExp(r'^https?://fb\.com/[^/]+/?$', caseSensitive: false),
+    ];
+
+    bool isInstagram = instagramPatterns[0].hasMatch(url);
+    bool isFacebook =
+        facebookPatterns[0].hasMatch(url) || facebookPatterns[1].hasMatch(url);
+
+    // Check if it's a post URL (not supported)
+    if (instagramPatterns[1].hasMatch(url)) {
+      socialUrlError.value =
+          'Post URLs are not supported. Please enter a profile URL.';
+      isValidSocialUrl.value = false;
+      return;
+    }
+
+    // Check for invalid characters or common mistakes
+    if (url.contains(' ') || url.contains('\n')) {
+      socialUrlError.value = 'URL cannot contain spaces';
+      isValidSocialUrl.value = false;
+      return;
+    }
+
+    if (isInstagram || isFacebook) {
+      socialUrlError.value = '';
+      isValidSocialUrl.value = true;
+    } else if (url.startsWith('http')) {
+      socialUrlError.value =
+          'Please enter a valid Instagram or Facebook profile URL';
+      isValidSocialUrl.value = false;
+    } else {
+      socialUrlError.value = '';
+      isValidSocialUrl.value = false;
+    }
+  }
+
+  /// Clear URL input
+  void clearSocialUrl() {
+    socialUrlController.clear();
+    validateSocialUrl('');
+  }
+
   @override
   void onInit() {
     super.onInit();
+    socialUrlController.addListener(() {
+      final current = socialUrlController.text;
+      if (current != socialUrlInput.value) {
+        validateSocialUrl(current);
+      }
+    });
     _listenForSocialOAuthCallbacks();
+    unawaited(_restoreSocialImportState());
   }
 
   @override
@@ -129,6 +226,7 @@ class BatchExtractionController extends GetxController {
     _sseSubscription?.cancel();
     _socialSseSubscription?.cancel();
     _socialOAuthLinkSubscription?.cancel();
+    socialUrlController.dispose();
     super.onClose();
   }
 
@@ -243,6 +341,7 @@ class BatchExtractionController extends GetxController {
       final started = await _socialRepo.startJob(sourceUrl: normalized);
       socialJobId.value = started.jobId;
       socialLastEventId.value = -1;
+      _persistSocialImportState();
 
       await refreshSocialStatus();
       _subscribeToSocialEvents(started.jobId);
@@ -305,16 +404,45 @@ class BatchExtractionController extends GetxController {
     try {
       socialIsLoading.value = true;
       socialError.value = '';
+
+      // Store credentials for potential 2FA retry
+      if (otpCode == null || otpCode.isEmpty) {
+        lastUsername.value = username;
+        lastPassword.value = password;
+      }
+
       await _socialRepo.submitScraperLogin(
         socialJobId.value,
         username: username.trim(),
         password: password,
         otpCode: otpCode?.trim().isNotEmpty == true ? otpCode!.trim() : null,
+        twoFactorIdentifier: twoFactorIdentifier.value.isNotEmpty
+            ? twoFactorIdentifier.value
+            : null,
       );
+
+      // Reset 2FA state on success
+      waitingForOtp.value = false;
+      twoFactorIdentifier.value = '';
+
       await refreshSocialStatus();
       _subscribeToSocialEvents(socialJobId.value);
     } catch (e) {
-      socialError.value = 'Failed to submit credentials: $e';
+      final errorStr = e.toString().toLowerCase();
+      // Check if error indicates 2FA is required
+      if (errorStr.contains('two_factor') ||
+          errorStr.contains('2fa') ||
+          errorStr.contains('otp') ||
+          errorStr.contains('two factor')) {
+        waitingForOtp.value = true;
+        socialError.value = 'Two-factor authentication required';
+      } else if (errorStr.contains('checkpoint') ||
+          errorStr.contains('security')) {
+        socialError.value =
+            'Security checkpoint required. Please log in via browser first.';
+      } else {
+        socialError.value = 'Failed to submit credentials: $e';
+      }
     } finally {
       socialIsLoading.value = false;
     }
@@ -399,6 +527,9 @@ class BatchExtractionController extends GetxController {
       await refreshSocialStatus();
       _socialSseSubscription?.cancel();
       socialIsConnected.value = false;
+      if (socialJob.value?.isTerminal == true) {
+        _clearPersistedSocialImportState();
+      }
     } catch (e) {
       socialError.value = 'Failed to cancel social import job: $e';
     } finally {
@@ -414,15 +545,41 @@ class BatchExtractionController extends GetxController {
     socialIsLoading.value = false;
     socialIsConnected.value = false;
     socialLastEventId.value = -1;
+    // Reset 2FA / scraper auth state
+    waitingForOtp.value = false;
+    lastUsername.value = '';
+    lastPassword.value = '';
+    twoFactorIdentifier.value = '';
+    // Reset URL input state
+    socialUrlInput.value = '';
+    socialUrlError.value = '';
+    isValidSocialUrl.value = false;
+    socialUrlController.clear();
+    _clearPersistedSocialImportState();
   }
 
   void _applySocialJob(SocialImportJobData job) {
     socialJob.value = job;
     socialError.value = (job.errorMessage ?? '').trim();
+
+    if (job.status == SocialImportJobStatus.awaitingAuth &&
+        (job.authReason?.isNotEmpty == true)) {
+      if (job.authReason == 'two_factor_required') {
+        waitingForOtp.value = true;
+        twoFactorIdentifier.value = job.twoFactorIdentifier ?? '';
+      } else {
+        waitingForOtp.value = false;
+      }
+    }
+
     if (job.isTerminal) {
       socialIsConnected.value = false;
       _socialSseSubscription?.cancel();
+      _clearPersistedSocialImportState();
+      return;
     }
+
+    _persistSocialImportState();
   }
 
   void _subscribeToSocialEvents(String jobId, {int? lastEventId}) {
@@ -434,7 +591,36 @@ class BatchExtractionController extends GetxController {
             socialIsConnected.value = true;
             if (event.id != null) {
               socialLastEventId.value = event.id!;
+              _persistSocialImportState();
             }
+
+            // Handle specific auth_required events
+            if (event.type == 'auth_required') {
+              final reason = event.data['reason']?.toString();
+              final message = event.data['message']?.toString();
+
+              if (reason == 'two_factor_required') {
+                waitingForOtp.value = true;
+                twoFactorIdentifier.value =
+                    event.data['two_factor_identifier']?.toString() ?? '';
+                socialError.value =
+                    message ?? 'Two-factor authentication required';
+              } else if (reason == 'checkpoint_required') {
+                waitingForOtp.value = false;
+                socialError.value =
+                    message ??
+                    'Security checkpoint required. Please log in via browser first.';
+              } else if (reason == 'login_failed') {
+                waitingForOtp.value = false;
+                socialError.value =
+                    message ?? 'Login failed. Please check your credentials.';
+              } else {
+                waitingForOtp.value = false;
+                socialError.value =
+                    message ?? 'Login required to continue importing';
+              }
+            }
+
             if (event.type == 'heartbeat' || event.type == 'connected') {
               return;
             }
@@ -502,6 +688,7 @@ class BatchExtractionController extends GetxController {
         return;
       }
       socialJobId.value = callbackJobId;
+      _persistSocialImportState();
     }
 
     final callbackStatus = (uri.queryParameters['status'] ?? '').toLowerCase();
@@ -536,6 +723,70 @@ class BatchExtractionController extends GetxController {
       callbackMessage,
       snackPosition: SnackPosition.BOTTOM,
     );
+  }
+
+  Future<void> _restoreSocialImportState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final persistedJobId = (prefs.getString(_socialPersistedJobIdKey) ?? '')
+          .trim();
+      if (persistedJobId.isEmpty || socialJobId.value.isNotEmpty) {
+        return;
+      }
+
+      socialJobId.value = persistedJobId;
+      socialLastEventId.value =
+          prefs.getInt(_socialPersistedLastEventIdKey) ?? -1;
+
+      await refreshSocialStatus();
+      final job = socialJob.value;
+      if (job == null || job.isTerminal) {
+        _clearPersistedSocialImportState();
+        return;
+      }
+
+      _subscribeToSocialEvents(
+        persistedJobId,
+        lastEventId: socialLastEventId.value > 0
+            ? socialLastEventId.value
+            : null,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('Failed to restore social import state: $e');
+      }
+    }
+  }
+
+  void _persistSocialImportState() {
+    final currentJobId = socialJobId.value.trim();
+    if (currentJobId.isEmpty) {
+      _clearPersistedSocialImportState();
+      return;
+    }
+
+    final lastEvent = socialLastEventId.value;
+    unawaited(
+      _writeSocialImportState(currentJobId, lastEvent > 0 ? lastEvent : null),
+    );
+  }
+
+  Future<void> _writeSocialImportState(String jobId, int? lastEventId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_socialPersistedJobIdKey, jobId);
+    if (lastEventId != null) {
+      await prefs.setInt(_socialPersistedLastEventIdKey, lastEventId);
+    } else {
+      await prefs.remove(_socialPersistedLastEventIdKey);
+    }
+  }
+
+  void _clearPersistedSocialImportState() {
+    unawaited(() async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_socialPersistedJobIdKey);
+      await prefs.remove(_socialPersistedLastEventIdKey);
+    }());
   }
 
   /// Start the batch extraction process

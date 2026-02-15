@@ -179,7 +179,7 @@ export function BatchExtractionFlow({
     }
 
     reset();
-    socialImport.reset();
+    void socialImport.reset();
     onClose?.();
   }, [isProcessing, onClose, onRequestOpen, reset, socialImport, toast]);
 
@@ -465,15 +465,23 @@ export function BatchExtractionFlow({
                   )}
 
                   {socialImport.state.job && (
-                    <SocialImportProgress
-                      job={socialImport.state.job}
-                      isConnected={socialImport.state.isConnected}
-                    />
+                    <>
+                      {socialImport.state.error && (
+                        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                          {socialImport.state.error}
+                        </div>
+                      )}
+                      <SocialImportProgress
+                        job={socialImport.state.job}
+                        isConnected={socialImport.state.isConnected}
+                      />
+                    </>
                   )}
 
                   {socialImport.state.job && socialImport.state.authRequired && (
                     <SocialImportAuthPrompt
                       platform={socialImport.state.job.platform}
+                      allowScraperFallback={socialImport.state.job.platform === 'instagram'}
                       isLoading={socialImport.state.isLoading}
                       error={socialImport.state.error}
                       onStartOAuthConnect={socialImport.startOAuthConnect}
@@ -503,8 +511,8 @@ export function BatchExtractionFlow({
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={socialImport.reset}
-                        disabled={socialImport.state.status === 'processing'}
+                        onClick={() => void socialImport.reset()}
+                        disabled={socialImport.state.isLoading}
                       >
                         Reset
                       </Button>

@@ -64,7 +64,19 @@ class ProviderConfig:
     vision_model: Optional[str] = None
     image_gen_model: Optional[str] = None
     max_tokens: int = 64096
-    timeout: float = 600.0  # 10 minutes
+
+    # Optimized timeout configuration (separate connect vs read)
+    connect_timeout: float = 5.0     # 5s for connection establishment
+    read_timeout: float = 120.0      # 2min for reading response
+    write_timeout: float = 30.0      # 30s for sending request
+    pool_timeout: float = 10.0       # 10s for acquiring connection from pool
+
+    # Connection pool settings
+    max_connections: int = 100       # Total connections in pool
+    max_keepalive: int = 20          # Persistent connections to keep alive
+
+    # Legacy timeout field for backward compatibility
+    timeout: float = 600.0  # Deprecated - use specific timeouts above
 
     def get_vision_model(self) -> str:
         """Get the vision model, falling back to the default model."""
@@ -160,14 +172,30 @@ class AIProviderService:
         self._client: Optional[httpx.AsyncClient] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create the HTTP client."""
+        """Get or create the HTTP client with connection pooling."""
         if self._client is None:
+            # Create client with connection pooling and optimized timeouts
+            limits = httpx.Limits(
+                max_connections=self.config.max_connections,
+                max_keepalive_connections=self.config.max_keepalive,
+                keepalive_expiry=30.0,  # Keep connections alive for 30s
+            )
+
+            timeout = httpx.Timeout(
+                connect=self.config.connect_timeout,
+                read=self.config.read_timeout,
+                write=self.config.write_timeout,
+                pool=self.config.pool_timeout,
+            )
+
             self._client = httpx.AsyncClient(
-                timeout=httpx.Timeout(self.config.timeout),
+                timeout=timeout,
+                limits=limits,
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {self.config.api_key}",
                 },
+                http2=True,  # Enable HTTP/2 for multiplexing
             )
         return self._client
 
@@ -223,10 +251,10 @@ class AIProviderService:
 
     @staticmethod
     def _retry_delay_seconds(attempt: int) -> float:
-        # Balanced retry profile: exponential backoff with jitter
-        base = 1.0 * (2 ** attempt)
-        jitter = random.random() * 0.5 * base
-        return min(base + jitter, 8.0)
+        # Faster retry profile for better user experience
+        base = 0.5 * (1.5 ** attempt)  # Reduced from 2^attempt
+        jitter = random.random() * 0.3 * base  # Reduced jitter
+        return min(base + jitter, 5.0)  # Cap at 5s instead of 8s
 
     async def chat(
         self,
@@ -296,8 +324,33 @@ class AIProviderService:
             has_response_format=bool(response_format),
         )
 
+        # Check provider health before first attempt (fail fast if unavailable)
+        from app.services.ai_provider_health_service import get_health_service
+        health_service = get_health_service()
+
+        health_status = await health_service.check_provider_health(
+            base_url=self.config.api_url,
+            api_key=self.config.api_key,
+            timeout_seconds=3.0,
+        )
+
+        if not health_status.available:
+            # Provider is down - fail fast instead of retrying
+            error_msg = (
+                f"AI provider {self.config.api_url} is unavailable. "
+                f"Error: {health_status.error}. "
+                "Please check if the service is running or configure an alternative provider."
+            )
+            logger.error(
+                "Provider unavailable, failing fast",
+                provider_url=self.config.api_url,
+                error=health_status.error,
+                consecutive_failures=health_status.consecutive_failures,
+            )
+            raise AIServiceError(error_msg)
+
         async def _post_chat(req_payload: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
-            max_retries = 3
+            max_retries = 2  # Reduced from 3
             attempt = 0
 
             while True:
@@ -305,11 +358,42 @@ class AIProviderService:
                     response = await client.post(url, json=req_payload)
                     response.raise_for_status()
                     return response.json(), response.status_code
+                except httpx.ConnectError as transport_error:
+                    # Connection refused - mark provider as unhealthy
+                    health_service.clear_cache(self.config.api_url)
+
+                    if attempt >= max_retries:
+                        logger.error(
+                            "Cannot connect to AI provider after retries",
+                            provider_url=self.config.api_url,
+                            attempts=attempt + 1,
+                        )
+                        raise AIServiceError(
+                            f"Cannot connect to AI provider at {self.config.api_url}. "
+                            "Please ensure the service is running or configure an alternative provider."
+                        )
+
+                    delay = self._retry_delay_seconds(attempt)
+                    logger.warning(
+                        "Connection refused, retrying",
+                        attempt=attempt + 1,
+                        max_retries=max_retries,
+                        delay_seconds=round(delay, 2),
+                        error=self._format_exception_message(transport_error),
+                    )
+                    attempt += 1
+                    await asyncio.sleep(delay)
+
                 except Exception as transport_error:
                     if not self._is_transient_transport_error(transport_error):
                         raise
 
                     if attempt >= max_retries:
+                        logger.error(
+                            "Chat transport error after retries",
+                            timeout=self.config.read_timeout,
+                            error=self._format_exception_message(transport_error),
+                        )
                         raise
 
                     delay = self._retry_delay_seconds(attempt)

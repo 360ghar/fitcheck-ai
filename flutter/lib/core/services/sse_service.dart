@@ -100,11 +100,16 @@ class SSEService {
       String buffer = '';
 
       await for (final chunk in response.stream.transform(utf8.decoder)) {
-        buffer += chunk;
+        // Normalize line endings because many SSE servers (including
+        // sse-starlette) emit CRLF. Our parser operates on LF-delimited chunks.
+        buffer += chunk.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 
         // Parse SSE format: "event: type\ndata: {...}\n\n"
-        while (buffer.contains('\n\n')) {
+        while (true) {
           final eventEnd = buffer.indexOf('\n\n');
+          if (eventEnd == -1) {
+            break;
+          }
           final eventStr = buffer.substring(0, eventEnd);
           buffer = buffer.substring(eventEnd + 2);
 
@@ -122,8 +127,8 @@ class SSEService {
   /// Parse a single SSE event string
   ServerSentEvent? _parseServerSentEvent(String eventStr) {
     String? eventType;
-    String? dataStr;
     int? eventId;
+    final dataLines = <String>[];
 
     for (final line in eventStr.split('\n')) {
       if (line.startsWith('event:')) {
@@ -131,11 +136,12 @@ class SSEService {
       } else if (line.startsWith('id:')) {
         eventId = int.tryParse(line.substring(3).trim());
       } else if (line.startsWith('data:')) {
-        dataStr = line.substring(5).trim();
+        dataLines.add(line.substring(5).trimLeft());
       }
     }
 
     if (eventType != null) {
+      final dataStr = dataLines.isNotEmpty ? dataLines.join('\n') : null;
       Map<String, dynamic>? data;
       if (dataStr != null && dataStr.isNotEmpty) {
         try {

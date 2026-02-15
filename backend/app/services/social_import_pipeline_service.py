@@ -15,6 +15,7 @@ from app.agents.image_generation_agent import get_image_generation_agent
 from app.agents.item_extraction_agent import get_item_extraction_agent
 from app.core.exceptions import (
     SocialImportAuthRequiredError,
+    SocialImportError,
     SocialImportJobNotFoundError,
 )
 from app.core.logging_config import get_context_logger
@@ -46,6 +47,8 @@ class SocialImportPipelineService:
     # Pagination safeguards to prevent infinite loops
     MAX_DISCOVERY_ITERATIONS = 100  # Max pages to fetch per job
     MAX_DISCOVERY_PHOTOS = 2000     # Hard limit on photos per job
+    DISCOVERY_RETRY_ATTEMPTS = 3
+    DISCOVERY_RETRY_BASE_DELAY_SECONDS = 1.0
 
     def __init__(self, *, user_id: str, db):
         self.user_id = user_id
@@ -211,6 +214,8 @@ class SocialImportPipelineService:
         if not job:
             raise SocialImportJobNotFoundError(job_id)
 
+        job_metadata = dict(job.get("metadata") or {})
+
         await SocialImportJobStore.set_job_status(
             self.db,
             job_id=job_id,
@@ -227,9 +232,13 @@ class SocialImportPipelineService:
             },
         )
 
-        cursor: Optional[str] = None
+        stored_cursor = job_metadata.get("discovery_cursor")
+        cursor: Optional[str] = stored_cursor if isinstance(stored_cursor, str) and stored_cursor else None
         ordinal = int(job.get("discovered_photos") or 0) + 1
-        iteration_count = 0
+        try:
+            iteration_count = int(job_metadata.get("discovery_iteration") or 0)
+        except (TypeError, ValueError):
+            iteration_count = 0
 
         while iteration_count < self.MAX_DISCOVERY_ITERATIONS:
             iteration_count += 1
@@ -238,14 +247,104 @@ class SocialImportPipelineService:
                 job_id=job_id,
                 user_id=self.user_id,
             )
-            result = await SocialScraperService.discover_profile_photos(
-                normalized_url=job["normalized_url"],
-                platform=SocialPlatform(job["platform"]),
+            result = None
+            last_discovery_error: Optional[Exception] = None
+            for attempt in range(self.DISCOVERY_RETRY_ATTEMPTS):
+                try:
+                    result = await SocialScraperService.discover_profile_photos(
+                        normalized_url=job["normalized_url"],
+                        platform=SocialPlatform(job["platform"]),
+                        auth_session=auth_session,
+                        cursor=cursor,
+                    )
+                    if result is None:
+                        raise RuntimeError(
+                            "Photo discovery returned no result"
+                        )
+                    break
+                except Exception as discovery_error:
+                    last_discovery_error = discovery_error
+                    if attempt < self.DISCOVERY_RETRY_ATTEMPTS - 1:
+                        retry_delay = self.DISCOVERY_RETRY_BASE_DELAY_SECONDS * (attempt + 1)
+                        logger.warning(
+                            "Retrying photo discovery",
+                            job_id=job_id,
+                            user_id=self.user_id,
+                            attempt=attempt + 1,
+                            max_attempts=self.DISCOVERY_RETRY_ATTEMPTS,
+                            error=str(discovery_error),
+                            retry_delay_seconds=retry_delay,
+                        )
+                        await asyncio.sleep(retry_delay)
+
+            if result is None:
+                raise RuntimeError(
+                    "Photo discovery failed after retries"
+                    if last_discovery_error is None
+                    else f"Photo discovery failed after retries: {last_discovery_error}"
+                )
+
+            await self._persist_scraper_session_from_payload(
+                job_id=job_id,
                 auth_session=auth_session,
-                cursor=cursor,
             )
 
             if result.requires_auth:
+                # Build auth required event with metadata
+                auth_metadata = result.metadata or {}
+                reason = auth_metadata.get("reason", "auth_required")
+                error_message = auth_metadata.get("message")
+                two_factor_identifier = auth_metadata.get("two_factor_identifier")
+
+                # Persist two-factor challenge state so OTP retries can resume login.
+                session_payload = (auth_session or {}).get("session_payload") or {}
+                if (
+                    two_factor_identifier
+                    and session_payload.get("username")
+                    and session_payload.get("password")
+                ):
+                    try:
+                        await SocialAuthService.store_scraper_session(
+                            self.db,
+                            job_id=job_id,
+                            user_id=self.user_id,
+                            username=session_payload["username"],
+                            password=session_payload["password"],
+                            otp_code=session_payload.get("otp_code"),
+                            two_factor_identifier=two_factor_identifier,
+                            sessionid=session_payload.get("sessionid"),
+                            csrftoken=session_payload.get("csrftoken"),
+                            ds_user_id=session_payload.get("ds_user_id"),
+                        )
+                    except Exception as persist_error:
+                        logger.warning(
+                            "Failed to persist two-factor identifier",
+                            job_id=job_id,
+                            user_id=self.user_id,
+                            error=str(persist_error),
+                        )
+
+                existing_metadata = dict(job_metadata)
+                existing_metadata["discovery_iteration"] = iteration_count
+                if cursor:
+                    existing_metadata["discovery_cursor"] = cursor
+                else:
+                    existing_metadata.pop("discovery_cursor", None)
+                existing_metadata.update(
+                    {
+                        "auth_reason": reason,
+                        "auth_message": error_message,
+                    }
+                )
+                if "two_factor_identifier" in auth_metadata:
+                    existing_metadata["two_factor_identifier"] = auth_metadata["two_factor_identifier"]
+                else:
+                    existing_metadata.pop("two_factor_identifier", None)
+                if "checkpoint_url" in auth_metadata:
+                    existing_metadata["checkpoint_url"] = auth_metadata["checkpoint_url"]
+                else:
+                    existing_metadata.pop("checkpoint_url", None)
+
                 await SocialImportJobStore.update_job(
                     self.db,
                     job_id=job_id,
@@ -253,17 +352,28 @@ class SocialImportPipelineService:
                     updates={
                         "status": SocialImportJobStatus.AWAITING_AUTH.value,
                         "auth_required": True,
-                        "error_message": None,
+                        "error_message": error_message,
+                        "metadata": existing_metadata,
                     },
                 )
+
+                event_payload = {
+                    "job_id": job_id,
+                    "status": SocialImportJobStatus.AWAITING_AUTH.value,
+                    "reason": reason,
+                    "message": error_message or "Login required to continue importing this profile",
+                }
+
+                # Include additional metadata for specific auth flows
+                if "two_factor_identifier" in auth_metadata:
+                    event_payload["two_factor_identifier"] = auth_metadata["two_factor_identifier"]
+                if "checkpoint_url" in auth_metadata:
+                    event_payload["checkpoint_url"] = auth_metadata["checkpoint_url"]
+
                 await self._publish_event(
                     job_id,
                     "auth_required",
-                    {
-                        "job_id": job_id,
-                        "status": SocialImportJobStatus.AWAITING_AUTH.value,
-                        "message": "Login required to continue importing this profile",
-                    },
+                    event_payload,
                 )
                 raise SocialImportAuthRequiredError()
 
@@ -305,6 +415,18 @@ class SocialImportPipelineService:
             if not cursor:
                 break
 
+            job_metadata["discovery_cursor"] = cursor
+            job_metadata["discovery_iteration"] = iteration_count
+            await SocialImportJobStore.update_job(
+                self.db,
+                job_id=job_id,
+                user_id=self.user_id,
+                updates={"metadata": job_metadata},
+            )
+
+        job_metadata.pop("discovery_cursor", None)
+        job_metadata.pop("discovery_iteration", None)
+
         await SocialImportJobStore.update_job(
             self.db,
             job_id=job_id,
@@ -313,6 +435,7 @@ class SocialImportPipelineService:
                 "discovery_completed": True,
                 "auth_required": False,
                 "status": SocialImportJobStatus.PROCESSING.value,
+                "metadata": job_metadata,
             },
         )
         await self._publish_event(
@@ -696,7 +819,29 @@ class SocialImportPipelineService:
                     SocialImportItemStatus.SAVED.value,
                 }:
                     continue
-                saved_item_id = await self._save_item_from_social_item(item)
+                try:
+                    saved_item_id = await self._save_item_from_social_item(item)
+                except Exception as save_error:
+                    logger.warning(
+                        "Failed to save approved social import item",
+                        job_id=job_id,
+                        photo_id=photo_id,
+                        item_id=item.get("id"),
+                        user_id=self.user_id,
+                        error=str(save_error),
+                    )
+                    await SocialImportJobStore.update_item(
+                        self.db,
+                        job_id=job_id,
+                        photo_id=photo_id,
+                        item_id=item["id"],
+                        user_id=self.user_id,
+                        updates={
+                            "status": SocialImportItemStatus.FAILED.value,
+                            "generation_error": f"Save failed: {save_error}",
+                        },
+                    )
+                    continue
                 if saved_item_id:
                     saved_count += 1
                     await SocialImportJobStore.update_item(
@@ -842,6 +987,7 @@ class SocialImportPipelineService:
         payload: Dict[str, Any],
     ) -> None:
         """Accept OAuth or scraper authentication and resume the job."""
+        resume_job = False
         lock = self._job_lock(job_id)
         async with lock:
             job = await SocialImportJobStore.get_job(
@@ -851,6 +997,17 @@ class SocialImportPipelineService:
             )
             if not job:
                 raise SocialImportJobNotFoundError(job_id)
+
+            job_status = job.get("status")
+            terminal_statuses = {
+                SocialImportJobStatus.COMPLETED.value,
+                SocialImportJobStatus.CANCELLED.value,
+                SocialImportJobStatus.FAILED.value,
+            }
+            if job_status in terminal_statuses:
+                raise SocialImportError(
+                    "Cannot accept authentication for a job in terminal state"
+                )
 
             if auth_type == "oauth":
                 await SocialAuthService.store_oauth_session(
@@ -866,6 +1023,12 @@ class SocialImportPipelineService:
                     expires_at=payload.get("expires_at"),
                 )
             else:  # scraper
+                existing_session = await SocialAuthService.get_active_session(
+                    self.db,
+                    job_id=job_id,
+                    user_id=self.user_id,
+                )
+                existing_payload = (existing_session or {}).get("session_payload") or {}
                 await SocialAuthService.store_scraper_session(
                     self.db,
                     job_id=job_id,
@@ -873,7 +1036,29 @@ class SocialImportPipelineService:
                     username=payload["username"],
                     password=payload["password"],
                     otp_code=payload.get("otp_code"),
+                    two_factor_identifier=payload.get("two_factor_identifier")
+                    or existing_payload.get("two_factor_identifier"),
+                    sessionid=existing_payload.get("sessionid"),
+                    csrftoken=existing_payload.get("csrftoken"),
+                    ds_user_id=existing_payload.get("ds_user_id"),
                 )
+
+            if job_status != SocialImportJobStatus.AWAITING_AUTH.value:
+                await self._publish_event(
+                    job_id,
+                    "auth_accepted",
+                    {"job_id": job_id, "auth_type": auth_type, "resumed": False},
+                )
+                return
+
+            cleared_metadata = dict(job.get("metadata") or {})
+            for key in (
+                "auth_reason",
+                "auth_message",
+                "two_factor_identifier",
+                "checkpoint_url",
+            ):
+                cleared_metadata.pop(key, None)
 
             updated = await SocialImportJobStore.update_job(
                 self.db,
@@ -882,17 +1067,20 @@ class SocialImportPipelineService:
                 updates={
                     "status": SocialImportJobStatus.PROCESSING.value,
                     "auth_required": False,
+                    "metadata": cleared_metadata,
                 },
             )
             if not updated:
                 raise SocialImportJobNotFoundError(job_id)
 
+            resume_job = True
             await self._publish_event(
                 job_id,
                 "auth_accepted",
                 {"job_id": job_id, "auth_type": auth_type},
             )
-        await self.schedule_job(self, job_id)
+        if resume_job:
+            await self.schedule_job(self, job_id)
 
     async def get_status(self, job_id: str) -> Dict[str, Any]:
         job = await SocialImportJobStore.get_job(
@@ -934,6 +1122,7 @@ class SocialImportPipelineService:
         counts = await SocialImportJobStore.count_by_status(
             self.db, job_id=job_id, user_id=self.user_id
         )
+        metadata = dict(job.get("metadata") or {})
 
         return {
             "id": job["id"],
@@ -950,11 +1139,54 @@ class SocialImportPipelineService:
             "auth_required": bool(job.get("auth_required")),
             "discovery_completed": bool(job.get("discovery_completed")),
             "error_message": job.get("error_message"),
+            "auth_reason": metadata.get("auth_reason"),
+            "two_factor_identifier": metadata.get("two_factor_identifier"),
+            "checkpoint_url": metadata.get("checkpoint_url"),
             "awaiting_review_photo": awaiting,
             "buffered_photo": buffered,
             "processing_photo": processing,
             "queued_count": counts.get(SocialImportPhotoStatus.QUEUED.value, 0),
         }
+
+    async def _persist_scraper_session_from_payload(
+        self,
+        *,
+        job_id: str,
+        auth_session: Optional[Dict[str, Any]],
+    ) -> None:
+        """Persist newly acquired scraper cookies/ids so discovery can resume without relogin."""
+        if not auth_session:
+            return
+        payload = (auth_session or {}).get("session_payload") or {}
+        username = payload.get("username")
+        password = payload.get("password")
+        if not username or not password:
+            return
+
+        # Persist only when we have auth-session artifacts worth keeping.
+        if not any(payload.get(key) for key in ("sessionid", "csrftoken", "ds_user_id", "two_factor_identifier")):
+            return
+
+        try:
+            await SocialAuthService.store_scraper_session(
+                self.db,
+                job_id=job_id,
+                user_id=self.user_id,
+                username=username,
+                password=password,
+                otp_code=payload.get("otp_code"),
+                two_factor_identifier=payload.get("two_factor_identifier"),
+                sessionid=payload.get("sessionid"),
+                csrftoken=payload.get("csrftoken"),
+                ds_user_id=payload.get("ds_user_id"),
+            )
+        except Exception as persist_error:
+            logger.warning(
+                "Failed to persist refreshed scraper session payload",
+                job_id=job_id,
+                user_id=self.user_id,
+                error=str(persist_error),
+            )
 
     async def _promote_buffered_if_available(self, job_id: str) -> None:
         slots = await SocialImportJobStore.get_slots(

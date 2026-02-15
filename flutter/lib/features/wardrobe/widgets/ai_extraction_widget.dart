@@ -43,11 +43,15 @@ class AIExtractionWidget extends StatefulWidget {
 }
 
 class _AIExtractionWidgetState extends State<AIExtractionWidget>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _progressController;
   late Animation<double> _progressAnimation;
+  late AnimationController _successController;
+  late Animation<double> _successScaleAnimation;
+  late Animation<double> _checkmarkAnimation;
   final TextEditingController _customUseCaseController =
       TextEditingController();
+  bool _hasShownSuccess = false;
 
   @override
   void initState() {
@@ -59,13 +63,39 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
     _progressAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _progressController, curve: Curves.easeInOut),
     );
+
+    // Success animation
+    _successController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _successScaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _successController,
+        curve: Curves.elasticOut,
+      ),
+    );
+    _checkmarkAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _successController,
+        curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
+      ),
+    );
   }
 
   @override
   void dispose() {
     _progressController.dispose();
+    _successController.dispose();
     _customUseCaseController.dispose();
     super.dispose();
+  }
+
+  void _triggerSuccessAnimation() {
+    if (!_hasShownSuccess) {
+      _hasShownSuccess = true;
+      _successController.forward();
+    }
   }
 
   @override
@@ -249,88 +279,306 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
   }
 
   Widget _buildProcessingStatus(AppUiTokens tokens) {
-    return Column(
-      children: [
-        // Animated progress indicator
-        AnimatedBuilder(
-          animation: _progressAnimation,
-          builder: (context, child) {
-            return Column(
-              children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: tokens.brandColor.withOpacity(0.2),
-                      width: 4,
-                    ),
-                  ),
+    final controller = Get.find<ItemAddController>();
+
+    return Obx(() {
+      final phase = controller.currentPhase.value;
+      final progress = controller.phaseProgress.value / 100;
+      final timeRemaining = controller.estimatedTimeRemaining.value;
+
+      // Determine phase icon and title
+      IconData phaseIcon;
+      String phaseTitle;
+      String phaseDescription;
+
+      switch (phase) {
+        case 'upload':
+          phaseIcon = Icons.cloud_upload;
+          phaseTitle = 'Uploading...';
+          phaseDescription = 'Preparing your photo';
+          break;
+        case 'connected':
+          phaseIcon = Icons.link;
+          phaseTitle = 'Connected';
+          phaseDescription = 'Establishing connection';
+          break;
+        case 'analyzing':
+          phaseIcon = Icons.analytics_outlined;
+          phaseTitle = 'Analyzing Photo';
+          phaseDescription = 'Our AI is examining your image';
+          break;
+        case 'extracting':
+          phaseIcon = Icons.auto_awesome;
+          phaseTitle = 'Detecting Items';
+          phaseDescription = 'Identifying clothing items';
+          break;
+        case 'generating':
+          phaseIcon = Icons.image_outlined;
+          phaseTitle = 'Creating Product Images';
+          phaseDescription = 'Generating catalog-style photos';
+          break;
+        case 'complete':
+          phaseIcon = Icons.check_circle;
+          phaseTitle = 'Complete!';
+          phaseDescription = 'All done';
+          break;
+        default:
+          phaseIcon = Icons.hourglass_empty;
+          phaseTitle = 'Processing...';
+          phaseDescription = 'Please wait';
+      }
+
+      // Trigger success animation when phase is complete
+      if (phase == 'complete') {
+        _triggerSuccessAnimation();
+      }
+
+      return Column(
+        children: [
+          // Progress ring with phase icon (or success animation)
+          if (phase == 'complete')
+            AnimatedBuilder(
+              animation: _successController,
+              builder: (context, child) {
+                return Transform.scale(
+                  scale: _successScaleAnimation.value,
                   child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      Center(
-                        child: Icon(
-                          Icons.search,
-                          size: 32,
-                          color: tokens.brandColor.withOpacity(0.5),
+                      Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.green.withOpacity(0.1),
+                          border: Border.all(
+                            color: Colors.green,
+                            width: 4,
+                          ),
                         ),
                       ),
-                      Positioned.fill(
-                        child: CircularProgressIndicator(
-                          value: _progressAnimation.value,
-                          strokeWidth: 3,
-                          color: tokens.brandColor,
+                      CustomPaint(
+                        size: const Size(60, 60),
+                        painter: _CheckmarkPainter(
+                          progress: _checkmarkAnimation.value,
+                          color: Colors.green,
                         ),
                       ),
                     ],
+                  ),
+                );
+              },
+            )
+          else
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 120,
+                  height: 120,
+                  child: CircularProgressIndicator(
+                    value: progress,
+                    strokeWidth: 8,
+                    color: tokens.brandColor,
+                    backgroundColor: tokens.brandColor.withOpacity(0.1),
                   ),
                 ),
-                const SizedBox(height: AppConstants.spacing16),
-                Shimmer.fromColors(
-                  baseColor: tokens.textMuted.withOpacity(0.5),
-                  highlightColor: tokens.textMuted.withOpacity(0.8),
-                  period: const Duration(milliseconds: 1200),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 200,
-                        height: 20,
-                        decoration: BoxDecoration(
-                          color: tokens.cardColor,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      const SizedBox(height: AppConstants.spacing8),
-                      Container(
-                        width: 150,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          color: tokens.cardColor,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ],
+                Container(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: tokens.brandColor.withOpacity(0.1),
+                  ),
+                  child: Icon(
+                    phaseIcon,
+                    size: 40,
+                    color: tokens.brandColor,
                   ),
                 ),
               ],
-            );
-          },
-        ),
+            ),
 
-        const SizedBox(height: AppConstants.spacing24),
+          const SizedBox(height: AppConstants.spacing20),
 
-        // Cancel button
-        OutlinedButton.icon(
-          onPressed: widget.onRetake,
-          icon: const Icon(Icons.close),
-          label: const Text('Cancel'),
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
+          // Progress percentage
+          Text(
+            '${(progress * 100).toInt()}%',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: tokens.brandColor,
+            ),
+          ),
+
+          const SizedBox(height: AppConstants.spacing8),
+
+          // Phase title
+          Text(
+            phaseTitle,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+
+          const SizedBox(height: AppConstants.spacing4),
+
+          // Phase description
+          Text(
+            phaseDescription,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: tokens.textMuted,
+            ),
+            textAlign: TextAlign.center,
+          ),
+
+          if (timeRemaining > 0) ...[
+            const SizedBox(height: AppConstants.spacing12),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppConstants.spacing12,
+                vertical: AppConstants.spacing6,
+              ),
+              decoration: BoxDecoration(
+                color: tokens.cardColor,
+                borderRadius: BorderRadius.circular(AppConstants.radius8),
+                border: Border.all(
+                  color: tokens.brandColor.withOpacity(0.2),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.schedule,
+                    size: 16,
+                    color: tokens.textMuted,
+                  ),
+                  const SizedBox(width: AppConstants.spacing6),
+                  Text(
+                    'About $timeRemaining seconds remaining',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: tokens.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Per-item generation status grid (if generating)
+          if (phase == 'generating' && controller.itemGenerationStatus.isNotEmpty) ...[
+            const SizedBox(height: AppConstants.spacing20),
+            _buildItemGenerationGrid(tokens, controller),
+          ],
+
+          const SizedBox(height: AppConstants.spacing24),
+
+          // Cancel button
+          OutlinedButton.icon(
+            onPressed: () {
+              controller.cancelExtraction();
+              widget.onRetake();
+            },
+            icon: const Icon(Icons.close),
+            label: const Text('Cancel'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+            ),
+          ),
+        ],
+      );
+    });
+  }
+
+  /// Build per-item generation status grid
+  Widget _buildItemGenerationGrid(AppUiTokens tokens, ItemAddController controller) {
+    return Obx(() {
+      final statusMap = controller.itemGenerationStatus;
+      final currentIndex = controller.currentGeneratingIndex.value;
+      final currentItemName = controller.currentGeneratingItemName.value;
+
+      return Container(
+        padding: const EdgeInsets.all(AppConstants.spacing16),
+        decoration: BoxDecoration(
+          color: tokens.cardColor,
+          borderRadius: BorderRadius.circular(AppConstants.radius12),
+          border: Border.all(
+            color: tokens.brandColor.withOpacity(0.2),
           ),
         ),
-      ],
-    );
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Generating Items',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (currentItemName.isNotEmpty) ...[
+              const SizedBox(height: AppConstants.spacing8),
+              Text(
+                'Current: $currentItemName ($currentIndex/${statusMap.length})',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: tokens.textMuted,
+                ),
+              ),
+            ],
+            const SizedBox(height: AppConstants.spacing12),
+            Wrap(
+              spacing: AppConstants.spacing8,
+              runSpacing: AppConstants.spacing8,
+              children: statusMap.entries.map((entry) {
+                final status = entry.value;
+                Color statusColor;
+                IconData statusIcon;
+
+                switch (status) {
+                  case 'pending':
+                    statusColor = tokens.textMuted;
+                    statusIcon = Icons.pending;
+                    break;
+                  case 'generating':
+                    statusColor = tokens.brandColor;
+                    statusIcon = Icons.sync;
+                    break;
+                  case 'complete':
+                    statusColor = Colors.green;
+                    statusIcon = Icons.check_circle;
+                    break;
+                  case 'failed':
+                    statusColor = Colors.red;
+                    statusIcon = Icons.error;
+                    break;
+                  default:
+                    statusColor = tokens.textMuted;
+                    statusIcon = Icons.help;
+                }
+
+                return Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(AppConstants.radius8),
+                    border: Border.all(
+                      color: statusColor.withOpacity(0.3),
+                      width: status == 'generating' ? 2 : 1,
+                    ),
+                  ),
+                  child: Icon(
+                    statusIcon,
+                    size: 16,
+                    color: statusColor,
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   Widget _buildExtractionResults(AppUiTokens tokens) {
@@ -1242,5 +1490,59 @@ class _SingleFlowPersonGroup {
       total: total ?? this.total,
       included: included ?? this.included,
     );
+  }
+}
+
+/// Custom painter for animated checkmark
+class _CheckmarkPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  _CheckmarkPainter({
+    required this.progress,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 6
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    // Checkmark path
+    final path = Path();
+
+    // Short line (left part of checkmark)
+    final shortLineStart = Offset(size.width * 0.2, size.height * 0.5);
+    final shortLineEnd = Offset(size.width * 0.4, size.height * 0.7);
+
+    // Long line (right part of checkmark)
+    final longLineStart = shortLineEnd;
+    final longLineEnd = Offset(size.width * 0.8, size.height * 0.3);
+
+    if (progress <= 0.5) {
+      // Draw short line (0 to 0.5)
+      final shortProgress = progress * 2;
+      final currentPoint = Offset.lerp(shortLineStart, shortLineEnd, shortProgress)!;
+      path.moveTo(shortLineStart.dx, shortLineStart.dy);
+      path.lineTo(currentPoint.dx, currentPoint.dy);
+    } else {
+      // Draw complete short line and animate long line (0.5 to 1.0)
+      path.moveTo(shortLineStart.dx, shortLineStart.dy);
+      path.lineTo(shortLineEnd.dx, shortLineEnd.dy);
+
+      final longProgress = (progress - 0.5) * 2;
+      final currentPoint = Offset.lerp(longLineStart, longLineEnd, longProgress)!;
+      path.lineTo(currentPoint.dx, currentPoint.dy);
+    }
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_CheckmarkPainter oldDelegate) {
+    return oldDelegate.progress != progress;
   }
 }

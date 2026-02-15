@@ -143,7 +143,6 @@ export function createSocialImportSSEConnection(
   lastEventId?: number
 ): () => void {
   const controller = new AbortController()
-  const token = getAccessToken()
 
   const search = new URLSearchParams()
   if (lastEventId !== undefined) {
@@ -154,6 +153,11 @@ export function createSocialImportSSEConnection(
 
   const connect = async () => {
     try {
+      const token = getAccessToken()
+      if (!token) {
+        throw new Error('Authentication required to receive social import updates')
+      }
+
       const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -194,16 +198,18 @@ export function createSocialImportSSEConnection(
 
         try {
           const parsed = payload ? JSON.parse(payload) : null
+          const numericId = Number(currentEventId)
           onMessage({
             type: type as SocialImportSSEEvent['type'],
             data: parsed,
-            id: currentEventId ? Number(currentEventId) : undefined,
+            id: Number.isFinite(numericId) ? numericId : undefined,
           })
         } catch {
+          const numericId = Number(currentEventId)
           onMessage({
             type: type as SocialImportSSEEvent['type'],
             data: payload,
-            id: currentEventId ? Number(currentEventId) : undefined,
+            id: Number.isFinite(numericId) ? numericId : undefined,
           })
         }
 

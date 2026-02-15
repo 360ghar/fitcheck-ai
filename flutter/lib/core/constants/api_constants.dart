@@ -64,6 +64,9 @@ class ApiConstants {
   static String aiBatchExtractStatus(String jobId) =>
       '$aiBatchExtract/$jobId/status';
 
+  // Single Item Async Extraction (uses same SSE infrastructure as batch)
+  static const String aiSingleExtract = '$ai/single-extract';
+
   // Social Import Endpoints
   static const String aiSocialImportJobs = '$apiVersion/ai/social-import/jobs';
   static String aiSocialImportStatus(String jobId) =>

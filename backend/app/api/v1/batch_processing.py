@@ -60,6 +60,19 @@ class BatchExtractionRequest(BaseModel):
     )
 
 
+class SingleExtractionRequest(BaseModel):
+    """Request to start single-item extraction."""
+    image: str = Field(..., description="Base64-encoded image")
+    auto_generate: bool = Field(
+        True,
+        description="Auto-generate product images",
+    )
+    skip_cache: bool = Field(
+        False,
+        description="Skip cache lookup (force fresh extraction)",
+    )
+
+
 class BatchJobResponse(BaseModel):
     """Response with job information."""
     job_id: str
@@ -212,7 +225,7 @@ async def batch_job_events(
         raise HTTPException(status_code=404, detail="Job not found")
 
     async def event_generator():
-        queue: asyncio.Queue = asyncio.Queue()
+        queue: asyncio.Queue = asyncio.Queue(maxsize=100)
 
         # Add subscriber
         if not await BatchJobService.add_subscriber(job_id, queue):
@@ -327,3 +340,160 @@ async def get_batch_job_status(
         raise HTTPException(status_code=404, detail="Job not found")
 
     return BatchJobStatusResponse(**status_data)
+
+
+@router.get(
+    "/pending-jobs",
+    response_model=List[BatchJobStatusResponse],
+)
+async def get_pending_jobs(
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Get all pending/in-progress jobs for the current user.
+
+    Returns jobs that can be resumed (status: pending, extracting, or generating).
+    Used by frontend to check for incomplete jobs on app startup.
+    """
+    try:
+        pending_jobs = []
+
+        # Get all jobs from the in-memory service
+        # Note: This currently returns empty list as jobs are in-memory only
+        # In production with database persistence, this would query the extraction_jobs table
+
+        # TODO: Query extraction_jobs table when persistence is implemented
+        # For now, return empty list
+        return pending_jobs
+
+    except Exception as e:
+        logger.error("Failed to get pending jobs", extra={"error": str(e)})
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get pending jobs: {str(e)}",
+        )
+
+
+@router.post(
+    "/single-extract",
+    response_model=BatchJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_single_extraction(
+    request: SingleExtractionRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """
+    Start a single-item extraction job with async processing.
+
+    Uses the same infrastructure as batch processing but optimized for single images.
+    Returns a job_id and SSE URL for real-time progress updates.
+
+    Includes intelligent caching - if the same image was extracted within the last 24 hours,
+    returns cached results immediately (indicated by 'cached: true' in response).
+
+    This provides feature parity with batch extraction - users get real-time updates
+    via SSE as items are detected and product images are generated.
+    """
+    try:
+        from datetime import datetime
+        from app.services.extraction_cache_service import ExtractionCacheService
+
+        # Check cache first (unless skip_cache is True)
+        if not request.skip_cache:
+            cached_result = await ExtractionCacheService.get_cached_result(
+                image_base64=request.image,
+                user_id=user_id,
+            )
+
+            if cached_result:
+                # Cache hit! Create a completed job with cached results
+                image_data = {
+                    "image_id": f"cached_{datetime.utcnow().timestamp()}",
+                    "image_base64": request.image,
+                    "filename": "uploaded_image.jpg",
+                }
+
+                job = await BatchJobService.create_job(
+                    user_id=user_id,
+                    images=[image_data],
+                    auto_generate=request.auto_generate,
+                    generation_batch_size=1,
+                )
+
+                # Hydrate cached items into the in-memory job and mark it complete
+                cached_items = cached_result.get("items", [])
+                if isinstance(cached_items, list):
+                    await BatchJobService.restore_cached_items(job.job_id, cached_items)
+                await BatchJobService.update_status(job.job_id, BatchJobStatus.COMPLETED)
+
+                logger.info(
+                    "Cache hit - returning cached extraction",
+                    extra={"job_id": job.job_id, "user_id": user_id, "item_count": len(cached_items) if isinstance(cached_items, list) else 0},
+                )
+
+                return BatchJobResponse(
+                    job_id=job.job_id,
+                    status=BatchJobStatus.COMPLETED.value,
+                    total_images=1,
+                    sse_url=f"/api/v1/ai/batch-extract/{job.job_id}/events",
+                    message="Items detected (cached)",
+                )
+
+        # Cache miss or skip_cache - proceed with normal extraction
+        # Check rate limit
+        from app.services.ai_settings_service import AISettingsService
+
+        extraction_check = await AISettingsService.check_rate_limit(
+            user_id=user_id,
+            operation_type="extraction",
+            db=db,
+            count=1,
+        )
+        if not extraction_check["allowed"]:
+            raise RateLimitError(
+                f"Daily extraction limit ({extraction_check['limit']}) exceeded"
+            )
+
+        # Create single-image batch job (reuse batch infrastructure)
+        image_data = {
+            "image_id": f"single_{datetime.utcnow().timestamp()}",
+            "image_base64": request.image,
+            "filename": "uploaded_image.jpg",
+        }
+
+        job = await BatchJobService.create_job(
+            user_id=user_id,
+            images=[image_data],
+            auto_generate=request.auto_generate,
+            generation_batch_size=1,  # Process items sequentially for single image
+        )
+
+        # Start processing in background
+        from app.services.batch_extraction_service import BatchExtractionService
+
+        service = BatchExtractionService(user_id=user_id, db=db)
+        asyncio.create_task(service.run_pipeline(job))
+
+        logger.info(
+            "Started single-item extraction",
+            extra={"job_id": job.job_id, "user_id": user_id},
+        )
+
+        return BatchJobResponse(
+            job_id=job.job_id,
+            status=job.status.value,
+            total_images=1,
+            sse_url=f"/api/v1/ai/batch-extract/{job.job_id}/events",
+            message="Single-item extraction started",
+        )
+
+    except RateLimitError:
+        raise
+    except Exception as e:
+        logger.error("Failed to start single extraction", extra={"error": str(e)})
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start extraction: {str(e)}",
+        )

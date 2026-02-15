@@ -290,6 +290,10 @@ class SocialImportJobData {
   final SocialImportPhoto? bufferedPhoto;
   final SocialImportPhoto? processingPhoto;
   final int queuedCount;
+  // Auth-related metadata for handling 2FA and other auth flows
+  final String? authReason;
+  final String? twoFactorIdentifier;
+  final String? checkpointUrl;
 
   const SocialImportJobData({
     required this.id,
@@ -310,6 +314,9 @@ class SocialImportJobData {
     this.awaitingReviewPhoto,
     this.bufferedPhoto,
     this.processingPhoto,
+    this.authReason,
+    this.twoFactorIdentifier,
+    this.checkpointUrl,
   });
 
   factory SocialImportJobData.fromJson(Map<String, dynamic> json) {
@@ -338,6 +345,10 @@ class SocialImportJobData {
           ? SocialImportPhoto.fromJson(_toMap(json['processing_photo'])!)
           : null,
       queuedCount: _toInt(json['queued_count']),
+      // Auth metadata fields
+      authReason: _toNullableString(json['auth_reason'] ?? json['reason']),
+      twoFactorIdentifier: _toNullableString(json['two_factor_identifier']),
+      checkpointUrl: _toNullableString(json['checkpoint_url']),
     );
   }
 

@@ -27,6 +27,14 @@ def test_profile_php_is_rejected():
         assert "profile.php" in str(exc).lower()
 
 
+def test_instagram_post_url_is_rejected():
+    try:
+        SocialURLService.normalize_profile_url("https://instagram.com/p/abc123/")
+        assert False, "Expected SocialImportInvalidUrlError"
+    except SocialImportInvalidUrlError as exc:
+        assert "profile" in str(exc).lower()
+
+
 def test_unsupported_host_is_rejected():
     try:
         SocialURLService.normalize_profile_url("https://example.com/user")

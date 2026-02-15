@@ -340,6 +340,19 @@ abstract class DetectedItemDataWithImage with _$DetectedItemDataWithImage {
   }) = _DetectedItemDataWithImage;
 
   factory DetectedItemDataWithImage.fromJson(Map<String, dynamic> json) {
+    final generatedImageBase64 =
+        json['generated_image_base64']?.toString() ??
+        json['generatedImageBase64']?.toString();
+    final generatedImageUrlRaw =
+        json['generated_image_url']?.toString() ??
+        json['generatedImageUrl']?.toString();
+    final generatedImageUrl =
+        (generatedImageUrlRaw != null && generatedImageUrlRaw.isNotEmpty)
+        ? generatedImageUrlRaw
+        : ((generatedImageBase64 != null && generatedImageBase64.isNotEmpty)
+              ? 'data:image/png;base64,$generatedImageBase64'
+              : null);
+
     return DetectedItemDataWithImage(
       tempId: json['temp_id']?.toString() ?? 'unknown',
       category: json['category']?.toString() ?? 'other',
@@ -366,9 +379,7 @@ abstract class DetectedItemDataWithImage with _$DetectedItemDataWithImage {
                 ? json['includeInWardrobe'] as bool
                 : true),
       status: json['status']?.toString() ?? 'detected',
-      generatedImageUrl:
-          json['generated_image_url']?.toString() ??
-          json['generatedImageUrl']?.toString(),
+      generatedImageUrl: generatedImageUrl,
       generationError:
           json['generation_error']?.toString() ??
           json['generationError']?.toString(),

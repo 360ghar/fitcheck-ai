@@ -760,7 +760,14 @@ async def get_item_stats(
 ):
     """Compute wardrobe item statistics for dashboard/analytics."""
     try:
-        items = db.table("items").select("id,name,category,colors,condition,price,usage_times_worn").eq("user_id", user_id).execute().data or []
+        items = (
+            db.table("items")
+            .select("id,name,category,colors,condition,price,usage_times_worn")
+            .eq("user_id", user_id)
+            .limit(1000)  # Limit to prevent fetching thousands of items
+            .execute()
+            .data or []
+        )
 
         total_items = len(items)
         items_by_category: Dict[str, int] = {}

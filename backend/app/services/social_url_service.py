@@ -23,12 +23,34 @@ class SocialURLService:
     """Parse and normalize Instagram/Facebook profile URLs."""
 
     _INSTAGRAM_HOSTS = {"instagram.com", "www.instagram.com", "m.instagram.com"}
+    _INSTAGRAM_RESERVED_PATHS = {
+        "accounts",
+        "api",
+        "direct",
+        "explore",
+        "p",
+        "reel",
+        "reels",
+        "stories",
+        "tv",
+    }
     _FACEBOOK_HOSTS = {
         "facebook.com",
         "www.facebook.com",
         "m.facebook.com",
         "fb.com",
         "www.fb.com",
+    }
+    _FACEBOOK_RESERVED_PATHS = {
+        "events",
+        "groups",
+        "help",
+        "marketplace",
+        "pages",
+        "photo.php",
+        "photos",
+        "profile.php",
+        "watch",
     }
 
     @classmethod
@@ -59,7 +81,15 @@ class SocialURLService:
         if not path_parts:
             raise SocialImportInvalidUrlError("Instagram profile URL is missing username")
 
-        username = path_parts[0].lstrip("@").strip()
+        first_segment = path_parts[0].lstrip("@").strip()
+        if not first_segment:
+            raise SocialImportInvalidUrlError("Instagram profile URL is missing username")
+        if first_segment.lower() in SocialURLService._INSTAGRAM_RESERVED_PATHS:
+            raise SocialImportInvalidUrlError(
+                "Instagram post/reel/system URLs are not supported. Use a profile URL."
+            )
+
+        username = first_segment
         if not username:
             raise SocialImportInvalidUrlError("Instagram profile URL is missing username")
 
@@ -76,12 +106,18 @@ class SocialURLService:
         if not path_parts:
             raise SocialImportInvalidUrlError("Facebook profile URL is missing profile slug")
 
-        if path_parts[0] == "profile.php":
+        slug = path_parts[0].strip()
+        slug_lower = slug.lower()
+        if slug_lower in SocialURLService._FACEBOOK_RESERVED_PATHS:
+            if slug_lower == "profile.php":
+                raise SocialImportInvalidUrlError(
+                    "Facebook profile.php links are not supported; use a profile username URL"
+                )
             raise SocialImportInvalidUrlError(
-                "Facebook profile.php links are not supported for import; use a profile username URL"
+                "Facebook profile links like pages/groups/events are not supported; use a profile username URL"
             )
 
-        profile_slug = path_parts[0].strip()
+        profile_slug = slug
         if not profile_slug:
             raise SocialImportInvalidUrlError("Facebook profile URL is missing profile slug")
 

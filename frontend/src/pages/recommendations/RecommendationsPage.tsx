@@ -3,7 +3,7 @@
  * AI-powered outfit suggestions and style recommendations
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Layers, Palette, Search, Shirt, Sparkles, Stars, TrendingUp } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -190,22 +190,27 @@ export default function RecommendationsPage() {
   const [astrologyDate, setAstrologyDate] = useState(localDateISO)
   const [astrologyData, setAstrologyData] = useState<Awaited<ReturnType<typeof getAstrologyRecommendations>> | null>(null)
   const [isLoadingAstrology, setIsLoadingAstrology] = useState(false)
+  const astrologyRequestIdRef = useRef(0)
 
   const runAstrology = async () => {
+    const requestId = ++astrologyRequestIdRef.current
     setIsLoadingAstrology(true)
     try {
       const data = await getAstrologyRecommendations({
         target_date: astrologyDate,
         mode: astrologyMode,
       })
+      if (requestId !== astrologyRequestIdRef.current) return
       setAstrologyData(data)
     } catch (err) {
+      if (requestId !== astrologyRequestIdRef.current) return
       toast({
         title: 'Failed to load astrology recommendations',
         description: err instanceof Error ? err.message : 'An error occurred',
         variant: 'destructive',
       })
     } finally {
+      if (requestId !== astrologyRequestIdRef.current) return
       setIsLoadingAstrology(false)
     }
   }

@@ -227,3 +227,19 @@ Map<String, dynamic> _normalizeBatchExtractedItemJson(
 
   return normalized;
 }
+
+/// Single-item extraction job response
+/// Reuses batch infrastructure for single image processing
+@freezed
+abstract class SingleExtractionJob with _$SingleExtractionJob {
+  const factory SingleExtractionJob({
+    @JsonKey(name: 'job_id') required String jobId,
+    required String status,
+    @JsonKey(name: 'total_images') required int totalImages,
+    @JsonKey(name: 'sse_url') required String sseUrl,
+    String? message,
+  }) = _SingleExtractionJob;
+
+  factory SingleExtractionJob.fromJson(Map<String, dynamic> json) =>
+      _$SingleExtractionJobFromJson(json);
+}

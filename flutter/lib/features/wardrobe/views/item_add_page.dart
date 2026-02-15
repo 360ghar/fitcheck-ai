@@ -63,21 +63,19 @@ class _ItemAddPageState extends State<ItemAddPage> {
     final tokens = AppUiTokens.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add Item'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Add Item'), elevation: 0),
       body: AppPageBackground(
         child: SafeArea(
           child: Obx(() {
             // Show AI extraction when processing or when we have results to display
             if (controller.selectedImage.value != null &&
                 (controller.isProcessing.value ||
-                 controller.isSaving.value ||
-                 controller.isGeneratingImages.value ||
-                 (controller.extractionResult.value != null && controller.extractionResult.value!.items.isNotEmpty) ||
-                 controller.generatedItems.isNotEmpty ||
-                 controller.showManualEntry.value)) {
+                    controller.isSaving.value ||
+                    controller.isGeneratingImages.value ||
+                    (controller.extractionResult.value != null &&
+                        controller.extractionResult.value!.items.isNotEmpty) ||
+                    controller.generatedItems.isNotEmpty ||
+                    controller.showManualEntry.value)) {
               return AIExtractionWidget(
                 imageFile: controller.selectedImage.value!,
                 extractionResult: controller.extractionResult.value,
@@ -85,19 +83,20 @@ class _ItemAddPageState extends State<ItemAddPage> {
                 isSaving: controller.isSaving.value,
                 isGeneratingImages: controller.isGeneratingImages.value,
                 generationProgress: controller.generationProgress.value,
-                currentGenerationStatus: controller.currentGenerationStatus.value,
+                currentGenerationStatus:
+                    controller.currentGenerationStatus.value,
                 onRetake: () => controller.reset(),
-                onSaveExtracted: (items) => controller.saveExtractedItems(items),
+                onSaveExtracted: (items) =>
+                    controller.saveExtractedItems(items),
                 onSaveGenerated: () => controller.saveGeneratedItems(),
                 onManualEntry: () => controller.proceedToManualEntry(),
               );
             }
 
             // Show manual entry form when user skipped AI
-            if (controller.showManualEntry.value && controller.selectedImage.value == null) {
-              return ManualEntryForm(
-                imageFile: controller.selectedImage.value,
-              );
+            if (controller.showManualEntry.value &&
+                controller.selectedImage.value == null) {
+              return ManualEntryForm(imageFile: controller.selectedImage.value);
             }
 
             // Show initial options
@@ -118,17 +117,17 @@ class _ItemAddPageState extends State<ItemAddPage> {
         Text(
           'Add to Your Wardrobe',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: tokens.textPrimary,
-              ),
+            fontWeight: FontWeight.w700,
+            color: tokens.textPrimary,
+          ),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: AppConstants.spacing8),
         Text(
           'Choose how you want to add your item',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: tokens.textMuted,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
           textAlign: TextAlign.center,
         ),
 
@@ -159,16 +158,16 @@ class _ItemAddPageState extends State<ItemAddPage> {
                 Text(
                   'Take Photo',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary,
-                      ),
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
                 ),
                 const SizedBox(height: AppConstants.spacing4),
                 Text(
                   'Use your camera to capture the item',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -203,16 +202,16 @@ class _ItemAddPageState extends State<ItemAddPage> {
                 Text(
                   'Choose from Gallery',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary,
-                      ),
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
                 ),
                 const SizedBox(height: AppConstants.spacing4),
                 Text(
                   'Select an existing photo from your device',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -237,26 +236,22 @@ class _ItemAddPageState extends State<ItemAddPage> {
                     color: tokens.brandColor.withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    Icons.edit,
-                    size: 32,
-                    color: tokens.brandColor,
-                  ),
+                  child: Icon(Icons.edit, size: 32, color: tokens.brandColor),
                 ),
                 const SizedBox(height: AppConstants.spacing12),
                 Text(
                   'Enter Manually',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary,
-                      ),
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
                 ),
                 const SizedBox(height: AppConstants.spacing4),
                 Text(
                   'Add item details without a photo',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -291,16 +286,56 @@ class _ItemAddPageState extends State<ItemAddPage> {
                 Text(
                   'Batch Upload',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary,
-                      ),
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
                 ),
                 const SizedBox(height: AppConstants.spacing4),
                 Text(
                   'Add multiple items at once (up to 50 photos)',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: AppConstants.spacing16),
+
+        // Import from Social Option
+        AppGlassCard(
+          padding: const EdgeInsets.all(AppConstants.spacing20),
+          child: InkWell(
+            onTap: () => Get.toNamed(Routes.wardrobeBatchAddSocial),
+            borderRadius: BorderRadius.circular(AppConstants.radius16),
+            child: Column(
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: tokens.brandColor.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.link, size: 32, color: tokens.brandColor),
+                ),
+                const SizedBox(height: AppConstants.spacing12),
+                Text(
+                  'Import from Social',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: AppConstants.spacing4),
+                Text(
+                  'Import photos from Instagram or Facebook profile',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -319,18 +354,14 @@ class _ItemAddPageState extends State<ItemAddPage> {
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.lightbulb_outline,
-                color: tokens.brandColor,
-                size: 20,
-              ),
+              Icon(Icons.lightbulb_outline, color: tokens.brandColor, size: 20),
               const SizedBox(width: AppConstants.spacing12),
               Expanded(
                 child: Text(
                   'AI will automatically detect items from your photo',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.brandColor,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.brandColor),
                 ),
               ),
             ],

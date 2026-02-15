@@ -7,6 +7,7 @@ import type { SocialPlatform } from '@/types'
 
 interface SocialImportAuthPromptProps {
   platform: SocialPlatform
+  allowScraperFallback?: boolean
   isLoading?: boolean
   error?: string | null
   onStartOAuthConnect: () => Promise<void>
@@ -15,6 +16,7 @@ interface SocialImportAuthPromptProps {
 
 export function SocialImportAuthPrompt({
   platform,
+  allowScraperFallback = true,
   isLoading = false,
   error,
   onStartOAuthConnect,
@@ -53,51 +55,53 @@ export function SocialImportAuthPrompt({
         </div>
       </div>
 
-      <div className="grid gap-3 rounded-lg border border-border p-4">
-        <div className="flex items-center gap-2">
-          <KeyRound className="h-4 w-4 text-indigo-500" />
-          <p className="text-sm font-semibold text-foreground">Manual Login Fallback</p>
+      {allowScraperFallback && (
+        <div className="grid gap-3 rounded-lg border border-border p-4">
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4 text-indigo-500" />
+            <p className="text-sm font-semibold text-foreground">Manual Login Fallback</p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Only use this if OAuth is unavailable for your account.
+          </p>
+          <Input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Instagram username"
+            disabled={isLoading}
+            autoComplete="username"
+          />
+          <Input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            disabled={isLoading}
+            autoComplete="current-password"
+          />
+          <Input
+            value={otpCode}
+            onChange={(e) => setOtpCode(e.target.value)}
+            placeholder="OTP code (optional)"
+            disabled={isLoading}
+            autoComplete="one-time-code"
+          />
+          <div className="flex justify-end">
+            <Button
+              disabled={isLoading || !username.trim() || !password.trim()}
+              onClick={() =>
+                onSubmitScraper({
+                  username: username.trim(),
+                  password,
+                  otp_code: otpCode.trim() || undefined,
+                })
+              }
+            >
+              Continue Import
+            </Button>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Only use this if OAuth is unavailable for your account.
-        </p>
-        <Input
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="Instagram/Facebook username"
-          disabled={isLoading}
-          autoComplete="username"
-        />
-        <Input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
-          disabled={isLoading}
-          autoComplete="current-password"
-        />
-        <Input
-          value={otpCode}
-          onChange={(e) => setOtpCode(e.target.value)}
-          placeholder="OTP code (optional)"
-          disabled={isLoading}
-          autoComplete="one-time-code"
-        />
-        <div className="flex justify-end">
-          <Button
-            disabled={isLoading || !username.trim() || !password.trim()}
-            onClick={() =>
-              onSubmitScraper({
-                username: username.trim(),
-                password,
-                otp_code: otpCode.trim() || undefined,
-              })
-            }
-          >
-            Continue Import
-          </Button>
-        </div>
-      </div>
+      )}
     </div>
   )
 }

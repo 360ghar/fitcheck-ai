@@ -528,6 +528,9 @@ async def refresh_token(
     Refresh access token using a refresh token.
 
     Returns new access and refresh tokens.
+
+    Uses deduplication to prevent "Invalid Refresh Token: Already Used" errors
+    when multiple concurrent requests arrive with the same refresh token.
     """
     try:
         refresh_token = request.refresh_token
@@ -535,22 +538,16 @@ async def refresh_token(
         if not refresh_token:
             raise ValidationError("refresh_token is required", details={"field": "refresh_token"})
 
-        # Refresh session using Supabase
-        auth_response = anon_db.auth.refresh_session(refresh_token)
+        # Refresh session with deduplication (prevents race conditions)
+        from app.services.token_refresh_service import refresh_token_with_deduplication
 
-        if auth_response.session is None:
-            raise AuthenticationError("Invalid or expired refresh token", error_code="AUTH_TOKEN_EXPIRED")
+        response_data = await refresh_token_with_deduplication(
+            supabase_client=anon_db,
+            refresh_token=refresh_token,
+        )
 
-        session = auth_response.session
-        user = auth_response.user
-
-        logger.info("Token refreshed successfully", user_id=user.id)
         return {
-            "data": {
-                "access_token": session.access_token,
-                "refresh_token": session.refresh_token,
-                "user": {"id": user.id, "email": user.email},
-            },
+            "data": response_data,
             "message": "OK",
         }
 

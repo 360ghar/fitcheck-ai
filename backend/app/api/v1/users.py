@@ -160,13 +160,17 @@ def _upsert_record(
     update_data: Any,
     model_class: Any,
     defaults: Optional[Dict[str, Any]] = None,
+    *,
+    updated_field: Optional[str] = "updated_at",
+    created_field: Optional[str] = "created_at",
 ) -> Dict[str, Any]:
     """
     Upsert a record for user: update if exists, insert if not.
     Returns validated record data.
     """
     update_dict = update_data.model_dump(exclude_unset=True)
-    update_dict["updated_at"] = _now()
+    if updated_field:
+        update_dict[updated_field] = _now()
 
     existing = db.table(table).select("user_id").eq("user_id", user_id).execute()
 
@@ -175,11 +179,13 @@ def _upsert_record(
     else:
         insert = {
             "user_id": user_id,
-            "created_at": _now(),
-            "updated_at": _now(),
             **(defaults or {}),
             **update_dict,
         }
+        if created_field:
+            insert[created_field] = _now()
+        if updated_field:
+            insert[updated_field] = _now()
         result = db.table(table).insert(insert).execute()
 
     row = _first_row(result.data or [])
@@ -405,7 +411,14 @@ async def update_user_preferences(
 ):
     try:
         prefs_data = _upsert_record(
-            db, "user_preferences", user_id, update_data, UserPreferences, _PREFERENCES_DEFAULTS
+            db,
+            "user_preferences",
+            user_id,
+            update_data,
+            UserPreferences,
+            _PREFERENCES_DEFAULTS,
+            updated_field="last_updated",
+            created_field=None,
         )
         return {"data": prefs_data, "message": "Updated"}
 

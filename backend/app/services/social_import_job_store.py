@@ -59,6 +59,22 @@ class SocialImportJobStore:
         return rows[0] if rows else None
 
     @staticmethod
+    async def count_active_jobs(db, *, user_id: str) -> int:
+        terminal_statuses = [
+            SocialImportJobStatus.COMPLETED.value,
+            SocialImportJobStatus.CANCELLED.value,
+            SocialImportJobStatus.FAILED.value,
+        ]
+        result = (
+            db.table("social_import_jobs")
+            .select("id")
+            .eq("user_id", user_id)
+            .not_.in_("status", terminal_statuses)
+            .execute()
+        )
+        return len(result.data or [])
+
+    @staticmethod
     async def update_job(
         db,
         *,

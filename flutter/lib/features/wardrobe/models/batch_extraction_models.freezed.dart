@@ -2602,4 +2602,279 @@ as String?,
 
 }
 
+
+/// @nodoc
+mixin _$SingleExtractionJob {
+
+@JsonKey(name: 'job_id') String get jobId; String get status;@JsonKey(name: 'total_images') int get totalImages;@JsonKey(name: 'sse_url') String get sseUrl; String? get message;
+/// Create a copy of SingleExtractionJob
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$SingleExtractionJobCopyWith<SingleExtractionJob> get copyWith => _$SingleExtractionJobCopyWithImpl<SingleExtractionJob>(this as SingleExtractionJob, _$identity);
+
+  /// Serializes this SingleExtractionJob to a JSON map.
+  Map<String, dynamic> toJson();
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SingleExtractionJob&&(identical(other.jobId, jobId) || other.jobId == jobId)&&(identical(other.status, status) || other.status == status)&&(identical(other.totalImages, totalImages) || other.totalImages == totalImages)&&(identical(other.sseUrl, sseUrl) || other.sseUrl == sseUrl)&&(identical(other.message, message) || other.message == message));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,jobId,status,totalImages,sseUrl,message);
+
+@override
+String toString() {
+  return 'SingleExtractionJob(jobId: $jobId, status: $status, totalImages: $totalImages, sseUrl: $sseUrl, message: $message)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $SingleExtractionJobCopyWith<$Res>  {
+  factory $SingleExtractionJobCopyWith(SingleExtractionJob value, $Res Function(SingleExtractionJob) _then) = _$SingleExtractionJobCopyWithImpl;
+@useResult
+$Res call({
+@JsonKey(name: 'job_id') String jobId, String status,@JsonKey(name: 'total_images') int totalImages,@JsonKey(name: 'sse_url') String sseUrl, String? message
+});
+
+
+
+
+}
+/// @nodoc
+class _$SingleExtractionJobCopyWithImpl<$Res>
+    implements $SingleExtractionJobCopyWith<$Res> {
+  _$SingleExtractionJobCopyWithImpl(this._self, this._then);
+
+  final SingleExtractionJob _self;
+  final $Res Function(SingleExtractionJob) _then;
+
+/// Create a copy of SingleExtractionJob
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? jobId = null,Object? status = null,Object? totalImages = null,Object? sseUrl = null,Object? message = freezed,}) {
+  return _then(_self.copyWith(
+jobId: null == jobId ? _self.jobId : jobId // ignore: cast_nullable_to_non_nullable
+as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as String,totalImages: null == totalImages ? _self.totalImages : totalImages // ignore: cast_nullable_to_non_nullable
+as int,sseUrl: null == sseUrl ? _self.sseUrl : sseUrl // ignore: cast_nullable_to_non_nullable
+as String,message: freezed == message ? _self.message : message // ignore: cast_nullable_to_non_nullable
+as String?,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [SingleExtractionJob].
+extension SingleExtractionJobPatterns on SingleExtractionJob {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _SingleExtractionJob value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _SingleExtractionJob() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _SingleExtractionJob value)  $default,){
+final _that = this;
+switch (_that) {
+case _SingleExtractionJob():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _SingleExtractionJob value)?  $default,){
+final _that = this;
+switch (_that) {
+case _SingleExtractionJob() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'total_images')  int totalImages, @JsonKey(name: 'sse_url')  String sseUrl,  String? message)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _SingleExtractionJob() when $default != null:
+return $default(_that.jobId,_that.status,_that.totalImages,_that.sseUrl,_that.message);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'total_images')  int totalImages, @JsonKey(name: 'sse_url')  String sseUrl,  String? message)  $default,) {final _that = this;
+switch (_that) {
+case _SingleExtractionJob():
+return $default(_that.jobId,_that.status,_that.totalImages,_that.sseUrl,_that.message);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'job_id')  String jobId,  String status, @JsonKey(name: 'total_images')  int totalImages, @JsonKey(name: 'sse_url')  String sseUrl,  String? message)?  $default,) {final _that = this;
+switch (_that) {
+case _SingleExtractionJob() when $default != null:
+return $default(_that.jobId,_that.status,_that.totalImages,_that.sseUrl,_that.message);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+@JsonSerializable()
+
+class _SingleExtractionJob implements SingleExtractionJob {
+  const _SingleExtractionJob({@JsonKey(name: 'job_id') required this.jobId, required this.status, @JsonKey(name: 'total_images') required this.totalImages, @JsonKey(name: 'sse_url') required this.sseUrl, this.message});
+  factory _SingleExtractionJob.fromJson(Map<String, dynamic> json) => _$SingleExtractionJobFromJson(json);
+
+@override@JsonKey(name: 'job_id') final  String jobId;
+@override final  String status;
+@override@JsonKey(name: 'total_images') final  int totalImages;
+@override@JsonKey(name: 'sse_url') final  String sseUrl;
+@override final  String? message;
+
+/// Create a copy of SingleExtractionJob
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$SingleExtractionJobCopyWith<_SingleExtractionJob> get copyWith => __$SingleExtractionJobCopyWithImpl<_SingleExtractionJob>(this, _$identity);
+
+@override
+Map<String, dynamic> toJson() {
+  return _$SingleExtractionJobToJson(this, );
+}
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SingleExtractionJob&&(identical(other.jobId, jobId) || other.jobId == jobId)&&(identical(other.status, status) || other.status == status)&&(identical(other.totalImages, totalImages) || other.totalImages == totalImages)&&(identical(other.sseUrl, sseUrl) || other.sseUrl == sseUrl)&&(identical(other.message, message) || other.message == message));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,jobId,status,totalImages,sseUrl,message);
+
+@override
+String toString() {
+  return 'SingleExtractionJob(jobId: $jobId, status: $status, totalImages: $totalImages, sseUrl: $sseUrl, message: $message)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$SingleExtractionJobCopyWith<$Res> implements $SingleExtractionJobCopyWith<$Res> {
+  factory _$SingleExtractionJobCopyWith(_SingleExtractionJob value, $Res Function(_SingleExtractionJob) _then) = __$SingleExtractionJobCopyWithImpl;
+@override @useResult
+$Res call({
+@JsonKey(name: 'job_id') String jobId, String status,@JsonKey(name: 'total_images') int totalImages,@JsonKey(name: 'sse_url') String sseUrl, String? message
+});
+
+
+
+
+}
+/// @nodoc
+class __$SingleExtractionJobCopyWithImpl<$Res>
+    implements _$SingleExtractionJobCopyWith<$Res> {
+  __$SingleExtractionJobCopyWithImpl(this._self, this._then);
+
+  final _SingleExtractionJob _self;
+  final $Res Function(_SingleExtractionJob) _then;
+
+/// Create a copy of SingleExtractionJob
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? jobId = null,Object? status = null,Object? totalImages = null,Object? sseUrl = null,Object? message = freezed,}) {
+  return _then(_SingleExtractionJob(
+jobId: null == jobId ? _self.jobId : jobId // ignore: cast_nullable_to_non_nullable
+as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
+as String,totalImages: null == totalImages ? _self.totalImages : totalImages // ignore: cast_nullable_to_non_nullable
+as int,sseUrl: null == sseUrl ? _self.sseUrl : sseUrl // ignore: cast_nullable_to_non_nullable
+as String,message: freezed == message ? _self.message : message // ignore: cast_nullable_to_non_nullable
+as String?,
+  ));
+}
+
+
+}
+
 // dart format on

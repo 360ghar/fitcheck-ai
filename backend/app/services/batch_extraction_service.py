@@ -121,6 +121,10 @@ class BatchExtractionService:
             "timestamp": datetime.utcnow().isoformat(),
         })
 
+        # Cache extraction results for single-image jobs (24-hour TTL)
+        if job.total_images == 1 and job.detected_items:
+            await self._cache_extraction_results(job)
+
     async def _extract_single_image(
         self,
         job: BatchJob,
@@ -195,7 +199,12 @@ class BatchExtractionService:
                 return []
 
     async def _fetch_user_avatar_base64(self) -> Optional[str]:
-        """Best-effort avatar fetch for profile-aware person matching."""
+        """
+        Best-effort avatar fetch for profile-aware person matching.
+
+        Non-blocking with aggressive 5-second timeout - if avatar fetch is slow,
+        skip it and continue without avatar. Don't block extraction pipeline.
+        """
         try:
             user_result = (
                 self.db.table("users")
@@ -211,13 +220,24 @@ class BatchExtractionService:
             if not avatar_url:
                 return None
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            # Aggressive 5-second timeout - if avatar fetch is slow, skip it
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(5.0),
+                limits=httpx.Limits(max_connections=10),
+            ) as client:
                 response = await client.get(avatar_url)
                 response.raise_for_status()
                 return base64.b64encode(response.content).decode("utf-8")
+
+        except asyncio.TimeoutError:
+            logger.info(
+                "Avatar fetch timed out (5s) - continuing without avatar",
+                extra={"user_id": self.user_id},
+            )
+            return None
         except Exception as e:
-            logger.warning(
-                "Failed to fetch user avatar for batch extraction",
+            logger.info(
+                "Failed to fetch user avatar - continuing without it",
                 extra={"user_id": self.user_id, "error": str(e)},
             )
             return None
@@ -403,6 +423,50 @@ class BatchExtractionService:
                 })
 
                 return None
+
+    async def _cache_extraction_results(self, job: BatchJob) -> None:
+        """
+        Cache extraction results for single-image jobs.
+
+        Caches by image hash with 24-hour TTL to avoid redundant AI processing.
+        """
+        try:
+            from app.services.extraction_cache_service import ExtractionCacheService
+
+            # Get the single image from the job
+            if not job.images:
+                return
+
+            image_data = list(job.images.values())[0]
+            image_base64 = image_data.image_base64
+
+            # Prepare result to cache
+            result = {
+                "items": [item.to_dict() for item in job.detected_items],
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
+            await ExtractionCacheService.set_cached_result(
+                image_base64=image_base64,
+                user_id=self.user_id,
+                result=result,
+            )
+
+            logger.info(
+                "Cached extraction results",
+                extra={
+                    "job_id": job.job_id,
+                    "user_id": self.user_id,
+                    "item_count": len(job.detected_items),
+                },
+            )
+
+        except Exception as e:
+            # Non-critical - log and continue
+            logger.warning(
+                "Failed to cache extraction results",
+                extra={"job_id": job.job_id, "error": str(e)},
+            )
 
     async def _broadcast_job_complete(self, job: BatchJob) -> None:
         """Broadcast job completion with full results."""

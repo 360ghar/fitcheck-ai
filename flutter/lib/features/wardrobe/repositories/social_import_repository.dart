@@ -86,6 +86,7 @@ class SocialImportRepository {
     required String username,
     required String password,
     String? otpCode,
+    String? twoFactorIdentifier,
   }) async {
     try {
       await _apiClient.post(
@@ -94,6 +95,8 @@ class SocialImportRepository {
           'username': username,
           'password': password,
           if (otpCode != null && otpCode.isNotEmpty) 'otp_code': otpCode,
+          if (twoFactorIdentifier != null && twoFactorIdentifier.isNotEmpty)
+            'two_factor_identifier': twoFactorIdentifier,
         },
       );
     } on DioException catch (e) {

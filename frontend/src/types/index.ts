@@ -948,6 +948,9 @@ export interface SocialImportJobData {
   auth_required: boolean
   discovery_completed: boolean
   error_message?: string
+  auth_reason?: string
+  two_factor_identifier?: string
+  checkpoint_url?: string
   awaiting_review_photo?: SocialImportPhoto | null
   buffered_photo?: SocialImportPhoto | null
   processing_photo?: SocialImportPhoto | null

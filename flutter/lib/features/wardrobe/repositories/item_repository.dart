@@ -7,6 +7,8 @@ import '../../../domain/enums/category.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/exceptions/app_exceptions.dart';
+import '../../../core/services/sse_service.dart';
+import '../models/batch_extraction_models.dart';
 
 /// Wardrobe item repository
 class ItemRepository {
@@ -339,6 +341,46 @@ class ItemRepository {
       throw handleDioException(e);
     } catch (e) {
       rethrow;
+    }
+  }
+
+  /// Start async extraction for a single image (with SSE progress updates)
+  /// Returns job info to connect to SSE stream for real-time updates
+  Future<SingleExtractionJob> extractItemsFromImageAsync(File image) async {
+    try {
+      final bytes = await image.readAsBytes();
+      final imageBase64 = base64Encode(bytes);
+
+      final response = await _apiClient.post(
+        ApiConstants.aiSingleExtract,
+        data: {
+          'image': imageBase64,
+          'auto_generate': true,
+        },
+      );
+
+      final data = _extractDataMap(response.data);
+      return SingleExtractionJob.fromJson(data);
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    }
+  }
+
+  /// Subscribe to SSE events for single-item extraction
+  /// Returns a stream of events as extraction and generation progress
+  Stream<SSEEvent> subscribeSingleExtractionEvents(String jobId) {
+    final path = ApiConstants.aiBatchExtractEvents(jobId);
+    return SSEService.instance
+        .connect(path)
+        .map((event) => SSEEvent(type: event.type, data: event.data));
+  }
+
+  /// Cancel single extraction job
+  Future<void> cancelSingleExtraction(String jobId) async {
+    try {
+      await _apiClient.post(ApiConstants.aiBatchExtractCancel(jobId));
+    } on DioException catch (e) {
+      throw handleDioException(e);
     }
   }
 

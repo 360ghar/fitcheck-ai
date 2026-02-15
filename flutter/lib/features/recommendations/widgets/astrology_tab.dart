@@ -46,7 +46,7 @@ class AstrologyTab extends StatelessWidget {
 
             final status = data['status']?.toString() ?? 'ready';
             if (status == 'profile_required') {
-              return _buildProfileRequiredCard(context, tokens);
+              return _buildProfileRequiredCard(context, tokens, data);
             }
 
             return Column(
@@ -195,7 +195,15 @@ class AstrologyTab extends StatelessWidget {
     );
   }
 
-  Widget _buildProfileRequiredCard(BuildContext context, AppUiTokens tokens) {
+  Widget _buildProfileRequiredCard(
+    BuildContext context,
+    AppUiTokens tokens,
+    Map<String, dynamic> data,
+  ) {
+    final notes = (data['notes'] is List)
+        ? (data['notes'] as List).map((e) => e.toString()).toList()
+        : const <String>[];
+
     return AppGlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,6 +222,20 @@ class AstrologyTab extends StatelessWidget {
               context,
             ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
           ),
+          if (notes.isNotEmpty) ...[
+            const SizedBox(height: AppConstants.spacing8),
+            ...notes.map(
+              (note) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  note,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: AppConstants.spacing12),
           ElevatedButton(
             onPressed: () => Get.toNamed(Routes.profileEdit),
@@ -276,7 +298,7 @@ class AstrologyTab extends StatelessWidget {
               final name = color['name']?.toString() ?? 'Unknown';
               final hex = color['hex']?.toString() ?? '#E5E7EB';
               final reason = color['reason']?.toString() ?? '';
-              final confidence = color['confidence'] as num?;
+              final confidence = _parseConfidence(color['confidence']);
 
               return Container(
                 margin: const EdgeInsets.only(bottom: AppConstants.spacing8),
@@ -567,5 +589,14 @@ class AstrologyTab extends StatelessWidget {
     final colorInt = int.tryParse(hex, radix: 16);
     if (colorInt == null) return const Color(0xFFE5E7EB);
     return Color(colorInt);
+  }
+
+  double? _parseConfidence(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      return double.tryParse(value.trim());
+    }
+    return null;
   }
 }
