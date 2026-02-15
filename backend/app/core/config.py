@@ -70,6 +70,7 @@ class Settings(BaseSettings):
         if value and not value.endswith("/"):
             return value + "/"
         return value
+
     SUPABASE_SECRET_KEY: str
     SUPABASE_JWT_SECRET: str
     SUPABASE_STORAGE_BUCKET: str = "fitcheck-images"
@@ -149,11 +150,12 @@ class Settings(BaseSettings):
     PHOTOSHOOT_CONCURRENCY_LIMIT: int = 3  # Max concurrent image generations
 
     # Social Import
-    ENABLE_SOCIAL_IMPORT: bool = False
+    ENABLE_SOCIAL_IMPORT: bool = True
     SOCIAL_IMPORT_MAX_CONCURRENT_JOBS: int = 1
     SOCIAL_IMPORT_MAX_PHOTOS_PER_JOB: int = 2000
     SOCIAL_IMPORT_AUTH_SESSION_TTL_MINUTES: int = 120
     SOCIAL_IMPORT_DISCOVERY_PAGE_SIZE: int = 50
+    SOCIAL_IMPORT_MAX_DISCOVERY_ITERATIONS: int = 100  # Max pages to fetch per job
 
     # Meta OAuth (optional for social import)
     META_OAUTH_CLIENT_ID: Optional[str] = None
@@ -192,7 +194,9 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _include_frontend_origin(self):
         frontend_url = (self.FRONTEND_URL or "").strip().rstrip("/")
-        origins = [origin.strip().rstrip("/") for origin in (self.BACKEND_CORS_ORIGINS or [])]
+        origins = [
+            origin.strip().rstrip("/") for origin in (self.BACKEND_CORS_ORIGINS or [])
+        ]
         if frontend_url:
             origins.append(frontend_url)
 

@@ -38,8 +38,9 @@ async def test_accept_oauth_auth_requires_owned_job(monkeypatch):
 
     service = SocialImportPipelineService(user_id="user-1", db=object())
     with pytest.raises(SocialImportJobNotFoundError):
-        await service.accept_oauth_auth(
+        await service.accept_auth(
             "job-1",
+            "oauth",
             {"provider_access_token": "token-1234567890"},
         )
 

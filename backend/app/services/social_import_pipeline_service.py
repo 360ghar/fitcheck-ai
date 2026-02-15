@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -16,6 +17,7 @@ from app.core.exceptions import (
     SocialImportAuthRequiredError,
     SocialImportJobNotFoundError,
 )
+from app.core.logging_config import get_context_logger
 from app.models.social_import import (
     SocialImportItemStatus,
     SocialImportJobStatus,
@@ -31,6 +33,8 @@ from app.services.social_scraper_service import SocialScraperService
 from app.services.storage_service import StorageService
 from app.services.vector_service import get_vector_service
 
+logger = get_context_logger(__name__)
+
 
 class SocialImportPipelineService:
     """Coordinates discovery, processing, and per-photo approval queueing."""
@@ -38,6 +42,10 @@ class SocialImportPipelineService:
     _tasks: Dict[str, asyncio.Task] = {}
     _locks: Dict[str, asyncio.Lock] = {}
     _task_lock: asyncio.Lock = asyncio.Lock()
+
+    # Pagination safeguards to prevent infinite loops
+    MAX_DISCOVERY_ITERATIONS = 100  # Max pages to fetch per job
+    MAX_DISCOVERY_PHOTOS = 2000     # Hard limit on photos per job
 
     def __init__(self, *, user_id: str, db):
         self.user_id = user_id
@@ -68,19 +76,50 @@ class SocialImportPipelineService:
             if task and not task.done():
                 task.cancel()
 
-    async def _cleanup_job_resources(self, job_id: str) -> None:
+    @classmethod
+    async def _cleanup_job_resources(cls, job_id: str) -> None:
         """Clean up task and lock resources for a job."""
-        async with self._task_lock:
-            self._tasks.pop(job_id, None)
-            self._locks.pop(job_id, None)
+        async with cls._task_lock:
+            cls._tasks.pop(job_id, None)
+            cls._locks.pop(job_id, None)
+
+    @classmethod
+    def _cleanup_all_finished_tasks(cls) -> None:
+        """Periodic cleanup of completed task references to prevent memory growth."""
+        done_tasks = [job_id for job_id, task in cls._tasks.items() if task.done()]
+        for job_id in done_tasks:
+            cls._tasks.pop(job_id, None)
+            cls._locks.pop(job_id, None)
+
+    async def _publish_event(
+        self, job_id: str, event_type: str, payload: Dict[str, Any]
+    ) -> None:
+        """Publish an event to the social import event stream."""
+        await SocialImportEventService.publish(
+            self.db,
+            job_id=job_id,
+            user_id=self.user_id,
+            event_type=event_type,
+            payload=payload,
+        )
 
     async def run(self, job_id: str) -> None:
+        logger.info(
+            "Social import job started",
+            job_id=job_id,
+            user_id=self.user_id,
+        )
         lock = self._job_lock(job_id)
         async with lock:
             job = await SocialImportJobStore.get_job(
                 self.db, job_id=job_id, user_id=self.user_id
             )
             if not job:
+                logger.warning(
+                    "Job not found during run",
+                    job_id=job_id,
+                    user_id=self.user_id,
+                )
                 await self._cleanup_job_resources(job_id)
                 return
 
@@ -90,29 +129,60 @@ class SocialImportPipelineService:
                 SocialImportJobStatus.CANCELLED.value,
                 SocialImportJobStatus.FAILED.value,
             }:
+                logger.debug(
+                    "Job already in terminal state",
+                    job_id=job_id,
+                    status=status,
+                )
                 await self._cleanup_job_resources(job_id)
                 return
 
             try:
                 if not job.get("discovery_completed"):
+                    logger.info(
+                        "Starting photo discovery",
+                        job_id=job_id,
+                        platform=job.get("platform"),
+                    )
                     await self._discover_all_photos(job_id)
                     job = await SocialImportJobStore.get_job(
                         self.db, job_id=job_id, user_id=self.user_id
                     )
                     if not job:
+                        logger.warning(
+                            "Job disappeared after discovery",
+                            job_id=job_id,
+                        )
                         await self._cleanup_job_resources(job_id)
                         return
 
                 if job.get("status") == SocialImportJobStatus.AWAITING_AUTH.value:
+                    logger.info(
+                        "Job awaiting authentication",
+                        job_id=job_id,
+                    )
                     return
 
                 await self._run_queue(job_id)
             except SocialImportAuthRequiredError:
+                logger.info(
+                    "Authentication required for job",
+                    job_id=job_id,
+                )
                 # Job already moved to awaiting_auth and should resume after auth submission.
                 return
             except asyncio.CancelledError:
+                logger.info(
+                    "Job cancelled",
+                    job_id=job_id,
+                )
                 raise
             except Exception as e:
+                logger.exception(
+                    "Job failed with error",
+                    job_id=job_id,
+                    error=str(e),
+                )
                 await SocialImportJobStore.set_job_status(
                     self.db,
                     job_id=job_id,
@@ -120,17 +190,19 @@ class SocialImportPipelineService:
                     status=SocialImportJobStatus.FAILED,
                     error_message=str(e),
                 )
-                await SocialImportEventService.publish(
-                    self.db,
-                    job_id=job_id,
-                    user_id=self.user_id,
-                    event_type="job_failed",
-                    payload={"job_id": job_id, "error": str(e)},
+                await self._publish_event(
+                    job_id,
+                    "job_failed",
+                    {"job_id": job_id, "error": str(e)},
                 )
             finally:
-                # Clean up task reference after job finishes
-                async with self._task_lock:
-                    self._tasks.pop(job_id, None)
+                # Clean up task and lock references after job finishes
+                await self._cleanup_job_resources(job_id)
+                logger.info(
+                    "Job run completed",
+                    job_id=job_id,
+                    status="cleaned_up",
+                )
 
     async def _discover_all_photos(self, job_id: str) -> None:
         job = await SocialImportJobStore.get_job(
@@ -146,12 +218,10 @@ class SocialImportPipelineService:
             status=SocialImportJobStatus.DISCOVERING,
             error_message=None,
         )
-        await SocialImportEventService.publish(
-            self.db,
-            job_id=job_id,
-            user_id=self.user_id,
-            event_type="job_updated",
-            payload={
+        await self._publish_event(
+            job_id,
+            "job_updated",
+            {
                 "job_id": job_id,
                 "status": SocialImportJobStatus.DISCOVERING.value,
             },
@@ -159,8 +229,10 @@ class SocialImportPipelineService:
 
         cursor: Optional[str] = None
         ordinal = int(job.get("discovered_photos") or 0) + 1
+        iteration_count = 0
 
-        while True:
+        while iteration_count < self.MAX_DISCOVERY_ITERATIONS:
+            iteration_count += 1
             auth_session = await SocialAuthService.get_active_session(
                 self.db,
                 job_id=job_id,
@@ -184,12 +256,10 @@ class SocialImportPipelineService:
                         "error_message": None,
                     },
                 )
-                await SocialImportEventService.publish(
-                    self.db,
-                    job_id=job_id,
-                    user_id=self.user_id,
-                    event_type="auth_required",
-                    payload={
+                await self._publish_event(
+                    job_id,
+                    "auth_required",
+                    {
                         "job_id": job_id,
                         "status": SocialImportJobStatus.AWAITING_AUTH.value,
                         "message": "Login required to continue importing this profile",
@@ -197,22 +267,31 @@ class SocialImportPipelineService:
                 )
                 raise SocialImportAuthRequiredError()
 
+            # Check if adding these photos would exceed the max limit
+            current_count = ordinal - 1
+            photos_to_add = result.photos
+            if current_count + len(photos_to_add) > self.MAX_DISCOVERY_PHOTOS:
+                allowed_count = self.MAX_DISCOVERY_PHOTOS - current_count
+                photos_to_add = photos_to_add[:allowed_count]
+
             inserted = await SocialImportJobStore.add_discovered_photos(
                 self.db,
                 job_id=job_id,
                 user_id=self.user_id,
                 start_ordinal=ordinal,
-                photos=[photo.model_dump() for photo in result.photos],
+                photos=[photo.model_dump() for photo in photos_to_add],
             )
             ordinal += len(inserted)
 
+            # If we've hit the max photos limit, stop discovery
+            if ordinal > self.MAX_DISCOVERY_PHOTOS:
+                break
+
             if inserted:
-                await SocialImportEventService.publish(
-                    self.db,
-                    job_id=job_id,
-                    user_id=self.user_id,
-                    event_type="photo_discovered",
-                    payload={
+                await self._publish_event(
+                    job_id,
+                    "photo_discovered",
+                    {
                         "job_id": job_id,
                         "count": len(inserted),
                         "discovered_photos": ordinal - 1,
@@ -236,12 +315,10 @@ class SocialImportPipelineService:
                 "status": SocialImportJobStatus.PROCESSING.value,
             },
         )
-        await SocialImportEventService.publish(
-            self.db,
-            job_id=job_id,
-            user_id=self.user_id,
-            event_type="job_updated",
-            payload={
+        await self._publish_event(
+            job_id,
+            "job_updated",
+            {
                 "job_id": job_id,
                 "status": SocialImportJobStatus.PROCESSING.value,
                 "discovery_completed": True,
@@ -305,12 +382,10 @@ class SocialImportPipelineService:
                     photo=promoted,
                     user_id=self.user_id,
                 )
-                await SocialImportEventService.publish(
-                    self.db,
-                    job_id=job_id,
-                    user_id=self.user_id,
-                    event_type="photo_ready_for_review",
-                    payload={"job_id": job_id, "photo": promoted_full},
+                await self._publish_event(
+                    job_id,
+                    "photo_ready_for_review",
+                    {"job_id": job_id, "photo": promoted_full},
                 )
                 awaiting = promoted
 
@@ -343,14 +418,58 @@ class SocialImportPipelineService:
             await self._sync_job_counters(job_id)
             return
 
+    async def _check_rate_limit_with_pause(
+        self, job_id: str, operation_type: str, count: int = 1
+    ) -> bool:
+        """Check rate limit; if not allowed, pause job and return False."""
+        check = await AISettingsService.check_rate_limit(
+            user_id=self.user_id,
+            operation_type=operation_type,
+            db=self.db,
+            count=count,
+        )
+        if not check["allowed"]:
+            await self._pause_for_rate_limit(job_id, operation_type)
+            return False
+        return True
+
+    def _build_item_dict(
+        self,
+        item: Dict[str, Any],
+        temp_id: str,
+        status: SocialImportItemStatus,
+        generated_urls: Optional[Dict[str, str]] = None,
+        generation_error: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Build an item dictionary with common fields and optional generation results."""
+        result: Dict[str, Any] = {
+            "temp_id": temp_id,
+            "name": self._suggest_item_name(item),
+            "category": item.get("category") or "other",
+            "sub_category": item.get("sub_category"),
+            "colors": item.get("colors") or [],
+            "material": item.get("material"),
+            "pattern": item.get("pattern"),
+            "brand": item.get("brand"),
+            "confidence": item.get("confidence") or 0,
+            "bounding_box": item.get("bounding_box"),
+            "detailed_description": item.get("detailed_description"),
+            "status": status.value,
+        }
+        if generated_urls:
+            result["generated_image_url"] = generated_urls.get("image_url")
+            result["generated_thumbnail_url"] = generated_urls.get("thumbnail_url")
+            result["generated_storage_path"] = generated_urls.get("storage_path")
+        if generation_error:
+            result["generation_error"] = generation_error
+        return result
+
     async def _process_single_photo(self, job_id: str, photo: Dict[str, Any]) -> None:
         photo_id = photo["id"]
-        await SocialImportEventService.publish(
-            self.db,
-            job_id=job_id,
-            user_id=self.user_id,
-            event_type="photo_processing_started",
-            payload={
+        await self._publish_event(
+            job_id,
+            "photo_processing_started",
+            {
                 "job_id": job_id,
                 "photo_id": photo_id,
                 "ordinal": photo.get("ordinal"),
@@ -358,14 +477,7 @@ class SocialImportPipelineService:
         )
 
         try:
-            extraction_check = await AISettingsService.check_rate_limit(
-                user_id=self.user_id,
-                operation_type="extraction",
-                db=self.db,
-                count=1,
-            )
-            if not extraction_check["allowed"]:
-                await self._pause_for_rate_limit(job_id, "extraction")
+            if not await self._check_rate_limit_with_pause(job_id, "extraction"):
                 await SocialImportJobStore.update_photo(
                     self.db,
                     job_id=job_id,
@@ -406,12 +518,10 @@ class SocialImportPipelineService:
                         ).isoformat(),
                     },
                 )
-                await SocialImportEventService.publish(
-                    self.db,
-                    job_id=job_id,
-                    user_id=self.user_id,
-                    event_type="photo_failed",
-                    payload={
+                await self._publish_event(
+                    job_id,
+                    "photo_failed",
+                    {
                         "job_id": job_id,
                         "photo_id": photo_id,
                         "error": "No items detected",
@@ -420,14 +530,9 @@ class SocialImportPipelineService:
                 await self._sync_job_counters(job_id)
                 return
 
-            generation_check = await AISettingsService.check_rate_limit(
-                user_id=self.user_id,
-                operation_type="generation",
-                db=self.db,
-                count=len(raw_items),
-            )
-            if not generation_check["allowed"]:
-                await self._pause_for_rate_limit(job_id, "generation")
+            if not await self._check_rate_limit_with_pause(
+                job_id, "generation", count=len(raw_items)
+            ):
                 await SocialImportJobStore.update_photo(
                     self.db,
                     job_id=job_id,
@@ -470,41 +575,25 @@ class SocialImportPipelineService:
                     )
                     generation_success_count += 1
                     processed_items.append(
-                        {
-                            "temp_id": temp_id,
-                            "name": self._suggest_item_name(item),
-                            "category": item.get("category") or "other",
-                            "sub_category": item.get("sub_category"),
-                            "colors": item.get("colors") or [],
-                            "material": item.get("material"),
-                            "pattern": item.get("pattern"),
-                            "brand": item.get("brand"),
-                            "confidence": item.get("confidence") or 0,
-                            "bounding_box": item.get("bounding_box"),
-                            "detailed_description": item.get("detailed_description"),
-                            "generated_image_url": uploaded.get("image_url"),
-                            "generated_thumbnail_url": uploaded.get("thumbnail_url"),
-                            "generated_storage_path": uploaded.get("storage_path"),
-                            "status": SocialImportItemStatus.GENERATED.value,
-                        }
+                        self._build_item_dict(
+                            item,
+                            temp_id,
+                            SocialImportItemStatus.GENERATED,
+                            generated_urls={
+                                "image_url": uploaded.get("image_url"),
+                                "thumbnail_url": uploaded.get("thumbnail_url"),
+                                "storage_path": uploaded.get("storage_path"),
+                            },
+                        )
                     )
                 except Exception as generation_error:
                     processed_items.append(
-                        {
-                            "temp_id": temp_id,
-                            "name": self._suggest_item_name(item),
-                            "category": item.get("category") or "other",
-                            "sub_category": item.get("sub_category"),
-                            "colors": item.get("colors") or [],
-                            "material": item.get("material"),
-                            "pattern": item.get("pattern"),
-                            "brand": item.get("brand"),
-                            "confidence": item.get("confidence") or 0,
-                            "bounding_box": item.get("bounding_box"),
-                            "detailed_description": item.get("detailed_description"),
-                            "generation_error": str(generation_error),
-                            "status": SocialImportItemStatus.FAILED.value,
-                        }
+                        self._build_item_dict(
+                            item,
+                            temp_id,
+                            SocialImportItemStatus.FAILED,
+                            generation_error=str(generation_error),
+                        )
                     )
 
             if generation_success_count > 0:
@@ -550,16 +639,15 @@ class SocialImportPipelineService:
                 user_id=self.user_id,
             )
 
-            await SocialImportEventService.publish(
-                self.db,
-                job_id=job_id,
-                user_id=self.user_id,
-                event_type=(
-                    "photo_buffered_ready"
-                    if target_status == SocialImportPhotoStatus.BUFFERED_READY
-                    else "photo_ready_for_review"
-                ),
-                payload={"job_id": job_id, "photo": updated_photo},
+            event_type = (
+                "photo_buffered_ready"
+                if target_status == SocialImportPhotoStatus.BUFFERED_READY
+                else "photo_ready_for_review"
+            )
+            await self._publish_event(
+                job_id,
+                event_type,
+                {"job_id": job_id, "photo": updated_photo},
             )
             await self._sync_job_counters(job_id)
 
@@ -575,12 +663,10 @@ class SocialImportPipelineService:
                     "processing_completed_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
-            await SocialImportEventService.publish(
-                self.db,
-                job_id=job_id,
-                user_id=self.user_id,
-                event_type="photo_failed",
-                payload={"job_id": job_id, "photo_id": photo_id, "error": str(e)},
+            await self._publish_event(
+                job_id,
+                "photo_failed",
+                {"job_id": job_id, "photo_id": photo_id, "error": str(e)},
             )
             await self._sync_job_counters(job_id)
 
@@ -636,12 +722,10 @@ class SocialImportPipelineService:
                 },
             )
 
-            await SocialImportEventService.publish(
-                self.db,
-                job_id=job_id,
-                user_id=self.user_id,
-                event_type="photo_approved",
-                payload={
+            await self._publish_event(
+                job_id,
+                "photo_approved",
+                {
                     "job_id": job_id,
                     "photo_id": photo_id,
                     "saved_count": saved_count,
@@ -698,12 +782,10 @@ class SocialImportPipelineService:
                 },
             )
 
-            await SocialImportEventService.publish(
-                self.db,
-                job_id=job_id,
-                user_id=self.user_id,
-                event_type="photo_rejected",
-                payload={"job_id": job_id, "photo_id": photo_id},
+            await self._publish_event(
+                job_id,
+                "photo_rejected",
+                {"job_id": job_id, "photo_id": photo_id},
             )
 
             await self._promote_buffered_if_available(job_id)
@@ -746,16 +828,20 @@ class SocialImportPipelineService:
                 job_id=job_id,
                 user_id=self.user_id,
             )
-            await SocialImportEventService.publish(
-                self.db,
-                job_id=job_id,
-                user_id=self.user_id,
-                event_type="job_cancelled",
-                payload={"job_id": job_id},
+            await self._publish_event(
+                job_id,
+                "job_cancelled",
+                {"job_id": job_id},
             )
         await self.cancel_scheduled_job(job_id)
 
-    async def accept_oauth_auth(self, job_id: str, payload: Dict[str, Any]) -> None:
+    async def accept_auth(
+        self,
+        job_id: str,
+        auth_type: str,
+        payload: Dict[str, Any],
+    ) -> None:
+        """Accept OAuth or scraper authentication and resume the job."""
         lock = self._job_lock(job_id)
         async with lock:
             job = await SocialImportJobStore.get_job(
@@ -766,18 +852,29 @@ class SocialImportPipelineService:
             if not job:
                 raise SocialImportJobNotFoundError(job_id)
 
-            await SocialAuthService.store_oauth_session(
-                self.db,
-                job_id=job_id,
-                user_id=self.user_id,
-                provider_access_token=payload["provider_access_token"],
-                provider_refresh_token=payload.get("provider_refresh_token"),
-                provider_user_id=payload.get("provider_user_id"),
-                provider_page_access_token=payload.get("provider_page_access_token"),
-                provider_page_id=payload.get("provider_page_id"),
-                provider_username=payload.get("provider_username"),
-                expires_at=payload.get("expires_at"),
-            )
+            if auth_type == "oauth":
+                await SocialAuthService.store_oauth_session(
+                    self.db,
+                    job_id=job_id,
+                    user_id=self.user_id,
+                    provider_access_token=payload["provider_access_token"],
+                    provider_refresh_token=payload.get("provider_refresh_token"),
+                    provider_user_id=payload.get("provider_user_id"),
+                    provider_page_access_token=payload.get("provider_page_access_token"),
+                    provider_page_id=payload.get("provider_page_id"),
+                    provider_username=payload.get("provider_username"),
+                    expires_at=payload.get("expires_at"),
+                )
+            else:  # scraper
+                await SocialAuthService.store_scraper_session(
+                    self.db,
+                    job_id=job_id,
+                    user_id=self.user_id,
+                    username=payload["username"],
+                    password=payload["password"],
+                    otp_code=payload.get("otp_code"),
+                )
+
             updated = await SocialImportJobStore.update_job(
                 self.db,
                 job_id=job_id,
@@ -789,51 +886,11 @@ class SocialImportPipelineService:
             )
             if not updated:
                 raise SocialImportJobNotFoundError(job_id)
-            await SocialImportEventService.publish(
-                self.db,
-                job_id=job_id,
-                user_id=self.user_id,
-                event_type="auth_accepted",
-                payload={"job_id": job_id, "auth_type": "oauth"},
-            )
-        await self.schedule_job(self, job_id)
 
-    async def accept_scraper_auth(self, job_id: str, payload: Dict[str, Any]) -> None:
-        lock = self._job_lock(job_id)
-        async with lock:
-            job = await SocialImportJobStore.get_job(
-                self.db,
-                job_id=job_id,
-                user_id=self.user_id,
-            )
-            if not job:
-                raise SocialImportJobNotFoundError(job_id)
-
-            await SocialAuthService.store_scraper_session(
-                self.db,
-                job_id=job_id,
-                user_id=self.user_id,
-                username=payload["username"],
-                password=payload["password"],
-                otp_code=payload.get("otp_code"),
-            )
-            updated = await SocialImportJobStore.update_job(
-                self.db,
-                job_id=job_id,
-                user_id=self.user_id,
-                updates={
-                    "status": SocialImportJobStatus.PROCESSING.value,
-                    "auth_required": False,
-                },
-            )
-            if not updated:
-                raise SocialImportJobNotFoundError(job_id)
-            await SocialImportEventService.publish(
-                self.db,
-                job_id=job_id,
-                user_id=self.user_id,
-                event_type="auth_accepted",
-                payload={"job_id": job_id, "auth_type": "scraper"},
+            await self._publish_event(
+                job_id,
+                "auth_accepted",
+                {"job_id": job_id, "auth_type": auth_type},
             )
         await self.schedule_job(self, job_id)
 
@@ -919,12 +976,10 @@ class SocialImportPipelineService:
             photo=promoted,
             user_id=self.user_id,
         )
-        await SocialImportEventService.publish(
-            self.db,
-            job_id=job_id,
-            user_id=self.user_id,
-            event_type="photo_ready_for_review",
-            payload={"job_id": job_id, "photo": promoted},
+        await self._publish_event(
+            job_id,
+            "photo_ready_for_review",
+            {"job_id": job_id, "photo": promoted},
         )
 
     async def _sync_job_counters(self, job_id: str) -> None:
@@ -957,12 +1012,10 @@ class SocialImportPipelineService:
             },
         )
 
-        await SocialImportEventService.publish(
-            self.db,
-            job_id=job_id,
-            user_id=self.user_id,
-            event_type="job_updated",
-            payload={
+        await self._publish_event(
+            job_id,
+            "job_updated",
+            {
                 "job_id": job_id,
                 "processed_photos": total_processed,
                 "approved_photos": counts.get(
@@ -985,12 +1038,10 @@ class SocialImportPipelineService:
             status=SocialImportJobStatus.PAUSED_RATE_LIMITED,
             error_message=message,
         )
-        await SocialImportEventService.publish(
-            self.db,
-            job_id=job_id,
-            user_id=self.user_id,
-            event_type="rate_limit_paused",
-            payload={
+        await self._publish_event(
+            job_id,
+            "rate_limit_paused",
+            {
                 "job_id": job_id,
                 "status": SocialImportJobStatus.PAUSED_RATE_LIMITED.value,
                 "operation_type": operation_type,
@@ -1027,12 +1078,10 @@ class SocialImportPipelineService:
         if not updated:
             return False
 
-        await SocialImportEventService.publish(
-            self.db,
-            job_id=job_id,
-            user_id=self.user_id,
-            event_type="job_updated",
-            payload={
+        await self._publish_event(
+            job_id,
+            "job_updated",
+            {
                 "job_id": job_id,
                 "status": SocialImportJobStatus.PROCESSING.value,
                 "message": "Daily limit reset detected. Resuming queued social import photos.",
@@ -1084,12 +1133,10 @@ class SocialImportPipelineService:
             job_id=job_id,
             user_id=self.user_id,
         )
-        await SocialImportEventService.publish(
-            self.db,
-            job_id=job_id,
-            user_id=self.user_id,
-            event_type="job_completed",
-            payload={"job_id": job_id, "status": SocialImportJobStatus.COMPLETED.value},
+        await self._publish_event(
+            job_id,
+            "job_completed",
+            {"job_id": job_id, "status": SocialImportJobStatus.COMPLETED.value},
         )
 
     async def _cleanup_unsaved_temp_assets(self, job_id: str) -> None:

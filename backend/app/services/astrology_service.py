@@ -13,10 +13,16 @@ from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 import httpx
+import time
 
 from app.core.logging_config import get_context_logger
 
 logger = get_context_logger(__name__)
+
+# In-memory TTL cache for geocoding results (birth_place -> resolved data)
+# TTL: 1 hour (3600 seconds)
+_GEOCODING_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
+_GEOCODING_CACHE_TTL_SECONDS = 3600
 
 
 _WEEKDAY_PLANETS = {
@@ -30,66 +36,18 @@ _WEEKDAY_PLANETS = {
 }
 
 _COLOR_LIBRARY: Dict[str, Dict[str, Any]] = {
-    "white": {
-        "hex": "#FFFFFF",
-        "planets": {"Moon": 0.35, "Venus": 0.28},
-        "keywords": {"white", "ivory", "off white"},
-    },
-    "cream": {
-        "hex": "#FFF3CD",
-        "planets": {"Moon": 0.26, "Jupiter": 0.22},
-        "keywords": {"cream", "beige", "sand", "ecru"},
-    },
-    "emerald green": {
-        "hex": "#2E7D32",
-        "planets": {"Mercury": 0.40, "Venus": 0.18},
-        "keywords": {"emerald", "green", "olive", "mint"},
-    },
-    "royal blue": {
-        "hex": "#1E40AF",
-        "planets": {"Saturn": 0.28, "Jupiter": 0.16},
-        "keywords": {"blue", "royal blue", "cobalt"},
-    },
-    "navy blue": {
-        "hex": "#1F2A44",
-        "planets": {"Saturn": 0.36, "Mercury": 0.12},
-        "keywords": {"navy", "midnight blue", "ink blue"},
-    },
-    "charcoal": {
-        "hex": "#36454F",
-        "planets": {"Saturn": 0.33},
-        "keywords": {"charcoal", "graphite", "slate"},
-    },
-    "golden yellow": {
-        "hex": "#D4AF37",
-        "planets": {"Jupiter": 0.42, "Sun": 0.16},
-        "keywords": {"yellow", "gold", "mustard", "ochre"},
-    },
-    "saffron orange": {
-        "hex": "#FF8C00",
-        "planets": {"Sun": 0.45, "Mars": 0.12},
-        "keywords": {"orange", "saffron", "amber", "tangerine"},
-    },
-    "ruby red": {
-        "hex": "#A91B0D",
-        "planets": {"Mars": 0.41, "Sun": 0.16},
-        "keywords": {"red", "maroon", "crimson", "burgundy"},
-    },
-    "pastel pink": {
-        "hex": "#F8BBD0",
-        "planets": {"Venus": 0.34, "Moon": 0.16},
-        "keywords": {"pink", "rose", "blush"},
-    },
-    "lavender": {
-        "hex": "#C4B5FD",
-        "planets": {"Venus": 0.20, "Mercury": 0.10},
-        "keywords": {"lavender", "lilac", "violet"},
-    },
-    "black": {
-        "hex": "#111111",
-        "planets": {"Saturn": 0.22},
-        "keywords": {"black", "jet", "onyx"},
-    },
+    "white": {"hex": "#FFFFFF", "planets": {"Moon": 0.35, "Venus": 0.28}, "keywords": {"white", "ivory", "off white"}},
+    "cream": {"hex": "#FFF3CD", "planets": {"Moon": 0.26, "Jupiter": 0.22}, "keywords": {"cream", "beige", "sand", "ecru"}},
+    "emerald green": {"hex": "#2E7D32", "planets": {"Mercury": 0.40, "Venus": 0.18}, "keywords": {"emerald", "green", "olive", "mint"}},
+    "royal blue": {"hex": "#1E40AF", "planets": {"Saturn": 0.28, "Jupiter": 0.16}, "keywords": {"blue", "royal blue", "cobalt"}},
+    "navy blue": {"hex": "#1F2A44", "planets": {"Saturn": 0.36, "Mercury": 0.12}, "keywords": {"navy", "midnight blue", "ink blue"}},
+    "charcoal": {"hex": "#36454F", "planets": {"Saturn": 0.33}, "keywords": {"charcoal", "graphite", "slate"}},
+    "golden yellow": {"hex": "#D4AF37", "planets": {"Jupiter": 0.42, "Sun": 0.16}, "keywords": {"yellow", "gold", "mustard", "ochre"}},
+    "saffron orange": {"hex": "#FF8C00", "planets": {"Sun": 0.45, "Mars": 0.12}, "keywords": {"orange", "saffron", "amber", "tangerine"}},
+    "ruby red": {"hex": "#A91B0D", "planets": {"Mars": 0.41, "Sun": 0.16}, "keywords": {"red", "maroon", "crimson", "burgundy"}},
+    "pastel pink": {"hex": "#F8BBD0", "planets": {"Venus": 0.34, "Moon": 0.16}, "keywords": {"pink", "rose", "blush"}},
+    "lavender": {"hex": "#C4B5FD", "planets": {"Venus": 0.20, "Mercury": 0.10}, "keywords": {"lavender", "lilac", "violet"}},
+    "black": {"hex": "#111111", "planets": {"Saturn": 0.22}, "keywords": {"black", "jet", "onyx"}},
 }
 
 _COLOR_SYNONYMS = {
@@ -264,7 +222,29 @@ class AstrologyService:
             "birth_place_resolved": resolved.get("display_name"),
         }
 
+    def _get_cached_geocode(self, birth_place: str) -> Optional[Dict[str, Any]]:
+        """Get cached geocoding result if not expired."""
+        cache_key = birth_place.lower().strip()
+        if cache_key in _GEOCODING_CACHE:
+            data, timestamp = _GEOCODING_CACHE[cache_key]
+            if time.time() - timestamp < _GEOCODING_CACHE_TTL_SECONDS:
+                logger.debug("Geocoding cache hit", birth_place=birth_place)
+                return data
+            # Expired, remove from cache
+            del _GEOCODING_CACHE[cache_key]
+        return None
+
+    def _set_cached_geocode(self, birth_place: str, data: Dict[str, Any]) -> None:
+        """Cache geocoding result with TTL."""
+        cache_key = birth_place.lower().strip()
+        _GEOCODING_CACHE[cache_key] = (data, time.time())
+
     async def _resolve_birth_place(self, birth_place: str) -> Dict[str, Any]:
+        # Check cache first
+        cached = self._get_cached_geocode(birth_place)
+        if cached:
+            return cached
+
         async with httpx.AsyncClient(timeout=8.0) as client:
             response = await client.get(
                 self.geocode_url,
@@ -289,12 +269,16 @@ class AstrologyService:
         display_name = ", ".join(
             [part for part in [row.get("name"), row.get("admin1"), row.get("country")] if part]
         )
-        return {
+        result = {
             "latitude": float(row["latitude"]),
             "longitude": float(row["longitude"]),
             "timezone": timezone_name,
             "display_name": display_name or birth_place,
         }
+
+        # Cache the result
+        self._set_cached_geocode(birth_place, result)
+        return result
 
     def _compute_sidereal_context(
         self,
@@ -356,42 +340,31 @@ class AstrologyService:
         scores: Dict[str, float] = {name: 0.15 for name in _COLOR_LIBRARY}
         ruling_planet = context.get("ruling_planet")
 
+        # Apply ruling planet scores
         if ruling_planet:
-            for color_name, meta in _COLOR_LIBRARY.items():
-                scores[color_name] += float(meta.get("planets", {}).get(ruling_planet, 0.0))
+            for name, meta in _COLOR_LIBRARY.items():
+                scores[name] += float(meta.get("planets", {}).get(ruling_planet, 0.0))
 
-        for sign_key in ("sidereal_sun_sign", "moon_sign", "ascendant"):
-            sign_value = context.get(sign_key)
-            if sign_value in _SIGN_COLOR_BIAS:
-                for color_name, boost in _SIGN_COLOR_BIAS[sign_value]:
-                    scores[color_name] += boost
+        # Apply sign-based color biases
+        for sign in (context.get(k) for k in ("sidereal_sun_sign", "moon_sign", "ascendant")):
+            for name, boost in _SIGN_COLOR_BIAS.get(sign, []):
+                scores[name] += boost
 
+        # Apply meeting mode boost
         if mode == "important_meeting":
-            for color_name, boost in _MEETING_BOOST.items():
-                scores[color_name] += boost
+            for name, boost in _MEETING_BOOST.items():
+                scores[name] += boost
 
         ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
-        lucky_raw = ranked[:3]
-        avoid_raw = sorted(scores.items(), key=lambda kv: kv[1])[:2]
+        lucky_names = {n for n, _ in ranked[:3]}
 
         lucky_colors = [
-            {
-                "name": name,
-                "hex": _COLOR_LIBRARY[name]["hex"],
-                "reason": self._build_color_reason(name=name, context=context, mode=mode),
-                "confidence": round(min(0.99, max(0.1, score)), 2),
-            }
-            for name, score in lucky_raw
+            self._build_color_result(name, score, context, mode) for name, score in ranked[:3]
         ]
         avoid_colors = [
-            {
-                "name": name,
-                "hex": _COLOR_LIBRARY[name]["hex"],
-                "reason": "Lower day-wise harmony from Vedic weighting",
-                "confidence": round(min(0.99, max(0.1, 1.0 - score)), 2),
-            }
-            for name, score in avoid_raw
-            if name not in {c["name"] for c in lucky_colors}
+            self._build_color_result(name, 1.0 - score, context, mode, is_avoid=True)
+            for name, score in sorted(scores.items(), key=lambda kv: kv[1])[:2]
+            if name not in lucky_names
         ]
 
         notes = [
@@ -399,6 +372,26 @@ class AstrologyService:
             "Use one lucky color as the focal outfit color and keep others neutral.",
         ]
         return lucky_colors, avoid_colors, notes
+
+    def _build_color_result(
+        self,
+        name: str,
+        score: float,
+        context: Dict[str, Any],
+        mode: str,
+        is_avoid: bool = False,
+    ) -> Dict[str, Any]:
+        """Build a color result dictionary."""
+        return {
+            "name": name,
+            "hex": _COLOR_LIBRARY[name]["hex"],
+            "reason": (
+                "Lower day-wise harmony from Vedic weighting"
+                if is_avoid
+                else self._build_color_reason(name=name, context=context, mode=mode)
+            ),
+            "confidence": round(min(0.99, max(0.1, score)), 2),
+        }
 
     def _build_color_reason(self, *, name: str, context: Dict[str, Any], mode: str) -> str:
         ruling_planet = context.get("ruling_planet")
@@ -417,18 +410,13 @@ class AstrologyService:
         avoid_colors: List[Dict[str, Any]],
         mode: str,
     ) -> List[Dict[str, Any]]:
-        lucky_set = {
-            self._normalize_color_name(color["name"])
-            for color in lucky_colors
-            if color.get("name")
-        }
-        avoid_set = {
-            self._normalize_color_name(color["name"])
-            for color in avoid_colors
-            if color.get("name")
-        }
-        lucky_set.discard(None)
-        avoid_set.discard(None)
+        def _color_set(colors: List[Dict[str, Any]]) -> set:
+            return {c for c in (self._normalize_color_name(cl.get("name")) for cl in colors) if c}
+
+        lucky_set = _color_set(lucky_colors)
+        avoid_set = _color_set(avoid_colors)
+        neutral_bonus = {"white", "cream", "charcoal", "black", "navy blue"}
+        meeting_categories = {"tops", "bottoms", "shoes", "outerwear"}
 
         scored: List[Dict[str, Any]] = []
         for item in items:
@@ -436,32 +424,22 @@ class AstrologyService:
             if condition in _UNUSABLE_CONDITIONS:
                 continue
 
-            raw_colors = item.get("colors") or []
-            normalized_colors = {
-                self._normalize_color_name(str(color))
-                for color in raw_colors
-                if color is not None
-            }
-            normalized_colors.discard(None)
+            normalized_colors = {c for c in (self._normalize_color_name(str(cl)) for cl in item.get("colors") or []) if c}
 
             lucky_hits = lucky_set & normalized_colors
             avoid_hits = avoid_set & normalized_colors
 
-            score = 0.25
-            score += len(lucky_hits) * 2.5
-            score -= len(avoid_hits) * 1.8
+            score = 0.25 + len(lucky_hits) * 2.5 - len(avoid_hits) * 1.8
             if not normalized_colors:
                 score += 0.2
-
-            category = str(item.get("category") or "other").lower()
-            if mode == "important_meeting" and category in {"tops", "bottoms", "shoes", "outerwear"}:
-                score += 0.7
-
-            if normalized_colors & {"white", "cream", "charcoal", "black", "navy blue"}:
+            if normalized_colors & neutral_bonus:
                 score += 0.35
 
-            scored_item = {**item, "_astrology_score": round(score, 3)}
-            scored.append(scored_item)
+            category = str(item.get("category") or "other").lower()
+            if mode == "important_meeting" and category in meeting_categories:
+                score += 0.7
+
+            scored.append({**item, "_astrology_score": round(score, 3)})
 
         scored.sort(key=lambda row: row.get("_astrology_score", 0.0), reverse=True)
         return scored
@@ -551,31 +529,29 @@ class AstrologyService:
         except Exception:
             return timezone.utc
 
+    # Sidereal sun sign date windows: (start_month, start_day, end_month, end_day, sign)
+    _SIDEREAL_WINDOWS: List[Tuple[int, int, int, int, str]] = [
+        (1, 14, 2, 12, "Capricorn"),
+        (2, 13, 3, 14, "Aquarius"),
+        (3, 15, 4, 13, "Pisces"),
+        (4, 14, 5, 14, "Aries"),
+        (5, 15, 6, 14, "Taurus"),
+        (6, 15, 7, 15, "Gemini"),
+        (7, 16, 8, 16, "Cancer"),
+        (8, 17, 9, 16, "Leo"),
+        (9, 17, 10, 17, "Virgo"),
+        (10, 18, 11, 16, "Libra"),
+        (11, 17, 12, 15, "Scorpio"),
+        (12, 16, 12, 31, "Sagittarius"),
+        (1, 1, 1, 13, "Sagittarius"),
+    ]
+
     def _sidereal_sun_sign(self, target_date: date) -> str:
         """Approximate sidereal sun sign windows."""
         md = (target_date.month, target_date.day)
-        if (4, 14) <= md <= (5, 14):
-            return "Aries"
-        if (5, 15) <= md <= (6, 14):
-            return "Taurus"
-        if (6, 15) <= md <= (7, 15):
-            return "Gemini"
-        if (7, 16) <= md <= (8, 16):
-            return "Cancer"
-        if (8, 17) <= md <= (9, 16):
-            return "Leo"
-        if (9, 17) <= md <= (10, 17):
-            return "Virgo"
-        if (10, 18) <= md <= (11, 16):
-            return "Libra"
-        if (11, 17) <= md <= (12, 15):
-            return "Scorpio"
-        if md >= (12, 16) or md <= (1, 13):
-            return "Sagittarius"
-        if (1, 14) <= md <= (2, 12):
-            return "Capricorn"
-        if (2, 13) <= md <= (3, 14):
-            return "Aquarius"
+        for start_m, start_d, end_m, end_d, sign in self._SIDEREAL_WINDOWS:
+            if (start_m, start_d) <= md <= (end_m, end_d):
+                return sign
         return "Pisces"
 
 
