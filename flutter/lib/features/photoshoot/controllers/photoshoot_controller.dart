@@ -15,12 +15,7 @@ import '../models/photoshoot_models.dart';
 import '../repositories/photoshoot_repository.dart';
 
 /// Steps in the photoshoot generation flow
-enum PhotoshootStep {
-  upload,
-  configure,
-  generating,
-  results,
-}
+enum PhotoshootStep { upload, configure, generating, results }
 
 /// Controller for AI Photoshoot Generator feature
 class PhotoshootController extends GetxController {
@@ -64,11 +59,15 @@ class PhotoshootController extends GetxController {
 
   // Results state
   final RxList<GeneratedImage> generatedImages = <GeneratedImage>[].obs;
+  final RxList<int> failedIndices = <int>[].obs;
+  final RxInt failedCount = 0.obs;
+  final RxBool partialSuccess = false.obs;
   final RxString sessionId = ''.obs;
 
   // Download state
   final RxBool isDownloading = false.obs;
   final RxInt downloadingIndex = (-1).obs;
+  final RxInt retryingFailedIndex = (-1).obs;
 
   // Error state
   final RxString error = ''.obs;
@@ -130,7 +129,10 @@ class PhotoshootController extends GetxController {
         }
 
         // Add new photos to existing ones (up to the limit)
-        final newFiles = images.take(spotsAvailable).map((x) => File(x.path)).toList();
+        final newFiles = images
+            .take(spotsAvailable)
+            .map((x) => File(x.path))
+            .toList();
         selectedPhotos.addAll(newFiles);
         error.value = '';
       }
@@ -207,7 +209,10 @@ class PhotoshootController extends GetxController {
         if (!canGenerate) {
           if (selectedUseCase.value == PhotoshootUseCase.custom &&
               customPrompt.value.isEmpty) {
-            Get.snackbar('Custom Prompt Required', 'Please enter a custom prompt');
+            Get.snackbar(
+              'Custom Prompt Required',
+              'Please enter a custom prompt',
+            );
             return;
           }
           if (numImages.value > remainingToday) {
@@ -258,6 +263,9 @@ class PhotoshootController extends GetxController {
     generationStatus.value = 'Preparing your photos...';
     currentStep.value = PhotoshootStep.generating;
     generatedImages.clear();
+    failedIndices.clear();
+    failedCount.value = 0;
+    partialSuccess.value = false;
 
     try {
       // Convert photos to base64
@@ -305,21 +313,24 @@ class PhotoshootController extends GetxController {
   /// Subscribe to SSE events for real-time progress
   void _subscribeToEvents(String id) {
     _sseSubscription?.cancel();
-    _sseSubscription = _repository.subscribeToEvents(id).listen(
-      _handleSSEEvent,
-      onError: (e) {
-        debugPrint('SSE error: $e');
-        // Fallback to polling if SSE fails
-        _pollJobStatus(id);
-      },
-      onDone: () {
-        debugPrint('SSE stream ended');
-        // If still generating, stream ended unexpectedly - fallback to polling
-        if (isGenerating.value && currentStep.value == PhotoshootStep.generating) {
-          _pollJobStatus(id);
-        }
-      },
-    );
+    _sseSubscription = _repository
+        .subscribeToEvents(id)
+        .listen(
+          _handleSSEEvent,
+          onError: (e) {
+            debugPrint('SSE error: $e');
+            // Fallback to polling if SSE fails
+            _pollJobStatus(id);
+          },
+          onDone: () {
+            debugPrint('SSE stream ended');
+            // If still generating, stream ended unexpectedly - fallback to polling
+            if (isGenerating.value &&
+                currentStep.value == PhotoshootStep.generating) {
+              _pollJobStatus(id);
+            }
+          },
+        );
   }
 
   /// Handle incoming SSE events
@@ -356,7 +367,14 @@ class PhotoshootController extends GetxController {
         break;
 
       case 'image_failed':
-        debugPrint('Image generation failed: ${event.data?['error']}');
+        final failedIndex = event.data?['index'];
+        if (failedIndex is int && !failedIndices.contains(failedIndex)) {
+          failedIndices.add(failedIndex);
+          failedIndices.sort();
+        }
+        failedCount.value = event.data?['failed_count'] ?? failedIndices.length;
+        partialSuccess.value = failedCount.value > 0;
+        debugPrint('Image generation failed at index: $failedIndex');
         break;
 
       case 'batch_complete':
@@ -402,13 +420,25 @@ class PhotoshootController extends GetxController {
       usage.value = PhotoshootUsage.fromJson(data!['usage']);
     }
 
+    final completedFailedIndices =
+        (data?['failed_indices'] as List<dynamic>? ?? [])
+            .whereType<int>()
+            .toList();
+    if (completedFailedIndices.isNotEmpty) {
+      failedIndices.assignAll(completedFailedIndices..sort());
+    }
+    failedCount.value = data?['failed_count'] ?? failedIndices.length;
+    partialSuccess.value = data?['partial_success'] ?? (failedCount.value > 0);
+
     currentStep.value = PhotoshootStep.results;
     isGenerating.value = false;
     _sseSubscription?.cancel();
 
     Get.snackbar(
-      'Success',
-      '${generatedImages.length} images generated!',
+      partialSuccess.value ? 'Partially Complete' : 'Success',
+      partialSuccess.value
+          ? '${generatedImages.length} generated, ${failedCount.value} failed.'
+          : '${generatedImages.length} images generated!',
       snackPosition: SnackPosition.TOP,
     );
   }
@@ -421,6 +451,9 @@ class PhotoshootController extends GetxController {
       final status = await _repository.getJobStatus(id);
 
       generatedImages.assignAll(status.images);
+      failedIndices.assignAll(List<int>.from(status.failedIndices)..sort());
+      failedCount.value = status.failedCount;
+      partialSuccess.value = status.partialSuccess;
       if (status.totalCount > 0) {
         generationProgress.value =
             10 + ((status.generatedCount / status.totalCount) * 90).toInt();
@@ -437,6 +470,9 @@ class PhotoshootController extends GetxController {
         case 'complete':
           _handleJobComplete({
             'session_id': status.jobId,
+            'failed_count': status.failedCount,
+            'failed_indices': status.failedIndices,
+            'partial_success': status.partialSuccess,
             if (status.usage != null) 'usage': status.usage!.toJson(),
           });
           break;
@@ -458,6 +494,65 @@ class PhotoshootController extends GetxController {
       if (isGenerating.value) {
         _pollJobStatus(id);
       }
+    }
+  }
+
+  /// Retry a single failed slot by generating one new image and filling the slot index.
+  Future<void> retryFailedSlot(int failedIndex) async {
+    if (!failedIndices.contains(failedIndex)) return;
+    if (retryingFailedIndex.value != -1) return;
+    if (selectedPhotos.isEmpty) return;
+
+    retryingFailedIndex.value = failedIndex;
+    error.value = '';
+
+    try {
+      final List<String> photosBase64 = await Future.wait(
+        selectedPhotos.map((file) async {
+          final bytes = await file.readAsBytes();
+          return await compute(_encodeBase64, bytes);
+        }),
+      );
+
+      final result = await _repository.generateSync(
+        photos: photosBase64,
+        useCase: selectedUseCase.value,
+        customPrompt: selectedUseCase.value == PhotoshootUseCase.custom
+            ? customPrompt.value
+            : null,
+        numImages: 1,
+        aspectRatio: selectedAspectRatio.value,
+      );
+
+      if (result.images.isEmpty) {
+        Get.snackbar('Retry Failed', 'Could not generate replacement image');
+        return;
+      }
+
+      final replacement = result.images.first.copyWith(index: failedIndex);
+      final nextImages = [
+        ...generatedImages.where((img) => img.index != failedIndex),
+        replacement,
+      ]..sort((a, b) => a.index.compareTo(b.index));
+
+      generatedImages.assignAll(nextImages);
+      failedIndices.remove(failedIndex);
+      failedIndices.sort();
+      failedCount.value = failedIndices.length;
+      partialSuccess.value = failedCount.value > 0;
+
+      if (result.usage != null) {
+        usage.value = result.usage;
+      }
+
+      Get.snackbar(
+        'Slot Retried',
+        'Failed slot #${failedIndex + 1} has been replaced',
+      );
+    } catch (e) {
+      Get.snackbar('Retry Failed', e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      retryingFailedIndex.value = -1;
     }
   }
 
@@ -592,6 +687,9 @@ class PhotoshootController extends GetxController {
     selectedAspectRatio.value = PhotoshootAspectRatio.square;
     numImages.value = effectiveMaxImages.clamp(minImages, maxImages);
     generatedImages.clear();
+    failedIndices.clear();
+    failedCount.value = 0;
+    partialSuccess.value = false;
     sessionId.value = '';
     jobId.value = '';
     currentBatch.value = 0;
@@ -616,6 +714,9 @@ class PhotoshootController extends GetxController {
     selectedAspectRatio.value = PhotoshootAspectRatio.square;
     numImages.value = effectiveMaxImages.clamp(minImages, maxImages);
     generatedImages.clear();
+    failedIndices.clear();
+    failedCount.value = 0;
+    partialSuccess.value = false;
     sessionId.value = '';
     jobId.value = '';
     currentBatch.value = 0;
@@ -650,11 +751,7 @@ class ReferralLimitDialog extends StatelessWidget {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.photo_camera,
-            size: 48,
-            color: Colors.orange,
-          ),
+          const Icon(Icons.photo_camera, size: 48, color: Colors.orange),
           const SizedBox(height: 16),
           const Text(
             "You've used all your free images today!",
@@ -665,18 +762,12 @@ class ReferralLimitDialog extends StatelessWidget {
           Text(
             'Refer a friend and both get 1 month Pro free!',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[600],
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
           ),
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: onUpgrade,
-          child: const Text('Upgrade to Pro'),
-        ),
+        TextButton(onPressed: onUpgrade, child: const Text('Upgrade to Pro')),
         ElevatedButton(
           onPressed: onReferFriend,
           child: const Text('Refer a Friend'),

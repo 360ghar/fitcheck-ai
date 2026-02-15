@@ -31,7 +31,16 @@ class FindMatchesTab extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
           child: Obx(() {
             if (controller.isLoadingItems.value) {
-              return const Center(child: CircularProgressIndicator());
+              return ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: 4,
+                separatorBuilder: (context, index) => const SizedBox(width: AppConstants.spacing12),
+                itemBuilder: (context, index) => const ShimmerBox(
+                  width: 80,
+                  height: 80,
+                  borderRadius: AppConstants.radius8,
+                ),
+              );
             }
 
             if (controller.itemsError.value.isNotEmpty) {
@@ -109,7 +118,7 @@ class FindMatchesTab extends StatelessWidget {
                   decoration: InputDecoration(
                     hintText: 'Search matches...',
                     filled: true,
-                    fillColor: tokens.cardColor.withOpacity(0.5),
+                    fillColor: tokens.cardColor.withValues(alpha: 0.5),
                     prefixIcon: const Icon(Icons.search),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(AppConstants.radius12),
@@ -146,7 +155,14 @@ class FindMatchesTab extends StatelessWidget {
         Expanded(
           child: Obx(() {
             if (controller.isLoadingMatches.value) {
-              return const Center(child: CircularProgressIndicator());
+              return Padding(
+                padding: const EdgeInsets.all(AppConstants.spacing16),
+                child: ShimmerGridLoaderBox(
+                  crossAxisCount: 2,
+                  itemCount: 6,
+                  childAspectRatio: 0.75,
+                ),
+              );
             }
 
             if (controller.matchesError.value.isNotEmpty) {
@@ -247,7 +263,14 @@ class FindMatchesTab extends StatelessWidget {
                 return RecommendationCard(
                   item: item,
                   onTap: () => _showItemDetails(item, context),
-                  onFavorite: () {},
+                  onFavorite: () {
+                  Get.snackbar(
+                    'Coming Soon',
+                    'Favoriting recommendations will be available in a future update',
+                    snackPosition: SnackPosition.TOP,
+                    duration: const Duration(seconds: 2),
+                  );
+                },
                 );
               },
             );

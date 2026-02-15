@@ -74,6 +74,16 @@ class CreateEventRequest(BaseModel):
     calendar_id: Optional[str] = None
 
 
+class UpdateEventRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    location: Optional[str] = None
+    is_all_day: Optional[bool] = None
+    outfit_id: Optional[str] = None
+
+
 # ============================================================================
 # ENDPOINTS
 # ============================================================================
@@ -373,6 +383,138 @@ async def create_calendar_event(
         raise DatabaseError(
             message="Failed to create event",
             operation="create_calendar_event"
+        )
+
+
+@router.put("/events/{event_id}", response_model=Dict[str, Any])
+async def update_calendar_event(
+    event_id: str,
+    request: UpdateEventRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """Update a calendar event."""
+    try:
+        # Verify event exists and belongs to user
+        existing = (
+            db.table("calendar_events")
+            .select("id")
+            .eq("id", event_id)
+            .eq("user_id", user_id)
+            .single()
+            .execute()
+        )
+        if not existing.data:
+            raise CalendarEventNotFoundError(event_id=event_id)
+
+        # Build update dict with only provided fields
+        update_data: Dict[str, Any] = {}
+        if request.title is not None:
+            update_data["title"] = request.title
+        if request.description is not None:
+            update_data["description"] = request.description
+        if request.start_time is not None:
+            update_data["start_time"] = request.start_time
+        if request.end_time is not None:
+            update_data["end_time"] = request.end_time
+        if request.location is not None:
+            update_data["location"] = request.location
+        if request.is_all_day is not None:
+            update_data["is_all_day"] = request.is_all_day
+        if request.outfit_id is not None:
+            update_data["outfit_id"] = request.outfit_id
+
+        if not update_data:
+            # No fields to update, return existing event
+            result = (
+                db.table("calendar_events")
+                .select("*")
+                .eq("id", event_id)
+                .single()
+                .execute()
+            )
+            return {"data": {"event": result.data}, "message": "No changes"}
+
+        now = datetime.utcnow().isoformat()
+        update_data["updated_at"] = now
+
+        result = (
+            db.table("calendar_events")
+            .update(update_data)
+            .eq("id", event_id)
+            .execute()
+        )
+        row = (result.data or [None])[0]
+        if not row:
+            raise DatabaseError(
+                message="Failed to update calendar event",
+                operation="update_calendar_event"
+            )
+
+        logger.info(
+            "Calendar event updated",
+            user_id=user_id,
+            event_id=event_id
+        )
+        return {"data": {"event": row}, "message": "Updated"}
+
+    except (CalendarEventNotFoundError, DatabaseError):
+        raise
+    except Exception as e:
+        logger.error(
+            "Update calendar event error",
+            user_id=user_id,
+            event_id=event_id,
+            error=str(e)
+        )
+        raise DatabaseError(
+            message="Failed to update event",
+            operation="update_calendar_event"
+        )
+
+
+@router.delete("/events/{event_id}", response_model=Dict[str, Any])
+async def delete_calendar_event(
+    event_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """Delete a calendar event."""
+    try:
+        # Verify event exists and belongs to user
+        existing = (
+            db.table("calendar_events")
+            .select("id")
+            .eq("id", event_id)
+            .eq("user_id", user_id)
+            .single()
+            .execute()
+        )
+        if not existing.data:
+            raise CalendarEventNotFoundError(event_id=event_id)
+
+        # Delete the event
+        db.table("calendar_events").delete().eq("id", event_id).execute()
+
+        logger.info(
+            "Calendar event deleted",
+            user_id=user_id,
+            event_id=event_id
+        )
+        return {"data": {"id": event_id}, "message": "Deleted"}
+
+    except CalendarEventNotFoundError:
+        raise
+    except Exception as e:
+        logger.error(
+            "Delete calendar event error",
+            user_id=user_id,
+            event_id=event_id,
+            error=str(e)
+        )
+        raise DatabaseError(
+            message="Failed to delete event",
+            operation="delete_calendar_event"
         )
 
 

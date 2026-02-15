@@ -2,6 +2,8 @@
  * Recommendations API endpoints
  */
 
+import { isAxiosError } from 'axios';
+
 import { apiClient, getApiError } from './client';
 import type {
   ApiEnvelope,
@@ -10,6 +12,8 @@ import type {
   WeatherRecommendation,
   SimilarItemResult,
   SuggestedItem,
+  AstrologyRecommendation,
+  AstrologyRecommendationMode,
 } from '../types';
 
 // ============================================================================
@@ -99,6 +103,36 @@ export async function getWeatherRecommendations(
     );
     return response.data.data;
   } catch (error) {
+    throw getApiError(error);
+  }
+}
+
+/**
+ * Get astrology-based lucky colors and wardrobe picks
+ */
+export async function getAstrologyRecommendations(options?: {
+  target_date?: string;
+  mode?: AstrologyRecommendationMode;
+  limit_per_category?: number;
+}): Promise<AstrologyRecommendation> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.target_date) params.append('target_date', options.target_date);
+    if (options?.mode) params.append('mode', options.mode);
+    if (options?.limit_per_category) params.append('limit_per_category', String(options.limit_per_category));
+
+    const queryString = params.toString();
+    const endpoint = queryString
+      ? `/api/v1/recommendations/astrology?${queryString}`
+      : '/api/v1/recommendations/astrology';
+    const response = await apiClient.get<ApiEnvelope<AstrologyRecommendation>>(endpoint);
+    return response.data.data;
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) {
+      throw new Error(
+        'Astrology API is not available on the current backend deployment. Please update backend routes.',
+      );
+    }
     throw getApiError(error);
   }
 }

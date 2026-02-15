@@ -54,6 +54,30 @@ class PhotoshootRepository {
     return PhotoshootJobResponse.fromJson(data);
   }
 
+  /// Generate photos synchronously (used for retrying failed slots)
+  Future<PhotoshootResult> generateSync({
+    required List<String> photos,
+    required PhotoshootUseCase useCase,
+    String? customPrompt,
+    int numImages = 1,
+    PhotoshootAspectRatio aspectRatio = PhotoshootAspectRatio.square,
+  }) async {
+    final response = await _apiClient.post(
+      '$_baseEndpoint/generate?sync=true',
+      data: {
+        'photos': photos,
+        'use_case': useCase.apiValue,
+        if (customPrompt != null && customPrompt.isNotEmpty)
+          'custom_prompt': customPrompt,
+        'num_images': numImages,
+        'aspect_ratio': aspectRatio.apiValue,
+      },
+    );
+
+    final data = _extractDataMap(response.data);
+    return PhotoshootResult.fromJson(data);
+  }
+
   /// Subscribe to SSE events for real-time progress
   Stream<ServerSentEvent> subscribeToEvents(String jobId) {
     final path = ApiConstants.photoshootEvents(jobId);
@@ -62,16 +86,12 @@ class PhotoshootRepository {
 
   /// Cancel a running generation job
   Future<void> cancelJob(String jobId) async {
-    await _apiClient.post(
-      ApiConstants.photoshootCancel(jobId),
-    );
+    await _apiClient.post(ApiConstants.photoshootCancel(jobId));
   }
 
   /// Get job status (fallback if SSE fails)
   Future<PhotoshootJobStatusResponse> getJobStatus(String jobId) async {
-    final response = await _apiClient.get(
-      ApiConstants.photoshootStatus(jobId),
-    );
+    final response = await _apiClient.get(ApiConstants.photoshootStatus(jobId));
     final data = _extractDataMap(response.data);
     return PhotoshootJobStatusResponse.fromJson(data);
   }

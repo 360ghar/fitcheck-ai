@@ -5,10 +5,16 @@ All settings can be overridden via environment variables.
 
 import json
 import re
+from pathlib import Path
 from typing import List, Optional
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
+
+_BACKEND_DIR = Path(__file__).resolve().parents[2]
+_REPO_ROOT_DIR = Path(__file__).resolve().parents[3]
+_BACKEND_ENV_FILE = _BACKEND_DIR / ".env"
+_ROOT_ENV_FILE = _REPO_ROOT_DIR / ".env"
 
 
 class Settings(BaseSettings):
@@ -64,6 +70,7 @@ class Settings(BaseSettings):
         if value and not value.endswith("/"):
             return value + "/"
         return value
+
     SUPABASE_SECRET_KEY: str
     SUPABASE_JWT_SECRET: str
     SUPABASE_STORAGE_BUCKET: str = "fitcheck-images"
@@ -98,7 +105,7 @@ class Settings(BaseSettings):
 
     # Custom Proxy Defaults (e.g., local proxy at localhost:8317)
     AI_CUSTOM_API_URL: str = "http://localhost:8317/v1"
-    AI_CUSTOM_API_KEY: str = "***REMOVED***"
+    AI_CUSTOM_API_KEY: Optional[str] = None
     AI_CUSTOM_CHAT_MODEL: str = "gemini-3-flash-preview"
     AI_CUSTOM_VISION_MODEL: str = "gemini-3-flash-preview"
     AI_CUSTOM_IMAGE_MODEL: str = "gemini-3-pro-image-preview"
@@ -140,7 +147,19 @@ class Settings(BaseSettings):
     # Photoshoot Generator Configuration
     PLAN_FREE_DAILY_PHOTOSHOOT_IMAGES: int = 10
     PLAN_PRO_DAILY_PHOTOSHOOT_IMAGES: int = 50
-    PHOTOSHOOT_CONCURRENCY_LIMIT: int = 10  # Max concurrent image generations
+    PHOTOSHOOT_CONCURRENCY_LIMIT: int = 3  # Max concurrent image generations
+
+    # Social Import
+    ENABLE_SOCIAL_IMPORT: bool = True
+    SOCIAL_IMPORT_MAX_CONCURRENT_JOBS: int = 1
+    SOCIAL_IMPORT_MAX_PHOTOS_PER_JOB: int = 2000
+    SOCIAL_IMPORT_AUTH_SESSION_TTL_MINUTES: int = 120
+    SOCIAL_IMPORT_DISCOVERY_PAGE_SIZE: int = 50
+    SOCIAL_IMPORT_MAX_DISCOVERY_ITERATIONS: int = 100  # Max pages to fetch per job
+
+    # Meta OAuth (optional for social import)
+    META_OAUTH_CLIENT_ID: Optional[str] = None
+    META_OAUTH_CLIENT_SECRET: Optional[str] = None
 
     # Weather (OpenWeatherMap)
     WEATHER_API_KEY: Optional[str] = None
@@ -164,8 +183,30 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = "logs"
 
+    # Token Refresh Configuration
+    TOKEN_REFRESH_CACHE_TTL_MINUTES: int = 55  # Cache refreshed tokens (5min buffer before 60min expiry)
+    TOKEN_REFRESH_LOCK_TIMEOUT_SECONDS: int = 10  # Max time to wait for lock acquisition
+
+    # AI Provider Health & Reliability Configuration
+    AI_PROVIDER_HEALTH_CHECK_ENABLED: bool = True
+    AI_PROVIDER_HEALTH_CHECK_TIMEOUT: float = 5.0
+    AI_PROVIDER_CIRCUIT_BREAKER_THRESHOLD: int = 3
+    AI_PROVIDER_CIRCUIT_BREAKER_RESET_TIMEOUT: int = 120
+
+    # Connection Pool Configuration
+    AI_CONNECTION_POOL_MAX_CONNECTIONS: int = 100
+    AI_CONNECTION_POOL_MAX_KEEPALIVE: int = 20
+
+    # Timeout Configuration (seconds)
+    AI_CONNECT_TIMEOUT: float = 5.0      # Connection establishment
+    AI_READ_TIMEOUT: float = 120.0       # Reading response
+    AI_WRITE_TIMEOUT: float = 30.0       # Sending request
+    AI_POOL_TIMEOUT: float = 10.0        # Pool acquisition
+
     class Config:
-        env_file = ".env"
+        # Load env keys regardless of whether process is started from repo root
+        # or from the backend folder.
+        env_file = (str(_BACKEND_ENV_FILE), str(_ROOT_ENV_FILE))
         case_sensitive = True
         enable_decoding = False
         extra = "ignore"
@@ -173,7 +214,9 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _include_frontend_origin(self):
         frontend_url = (self.FRONTEND_URL or "").strip().rstrip("/")
-        origins = [origin.strip().rstrip("/") for origin in (self.BACKEND_CORS_ORIGINS or [])]
+        origins = [
+            origin.strip().rstrip("/") for origin in (self.BACKEND_CORS_ORIGINS or [])
+        ]
         if frontend_url:
             origins.append(frontend_url)
 

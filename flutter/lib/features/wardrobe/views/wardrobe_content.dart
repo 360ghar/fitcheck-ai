@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:shimmer/shimmer.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
 import '../controllers/wardrobe_controller.dart';
 
@@ -22,34 +22,54 @@ class _WardrobeContentState extends State<WardrobeContent> {
   Widget build(BuildContext context) {
     return AppPageBackground(
       child: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            // App bar
-            _buildAppBar(),
+        child: Obx(
+          () => RefreshIndicator(
+            onRefresh: () => controller.fetchItems(refresh: true),
+            child: InfiniteScrollWrapper(
+              onLoadMore: () => controller.fetchItems(),
+              hasMore: controller.hasMore.value,
+              isLoadingMore: controller.isLoadingMore.value,
+              child: CustomScrollView(
+                slivers: [
+                  // App bar
+                  _buildAppBar(),
 
-            // Category filter chips
-            SliverToBoxAdapter(
-              child: _buildCategoryChips(),
+                  // Category filter chips
+                  SliverToBoxAdapter(child: _buildCategoryChips()),
+
+                  // Content
+                  SliverPadding(
+                    padding: const EdgeInsets.all(AppConstants.spacing16),
+                    sliver: Obx(() {
+                      if (controller.isLoading.value &&
+                          controller.items.isEmpty) {
+                        return const ShimmerGridLoader(
+                          crossAxisCount: 2,
+                          itemCount: 6,
+                          childAspectRatio: 0.75,
+                        );
+                      }
+
+                      if (controller.filteredItems.isEmpty) {
+                        return _buildEmptyState();
+                      }
+
+                      return controller.viewMode.value == 'grid'
+                          ? _buildItemsGrid()
+                          : _buildItemsList();
+                    }),
+                  ),
+
+                  // Load more indicator
+                  Obx(
+                    () => SliverLoadingMoreIndicator(
+                      isLoading: controller.isLoadingMore.value,
+                    ),
+                  ),
+                ],
+              ),
             ),
-
-            // Content
-            SliverPadding(
-              padding: const EdgeInsets.all(AppConstants.spacing16),
-              sliver: Obx(() {
-                if (controller.isLoading.value && controller.items.isEmpty) {
-                  return _buildLoadingGrid();
-                }
-
-                if (controller.filteredItems.isEmpty) {
-                  return _buildEmptyState();
-                }
-
-                return controller.viewMode.value == 'grid'
-                    ? _buildItemsGrid()
-                    : _buildItemsList();
-              }),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -65,35 +85,39 @@ class _WardrobeContentState extends State<WardrobeContent> {
       title: Text(
         'Wardrobe',
         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: tokens.textPrimary,
-            ),
+          fontWeight: FontWeight.w700,
+          color: tokens.textPrimary,
+        ),
       ),
       actions: [
-        Obx(() => controller.selectedIds.isNotEmpty
-            ? IconButton(
-                icon: const Icon(Icons.delete),
-                onPressed: () => _showDeleteConfirmation(),
-              )
-            : IconButton(
-                icon: const Icon(Icons.search),
-                onPressed: () => _showSearchDialog(),
-              )),
-        Obx(() => controller.selectedIds.isNotEmpty
-            ? TextButton(
-                onPressed: controller.clearSelection,
-                child: Text('${controller.selectedCount} selected'),
-              )
-            : IconButton(
-                icon: Icon(
-                  controller.viewMode.value == 'grid'
-                      ? Icons.view_list
-                      : Icons.grid_on,
+        Obx(
+          () => controller.selectedIds.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: () => _showDeleteConfirmation(),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.search),
+                  onPressed: () => _showSearchDialog(),
                 ),
-                onPressed: () => controller.setViewMode(
-                  controller.viewMode.value == 'grid' ? 'list' : 'grid',
+        ),
+        Obx(
+          () => controller.selectedIds.isNotEmpty
+              ? TextButton(
+                  onPressed: controller.clearSelection,
+                  child: Text('${controller.selectedCount} selected'),
+                )
+              : IconButton(
+                  icon: Icon(
+                    controller.viewMode.value == 'grid'
+                        ? Icons.view_list
+                        : Icons.grid_on,
+                  ),
+                  onPressed: () => controller.setViewMode(
+                    controller.viewMode.value == 'grid' ? 'list' : 'grid',
+                  ),
                 ),
-              )),
+        ),
         PopupMenuButton<String>(
           onSelected: (value) {
             if (value == 'filter') {
@@ -194,8 +218,9 @@ class _WardrobeContentState extends State<WardrobeContent> {
               ),
               // Category chips
               ...Category.values.map((category) {
-                final isSelected =
-                    controller.selectedCategories.contains(category);
+                final isSelected = controller.selectedCategories.contains(
+                  category,
+                );
                 final count = controller.items
                     .where((item) => item.category == category)
                     .length;
@@ -274,55 +299,49 @@ class _WardrobeContentState extends State<WardrobeContent> {
         crossAxisSpacing: AppConstants.spacing12,
         childAspectRatio: 0.75,
       ),
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final item = controller.filteredItems[index];
-          final isSelected = controller.selectedIds.contains(item.id);
+      delegate: SliverChildBuilderDelegate((context, index) {
+        final item = controller.filteredItems[index];
+        final isSelected = controller.selectedIds.contains(item.id);
 
-          return GestureDetector(
-            onTap: () {
-              if (controller.selectedIds.isNotEmpty) {
-                controller.toggleItemSelection(item);
-              } else {
-                Get.toNamed('/wardrobe/${item.id}');
-              }
-            },
-            onLongPress: () {
-              controller.setSelectedItem(item);
-              _showItemOptions(item);
-            },
-            child: _buildItemCard(item, isSelected),
-          );
-        },
-        childCount: controller.filteredItems.length,
-      ),
+        return GestureDetector(
+          onTap: () {
+            if (controller.selectedIds.isNotEmpty) {
+              controller.toggleItemSelection(item);
+            } else {
+              Get.toNamed('/wardrobe/${item.id}');
+            }
+          },
+          onLongPress: () {
+            controller.setSelectedItem(item);
+            _showItemOptions(item);
+          },
+          child: _buildItemCard(item, isSelected),
+        );
+      }, childCount: controller.filteredItems.length),
     );
   }
 
   Widget _buildItemsList() {
     return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final item = controller.filteredItems[index];
-          final isSelected = controller.selectedIds.contains(item.id);
+      delegate: SliverChildBuilderDelegate((context, index) {
+        final item = controller.filteredItems[index];
+        final isSelected = controller.selectedIds.contains(item.id);
 
-          return GestureDetector(
-            onTap: () {
-              if (controller.selectedIds.isNotEmpty) {
-                controller.toggleItemSelection(item);
-              } else {
-                Get.toNamed('/wardrobe/${item.id}');
-              }
-            },
-            onLongPress: () {
-              controller.setSelectedItem(item);
-              _showItemOptions(item);
-            },
-            child: _buildListItemCard(item, isSelected),
-          );
-        },
-        childCount: controller.filteredItems.length,
-      ),
+        return GestureDetector(
+          onTap: () {
+            if (controller.selectedIds.isNotEmpty) {
+              controller.toggleItemSelection(item);
+            } else {
+              Get.toNamed('/wardrobe/${item.id}');
+            }
+          },
+          onLongPress: () {
+            controller.setSelectedItem(item);
+            _showItemOptions(item);
+          },
+          child: _buildListItemCard(item, isSelected),
+        );
+      }, childCount: controller.filteredItems.length),
     );
   }
 
@@ -389,9 +408,9 @@ class _WardrobeContentState extends State<WardrobeContent> {
                   Text(
                     item.name,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: tokens.textPrimary,
-                        ),
+                      fontWeight: FontWeight.w600,
+                      color: tokens.textPrimary,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -417,10 +436,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                     const SizedBox(height: AppConstants.spacing4),
                     Text(
                       item.brand!,
-                      style: TextStyle(
-                        color: tokens.textMuted,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: tokens.textMuted, fontSize: 12),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -440,7 +456,9 @@ class _WardrobeContentState extends State<WardrobeContent> {
                   Container(
                     padding: const EdgeInsets.all(AppConstants.spacing4),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondary.withOpacity(0.9),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.secondary.withOpacity(0.9),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -530,9 +548,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
               decoration: BoxDecoration(
                 color: tokens.cardColor.withOpacity(0.9),
                 borderRadius: BorderRadius.circular(AppConstants.radius8),
-                border: Border.all(
-                  color: tokens.cardBorderColor,
-                ),
+                border: Border.all(color: tokens.cardBorderColor),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -564,7 +580,9 @@ class _WardrobeContentState extends State<WardrobeContent> {
               child: Container(
                 padding: const EdgeInsets.all(AppConstants.spacing4),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.secondary.withOpacity(0.9),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.secondary.withOpacity(0.9),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
@@ -586,7 +604,9 @@ class _WardrobeContentState extends State<WardrobeContent> {
           if (isSelected)
             Positioned(
               top: AppConstants.spacing8,
-              right: item.isFavorite ? AppConstants.spacing8 + 30 : AppConstants.spacing8,
+              right: item.isFavorite
+                  ? AppConstants.spacing8 + 30
+                  : AppConstants.spacing8,
               child: Container(
                 padding: const EdgeInsets.all(AppConstants.spacing4),
                 decoration: BoxDecoration(
@@ -600,11 +620,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                     ),
                   ],
                 ),
-                child: const Icon(
-                  Icons.check,
-                  color: Colors.white,
-                  size: 14,
-                ),
+                child: const Icon(Icons.check, color: Colors.white, size: 14),
               ),
             ),
 
@@ -622,10 +638,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.8),
-                  ],
+                  colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
                 ),
                 borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(AppConstants.radius16),
@@ -664,36 +677,6 @@ class _WardrobeContentState extends State<WardrobeContent> {
     );
   }
 
-  Widget _buildLoadingGrid() {
-    final tokens = AppUiTokens.of(context);
-
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: AppConstants.spacing12,
-        crossAxisSpacing: AppConstants.spacing12,
-        childAspectRatio: 0.75,
-      ),
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          return Shimmer.fromColors(
-            baseColor: tokens.cardColor.withOpacity(0.4),
-            highlightColor: tokens.cardColor.withOpacity(0.7),
-            period: const Duration(milliseconds: 1200),
-            child: Container(
-              decoration: BoxDecoration(
-                color: tokens.cardColor.withOpacity(0.6),
-                borderRadius: BorderRadius.circular(AppConstants.radius16),
-                border: Border.all(color: tokens.cardBorderColor),
-              ),
-            ),
-          );
-        },
-        childCount: 6,
-      ),
-    );
-  }
-
   Widget _buildEmptyState() {
     final tokens = AppUiTokens.of(context);
 
@@ -724,18 +707,18 @@ class _WardrobeContentState extends State<WardrobeContent> {
                 Text(
                   'Your wardrobe is empty',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: tokens.textPrimary,
-                      ),
+                    fontWeight: FontWeight.w700,
+                    color: tokens.textPrimary,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: AppConstants.spacing8),
                 Text(
                   'Start building your digital closet by adding\nyour first clothing item',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: tokens.textMuted,
-                        height: 1.5,
-                      ),
+                    color: tokens.textMuted,
+                    height: 1.5,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: AppConstants.spacing24),
@@ -753,9 +736,9 @@ class _WardrobeContentState extends State<WardrobeContent> {
                 const SizedBox(height: AppConstants.spacing12),
                 Text(
                   'Take a photo or upload from gallery',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
               ],
             ),
@@ -771,6 +754,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
 
   void _showFilterBottomSheet() {
     final tokens = AppUiTokens.of(context);
+    final customUseCaseController = TextEditingController();
 
     Get.bottomSheet(
       Container(
@@ -787,25 +771,94 @@ class _WardrobeContentState extends State<WardrobeContent> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text('Filters', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: AppConstants.spacing16),
               Text(
-                'Filter by Category',
-                style: Theme.of(context).textTheme.titleMedium,
+                'Category',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: AppConstants.spacing8),
+              Obx(
+                () => Wrap(
+                  spacing: AppConstants.spacing8,
+                  runSpacing: AppConstants.spacing8,
+                  children: Category.values.map((category) {
+                    final isSelected = controller.selectedCategories.contains(
+                      category,
+                    );
+                    return FilterChip(
+                      label: Text(category.displayName),
+                      selected: isSelected,
+                      onSelected: (_) =>
+                          controller.toggleCategoryFilter(category),
+                    );
+                  }).toList(),
+                ),
               ),
               const SizedBox(height: AppConstants.spacing16),
-              Obx(() => Wrap(
-                    spacing: AppConstants.spacing8,
-                    runSpacing: AppConstants.spacing8,
-                    children: Category.values.map((category) {
+              Text(
+                'Use Case',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: AppConstants.spacing8),
+              Obx(
+                () => Wrap(
+                  spacing: AppConstants.spacing8,
+                  runSpacing: AppConstants.spacing8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('All'),
+                      selected: controller.selectedOccasion.value.isEmpty,
+                      onSelected: (_) => controller.setOccasionFilter(''),
+                    ),
+                    ...UseCases.defaults.map((useCase) {
                       final isSelected =
-                          controller.selectedCategories.contains(category);
-                      return FilterChip(
-                        label: Text(category.displayName),
+                          controller.selectedOccasion.value == useCase;
+                      return ChoiceChip(
+                        label: Text(UseCases.displayLabel(useCase)),
                         selected: isSelected,
                         onSelected: (_) =>
-                            controller.toggleCategoryFilter(category),
+                            controller.setOccasionFilter(useCase),
                       );
-                    }).toList(),
-                  )),
+                    }),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppConstants.spacing8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: customUseCaseController,
+                      decoration: const InputDecoration(
+                        labelText: 'Custom use case',
+                        hintText: 'e.g., brunch',
+                        border: OutlineInputBorder(),
+                      ),
+                      onSubmitted: (_) {
+                        final value = UseCases.normalize(
+                          customUseCaseController.text,
+                        );
+                        controller.setOccasionFilter(value);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: AppConstants.spacing8),
+                  OutlinedButton(
+                    onPressed: () {
+                      final value = UseCases.normalize(
+                        customUseCaseController.text,
+                      );
+                      controller.setOccasionFilter(value);
+                    },
+                    child: const Text('Set'),
+                  ),
+                ],
+              ),
               const SizedBox(height: AppConstants.spacing24),
               Row(
                 children: [
@@ -907,10 +960,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
           },
         ),
         actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('Done'),
-          ),
+          TextButton(onPressed: () => Get.back(), child: const Text('Done')),
         ],
       ),
     );
@@ -938,7 +988,11 @@ class _WardrobeContentState extends State<WardrobeContent> {
                   item.isFavorite ? Icons.favorite : Icons.favorite_border,
                   color: item.isFavorite ? Colors.red : null,
                 ),
-                title: Text(item.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'),
+                title: Text(
+                  item.isFavorite
+                      ? 'Remove from Favorites'
+                      : 'Add to Favorites',
+                ),
                 onTap: () {
                   Get.back();
                   controller.toggleFavorite(item.id);
@@ -977,10 +1031,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
               : 'Delete this item from your wardrobe?',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
               Get.back();

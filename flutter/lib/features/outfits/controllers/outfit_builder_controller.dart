@@ -6,12 +6,16 @@ import '../models/outfit_model.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../repositories/outfit_repository.dart';
 import '../../wardrobe/repositories/item_repository.dart';
+import '../../wardrobe/controllers/wardrobe_controller.dart';
 
 /// Controller for outfit builder
 /// Manages outfit creation, item selection, and AI generation
 class OutfitBuilderController extends GetxController {
   final OutfitRepository _outfitRepository = OutfitRepository();
   final ItemRepository _itemRepository = ItemRepository();
+
+  // Worker for cleanup
+  Worker? _wardrobeItemsWorker;
 
   // Reactive state
   final RxList<ItemModel> availableItems = <ItemModel>[].obs;
@@ -39,9 +43,32 @@ class OutfitBuilderController extends GetxController {
   }
 
   Future<void> _loadAvailableItems() async {
+    // Try to sync with WardrobeController for real-time updates
+    if (Get.isRegistered<WardrobeController>()) {
+      final wardrobeController = Get.find<WardrobeController>();
+
+      // Use wardrobe's items directly
+      availableItems.value = wardrobeController.items.toList();
+
+      // Listen for changes to wardrobe items
+      _wardrobeItemsWorker = ever(wardrobeController.items, (items) {
+        availableItems.value = items.toList();
+      });
+
+      // If wardrobe is empty, load independently as fallback
+      if (availableItems.isEmpty) {
+        await _loadItemsFromRepository();
+      }
+    } else {
+      // Fallback: load independently
+      await _loadItemsFromRepository();
+    }
+  }
+
+  Future<void> _loadItemsFromRepository() async {
     try {
       isLoading.value = true;
-      final response = await _itemRepository.getItems(limit: 100);
+      final response = await _itemRepository.getItems(limit: 500);
       availableItems.value = response.items;
     } catch (e) {
       error.value = e.toString().replaceAll('Exception: ', '');
@@ -270,6 +297,7 @@ class OutfitBuilderController extends GetxController {
 
   @override
   void onClose() {
+    _wardrobeItemsWorker?.dispose();
     clearSelection();
     super.onClose();
   }

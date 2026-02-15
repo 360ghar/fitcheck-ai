@@ -34,6 +34,7 @@ from app.models.item import (
     ItemUpdate,
     VALID_CATEGORIES,
     VALID_CONDITIONS,
+    normalize_tag_list,
 )
 from app.services.ai_service import AIService
 from app.services.ai_settings_service import AISettingsService
@@ -296,6 +297,7 @@ async def list_items(
     page_size: int = Query(20, ge=1, le=100),
     category: Optional[str] = Query(None),
     color: Optional[str] = Query(None),
+    occasion: Optional[str] = Query(None),
     condition: Optional[str] = Query(None),
     brand: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
@@ -305,6 +307,11 @@ async def list_items(
 ):
     """Browse items with filtering and pagination."""
     try:
+        occasion_filter: Optional[str] = None
+        if occasion is not None:
+            normalized_occasion = normalize_tag_list([occasion])
+            occasion_filter = normalized_occasion[0] if normalized_occasion else None
+
         query = db.table("items").select("*, item_images(*)").eq("user_id", user_id).eq("is_deleted", False)
 
         if category:
@@ -331,6 +338,8 @@ async def list_items(
         if color:
             # JSONB array contains
             query = query.contains("colors", [color])
+        if occasion_filter:
+            query = query.contains("occasion_tags", [occasion_filter])
 
         if search:
             like = f"%{search}%"
@@ -352,6 +361,8 @@ async def list_items(
             count_q = count_q.ilike("brand", f"%{brand}%")
         if color:
             count_q = count_q.contains("colors", [color])
+        if occasion_filter:
+            count_q = count_q.contains("occasion_tags", [occasion_filter])
         if search:
             like = f"%{search}%"
             count_q = count_q.or_(f"name.ilike.{like},brand.ilike.{like}")
@@ -437,14 +448,17 @@ async def update_item(
             raise DatabaseError("Failed to update item", operation="update")
 
         # Refresh item with images
-        item = (
+        item_result = (
             db.table("items")
             .select("*, item_images(*)")
             .eq("id", item_id_str)
             .eq("user_id", user_id)
             .single()
             .execute()
-        ).data
+        )
+        if not item_result or not item_result.data:
+            raise ItemNotFoundError(item_id_str)
+        item = item_result.data
 
         # Update embedding (best-effort) if relevant fields changed
         if any(k in update_dict for k in ("name", "category", "colors", "brand", "tags", "sub_category", "material")):
@@ -511,8 +525,8 @@ async def delete_item(
         try:
             vector_service = get_vector_service()
             await vector_service.delete_item(item_id_str)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to delete item embedding", item_id=item_id_str, error=str(e))
 
         db.table("items").delete().eq("id", item_id_str).eq("user_id", user_id).execute()
         return None
@@ -627,10 +641,14 @@ async def upload_item_image(
             "created_at": now,
         }
 
-        if is_primary:
-            db.table("item_images").update({"is_primary": False}).eq("item_id", item_id_str).execute()
+        # Insert new image first, then clear is_primary on other images
+        # This minimizes the race window where no primary exists
+        insert_result = db.table("item_images").insert(img_row).execute()
+        new_image_id = insert_result.data[0]["id"] if insert_result.data else None
 
-        db.table("item_images").insert(img_row).execute()
+        if is_primary and new_image_id:
+            # Clear is_primary on all OTHER images for this item
+            db.table("item_images").update({"is_primary": False}).eq("item_id", item_id_str).neq("id", new_image_id).execute()
 
         return {"data": img_row, "message": "Created"}
     except (ItemNotFoundError, ImageNotFoundError, ValidationError, UnsupportedMediaTypeError, StorageServiceError, DatabaseError):
@@ -673,8 +691,8 @@ async def delete_item_image(
         if storage_path:
             try:
                 await StorageService.delete_image(db=db, storage_path=storage_path)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to delete image from storage", storage_path=storage_path, error=str(e))
 
         db.table("item_images").delete().eq("id", image_id_str).eq("item_id", item_id_str).execute()
         return {"data": {"deleted": True}, "message": "OK"}
@@ -713,15 +731,15 @@ async def batch_delete_items(
         if storage_paths:
             try:
                 await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to delete images from storage", count=len(storage_paths), error=str(e))
 
         # Best-effort delete embeddings
         try:
             vector_service = get_vector_service()
             await vector_service.batch_delete(item_ids)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to delete item embeddings", item_count=len(item_ids), error=str(e))
 
         # Delete items (FK cascade removes item_images)
         delete_res = db.table("items").delete().eq("user_id", user_id).in_("id", item_ids).execute()
@@ -742,7 +760,14 @@ async def get_item_stats(
 ):
     """Compute wardrobe item statistics for dashboard/analytics."""
     try:
-        items = db.table("items").select("id,name,category,colors,condition,price,usage_times_worn").eq("user_id", user_id).execute().data or []
+        items = (
+            db.table("items")
+            .select("id,name,category,colors,condition,price,usage_times_worn")
+            .eq("user_id", user_id)
+            .limit(1000)  # Limit to prevent fetching thousands of items
+            .execute()
+            .data or []
+        )
 
         total_items = len(items)
         items_by_category: Dict[str, int] = {}
@@ -764,8 +789,8 @@ async def get_item_stats(
             if item.get("price") is not None:
                 try:
                     total_value += float(item["price"])
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Could not parse item price", item_id=item.get("id"), price=item.get("price"), error=str(e))
 
         most_worn = sorted(items, key=lambda i: int(i.get("usage_times_worn") or 0), reverse=True)[:5]
         least_worn = sorted(items, key=lambda i: int(i.get("usage_times_worn") or 0))[:5]
@@ -947,6 +972,8 @@ async def update_item_categories(
             update["category"] = update["category"].lower()
         if "sub_category" in update and update["sub_category"] is not None:
             update["sub_category"] = update["sub_category"]
+        if "occasion_tags" in update and update["occasion_tags"] is not None:
+            update["occasion_tags"] = normalize_tag_list(update["occasion_tags"])
 
         update["updated_at"] = _now()
         res = db.table("items").update(update).eq("id", item_id_str).eq("user_id", user_id).execute()

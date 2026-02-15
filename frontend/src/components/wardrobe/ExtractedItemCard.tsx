@@ -15,12 +15,15 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
+  Plus,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -40,6 +43,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { checkDuplicates, type DuplicateItem } from '@/api/items'
+import { DEFAULT_USE_CASES, formatUseCaseLabel, normalizeUseCase, normalizeUseCases } from '@/lib/use-cases'
 import type { DetectedItem, Category } from '@/types'
 
 interface ExtractedItemCardProps {
@@ -87,6 +91,8 @@ export function ExtractedItemCard({
   const isLowConfidence = item.confidence < 0.7
   const hasFailed = item.status === 'failed'
   const hasDuplicates = duplicates.length > 0
+  const isIncluded = item.includeInWardrobe !== false
+  const occasionTags = item.occasion_tags || []
 
   // Check for duplicates when item has name and category
   useEffect(() => {
@@ -136,6 +142,30 @@ export function ExtractedItemCard({
     return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ') || 'New Item'
   }
 
+  const toggleUseCase = (useCase: string) => {
+    const normalized = normalizeUseCase(useCase)
+    if (!normalized) return
+
+    const nextTags = occasionTags.includes(normalized)
+      ? occasionTags.filter((tag) => tag !== normalized)
+      : [...occasionTags, normalized]
+
+    onUpdate(item.tempId, { occasion_tags: normalizeUseCases(nextTags) })
+  }
+
+  const [customUseCase, setCustomUseCase] = useState('')
+
+  const addCustomUseCase = () => {
+    const normalized = normalizeUseCase(customUseCase)
+    if (!normalized) return
+    onUpdate(item.tempId, { occasion_tags: normalizeUseCases([...occasionTags, normalized]) })
+    setCustomUseCase('')
+  }
+
+  const customOccasionTags = occasionTags.filter(
+    (tag) => !DEFAULT_USE_CASES.includes(tag as (typeof DEFAULT_USE_CASES)[number])
+  )
+
   return (
     <Card
       className={`overflow-hidden transition-all ${
@@ -144,7 +174,7 @@ export function ExtractedItemCard({
           : isLowConfidence
           ? 'border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-900/20'
           : 'border-gray-200 dark:border-gray-700'
-      }`}
+      } ${!isIncluded ? 'opacity-70' : ''}`}
     >
       <CardContent className="p-0">
         {/* Image Section */}
@@ -207,6 +237,11 @@ export function ExtractedItemCard({
             {hasFailed && (
               <Badge variant="destructive">
                 Failed
+              </Badge>
+            )}
+            {!isIncluded && (
+              <Badge variant="outline" className="bg-gray-100 dark:bg-gray-800/80 text-gray-600 dark:text-gray-300">
+                Excluded
               </Badge>
             )}
           </div>
@@ -276,6 +311,23 @@ export function ExtractedItemCard({
 
         {/* Basic info */}
         <div className="p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            {item.personLabel ? (
+              <Badge variant="outline" className="text-xs max-w-[65%] truncate">
+                {item.personLabel}
+              </Badge>
+            ) : (
+              <span />
+            )}
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground">Include</Label>
+              <Switch
+                checked={isIncluded}
+                onCheckedChange={(checked) => onUpdate(item.tempId, { includeInWardrobe: checked })}
+              />
+            </div>
+          </div>
+
           {/* Name input */}
           <Input
             value={item.name || ''}
@@ -390,6 +442,61 @@ export function ExtractedItemCard({
                     </Badge>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <Label className="text-xs">Use cases</Label>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {DEFAULT_USE_CASES.map((useCase) => (
+                    <Badge
+                      key={useCase}
+                      variant={occasionTags.includes(useCase) ? 'default' : 'outline'}
+                      className="cursor-pointer text-xs px-1.5 py-0"
+                      onClick={() => toggleUseCase(useCase)}
+                    >
+                      {formatUseCaseLabel(useCase)}
+                    </Badge>
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Input
+                    value={customUseCase}
+                    onChange={(e) => setCustomUseCase(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addCustomUseCase()
+                      }
+                    }}
+                    placeholder="Add custom use case"
+                    className="h-8 text-xs"
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    className="h-8 w-8"
+                    onClick={addCustomUseCase}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+                {customOccasionTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {customOccasionTags.map((tag) => (
+                      <Badge key={tag} variant="secondary" className="gap-1">
+                        {formatUseCaseLabel(tag)}
+                        <button
+                          type="button"
+                          className="hover:text-foreground"
+                          onClick={() => toggleUseCase(tag)}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
             </CollapsibleContent>
           </Collapsible>

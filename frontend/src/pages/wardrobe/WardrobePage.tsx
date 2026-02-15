@@ -28,7 +28,12 @@ import { ItemUpload } from '@/components/wardrobe/ItemUpload'
 import { ItemDetailModal } from '@/components/wardrobe/ItemDetailModal'
 import { ItemCard } from '@/components/wardrobe/ItemCard'
 import { useToast } from '@/components/ui/use-toast'
-import { toggleItemFavorite as apiToggleFavorite, markItemAsWorn as apiMarkAsWorn, deleteItem as apiDeleteItem } from '@/api/items'
+import {
+  toggleItemFavorite as apiToggleFavorite,
+  markItemAsWorn as apiMarkAsWorn,
+  deleteItem as apiDeleteItem,
+  updateItem as apiUpdateItem,
+} from '@/api/items'
 import type { Item } from '@/types'
 
 export default function WardrobePage() {
@@ -54,6 +59,7 @@ export default function WardrobePage() {
     search: '',
     category: 'all',
     color: '',
+    occasion: '',
     condition: 'all',
     isFavorite: false,
   })
@@ -116,6 +122,7 @@ export default function WardrobePage() {
       search: '',
       category: 'all',
       color: '',
+      occasion: '',
       condition: 'all',
       isFavorite: false,
     })
@@ -185,13 +192,39 @@ export default function WardrobePage() {
     }
   }
 
-  const handleEditItem = () => {
-    toast({
-      title: 'Item updated',
-      description: 'Your changes have been saved',
-    })
-    setIsDetailModalOpen(false)
-    fetchItems(true)
+  const handleEditItem = async (updatedItem: Item) => {
+    try {
+      const savedItem = await apiUpdateItem(updatedItem.id, {
+        name: updatedItem.name,
+        category: updatedItem.category,
+        sub_category: updatedItem.sub_category,
+        brand: updatedItem.brand,
+        colors: updatedItem.colors,
+        occasion_tags: updatedItem.occasion_tags,
+        size: updatedItem.size,
+        price: updatedItem.price,
+        purchase_date: updatedItem.purchase_date,
+        purchase_location: updatedItem.purchase_location,
+        tags: updatedItem.tags,
+        notes: updatedItem.notes,
+        condition: updatedItem.condition,
+        is_favorite: updatedItem.is_favorite,
+      })
+
+      toast({
+        title: 'Item updated',
+        description: 'Your changes have been saved',
+      })
+      setSelectedItemDetail(savedItem)
+      setIsDetailModalOpen(false)
+      fetchItems(true)
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: 'Failed to save item changes',
+        variant: 'destructive',
+      })
+    }
   }
 
   const handleUploadComplete = (results: any[]) => {
@@ -270,7 +303,7 @@ export default function WardrobePage() {
           <Shirt className="mx-auto h-12 w-12 md:h-16 md:w-16 text-muted-foreground" />
           <h3 className="mt-4 text-lg font-medium text-foreground">No items found</h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            {filters.search || filters.category !== 'all' || filters.condition !== 'all'
+            {filters.search || filters.category !== 'all' || filters.condition !== 'all' || filters.occasion
               ? 'Try adjusting your filters or search query'
               : 'Add your first item to get started'}
           </p>

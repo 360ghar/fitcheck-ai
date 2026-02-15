@@ -18,14 +18,19 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ToastAction } from '@/components/ui/toast';
 import { useToast } from '@/components/ui/use-toast';
-import { useBatchExtraction } from '@/hooks';
+import { useBatchExtraction, useSocialImportQueue } from '@/hooks';
 import { createItem, uploadItemImages } from '@/api/items';
 import { parallelWithRetry } from '@/lib/retry';
+import { normalizeUseCases } from '@/lib/use-cases';
 import { BatchImageSelector } from './BatchImageSelector';
 import { BatchExtractionProgress } from './BatchExtractionProgress';
 import { BatchGenerationProgress } from './BatchGenerationProgress';
 import { BatchOriginalsReview } from './BatchOriginalsReview';
 import { ExtractedItemsGrid } from './ExtractedItemsGrid';
+import { SocialImportUrlPane } from './SocialImportUrlPane';
+import { SocialImportAuthPrompt } from './SocialImportAuthPrompt';
+import { SocialImportQueueReview } from './SocialImportQueueReview';
+import { SocialImportProgress } from './SocialImportProgress';
 import type { DetectedItem, ItemCreate } from '@/types';
 
 // ============================================================================
@@ -105,11 +110,21 @@ export function BatchExtractionFlow({
 
   const { toast } = useToast();
   const backgroundedRef = useRef(false);
+  const socialImport = useSocialImportQueue();
+  const socialImportEnabled = import.meta.env.VITE_ENABLE_SOCIAL_IMPORT === 'true';
+  const [inputMode, setInputMode] = useState<'upload' | 'social'>('upload');
 
   // Local state for saving
   const [savingProgress, setSavingProgress] = useState(0);
   const [regeneratingItemId, setRegeneratingItemId] = useState<string | null>(null);
-  const isProcessing = ['uploading', 'extracting', 'generating', 'saving'].includes(state.step);
+  const isBatchProcessing = ['uploading', 'extracting', 'generating', 'saving'].includes(state.step);
+  const isSocialProcessing =
+    !!socialImport.state.jobId &&
+    !['completed', 'cancelled', 'failed'].includes(socialImport.state.status || '');
+  const isProcessing = isBatchProcessing || isSocialProcessing;
+  const shouldReopenForSocialAction =
+    !!socialImport.state.job &&
+    (socialImport.state.authRequired || !!socialImport.state.job.awaiting_review_photo);
 
   useEffect(() => {
     if (isOpen) {
@@ -118,11 +133,11 @@ export function BatchExtractionFlow({
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen && state.step === 'review' && backgroundedRef.current) {
+    if (!isOpen && (state.step === 'review' || shouldReopenForSocialAction) && backgroundedRef.current) {
       backgroundedRef.current = false;
       onRequestOpen?.();
     }
-  }, [isOpen, onRequestOpen, state.step]);
+  }, [isOpen, onRequestOpen, shouldReopenForSocialAction, state.step]);
 
   // ============================================================================
   // EVENT HANDLERS
@@ -164,8 +179,9 @@ export function BatchExtractionFlow({
     }
 
     reset();
+    void socialImport.reset();
     onClose?.();
-  }, [isProcessing, onClose, onRequestOpen, reset, toast]);
+  }, [isProcessing, onClose, onRequestOpen, reset, socialImport, toast]);
 
   // ============================================================================
   // REGENERATE ITEM
@@ -227,7 +243,10 @@ export function BatchExtractionFlow({
   const saveAllItems = useCallback(async () => {
     // Get items that are ready to save (generated and not deleted)
     const itemsToSave = state.allDetectedItems.filter(
-      (item) => item.status === 'generated' && item.generatedImageUrl
+      (item) =>
+        item.status === 'generated' &&
+        item.generatedImageUrl &&
+        item.includeInWardrobe !== false
     );
 
     if (itemsToSave.length === 0) {
@@ -269,6 +288,7 @@ export function BatchExtractionFlow({
           colors: item.colors,
           material: item.material,
           pattern: item.pattern,
+          occasion_tags: normalizeUseCases(item.occasion_tags),
           tags: [],
           condition: 'clean',
           is_favorite: false,
@@ -324,7 +344,7 @@ export function BatchExtractionFlow({
   const getStepTitle = () => {
     switch (state.step) {
       case 'select':
-        return 'Select Images';
+        return inputMode === 'social' ? 'Social Import' : 'Select Images';
       case 'uploading':
         return 'Uploading Images';
       case 'extracting':
@@ -343,7 +363,9 @@ export function BatchExtractionFlow({
   const getStepDescription = () => {
     switch (state.step) {
       case 'select':
-        return 'Upload up to 50 clothing photos and our AI will extract all visible items.';
+        return inputMode === 'social'
+          ? 'Import wardrobe candidates from an Instagram/Facebook profile URL with queued review.'
+          : 'Upload up to 50 clothing photos and our AI will extract all visible items.';
       case 'uploading':
         return 'Preparing your images for processing...';
       case 'extracting':
@@ -378,7 +400,7 @@ export function BatchExtractionFlow({
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-indigo-500" />
             {getStepTitle()}
-            {isConnected && (
+            {(isConnected || socialImport.state.isConnected) && (
               <span className="inline-flex items-center gap-1 text-xs font-normal text-green-600 dark:text-green-400 ml-2">
                 <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                 Live
@@ -391,16 +413,114 @@ export function BatchExtractionFlow({
         <div className="flex-1 overflow-y-auto min-h-[400px] min-w-0">
           {/* Step 1: Select Images */}
           {state.step === 'select' && (
-            <BatchImageSelector
-              selectedImages={state.images}
-              onImagesSelected={handleImagesSelected}
-              onImageRemove={removeImage}
-              onClearAll={clearImages}
-              maxImages={50}
-              disabled={false}
-              error={state.error}
-              onContinue={handleContinue}
-            />
+            <div className="space-y-4">
+              {socialImportEnabled && (
+                <div className="inline-flex rounded-md border border-border bg-muted p-1">
+                  <button
+                    type="button"
+                    className={`rounded px-3 py-1.5 text-sm ${
+                      inputMode === 'upload'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground'
+                    }`}
+                    onClick={() => setInputMode('upload')}
+                  >
+                    Upload Photos
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded px-3 py-1.5 text-sm ${
+                      inputMode === 'social'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground'
+                    }`}
+                    onClick={() => setInputMode('social')}
+                  >
+                    Import URL
+                  </button>
+                </div>
+              )}
+
+              {inputMode === 'upload' && (
+                <BatchImageSelector
+                  selectedImages={state.images}
+                  onImagesSelected={handleImagesSelected}
+                  onImageRemove={removeImage}
+                  onClearAll={clearImages}
+                  maxImages={50}
+                  disabled={false}
+                  error={state.error}
+                  onContinue={handleContinue}
+                />
+              )}
+
+              {inputMode === 'social' && (
+                <div className="space-y-4">
+                  {!socialImport.state.jobId && (
+                    <SocialImportUrlPane
+                      isLoading={socialImport.state.isLoading}
+                      error={socialImport.state.error}
+                      onStart={socialImport.startJob}
+                    />
+                  )}
+
+                  {socialImport.state.job && (
+                    <>
+                      {socialImport.state.error && (
+                        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                          {socialImport.state.error}
+                        </div>
+                      )}
+                      <SocialImportProgress
+                        job={socialImport.state.job}
+                        isConnected={socialImport.state.isConnected}
+                      />
+                    </>
+                  )}
+
+                  {socialImport.state.job && socialImport.state.authRequired && (
+                    <SocialImportAuthPrompt
+                      platform={socialImport.state.job.platform}
+                      allowScraperFallback={socialImport.state.job.platform === 'instagram'}
+                      isLoading={socialImport.state.isLoading}
+                      error={socialImport.state.error}
+                      onStartOAuthConnect={socialImport.startOAuthConnect}
+                      onSubmitScraper={socialImport.submitScraperAuth}
+                    />
+                  )}
+
+                  {socialImport.state.job &&
+                    !socialImport.state.authRequired &&
+                    (socialImport.state.job.awaiting_review_photo ||
+                      socialImport.state.job.buffered_photo ||
+                      socialImport.state.job.processing_photo) && (
+                      <SocialImportQueueReview
+                        awaitingPhoto={socialImport.state.job.awaiting_review_photo || undefined}
+                        bufferedPhoto={socialImport.state.job.buffered_photo || undefined}
+                        processingPhoto={socialImport.state.job.processing_photo || undefined}
+                        onApprove={socialImport.approveAwaiting}
+                        onReject={socialImport.rejectAwaiting}
+                        onItemUpdate={socialImport.updateItem}
+                      />
+                    )}
+
+                  {socialImport.state.jobId && (
+                    <div className="flex justify-end gap-2 border-t pt-4">
+                      <Button variant="outline" onClick={socialImport.cancelJob}>
+                        Cancel Job
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => void socialImport.reset()}
+                        disabled={socialImport.state.isLoading}
+                      >
+                        Reset
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           {/* Step 2: Uploading */}

@@ -387,6 +387,9 @@ Authorization: Bearer <token>
     "email": "user@example.com",
     "full_name": "John Doe",
     "avatar_url": "https://...",
+    "birth_date": "1995-04-19",
+    "birth_time": "09:15:00",
+    "birth_place": "New Delhi, India",
     "created_at": "2026-01-06T00:00:00Z"
   }
 }
@@ -407,7 +410,10 @@ Authorization: Bearer <token>
 ```json
 {
   "full_name": "Jane Doe",
-  "avatar_url": "https://..."
+  "avatar_url": "https://...",
+  "birth_date": "1995-04-19",
+  "birth_time": "09:15:00",
+  "birth_place": "New Delhi, India"
 }
 ```
 
@@ -419,6 +425,9 @@ Authorization: Bearer <token>
     "email": "user@example.com",
     "full_name": "Jane Doe",
     "avatar_url": "https://...",
+    "birth_date": "1995-04-19",
+    "birth_time": "09:15:00",
+    "birth_place": "New Delhi, India",
     "updated_at": "2026-01-06T00:00:00Z"
   }
 }
@@ -1830,6 +1839,92 @@ location=New%20York
 
 ---
 
+### GET /recommendations/astrology
+
+Get Vedic-style lucky colors and wardrobe picks for a date.
+
+**Query Parameters:**
+```
+target_date=2026-02-06
+mode=daily | important_meeting
+limit_per_category=4
+```
+
+**Response (200, profile required):**
+```json
+{
+  "data": {
+    "status": "profile_required",
+    "target_date": "2026-02-06",
+    "mode": "daily",
+    "astrology_mode": "vedic_lite",
+    "missing_fields": ["birth_date"],
+    "context": {
+      "weekday": "Friday",
+      "ruling_planet": "Venus",
+      "moon_sign": null,
+      "ascendant": null
+    },
+    "lucky_colors": [],
+    "avoid_colors": [],
+    "wardrobe_picks": [],
+    "suggested_outfits": [],
+    "notes": ["Add your date of birth in profile settings to unlock astrology recommendations."]
+  }
+}
+```
+
+**Response (200, ready):**
+```json
+{
+  "data": {
+    "status": "ready",
+    "target_date": "2026-02-06",
+    "mode": "important_meeting",
+    "astrology_mode": "vedic_lite",
+    "missing_fields": [],
+    "context": {
+      "weekday": "Friday",
+      "ruling_planet": "Venus",
+      "moon_sign": "Capricorn",
+      "ascendant": null
+    },
+    "lucky_colors": [
+      {
+        "name": "navy blue",
+        "hex": "#1F2A44",
+        "reason": "Boosts confident and professional presence",
+        "confidence": 0.95
+      }
+    ],
+    "avoid_colors": [
+      {
+        "name": "lavender",
+        "hex": "#C4B5FD",
+        "reason": "Lower day-wise harmony from Vedic weighting",
+        "confidence": 0.72
+      }
+    ],
+    "wardrobe_picks": [
+      {
+        "category": "tops",
+        "items": [{ "id": "item_uuid", "name": "Navy Shirt" }]
+      }
+    ],
+    "suggested_outfits": [
+      {
+        "description": "Meeting-ready contrast look",
+        "item_ids": ["item_uuid"],
+        "match_score": 84
+      }
+    ],
+    "notes": ["Ruling planet today: Venus."]
+  }
+}
+```
+
+---
+
 ### GET /recommendations/similar
 
 Find items similar to an existing wardrobe item (vector search when available).
@@ -2480,7 +2575,11 @@ wss://api.fitcheckaiapp.com/ws
 The complete OpenAPI specification is available at:
 
 ```
-GET /api/v1/docs
+GET /api/v1/openapi.json
 ```
 
-This provides an interactive Swagger UI for testing all endpoints.
+Interactive docs are available at:
+
+```
+GET /api/v1/docs
+```

@@ -1,11 +1,13 @@
 import 'package:get/get.dart';
+import '../../../../domain/constants/use_cases.dart';
 import '../../../../domain/enums/category.dart';
 import '../../../../domain/enums/condition.dart' as domain;
 import '../../../app/routes/app_routes.dart';
 import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
 import '../../../core/services/haptic_service.dart';
-import '../../../core/services/network_service.dart' show RetryHelper, NetworkService;
+import '../../../core/services/network_service.dart'
+    show RetryHelper, NetworkService;
 
 /// Wardrobe controller
 class WardrobeController extends GetxController {
@@ -30,6 +32,7 @@ class WardrobeController extends GetxController {
   final RxSet<Category> selectedCategories = <Category>{}.obs;
   final RxSet<domain.Condition> selectedConditions = <domain.Condition>{}.obs;
   final RxSet<String> selectedColors = <String>{}.obs;
+  final RxString selectedOccasion = ''.obs;
   final RxString sortType = 'newest'.obs;
   final RxString viewMode = 'grid'.obs;
 
@@ -85,10 +88,31 @@ class WardrobeController extends GetxController {
 
     // Other filters trigger refetch with debounce
     _workers.addAll([
-      debounce(selectedCategories, (_) => fetchItems(refresh: true), time: const Duration(milliseconds: 100)),
-      debounce(selectedConditions, (_) => fetchItems(refresh: true), time: const Duration(milliseconds: 100)),
-      debounce(selectedColors, (_) => fetchItems(refresh: true), time: const Duration(milliseconds: 100)),
-      debounce(sortType, (_) => fetchItems(refresh: true), time: const Duration(milliseconds: 100)),
+      debounce(
+        selectedCategories,
+        (_) => fetchItems(refresh: true),
+        time: const Duration(milliseconds: 100),
+      ),
+      debounce(
+        selectedConditions,
+        (_) => fetchItems(refresh: true),
+        time: const Duration(milliseconds: 100),
+      ),
+      debounce(
+        selectedColors,
+        (_) => fetchItems(refresh: true),
+        time: const Duration(milliseconds: 100),
+      ),
+      debounce(
+        selectedOccasion,
+        (_) => fetchItems(refresh: true),
+        time: const Duration(milliseconds: 100),
+      ),
+      debounce(
+        sortType,
+        (_) => fetchItems(refresh: true),
+        time: const Duration(milliseconds: 100),
+      ),
     ]);
   }
 
@@ -120,6 +144,9 @@ class WardrobeController extends GetxController {
               ? null
               : selectedCategories.map((c) => c.name.toLowerCase()).toList(),
           colors: selectedColors.isEmpty ? null : selectedColors.toList(),
+          occasion: selectedOccasion.value.isEmpty
+              ? null
+              : UseCases.normalize(selectedOccasion.value),
           conditions: selectedConditions.isEmpty
               ? null
               : selectedConditions.map((c) => c.name.toLowerCase()).toList(),
@@ -142,11 +169,7 @@ class WardrobeController extends GetxController {
       filteredItems.value = items.toList();
     } catch (e) {
       error.value = e.toString().replaceAll('Exception: ', '');
-      Get.snackbar(
-        'Error',
-        error.value,
-        snackPosition: SnackPosition.TOP,
-      );
+      Get.snackbar('Error', error.value, snackPosition: SnackPosition.TOP);
     } finally {
       isLoading.value = false;
       isLoadingMore.value = false;
@@ -239,12 +262,18 @@ class WardrobeController extends GetxController {
     }
   }
 
+  /// Set use-case filter (single value).
+  void setOccasionFilter(String value) {
+    selectedOccasion.value = UseCases.normalize(value);
+  }
+
   /// Clear all filters
   void clearAllFilters() {
     searchQuery.value = '';
     selectedCategories.clear();
     selectedConditions.clear();
     selectedColors.clear();
+    selectedOccasion.value = '';
     sortType.value = 'newest';
   }
 
@@ -271,7 +300,9 @@ class WardrobeController extends GetxController {
         items[index] = updatedItem;
       }
 
-      final filteredIndex = filteredItems.indexWhere((item) => item.id == itemId);
+      final filteredIndex = filteredItems.indexWhere(
+        (item) => item.id == itemId,
+      );
       if (filteredIndex != -1) {
         filteredItems[filteredIndex] = updatedItem;
       }
@@ -282,7 +313,9 @@ class WardrobeController extends GetxController {
 
       Get.snackbar(
         '',
-        updatedItem.isFavorite ? 'Added to Favorites' : 'Removed from Favorites',
+        updatedItem.isFavorite
+            ? 'Added to Favorites'
+            : 'Removed from Favorites',
         snackPosition: SnackPosition.TOP,
         duration: const Duration(seconds: 1),
       );
@@ -310,7 +343,9 @@ class WardrobeController extends GetxController {
         items[index] = updatedItem;
       }
 
-      final filteredIndex = filteredItems.indexWhere((item) => item.id == itemId);
+      final filteredIndex = filteredItems.indexWhere(
+        (item) => item.id == itemId,
+      );
       if (filteredIndex != -1) {
         filteredItems[filteredIndex] = updatedItem;
       }
@@ -404,16 +439,73 @@ class WardrobeController extends GetxController {
     error.value = '';
   }
 
+  // ============================================================
+  // Direct sync methods for cross-controller communication
+  // ============================================================
+
+  /// Add a newly created item to the list (for immediate UI update)
+  /// Called by ItemAddController, BatchExtractionController after creating items
+  void addItem(ItemModel item) {
+    items.insert(0, item);
+    filteredItems.insert(0, item);
+    totalItems.value++;
+  }
+
+  /// Add multiple newly created items to the list
+  /// Called by BatchExtractionController after batch saving items
+  void addItems(List<ItemModel> newItems) {
+    if (newItems.isEmpty) return;
+    items.insertAll(0, newItems);
+    filteredItems.insertAll(0, newItems);
+    totalItems.value += newItems.length;
+  }
+
+  /// Update an existing item in the list (for immediate UI update)
+  /// Called by ItemDetailController after updating an item
+  void updateItem(ItemModel updatedItem) {
+    final index = items.indexWhere((item) => item.id == updatedItem.id);
+    if (index != -1) {
+      items[index] = updatedItem;
+    }
+
+    final filteredIndex = filteredItems.indexWhere(
+      (item) => item.id == updatedItem.id,
+    );
+    if (filteredIndex != -1) {
+      filteredItems[filteredIndex] = updatedItem;
+    }
+
+    if (selectedItem.value?.id == updatedItem.id) {
+      selectedItem.value = updatedItem;
+    }
+  }
+
+  /// Remove an item from local state (without API call)
+  /// Used for immediate UI update when item is deleted elsewhere
+  void removeItemFromState(String itemId) {
+    items.removeWhere((item) => item.id == itemId);
+    filteredItems.removeWhere((item) => item.id == itemId);
+    selectedIds.remove(itemId);
+    if (selectedItem.value?.id == itemId) {
+      selectedItem.value = null;
+    }
+    if (totalItems.value > 0) {
+      totalItems.value--;
+    }
+  }
+
   /// Setup network monitoring
   void _setupNetworkMonitoring() {
     // Update offline state based on network connectivity
-    _workers.add(ever(_networkService.isConnected, (connected) {
-      isOffline.value = !connected;
-      if (connected && items.isEmpty && !isLoading.value) {
-        // Network recovered and we have no items, try fetching
-        fetchItems();
-      }
-    }));
+    _workers.add(
+      ever(_networkService.isConnected, (connected) {
+        isOffline.value = !connected;
+        if (connected && items.isEmpty && !isLoading.value) {
+          // Network recovered and we have no items, try fetching
+          fetchItems();
+        }
+      }),
+    );
 
     // Initial state
     isOffline.value = !_networkService.isConnected.value;

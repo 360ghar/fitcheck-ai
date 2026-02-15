@@ -54,14 +54,8 @@ import 'app_routes.dart';
 class AppPages {
   static final routes = [
     // Splash/Welcome
-    GetPage(
-      name: Routes.splash,
-      page: () => const SplashPage(),
-    ),
-    GetPage(
-      name: Routes.onboarding,
-      page: () => const AuthEntryPage(),
-    ),
+    GetPage(name: Routes.splash, page: () => const SplashPage()),
+    GetPage(name: Routes.onboarding, page: () => const AuthEntryPage()),
 
     // Authentication
     GetPage(
@@ -129,6 +123,12 @@ class AppPages {
     GetPage(
       name: Routes.wardrobeBatchAdd,
       page: () => const BatchImageSelectorPage(),
+      binding: BatchExtractionBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    GetPage(
+      name: Routes.wardrobeBatchAddSocial,
+      page: () => const BatchImageSelectorPage(launchInSocialMode: true),
       binding: BatchExtractionBinding(),
       middlewares: [AuthMiddleware()],
     ),

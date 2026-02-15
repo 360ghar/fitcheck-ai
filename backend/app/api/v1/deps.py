@@ -10,6 +10,7 @@ from supabase import Client
 
 from app.db.connection import get_db, SupabaseDB
 from app.core.security import verify_token, TokenData
+from app.core.exceptions import AuthenticationError
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,10 @@ async def get_current_user(
         token_data: Verified JWT token data
 
     Returns:
-        User data dict or None if not found and creation failed
+        User data dict
+
+    Raises:
+        AuthenticationError: If user profile could not be loaded or created
     """
     try:
         user = db.table("users").select("*").eq("id", token_data.sub).single().execute()
@@ -111,4 +115,7 @@ async def get_current_user(
 
     except Exception as e:
         logger.warning(f"Failed to auto-create user profile: {e}")
-        return None
+        raise AuthenticationError(
+            message="User profile could not be loaded or created",
+            error_code="AUTH_PROFILE_ERROR"
+        )

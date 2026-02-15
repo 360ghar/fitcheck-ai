@@ -8,7 +8,7 @@ import random
 from datetime import datetime
 from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, Request, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.db.connection import get_db, get_anon_db, SupabaseDB
@@ -23,6 +23,7 @@ from app.core.exceptions import (
     SchemaNotInitializedError,
     DatabaseError,
 )
+from app.core.ip_rate_limit import auth_rate_limited_operation, get_client_ip
 from app.services.referral_service import ReferralService
 from supabase import Client
 from supabase_auth.errors import AuthApiError
@@ -191,7 +192,8 @@ class OAuthSyncRequest(BaseModel):
 
 @router.post("/register", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def register(
-    request: RegisterRequest,
+    register_request: RegisterRequest,
+    http_request: Request,
     anon_db: Client = Depends(get_anon_db),
     db: Client = Depends(get_db),
 ):
@@ -200,171 +202,177 @@ async def register(
 
     Creates a user in Supabase Auth and adds a profile to the public.users table.
     """
-    try:
-        _require_schema(db)
-
-        # Create user via Supabase Auth
+    async with auth_rate_limited_operation(http_request, "register"):
         try:
-            auth_response = anon_db.auth.sign_up({
-                "email": request.email,
-                "password": request.password,
-                "options": {
-                    "data": {
-                        "full_name": request.full_name
+            _require_schema(db)
+
+            # Create user via Supabase Auth
+            try:
+                auth_response = anon_db.auth.sign_up({
+                    "email": register_request.email,
+                    "password": register_request.password,
+                    "options": {
+                        "data": {
+                            "full_name": register_request.full_name
+                        }
                     }
+                })
+            except AuthApiError as e:
+                message = str(e) or "Registration failed"
+                lower = message.lower()
+                if "already registered" in lower:
+                    raise EmailAlreadyExistsError()
+                raise AuthenticationError(message, error_code="AUTH_REGISTRATION_FAILED")
+
+            if auth_response.user is None:
+                # Check for error in response
+                if hasattr(auth_response, 'error') and auth_response.error:
+                    error_msg = auth_response.error.get('message', 'Registration failed')
+                    raise AuthenticationError(error_msg, error_code="AUTH_REGISTRATION_FAILED")
+                raise AuthenticationError("Registration failed", error_code="AUTH_REGISTRATION_FAILED")
+
+            user_id = auth_response.user.id
+            session = auth_response.session
+            requires_email_confirmation = not bool(getattr(session, "access_token", None))
+
+            # Create/update user profile in public.users table
+            # Note: The database trigger (002_user_profile_trigger.sql) may have already
+            # created the profile. We use upsert to handle both cases gracefully.
+            try:
+                profile_payload = {
+                    "id": user_id,
+                    "email": register_request.email,
+                    "full_name": register_request.full_name,
+                    "email_verified": False,
+                    "is_active": True,
+                    "created_at": datetime.now().isoformat(),
+                    "updated_at": datetime.now().isoformat(),
                 }
-            })
-        except AuthApiError as e:
-            message = str(e) or "Registration failed"
-            lower = message.lower()
-            if "already registered" in lower:
-                raise EmailAlreadyExistsError()
-            raise AuthenticationError(message, error_code="AUTH_REGISTRATION_FAILED")
+                profile_created = await _upsert_user_profile(db, profile_payload)
+                if not profile_created:
+                    logger.error(
+                        "Auth user record not available for profile creation",
+                        user_id=user_id,
+                    )
+                    raise DatabaseError(
+                        "User profile could not be created because the auth user record was not available. Try again shortly or verify Supabase Auth/migrations.",
+                        operation="create_profile"
+                    )
 
-        if auth_response.user is None:
-            # Check for error in response
-            if hasattr(auth_response, 'error') and auth_response.error:
-                error_msg = auth_response.error.get('message', 'Registration failed')
-                raise AuthenticationError(error_msg, error_code="AUTH_REGISTRATION_FAILED")
-            raise AuthenticationError("Registration failed", error_code="AUTH_REGISTRATION_FAILED")
+                # Create default user preferences (upsert to handle trigger-created records)
+                try:
+                    db.table("user_preferences").upsert({
+                        "user_id": user_id,
+                        "favorite_colors": [],
+                        "preferred_styles": [],
+                        "liked_brands": [],
+                        "disliked_patterns": [],
+                        "preferred_occasions": [],
+                        "data_points_collected": 0,
+                    }, on_conflict="user_id").execute()
+                except Exception as e:
+                    logger.debug(f"User preferences upsert skipped (may exist from trigger): {e}")
 
-        user_id = auth_response.user.id
-        session = auth_response.session
-        requires_email_confirmation = not bool(getattr(session, "access_token", None))
+                # Create default user settings (upsert to handle trigger-created records)
+                try:
+                    db.table("user_settings").upsert({
+                        "user_id": user_id,
+                        "language": "en",
+                        "measurement_units": "imperial",
+                        "notifications_enabled": True,
+                        "email_marketing": False,
+                        "dark_mode": False
+                    }, on_conflict="user_id").execute()
+                except Exception as e:
+                    logger.debug(f"User settings upsert skipped (may exist from trigger): {e}")
 
-        # Create/update user profile in public.users table
-        # Note: The database trigger (002_user_profile_trigger.sql) may have already
-        # created the profile. We use upsert to handle both cases gracefully.
-        try:
-            profile_payload = {
-                "id": user_id,
-                "email": request.email,
-                "full_name": request.full_name,
-                "email_verified": False,
-                "is_active": True,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-            }
-            profile_created = await _upsert_user_profile(db, profile_payload)
-            if not profile_created:
-                logger.error(
-                    "Auth user record not available for profile creation",
-                    user_id=user_id,
-                )
+                # Process referral code if provided
+                referral_result = None
+                if register_request.referral_code:
+                    try:
+                        referral_result = await ReferralService.redeem_referral(
+                            referred_user_id=user_id,
+                            code=register_request.referral_code,
+                            db=db,
+                        )
+                        if referral_result.success:
+                            logger.info(
+                                f"Referral code redeemed during registration",
+                                user_id=user_id,
+                                code=register_request.referral_code,
+                            )
+                    except Exception as e:
+                        logger.warning(f"Failed to redeem referral code during registration: {e}")
+
+            except PostgrestAPIError as e:
+                error_info = getattr(e, 'json', lambda: {})() or {}
+                code = error_info.get('code') or getattr(e, 'code', None)
+                message = error_info.get('message', str(e))
+
+                # Handle duplicate email error - user already exists in public.users
+                if code == '23505' and 'users_email_key' in message:
+                    logger.warning("Email already exists in public.users", email=register_request.email)
+                    raise EmailAlreadyExistsError()
+
+                logger.error("Error creating user profile", error_info=error_info or str(e))
                 raise DatabaseError(
-                    "User profile could not be created because the auth user record was not available. Try again shortly or verify Supabase Auth/migrations.",
+                    "User profile could not be created. Ensure Supabase migrations have been applied.",
+                    operation="create_profile"
+                )
+            except (EmailAlreadyExistsError, DatabaseError):
+                raise
+            except Exception as e:
+                logger.error("Error creating user profile")
+                raise DatabaseError(
+                    "User profile could not be created. Ensure Supabase migrations have been applied.",
                     operation="create_profile"
                 )
 
-            # Create default user preferences (upsert to handle trigger-created records)
-            try:
-                db.table("user_preferences").upsert({
-                    "user_id": user_id,
-                    "favorite_colors": [],
-                    "preferred_styles": [],
-                    "liked_brands": [],
-                    "disliked_patterns": [],
-                    "preferred_occasions": [],
-                    "data_points_collected": 0,
-                }, on_conflict="user_id").execute()
-            except Exception as e:
-                logger.debug(f"User preferences upsert skipped (may exist from trigger): {e}")
+            logger.info("User registered successfully", user_id=user_id, email=register_request.email)
 
-            # Create default user settings (upsert to handle trigger-created records)
-            try:
-                db.table("user_settings").upsert({
-                    "user_id": user_id,
-                    "language": "en",
-                    "measurement_units": "imperial",
-                    "notifications_enabled": True,
-                    "email_marketing": False,
-                    "dark_mode": False
-                }, on_conflict="user_id").execute()
-            except Exception as e:
-                logger.debug(f"User settings upsert skipped (may exist from trigger): {e}")
-
-            # Process referral code if provided
-            referral_result = None
-            if request.referral_code:
-                try:
-                    referral_result = await ReferralService.redeem_referral(
-                        referred_user_id=user_id,
-                        code=request.referral_code,
-                        db=db,
-                    )
-                    if referral_result.success:
-                        logger.info(f"Referral code redeemed during registration", user_id=user_id, code=request.referral_code)
-                except Exception as e:
-                    logger.warning(f"Failed to redeem referral code during registration: {e}")
-
-        except PostgrestAPIError as e:
-            error_info = getattr(e, 'json', lambda: {})() or {}
-            code = error_info.get('code') or getattr(e, 'code', None)
-            message = error_info.get('message', str(e))
-
-            # Handle duplicate email error - user already exists in public.users
-            if code == '23505' and 'users_email_key' in message:
-                logger.warning("Email already exists in public.users", email=request.email)
-                raise EmailAlreadyExistsError()
-
-            logger.error("Error creating user profile", error_info=error_info or str(e))
-            raise DatabaseError(
-                "User profile could not be created. Ensure Supabase migrations have been applied.",
-                operation="create_profile"
-            )
-        except (EmailAlreadyExistsError, DatabaseError):
-            raise
-        except Exception as e:
-            logger.error("Error creating user profile")
-            raise DatabaseError(
-                "User profile could not be created. Ensure Supabase migrations have been applied.",
-                operation="create_profile"
-            )
-
-        logger.info("User registered successfully", user_id=user_id, email=request.email)
-
-        response_data = {
-            "user": {
-                "id": user_id,
-                "email": request.email,
-                "full_name": request.full_name,
-                "avatar_url": None,
-                "gender": None,
-                "is_active": True,
-                "email_verified": False,
-                "created_at": profile_payload.get("created_at"),
-            },
-            "access_token": session.access_token if session else "",
-            "refresh_token": session.refresh_token if session else "",
-            "requires_email_confirmation": requires_email_confirmation,
-        }
-
-        # Add referral info to response if applicable
-        if request.referral_code and referral_result:
-            response_data["referral"] = {
-                "success": referral_result.success,
-                "message": referral_result.message,
-                "credit_months": referral_result.credit_months,
+            response_data = {
+                "user": {
+                    "id": user_id,
+                    "email": register_request.email,
+                    "full_name": register_request.full_name,
+                    "avatar_url": None,
+                    "gender": None,
+                    "is_active": True,
+                    "email_verified": False,
+                    "created_at": profile_payload.get("created_at"),
+                },
+                "access_token": session.access_token if session else "",
+                "refresh_token": session.refresh_token if session else "",
+                "requires_email_confirmation": requires_email_confirmation,
             }
 
-        return {
-            "data": response_data,
-            "message": "Registered",
-        }
+            # Add referral info to response if applicable
+            if register_request.referral_code and referral_result:
+                response_data["referral"] = {
+                    "success": referral_result.success,
+                    "message": referral_result.message,
+                    "credit_months": referral_result.credit_months,
+                }
 
-    except (HTTPException, FitCheckException):
-        raise
-    except AuthApiError as e:
-        logger.error("Registration error", error=str(e))
-        raise AuthenticationError(str(e) or "Registration failed", error_code="AUTH_REGISTRATION_FAILED")
-    except Exception as e:
-        logger.error("Registration error")
-        raise DatabaseError("An error occurred during registration")
+            return {
+                "data": response_data,
+                "message": "Registered",
+            }
+
+        except (HTTPException, FitCheckException):
+            raise
+        except AuthApiError as e:
+            logger.error("Registration error", error=str(e))
+            raise AuthenticationError(str(e) or "Registration failed", error_code="AUTH_REGISTRATION_FAILED")
+        except Exception:
+            logger.error("Registration error")
+            raise DatabaseError("An error occurred during registration")
 
 
 @router.post("/login", response_model=dict)
 async def login(
-    request: LoginRequest,
+    login_request: LoginRequest,
+    http_request: Request,
     anon_db: Client = Depends(get_anon_db),
     db: Client = Depends(get_db),
 ):
@@ -373,121 +381,122 @@ async def login(
 
     Returns JWT tokens and user data.
     """
-    try:
-        _require_schema(db)
-
-        # Authenticate with Supabase Auth
+    async with auth_rate_limited_operation(http_request, "login"):
         try:
-            auth_response = anon_db.auth.sign_in_with_password({
-                "email": request.email,
-                "password": request.password
-            })
-        except AuthApiError as e:
-            message = str(e) or "Login failed"
-            lower = message.lower()
-            if "email not confirmed" in lower:
-                raise AuthenticationError("Email not confirmed", error_code="AUTH_EMAIL_NOT_CONFIRMED")
-            if "invalid login credentials" in lower:
+            _require_schema(db)
+
+            # Authenticate with Supabase Auth
+            try:
+                auth_response = anon_db.auth.sign_in_with_password({
+                    "email": login_request.email,
+                    "password": login_request.password
+                })
+            except AuthApiError as e:
+                message = str(e) or "Login failed"
+                lower = message.lower()
+                if "email not confirmed" in lower:
+                    raise AuthenticationError("Email not confirmed", error_code="AUTH_EMAIL_NOT_CONFIRMED")
+                if "invalid login credentials" in lower:
+                    raise AuthenticationError("Invalid email or password", error_code="AUTH_INVALID_CREDENTIALS")
+                raise AuthenticationError(message, error_code="AUTH_LOGIN_FAILED")
+
+            if auth_response.user is None:
                 raise AuthenticationError("Invalid email or password", error_code="AUTH_INVALID_CREDENTIALS")
-            raise AuthenticationError(message, error_code="AUTH_LOGIN_FAILED")
 
-        if auth_response.user is None:
-            raise AuthenticationError("Invalid email or password", error_code="AUTH_INVALID_CREDENTIALS")
+            user = auth_response.user
+            session = auth_response.session
 
-        user = auth_response.user
-        session = auth_response.session
+            # Ensure user profile exists in public.users (handles missing trigger case)
+            try:
+                existing = db.table("users").select("id").eq("id", user.id).execute()
+                if not existing.data:
+                    # Profile doesn't exist - create it
+                    profile_payload = {
+                        "id": user.id,
+                        "email": user.email,
+                        "full_name": user.user_metadata.get("full_name") if user.user_metadata else "",
+                        "email_verified": user.email_confirmed_at is not None,
+                        "is_active": True,
+                        "created_at": datetime.now().isoformat(),
+                        "updated_at": datetime.now().isoformat(),
+                        "last_login_at": datetime.now().isoformat(),
+                    }
+                    await _upsert_user_profile(db, profile_payload)
 
-        # Ensure user profile exists in public.users (handles missing trigger case)
-        try:
-            existing = db.table("users").select("id").eq("id", user.id).execute()
-            if not existing.data:
-                # Profile doesn't exist - create it
-                profile_payload = {
+                    # Create default user_preferences
+                    db.table("user_preferences").upsert({
+                        "user_id": user.id,
+                        "favorite_colors": [],
+                        "preferred_styles": [],
+                        "liked_brands": [],
+                        "disliked_patterns": [],
+                        "preferred_occasions": [],
+                        "data_points_collected": 0,
+                    }, on_conflict="user_id").execute()
+
+                    # Create default user_settings
+                    db.table("user_settings").upsert({
+                        "user_id": user.id,
+                        "language": "en",
+                        "measurement_units": "imperial",
+                        "notifications_enabled": True,
+                        "email_marketing": False,
+                        "dark_mode": False,
+                    }, on_conflict="user_id").execute()
+
+                    logger.info("Created missing user profile on login", user_id=user.id)
+                else:
+                    # Profile exists - just update last_login_at
+                    db.table("users").update({
+                        "last_login_at": datetime.now().isoformat()
+                    }).eq("id", user.id).execute()
+            except Exception as e:
+                logger.warning("Failed to ensure user profile", user_id=user.id, error=str(e))
+
+            # Get user profile data from database (not auth metadata) to ensure
+            # avatar_url and other profile fields are returned correctly
+            profile_result = db.table("users").select("*").eq("id", user.id).execute()
+            if profile_result.data and len(profile_result.data) > 0:
+                profile = profile_result.data[0]
+                user_data = {
                     "id": user.id,
                     "email": user.email,
-                    "full_name": user.user_metadata.get("full_name") if user.user_metadata else "",
-                    "email_verified": user.email_confirmed_at is not None,
-                    "is_active": True,
-                    "created_at": datetime.now().isoformat(),
-                    "updated_at": datetime.now().isoformat(),
-                    "last_login_at": datetime.now().isoformat(),
+                    "full_name": profile.get("full_name"),
+                    "avatar_url": profile.get("avatar_url"),
+                    "gender": profile.get("gender"),
+                    "is_active": profile.get("is_active", True),
+                    "email_verified": profile.get("email_verified", False),
+                    "created_at": profile.get("created_at"),
+                    "updated_at": profile.get("updated_at"),
+                    "last_login_at": profile.get("last_login_at"),
                 }
-                await _upsert_user_profile(db, profile_payload)
-
-                # Create default user_preferences
-                db.table("user_preferences").upsert({
-                    "user_id": user.id,
-                    "favorite_colors": [],
-                    "preferred_styles": [],
-                    "liked_brands": [],
-                    "disliked_patterns": [],
-                    "preferred_occasions": [],
-                    "data_points_collected": 0,
-                }, on_conflict="user_id").execute()
-
-                # Create default user_settings
-                db.table("user_settings").upsert({
-                    "user_id": user.id,
-                    "language": "en",
-                    "measurement_units": "imperial",
-                    "notifications_enabled": True,
-                    "email_marketing": False,
-                    "dark_mode": False,
-                }, on_conflict="user_id").execute()
-
-                logger.info("Created missing user profile on login", user_id=user.id)
             else:
-                # Profile exists - just update last_login_at
-                db.table("users").update({
-                    "last_login_at": datetime.now().isoformat()
-                }).eq("id", user.id).execute()
-        except Exception as e:
-            logger.warning("Failed to ensure user profile", user_id=user.id, error=str(e))
+                # Fallback to auth metadata if no profile exists yet
+                user_data = {
+                    "id": user.id,
+                    "email": user.email,
+                    "full_name": user.user_metadata.get("full_name") if user.user_metadata else None,
+                    "avatar_url": None,
+                }
 
-        # Get user profile data from database (not auth metadata) to ensure
-        # avatar_url and other profile fields are returned correctly
-        profile_result = db.table("users").select("*").eq("id", user.id).execute()
-        if profile_result.data:
-            profile = profile_result.data[0]
-            user_data = {
-                "id": user.id,
-                "email": user.email,
-                "full_name": profile.get("full_name"),
-                "avatar_url": profile.get("avatar_url"),
-                "gender": profile.get("gender"),
-                "is_active": profile.get("is_active", True),
-                "email_verified": profile.get("email_verified", False),
-                "created_at": profile.get("created_at"),
-                "updated_at": profile.get("updated_at"),
-                "last_login_at": profile.get("last_login_at"),
-            }
-        else:
-            # Fallback to auth metadata if no profile exists yet
-            user_data = {
-                "id": user.id,
-                "email": user.email,
-                "full_name": user.user_metadata.get("full_name") if user.user_metadata else None,
-                "avatar_url": None,
+            logger.info("User logged in successfully", user_id=user.id)
+            return {
+                "data": {
+                    "access_token": session.access_token,
+                    "refresh_token": session.refresh_token,
+                    "user": user_data,
+                },
+                "message": "OK",
             }
 
-        logger.info("User logged in successfully", user_id=user.id)
-        return {
-            "data": {
-                "access_token": session.access_token,
-                "refresh_token": session.refresh_token,
-                "user": user_data,
-            },
-            "message": "OK",
-        }
-
-    except (HTTPException, FitCheckException):
-        raise
-    except AuthApiError as e:
-        logger.error("Login error", error=str(e))
-        raise AuthenticationError(str(e) or "Login failed", error_code="AUTH_LOGIN_FAILED")
-    except Exception as e:
-        logger.error("Login error")
-        raise DatabaseError("An error occurred during login")
+        except (HTTPException, FitCheckException):
+            raise
+        except AuthApiError as e:
+            logger.error("Login error", error=str(e))
+            raise AuthenticationError(str(e) or "Login failed", error_code="AUTH_LOGIN_FAILED")
+        except Exception:
+            logger.error("Login error")
+            raise DatabaseError("An error occurred during login")
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -519,6 +528,9 @@ async def refresh_token(
     Refresh access token using a refresh token.
 
     Returns new access and refresh tokens.
+
+    Uses deduplication to prevent "Invalid Refresh Token: Already Used" errors
+    when multiple concurrent requests arrive with the same refresh token.
     """
     try:
         refresh_token = request.refresh_token
@@ -526,22 +538,16 @@ async def refresh_token(
         if not refresh_token:
             raise ValidationError("refresh_token is required", details={"field": "refresh_token"})
 
-        # Refresh session using Supabase
-        auth_response = anon_db.auth.refresh_session(refresh_token)
+        # Refresh session with deduplication (prevents race conditions)
+        from app.services.token_refresh_service import refresh_token_with_deduplication
 
-        if auth_response.session is None:
-            raise AuthenticationError("Invalid or expired refresh token", error_code="AUTH_TOKEN_EXPIRED")
+        response_data = await refresh_token_with_deduplication(
+            supabase_client=anon_db,
+            refresh_token=refresh_token,
+        )
 
-        session = auth_response.session
-        user = auth_response.user
-
-        logger.info("Token refreshed successfully", user_id=user.id)
         return {
-            "data": {
-                "access_token": session.access_token,
-                "refresh_token": session.refresh_token,
-                "user": {"id": user.id, "email": user.email},
-            },
+            "data": response_data,
             "message": "OK",
         }
 
@@ -554,7 +560,8 @@ async def refresh_token(
 
 @router.post("/reset-password", response_model=dict)
 async def reset_password(
-    request: ResetPasswordRequest,
+    reset_request: ResetPasswordRequest,
+    http_request: Request,
     anon_db: Client = Depends(get_anon_db)
 ):
     """
@@ -562,24 +569,25 @@ async def reset_password(
 
     Sends an email with a password reset link to the user's email address.
     """
-    try:
-        # In a real implementation, you would configure Supabase to send emails
-        # This is a placeholder that shows the flow
-        anon_db.auth.reset_password_for_email(
-            request.email,
-            {
-                "redirectUrl": f"{settings.FRONTEND_URL.rstrip('/')}/auth/reset-password"
-            }
-        )
-        logger.info("Password reset email requested", email=request.email)
+    async with auth_rate_limited_operation(http_request, "password_reset"):
+        try:
+            # In a real implementation, you would configure Supabase to send emails
+            # This is a placeholder that shows the flow
+            anon_db.auth.reset_password_for_email(
+                reset_request.email,
+                {
+                    "redirectUrl": f"{settings.FRONTEND_URL.rstrip('/')}/auth/reset-password"
+                }
+            )
+            logger.info("Password reset email requested", email=reset_request.email)
 
-        # Always return success to prevent email enumeration
-        return {"message": "If an account exists with this email, a password reset link has been sent"}
+            # Always return success to prevent email enumeration
+            return {"message": "If an account exists with this email, a password reset link has been sent"}
 
-    except Exception as e:
-        logger.warning("Password reset error (returning success to prevent enumeration)", error=str(e))
-        # Return success even if there's an error (prevent email enumeration)
-        return {"message": "If an account exists with this email, a password reset link has been sent"}
+        except Exception as e:
+            logger.warning("Password reset error (returning success to prevent enumeration)", error=str(e))
+            # Return success even if there's an error (prevent email enumeration)
+            return {"message": "If an account exists with this email, a password reset link has been sent"}
 
 
 @router.post("/confirm-reset-password", response_model=dict)
@@ -737,14 +745,14 @@ async def oauth_sync(
 
             # Fetch the created profile
             profile_result = db.table("users").select("*").eq("id", user_id).execute()
-            user_data = profile_result.data[0] if profile_result.data else profile_payload
+            user_data = profile_result.data[0] if (profile_result.data and len(profile_result.data) > 0) else profile_payload
         else:
             # Profile exists - update last_login_at
             db.table("users").update({
                 "last_login_at": datetime.now().isoformat()
             }).eq("id", user_id).execute()
 
-            user_data = existing.data[0]
+            user_data = existing.data[0] if (existing.data and len(existing.data) > 0) else {}
             logger.info("OAuth sync for existing user", user_id=user_id)
             referral_result = None  # No referral processing for existing users
 

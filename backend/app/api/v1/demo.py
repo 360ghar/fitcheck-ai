@@ -67,7 +67,7 @@ async def demo_extract_items(
                 max_retries=2,
                 initial_delay=1.0,
                 backoff_factor=2.0,
-                retryable_exceptions=(AIServiceError, Exception),
+                retryable_exceptions=(AIServiceError,),
                 on_retry=lambda attempt, error, delay: logger.warning(
                     "Retrying demo extraction",
                     attempt=attempt,
@@ -164,7 +164,7 @@ async def demo_try_on(
                 max_retries=2,
                 initial_delay=2.0,
                 backoff_factor=2.0,
-                retryable_exceptions=(AIServiceError, Exception),
+                retryable_exceptions=(AIServiceError,),
                 on_retry=lambda attempt, error, delay: logger.warning(
                     "Retrying demo try-on",
                     attempt=attempt,

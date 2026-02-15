@@ -65,8 +65,18 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildContent() {
     if (controller.isLoading.value && controller.preferences.value == null) {
-      return const SliverFillRemaining(
-        child: Center(child: CircularProgressIndicator()),
+      return SliverList(
+        delegate: SliverChildListDelegate([
+          const ShimmerCard(height: 120),
+          const SizedBox(height: AppConstants.spacing24),
+          const ShimmerCard(height: 200),
+          const SizedBox(height: AppConstants.spacing24),
+          const ShimmerCard(height: 120),
+          const SizedBox(height: AppConstants.spacing24),
+          const ShimmerCard(height: 80),
+          const SizedBox(height: AppConstants.spacing24),
+          const ShimmerCard(height: 120),
+        ]),
       );
     }
 
@@ -447,8 +457,20 @@ class _SettingsPageState extends State<SettingsPage> {
     final newPasswordController = TextEditingController();
     final confirmPasswordController = TextEditingController();
 
+    void disposeControllers() {
+      currentPasswordController.dispose();
+      newPasswordController.dispose();
+      confirmPasswordController.dispose();
+    }
+
     Get.dialog(
-      Obx(() => AlertDialog(
+      PopScope(
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) {
+            disposeControllers();
+          }
+        },
+        child: Obx(() => AlertDialog(
         title: const Text('Change Password'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -501,6 +523,24 @@ class _SettingsPageState extends State<SettingsPage> {
                       Get.snackbar('Error', 'Please enter a new password');
                       return;
                     }
+                    // Password strength validation
+                    final password = newPasswordController.text;
+                    if (password.length < 8) {
+                      Get.snackbar('Weak Password', 'Password must be at least 8 characters');
+                      return;
+                    }
+                    if (!password.contains(RegExp(r'[A-Z]'))) {
+                      Get.snackbar('Weak Password', 'Password must contain at least one uppercase letter');
+                      return;
+                    }
+                    if (!password.contains(RegExp(r'[a-z]'))) {
+                      Get.snackbar('Weak Password', 'Password must contain at least one lowercase letter');
+                      return;
+                    }
+                    if (!password.contains(RegExp(r'[0-9]'))) {
+                      Get.snackbar('Weak Password', 'Password must contain at least one number');
+                      return;
+                    }
                     if (newPasswordController.text != confirmPasswordController.text) {
                       Get.snackbar('Error', 'Passwords do not match');
                       return;
@@ -523,7 +563,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 : const Text('Change'),
           ),
         ],
-      )),
+      ))),
       barrierDismissible: false,
     );
   }

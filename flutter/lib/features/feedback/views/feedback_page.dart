@@ -21,11 +21,14 @@ class FeedbackPage extends GetView<FeedbackController> {
       ),
       body: AppPageBackground(
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppConstants.spacing16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+          child: RefreshIndicator(
+            onRefresh: () => controller.fetchTickets(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(AppConstants.spacing16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                 // Success message
                 Obx(() {
                   if (!controller.showSuccess.value) return const SizedBox.shrink();
@@ -344,6 +347,32 @@ class FeedbackPage extends GetView<FeedbackController> {
 
                 // Ticket history
                 Obx(() {
+                  if (controller.isLoadingTickets.value && controller.tickets.isEmpty) {
+                    return AppGlassCard(
+                      padding: const EdgeInsets.all(AppConstants.spacing16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.history, color: tokens.brandColor),
+                              const SizedBox(width: AppConstants.spacing12),
+                              Text(
+                                'Your Submissions',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppConstants.spacing16),
+                          const ShimmerListTile(hasLeading: true, hasSubtitle: true),
+                          const SizedBox(height: AppConstants.spacing8),
+                          const ShimmerListTile(hasLeading: true, hasSubtitle: true),
+                        ],
+                      ),
+                    );
+                  }
                   if (controller.tickets.isEmpty) return const SizedBox.shrink();
                   return AppGlassCard(
                     padding: const EdgeInsets.all(AppConstants.spacing16),
@@ -368,7 +397,8 @@ class FeedbackPage extends GetView<FeedbackController> {
                     ),
                   );
                 }),
-              ],
+                ],
+              ),
             ),
           ),
         ),

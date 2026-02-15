@@ -31,7 +31,8 @@ class PhotoshootContent extends GetView<PhotoshootController> {
                     children: [
                       Text(
                         'AI Photoshoot',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(
                               fontWeight: FontWeight.w700,
                               color: tokens.textPrimary,
                             ),
@@ -41,12 +42,14 @@ class PhotoshootContent extends GetView<PhotoshootController> {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Obx(() => Text(
-                        _getSubtitle(),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: tokens.textMuted,
-                            ),
-                      )),
+                  Obx(
+                    () => Text(
+                      _getSubtitle(),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -84,6 +87,10 @@ class PhotoshootContent extends GetView<PhotoshootController> {
       case PhotoshootStep.generating:
         return 'Creating your images...';
       case PhotoshootStep.results:
+        if (controller.partialSuccess.value &&
+            controller.failedCount.value > 0) {
+          return '${controller.generatedImages.length} ready, ${controller.failedCount.value} failed';
+        }
         return '${controller.generatedImages.length} images ready!';
     }
   }
@@ -120,8 +127,12 @@ class PhotoshootContent extends GetView<PhotoshootController> {
                         steps[index],
                         style: TextStyle(
                           fontSize: 10,
-                          fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
-                          color: isActive ? tokens.brandColor : tokens.textMuted,
+                          fontWeight: isCurrent
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                          color: isActive
+                              ? tokens.brandColor
+                              : tokens.textMuted,
                         ),
                       ),
                     ],

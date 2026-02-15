@@ -3,8 +3,8 @@
  * AI-powered outfit suggestions and style recommendations
  */
 
-import { useEffect, useMemo, useState } from 'react'
-import { Layers, Palette, Search, Shirt, Sparkles, TrendingUp } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Layers, Palette, Search, Shirt, Sparkles, Stars, TrendingUp } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,17 +15,27 @@ import { useToast } from '@/components/ui/use-toast'
 import { ItemImage } from '@/components/ui/item-image'
 import { cn } from '@/lib/utils'
 import { generateFallbackOutfits } from '@/lib/outfit-generator'
+import { AstrologyTab } from '@/components/recommendations'
 
 import { useWardrobeStore } from '@/stores/wardrobeStore'
 import {
   findMatchingItems,
+  getAstrologyRecommendations,
   getCompleteLookSuggestions,
   getShoppingRecommendations,
   getWeatherRecommendations,
 } from '@/api/recommendations'
-import type { CompleteLookSuggestion, MatchResult, Item } from '@/types'
+import type { AstrologyRecommendationMode, CompleteLookSuggestion, MatchResult, Item } from '@/types'
 
-type TabType = 'match' | 'complete' | 'weather' | 'shopping'
+type TabType = 'match' | 'complete' | 'weather' | 'astrology' | 'shopping'
+
+function localDateISO(): string {
+  const now = new Date()
+  const yyyy = now.getFullYear()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
 
 /**
  * Enrich an item with images from the wardrobe store
@@ -173,6 +183,39 @@ export default function RecommendationsPage() {
   }
 
   // ============================================================================
+  // ASTROLOGY TAB
+  // ============================================================================
+
+  const [astrologyMode, setAstrologyMode] = useState<AstrologyRecommendationMode>('daily')
+  const [astrologyDate, setAstrologyDate] = useState(localDateISO)
+  const [astrologyData, setAstrologyData] = useState<Awaited<ReturnType<typeof getAstrologyRecommendations>> | null>(null)
+  const [isLoadingAstrology, setIsLoadingAstrology] = useState(false)
+  const astrologyRequestIdRef = useRef(0)
+
+  const runAstrology = async () => {
+    const requestId = ++astrologyRequestIdRef.current
+    setIsLoadingAstrology(true)
+    try {
+      const data = await getAstrologyRecommendations({
+        target_date: astrologyDate,
+        mode: astrologyMode,
+      })
+      if (requestId !== astrologyRequestIdRef.current) return
+      setAstrologyData(data)
+    } catch (err) {
+      if (requestId !== astrologyRequestIdRef.current) return
+      toast({
+        title: 'Failed to load astrology recommendations',
+        description: err instanceof Error ? err.message : 'An error occurred',
+        variant: 'destructive',
+      })
+    } finally {
+      if (requestId !== astrologyRequestIdRef.current) return
+      setIsLoadingAstrology(false)
+    }
+  }
+
+  // ============================================================================
   // SHOPPING TAB
   // ============================================================================
 
@@ -207,6 +250,7 @@ export default function RecommendationsPage() {
     { id: 'match' as TabType, name: 'Find Matches', icon: Shirt },
     { id: 'complete' as TabType, name: 'Complete Look', icon: Layers },
     { id: 'weather' as TabType, name: 'Weather-Based', icon: TrendingUp },
+    { id: 'astrology' as TabType, name: 'Astrology', icon: Stars },
     { id: 'shopping' as TabType, name: 'Shopping', icon: Palette },
   ]
 
@@ -515,6 +559,18 @@ export default function RecommendationsPage() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {activeTab === 'astrology' && (
+          <AstrologyTab
+            data={astrologyData}
+            isLoading={isLoadingAstrology}
+            targetDate={astrologyDate}
+            mode={astrologyMode}
+            onTargetDateChange={setAstrologyDate}
+            onModeChange={setAstrologyMode}
+            onRun={runAstrology}
+          />
         )}
 
         {activeTab === 'shopping' && (

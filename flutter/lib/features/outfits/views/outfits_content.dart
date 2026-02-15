@@ -24,25 +24,41 @@ class _OutfitsContentState extends State<OutfitsContent> {
   Widget build(BuildContext context) {
     return AppPageBackground(
       child: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            _buildAppBar(),
-            SliverPadding(
-              padding: const EdgeInsets.all(AppConstants.spacing16),
-              sliver: Obx(() {
-                if (controller.isLoading.value && controller.outfits.isEmpty) {
-                  return _buildLoadingGrid();
-                }
+        child: Obx(() => RefreshIndicator(
+              onRefresh: () => controller.fetchOutfits(refresh: true),
+              child: InfiniteScrollWrapper(
+                onLoadMore: () => controller.fetchOutfits(),
+                hasMore: controller.hasMore.value,
+                isLoadingMore: controller.isLoadingMore.value,
+                child: CustomScrollView(
+                  slivers: [
+                    _buildAppBar(),
+                    SliverPadding(
+                      padding: const EdgeInsets.all(AppConstants.spacing16),
+                      sliver: Obx(() {
+                        if (controller.isLoading.value && controller.outfits.isEmpty) {
+                          return const ShimmerGridLoader(
+                            crossAxisCount: 2,
+                            itemCount: 6,
+                            childAspectRatio: 0.85,
+                          );
+                        }
 
-                if (controller.filteredOutfits.isEmpty) {
-                  return _buildEmptyState();
-                }
+                        if (controller.filteredOutfits.isEmpty) {
+                          return _buildEmptyState();
+                        }
 
-                return _buildOutfitsGrid();
-              }),
-            ),
-          ],
-        ),
+                        return _buildOutfitsGrid();
+                      }),
+                    ),
+                    // Load more indicator
+                    Obx(() => SliverLoadingMoreIndicator(
+                          isLoading: controller.isLoadingMore.value,
+                        )),
+                  ],
+                ),
+              ),
+            )),
       ),
     );
   }
@@ -278,31 +294,6 @@ class _OutfitsContentState extends State<OutfitsContent> {
       color: tokens.cardColor.withOpacity(0.6),
       child: const Center(
         child: Icon(Icons.image, size: 48, color: Colors.white54),
-      ),
-    );
-  }
-
-  Widget _buildLoadingGrid() {
-    final tokens = AppUiTokens.of(context);
-
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: AppConstants.spacing12,
-        crossAxisSpacing: AppConstants.spacing12,
-        childAspectRatio: 0.85,
-      ),
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          return Container(
-            decoration: BoxDecoration(
-              color: tokens.cardColor.withOpacity(0.6),
-              borderRadius: BorderRadius.circular(AppConstants.radius16),
-              border: Border.all(color: tokens.cardBorderColor),
-            ),
-          );
-        },
-        childCount: 6,
       ),
     );
   }

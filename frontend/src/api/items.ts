@@ -76,6 +76,7 @@ export async function getItems(filters?: ItemFilters): Promise<PaginatedItemsRes
 
     if (filters?.category) params.append('category', filters.category);
     if (filters?.color) params.append('color', filters.color);
+    if (filters?.occasion) params.append('occasion', filters.occasion);
     if (filters?.condition) params.append('condition', filters.condition);
     if (filters?.brand) params.append('brand', filters.brand);
     if (filters?.search) params.append('search', filters.search);

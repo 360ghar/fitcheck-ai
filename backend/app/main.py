@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.logging_config import setup_session_logging
 from app.core.exceptions import FitCheckException
 from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, get_correlation_id
-from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, referral, feedback, photoshoot
+from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, referral, feedback, photoshoot, social_import
 from app.db.connection import SupabaseDB
 from postgrest.exceptions import APIError as PostgrestAPIError
 
@@ -49,9 +49,19 @@ REQUIRED_TABLES = (
     "support_tickets",
 )
 
+SOCIAL_IMPORT_TABLES = (
+    "social_import_jobs",
+    "social_import_photos",
+    "social_import_items",
+    "social_import_auth_sessions",
+    "social_import_events",
+)
+
 REQUIRED_COLUMNS = (
     # Preference profile (recommendations)
     ("user_preferences", "preferred_occasions"),
+    # Astrology profile base field (legacy-compatible via REQUIRED_COLUMN_ALTERNATIVES)
+    ("users", "birth_date"),
     # Wardrobe enrichment (recommendations/categorization)
     ("items", "material"),
     ("item_images", "storage_path"),
@@ -61,12 +71,32 @@ REQUIRED_COLUMNS = (
     ("outfit_collections", "is_favorite"),
 )
 
+REQUIRED_COLUMN_ALTERNATIVES = {
+    # Backward compatibility for environments that still use legacy DOB column.
+    ("users", "birth_date"): (("users", "date_of_birth"),),
+}
+
+
+def _column_exists(db, table: str, column: str) -> bool:
+    try:
+        db.table(table).select(column).limit(1).execute()
+        return True
+    except PostgrestAPIError as e:
+        if getattr(e, "code", None) in {"PGRST205", "42703"}:
+            return False
+        return False
+    except Exception:
+        return False
+
 
 def _schema_missing(db) -> list[str]:
     missing: list[str] = []
+    required_tables = list(REQUIRED_TABLES)
+    if settings.ENABLE_SOCIAL_IMPORT:
+        required_tables.extend(SOCIAL_IMPORT_TABLES)
 
     # Required tables
-    for table in REQUIRED_TABLES:
+    for table in required_tables:
         try:
             db.table(table).select("*").limit(1).execute()
         except PostgrestAPIError as e:
@@ -79,16 +109,15 @@ def _schema_missing(db) -> list[str]:
 
     # Required columns (guarding against partial migrations)
     for table, column in REQUIRED_COLUMNS:
-        try:
-            db.table(table).select(column).limit(1).execute()
-        except PostgrestAPIError as e:
-            code = getattr(e, "code", None)
-            if code in {"PGRST205", "42703"}:
-                missing.append(f"{table}.{column}")
-            else:
-                missing.append(f"{table}.{column}")
-        except Exception:
-            missing.append(f"{table}.{column}")
+        if _column_exists(db, table, column):
+            continue
+
+        alternatives = REQUIRED_COLUMN_ALTERNATIVES.get((table, column), ())
+        has_alternative = any(_column_exists(db, alt_table, alt_column) for alt_table, alt_column in alternatives)
+        if has_alternative:
+            continue
+
+        missing.append(f"{table}.{column}")
 
     # De-dupe while preserving order
     seen = set()
@@ -125,6 +154,16 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Missing: {', '.join(missing[:8])}{'…' if len(missing) > 8 else ''}")
     except Exception as e:
         logger.warning(f"Supabase schema check failed: {e}")
+
+    # Best-effort Pinecone index initialization
+    if settings.PINECONE_API_KEY:
+        try:
+            from app.services.vector_service import get_vector_service
+            vector_service = get_vector_service()
+            vector_service.create_index()
+        except Exception as e:
+            logger.warning(f"Pinecone index initialization failed: {e}")
+
     yield
     # Shutdown
     logger.info(f"{settings.PROJECT_NAME} shutting down...")
@@ -221,6 +260,10 @@ app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"]
 # Photoshoot routes (auth for generate, public for demo and use-cases)
 app.include_router(photoshoot.router, prefix="/api/v1/photoshoot", tags=["Photoshoot"])
 
+# Social import routes (feature-flagged)
+if settings.ENABLE_SOCIAL_IMPORT:
+    app.include_router(social_import.router, prefix="/api/v1/ai", tags=["Social Import"])
+
 
 # ============================================================================
 # HEALTH CHECK & ROOT ENDPOINTS
@@ -247,13 +290,19 @@ async def health_check():
     except Exception:
         missing = []
         schema_ready = False
-    return {
+
+    response = {
         "status": "healthy",
         "service": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "schema_ready": schema_ready,
-        "missing_tables": missing,
     }
+
+    # Only expose missing tables in DEBUG mode (not in production)
+    if settings.DEBUG and missing:
+        response["missing_tables"] = missing
+
+    return response
 
 
 # ============================================================================

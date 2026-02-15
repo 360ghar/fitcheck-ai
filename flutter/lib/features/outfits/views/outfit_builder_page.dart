@@ -44,7 +44,34 @@ class OutfitBuilderPage extends StatelessWidget {
             Expanded(
               child: Obx(() {
                 if (controller.isLoading.value && controller.availableItems.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
+                  return SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppConstants.spacing16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Shimmer for outfit details form
+                          const ShimmerCard(height: 120),
+                          const SizedBox(height: AppConstants.spacing16),
+                          // Shimmer for section header
+                          const ShimmerBox(width: 180, height: 20),
+                          const SizedBox(height: AppConstants.spacing12),
+                          // Shimmer for selected items row
+                          const ShimmerCard(height: 100),
+                          const SizedBox(height: AppConstants.spacing16),
+                          // Shimmer for search filter
+                          const ShimmerCard(height: 56),
+                          const SizedBox(height: AppConstants.spacing16),
+                          // Shimmer for items grid
+                          ShimmerGridLoaderBox(
+                            crossAxisCount: 3,
+                            itemCount: 9,
+                            childAspectRatio: 0.75,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
                 }
                 return SingleChildScrollView(
                   child: Column(

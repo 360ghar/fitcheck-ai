@@ -324,6 +324,7 @@ class SubscriptionService:
         operation_type: str,
         db: Client,
         count: int = 1,
+        _retry: bool = True,
     ) -> UsageCheckResult:
         """Check if user can perform an operation based on their plan limits."""
         try:
@@ -363,6 +364,16 @@ class SubscriptionService:
             )
 
         except Exception as e:
+            error_str = str(e)
+            # Retry once on connection errors (HTTP/2 connection terminated)
+            if _retry and ("ConnectionTerminated" in error_str or "RemoteProtocolError" in error_str):
+                logger.warning(f"Connection error for user {user_id}, retrying: {e}")
+                from app.db.connection import SupabaseDB
+                SupabaseDB._service_instance = None
+                new_db = SupabaseDB.get_service_client()
+                return await SubscriptionService.check_limit(
+                    user_id, operation_type, new_db, count, _retry=False
+                )
             logger.error(f"Error checking limit for user {user_id}: {e}")
             raise DatabaseError(f"Failed to check limit: {str(e)}")
 

@@ -11,6 +11,7 @@ export type UUID = string;
 export interface ApiEnvelope<T> {
   data: T;
   message?: string;
+  meta?: Record<string, unknown>;
 }
 
 export interface ApiErrorEnvelope {
@@ -230,6 +231,9 @@ export interface User {
   full_name?: string;
   avatar_url?: string;
   gender?: Gender | null;
+  birth_date?: string | null;
+  birth_time?: string | null;
+  birth_place?: string | null;
   is_active: boolean;
   email_verified: boolean;
   created_at: string;
@@ -362,6 +366,49 @@ export interface WeatherRecommendation {
   color_suggestions: string[];
 }
 
+export type AstrologyRecommendationMode = 'daily' | 'important_meeting';
+export type AstrologyRecommendationStatus = 'ready' | 'profile_required';
+
+export interface AstrologyColorSuggestion {
+  name: string;
+  hex: string;
+  reason: string;
+  confidence: number;
+}
+
+export interface AstrologyContext {
+  weekday: string;
+  ruling_planet: string;
+  moon_sign?: string | null;
+  ascendant?: string | null;
+  sidereal_sun_sign?: string | null;
+}
+
+export interface AstrologyWardrobePick {
+  category: Category | string;
+  items: Item[];
+}
+
+export interface AstrologyOutfitSuggestion {
+  description: string;
+  item_ids: UUID[];
+  match_score: number;
+}
+
+export interface AstrologyRecommendation {
+  status: AstrologyRecommendationStatus;
+  target_date: string;
+  mode: AstrologyRecommendationMode;
+  astrology_mode: 'vedic_full' | 'vedic_lite';
+  missing_fields: string[];
+  context: AstrologyContext;
+  lucky_colors: AstrologyColorSuggestion[];
+  avoid_colors: AstrologyColorSuggestion[];
+  wardrobe_picks: AstrologyWardrobePick[];
+  suggested_outfits: AstrologyOutfitSuggestion[];
+  notes: string[];
+}
+
 // ============================================================================
 // FILTER TYPES
 // ============================================================================
@@ -369,6 +416,7 @@ export interface WeatherRecommendation {
 export interface ItemFilters {
   category?: Category;
   color?: string;
+  occasion?: string;
   condition?: Condition;
   brand?: string;
   search?: string;
@@ -396,6 +444,7 @@ export interface ItemFormData {
   sub_category?: string;
   brand?: string;
   colors: string[];
+  occasion_tags?: string[];
   size?: string;
   price?: number;
   purchase_date?: string;
@@ -462,6 +511,14 @@ export interface DetectedItem {
   tempId: string;
   /** Source image ID for batch workflows */
   sourceImageId?: string;
+  /** Person identifier in source image */
+  personId?: string;
+  /** Human-readable person label */
+  personLabel?: string;
+  /** Whether this item belongs to current user match */
+  isCurrentUserPerson?: boolean;
+  /** Whether item should be included when saving */
+  includeInWardrobe?: boolean;
   /** Category of the item */
   category: Category;
   /** Sub-category (e.g., "t-shirt", "jeans") */
@@ -490,6 +547,8 @@ export interface DetectedItem {
   name?: string;
   /** User-editable tags */
   tags?: string[];
+  /** User-editable use cases */
+  occasion_tags?: string[];
 }
 
 /**
@@ -498,6 +557,10 @@ export interface DetectedItem {
 export interface MultiItemDetectionResult {
   /** All detected items */
   items: DetectedItem[];
+  /** Whether profile reference image was used */
+  hasProfileReference?: boolean;
+  /** Whether user profile was matched in extraction image */
+  profileMatchFound?: boolean;
   /** Overall analysis confidence */
   overallConfidence: number;
   /** Description of the full image */
@@ -643,6 +706,10 @@ export interface ImageExtractionCompleteData {
   image_id: string;
   items: Array<{
     temp_id: string;
+    person_id?: string;
+    person_label?: string;
+    is_current_user_person?: boolean;
+    include_in_wardrobe?: boolean;
     category: string;
     sub_category?: string;
     colors: string[];
@@ -751,6 +818,10 @@ export interface JobCompleteData {
   items: Array<{
     temp_id: string;
     image_id: string;
+    person_id?: string;
+    person_label?: string;
+    is_current_user_person?: boolean;
+    include_in_wardrobe?: boolean;
     category: string;
     sub_category?: string;
     colors: string[];
@@ -803,6 +874,111 @@ export interface BatchExtractionState {
 
   /** Error message if any */
   error: string | null;
+}
+
+// ============================================================================
+// SOCIAL IMPORT TYPES
+// ============================================================================
+
+export type SocialPlatform = 'instagram' | 'facebook'
+
+export type SocialImportJobStatus =
+  | 'created'
+  | 'discovering'
+  | 'awaiting_auth'
+  | 'processing'
+  | 'paused_rate_limited'
+  | 'completed'
+  | 'cancelled'
+  | 'failed'
+
+export type SocialImportPhotoStatus =
+  | 'queued'
+  | 'processing'
+  | 'awaiting_review'
+  | 'buffered_ready'
+  | 'approved'
+  | 'rejected'
+  | 'failed'
+
+export type SocialImportItemStatus = 'generated' | 'edited' | 'failed' | 'saved' | 'discarded'
+
+export interface SocialImportItem {
+  id: string
+  temp_id: string
+  name?: string
+  category: Category
+  sub_category?: string
+  colors: string[]
+  material?: string
+  pattern?: string
+  brand?: string
+  confidence: number
+  bounding_box?: BoundingBox
+  detailed_description?: string
+  generated_image_url?: string
+  generated_storage_path?: string
+  generation_error?: string
+  status: SocialImportItemStatus
+  saved_item_id?: string
+}
+
+export interface SocialImportPhoto {
+  id: string
+  ordinal: number
+  source_photo_url: string
+  source_thumb_url?: string
+  status: SocialImportPhotoStatus
+  error_message?: string
+  items: SocialImportItem[]
+}
+
+export interface SocialImportJobData {
+  id: string
+  status: SocialImportJobStatus
+  platform: SocialPlatform
+  source_url: string
+  normalized_url: string
+  total_photos: number
+  discovered_photos: number
+  processed_photos: number
+  approved_photos: number
+  rejected_photos: number
+  failed_photos: number
+  auth_required: boolean
+  discovery_completed: boolean
+  error_message?: string
+  auth_reason?: string
+  two_factor_identifier?: string
+  checkpoint_url?: string
+  awaiting_review_photo?: SocialImportPhoto | null
+  buffered_photo?: SocialImportPhoto | null
+  processing_photo?: SocialImportPhoto | null
+  queued_count: number
+}
+
+export type SocialImportEventType =
+  | 'connected'
+  | 'job_updated'
+  | 'photo_discovered'
+  | 'photo_processing_started'
+  | 'photo_ready_for_review'
+  | 'photo_buffered_ready'
+  | 'photo_approved'
+  | 'photo_rejected'
+  | 'photo_failed'
+  | 'auth_required'
+  | 'auth_accepted'
+  | 'rate_limit_paused'
+  | 'job_completed'
+  | 'job_failed'
+  | 'job_cancelled'
+  | 'heartbeat'
+
+export interface SocialImportSSEEvent<T = unknown> {
+  type: SocialImportEventType
+  data: T
+  id?: number
 }
 
 // ============================================================================

@@ -56,6 +56,10 @@ export interface DemoPhotoshootResult {
     image_url?: string;
     image_base64?: string;
   }>;
+  generated_count?: number;
+  failed_count?: number;
+  image_failures?: Array<{ index: number; error: string }>;
+  partial_success?: boolean;
   remaining_today: number;
   signup_cta: string;
 }

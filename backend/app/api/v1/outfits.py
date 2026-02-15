@@ -538,44 +538,26 @@ async def share_outfit(
         db.table("outfits").update({"is_public": is_public, "updated_at": now}).eq("id", outfit_id_str).execute()
 
         share_url = f"{settings.FRONTEND_URL.rstrip('/')}/shared/outfits/{outfit_id_str}"
-        existing_share = (
-            db.table("shared_outfits")
-            .select("*")
-            .eq("outfit_id", outfit_id_str)
-            .eq("user_id", user_id)
-            .order("created_at", desc=True)
-            .limit(1)
-            .execute()
-        )
-        share_row = (existing_share.data or [None])[0]
-        payload = {
+
+        # Use upsert to avoid race conditions between check and insert
+        upsert_payload = {
+            "user_id": user_id,
+            "outfit_id": outfit_id_str,
             "visibility": request.visibility,
             "expires_at": request.expires_at,
             "caption": request.custom_caption,
             "allow_feedback": request.allow_feedback,
             "share_url": share_url,
+            "created_at": now,
+            "updated_at": now,
         }
-        if share_row:
-            updated = (
-                db.table("shared_outfits")
-                .update(payload)
-                .eq("id", share_row["id"])
-                .execute()
-            )
-            share_row = (updated.data or [share_row])[0]
-        else:
-            insert = {
-                "user_id": user_id,
-                "outfit_id": outfit_id_str,
-                "share_url": share_url,
-                "visibility": request.visibility,
-                "expires_at": request.expires_at,
-                "caption": request.custom_caption,
-                "allow_feedback": request.allow_feedback,
-                "created_at": now,
-            }
-            created = db.table("shared_outfits").insert(insert).execute()
-            share_row = (created.data or [None])[0]
+
+        upsert_result = (
+            db.table("shared_outfits")
+            .upsert(upsert_payload, on_conflict="outfit_id,user_id")
+            .execute()
+        )
+        share_row = (upsert_result.data or [{}])[0]
 
         return {
             "data": {
@@ -920,8 +902,9 @@ async def get_wear_history(
                 .execute()
             )
             wear_history = history.data or []
-        except Exception:
+        except Exception as e:
             # Table might not exist yet
+            logger.warning("Failed to fetch wear history", outfit_id=outfit_id_str, error=str(e))
             wear_history = []
 
         return {
@@ -1234,9 +1217,15 @@ async def upload_outfit_image(
             "generation_metadata": upload.get("metadata"),
             "created_at": now,
         }
-        if is_primary:
-            db.table("outfit_images").update({"is_primary": False}).eq("outfit_id", outfit_id_str).execute()
-        db.table("outfit_images").insert(img_row).execute()
+
+        # Insert new image first, then clear is_primary on other images
+        # This minimizes the race window where no primary exists
+        insert_result = db.table("outfit_images").insert(img_row).execute()
+        new_image_id = insert_result.data[0]["id"] if insert_result.data else None
+
+        if is_primary and new_image_id:
+            # Clear is_primary on all OTHER images for this outfit
+            db.table("outfit_images").update({"is_primary": False}).eq("outfit_id", outfit_id_str).neq("id", new_image_id).execute()
 
         # Mark generation complete if provided
         if generation_id:
@@ -1289,8 +1278,8 @@ async def delete_outfit_image(
         if storage_path:
             try:
                 await StorageService.delete_image(db=db, storage_path=storage_path)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to delete outfit image from storage", storage_path=storage_path, error=str(e))
 
         db.table("outfit_images").delete().eq("id", image_id_str).eq("outfit_id", outfit_id_str).execute()
         return {"data": {"deleted": True}, "message": "OK"}
@@ -1364,8 +1353,8 @@ async def batch_delete_outfits(
         if storage_paths:
             try:
                 await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to delete outfit images from storage", count=len(storage_paths), error=str(e))
 
         delete_res = db.table("outfits").delete().eq("user_id", user_id).in_("id", outfit_ids).execute()
         deleted_count = len(delete_res.data or [])

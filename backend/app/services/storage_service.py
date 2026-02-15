@@ -502,6 +502,106 @@ class StorageService:
             )
             raise StorageServiceError(f"Failed to upload attachment: {str(e)}")
 
+    @staticmethod
+    async def upload_file(
+        db: Client,
+        file_data: bytes,
+        file_path: str,
+        content_type: str = "application/octet-stream",
+        bucket: Optional[str] = None,
+        upsert: bool = False,
+    ) -> dict:
+        """Upload raw bytes to Supabase Storage with an explicit destination path."""
+        if bucket is None:
+            bucket = settings.SUPABASE_STORAGE_BUCKET
+
+        try:
+            db.storage.from_(bucket).upload(
+                path=file_path,
+                file=file_data,
+                file_options={"content-type": content_type, "upsert": str(upsert).lower()},
+            )
+            return {
+                "public_url": db.storage.from_(bucket).get_public_url(file_path),
+                "storage_path": file_path,
+                "bucket": bucket,
+            }
+        except Exception as e:
+            logger.error(
+                "Failed to upload file",
+                storage_path=file_path,
+                bucket=bucket,
+                error=str(e),
+            )
+            raise StorageServiceError(f"Failed to upload file: {str(e)}")
+
+    @staticmethod
+    async def upload_temp_generated_image(
+        db: Client,
+        user_id: str,
+        file_data: bytes,
+        source: str = "social-import",
+        extension: str = ".png",
+    ) -> dict:
+        """Upload temporary AI-generated image for review workflows."""
+        ext = extension if extension.startswith(".") else f".{extension}"
+        temp_name = f"{user_id}/tmp/{source}/{uuid.uuid4().hex}{ext}"
+        upload = await StorageService.upload_file(
+            db=db,
+            file_data=file_data,
+            file_path=temp_name,
+            content_type="image/png",
+        )
+        return {
+            "image_url": upload["public_url"],
+            "thumbnail_url": upload["public_url"],
+            "storage_path": upload["storage_path"],
+        }
+
+    @staticmethod
+    async def promote_temp_image_to_item(
+        db: Client,
+        user_id: str,
+        temp_storage_path: str,
+        filename_hint: str = "generated.png",
+    ) -> dict:
+        """Move a temporary generated image into the canonical item image path."""
+        new_path = StorageService._generate_filename(user_id, filename_hint, "item")
+        await StorageService.move_image(
+            db=db,
+            old_path=temp_storage_path,
+            new_path=new_path,
+            bucket=settings.SUPABASE_STORAGE_BUCKET,
+        )
+        image_url = db.storage.from_(settings.SUPABASE_STORAGE_BUCKET).get_public_url(new_path)
+        return {
+            "image_url": image_url,
+            "thumbnail_url": image_url,
+            "storage_path": new_path,
+        }
+
+    @staticmethod
+    async def cleanup_temp_images(
+        db: Client,
+        storage_paths: List[str],
+    ) -> int:
+        """Delete temporary generated images (best-effort)."""
+        if not storage_paths:
+            return 0
+        try:
+            return await StorageService.delete_multiple_images(
+                db=db,
+                storage_paths=storage_paths,
+                bucket=settings.SUPABASE_STORAGE_BUCKET,
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to cleanup temp images",
+                count=len(storage_paths),
+                error=str(e),
+            )
+            return 0
+
 
 # ============================================================================
 # IMAGE PROCESSING UTILITIES

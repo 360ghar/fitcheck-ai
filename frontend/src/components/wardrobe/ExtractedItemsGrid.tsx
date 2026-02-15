@@ -49,11 +49,56 @@ export function ExtractedItemsGrid({
   backLabel,
 }: ExtractedItemsGridProps) {
   const activeItems = items.filter((item) => item.status !== 'deleted')
-  const failedCount = activeItems.filter((item) => item.status === 'failed').length
-  const lowConfidenceCount = activeItems.filter((item) => item.confidence < 0.7).length
-  const successCount = activeItems.filter(
+  const includedItems = activeItems.filter((item) => item.includeInWardrobe !== false)
+  const failedCount = includedItems.filter((item) => item.status === 'failed').length
+  const lowConfidenceCount = includedItems.filter((item) => item.confidence < 0.7).length
+  const successCount = includedItems.filter(
     (item) => item.status === 'generated' && item.confidence >= 0.7
   ).length
+  const saveableCount = activeItems.filter(
+    (item) => item.status === 'generated' && item.includeInWardrobe !== false
+  ).length
+
+  const personGroups = Object.values(
+    activeItems.reduce<
+      Record<
+        string,
+        {
+          key: string
+          label: string
+          isCurrent: boolean
+          total: number
+          included: number
+          itemIds: string[]
+        }
+      >
+    >((acc, item) => {
+      const personKey = `${item.sourceImageId || 'single'}::${item.personId || 'unassigned'}`
+      const defaultLabel = item.personLabel || (item.personId ? 'Person' : 'Unassigned')
+      if (!acc[personKey]) {
+        acc[personKey] = {
+          key: personKey,
+          label: defaultLabel,
+          isCurrent: item.isCurrentUserPerson === true,
+          total: 0,
+          included: 0,
+          itemIds: [],
+        }
+      }
+      acc[personKey].total += 1
+      if (item.includeInWardrobe !== false) {
+        acc[personKey].included += 1
+      }
+      acc[personKey].itemIds.push(item.tempId)
+      if (item.isCurrentUserPerson === true) {
+        acc[personKey].isCurrent = true
+      }
+      if (item.personLabel) {
+        acc[personKey].label = item.personLabel
+      }
+      return acc
+    }, {})
+  )
 
   return (
     <div className="flex flex-col h-full">
@@ -80,9 +125,55 @@ export function ExtractedItemsGrid({
           </div>
         </div>
         <p className="text-sm text-muted-foreground">
-          {activeItems.length} item{activeItems.length !== 1 ? 's' : ''} detected
+          {activeItems.length} item{activeItems.length !== 1 ? 's' : ''} detected, {saveableCount} selected to save
         </p>
       </div>
+
+      {personGroups.length > 0 && (
+        <div className="mb-4 p-3 rounded-lg border border-border bg-muted/20">
+          <p className="text-sm font-medium text-foreground mb-2">People in photo</p>
+          <div className="flex flex-wrap gap-2">
+            {personGroups.map((group) => (
+              <div
+                key={group.key}
+                className="rounded-md border border-border bg-background px-2 py-1.5 flex items-center gap-2"
+              >
+                <span className="text-xs font-medium">
+                  {group.label}
+                  {group.isCurrent ? ' (You)' : ''}
+                </span>
+                <span className="text-xs text-muted-foreground">{group.included}/{group.total}</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => {
+                    group.itemIds.forEach((itemId) => {
+                      onItemUpdate(itemId, { includeInWardrobe: true })
+                    })
+                  }}
+                >
+                  Include
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => {
+                    group.itemIds.forEach((itemId) => {
+                      onItemUpdate(itemId, { includeInWardrobe: false })
+                    })
+                  }}
+                >
+                  Exclude
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main content */}
       <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 flex-1 min-h-0">
@@ -214,7 +305,7 @@ export function ExtractedItemsGrid({
           )}
           <Button
             onClick={onSaveAll}
-            disabled={isSaving || activeItems.filter((i) => i.status === 'generated').length === 0}
+            disabled={isSaving || saveableCount === 0}
             className="gap-2"
           >
             {isSaving ? (
@@ -222,7 +313,7 @@ export function ExtractedItemsGrid({
             ) : (
               <>
                 <Save className="h-4 w-4" />
-                Save All ({activeItems.filter((i) => i.status === 'generated').length})
+                Save All ({saveableCount})
               </>
             )}
           </Button>

@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { ScrollableTabs } from '@/components/ui/scrollable-tabs'
-import { updateCurrentUser, uploadAvatar, getUserPreferences, updateUserPreferences, getUserSettings, updateUserSettings, deleteAccount } from '@/api/users'
+import { getCurrentUser, updateCurrentUser, uploadAvatar, getUserPreferences, updateUserPreferences, getUserSettings, updateUserSettings, deleteAccount } from '@/api/users'
 import { requestPasswordReset } from '@/api/auth'
 import { AISettingsPanel, LocationInput, SubscriptionPanel, SupportPanel } from '@/components/settings'
 import { useTheme } from '@/components/theme'
@@ -72,6 +72,18 @@ function toCsv(value: string[] | undefined | null): string {
   return (value || []).join(', ')
 }
 
+function normalizeBirthTimeForInput(value?: string | null): string {
+  if (!value) return ''
+  return value.length >= 5 ? value.slice(0, 5) : value
+}
+
+function normalizeBirthTimeForApi(value: string): string | undefined {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  if (trimmed.length === 5) return `${trimmed}:00`
+  return trimmed
+}
+
 const isValidTab = (value: string): value is TabType =>
   ['profile', 'preferences', 'settings', 'ai', 'subscription', 'support', 'security'].includes(value)
 
@@ -91,6 +103,9 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false)
   const [fullName, setFullName] = useState(user?.full_name || '')
   const [gender, setGender] = useState<string>(user?.gender || '')
+  const [birthDate, setBirthDate] = useState(user?.birth_date || '')
+  const [birthTime, setBirthTime] = useState(normalizeBirthTimeForInput(user?.birth_time))
+  const [birthPlace, setBirthPlace] = useState(user?.birth_place || '')
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement | null>(null)
@@ -143,7 +158,10 @@ export default function ProfilePage() {
     // Keep edit input in sync if user changes (e.g. refresh profile)
     setFullName(user?.full_name || '')
     setGender(user?.gender || '')
-  }, [user?.full_name, user?.gender])
+    setBirthDate(user?.birth_date || '')
+    setBirthTime(normalizeBirthTimeForInput(user?.birth_time))
+    setBirthPlace(user?.birth_place || '')
+  }, [user?.birth_date, user?.birth_place, user?.birth_time, user?.full_name, user?.gender])
 
   useEffect(() => {
     if (!user) return
@@ -184,13 +202,32 @@ export default function ProfilePage() {
     if (!user) return
     setIsSavingProfile(true)
     try {
-      const updated = await updateCurrentUser({
+      const result = await updateCurrentUser({
         full_name: fullName.trim() || undefined,
         gender: gender || null,
+        birth_date: birthDate || null,
+        birth_time: normalizeBirthTimeForApi(birthTime) || null,
+        birth_place: birthPlace.trim() || null,
       })
-      setUser(updated)
+      const refreshedUser = await getCurrentUser().catch(() => result.user)
+      setUser(refreshedUser)
       setIsEditing(false)
-      toast({ title: 'Profile updated' })
+
+      const skippedBirthFields = result.skippedFields.filter(
+        (field) => field === 'birth_date' || field === 'birth_time' || field === 'birth_place'
+      )
+
+      if (skippedBirthFields.length > 0) {
+        toast({
+          title: 'Profile partially updated',
+          description:
+            'Birth details could not be saved to DB columns and were stored in fallback metadata. '
+            + 'Apply migrations 002/014 on production.',
+          variant: 'destructive',
+        })
+      } else {
+        toast({ title: 'Profile updated' })
+      }
     } catch (err) {
       toast({
         title: 'Failed to update profile',
@@ -455,6 +492,58 @@ export default function ProfilePage() {
                       Contact support to change your email
                     </p>
                   </div>
+
+                  <div className="md:col-span-3">
+                    <label htmlFor="birthDate" className="block text-sm font-medium text-foreground">
+                      Date of Birth (Optional)
+                    </label>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      Needed for astrology color recommendations
+                    </p>
+                    <input
+                      type="date"
+                      id="birthDate"
+                      value={isEditing ? birthDate : user?.birth_date || ''}
+                      onChange={(e) => setBirthDate(e.target.value)}
+                      disabled={!isEditing}
+                      className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
+                    />
+                  </div>
+
+                  <div className="md:col-span-3">
+                    <label htmlFor="birthTime" className="block text-sm font-medium text-foreground">
+                      Birth Time (Optional)
+                    </label>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      Optional: improves Vedic accuracy when available
+                    </p>
+                    <input
+                      type="time"
+                      id="birthTime"
+                      value={isEditing ? birthTime : normalizeBirthTimeForInput(user?.birth_time)}
+                      onChange={(e) => setBirthTime(e.target.value)}
+                      disabled={!isEditing}
+                      className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
+                    />
+                  </div>
+
+                  <div className="md:col-span-6">
+                    <label htmlFor="birthPlace" className="block text-sm font-medium text-foreground">
+                      Birth Place (Optional)
+                    </label>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      City and country helps timezone-accurate calculations
+                    </p>
+                    <input
+                      type="text"
+                      id="birthPlace"
+                      value={isEditing ? birthPlace : user?.birth_place || ''}
+                      onChange={(e) => setBirthPlace(e.target.value)}
+                      disabled={!isEditing}
+                      className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary disabled:bg-muted disabled:text-muted-foreground"
+                      placeholder="e.g. New Delhi, India"
+                    />
+                  </div>
                 </div>
 
                 <div className="mt-6 flex flex-col-reverse gap-3 md:flex-row md:justify-end">
@@ -466,6 +555,9 @@ export default function ProfilePage() {
                           setIsEditing(false)
                           setFullName(user?.full_name || '')
                           setGender(user?.gender || '')
+                          setBirthDate(user?.birth_date || '')
+                          setBirthTime(normalizeBirthTimeForInput(user?.birth_time))
+                          setBirthPlace(user?.birth_place || '')
                         }}
                         className="w-full md:w-auto"
                       >

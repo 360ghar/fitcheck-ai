@@ -1,12 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' hide Category;
 import '../models/item_model.dart';
+import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/exceptions/app_exceptions.dart';
+import '../../../core/services/sse_service.dart';
+import '../models/batch_extraction_models.dart';
 
 /// Wardrobe item repository
 class ItemRepository {
@@ -19,6 +21,7 @@ class ItemRepository {
     String? search,
     List<String>? categories,
     List<String>? colors,
+    String? occasion,
     List<String>? conditions,
     String? sortBy,
     String? sortOrder,
@@ -36,6 +39,9 @@ class ItemRepository {
       }
       if (colors != null && colors.isNotEmpty) {
         queryParams['color'] = colors.first;
+      }
+      if (occasion != null && occasion.trim().isNotEmpty) {
+        queryParams['occasion'] = UseCases.normalize(occasion);
       }
       if (conditions != null && conditions.isNotEmpty) {
         queryParams['condition'] = conditions.first;
@@ -68,10 +74,7 @@ class ItemRepository {
   Future<ItemModel> createItem(CreateItemRequest request) async {
     try {
       final payload = _normalizeCreateItemPayload(request.toJson());
-      final response = await _apiClient.post(
-        ApiConstants.items,
-        data: payload,
-      );
+      final response = await _apiClient.post(ApiConstants.items, data: payload);
       return _parseItem(response.data);
     } on DioException catch (e) {
       throw handleDioException(e);
@@ -93,10 +96,7 @@ class ItemRepository {
   }
 
   /// Update item
-  Future<ItemModel> updateItem(
-    String itemId,
-    UpdateItemRequest request,
-  ) async {
+  Future<ItemModel> updateItem(String itemId, UpdateItemRequest request) async {
     try {
       final payload = _normalizeUpdateItemPayload(request.toJson());
       final response = await _apiClient.put(
@@ -146,7 +146,8 @@ class ItemRepository {
           final item = await createItem(request);
 
           // If there's a corresponding base64 image, upload it
-          if (itemImageBase64s != null && itemImageBase64s.containsKey('$index')) {
+          if (itemImageBase64s != null &&
+              itemImageBase64s.containsKey('$index')) {
             try {
               await _apiClient.post(
                 '${ApiConstants.items}/${item.id}/images',
@@ -174,9 +175,7 @@ class ItemRepository {
   /// Toggle item favorite
   Future<ItemModel> toggleFavorite(String itemId) async {
     try {
-      await _apiClient.post(
-        '${ApiConstants.items}/$itemId/favorite',
-      );
+      await _apiClient.post('${ApiConstants.items}/$itemId/favorite');
       return getItem(itemId);
     } on DioException catch (e) {
       throw handleDioException(e);
@@ -194,10 +193,7 @@ class ItemRepository {
   }
 
   /// Upload item images
-  Future<List<ItemImage>> uploadImages(
-    String itemId,
-    List<File> images,
-  ) async {
+  Future<List<ItemImage>> uploadImages(String itemId, List<File> images) async {
     try {
       final uploaded = <ItemImage>[];
       for (final image in images) {
@@ -249,9 +245,9 @@ class ItemRepository {
         return ItemImage.fromJson(_normalizeItemImageJson(dataMap));
       }
       return null;
-    } on DioException catch (e) {
+    } on DioException {
       return null;
-    } catch (e) {
+    } catch (_) {
       return null;
     }
   }
@@ -348,6 +344,46 @@ class ItemRepository {
     }
   }
 
+  /// Start async extraction for a single image (with SSE progress updates)
+  /// Returns job info to connect to SSE stream for real-time updates
+  Future<SingleExtractionJob> extractItemsFromImageAsync(File image) async {
+    try {
+      final bytes = await image.readAsBytes();
+      final imageBase64 = base64Encode(bytes);
+
+      final response = await _apiClient.post(
+        ApiConstants.aiSingleExtract,
+        data: {
+          'image': imageBase64,
+          'auto_generate': true,
+        },
+      );
+
+      final data = _extractDataMap(response.data);
+      return SingleExtractionJob.fromJson(data);
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    }
+  }
+
+  /// Subscribe to SSE events for single-item extraction
+  /// Returns a stream of events as extraction and generation progress
+  Stream<SSEEvent> subscribeSingleExtractionEvents(String jobId) {
+    final path = ApiConstants.aiBatchExtractEvents(jobId);
+    return SSEService.instance
+        .connect(path)
+        .map((event) => SSEEvent(type: event.type, data: event.data));
+  }
+
+  /// Cancel single extraction job
+  Future<void> cancelSingleExtraction(String jobId) async {
+    try {
+      await _apiClient.post(ApiConstants.aiBatchExtractCancel(jobId));
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    }
+  }
+
   /// Generate a product image for a detected clothing item
   /// This creates an isolated product-style image of just the clothing item
   /// without the person/background, suitable for catalog display
@@ -379,7 +415,9 @@ class ItemRepository {
           'save_to_storage': saveToStorage,
         },
         options: Options(
-          receiveTimeout: const Duration(minutes: 5), // AI generation can take time
+          receiveTimeout: const Duration(
+            minutes: 5,
+          ), // AI generation can take time
         ),
       );
 
@@ -406,7 +444,8 @@ class ItemRepository {
     for (final item in items) {
       try {
         final response = await generateProductImage(
-          itemDescription: item.detailedDescription ?? item.subCategory ?? item.category,
+          itemDescription:
+              item.detailedDescription ?? item.subCategory ?? item.category,
           category: item.category,
           subCategory: item.subCategory,
           colors: item.colors,
@@ -417,36 +456,48 @@ class ItemRepository {
         // Convert base64 to data URL for display
         final dataUrl = 'data:image/png;base64,${response.imageBase64}';
 
-        results.add(DetectedItemDataWithImage(
-          tempId: item.tempId,
-          category: item.category,
-          subCategory: item.subCategory,
-          colors: item.colors,
-          material: item.material,
-          pattern: item.pattern,
-          brand: item.brand,
-          confidence: item.confidence,
-          detailedDescription: item.detailedDescription,
-          status: 'generated',
-          generatedImageUrl: dataUrl,
-          name: item.subCategory ?? item.category,
-        ));
+        results.add(
+          DetectedItemDataWithImage(
+            tempId: item.tempId,
+            category: item.category,
+            subCategory: item.subCategory,
+            colors: item.colors,
+            material: item.material,
+            pattern: item.pattern,
+            brand: item.brand,
+            confidence: item.confidence,
+            detailedDescription: item.detailedDescription,
+            personId: item.personId,
+            personLabel: item.personLabel,
+            isCurrentUserPerson: item.isCurrentUserPerson,
+            includeInWardrobe: item.includeInWardrobe,
+            status: 'generated',
+            generatedImageUrl: dataUrl,
+            name: item.subCategory ?? item.category,
+          ),
+        );
       } catch (e) {
         // Add item with error status
-        results.add(DetectedItemDataWithImage(
-          tempId: item.tempId,
-          category: item.category,
-          subCategory: item.subCategory,
-          colors: item.colors,
-          material: item.material,
-          pattern: item.pattern,
-          brand: item.brand,
-          confidence: item.confidence,
-          detailedDescription: item.detailedDescription,
-          status: 'generation_failed',
-          generationError: e.toString().replaceAll('Exception: ', ''),
-          name: item.subCategory ?? item.category,
-        ));
+        results.add(
+          DetectedItemDataWithImage(
+            tempId: item.tempId,
+            category: item.category,
+            subCategory: item.subCategory,
+            colors: item.colors,
+            material: item.material,
+            pattern: item.pattern,
+            brand: item.brand,
+            confidence: item.confidence,
+            detailedDescription: item.detailedDescription,
+            personId: item.personId,
+            personLabel: item.personLabel,
+            isCurrentUserPerson: item.isCurrentUserPerson,
+            includeInWardrobe: item.includeInWardrobe,
+            status: 'generation_failed',
+            generationError: e.toString().replaceAll('Exception: ', ''),
+            name: item.subCategory ?? item.category,
+          ),
+        );
       }
     }
 
@@ -468,7 +519,7 @@ class ItemRepository {
       // If batch endpoint fails, try the extraction items endpoint
       try {
         final response = await _apiClient.get(
-          '${ApiConstants.ai}/extract-items/$generationId',  // interpolation needed here
+          '${ApiConstants.ai}/extract-items/$generationId', // interpolation needed here
         );
         final data = _extractDataMap(response.data);
         return _parseExtractionResponse(data);
@@ -498,15 +549,19 @@ class ItemRepository {
     final itemsPayload = data['items'];
     final items = itemsPayload is List
         ? itemsPayload
-            .whereType<Map<String, dynamic>>()
-            .map(_normalizeItemJson)
-            .map(ItemModel.fromJson)
-            .toList()
+              .whereType<Map<String, dynamic>>()
+              .map(_normalizeItemJson)
+              .map(ItemModel.fromJson)
+              .toList()
         : <ItemModel>[];
     final total = _coerceInt(data['total']);
     final pageValue = _coerceInt(data['page'], fallback: page);
-    final limitValue = _coerceInt(data['limit'] ?? data['page_size'], fallback: limit);
-    final hasMore = _coerceBool(data['has_more']) ??
+    final limitValue = _coerceInt(
+      data['limit'] ?? data['page_size'],
+      fallback: limit,
+    );
+    final hasMore =
+        _coerceBool(data['has_more']) ??
         _coerceBool(data['has_next']) ??
         (limitValue > 0 ? (pageValue * limitValue) < total : false);
     return ItemsListResponse(
@@ -547,6 +602,10 @@ class ItemRepository {
     if (normalized['condition'] == null) {
       normalized['condition'] = 'clean';
     }
+    final occasionTags = _coerceStringList(normalized['occasion_tags']);
+    if (occasionTags != null) {
+      normalized['occasion_tags'] = UseCases.normalizeList(occasionTags);
+    }
     final images = normalized['item_images'] ?? normalized['images'];
     if (images is List) {
       normalized['item_images'] = images
@@ -559,7 +618,8 @@ class ItemRepository {
 
   Map<String, dynamic> _normalizeItemImageJson(Map<String, dynamic> json) {
     final normalized = Map<String, dynamic>.from(json);
-    normalized['url'] ??= normalized['image_url'] ?? normalized['thumbnail_url'];
+    normalized['url'] ??=
+        normalized['image_url'] ?? normalized['thumbnail_url'];
     return normalized;
   }
 
@@ -584,7 +644,9 @@ class ItemRepository {
     return null;
   }
 
-  Map<String, dynamic> _normalizeCreateItemPayload(Map<String, dynamic> payload) {
+  Map<String, dynamic> _normalizeCreateItemPayload(
+    Map<String, dynamic> payload,
+  ) {
     final normalized = Map<String, dynamic>.from(payload);
     _remapKey(normalized, 'location', 'purchase_location');
     _remapKey(normalized, 'description', 'notes');
@@ -592,7 +654,9 @@ class ItemRepository {
     return normalized;
   }
 
-  Map<String, dynamic> _normalizeUpdateItemPayload(Map<String, dynamic> payload) {
+  Map<String, dynamic> _normalizeUpdateItemPayload(
+    Map<String, dynamic> payload,
+  ) {
     final normalized = Map<String, dynamic>.from(payload);
     if (normalized.containsKey('purchaseDate')) {
       normalized['purchase_date'] = normalized.remove('purchaseDate');
@@ -615,12 +679,13 @@ class ItemRepository {
     final itemsPayload = data['items'];
     final items = itemsPayload is List
         ? itemsPayload
-            .whereType<Map<String, dynamic>>()
-            .map(_mapExtractedItem)
-            .toList()
+              .whereType<Map<String, dynamic>>()
+              .map(_mapExtractedItem)
+              .toList()
         : <ExtractedItem>[];
     final status = data['status']?.toString() ?? 'completed';
-    final id = data['id']?.toString() ??
+    final id =
+        data['id']?.toString() ??
         data['extraction_id']?.toString() ??
         'extraction-${DateTime.now().millisecondsSinceEpoch}';
     return ExtractionResponse(
@@ -635,7 +700,8 @@ class ItemRepository {
 
   ExtractedItem _mapExtractedItem(Map<String, dynamic> json) {
     final categoryValue = json['category']?.toString().toLowerCase() ?? 'other';
-    final name = json['name']?.toString() ??
+    final name =
+        json['name']?.toString() ??
         json['sub_category']?.toString() ??
         categoryValue;
     return ExtractedItem(
@@ -644,7 +710,8 @@ class ItemRepository {
       colors: _coerceStringList(json['colors']),
       material: json['material']?.toString(),
       pattern: json['pattern']?.toString(),
-      description: json['detailed_description']?.toString() ??
+      description:
+          json['detailed_description']?.toString() ??
           json['description']?.toString(),
       boundingBox: json['bounding_box'] is Map<String, dynamic>
           ? json['bounding_box'] as Map<String, dynamic>
@@ -668,5 +735,4 @@ class ItemRepository {
     }
     return null;
   }
-
 }

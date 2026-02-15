@@ -40,6 +40,10 @@ interface PhotoshootState {
   // Results state
   sessionId: string;
   generatedImages: GeneratedImage[];
+  failedIndices: number[];
+  failedCount: number;
+  partialSuccess: boolean;
+  retryingFailedIndex: number | null;
 
   // Error state
   error: string | null;
@@ -53,6 +57,7 @@ interface PhotoshootState {
   setNumImages: (count: number) => void;
   fetchUsage: () => Promise<void>;
   generate: () => Promise<PhotoshootResult | null>;
+  retryFailedSlot: (index: number) => Promise<void>;
   reset: () => void;
 }
 
@@ -69,6 +74,10 @@ const initialState = {
   statusMessage: '',
   sessionId: '',
   generatedImages: [],
+  failedIndices: [],
+  failedCount: 0,
+  partialSuccess: false,
+  retryingFailedIndex: null,
   error: null,
 };
 
@@ -197,6 +206,9 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
         progress: 100,
         sessionId: result.session_id,
         generatedImages: result.images,
+        failedIndices: (result.image_failures ?? []).map((f) => f.index),
+        failedCount: result.failed_count ?? (result.image_failures?.length ?? 0),
+        partialSuccess: Boolean(result.partial_success),
         currentStep: 'results',
         isGenerating: false,
       });
@@ -214,6 +226,68 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
         currentStep: 'configure',
       });
       return null;
+    }
+  },
+
+  retryFailedSlot: async (index) => {
+    const { photos, useCase, customPrompt, usage, failedIndices, generatedImages } = get();
+
+    if (!failedIndices.includes(index)) return;
+    if (photos.length === 0) return;
+    if (usage && usage.remaining <= 0) {
+      set({ error: 'Not enough images remaining today' });
+      return;
+    }
+
+    set({ retryingFailedIndex: index, error: null });
+
+    try {
+      const photosBase64 = await Promise.all(
+        photos.map(async (file) => {
+          return new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const result = reader.result as string;
+              resolve(result.split(',')[1]);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+        })
+      );
+
+      const result = await generatePhotoshoot({
+        photos: photosBase64,
+        use_case: useCase,
+        custom_prompt: useCase === 'custom' ? customPrompt : undefined,
+        num_images: 1,
+      });
+
+      const retriedImage = result.images[0];
+      if (!retriedImage) {
+        set({ error: 'Retry failed. Please try again.', retryingFailedIndex: null });
+        return;
+      }
+
+      const patchedImage: GeneratedImage = { ...retriedImage, index };
+      const nextImages = [...generatedImages.filter((img) => img.index !== index), patchedImage]
+        .sort((a, b) => a.index - b.index);
+      const nextFailed = failedIndices.filter((i) => i !== index).sort((a, b) => a - b);
+
+      set({
+        generatedImages: nextImages,
+        failedIndices: nextFailed,
+        failedCount: nextFailed.length,
+        partialSuccess: nextFailed.length > 0,
+        retryingFailedIndex: null,
+      });
+
+      if (result.usage) {
+        set({ usage: result.usage });
+      }
+    } catch (error) {
+      const apiError = getApiError(error);
+      set({ error: apiError.message, retryingFailedIndex: null });
     }
   },
 

@@ -23,7 +23,22 @@ class BodyProfilesPage extends StatelessWidget {
         child: SafeArea(
           child: Obx(() {
             if (controller.isLoading.value && controller.profiles.isEmpty) {
-              return const Center(child: CircularProgressIndicator());
+              return Padding(
+                padding: const EdgeInsets.all(AppConstants.spacing16),
+                child: Column(
+                  children: const [
+                    ShimmerCard(height: 80),
+                    SizedBox(height: AppConstants.spacing24),
+                    ShimmerCard(height: 48),
+                    SizedBox(height: AppConstants.spacing24),
+                    ShimmerBox(width: 120, height: 20),
+                    SizedBox(height: AppConstants.spacing12),
+                    ShimmerListTile(hasLeading: true, hasSubtitle: true),
+                    SizedBox(height: AppConstants.spacing8),
+                    ShimmerListTile(hasLeading: true, hasSubtitle: true),
+                  ],
+                ),
+              );
             }
 
             return RefreshIndicator(

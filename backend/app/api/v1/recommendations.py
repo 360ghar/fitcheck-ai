@@ -6,7 +6,10 @@ For MVP we provide deterministic, fast recommendations using:
 - optional embeddings + Pinecone when configured
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import date, datetime, time as dt_time
+import functools
+import re
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
@@ -16,6 +19,7 @@ from supabase import Client
 from app.core.exceptions import (
     AIServiceError,
     DatabaseError,
+    FitCheckException,
     ItemNotFoundError,
     ValidationError,
     WeatherServiceError,
@@ -25,6 +29,7 @@ from app.core.security import get_current_user_id
 from app.db.connection import get_db
 from app.services.ai_service import AIService
 from app.services.ai_settings_service import AISettingsService
+from app.services.astrology_service import get_astrology_service
 from app.services.vector_service import get_vector_service
 from app.services.weather_service import get_weather_service
 
@@ -69,6 +74,54 @@ class CompleteLookRequest(BaseModel):
         return self
 
 
+class RateRecommendationRequest(BaseModel):
+    rating: str = Field(..., description="thumbs_up|thumbs_down|neutral")
+
+
+# ============================================================================
+# ERROR HANDLING DECORATOR
+# ============================================================================
+
+def handle_route_errors(
+    operation: str,
+    error_message: str,
+    re_raise: Optional[tuple[Type[FitCheckException], ...]] = None
+):
+    """Decorator to standardize endpoint error handling.
+
+    Catches exceptions, logs them, and raises DatabaseError.
+    Allows specific exceptions to be re-raised without wrapping.
+    """
+    re_raise_exceptions = re_raise or (ItemNotFoundError, ValidationError)
+
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs) -> Any:
+            try:
+                return await func(*args, **kwargs)
+            except re_raise_exceptions:
+                raise
+            except Exception as e:
+                user_id = kwargs.get("user_id")
+                extra_log = {}
+
+                # Extract common ID parameters for logging
+                for key in ("item_id", "source_ids", "recommendation_id", "location", "target_date", "mode"):
+                    if key in kwargs:
+                        extra_log[key] = str(kwargs[key]) if kwargs[key] is not None else None
+
+                logger.error(
+                    f"{operation} error",
+                    user_id=user_id,
+                    error=str(e),
+                    **extra_log
+                )
+                raise DatabaseError(message=error_message, operation=operation)
+
+        return wrapper
+    return decorator
+
+
 # ============================================================================
 # MATCHING LOGIC (rule-based MVP)
 # ============================================================================
@@ -81,6 +134,139 @@ _COMPLEMENTARY: Dict[str, List[str]] = {
     "outerwear": ["tops", "bottoms", "shoes"],
     "accessories": ["tops", "bottoms", "shoes", "outerwear"],
 }
+
+_WEEKDAY_PLANET_LOOKUP = {
+    0: "Moon",
+    1: "Mars",
+    2: "Mercury",
+    3: "Jupiter",
+    4: "Venus",
+    5: "Saturn",
+    6: "Sun",
+}
+
+
+def _coerce_date(value: Any) -> Optional[date]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    raw = str(value).strip()
+    if not raw:
+        return None
+    normalized = raw.replace("Z", "+00:00")
+    # Try full ISO datetime/date first, then a strict YYYY-MM-DD fallback.
+    try:
+        return datetime.fromisoformat(normalized).date()
+    except ValueError:
+        pass
+    try:
+        return date.fromisoformat(normalized[:10])
+    except ValueError:
+        return None
+
+
+def _coerce_time(value: Any) -> Optional[dt_time]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.time().replace(tzinfo=None)
+    if isinstance(value, dt_time):
+        return value.replace(tzinfo=None)
+    raw = str(value).strip()
+    if not raw:
+        return None
+    normalized = raw.replace("Z", "+00:00")
+    # Support ISO-ish time values such as 12:34:56.000000 or 12:34:56+05:30.
+    for candidate in (
+        normalized if "T" in normalized else f"1970-01-01T{normalized}",
+        f"1970-01-01T{normalized}",
+    ):
+        try:
+            parsed = datetime.fromisoformat(candidate)
+            return parsed.time().replace(tzinfo=None)
+        except ValueError:
+            continue
+    if "+" in normalized:
+        normalized = normalized.split("+", 1)[0]
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1]
+    # Strip timezone offsets that may use '-' after seconds (e.g., HH:MM:SS-05:00).
+    if "T" in normalized:
+        normalized = normalized.split("T", 1)[1]
+    tz_match = re.match(r"^(\d{2}:\d{2}(?::\d{2})?)(?:\.\d+)?(?:[+-].*)?$", normalized)
+    if tz_match:
+        normalized = tz_match.group(1)
+    for fmt in ("%H:%M:%S", "%H:%M"):
+        try:
+            return datetime.strptime(normalized, fmt).time()
+        except ValueError:
+            continue
+    return None
+
+
+def _extract_missing_users_column(err: Exception) -> Optional[str]:
+    code = getattr(err, "code", None)
+    text = str(err).lower()
+    if code not in {"42703", "PGRST204", "PGRST205"} and "42703" not in text:
+        return None
+
+    match = re.search(r"column\s+users\.([a-z0-9_]+)\s+does\s+not\s+exist", text)
+    if match:
+        return match.group(1)
+    match = re.search(r"could\s+not\s+find\s+the\s+'([a-z0-9_]+)'\s+column\s+of\s+'users'", text)
+    if match:
+        return match.group(1)
+    if code == "PGRST205":
+        return "__table__"
+    return None
+
+
+def _get_user_birth_profile(db: Client, user_id: str) -> Tuple[Dict[str, Any], bool]:
+    """Read user birth profile from canonical columns."""
+    profile: Dict[str, Any] = {}
+    users_profile_columns_missing = False
+
+    for column in ("birth_date", "birth_time", "birth_place"):
+        try:
+            row = (
+                db.table("users")
+                .select(column)
+                .eq("id", user_id)
+                .single()
+                .execute()
+            )
+            if row.data and column in row.data:
+                profile[column] = row.data.get(column)
+        except Exception as e:
+            missing_col = _extract_missing_users_column(e)
+            if missing_col in {column, "__table__"}:
+                users_profile_columns_missing = True
+                continue
+            raise
+
+    return profile, users_profile_columns_missing
+
+
+def _get_auth_birth_profile(db: Client, user_id: str) -> Dict[str, Any]:
+    """Read birth fields from Supabase Auth metadata as schema-migration fallback."""
+    try:
+        admin = getattr(db.auth, "admin", None)
+        if not admin or not hasattr(admin, "get_user_by_id"):
+            return {}
+        auth_user = admin.get_user_by_id(user_id)
+        if not auth_user or not getattr(auth_user, "user", None):
+            return {}
+        meta = getattr(auth_user.user, "user_metadata", {}) or {}
+        return {
+            "birth_date": meta.get("birth_date"),
+            "birth_time": meta.get("birth_time"),
+            "birth_place": meta.get("birth_place"),
+        }
+    except Exception:
+        return {}
 
 
 def _score_match(source: Dict[str, Any], candidate: Dict[str, Any]) -> Tuple[float, List[str]]:
@@ -110,12 +296,74 @@ def _score_match(source: Dict[str, Any], candidate: Dict[str, Any]) -> Tuple[flo
     return min(1.0, score), reasons
 
 
+def _get_primary_image_url(item: Dict[str, Any]) -> Optional[str]:
+    """Extract primary image URL from item's images."""
+    images = item.get("item_images") or []
+    primary = next((i for i in images if i.get("is_primary")), images[0] if images else None)
+    return (primary or {}).get("thumbnail_url") or (primary or {}).get("image_url")
+
+
+def _build_complete_look_response(item: Dict[str, Any], position: int) -> Dict[str, Any]:
+    """Build a capsule wardrobe item response."""
+    return {
+        "item_id": item["id"],
+        "item_name": item.get("name"),
+        "image_url": _get_primary_image_url(item),
+        "category": item.get("category"),
+        "position": item.get("category"),
+        "confidence": 0.7,
+    }
+
+
+def _count_by_category(items: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Count items by category."""
+    counts: Dict[str, int] = {}
+    for item in items:
+        cat = (item.get("category") or "other").lower()
+        counts[cat] = counts.get(cat, 0) + 1
+    return counts
+
+
+def _build_similar_item_response(match: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
+    """Build a similar item response from match and item data."""
+    return {
+        "item_id": item["id"],
+        "item_name": item.get("name"),
+        "image_url": _get_primary_image_url(item),
+        "category": item.get("category"),
+        "sub_category": item.get("sub_category"),
+        "brand": item.get("brand"),
+        "colors": item.get("colors") or [],
+        "similarity": float(match.get("score") or 0) * 100.0,
+        "reasons": ["Similar style and attributes"],
+    }
+
+
+def _build_fallback_similar_response(cand: Dict[str, Any], score: float) -> Dict[str, Any]:
+    """Build a fallback similar item response from candidate data."""
+    return {
+        "item_id": cand["id"],
+        "item_name": cand.get("name"),
+        "image_url": _get_primary_image_url(cand),
+        "category": cand.get("category"),
+        "sub_category": cand.get("sub_category"),
+        "brand": cand.get("brand"),
+        "colors": cand.get("colors") or [],
+        "similarity": int(score * 100),
+        "reasons": ["Similar category/colors"],
+    }
+
+
 # ============================================================================
 # ENDPOINTS
 # ============================================================================
 
 
 @router.post("/match", response_model=Dict[str, Any])
+@handle_route_errors(
+    operation="match_items",
+    error_message="Failed to generate matches"
+)
 async def match_items(
     request: MatchRequest,
     category: Optional[str] = Query(None),
@@ -125,86 +373,82 @@ async def match_items(
     db: Client = Depends(get_db),
 ):
     """Find items that match the given item(s)."""
-    try:
-        requested_limit = request.limit or limit
-        source_ids = list(dict.fromkeys(request.item_ids or ([request.item_id] if request.item_id else [])))
-        sources_res = (
-            db.table("items")
-            .select("*")
-            .eq("user_id", user_id)
-            .in_("id", source_ids)
-            .execute()
-        )
-        sources = sources_res.data or []
-        if not sources:
-            raise ItemNotFoundError()
+    requested_limit = request.limit or limit
+    source_ids = list(dict.fromkeys(request.item_ids or ([request.item_id] if request.item_id else [])))
+    sources_res = (
+        db.table("items")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("is_deleted", False)
+        .in_("id", source_ids)
+        .execute()
+    )
+    sources = sources_res.data or []
+    if not sources:
+        raise ItemNotFoundError()
 
-        # Candidate pool: same wardrobe excluding sources
-        candidates_q = db.table("items").select("*").eq("user_id", user_id).not_.in_("id", source_ids)
-        if category:
-            candidates_q = candidates_q.eq("category", category)
-        # Exclude laundry/repair/donate by default (docs)
-        candidates_q = candidates_q.not_.in_("condition", ["laundry", "repair", "donate"])
-        candidates_res = candidates_q.limit(500).execute()
-        candidates = candidates_res.data or []
+    # Candidate pool: same wardrobe excluding sources
+    candidates_q = (
+        db.table("items")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("is_deleted", False)
+        .not_.in_("id", source_ids)
+    )
+    if category:
+        candidates_q = candidates_q.eq("category", category)
+    # Exclude laundry/repair/donate by default (docs)
+    candidates_q = candidates_q.not_.in_("condition", ["laundry", "repair", "donate"])
+    candidates_res = candidates_q.limit(500).execute()
+    candidates = candidates_res.data or []
 
-        matches: List[Dict[str, Any]] = []
-        for source in sources:
-            for cand in candidates:
-                score, reasons = _score_match(source, cand)
-                score_pct = int(round(score * 100))
-                if score_pct < min_score:
-                    continue
-                matches.append({"item": cand, "score": score_pct, "reasons": [r.capitalize() for r in reasons]})
+    matches: List[Dict[str, Any]] = []
+    for source in sources:
+        for cand in candidates:
+            score, reasons = _score_match(source, cand)
+            score_pct = int(round(score * 100))
+            if score_pct < min_score:
+                continue
+            matches.append({"item": cand, "score": score_pct, "reasons": [r.capitalize() for r in reasons]})
 
-        matches.sort(key=lambda m: m["score"], reverse=True)
-        matches = matches[:requested_limit]
+    matches.sort(key=lambda m: m["score"], reverse=True)
+    matches = matches[:requested_limit]
 
-        # Basic "complete looks" (top+bottom+shoes when possible)
-        complete_looks: List[Dict[str, Any]] = []
-        by_cat: Dict[str, List[Dict[str, Any]]] = {}
-        for m in matches:
-            cat = (m["item"].get("category") or "other").lower()
-            by_cat.setdefault(cat, []).append(m["item"])
+    # Basic "complete looks" (top+bottom+shoes when possible)
+    complete_looks: List[Dict[str, Any]] = []
+    by_cat: Dict[str, List[Dict[str, Any]]] = {}
+    for m in matches:
+        cat = (m["item"].get("category") or "other").lower()
+        by_cat.setdefault(cat, []).append(m["item"])
 
-        for i in range(min(3, requested_limit)):
-            look_items: List[Dict[str, Any]] = []
-            for cat in ("tops", "bottoms", "shoes", "outerwear", "accessories"):
-                if cat in by_cat and len(by_cat[cat]) > i:
-                    look_items.append(by_cat[cat][i])
-            if look_items:
-                complete_looks.append(
-                    {
-                        "items": look_items,
-                        "match_score": 80,
-                        "description": "A complete look built from your wardrobe",
-                    }
-                )
+    for i in range(min(3, requested_limit)):
+        look_items: List[Dict[str, Any]] = []
+        for cat in ("tops", "bottoms", "shoes", "outerwear", "accessories"):
+            if cat in by_cat and len(by_cat[cat]) > i:
+                look_items.append(by_cat[cat][i])
+        if look_items:
+            complete_looks.append(
+                {
+                    "items": look_items,
+                    "match_score": 80,
+                    "description": "A complete look built from your wardrobe",
+                }
+            )
 
-        logger.debug(
-            "Match items completed",
-            user_id=user_id,
-            source_count=len(sources),
-            match_count=len(matches)
-        )
-        return {"data": {"matches": matches, "complete_looks": complete_looks}, "message": "OK"}
-
-    except ItemNotFoundError:
-        raise
-    except Exception as e:
-        logger.error(
-            "Match error",
-            user_id=user_id,
-            source_ids=source_ids if 'source_ids' in dir() else None,
-            error=str(e)
-        )
-        raise DatabaseError(
-            message="Failed to generate matches",
-            operation="match_items"
-        )
+    logger.debug(
+        "Match items completed",
+        user_id=user_id,
+        source_count=len(sources),
+        match_count=len(matches)
+    )
+    return {"data": {"matches": matches, "complete_looks": complete_looks}, "message": "OK"}
 
 
 @router.post("/complete-look", response_model=Dict[str, Any])
+@handle_route_errors(
+    operation="complete_look",
+    error_message="Failed to generate complete looks"
+)
 async def complete_look(
     request: CompleteLookRequest,
     style: Optional[str] = Query(None),
@@ -214,66 +458,61 @@ async def complete_look(
     db: Client = Depends(get_db),
 ):
     """Generate complete outfit suggestions from a start item."""
-    try:
-        requested_limit = request.limit or limit
-        effective_occasion = request.occasion or occasion
+    requested_limit = request.limit or limit
+    effective_occasion = request.occasion or occasion
 
-        seed_ids = request.item_ids or ([request.start_item_id] if request.start_item_id else [])
-        seed_ids = [i for i in seed_ids if i]
-        if not seed_ids:
-            raise ValidationError(
-                message="No seed items provided",
-                details={"field": "item_ids or start_item_id"}
-            )
-
-        seed_res = db.table("items").select("*").eq("user_id", user_id).in_("id", seed_ids).execute()
-        seeds = seed_res.data or []
-        if not seeds:
-            raise ItemNotFoundError()
-
-        # Reuse match logic
-        match_res = await match_items(
-            MatchRequest(item_ids=seed_ids, limit=50),
-            user_id=user_id,
-            db=db,
+    seed_ids = [i for i in (request.item_ids or ([request.start_item_id] if request.start_item_id else [])) if i]
+    if not seed_ids:
+        raise ValidationError(
+            message="No seed items provided",
+            details={"field": "item_ids or start_item_id"}
         )
-        matches = (match_res.get("data") or {}).get("matches") or []
 
-        looks: List[Dict[str, Any]] = []
-        for i in range(min(requested_limit, len(matches))):
-            looks.append(
-                {
-                    "items": [seeds[0], matches[i]["item"]],
-                    "match_score": matches[i]["score"],
-                    "description": f"Suggested look for {effective_occasion or 'any occasion'}",
-                    "style": style,
-                    "occasion": effective_occasion,
-                }
-            )
+    seed_res = (
+        db.table("items")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("is_deleted", False)
+        .in_("id", seed_ids)
+        .execute()
+    )
+    seeds = seed_res.data or []
+    if not seeds:
+        raise ItemNotFoundError()
 
-        logger.debug(
-            "Complete look generated",
-            user_id=user_id,
-            seed_count=len(seeds),
-            look_count=len(looks)
-        )
-        return {"data": {"complete_looks": looks}, "message": "OK"}
+    # Reuse match logic
+    match_res = await match_items(
+        MatchRequest(item_ids=seed_ids, limit=50),
+        user_id=user_id,
+        db=db,
+    )
+    matches = (match_res.get("data") or {}).get("matches") or []
 
-    except (ItemNotFoundError, ValidationError):
-        raise
-    except Exception as e:
-        logger.error(
-            "Complete-look error",
-            user_id=user_id,
-            error=str(e)
-        )
-        raise DatabaseError(
-            message="Failed to generate complete looks",
-            operation="complete_look"
-        )
+    looks: List[Dict[str, Any]] = [
+        {
+            "items": [seeds[0], matches[i]["item"]],
+            "match_score": matches[i]["score"],
+            "description": f"Suggested look for {effective_occasion or 'any occasion'}",
+            "style": style,
+            "occasion": effective_occasion,
+        }
+        for i in range(min(requested_limit, len(matches)))
+    ]
+
+    logger.debug(
+        "Complete look generated",
+        user_id=user_id,
+        seed_count=len(seeds),
+        look_count=len(looks)
+    )
+    return {"data": {"complete_looks": looks}, "message": "OK"}
 
 
 @router.get("/personalized", response_model=Dict[str, Any])
+@handle_route_errors(
+    operation="personalized",
+    error_message="Failed to fetch recommendations"
+)
 async def personalized(
     type: str = Query("outfits"),
     limit: int = Query(10, ge=1, le=50),
@@ -281,49 +520,40 @@ async def personalized(
     db: Client = Depends(get_db),
 ):
     """Return simple personalized recommendations (favorites + least worn)."""
-    try:
-        items_fav = (
-            db.table("items")
-            .select("*")
-            .eq("user_id", user_id)
-            .eq("is_favorite", True)
-            .limit(limit)
-            .execute()
-        ).data or []
+    items_fav = (
+        db.table("items")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("is_deleted", False)
+        .eq("is_favorite", True)
+        .limit(limit)
+        .execute()
+    ).data or []
 
-        items_least = (
-            db.table("items")
-            .select("*")
-            .eq("user_id", user_id)
-            .order("usage_times_worn", desc=False)
-            .limit(limit)
-            .execute()
-        ).data or []
+    items_least = (
+        db.table("items")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("is_deleted", False)
+        .order("usage_times_worn", desc=False)
+        .limit(limit)
+        .execute()
+    ).data or []
 
-        logger.debug(
-            "Personalized recommendations retrieved",
-            user_id=user_id,
-            favorites_count=len(items_fav),
-            least_worn_count=len(items_least)
-        )
-        return {
-            "data": {
-                "items": [{"item": i, "match_score": 90, "why_recommended": "Favorite item"} for i in items_fav][:limit],
-                "outfits": [],
-                "least_worn": items_least[:limit],
-            },
-            "message": "OK",
-        }
-    except Exception as e:
-        logger.error(
-            "Personalized error",
-            user_id=user_id,
-            error=str(e)
-        )
-        raise DatabaseError(
-            message="Failed to fetch recommendations",
-            operation="personalized"
-        )
+    logger.debug(
+        "Personalized recommendations retrieved",
+        user_id=user_id,
+        favorites_count=len(items_fav),
+        least_worn_count=len(items_least)
+    )
+    return {
+        "data": {
+            "items": [{"item": i, "match_score": 90, "why_recommended": "Favorite item"} for i in items_fav][:limit],
+            "outfits": [],
+            "least_worn": items_least[:limit],
+        },
+        "message": "OK",
+    }
 
 
 # ============================================================================
@@ -346,103 +576,235 @@ def _parse_coordinates(location: str) -> Optional[Tuple[float, float]]:
 
 
 @router.get("/weather", response_model=Dict[str, Any])
+@handle_route_errors(
+    operation="weather_recommendations",
+    error_message="Failed to generate weather recommendations"
+)
 async def weather_recommendations(
     location: Optional[str] = Query(None),
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
 ):
     """Return a weather-driven recommendation object for the frontend."""
-    try:
-        # Prefer user settings default_location when location isn't provided
-        if not location:
-            try:
-                settings_row = db.table("user_settings").select("default_location").eq("user_id", user_id).single().execute()
-                location = settings_row.data.get("default_location") if settings_row.data else None
-            except Exception:
-                location = None
+    # Prefer user settings default_location when location isn't provided
+    if not location:
+        try:
+            settings_row = db.table("user_settings").select("default_location").eq("user_id", user_id).single().execute()
+            location = settings_row.data.get("default_location") if settings_row.data else None
+        except Exception:
+            location = None
 
-        service = get_weather_service()
-        resolved_location = (location or "New York").strip()
-        coords = _parse_coordinates(resolved_location)
-        if coords:
-            weather = await service.get_weather_by_coordinates(lat=coords[0], lon=coords[1], units="imperial")
-        else:
-            weather = await service.get_weather(location=resolved_location, units="imperial")
-        temp_f = float((weather or {}).get("temperature") or 70)
-        temp_c = round((temp_f - 32.0) * 5.0 / 9.0, 1)
-        state = (weather or {}).get("weather_state") or (weather or {}).get("condition") or "unknown"
-        temp_category = (weather or {}).get("temp_category") or "mild"
+    service = get_weather_service()
+    resolved_location = (location or "New York").strip()
+    coords = _parse_coordinates(resolved_location)
+    if coords:
+        weather = await service.get_weather_by_coordinates(lat=coords[0], lon=coords[1], units="imperial")
+    else:
+        weather = await service.get_weather(location=resolved_location, units="imperial")
+    temp_f = float((weather or {}).get("temperature") or 70)
+    temp_c = round((temp_f - 32.0) * 5.0 / 9.0, 1)
+    state = (weather or {}).get("weather_state") or (weather or {}).get("condition") or "unknown"
+    temp_category = (weather or {}).get("temp_category") or "mild"
 
-        preferred_categories = ["tops", "bottoms", "shoes"]
-        avoid_categories: List[str] = []
-        additional_items: List[str] = []
-        items_to_avoid: List[str] = []
-        preferred_materials: List[str] = []
+    preferred_categories = ["tops", "bottoms", "shoes"]
+    avoid_categories: List[str] = []
+    additional_items: List[str] = []
+    items_to_avoid: List[str] = []
+    preferred_materials: List[str] = []
+    suggested_layers = 1
+    notes: List[str] = []
+    color_suggestions: List[str] = []
+
+    if temp_c < 5:
+        preferred_categories = ["outerwear", "tops", "bottoms", "shoes", "accessories"]
+        avoid_categories = ["swimwear"]
+        suggested_layers = 3
+        additional_items = ["coat", "scarf", "gloves"]
+        preferred_materials = ["wool", "fleece"]
+        notes.append("Dress in warm layers to stay comfortable.")
+        color_suggestions = ["navy", "black", "burgundy"]
+    elif temp_c < 12:
+        preferred_categories = ["outerwear", "tops", "bottoms", "shoes"]
+        suggested_layers = 2
+        additional_items = ["light jacket"]
+        preferred_materials = ["denim", "cotton", "knit"]
+        color_suggestions = ["gray", "navy", "beige"]
+    elif temp_c > 27:
+        preferred_categories = ["tops", "bottoms", "shoes", "accessories"]
+        avoid_categories = ["outerwear"]
         suggested_layers = 1
-        notes: List[str] = []
-        color_suggestions: List[str] = []
+        additional_items = ["sunglasses"]
+        preferred_materials = ["linen", "cotton"]
+        notes.append("Choose breathable fabrics and lighter colors.")
+        color_suggestions = ["white", "cream", "light blue"]
 
-        if temp_c < 5:
-            preferred_categories = ["outerwear", "tops", "bottoms", "shoes", "accessories"]
-            avoid_categories = ["swimwear"]
-            suggested_layers = 3
-            additional_items = ["coat", "scarf", "gloves"]
-            preferred_materials = ["wool", "fleece"]
-            notes.append("Dress in warm layers to stay comfortable.")
-            color_suggestions = ["navy", "black", "burgundy"]
-        elif temp_c < 12:
-            preferred_categories = ["outerwear", "tops", "bottoms", "shoes"]
-            suggested_layers = 2
-            additional_items = ["light jacket"]
-            preferred_materials = ["denim", "cotton", "knit"]
-            color_suggestions = ["gray", "navy", "beige"]
-        elif temp_c > 27:
-            preferred_categories = ["tops", "bottoms", "shoes", "accessories"]
-            avoid_categories = ["outerwear"]
-            suggested_layers = 1
-            additional_items = ["sunglasses"]
-            preferred_materials = ["linen", "cotton"]
-            notes.append("Choose breathable fabrics and lighter colors.")
-            color_suggestions = ["white", "cream", "light blue"]
+    if str(state).lower() in {"rainy", "stormy"}:
+        additional_items.extend(["umbrella", "rain jacket"])
+        preferred_materials.extend(["waterproof"])
+        notes.append("Rain expected — consider waterproof layers.")
 
-        if str(state).lower() in {"rainy", "stormy"}:
-            additional_items.extend(["umbrella", "rain jacket"])
-            preferred_materials.extend(["waterproof"])
-            notes.append("Rain expected — consider waterproof layers.")
+    logger.debug(
+        "Weather recommendations generated",
+        user_id=user_id,
+        location=location or "New York",
+        temperature=temp_c,
+        weather_state=state
+    )
+    return {
+        "data": {
+            "temperature": temp_c,
+            "temp_category": temp_category,
+            "weather_state": state,
+            "preferred_categories": preferred_categories,
+            "avoid_categories": avoid_categories,
+            "preferred_materials": preferred_materials,
+            "suggested_layers": suggested_layers,
+            "additional_items": additional_items,
+            "items_to_avoid": items_to_avoid,
+            "notes": notes,
+            "color_suggestions": color_suggestions,
+        },
+        "message": "OK",
+    }
 
-        logger.debug(
-            "Weather recommendations generated",
-            user_id=user_id,
-            location=location or "New York",
-            temperature=temp_c,
-            weather_state=state
+
+# ============================================================================
+# ASTROLOGY RECOMMENDATIONS (Vedic-inspired deterministic rules)
+# ============================================================================
+
+
+@router.get("/astrology", response_model=Dict[str, Any])
+@handle_route_errors(
+    operation="astrology_recommendations",
+    error_message="Failed to generate astrology recommendations"
+)
+async def astrology_recommendations(
+    target_date: Optional[date] = Query(None),
+    mode: str = Query("daily"),
+    limit_per_category: int = Query(4, ge=1, le=8),
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """Return astrology-driven lucky colors with wardrobe-linked picks."""
+    if mode not in {"daily", "important_meeting"}:
+        raise ValidationError(
+            message="Invalid mode",
+            details={"allowed": ["daily", "important_meeting"]},
         )
+
+    user_profile, users_profile_columns_missing = _get_user_birth_profile(db, user_id)
+    if (
+        users_profile_columns_missing
+        or not user_profile.get("birth_date")
+        or not user_profile.get("birth_time")
+        or not user_profile.get("birth_place")
+    ):
+        auth_profile = _get_auth_birth_profile(db, user_id)
+        user_profile["birth_date"] = user_profile.get("birth_date") or auth_profile.get("birth_date")
+        user_profile["birth_time"] = user_profile.get("birth_time") or auth_profile.get("birth_time")
+        user_profile["birth_place"] = user_profile.get("birth_place") or auth_profile.get("birth_place")
+
+    settings_timezone: Optional[str] = None
+    try:
+        settings_row = (
+            db.table("user_settings")
+            .select("timezone")
+            .eq("user_id", user_id)
+            .single()
+            .execute()
+        )
+        settings_timezone = (settings_row.data or {}).get("timezone")
+    except Exception:
+        settings_timezone = None
+
+    astrology_service = get_astrology_service()
+    birth_place = user_profile.get("birth_place")
+    effective_timezone = settings_timezone
+    if not effective_timezone and birth_place:
+        effective_timezone = await astrology_service.resolve_birth_timezone(str(birth_place))
+
+    effective_date = target_date or astrology_service.user_local_today(effective_timezone)
+
+    birth_date = _coerce_date(user_profile.get("birth_date"))
+    birth_time = _coerce_time(user_profile.get("birth_time"))
+    missing_fields: List[str] = []
+    if birth_date is None:
+        missing_fields.append("birth_date")
+
+    if missing_fields:
+        weekday = effective_date.strftime("%A")
+        notes = ["Add your date of birth in profile settings to unlock astrology recommendations."]
+        if users_profile_columns_missing:
+            notes.append(
+                "Database astrology columns are missing; using auth-metadata fallback for now. "
+                "Run migration 002_astrology_profile.sql in Supabase."
+            )
         return {
             "data": {
-                "temperature": temp_c,
-                "temp_category": temp_category,
-                "weather_state": state,
-                "preferred_categories": preferred_categories,
-                "avoid_categories": avoid_categories,
-                "preferred_materials": preferred_materials,
-                "suggested_layers": suggested_layers,
-                "additional_items": additional_items,
-                "items_to_avoid": items_to_avoid,
+                "status": "profile_required",
+                "target_date": effective_date.isoformat(),
+                "mode": mode,
+                "astrology_mode": "vedic_lite",
+                "missing_fields": missing_fields,
+                "context": {
+                    "weekday": weekday,
+                    "ruling_planet": _WEEKDAY_PLANET_LOOKUP[effective_date.weekday()],
+                    "moon_sign": None,
+                    "ascendant": None,
+                },
+                "lucky_colors": [],
+                "avoid_colors": [],
+                "wardrobe_picks": [],
+                "suggested_outfits": [],
                 "notes": notes,
-                "color_suggestions": color_suggestions,
             },
             "message": "OK",
         }
-    except Exception as e:
-        logger.error(
-            "Weather recommendations error",
-            user_id=user_id,
-            location=location,
-            error=str(e)
+
+    try:
+        items_res = (
+            db.table("items")
+            .select("*, item_images(*)")
+            .eq("user_id", user_id)
+            .eq("is_deleted", False)
+            .not_.in_("condition", ["laundry", "repair", "donate"])
+            .limit(600)
+            .execute()
         )
-        raise WeatherServiceError(
-            message="Failed to generate weather recommendations"
-        )
+        items = items_res.data or []
+    except Exception:
+        # Keep astrology colors usable even if related tables/columns are incomplete.
+        items = []
+
+    astrology_data = await astrology_service.generate_recommendation(
+        birth_date=birth_date,
+        birth_time=birth_time,
+        birth_place=str(birth_place).strip() if birth_place else None,
+        target_date=effective_date,
+        mode=mode,
+        items=items,
+        user_timezone=effective_timezone,
+        limit_per_category=limit_per_category,
+    )
+
+    logger.debug(
+        "Astrology recommendations generated",
+        user_id=user_id,
+        mode=mode,
+        target_date=effective_date.isoformat(),
+        astrology_mode=astrology_data.get("astrology_mode"),
+        lucky_colors=len(astrology_data.get("lucky_colors") or []),
+    )
+    return {
+        "data": {
+            "status": "ready",
+            "target_date": effective_date.isoformat(),
+            "mode": mode,
+            "missing_fields": [],
+            **astrology_data,
+        },
+        "message": "OK",
+    }
 
 
 # ============================================================================
@@ -451,6 +813,10 @@ async def weather_recommendations(
 
 
 @router.get("/similar", response_model=Dict[str, Any])
+@handle_route_errors(
+    operation="similar_items",
+    error_message="Failed to fetch similar items"
+)
 async def similar_items(
     item_id: str = Query(...),
     category: Optional[str] = Query(None),
@@ -458,135 +824,93 @@ async def similar_items(
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
 ):
-    try:
-        source = db.table("items").select("*").eq("id", item_id).eq("user_id", user_id).single().execute()
-        if not source.data:
-            raise ItemNotFoundError(item_id=item_id)
+    source = db.table("items").select("*").eq("id", item_id).eq("user_id", user_id).single().execute()
+    if not source.data:
+        raise ItemNotFoundError(item_id=item_id)
 
-        # Vector search best-effort
-        results: List[Dict[str, Any]] = []
-        try:
-            rate_check = await AISettingsService.check_rate_limit(
-                user_id=user_id,
-                operation_type="embedding",
-                db=db,
-            )
-            if rate_check["allowed"]:
-                embedding = await AIService.generate_item_embedding(source.data)
-                if embedding:
-                    await AISettingsService.increment_usage(
-                        user_id=user_id,
-                        operation_type="embedding",
-                        db=db,
-                    )
-                    vector_service = get_vector_service()
-                    matches = await vector_service.find_similar(
-                        embedding=embedding,
-                        user_id=user_id,
-                        category=category,
-                        exclude_item_ids=[item_id],
-                        top_k=limit,
-                        min_score=0.2,
-                    )
-                    match_ids = [m["item_id"] for m in matches if m.get("item_id")]
-                    if match_ids:
-                        items_res = db.table("items").select("*, item_images(*)").in_("id", match_ids).execute()
-                        by_id = {r["id"]: r for r in (items_res.data or [])}
-                        for m in matches:
-                            it = by_id.get(m.get("item_id"))
-                            if not it:
-                                continue
-                            results.append(
-                                {
-                                    "item_id": it["id"],
-                                    "item_name": it.get("name"),
-                                    "image_url": (it.get("item_images") or [{}])[0].get("thumbnail_url")
-                                    or (it.get("item_images") or [{}])[0].get("image_url"),
-                                    "category": it.get("category"),
-                                    "sub_category": it.get("sub_category"),
-                                    "brand": it.get("brand"),
-                                    "colors": it.get("colors") or [],
-                                    "similarity": float(m.get("score") or 0) * 100.0,
-                                    "reasons": ["Similar style and attributes"],
-                                }
-                            )
-            else:
-                logger.info(
-                    "Embedding rate limit exceeded for recommendations similar, using fallback",
+    # Vector search best-effort
+    results: List[Dict[str, Any]] = []
+    try:
+        rate_check = await AISettingsService.check_rate_limit(
+            user_id=user_id,
+            operation_type="embedding",
+            db=db,
+        )
+        if rate_check["allowed"]:
+            embedding = await AIService.generate_item_embedding(source.data)
+            if embedding:
+                await AISettingsService.increment_usage(
                     user_id=user_id,
-                    item_id=item_id,
-                    remaining=rate_check["remaining"],
-                    limit=rate_check["limit"],
+                    operation_type="embedding",
+                    db=db,
                 )
-        except Exception as ve:
-            logger.debug(
-                "Vector search failed, falling back to rule-based",
+                vector_service = get_vector_service()
+                matches = await vector_service.find_similar(
+                    embedding=embedding,
+                    user_id=user_id,
+                    category=category,
+                    exclude_item_ids=[item_id],
+                    top_k=limit,
+                    min_score=0.2,
+                )
+                match_ids = [m["item_id"] for m in matches if m.get("item_id")]
+                if match_ids:
+                    items_res = db.table("items").select("*, item_images(*)").in_("id", match_ids).execute()
+                    by_id = {r["id"]: r for r in (items_res.data or [])}
+                    results = [
+                        _build_similar_item_response(m, by_id[m["item_id"]])
+                        for m in matches
+                        if m.get("item_id") and m["item_id"] in by_id
+                    ]
+        else:
+            logger.info(
+                "Embedding rate limit exceeded for recommendations similar, using fallback",
                 user_id=user_id,
                 item_id=item_id,
-                error=str(ve)
+                remaining=rate_check["remaining"],
+                limit=rate_check["limit"],
             )
-            results = []
-
-        # Fallback: same category + color overlap
-        if not results:
-            candidates = (
-                db.table("items")
-                .select("*, item_images(*)")
-                .eq("user_id", user_id)
-                .neq("id", item_id)
-                .limit(200)
-                .execute()
-            ).data or []
-            src_colors = set((source.data.get("colors") or []))
-            scored = []
-            for cand in candidates:
-                score = 0.0
-                if category and cand.get("category") != category:
-                    continue
-                if cand.get("category") == source.data.get("category"):
-                    score += 0.4
-                cand_colors = set((cand.get("colors") or []))
-                if src_colors and cand_colors and src_colors & cand_colors:
-                    score += 0.4
-                scored.append((score, cand))
-            scored.sort(key=lambda t: t[0], reverse=True)
-            for score, cand in scored[:limit]:
-                images = cand.get("item_images") or []
-                primary = next((i for i in images if i.get("is_primary")), images[0] if images else None)
-                results.append(
-                    {
-                        "item_id": cand["id"],
-                        "item_name": cand.get("name"),
-                        "image_url": (primary or {}).get("thumbnail_url") or (primary or {}).get("image_url"),
-                        "category": cand.get("category"),
-                        "sub_category": cand.get("sub_category"),
-                        "brand": cand.get("brand"),
-                        "colors": cand.get("colors") or [],
-                        "similarity": int(score * 100),
-                        "reasons": ["Similar category/colors"],
-                    }
-                )
-
+    except Exception as ve:
         logger.debug(
-            "Similar items retrieved",
+            "Vector search failed, falling back to rule-based",
             user_id=user_id,
             item_id=item_id,
-            result_count=len(results)
+            error=str(ve)
         )
-        return {"data": results, "message": "OK"}
-    except ItemNotFoundError:
-        raise
-    except Exception as e:
-        logger.error(
-            "Similar items error",
-            user_id=user_id,
-            item_id=item_id,
-            error=str(e)
-        )
-        raise DatabaseError(
-            message="Failed to fetch similar items",
-            operation="similar_items"
-        )
+        results = []
+
+    # Fallback: same category + color overlap
+    if not results:
+        candidates = (
+            db.table("items")
+            .select("*, item_images(*)")
+            .eq("user_id", user_id)
+            .neq("id", item_id)
+            .limit(200)
+            .execute()
+        ).data or []
+        src_colors = set((source.data.get("colors") or []))
+        scored = []
+        for cand in candidates:
+            score = 0.0
+            if category and cand.get("category") != category:
+                continue
+            if cand.get("category") == source.data.get("category"):
+                score += 0.4
+            cand_colors = set((cand.get("colors") or []))
+            if src_colors and cand_colors and src_colors & cand_colors:
+                score += 0.4
+            scored.append((score, cand))
+        scored.sort(key=lambda t: t[0], reverse=True)
+        results = [_build_fallback_similar_response(cand, score) for score, cand in scored[:limit]]
+
+    logger.debug(
+        "Similar items retrieved",
+        user_id=user_id,
+        item_id=item_id,
+        result_count=len(results)
+    )
+    return {"data": results, "message": "OK"}
 
 
 # ============================================================================
@@ -595,166 +919,147 @@ async def similar_items(
 
 
 @router.get("/style/{item_id}", response_model=Dict[str, Any])
+@handle_route_errors(
+    operation="style_analysis",
+    error_message="Failed to analyze style"
+)
 async def style_analysis(
     item_id: UUID,
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
 ):
-    try:
-        item_id_str = str(item_id)
-        item = db.table("items").select("*").eq("id", item_id_str).eq("user_id", user_id).single().execute()
-        if not item.data:
-            raise ItemNotFoundError(item_id=item_id_str)
+    item_id_str = str(item_id)
+    item = db.table("items").select("*").eq("id", item_id_str).eq("user_id", user_id).single().execute()
+    if not item.data:
+        raise ItemNotFoundError(item_id=item_id_str)
 
-        tags = [str(t).lower() for t in (item.data.get("tags") or [])]
-        style = item.data.get("style") or next((t for t in tags if t in {"casual", "formal", "business", "sporty", "streetwear", "vintage", "minimalist"}), "casual")
+    tags = [str(t).lower() for t in (item.data.get("tags") or [])]
+    style = item.data.get("style") or next((t for t in tags if t in {"casual", "formal", "business", "sporty", "streetwear", "vintage", "minimalist"}), "casual")
 
-        # Simple alternatives
-        alt = [s for s in ["casual", "business", "formal", "streetwear", "minimalist"] if s != style][:3]
+    # Simple alternatives
+    alt = [s for s in ["casual", "business", "formal", "streetwear", "minimalist"] if s != style][:3]
 
-        # Suggested occasions
-        suggested_occasions = []
-        if style in {"business", "formal"}:
-            suggested_occasions.extend(["work", "formal"])
-        else:
-            suggested_occasions.extend(["casual"])
-        if "workout" in tags:
-            suggested_occasions.append("workout")
+    # Suggested occasions
+    suggested_occasions = []
+    if style in {"business", "formal"}:
+        suggested_occasions.extend(["work", "formal"])
+    else:
+        suggested_occasions.extend(["casual"])
+    if "workout" in tags:
+        suggested_occasions.append("workout")
 
-        # Suggested companions: top 3 match results
-        match = await match_items(MatchRequest(item_id=item_id_str, limit=10), user_id=user_id, db=db)
-        matches = (match.get("data") or {}).get("matches") or []
-        suggested_companions = []
-        for m in matches[:5]:
-            it = m.get("item") or {}
-            suggested_companions.append(
-                {
-                    "item_id": it.get("id"),
-                    "item_name": it.get("name"),
-                    "category": it.get("category"),
-                    "confidence": m.get("score", 0) / 100.0,
-                }
-            )
-
-        logger.debug(
-            "Style analysis completed",
-            user_id=user_id,
-            item_id=item_id_str,
-            style=style
-        )
-        return {
-            "data": {
-                "style": style,
-                "confidence": 0.7,
-                "alternative_styles": [{"style": s, "confidence": 0.5} for s in alt],
-                "color_palette": item.data.get("colors") or [],
-                "suggested_occasions": suggested_occasions,
-                "suggested_companions": suggested_companions,
-            },
-            "message": "OK",
+    # Suggested companions: top 3 match results
+    match = await match_items(MatchRequest(item_id=item_id_str, limit=10), user_id=user_id, db=db)
+    matches = (match.get("data") or {}).get("matches") or []
+    suggested_companions = [
+        {
+            "item_id": it.get("id"),
+            "item_name": it.get("name"),
+            "category": it.get("category"),
+            "confidence": m.get("score", 0) / 100.0,
         }
-    except ItemNotFoundError:
-        raise
-    except Exception as e:
-        logger.error(
-            "Style analysis error",
-            user_id=user_id,
-            item_id=str(item_id),
-            error=str(e)
-        )
-        raise DatabaseError(
-            message="Failed to analyze style",
-            operation="style_analysis"
-        )
+        for m in matches[:5]
+        if (it := m.get("item"))
+    ]
+
+    logger.debug(
+        "Style analysis completed",
+        user_id=user_id,
+        item_id=item_id_str,
+        style=style
+    )
+    return {
+        "data": {
+            "style": style,
+            "confidence": 0.7,
+            "alternative_styles": [{"style": s, "confidence": 0.5} for s in alt],
+            "color_palette": item.data.get("colors") or [],
+            "suggested_occasions": suggested_occasions,
+            "suggested_companions": suggested_companions,
+        },
+        "message": "OK",
+    }
 
 
 # ============================================================================
 # WARDROBE GAPS + SHOPPING + CAPSULE (MVP heuristics)
 # ============================================================================
 
+# Rough targets for a balanced wardrobe
+_WARDROBE_IDEALS = {
+    "tops": (8, 20),
+    "bottoms": (5, 12),
+    "shoes": (3, 10),
+    "outerwear": (2, 8),
+    "accessories": (3, 20),
+}
+
 
 @router.get("/wardrobe-gaps", response_model=Dict[str, Any])
+@handle_route_errors(
+    operation="wardrobe_gaps",
+    error_message="Failed to analyze wardrobe gaps"
+)
 async def wardrobe_gaps(
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
 ):
-    try:
-        items = db.table("items").select("id,category").eq("user_id", user_id).eq("is_deleted", False).execute().data or []
-        if not items:
-            raise ItemNotFoundError(message="No items to analyze")
+    items = db.table("items").select("id,category").eq("user_id", user_id).eq("is_deleted", False).execute().data or []
+    if not items:
+        raise ItemNotFoundError(message="No items to analyze")
 
-        counts: Dict[str, int] = {}
-        for it in items:
-            cat = (it.get("category") or "other").lower()
-            counts[cat] = counts.get(cat, 0) + 1
+    counts = _count_by_category(items)
 
-        # Rough targets for a balanced wardrobe
-        ideals = {
-            "tops": (8, 20),
-            "bottoms": (5, 12),
-            "shoes": (3, 10),
-            "outerwear": (2, 8),
-            "accessories": (3, 20),
-        }
-
-        breakdown = []
-        missing = []
-        for cat, (ideal_min, ideal_max) in ideals.items():
-            count = counts.get(cat, 0)
-            under = count < ideal_min
-            breakdown.append(
+    breakdown = []
+    missing = []
+    for cat, (ideal_min, ideal_max) in _WARDROBE_IDEALS.items():
+        count = counts.get(cat, 0)
+        under = count < ideal_min
+        breakdown.append(
+            {
+                "category": cat,
+                "count": count,
+                "ideal_min": ideal_min,
+                "ideal_max": ideal_max,
+                "is_underrepresented": under,
+            }
+        )
+        if under:
+            missing.append(
                 {
                     "category": cat,
-                    "count": count,
-                    "ideal_min": ideal_min,
-                    "ideal_max": ideal_max,
-                    "is_underrepresented": under,
+                    "description": f"Add more versatile {cat} to increase outfit options.",
+                    "priority": "high" if cat in {"tops", "bottoms", "shoes"} else "medium",
+                    "would_complete": 10,
+                    "estimated_cpw": 5.0,
                 }
             )
-            if under:
-                missing.append(
-                    {
-                        "category": cat,
-                        "description": f"Add more versatile {cat} to increase outfit options.",
-                        "priority": "high" if cat in {"tops", "bottoms", "shoes"} else "medium",
-                        "would_complete": 10,
-                        "estimated_cpw": 5.0,
-                    }
-                )
 
-        completeness = 100 - min(80, len(missing) * 12)
+    completeness = 100 - min(80, len(missing) * 12)
 
-        logger.debug(
-            "Wardrobe gaps analyzed",
-            user_id=user_id,
-            item_count=len(items),
-            missing_categories=len(missing)
-        )
-        return {
-            "data": {
-                "analysis": {
-                    "category_breakdown": breakdown,
-                    "missing_essentials": missing,
-                    "wardrobe_completeness_score": completeness,
-                }
-            },
-            "message": "OK",
-        }
-    except ItemNotFoundError:
-        raise
-    except Exception as e:
-        logger.error(
-            "Wardrobe gaps error",
-            user_id=user_id,
-            error=str(e)
-        )
-        raise DatabaseError(
-            message="Failed to analyze wardrobe gaps",
-            operation="wardrobe_gaps"
-        )
+    logger.debug(
+        "Wardrobe gaps analyzed",
+        user_id=user_id,
+        item_count=len(items),
+        missing_categories=len(missing)
+    )
+    return {
+        "data": {
+            "analysis": {
+                "category_breakdown": breakdown,
+                "missing_essentials": missing,
+                "wardrobe_completeness_score": completeness,
+            }
+        },
+        "message": "OK",
+    }
 
 
 @router.get("/shopping", response_model=Dict[str, Any])
+@handle_route_errors(
+    operation="shopping_recommendations",
+    error_message="Failed to get shopping recommendations"
+)
 async def shopping_recommendations(
     category: Optional[str] = Query(None),
     budget: Optional[float] = Query(None, ge=0),
@@ -763,33 +1068,24 @@ async def shopping_recommendations(
     db: Client = Depends(get_db),
 ):
     """Return actionable shopping recommendations based on wardrobe gaps."""
-    try:
-        gaps = await wardrobe_gaps(user_id=user_id, db=db)
-        missing = ((gaps.get("data") or {}).get("analysis") or {}).get("missing_essentials") or []
-        if category:
-            missing = [m for m in missing if m.get("category") == category]
-        logger.debug(
-            "Shopping recommendations generated",
-            user_id=user_id,
-            category=category,
-            recommendation_count=len(missing)
-        )
-        return {"data": missing, "message": "OK"}
-    except ItemNotFoundError:
-        raise
-    except Exception as e:
-        logger.error(
-            "Shopping recommendations error",
-            user_id=user_id,
-            error=str(e)
-        )
-        raise DatabaseError(
-            message="Failed to get shopping recommendations",
-            operation="shopping_recommendations"
-        )
+    gaps = await wardrobe_gaps(user_id=user_id, db=db)
+    missing = ((gaps.get("data") or {}).get("analysis") or {}).get("missing_essentials") or []
+    if category:
+        missing = [m for m in missing if m.get("category") == category]
+    logger.debug(
+        "Shopping recommendations generated",
+        user_id=user_id,
+        category=category,
+        recommendation_count=len(missing)
+    )
+    return {"data": missing, "message": "OK"}
 
 
 @router.get("/capsule", response_model=Dict[str, Any])
+@handle_route_errors(
+    operation="capsule_wardrobe",
+    error_message="Failed to generate capsule wardrobe"
+)
 async def capsule_wardrobe(
     season: Optional[str] = Query(None),
     style: Optional[str] = Query(None),
@@ -798,69 +1094,45 @@ async def capsule_wardrobe(
     db: Client = Depends(get_db),
 ):
     """Return a simple capsule wardrobe suggestion from existing favorites."""
-    try:
-        items_res = (
-            db.table("items")
-            .select("id,name,category,colors,brand,item_images(image_url,thumbnail_url,is_primary)")
-            .eq("user_id", user_id)
-            .eq("is_deleted", False)
-            .order("is_favorite", desc=True)
-            .order("usage_times_worn", desc=True)
-            .limit(item_count)
-            .execute()
-        )
-        items = []
-        for it in items_res.data or []:
-            images = it.get("item_images") or []
-            primary = next((i for i in images if i.get("is_primary")), images[0] if images else None)
-            items.append(
-                {
-                    "item_id": it["id"],
-                    "item_name": it.get("name"),
-                    "image_url": (primary or {}).get("thumbnail_url") or (primary or {}).get("image_url"),
-                    "category": it.get("category"),
-                    "position": it.get("category"),
-                    "confidence": 0.7,
-                }
-            )
+    items_res = (
+        db.table("items")
+        .select("id,name,category,colors,brand,item_images(image_url,thumbnail_url,is_primary)")
+        .eq("user_id", user_id)
+        .eq("is_deleted", False)
+        .order("is_favorite", desc=True)
+        .order("usage_times_worn", desc=True)
+        .limit(item_count)
+        .execute()
+    )
+    items = [_build_complete_look_response(it, 0) for it in items_res.data or []]
 
-        logger.debug(
-            "Capsule wardrobe generated",
-            user_id=user_id,
-            season=season,
-            item_count=len(items)
-        )
-        return {
-            "data": {
-                "name": f"{season or 'All-season'} capsule",
-                "description": "A minimal set of versatile items from your wardrobe.",
-                "items": items,
-                "outfits": [],
-                "statistics": {
-                    "total_outfits_possible": max(10, len(items) * 2),
-                    "cost_per_wear_estimate": 5.0,
-                    "versatility_score": 75,
-                },
+    logger.debug(
+        "Capsule wardrobe generated",
+        user_id=user_id,
+        season=season,
+        item_count=len(items)
+    )
+    return {
+        "data": {
+            "name": f"{season or 'All-season'} capsule",
+            "description": "A minimal set of versatile items from your wardrobe.",
+            "items": items,
+            "outfits": [],
+            "statistics": {
+                "total_outfits_possible": max(10, len(items) * 2),
+                "cost_per_wear_estimate": 5.0,
+                "versatility_score": 75,
             },
-            "message": "OK",
-        }
-    except Exception as e:
-        logger.error(
-            "Capsule wardrobe error",
-            user_id=user_id,
-            error=str(e)
-        )
-        raise DatabaseError(
-            message="Failed to generate capsule wardrobe",
-            operation="capsule_wardrobe"
-        )
-
-
-class RateRecommendationRequest(BaseModel):
-    rating: str = Field(..., description="thumbs_up|thumbs_down|neutral")
+        },
+        "message": "OK",
+    }
 
 
 @router.post("/{recommendation_id}/rate", response_model=Dict[str, Any])
+@handle_route_errors(
+    operation="rate_recommendation",
+    error_message="Failed to store rating"
+)
 async def rate_recommendation(
     recommendation_id: UUID,
     request: RateRecommendationRequest,
@@ -868,30 +1140,18 @@ async def rate_recommendation(
     db: Client = Depends(get_db),
 ):
     """Store user feedback to improve future recommendations."""
-    try:
-        db.table("recommendation_logs").insert(
-            {
-                "id": str(recommendation_id),
-                "user_id": user_id,
-                "recommendation_type": "rating",
-                "feedback": {"rating": request.rating},
-            }
-        ).execute()
-        logger.info(
-            "Recommendation rated",
-            user_id=user_id,
-            recommendation_id=str(recommendation_id),
-            rating=request.rating
-        )
-        return {"data": {"saved": True}, "message": "OK"}
-    except Exception as e:
-        logger.error(
-            "Rate recommendation error",
-            user_id=user_id,
-            recommendation_id=str(recommendation_id),
-            error=str(e)
-        )
-        raise DatabaseError(
-            message="Failed to store rating",
-            operation="rate_recommendation"
-        )
+    db.table("recommendation_logs").insert(
+        {
+            "id": str(recommendation_id),
+            "user_id": user_id,
+            "recommendation_type": "rating",
+            "feedback": {"rating": request.rating},
+        }
+    ).execute()
+    logger.info(
+        "Recommendation rated",
+        user_id=user_id,
+        recommendation_id=str(recommendation_id),
+        rating=request.rating
+    )
+    return {"data": {"saved": True}, "message": "OK"}

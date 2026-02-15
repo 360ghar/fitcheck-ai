@@ -47,17 +47,15 @@ class BatchExtractionRepository {
   /// Returns a stream of SSE events for real-time progress updates
   Stream<SSEEvent> subscribeToEvents(String jobId) {
     final path = ApiConstants.aiBatchExtractEvents(jobId);
-    return _sseService.connect(path).map(
-      (event) => SSEEvent(type: event.type, data: event.data),
-    );
+    return _sseService
+        .connect(path)
+        .map((event) => SSEEvent(type: event.type, data: event.data));
   }
 
   /// Cancel a batch extraction job
   Future<void> cancelJob(String jobId) async {
     try {
-      await _apiClient.post(
-        ApiConstants.aiBatchExtractCancel(jobId),
-      );
+      await _apiClient.post(ApiConstants.aiBatchExtractCancel(jobId));
     } on DioException catch (e) {
       throw handleDioException(e);
     }
@@ -90,11 +88,23 @@ class BatchExtractionRepository {
       final itemsList = eventData['items'] as List;
       for (final itemData in itemsList) {
         try {
-          final item = BatchExtractedItem.fromJson({
-            ...itemData as Map<String, dynamic>,
-            'id': itemData['id'] ?? 'item_${DateTime.now().millisecondsSinceEpoch}',
-            'sourceImageId': sourceImageId,
-          });
+          final raw = itemData as Map<String, dynamic>;
+          final normalized = <String, dynamic>{
+            ...raw,
+            'temp_id':
+                raw['temp_id'] ??
+                raw['id'] ??
+                'item_${DateTime.now().millisecondsSinceEpoch}',
+            'image_id': raw['image_id'] ?? sourceImageId,
+            'name':
+                raw['name'] ??
+                raw['sub_category'] ??
+                raw['category'] ??
+                'New Item',
+            'status': raw['status'] ?? 'detected',
+            'isSelected': raw['include_in_wardrobe'] ?? true,
+          };
+          final item = BatchExtractedItem.fromJson({...normalized});
           items.add(item);
         } catch (e) {
           if (kDebugMode) {

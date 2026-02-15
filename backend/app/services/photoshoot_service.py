@@ -22,6 +22,7 @@ from app.models.photoshoot import (
     PhotoshootStatus,
     PhotoshootPrompt,
     GeneratedImage,
+    ImageGenerationFailure,
     PhotoshootUsage,
     PhotoshootResultResponse,
     UseCaseInfo,
@@ -140,6 +141,37 @@ Style should be visually cohesive, Instagram-worthy, and artistically compelling
         "example_prompts": [],
     },
 }
+
+PHOTOSHOOT_FIDELITY_APPENDIX = """CRITICAL FACE ADHERENCE REQUIREMENTS:
+This is a photoshoot of the EXACT SAME PERSON shown in the reference image(s).
+The generated image MUST be this specific individual - not someone who looks similar.
+
+FACE IDENTITY - MANDATORY EXACT MATCH:
+- EXACT facial structure: face shape, jawline, chin, cheekbones must be identical
+- EXACT eye features: eye shape, eye color, eye spacing, eyebrows, eyelid shape
+- EXACT nose: nose shape, nose bridge, nostril shape, nose size and proportions
+- EXACT mouth: lip shape, lip fullness, mouth width, smile characteristics
+- EXACT skin: skin tone, skin texture, any visible marks, moles, or features
+- EXACT hair: hair color, hair texture, hairstyle, hairline, facial hair if any
+- EXACT age appearance: maintain the same apparent age
+- EXACT gender presentation: maintain the same gender appearance
+
+OUTFIT ITEM FIDELITY - MANDATORY EXACT MATCH:
+- Treat the outfit in this prompt as a strict inventory.
+- Match all clothing, footwear, and accessories exactly as described.
+- Preserve exact silhouettes, fit, layering, color shades, textures, prints, trims, and hardware.
+- Do not add, remove, swap, or restyle outfit items.
+- Do not invent extra props or fashion elements.
+
+MANDATORY PRE-GENERATION QUALITY CONTROL (INTERNAL):
+- Think twice before you generate.
+- Re-evaluate the reference image(s) and outfit instructions a second time before rendering.
+- Build a detailed internal checklist for face identity and each outfit item.
+- Verify every checklist item is satisfied before finalizing.
+- If uncertain, prioritize the reference person features and explicit outfit text over assumptions.
+- Do not output your checklist; output only the final image.
+
+Generate a single high-quality photorealistic image of THIS EXACT PERSON."""
 
 
 class PhotoshootService:
@@ -371,6 +403,10 @@ First, carefully analyze the person in the provided reference image. Create a de
 STEP 2 - GENERATE PROMPTS:
 Generate exactly {num_prompts} diverse, detailed image generation prompts for this person.
 Each full_prompt MUST start with the complete person description from Step 1.
+For each prompt, provide an outfit description with explicit item-level detail:
+- top(s), bottom(s), outerwear (if any), footwear, accessories
+- include color shades, materials, textures, silhouette/fit, and notable details
+- avoid vague outfit phrases like "stylish look" without concrete item details
 
 Return a JSON object with this exact structure:
 {{
@@ -394,6 +430,8 @@ CRITICAL REQUIREMENTS:
 - This ensures every generated image depicts the EXACT SAME PERSON with identical features
 - The scene description (setting, outfit, pose, etc.) comes AFTER the person description
 - Each prompt should be unique and cover different aspects of the use case
+- Think twice and re-evaluate before finalizing each prompt
+- Re-check face details, outfit item details, and internal consistency before returning JSON
 """
 
         subject_hint = ""  # Will be extracted from response if available
@@ -417,7 +455,7 @@ CRITICAL REQUIREMENTS:
                         },
                         {
                             "type": "text",
-                            "text": f"Use case guidance:\n{guidance}\n\nAnalyze this person and generate {num_prompts} photoshoot prompts following the instructions above."
+                            "text": f"Use case guidance:\n{guidance}\n\nAnalyze this person and generate {num_prompts} photoshoot prompts following the instructions above. Think twice and re-evaluate before finalizing the JSON."
                         }
                     ]
 
@@ -433,7 +471,10 @@ CRITICAL REQUIREMENTS:
                     response = await ai_service.chat(
                         messages=[
                             ChatMessage(role="system", content=system_prompt),
-                            ChatMessage(role="user", content=guidance),
+                            ChatMessage(
+                                role="user",
+                                content=f"{guidance}\n\nThink twice and re-evaluate before finalizing the JSON.",
+                            ),
                         ],
                         temperature=0.8,
                     )
@@ -568,16 +609,86 @@ CRITICAL REQUIREMENTS:
             theme = f"Use case: {use_case.value}."
 
         seeds = [
-            ("modern studio", "minimalist monochrome outfit", "3/4 angle portrait", "softbox key light", "editorial", "confident"),
-            ("sunlit cafe", "smart casual", "candid seated", "natural window light", "lifestyle", "approachable"),
-            ("city street", "tailored blazer", "walking mid-step", "golden hour", "street style", "energetic"),
-            ("office", "business formal", "front-facing headshot", "soft natural light", "corporate", "professional"),
-            ("rooftop", "fashion-forward look", "power stance", "dramatic rim light", "high-fashion", "bold"),
-            ("park", "casual layered outfit", "relaxed smile", "diffused daylight", "candid", "warm"),
-            ("neutral backdrop", "classic formal", "close-up portrait", "studio lighting", "headshot", "friendly"),
-            ("hotel lobby", "elevated evening wear", "three-quarter body", "warm ambient light", "luxury", "poised"),
-            ("beach", "summer casual", "looking over shoulder", "sunset light", "travel", "joyful"),
-            ("gallery", "modern chic", "artistic pose", "moody spotlight", "editorial", "thoughtful"),
+            (
+                "modern studio",
+                "black structured blazer over ivory silk blouse, high-waisted black tailored trousers, black pointed-toe loafers, slim silver watch and stud earrings",
+                "3/4 angle portrait",
+                "softbox key light",
+                "editorial",
+                "confident",
+            ),
+            (
+                "sunlit cafe",
+                "light blue button-down shirt with rolled sleeves, beige straight-leg chinos, white low-top sneakers, brown leather belt, minimal bracelet",
+                "candid seated",
+                "natural window light",
+                "lifestyle",
+                "approachable",
+            ),
+            (
+                "city street",
+                "charcoal tailored blazer, crisp white crew-neck tee, dark indigo slim jeans, black Chelsea boots, matte black crossbody bag",
+                "walking mid-step",
+                "golden hour",
+                "street style",
+                "energetic",
+            ),
+            (
+                "office",
+                "navy suit jacket and matching trousers, pale blue shirt, polished brown oxford shoes, subtle tie clip, classic wristwatch",
+                "front-facing headshot",
+                "soft natural light",
+                "corporate",
+                "professional",
+            ),
+            (
+                "rooftop",
+                "structured monochrome trench coat, fitted mock-neck top, tailored wide-leg pants, clean leather ankle boots, geometric statement earrings",
+                "power stance",
+                "dramatic rim light",
+                "high-fashion",
+                "bold",
+            ),
+            (
+                "park",
+                "olive utility jacket over white tee, medium-wash straight jeans, tan sneakers, canvas tote bag, simple necklace",
+                "relaxed smile",
+                "diffused daylight",
+                "candid",
+                "warm",
+            ),
+            (
+                "neutral backdrop",
+                "classic black sheath dress with clean neckline, fitted blazer layer, black closed-toe heels, pearl studs, slim bracelet",
+                "close-up portrait",
+                "studio lighting",
+                "headshot",
+                "friendly",
+            ),
+            (
+                "hotel lobby",
+                "deep emerald evening blazer, satin camisole, tailored tapered trousers, black heeled sandals, metallic clutch, layered pendant necklace",
+                "three-quarter body",
+                "warm ambient light",
+                "luxury",
+                "poised",
+            ),
+            (
+                "beach",
+                "light linen button shirt, sand-colored relaxed shorts, minimalist leather sandals, woven hat, lightweight sunglasses",
+                "looking over shoulder",
+                "sunset light",
+                "travel",
+                "joyful",
+            ),
+            (
+                "gallery",
+                "cream oversized blazer over black turtleneck, pleated midi skirt, pointed ankle boots, sculptural ring set, structured mini bag",
+                "artistic pose",
+                "moody spotlight",
+                "editorial",
+                "thoughtful",
+            ),
         ]
 
         prompts: List[PhotoshootPrompt] = []
@@ -587,6 +698,8 @@ CRITICAL REQUIREMENTS:
                 f"{base} {theme} "
                 f"Setting: {setting}. Outfit: {outfit}. Pose: {pose}. "
                 f"Lighting: {lighting}. Style: {style}. Mood: {mood}. "
+                "Outfit fidelity is mandatory: match every listed clothing item, footwear item, and accessory exactly; do not add or remove items. "
+                "Think twice and re-evaluate before rendering. "
                 "High-end professional photography, sharp focus, flattering composition."
             )
             prompts.append(
@@ -613,7 +726,7 @@ CRITICAL REQUIREMENTS:
         prompts: List[PhotoshootPrompt],
         user_id: Optional[str] = None,
         db: Optional[Client] = None,
-    ) -> List[GeneratedImage]:
+    ) -> Tuple[List[GeneratedImage], List[ImageGenerationFailure]]:
         """Generate photoshoot images using AIProviderService.
 
         Uses the existing image generation infrastructure with identity preservation
@@ -654,37 +767,10 @@ CRITICAL REQUIREMENTS:
                         "image_url": {"url": ref_url}
                     })
 
-                # Add the generation prompt with comprehensive face adherence
+                # Add the generation prompt with strict identity + outfit fidelity controls
                 enhanced_prompt = f"""{prompt.full_prompt}
 
-CRITICAL FACE ADHERENCE REQUIREMENTS:
-This is a photoshoot of the EXACT SAME PERSON shown in the reference image(s).
-The generated image MUST be this specific individual - not someone who looks similar.
-
-FACE IDENTITY - MANDATORY EXACT MATCH:
-- EXACT facial structure: face shape, jawline, chin, cheekbones must be identical
-- EXACT eye features: eye shape, eye color, eye spacing, eyebrows, eyelid shape
-- EXACT nose: nose shape, nose bridge, nostril shape, nose size and proportions
-- EXACT mouth: lip shape, lip fullness, mouth width, smile characteristics
-- EXACT skin: skin tone, skin texture, any visible marks, moles, or features
-- EXACT hair: hair color, hair texture, hairstyle, hairline, facial hair if any
-- EXACT age appearance: maintain the same apparent age - do not make younger or older
-- EXACT gender presentation: maintain the same gender appearance
-
-STRUCTURAL PRESERVATION:
-- Face proportions and symmetry must match reference exactly
-- Head shape and size relative to body must be consistent
-- Ear shape and position if visible must match
-- Neck proportions must be consistent with reference
-
-DO NOT:
-- Idealize, beautify, or modify any facial features
-- Change apparent age, gender, or ethnicity
-- Alter face shape or bone structure
-- Smooth, filter, or modify skin texture unnaturally
-- Change any distinguishing facial characteristics
-
-Generate a single high-quality photorealistic image of THIS EXACT PERSON."""
+{PHOTOSHOOT_FIDELITY_APPENDIX}"""
 
                 content.append({"type": "text", "text": enhanced_prompt})
 
@@ -722,15 +808,21 @@ Generate a single high-quality photorealistic image of THIS EXACT PERSON."""
             tasks = [generate_with_semaphore(p) for p in prompts]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Filter successful results
+            # Filter successful and failed results
             successful: List[GeneratedImage] = []
+            failures: List[ImageGenerationFailure] = []
             for i, result in enumerate(results):
+                prompt_index = prompts[i].index if i < len(prompts) else i
                 if isinstance(result, GeneratedImage):
                     successful.append(result)
                 elif isinstance(result, Exception):
-                    logger.error(f"Image {i} generation failed with exception: {result}")
+                    error_text = str(result).strip() or result.__class__.__name__
+                    logger.error(f"Image {prompt_index} generation failed with exception: {error_text}")
+                    failures.append(ImageGenerationFailure(index=prompt_index, error=error_text))
                 else:
-                    logger.warning(f"Image {i} generation returned None")
+                    error_text = "Image generation returned no result"
+                    logger.warning(f"Image {prompt_index} generation returned None")
+                    failures.append(ImageGenerationFailure(index=prompt_index, error=error_text))
 
             if not successful:
                 raise ServiceError("All image generations failed")
@@ -738,8 +830,10 @@ Generate a single high-quality photorealistic image of THIS EXACT PERSON."""
             # Sort by index
             successful.sort(key=lambda img: img.index)
 
-            logger.info(f"Successfully generated {len(successful)}/{len(prompts)} images")
-            return successful
+            logger.info(
+                f"Successfully generated {len(successful)}/{len(prompts)} images"
+            )
+            return successful, failures
 
         finally:
             await ai_service.close()
@@ -785,7 +879,7 @@ Generate a single high-quality photorealistic image of THIS EXACT PERSON."""
             )
 
             # Generate images using AIProviderService
-            images = await PhotoshootService.generate_images(
+            images, failures = await PhotoshootService.generate_images(
                 reference_photos=photos,
                 prompts=prompts,
                 user_id=user_id,
@@ -806,6 +900,10 @@ Generate a single high-quality photorealistic image of THIS EXACT PERSON."""
                 images=images,
                 usage=updated_usage,
                 generation_time_seconds=round(generation_time, 2),
+                generated_count=len(images),
+                failed_count=len(failures),
+                image_failures=failures,
+                partial_success=len(failures) > 0,
             )
 
         except (ValidationError, RateLimitError, ServiceError, DatabaseError):
@@ -900,6 +998,8 @@ class PhotoshootStreamingService:
                 "session_id": job.session_id,
                 "generated_count": generated_count,
                 "failed_count": job.failed_count,
+                "failed_indices": sorted(job.failed_indices),
+                "partial_success": job.failed_count > 0,
                 "usage": usage_dict,
                 "timestamp": datetime.utcnow().isoformat(),
             })
@@ -1019,22 +1119,10 @@ class PhotoshootStreamingService:
                     "image_url": {"url": ref_url}
                 })
 
-            # Enhanced prompt with face adherence requirements
+            # Enhanced prompt with strict identity + outfit fidelity controls
             enhanced_prompt = f"""{prompt.full_prompt}
 
-CRITICAL FACE ADHERENCE REQUIREMENTS:
-This is a photoshoot of the EXACT SAME PERSON shown in the reference image(s).
-The generated image MUST be this specific individual - not someone who looks similar.
-
-FACE IDENTITY - MANDATORY EXACT MATCH:
-- EXACT facial structure: face shape, jawline, chin, cheekbones must be identical
-- EXACT eye features: eye shape, eye color, eye spacing, eyebrows, eyelid shape
-- EXACT nose: nose shape, nose bridge, nostril shape, nose size and proportions
-- EXACT mouth: lip shape, lip fullness, mouth width, smile characteristics
-- EXACT skin: skin tone, skin texture, any visible marks, moles, or features
-- EXACT hair: hair color, hair texture, hairstyle, hairline, facial hair if any
-
-Generate a single high-quality photorealistic image of THIS EXACT PERSON."""
+{PHOTOSHOOT_FIDELITY_APPENDIX}"""
 
             content.append({"type": "text", "text": enhanced_prompt})
             messages = [ChatMessage(role="user", content=content)]

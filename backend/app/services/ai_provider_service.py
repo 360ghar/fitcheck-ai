@@ -26,16 +26,18 @@ Sample request format:
       }'
 """
 
-import base64
-import json
+import asyncio
+import random
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
+from urllib.parse import urlparse
 
 import httpx
 
 from app.core.config import settings
-from app.core.logging_config import get_context_logger, sanitize_for_logging
+from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
 
 logger = get_context_logger(__name__)
@@ -62,7 +64,19 @@ class ProviderConfig:
     vision_model: Optional[str] = None
     image_gen_model: Optional[str] = None
     max_tokens: int = 64096
-    timeout: float = 600.0  # 10 minutes
+
+    # Optimized timeout configuration (separate connect vs read)
+    connect_timeout: float = 5.0     # 5s for connection establishment
+    read_timeout: float = 120.0      # 2min for reading response
+    write_timeout: float = 30.0      # 30s for sending request
+    pool_timeout: float = 10.0       # 10s for acquiring connection from pool
+
+    # Connection pool settings
+    max_connections: int = 100       # Total connections in pool
+    max_keepalive: int = 20          # Persistent connections to keep alive
+
+    # Legacy timeout field for backward compatibility
+    timeout: float = 600.0  # Deprecated - use specific timeouts above
 
     def get_vision_model(self) -> str:
         """Get the vision model, falling back to the default model."""
@@ -158,14 +172,30 @@ class AIProviderService:
         self._client: Optional[httpx.AsyncClient] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create the HTTP client."""
+        """Get or create the HTTP client with connection pooling."""
         if self._client is None:
+            # Create client with connection pooling and optimized timeouts
+            limits = httpx.Limits(
+                max_connections=self.config.max_connections,
+                max_keepalive_connections=self.config.max_keepalive,
+                keepalive_expiry=30.0,  # Keep connections alive for 30s
+            )
+
+            timeout = httpx.Timeout(
+                connect=self.config.connect_timeout,
+                read=self.config.read_timeout,
+                write=self.config.write_timeout,
+                pool=self.config.pool_timeout,
+            )
+
             self._client = httpx.AsyncClient(
-                timeout=httpx.Timeout(self.config.timeout),
+                timeout=timeout,
+                limits=limits,
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {self.config.api_key}",
                 },
+                http2=True,  # Enable HTTP/2 for multiplexing
             )
         return self._client
 
@@ -186,6 +216,46 @@ class AIProviderService:
                 return f"{base_url}/v1/chat/completions"
         return base_url
 
+    @staticmethod
+    def _count_image_inputs(messages: List[ChatMessage]) -> int:
+        count = 0
+        for message in messages:
+            content = message.content
+            if isinstance(content, list):
+                for part in content:
+                    if isinstance(part, dict) and part.get("type") == "image_url":
+                        count += 1
+        return count
+
+    @staticmethod
+    def _format_exception_message(exc: Exception) -> str:
+        detail = str(exc).strip()
+        if detail:
+            return f"{exc.__class__.__name__}: {detail}"
+        return exc.__class__.__name__
+
+    @staticmethod
+    def _is_transient_transport_error(exc: Exception) -> bool:
+        return isinstance(
+            exc,
+            (
+                httpx.ReadError,
+                httpx.ConnectError,
+                httpx.RemoteProtocolError,
+                httpx.WriteError,
+                httpx.PoolTimeout,
+                httpx.ConnectTimeout,
+                httpx.ReadTimeout,
+            ),
+        )
+
+    @staticmethod
+    def _retry_delay_seconds(attempt: int) -> float:
+        # Faster retry profile for better user experience
+        base = 0.5 * (1.5 ** attempt)  # Reduced from 2^attempt
+        jitter = random.random() * 0.3 * base  # Reduced jitter
+        return min(base + jitter, 5.0)  # Cap at 5s instead of 8s
+
     async def chat(
         self,
         messages: List[ChatMessage],
@@ -193,6 +263,7 @@ class AIProviderService:
         max_tokens: Optional[int] = None,
         temperature: float = 0.7,
         response_modalities: Optional[List[str]] = None,
+        response_format: Optional[Dict[str, Any]] = None,
     ) -> AIResponse:
         """
         Send a chat completion request.
@@ -203,6 +274,7 @@ class AIProviderService:
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature
             response_modalities: Response types ["TEXT", "IMAGE"] for image generation
+            response_format: Optional structured output format
 
         Returns:
             AIResponse with text and/or images
@@ -226,30 +298,124 @@ class AIProviderService:
         if response_modalities:
             payload["response_modalities"] = response_modalities
 
+        # Optional structured output contract
+        if response_format:
+            payload["response_format"] = response_format
+
         logger.debug(
             "Sending chat request",
             url=url,
             model=use_model,
             message_count=len(messages),
+            image_inputs=self._count_image_inputs(messages),
             has_response_modalities=bool(response_modalities),
+            has_response_format=bool(response_format),
         )
 
-        # Log full request payload for debugging
+        parsed_url = urlparse(url)
         logger.info(
-            "AI chat request payload",
-            url=url,
-            payload=sanitize_for_logging(payload),
+            "AI chat request started",
+            provider_host=parsed_url.netloc,
+            endpoint=parsed_url.path,
+            model=use_model,
+            message_count=len(messages),
+            image_inputs=self._count_image_inputs(messages),
+            has_response_modalities=bool(response_modalities),
+            has_response_format=bool(response_format),
         )
 
-        try:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            data = response.json()
+        # Check provider health before first attempt (fail fast if unavailable)
+        from app.services.ai_provider_health_service import get_health_service
+        health_service = get_health_service()
 
-            # Log full response for debugging
+        health_status = await health_service.check_provider_health(
+            base_url=self.config.api_url,
+            api_key=self.config.api_key,
+            timeout_seconds=3.0,
+        )
+
+        if not health_status.available:
+            # Provider is down - fail fast instead of retrying
+            error_msg = (
+                f"AI provider {self.config.api_url} is unavailable. "
+                f"Error: {health_status.error}. "
+                "Please check if the service is running or configure an alternative provider."
+            )
+            logger.error(
+                "Provider unavailable, failing fast",
+                provider_url=self.config.api_url,
+                error=health_status.error,
+                consecutive_failures=health_status.consecutive_failures,
+            )
+            raise AIServiceError(error_msg)
+
+        async def _post_chat(req_payload: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
+            max_retries = 2  # Reduced from 3
+            attempt = 0
+
+            while True:
+                try:
+                    response = await client.post(url, json=req_payload)
+                    response.raise_for_status()
+                    return response.json(), response.status_code
+                except httpx.ConnectError as transport_error:
+                    # Connection refused - mark provider as unhealthy
+                    health_service.clear_cache(self.config.api_url)
+
+                    if attempt >= max_retries:
+                        logger.error(
+                            "Cannot connect to AI provider after retries",
+                            provider_url=self.config.api_url,
+                            attempts=attempt + 1,
+                        )
+                        raise AIServiceError(
+                            f"Cannot connect to AI provider at {self.config.api_url}. "
+                            "Please ensure the service is running or configure an alternative provider."
+                        )
+
+                    delay = self._retry_delay_seconds(attempt)
+                    logger.warning(
+                        "Connection refused, retrying",
+                        attempt=attempt + 1,
+                        max_retries=max_retries,
+                        delay_seconds=round(delay, 2),
+                        error=self._format_exception_message(transport_error),
+                    )
+                    attempt += 1
+                    await asyncio.sleep(delay)
+
+                except Exception as transport_error:
+                    if not self._is_transient_transport_error(transport_error):
+                        raise
+
+                    if attempt >= max_retries:
+                        logger.error(
+                            "Chat transport error after retries",
+                            timeout=self.config.read_timeout,
+                            error=self._format_exception_message(transport_error),
+                        )
+                        raise
+
+                    delay = self._retry_delay_seconds(attempt)
+                    logger.warning(
+                        "Transient AI transport error, retrying",
+                        attempt=attempt + 1,
+                        max_retries=max_retries,
+                        delay_seconds=round(delay, 2),
+                        error=self._format_exception_message(transport_error),
+                    )
+                    attempt += 1
+                    await asyncio.sleep(delay)
+
+        started_at = time.monotonic()
+        try:
+            data, status_code = await _post_chat(payload)
+
             logger.info(
                 "AI chat response received",
-                response_data=sanitize_for_logging(data),
+                status_code=status_code,
+                latency_ms=round((time.monotonic() - started_at) * 1000, 2),
+                choices_count=len(data.get("choices", [])) if isinstance(data, dict) else 0,
             )
 
             return self._parse_chat_response(data, use_model)
@@ -262,6 +428,37 @@ class AIProviderService:
             except Exception:
                 error_detail = e.response.text[:500]
 
+            if response_format and self._should_retry_without_response_format(
+                status_code=e.response.status_code,
+                error_detail=error_detail,
+            ):
+                logger.warning(
+                    "Provider rejected response_format, retrying without it",
+                    status_code=e.response.status_code,
+                    error=error_detail,
+                )
+
+                fallback_payload = dict(payload)
+                fallback_payload.pop("response_format", None)
+                try:
+                    data, status_code = await _post_chat(fallback_payload)
+                    logger.info(
+                        "AI chat response received after response_format fallback",
+                        status_code=status_code,
+                        latency_ms=round((time.monotonic() - started_at) * 1000, 2),
+                        choices_count=len(data.get("choices", [])) if isinstance(data, dict) else 0,
+                    )
+                    return self._parse_chat_response(data, use_model)
+                except httpx.HTTPStatusError as fallback_error:
+                    try:
+                        fallback_error_data = fallback_error.response.json()
+                        error_detail = fallback_error_data.get(
+                            "error", {}
+                        ).get("message", str(fallback_error_data))
+                    except Exception:
+                        error_detail = fallback_error.response.text[:500]
+                    e = fallback_error
+
             logger.error(
                 "Chat request failed",
                 status_code=e.response.status_code,
@@ -269,13 +466,19 @@ class AIProviderService:
             )
             raise AIServiceError(f"AI request failed ({e.response.status_code}): {error_detail}")
 
-        except httpx.TimeoutException:
-            logger.error("Chat request timed out", timeout=self.config.timeout)
-            raise AIServiceError("AI request timed out. Please try again.")
-
         except Exception as e:
-            logger.error("Chat request error", error=str(e))
-            raise AIServiceError(f"AI request failed: {str(e)}")
+            if self._is_transient_transport_error(e):
+                error_message = self._format_exception_message(e)
+                logger.error(
+                    "Chat transport error after retries",
+                    timeout=self.config.timeout,
+                    error=error_message,
+                )
+                raise AIServiceError(f"AI transport request failed after retries: {error_message}")
+
+            error_message = self._format_exception_message(e)
+            logger.error("Chat request error", error=error_message)
+            raise AIServiceError(f"AI request failed: {error_message}")
 
     def _parse_chat_response(self, data: Dict[str, Any], model: str) -> AIResponse:
         """Parse the chat completion response."""
@@ -284,7 +487,7 @@ class AIProviderService:
 
         # Extract from choices
         choices = data.get("choices", [])
-        logger.info(
+        logger.debug(
             "Parsing chat response - choices",
             choices_count=len(choices),
             choices_keys=[list(c.keys()) if isinstance(c, dict) else type(c).__name__ for c in choices],
@@ -293,7 +496,7 @@ class AIProviderService:
             message = choices[0].get("message", {})
             content = message.get("content")
 
-            logger.info(
+            logger.debug(
                 "Parsing chat response - content",
                 content_type=type(content).__name__ if content else None,
                 message_keys=list(message.keys()) if isinstance(message, dict) else None,
@@ -348,7 +551,7 @@ class AIProviderService:
                 "total_tokens": data["usage"].get("total_tokens", 0),
             }
 
-        logger.info(
+        logger.debug(
             "Parsing chat response - result",
             has_text=text is not None,
             images_count=len(images),
@@ -363,12 +566,31 @@ class AIProviderService:
             raw_response=data,
         )
 
+    @staticmethod
+    def _should_retry_without_response_format(status_code: int, error_detail: str) -> bool:
+        """Detect provider incompatibility with response_format payload."""
+        if status_code not in {400, 404, 415, 422}:
+            return False
+
+        text = (error_detail or "").lower()
+        indicators = (
+            "response_format",
+            "json_schema",
+            "unsupported",
+            "unknown field",
+            "invalid field",
+            "unrecognized field",
+            "not support",
+        )
+        return any(indicator in text for indicator in indicators)
+
     async def chat_with_vision(
         self,
         prompt: str,
         images: List[str],
         model: Optional[str] = None,
         max_tokens: Optional[int] = None,
+        response_format: Optional[Dict[str, Any]] = None,
     ) -> AIResponse:
         """
         Send a chat completion request with images (vision).
@@ -378,6 +600,7 @@ class AIProviderService:
             images: List of base64-encoded images
             model: Vision model to use
             max_tokens: Maximum tokens in response
+            response_format: Optional structured output format
 
         Returns:
             AIResponse with text analysis
@@ -406,6 +629,7 @@ class AIProviderService:
             messages=messages,
             model=use_model,
             max_tokens=max_tokens,
+            response_format=response_format,
         )
 
     async def generate_image(

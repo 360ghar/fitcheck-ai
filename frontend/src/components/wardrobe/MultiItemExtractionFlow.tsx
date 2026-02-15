@@ -159,6 +159,11 @@ export function MultiItemExtractionFlow({
       // Map API response to component format and add default names
       const itemsWithNames: DetectedItem[] = result.items.map((item) => ({
         tempId: item.temp_id,
+        personId: item.person_id,
+        personLabel: item.person_label,
+        isCurrentUserPerson: item.is_current_user_person,
+        includeInWardrobe:
+          item.include_in_wardrobe !== undefined ? item.include_in_wardrobe : true,
         category: item.category as any,
         sub_category: item.sub_category,
         colors: item.colors,
@@ -373,7 +378,10 @@ export function MultiItemExtractionFlow({
     setState((prev) => ({ ...prev, step: 'saving', savingProgress: 0 }))
 
     const itemsToSave = state.detectedItems.filter(
-      (item) => item.status === 'generated' && item.generatedImageUrl
+      (item) =>
+        item.status === 'generated' &&
+        item.generatedImageUrl &&
+        item.includeInWardrobe !== false
     )
 
     if (itemsToSave.length === 0) {

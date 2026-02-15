@@ -1,18 +1,26 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import '../../../core/services/sse_service.dart';
 import '../../../core/utils/image_utils.dart';
-import '../../../domain/enums/category.dart';
+import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/condition.dart' as domain;
 import '../models/batch_extraction_models.dart';
 import '../models/item_model.dart';
+import '../models/social_import_models.dart';
 import '../repositories/batch_extraction_repository.dart';
 import '../repositories/item_repository.dart';
+import '../repositories/social_import_repository.dart';
+import 'wardrobe_controller.dart';
+
+enum BatchInputMode { upload, social }
 
 /// Controller for batch image extraction flow
 ///
@@ -24,15 +32,24 @@ import '../repositories/item_repository.dart';
 class BatchExtractionController extends GetxController {
   final BatchExtractionRepository _batchRepo = BatchExtractionRepository();
   final ItemRepository _itemRepo = ItemRepository();
+  final SocialImportRepository _socialRepo = SocialImportRepository();
   final ImagePicker _imagePicker = ImagePicker();
+  final AppLinks _appLinks = AppLinks();
 
   // Constants
   static const int maxImages = 50;
   static const int generationBatchSize = 5;
+  static const String socialOAuthCallbackUri =
+      'fitcheck.ai://social-import-callback';
+  static const String _socialPersistedJobIdKey =
+      'fitcheck.social_import.active_job_id';
+  static const String _socialPersistedLastEventIdKey =
+      'fitcheck.social_import.last_event_id';
 
   // Selected images
   final RxList<BatchImage> selectedImages = <BatchImage>[].obs;
   final RxInt remainingSlots = maxImages.obs;
+  final Rx<BatchInputMode> inputMode = BatchInputMode.upload.obs;
 
   // Job state
   final Rx<BatchJobStatus> jobStatus = BatchJobStatus.idle.obs;
@@ -50,9 +67,34 @@ class BatchExtractionController extends GetxController {
 
   // Extracted items for review
   final RxList<BatchExtractedItem> extractedItems = <BatchExtractedItem>[].obs;
+  final RxSet<String> selectedUseCases = <String>{}.obs;
 
-  // SSE subscription
+  // Batch SSE subscription
   StreamSubscription? _sseSubscription;
+
+  // Social import state
+  final RxString socialJobId = ''.obs;
+  final Rx<SocialImportJobData?> socialJob = Rx<SocialImportJobData?>(null);
+  final RxString socialError = ''.obs;
+  final RxBool socialIsLoading = false.obs;
+  final RxBool socialIsConnected = false.obs;
+  final RxInt socialLastEventId = (-1).obs;
+  final RxBool showSocialDialogTrigger = false.obs;
+
+  // 2FA / Scraper auth state
+  final RxBool waitingForOtp = false.obs;
+  final RxString lastUsername = ''.obs;
+  final RxString lastPassword = ''.obs;
+  final RxString twoFactorIdentifier = ''.obs;
+
+  // URL input validation
+  final RxString socialUrlInput = ''.obs;
+  final RxString socialUrlError = ''.obs;
+  final RxBool isValidSocialUrl = false.obs;
+  final TextEditingController socialUrlController = TextEditingController();
+
+  StreamSubscription? _socialSseSubscription;
+  StreamSubscription<Uri>? _socialOAuthLinkSubscription;
 
   // Computed properties
   bool get isIdle => jobStatus.value == BatchJobStatus.idle;
@@ -65,12 +107,126 @@ class BatchExtractionController extends GetxController {
   bool get isProcessing => isUploading || isExtracting || isGenerating;
   bool get hasImages => selectedImages.isNotEmpty;
   bool get hasError => error.value.isNotEmpty;
-  int get selectedItemCount =>
-      extractedItems.where((item) => item.isSelected).length;
+  bool get isSocialMode => inputMode.value == BatchInputMode.social;
+  bool get hasActiveSocialJob => socialJobId.value.isNotEmpty;
+  bool get hasSocialError => socialError.value.isNotEmpty;
+  bool get isSocialAuthRequired =>
+      socialJob.value?.authRequired == true ||
+      socialJob.value?.status == SocialImportJobStatus.awaitingAuth;
+  bool get isSocialProcessing {
+    final status = socialJob.value?.status;
+    return status == SocialImportJobStatus.created ||
+        status == SocialImportJobStatus.discovering ||
+        status == SocialImportJobStatus.processing ||
+        status == SocialImportJobStatus.awaitingAuth ||
+        status == SocialImportJobStatus.pausedRateLimited;
+  }
+
+  SocialImportPhoto? get socialAwaitingPhoto =>
+      socialJob.value?.awaitingReviewPhoto;
+  SocialImportPhoto? get socialBufferedPhoto => socialJob.value?.bufferedPhoto;
+  SocialImportPhoto? get socialProcessingPhoto =>
+      socialJob.value?.processingPhoto;
+  double get socialProgress {
+    final job = socialJob.value;
+    if (job == null || job.totalPhotos <= 0) return 0;
+    return (job.processedPhotos / job.totalPhotos).clamp(0, 1).toDouble();
+  }
+
+  int get selectedItemCount => extractedItems
+      .where((item) => item.isSelected && item.includeInWardrobe)
+      .length;
+
+  void initializeSocialMode() {
+    inputMode.value = BatchInputMode.social;
+    showSocialDialogTrigger.value = true;
+  }
+
+  /// Validate social profile URL
+  void validateSocialUrl(String url) {
+    socialUrlInput.value = url.trim();
+
+    if (url.isEmpty) {
+      socialUrlError.value = '';
+      isValidSocialUrl.value = false;
+      return;
+    }
+
+    // Check for Instagram URL patterns
+    final instagramPatterns = [
+      RegExp(
+        r'^https?://(www\.)?instagram\.com/[^/]+/?$',
+        caseSensitive: false,
+      ),
+      RegExp(
+        r'^https?://(www\.)?instagram\.com/p/',
+        caseSensitive: false,
+      ), // Post URLs not supported
+    ];
+
+    // Check for Facebook URL patterns
+    final facebookPatterns = [
+      RegExp(r'^https?://(www\.)?facebook\.com/[^/]+/?$', caseSensitive: false),
+      RegExp(r'^https?://fb\.com/[^/]+/?$', caseSensitive: false),
+    ];
+
+    bool isInstagram = instagramPatterns[0].hasMatch(url);
+    bool isFacebook =
+        facebookPatterns[0].hasMatch(url) || facebookPatterns[1].hasMatch(url);
+
+    // Check if it's a post URL (not supported)
+    if (instagramPatterns[1].hasMatch(url)) {
+      socialUrlError.value =
+          'Post URLs are not supported. Please enter a profile URL.';
+      isValidSocialUrl.value = false;
+      return;
+    }
+
+    // Check for invalid characters or common mistakes
+    if (url.contains(' ') || url.contains('\n')) {
+      socialUrlError.value = 'URL cannot contain spaces';
+      isValidSocialUrl.value = false;
+      return;
+    }
+
+    if (isInstagram || isFacebook) {
+      socialUrlError.value = '';
+      isValidSocialUrl.value = true;
+    } else if (url.startsWith('http')) {
+      socialUrlError.value =
+          'Please enter a valid Instagram or Facebook profile URL';
+      isValidSocialUrl.value = false;
+    } else {
+      socialUrlError.value = '';
+      isValidSocialUrl.value = false;
+    }
+  }
+
+  /// Clear URL input
+  void clearSocialUrl() {
+    socialUrlController.clear();
+    validateSocialUrl('');
+  }
+
+  @override
+  void onInit() {
+    super.onInit();
+    socialUrlController.addListener(() {
+      final current = socialUrlController.text;
+      if (current != socialUrlInput.value) {
+        validateSocialUrl(current);
+      }
+    });
+    _listenForSocialOAuthCallbacks();
+    unawaited(_restoreSocialImportState());
+  }
 
   @override
   void onClose() {
     _sseSubscription?.cancel();
+    _socialSseSubscription?.cancel();
+    _socialOAuthLinkSubscription?.cancel();
+    socialUrlController.dispose();
     super.onClose();
   }
 
@@ -162,6 +318,477 @@ class BatchExtractionController extends GetxController {
     remainingSlots.value = maxImages - selectedImages.length;
   }
 
+  void setInputMode(BatchInputMode mode) {
+    inputMode.value = mode;
+    if (mode == BatchInputMode.upload) {
+      socialError.value = '';
+      return;
+    }
+    error.value = '';
+  }
+
+  Future<void> startSocialImport(String sourceUrl) async {
+    final normalized = sourceUrl.trim();
+    if (normalized.isEmpty) {
+      socialError.value = 'Profile URL is required';
+      return;
+    }
+
+    try {
+      socialIsLoading.value = true;
+      socialError.value = '';
+
+      final started = await _socialRepo.startJob(sourceUrl: normalized);
+      socialJobId.value = started.jobId;
+      socialLastEventId.value = -1;
+      _persistSocialImportState();
+
+      await refreshSocialStatus();
+      _subscribeToSocialEvents(started.jobId);
+    } catch (e) {
+      socialError.value = 'Failed to start import: $e';
+    } finally {
+      socialIsLoading.value = false;
+    }
+  }
+
+  Future<void> refreshSocialStatus() async {
+    if (socialJobId.value.isEmpty) return;
+
+    try {
+      final job = await _socialRepo.getStatus(socialJobId.value);
+      _applySocialJob(job);
+    } catch (e) {
+      socialError.value = 'Failed to refresh social import status: $e';
+    }
+  }
+
+  Future<void> startSocialOAuthConnect() async {
+    if (socialJobId.value.isEmpty) return;
+
+    try {
+      socialIsLoading.value = true;
+      socialError.value = '';
+
+      final oauth = await _socialRepo.getOAuthConnectUrl(
+        socialJobId.value,
+        mobileRedirectUri: socialOAuthCallbackUri,
+      );
+
+      final launched = await launchUrl(
+        Uri.parse(oauth.authUrl),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        throw Exception('Unable to open social login. Please try again.');
+      }
+
+      Get.snackbar(
+        'Connect social account',
+        'Complete login in your browser, then return to FitCheck.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e) {
+      socialError.value = 'Failed to connect social account: $e';
+    } finally {
+      socialIsLoading.value = false;
+    }
+  }
+
+  Future<void> submitSocialScraperAuth({
+    required String username,
+    required String password,
+    String? otpCode,
+  }) async {
+    if (socialJobId.value.isEmpty) return;
+    try {
+      socialIsLoading.value = true;
+      socialError.value = '';
+
+      // Store credentials for potential 2FA retry
+      if (otpCode == null || otpCode.isEmpty) {
+        lastUsername.value = username;
+        lastPassword.value = password;
+      }
+
+      await _socialRepo.submitScraperLogin(
+        socialJobId.value,
+        username: username.trim(),
+        password: password,
+        otpCode: otpCode?.trim().isNotEmpty == true ? otpCode!.trim() : null,
+        twoFactorIdentifier: twoFactorIdentifier.value.isNotEmpty
+            ? twoFactorIdentifier.value
+            : null,
+      );
+
+      // Reset 2FA state on success
+      waitingForOtp.value = false;
+      twoFactorIdentifier.value = '';
+
+      await refreshSocialStatus();
+      _subscribeToSocialEvents(socialJobId.value);
+    } catch (e) {
+      final errorStr = e.toString().toLowerCase();
+      // Check if error indicates 2FA is required
+      if (errorStr.contains('two_factor') ||
+          errorStr.contains('2fa') ||
+          errorStr.contains('otp') ||
+          errorStr.contains('two factor')) {
+        waitingForOtp.value = true;
+        socialError.value = 'Two-factor authentication required';
+      } else if (errorStr.contains('checkpoint') ||
+          errorStr.contains('security')) {
+        socialError.value =
+            'Security checkpoint required. Please log in via browser first.';
+      } else {
+        socialError.value = 'Failed to submit credentials: $e';
+      }
+    } finally {
+      socialIsLoading.value = false;
+    }
+  }
+
+  Future<void> patchSocialItem({
+    required String photoId,
+    required String itemId,
+    required Map<String, dynamic> updates,
+  }) async {
+    if (socialJobId.value.isEmpty) return;
+
+    final payload = Map<String, dynamic>.from(updates)
+      ..removeWhere((key, value) => value == null);
+    if (payload.isEmpty) return;
+
+    try {
+      await _socialRepo.patchItem(socialJobId.value, photoId, itemId, payload);
+      await refreshSocialStatus();
+    } catch (e) {
+      socialError.value = 'Failed to update item: $e';
+    }
+  }
+
+  Future<void> approveAwaitingSocialPhoto() async {
+    final currentPhoto = socialAwaitingPhoto;
+    if (socialJobId.value.isEmpty || currentPhoto == null) return;
+
+    try {
+      socialIsLoading.value = true;
+      socialError.value = '';
+      await _socialRepo.approvePhoto(socialJobId.value, currentPhoto.id);
+      await refreshSocialStatus();
+      if (Get.isRegistered<WardrobeController>()) {
+        await Get.find<WardrobeController>().fetchItems(refresh: true);
+      }
+      if (socialJob.value != null && !socialJob.value!.isTerminal) {
+        _subscribeToSocialEvents(
+          socialJobId.value,
+          lastEventId: socialLastEventId.value > 0
+              ? socialLastEventId.value
+              : null,
+        );
+      }
+    } catch (e) {
+      socialError.value = 'Failed to approve photo: $e';
+    } finally {
+      socialIsLoading.value = false;
+    }
+  }
+
+  Future<void> rejectAwaitingSocialPhoto() async {
+    final currentPhoto = socialAwaitingPhoto;
+    if (socialJobId.value.isEmpty || currentPhoto == null) return;
+
+    try {
+      socialIsLoading.value = true;
+      socialError.value = '';
+      await _socialRepo.rejectPhoto(socialJobId.value, currentPhoto.id);
+      await refreshSocialStatus();
+      if (socialJob.value != null && !socialJob.value!.isTerminal) {
+        _subscribeToSocialEvents(
+          socialJobId.value,
+          lastEventId: socialLastEventId.value > 0
+              ? socialLastEventId.value
+              : null,
+        );
+      }
+    } catch (e) {
+      socialError.value = 'Failed to reject photo: $e';
+    } finally {
+      socialIsLoading.value = false;
+    }
+  }
+
+  Future<void> cancelSocialImportJob() async {
+    if (socialJobId.value.isEmpty) return;
+    try {
+      socialIsLoading.value = true;
+      socialError.value = '';
+      await _socialRepo.cancelJob(socialJobId.value);
+      await refreshSocialStatus();
+      _socialSseSubscription?.cancel();
+      socialIsConnected.value = false;
+      if (socialJob.value?.isTerminal == true) {
+        _clearPersistedSocialImportState();
+      }
+    } catch (e) {
+      socialError.value = 'Failed to cancel social import job: $e';
+    } finally {
+      socialIsLoading.value = false;
+    }
+  }
+
+  void resetSocialImportState() {
+    _socialSseSubscription?.cancel();
+    socialJobId.value = '';
+    socialJob.value = null;
+    socialError.value = '';
+    socialIsLoading.value = false;
+    socialIsConnected.value = false;
+    socialLastEventId.value = -1;
+    // Reset 2FA / scraper auth state
+    waitingForOtp.value = false;
+    lastUsername.value = '';
+    lastPassword.value = '';
+    twoFactorIdentifier.value = '';
+    // Reset URL input state
+    socialUrlInput.value = '';
+    socialUrlError.value = '';
+    isValidSocialUrl.value = false;
+    socialUrlController.clear();
+    _clearPersistedSocialImportState();
+  }
+
+  void _applySocialJob(SocialImportJobData job) {
+    socialJob.value = job;
+    socialError.value = (job.errorMessage ?? '').trim();
+
+    if (job.status == SocialImportJobStatus.awaitingAuth &&
+        (job.authReason?.isNotEmpty == true)) {
+      if (job.authReason == 'two_factor_required') {
+        waitingForOtp.value = true;
+        twoFactorIdentifier.value = job.twoFactorIdentifier ?? '';
+      } else {
+        waitingForOtp.value = false;
+      }
+    }
+
+    if (job.isTerminal) {
+      socialIsConnected.value = false;
+      _socialSseSubscription?.cancel();
+      _clearPersistedSocialImportState();
+      return;
+    }
+
+    _persistSocialImportState();
+  }
+
+  void _subscribeToSocialEvents(String jobId, {int? lastEventId}) {
+    _socialSseSubscription?.cancel();
+    _socialSseSubscription = _socialRepo
+        .subscribeToEvents(jobId, lastEventId: lastEventId)
+        .listen(
+          (event) {
+            socialIsConnected.value = true;
+            if (event.id != null) {
+              socialLastEventId.value = event.id!;
+              _persistSocialImportState();
+            }
+
+            // Handle specific auth_required events
+            if (event.type == 'auth_required') {
+              final reason = event.data['reason']?.toString();
+              final message = event.data['message']?.toString();
+
+              if (reason == 'two_factor_required') {
+                waitingForOtp.value = true;
+                twoFactorIdentifier.value =
+                    event.data['two_factor_identifier']?.toString() ?? '';
+                socialError.value =
+                    message ?? 'Two-factor authentication required';
+              } else if (reason == 'checkpoint_required') {
+                waitingForOtp.value = false;
+                socialError.value =
+                    message ??
+                    'Security checkpoint required. Please log in via browser first.';
+              } else if (reason == 'login_failed') {
+                waitingForOtp.value = false;
+                socialError.value =
+                    message ?? 'Login failed. Please check your credentials.';
+              } else {
+                waitingForOtp.value = false;
+                socialError.value =
+                    message ?? 'Login required to continue importing';
+              }
+            }
+
+            if (event.type == 'heartbeat' || event.type == 'connected') {
+              return;
+            }
+            unawaited(refreshSocialStatus());
+          },
+          onError: (e) {
+            socialIsConnected.value = false;
+            if (kDebugMode) {
+              print('Social import SSE error: $e');
+            }
+            _pollSocialStatus(jobId);
+          },
+          onDone: () {
+            socialIsConnected.value = false;
+          },
+        );
+  }
+
+  Future<void> _pollSocialStatus(String id) async {
+    if (id.isEmpty || id != socialJobId.value) return;
+    try {
+      final job = await _socialRepo.getStatus(id);
+      _applySocialJob(job);
+      if (!job.isTerminal && !socialIsConnected.value) {
+        await Future.delayed(const Duration(seconds: 2));
+        if (!socialIsConnected.value) {
+          await _pollSocialStatus(id);
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Social import status poll error: $e');
+      }
+    }
+  }
+
+  void _listenForSocialOAuthCallbacks() {
+    _socialOAuthLinkSubscription?.cancel();
+    _socialOAuthLinkSubscription = _appLinks.uriLinkStream.listen(
+      (uri) {
+        _handlePotentialSocialOAuthUri(uri);
+      },
+      onError: (e) {
+        if (kDebugMode) {
+          print('Social OAuth link stream error: $e');
+        }
+      },
+    );
+
+    _appLinks.getInitialLink().then((uri) {
+      if (uri != null) {
+        _handlePotentialSocialOAuthUri(uri);
+      }
+    });
+  }
+
+  Future<void> _handlePotentialSocialOAuthUri(Uri uri) async {
+    if (uri.scheme != 'fitcheck.ai' || uri.host != 'social-import-callback') {
+      return;
+    }
+
+    final callbackJobId = uri.queryParameters['job_id'];
+    if (callbackJobId != null && callbackJobId.isNotEmpty) {
+      if (socialJobId.value.isNotEmpty && callbackJobId != socialJobId.value) {
+        return;
+      }
+      socialJobId.value = callbackJobId;
+      _persistSocialImportState();
+    }
+
+    final callbackStatus = (uri.queryParameters['status'] ?? '').toLowerCase();
+    final callbackMessage =
+        uri.queryParameters['message'] ??
+        'Social account authorization failed.';
+
+    if (callbackStatus == 'success') {
+      await refreshSocialStatus();
+      if (socialJobId.value.isNotEmpty &&
+          socialJob.value != null &&
+          !socialJob.value!.isTerminal) {
+        _subscribeToSocialEvents(
+          socialJobId.value,
+          lastEventId: socialLastEventId.value > 0
+              ? socialLastEventId.value
+              : null,
+        );
+      }
+      Get.snackbar(
+        'Social connected',
+        callbackMessage,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    socialError.value = callbackMessage;
+    await refreshSocialStatus();
+    Get.snackbar(
+      'Social connection failed',
+      callbackMessage,
+      snackPosition: SnackPosition.BOTTOM,
+    );
+  }
+
+  Future<void> _restoreSocialImportState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final persistedJobId = (prefs.getString(_socialPersistedJobIdKey) ?? '')
+          .trim();
+      if (persistedJobId.isEmpty || socialJobId.value.isNotEmpty) {
+        return;
+      }
+
+      socialJobId.value = persistedJobId;
+      socialLastEventId.value =
+          prefs.getInt(_socialPersistedLastEventIdKey) ?? -1;
+
+      await refreshSocialStatus();
+      final job = socialJob.value;
+      if (job == null || job.isTerminal) {
+        _clearPersistedSocialImportState();
+        return;
+      }
+
+      _subscribeToSocialEvents(
+        persistedJobId,
+        lastEventId: socialLastEventId.value > 0
+            ? socialLastEventId.value
+            : null,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('Failed to restore social import state: $e');
+      }
+    }
+  }
+
+  void _persistSocialImportState() {
+    final currentJobId = socialJobId.value.trim();
+    if (currentJobId.isEmpty) {
+      _clearPersistedSocialImportState();
+      return;
+    }
+
+    final lastEvent = socialLastEventId.value;
+    unawaited(
+      _writeSocialImportState(currentJobId, lastEvent > 0 ? lastEvent : null),
+    );
+  }
+
+  Future<void> _writeSocialImportState(String jobId, int? lastEventId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_socialPersistedJobIdKey, jobId);
+    if (lastEventId != null) {
+      await prefs.setInt(_socialPersistedLastEventIdKey, lastEventId);
+    } else {
+      await prefs.remove(_socialPersistedLastEventIdKey);
+    }
+  }
+
+  void _clearPersistedSocialImportState() {
+    unawaited(() async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_socialPersistedJobIdKey);
+      await prefs.remove(_socialPersistedLastEventIdKey);
+    }());
+  }
+
   /// Start the batch extraction process
   Future<void> startExtraction() async {
     if (selectedImages.isEmpty) {
@@ -182,9 +809,7 @@ class BatchExtractionController extends GetxController {
         // Update image status
         _updateImageStatus(image.id, BatchImageStatus.uploading);
 
-        final base64 = await ImageUtils.compressAndEncode(
-          File(image.filePath),
-        );
+        final base64 = await ImageUtils.compressAndEncode(File(image.filePath));
 
         if (base64 == null) {
           _updateImageStatus(
@@ -195,10 +820,9 @@ class BatchExtractionController extends GetxController {
           continue;
         }
 
-        imageInputs.add(BatchImageInput(
-          id: image.id,
-          imageBase64: base64,
-        ));
+        imageInputs.add(
+          BatchImageInput(imageId: image.id, imageBase64: base64),
+        );
 
         // Update progress
         uploadProgress.value = (i + 1) / selectedImages.length;
@@ -230,21 +854,23 @@ class BatchExtractionController extends GetxController {
   /// Subscribe to SSE events for the job
   void _subscribeToEvents(String id) {
     _sseSubscription?.cancel();
-    _sseSubscription = _batchRepo.subscribeToEvents(id).listen(
-      _handleSSEEvent,
-      onError: (e) {
-        if (kDebugMode) {
-          print('SSE error: $e');
-        }
-        // Try to recover by polling status
-        _pollJobStatus(id);
-      },
-      onDone: () {
-        if (kDebugMode) {
-          print('SSE stream completed');
-        }
-      },
-    );
+    _sseSubscription = _batchRepo
+        .subscribeToEvents(id)
+        .listen(
+          _handleSSEEvent,
+          onError: (e) {
+            if (kDebugMode) {
+              print('SSE error: $e');
+            }
+            // Try to recover by polling status
+            _pollJobStatus(id);
+          },
+          onDone: () {
+            if (kDebugMode) {
+              print('SSE stream completed');
+            }
+          },
+        );
   }
 
   /// Handle incoming SSE events
@@ -280,13 +906,26 @@ class BatchExtractionController extends GetxController {
 
       case 'generation_started':
         jobStatus.value = BatchJobStatus.generating;
-        totalItems.value = extractedItems.length;
+        totalItems.value =
+            (event.data?['total_items'] as num?)?.toInt() ??
+            extractedItems.length;
         totalBatches.value =
-            (extractedItems.length / generationBatchSize).ceil();
+            (event.data?['total_batches'] as num?)?.toInt() ??
+            (extractedItems.isEmpty
+                ? 0
+                : (extractedItems.length / generationBatchSize).ceil());
+        for (var i = 0; i < selectedImages.length; i++) {
+          if (selectedImages[i].status != BatchImageStatus.failed) {
+            selectedImages[i] = selectedImages[i].copyWith(
+              status: BatchImageStatus.generating,
+            );
+          }
+        }
         break;
 
       case 'batch_generation_started':
-        currentBatch.value = event.data?['batch_index'] ?? 0;
+        currentBatch.value =
+            (event.data?['batch_number'] as num?)?.toInt() ?? 0;
         break;
 
       case 'item_generation_complete':
@@ -306,6 +945,25 @@ class BatchExtractionController extends GetxController {
         break;
 
       case 'job_complete':
+        final finalItems = event.data?['items'];
+        if (finalItems is List) {
+          final parsed = finalItems
+              .whereType<Map<String, dynamic>>()
+              .map(BatchExtractedItem.fromJson)
+              .toList();
+          extractedItems.assignAll(parsed);
+          totalItems.value = parsed.length;
+          generatedCount.value = parsed
+              .where((item) => item.status == BatchItemStatus.generated)
+              .length;
+        }
+        for (var i = 0; i < selectedImages.length; i++) {
+          if (selectedImages[i].status != BatchImageStatus.failed) {
+            selectedImages[i] = selectedImages[i].copyWith(
+              status: BatchImageStatus.generated,
+            );
+          }
+        }
         jobStatus.value = BatchJobStatus.complete;
         _sseSubscription?.cancel();
         break;
@@ -334,7 +992,9 @@ class BatchExtractionController extends GetxController {
     if (imageId == null) return;
 
     _updateImageStatus(imageId, BatchImageStatus.extracted);
-    extractedCount.value++;
+    extractedCount.value =
+        (data['completed_count'] as num?)?.toInt() ??
+        (extractedCount.value + 1);
 
     // Parse extracted items
     final items = _batchRepo.parseExtractedItems(data, imageId);
@@ -364,14 +1024,15 @@ class BatchExtractionController extends GetxController {
         error: errorMsg ?? 'Extraction failed',
       );
     }
-    failedCount.value++;
+    failedCount.value =
+        (data['failed_count'] as num?)?.toInt() ?? (failedCount.value + 1);
   }
 
   void _handleItemGenerationComplete(Map<String, dynamic>? data) {
     if (data == null) return;
 
-    final itemId = data['item_id'] as String?;
-    final imageUrl = data['image_url'] as String?;
+    final itemId = data['temp_id'] as String?;
+    final generatedBase64 = data['generated_image_base64']?.toString();
 
     if (itemId == null) return;
 
@@ -379,16 +1040,21 @@ class BatchExtractionController extends GetxController {
     if (itemIndex >= 0) {
       extractedItems[itemIndex] = extractedItems[itemIndex].copyWith(
         status: BatchItemStatus.generated,
-        generatedImageUrl: imageUrl,
+        generatedImageBase64: generatedBase64,
+        generatedImageUrl: generatedBase64 != null && generatedBase64.isNotEmpty
+            ? 'data:image/png;base64,$generatedBase64'
+            : extractedItems[itemIndex].generatedImageUrl,
       );
     }
-    generatedCount.value++;
+    generatedCount.value =
+        (data['completed_count'] as num?)?.toInt() ??
+        (generatedCount.value + 1);
   }
 
   void _handleItemGenerationFailed(Map<String, dynamic>? data) {
     if (data == null) return;
 
-    final itemId = data['item_id'] as String?;
+    final itemId = data['temp_id'] as String?;
     final errorMsg = data['error'] as String?;
 
     if (itemId == null) return;
@@ -424,9 +1090,10 @@ class BatchExtractionController extends GetxController {
       // Update state from polled status
       extractedCount.value = status.extractedCount;
       generatedCount.value = status.generatedCount;
-      failedCount.value = status.failedCount;
+      failedCount.value = status.failedCount + status.generationFailedCount;
       currentBatch.value = status.currentBatch;
       totalBatches.value = status.totalBatches;
+      totalItems.value = status.detectedItems?.length ?? extractedItems.length;
 
       // Update detected items if available
       if (status.detectedItems != null) {
@@ -482,8 +1149,10 @@ class BatchExtractionController extends GetxController {
   void toggleItemSelection(String itemId) {
     final index = extractedItems.indexWhere((item) => item.id == itemId);
     if (index >= 0) {
+      final nextValue = !extractedItems[index].isSelected;
       extractedItems[index] = extractedItems[index].copyWith(
-        isSelected: !extractedItems[index].isSelected,
+        isSelected: nextValue,
+        includeInWardrobe: nextValue,
       );
     }
   }
@@ -492,7 +1161,10 @@ class BatchExtractionController extends GetxController {
   void selectAllItems() {
     for (var i = 0; i < extractedItems.length; i++) {
       if (!extractedItems[i].isSelected) {
-        extractedItems[i] = extractedItems[i].copyWith(isSelected: true);
+        extractedItems[i] = extractedItems[i].copyWith(
+          isSelected: true,
+          includeInWardrobe: true,
+        );
       }
     }
   }
@@ -501,7 +1173,34 @@ class BatchExtractionController extends GetxController {
   void deselectAllItems() {
     for (var i = 0; i < extractedItems.length; i++) {
       if (extractedItems[i].isSelected) {
-        extractedItems[i] = extractedItems[i].copyWith(isSelected: false);
+        extractedItems[i] = extractedItems[i].copyWith(
+          isSelected: false,
+          includeInWardrobe: false,
+        );
+      }
+    }
+  }
+
+  /// Toggle include/exclude for a single item while keeping selection aligned.
+  void toggleItemInclude(String itemId) {
+    final index = extractedItems.indexWhere((item) => item.id == itemId);
+    if (index < 0) return;
+
+    final nextValue = !extractedItems[index].includeInWardrobe;
+    extractedItems[index] = extractedItems[index].copyWith(
+      includeInWardrobe: nextValue,
+      isSelected: nextValue,
+    );
+  }
+
+  /// Include/exclude all items for a specific person group.
+  void setPersonInclusion(String personId, bool include) {
+    for (var i = 0; i < extractedItems.length; i++) {
+      if ((extractedItems[i].personId ?? 'unassigned') == personId) {
+        extractedItems[i] = extractedItems[i].copyWith(
+          includeInWardrobe: include,
+          isSelected: include,
+        );
       }
     }
   }
@@ -514,9 +1213,54 @@ class BatchExtractionController extends GetxController {
     }
   }
 
+  /// Toggle one apply-to-all use-case value.
+  void toggleUseCase(String useCase) {
+    final normalized = UseCases.normalize(useCase);
+    if (normalized.isEmpty) return;
+    if (selectedUseCases.contains(normalized)) {
+      selectedUseCases.remove(normalized);
+    } else {
+      selectedUseCases.add(normalized);
+    }
+    selectedUseCases.refresh();
+  }
+
+  /// Add one use-case tag without toggling.
+  void addUseCase(String useCase) {
+    final normalized = UseCases.normalize(useCase);
+    if (normalized.isEmpty || selectedUseCases.contains(normalized)) return;
+    selectedUseCases.add(normalized);
+    selectedUseCases.refresh();
+  }
+
+  /// Remove one use-case tag.
+  void removeUseCase(String useCase) {
+    final normalized = UseCases.normalize(useCase);
+    if (!selectedUseCases.contains(normalized)) return;
+    selectedUseCases.remove(normalized);
+    selectedUseCases.refresh();
+  }
+
+  /// Set the apply-to-all use-case value directly (single active value).
+  void setUseCaseFilter(String value) {
+    final normalized = UseCases.normalize(value);
+    selectedUseCases.clear();
+    if (normalized.isNotEmpty) {
+      selectedUseCases.add(normalized);
+    }
+    selectedUseCases.refresh();
+  }
+
   /// Save selected items to wardrobe
   Future<List<ItemModel>> saveSelectedItems() async {
-    final selected = extractedItems.where((item) => item.isSelected).toList();
+    final selected = extractedItems
+        .where(
+          (item) =>
+              item.isSelected &&
+              item.includeInWardrobe &&
+              item.status == BatchItemStatus.generated,
+        )
+        .toList();
     if (selected.isEmpty) {
       error.value = 'No items selected';
       return [];
@@ -528,36 +1272,53 @@ class BatchExtractionController extends GetxController {
     for (final item in selected) {
       try {
         final request = CreateItemRequest(
-          name: item.name,
+          name: item.name.isNotEmpty
+              ? item.name
+              : (item.subCategory ?? item.category.name),
           category: item.category,
           colors: item.colors,
           material: item.material,
           pattern: item.pattern,
           description: item.description,
           condition: domain.Condition.clean,
+          occasionTags: selectedUseCases.isEmpty
+              ? null
+              : UseCases.normalizeList(selectedUseCases),
         );
 
-        // If we have a source image, create with image
-        final sourceImage = selectedImages.firstWhereOrNull(
-          (img) => img.id == item.sourceImageId,
-        );
+        final created = await _itemRepo.createItem(request);
 
-        ItemModel created;
-        if (sourceImage != null) {
-          created = await _itemRepo.createItemWithImage(
-            image: File(sourceImage.filePath),
-            request: request,
-          );
+        final generatedBase64 =
+            item.generatedImageBase64 ??
+            item.generatedImageUrl?.replaceFirst(
+              RegExp(r'^data:image/\w+;base64,', caseSensitive: false),
+              '',
+            );
+
+        if (generatedBase64 != null && generatedBase64.isNotEmpty) {
+          await _itemRepo.uploadImageFromBase64(created.id, generatedBase64);
         } else {
-          created = await _itemRepo.createItem(request);
+          final sourceImage = selectedImages.firstWhereOrNull(
+            (img) => img.id == item.sourceImageId,
+          );
+          if (sourceImage != null) {
+            await _itemRepo.uploadImages(created.id, [
+              File(sourceImage.filePath),
+            ]);
+          }
         }
 
-        savedItems.add(created);
+        savedItems.add(await _itemRepo.getItem(created.id));
       } catch (e) {
         if (kDebugMode) {
           print('Failed to save item ${item.name}: $e');
         }
       }
+    }
+
+    // Notify WardrobeController for immediate UI update
+    if (savedItems.isNotEmpty && Get.isRegistered<WardrobeController>()) {
+      Get.find<WardrobeController>().addItems(savedItems);
     }
 
     return savedItems;
@@ -566,6 +1327,7 @@ class BatchExtractionController extends GetxController {
   /// Reset the controller state
   void reset() {
     _sseSubscription?.cancel();
+    resetSocialImportState();
     selectedImages.clear();
     extractedItems.clear();
     jobStatus.value = BatchJobStatus.idle;
@@ -579,5 +1341,7 @@ class BatchExtractionController extends GetxController {
     totalBatches.value = 0;
     totalItems.value = 0;
     remainingSlots.value = maxImages;
+    selectedUseCases.clear();
+    inputMode.value = BatchInputMode.upload;
   }
 }

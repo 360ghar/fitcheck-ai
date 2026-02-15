@@ -165,6 +165,15 @@ class InvalidInputError(ValidationError):
         super().__init__(message, details=details)
 
 
+class SocialImportInvalidUrlError(ValidationError):
+    """Raised when the provided social profile URL is invalid or unsupported."""
+
+    error_code = "SOCIAL_IMPORT_INVALID_URL"
+
+    def __init__(self, message: str = "Invalid or unsupported social profile URL"):
+        super().__init__(message)
+
+
 # ============================================================================
 # NOT FOUND ERRORS
 # ============================================================================
@@ -270,6 +279,15 @@ class BodyProfileNotFoundError(NotFoundError):
         super().__init__(message, "body_profile", profile_id)
 
 
+class SocialImportJobNotFoundError(NotFoundError):
+    """Raised when a social import job is not found."""
+
+    error_code = "SOCIAL_IMPORT_JOB_NOT_FOUND"
+
+    def __init__(self, job_id: Optional[str] = None):
+        super().__init__("Social import job not found", "social_import_job", job_id)
+
+
 # ============================================================================
 # SERVICE ERRORS
 # ============================================================================
@@ -318,6 +336,91 @@ class StorageServiceError(ServiceError):
     
     def __init__(self, message: str = "Storage service unavailable"):
         super().__init__(message, "storage")
+
+
+class SocialImportError(FitCheckException):
+    """Base exception for social import errors."""
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    error_code = "SOCIAL_IMPORT_ERROR"
+
+    def __init__(
+        self,
+        message: str = "Social import failed",
+        details: Optional[Dict[str, Any]] = None,
+        error_code: Optional[str] = None,
+    ):
+        super().__init__(message=message, details=details, error_code=error_code)
+
+
+class SocialImportAuthRequiredError(SocialImportError):
+    """Raised when authentication is required to access a private profile."""
+
+    status_code = status.HTTP_401_UNAUTHORIZED
+    error_code = "SOCIAL_IMPORT_AUTH_REQUIRED"
+
+    def __init__(self, message: str = "Profile requires login to continue import"):
+        super().__init__(message=message)
+
+
+class SocialImportLoginFailedError(SocialImportError):
+    """Raised when social login credentials are rejected."""
+
+    status_code = status.HTTP_401_UNAUTHORIZED
+    error_code = "SOCIAL_IMPORT_LOGIN_FAILED"
+
+    def __init__(self, message: str = "Failed to authenticate social profile access"):
+        super().__init__(message=message)
+
+
+class SocialImportMFARequiredError(SocialImportError):
+    """Raised when scraper login requires MFA verification."""
+
+    status_code = status.HTTP_409_CONFLICT
+    error_code = "SOCIAL_IMPORT_MFA_REQUIRED"
+
+    def __init__(self, message: str = "Additional verification is required"):
+        super().__init__(message=message)
+
+
+class SocialImportEncryptionConfigError(SocialImportError):
+    """Raised when secure auth session encryption is not configured."""
+
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    error_code = "SOCIAL_IMPORT_ENCRYPTION_CONFIG_ERROR"
+
+    def __init__(self, message: str = "Secure social import auth is not configured"):
+        super().__init__(message=message)
+
+
+class SocialImportOAuthConfigError(SocialImportError):
+    """Raised when Meta OAuth is not configured."""
+
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    error_code = "SOCIAL_IMPORT_OAUTH_CONFIG_ERROR"
+
+    def __init__(self, message: str = "Meta OAuth is not configured"):
+        super().__init__(message=message)
+
+
+class SocialImportOAuthStateError(SocialImportError):
+    """Raised when OAuth callback state is invalid or expired."""
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    error_code = "SOCIAL_IMPORT_OAUTH_STATE_ERROR"
+
+    def __init__(self, message: str = "Invalid or expired OAuth session state"):
+        super().__init__(message=message)
+
+
+class SocialImportOAuthExchangeError(SocialImportError):
+    """Raised when code exchange with Meta OAuth fails."""
+
+    status_code = status.HTTP_502_BAD_GATEWAY
+    error_code = "SOCIAL_IMPORT_OAUTH_EXCHANGE_ERROR"
+
+    def __init__(self, message: str = "Failed to exchange OAuth code with Meta"):
+        super().__init__(message=message)
 
 
 # ============================================================================

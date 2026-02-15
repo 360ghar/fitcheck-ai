@@ -42,6 +42,13 @@ FACE IDENTITY (CRITICAL):
 - Do NOT smooth, filter, or idealize skin - preserve exact texture and features
 - Do NOT remove or add moles, freckles, scars, or distinguishing marks
 
+OUTFIT AND ITEM FIDELITY (CRITICAL):
+- Do NOT add, remove, replace, or restyle any required clothing item
+- Do NOT add or remove footwear, accessories, jewelry, bags, hats, belts, watches, or eyewear
+- Do NOT change garment silhouette, fit, cut, length, or layering structure
+- Do NOT change color shades, patterns, textures, stitching, trims, or fabric appearance
+- Do NOT modify logos, labels, hardware, laces, buckles, zippers, buttons, or embellishments
+
 SKIN AND BODY:
 - Do NOT alter skin tone - match reference exactly
 - Do NOT generate extra limbs, fingers, or distorted body parts
@@ -52,6 +59,16 @@ TECHNICAL:
 - Do NOT create floating or disconnected clothing
 - Do NOT blend face features unnaturally
 - Do NOT generate text, watermarks, or logos
+"""
+
+QUALITY_CONTROL_PROMPT = """
+MANDATORY PRE-GENERATION QUALITY CONTROL (INTERNAL):
+- Think twice before you generate.
+- Re-evaluate the requirements (and reference image(s), if provided) a second time before rendering.
+- Build a detailed internal checklist for face identity and every outfit item (tops, bottoms, outerwear, footwear, accessories, and other visible items).
+- Verify no required item is missing, altered, swapped, or invented.
+- If anything is ambiguous, use the reference image as the source of truth when available.
+- Do not output your checklist or analysis; output only the final generated image.
 """
 
 
@@ -101,6 +118,31 @@ class ImageGenerationAgent:
     def __init__(self, ai_service: AIProviderService):
         """Initialize with an AI service instance."""
         self.ai_service = ai_service
+
+    @staticmethod
+    def _build_outfit_inventory(items: List[Dict[str, Any]]) -> str:
+        """Build a detailed, deterministic outfit inventory for prompt fidelity."""
+        if not items:
+            return "Outfit inventory: none provided."
+
+        lines = ["OUTFIT INVENTORY (MUST BE MATCHED EXACTLY):"]
+        for idx, item in enumerate(items, start=1):
+            name = str(item.get("name") or "unspecified item").strip()
+            category = str(item.get("category") or "other").strip() or "other"
+            colors = [str(c).strip() for c in (item.get("colors") or []) if str(c).strip()]
+            material = str(item.get("material") or "").strip()
+            pattern = str(item.get("pattern") or "").strip()
+            brand = str(item.get("brand") or "").strip()
+
+            lines.append(f"- Item {idx}: {name} (category: {category})")
+            lines.append(f"  - colors: {', '.join(colors) if colors else 'unspecified'}")
+            lines.append(f"  - material: {material if material else 'unspecified'}")
+            lines.append(f"  - pattern: {pattern if pattern else 'unspecified'}")
+            lines.append(f"  - brand/details: {brand if brand else 'unspecified'}")
+
+        lines.append("- Include every listed item exactly once unless naturally hidden by layering.")
+        lines.append("- Do not add any extra clothing, footwear, accessories, or props.")
+        return "\n".join(lines)
 
     async def generate_outfit(
         self,
@@ -163,6 +205,7 @@ class ImageGenerationAgent:
             item_descriptions.append(" ".join(parts))
 
         items_list = "; ".join(item_descriptions)
+        outfit_inventory = self._build_outfit_inventory(items)
 
         # Build body profile description if available
         body_desc = ""
@@ -182,12 +225,23 @@ class ImageGenerationAgent:
             base_prompt = f"Professional flat lay fashion photography of a cohesive {style} outfit: {items_list}."
             prompt = f"""{base_prompt}
 
+{outfit_inventory}
+
+CRITICAL OUTFIT FIDELITY:
+- Match every listed item exactly, including apparel, footwear, and accessories.
+- Preserve exact colors, patterns, textures, silhouettes, trims, logos, and small design details.
+- Do not add or remove items.
+
 Style specifications:
 - Background: {background}
 - Pose: flat lay (top-down)
 - View angle: {view_angle}
 - Lighting: {lighting}
 - Image quality: high-end editorial fashion photography, sharp focus, realistic fabric textures, accurate colors
+
+{QUALITY_CONTROL_PROMPT}
+
+{NEGATIVE_PROMPTS}
 
 {f"Additional instructions: {custom_prompt}" if custom_prompt else ""}""".strip()
 
@@ -209,10 +263,14 @@ CRITICAL REQUIREMENTS:
    - Match hair color, style, texture, and hairline exactly
 
 2. CLOTHING ACCURACY: Render the outfit items exactly as described with accurate colors, patterns, textures, and styling.
+   - Match each inventory item exactly: tops, bottoms, outerwear, footwear, accessories, and other pieces
+   - Preserve exact silhouette, fit, layering, logos, labels, hardware, and small details
+   - Do not omit any listed item and do not add any unlisted item
 
 3. NATURAL INTEGRATION: The clothing should fit naturally on the person's body with realistic draping, shadows, and fabric behavior.
 
 4. SINGLE OUTPUT: Generate one cohesive image of the person wearing the complete outfit.
+{outfit_inventory}
 {body_desc}
 
 Style specifications:
@@ -223,6 +281,8 @@ Style specifications:
 - Image quality: High-end editorial fashion photography, sharp focus, realistic fabric textures, accurate colors
 
 {NEGATIVE_PROMPTS}
+
+{QUALITY_CONTROL_PROMPT}
 
 {f"Additional instructions: {custom_prompt}" if custom_prompt else ""}""".strip()
 
@@ -265,6 +325,14 @@ Style specifications:
             # Generic model generation (no avatar)
             base_prompt = f"Professional fashion photography of a {model_gender} model wearing a cohesive {style} outfit featuring: {items_list}."
             prompt = f"""{base_prompt}
+
+{outfit_inventory}
+
+CRITICAL OUTFIT FIDELITY:
+- Keep the listed clothing items exactly as specified.
+- Match apparel, footwear, and accessories precisely (colors, patterns, materials, silhouettes, and detail work).
+- Do not add extra garments, accessories, or props.
+- Do not remove any required outfit item.
 {body_desc}
 
 Style specifications:
@@ -273,6 +341,10 @@ Style specifications:
 - View angle: {view_angle}
 - Lighting: {lighting}
 - Image quality: high-end editorial fashion photography, sharp focus, realistic fabric textures, accurate colors
+
+{QUALITY_CONTROL_PROMPT}
+
+{NEGATIVE_PROMPTS}
 
 {f"Additional instructions: {custom_prompt}" if custom_prompt else ""}""".strip()
 
@@ -341,6 +413,13 @@ CRITICAL - The generated item must be IDENTICAL to the one in the reference imag
 - EXACT same fabric texture and material appearance
 - EXACT same brand logos, labels, or embellishments if visible
 - EXACT same proportions and fit
+- EXACT same accessories/hardware/details if part of the item (laces, buckles, straps, buttons, zippers, jewelry clasps, etc.)
+
+MANDATORY QUALITY CONTROL (INTERNAL):
+- Think twice before you generate.
+- Re-evaluate the reference image and item details twice before rendering.
+- Build a detailed internal blueprint of the item (shape, seams, trims, closures, logos, texture, color zones) and verify all details match.
+- If uncertain, copy the reference detail rather than inventing.
 
 Item details from reference: {item_description}
 
@@ -371,7 +450,12 @@ Photography specifications:
 - The item should be displayed flat or on an invisible mannequin
 - ONLY this single {category_name} should be visible
 - No model, no other clothing items, no accessories unless part of this item
-- Clean, isolated product shot suitable for an online store listing""".strip()
+- Clean, isolated product shot suitable for an online store listing
+
+MANDATORY QUALITY CONTROL (INTERNAL):
+- Think twice before you generate.
+- Re-evaluate the item description before rendering.
+- Internally verify category, shape, materials, colors, and all specified details match exactly.""".strip()
 
         return await self._generate_image(prompt, reference_image=reference_image)
 
@@ -544,6 +628,9 @@ CRITICAL REQUIREMENTS:
    - Match hair color, style, texture, and hairline exactly
 
 2. CLOTHING ACCURACY: The clothing item must be rendered exactly as shown in the second image - same colors, patterns, textures, style, and fit.
+   - Keep exact garment/accessory/footwear details if visible (logos, seams, stitching, hardware, laces, buckles, zippers, embellishments)
+   - Do not add or remove any clothing element
+   - Do not swap style, cut, silhouette, or layer structure
 
 3. NATURAL INTEGRATION: The clothing should fit naturally on the person's body with realistic draping, shadows, and fabric behavior.
 
@@ -557,6 +644,8 @@ Style specifications:
 - Image quality: High-end editorial fashion photography, sharp focus, realistic fabric textures, accurate colors{clothing_desc}
 
 {NEGATIVE_PROMPTS}
+
+{QUALITY_CONTROL_PROMPT}
 
 Output a single, high-quality photorealistic image that looks like a professional fashion photograph of THIS EXACT PERSON wearing these specific clothes."""
 

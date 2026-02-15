@@ -36,14 +36,18 @@ class _CalendarPageState extends State<CalendarPage> {
     return Scaffold(
       body: AppPageBackground(
         child: SafeArea(
-          child: CustomScrollView(
-            slivers: [
-              _buildAppBar(),
-              SliverPadding(
-                padding: const EdgeInsets.all(AppConstants.spacing16),
-                sliver: _buildContent(),
-              ),
-            ],
+          child: RefreshIndicator(
+            onRefresh: () => controller.fetchEventsForMonth(controller.focusedDate.value),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                _buildAppBar(),
+                SliverPadding(
+                  padding: const EdgeInsets.all(AppConstants.spacing16),
+                  sliver: _buildContent(),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -281,12 +285,19 @@ class _CalendarPageState extends State<CalendarPage> {
         const SizedBox(height: AppConstants.spacing12),
         Obx(() {
           if (controller.isLoadingEvents.value) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(AppConstants.spacing32),
-                child: CircularProgressIndicator(),
-              ),
+            return Column(
+              children: const [
+                ShimmerListTile(hasLeading: true, hasSubtitle: true),
+                SizedBox(height: AppConstants.spacing8),
+                ShimmerListTile(hasLeading: true, hasSubtitle: true),
+                SizedBox(height: AppConstants.spacing8),
+                ShimmerListTile(hasLeading: true, hasSubtitle: true),
+              ],
             );
+          }
+
+          if (controller.hasError) {
+            return _buildErrorState();
           }
 
           if (controller.selectedDateEvents.isEmpty) {
@@ -370,6 +381,50 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
+  Widget _buildErrorState() {
+    final tokens = AppUiTokens.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(AppConstants.spacing32),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.errorContainer.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(AppConstants.radius16),
+        border: Border.all(color: Theme.of(context).colorScheme.error.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 48,
+            color: Theme.of(context).colorScheme.error,
+          ),
+          const SizedBox(height: AppConstants.spacing16),
+          Text(
+            'Failed to load events',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppConstants.spacing8),
+          Text(
+            controller.error.value.replaceAll('Exception: ', ''),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: tokens.textMuted,
+                ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppConstants.spacing16),
+          ElevatedButton.icon(
+            onPressed: () {
+              controller.clearError();
+              controller.fetchEventsForMonth(controller.selectedDate.value);
+            },
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmptyState() {
     final tokens = AppUiTokens.of(context);
 
@@ -408,6 +463,13 @@ class _CalendarPageState extends State<CalendarPage> {
     final titleController = TextEditingController();
     final locationController = TextEditingController();
     final descriptionController = TextEditingController();
+
+    void disposeControllers() {
+      titleController.dispose();
+      locationController.dispose();
+      descriptionController.dispose();
+    }
+
     DateTime startTime = DateTime(
       controller.selectedDate.value.year,
       controller.selectedDate.value.month,
@@ -423,9 +485,15 @@ class _CalendarPageState extends State<CalendarPage> {
     bool isAllDay = false;
 
     Get.dialog(
-      StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
+      PopScope(
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) {
+            disposeControllers();
+          }
+        },
+        child: StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
             title: const Text('Add Event'),
             content: SingleChildScrollView(
               child: Column(
@@ -527,6 +595,10 @@ class _CalendarPageState extends State<CalendarPage> {
                     Get.snackbar('Error', 'Please enter a title');
                     return;
                   }
+                  if (!isAllDay && !endTime.isAfter(startTime)) {
+                    Get.snackbar('Error', 'End time must be after start time');
+                    return;
+                  }
                   controller.createEvent(
                     title: titleController.text,
                     startTime: startTime,
@@ -547,7 +619,7 @@ class _CalendarPageState extends State<CalendarPage> {
             ],
           );
         },
-      ),
+      )),
     );
   }
 
@@ -555,14 +627,27 @@ class _CalendarPageState extends State<CalendarPage> {
     final titleController = TextEditingController(text: event.title);
     final locationController = TextEditingController(text: event.location ?? '');
     final descriptionController = TextEditingController(text: event.description ?? '');
+
+    void disposeControllers() {
+      titleController.dispose();
+      locationController.dispose();
+      descriptionController.dispose();
+    }
+
     DateTime startTime = event.startTime;
     DateTime endTime = event.endTime;
     bool isAllDay = event.isAllDay;
 
     Get.dialog(
-      StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
+      PopScope(
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) {
+            disposeControllers();
+          }
+        },
+        child: StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
             title: const Text('Edit Event'),
             content: SingleChildScrollView(
               child: Column(
@@ -648,6 +733,10 @@ class _CalendarPageState extends State<CalendarPage> {
                     Get.snackbar('Error', 'Please enter a title');
                     return;
                   }
+                  if (!isAllDay && !endTime.isAfter(startTime)) {
+                    Get.snackbar('Error', 'End time must be after start time');
+                    return;
+                  }
                   controller.updateEvent(
                     event.id,
                     title: titleController.text,
@@ -669,7 +758,7 @@ class _CalendarPageState extends State<CalendarPage> {
             ],
           );
         },
-      ),
+      )),
     );
   }
 

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:shimmer/shimmer.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
@@ -102,32 +101,14 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
   }
 
   Widget _buildLoadingStats() {
-    final tokens = AppUiTokens.of(context);
-
     return SliverList(
       delegate: SliverChildListDelegate([
-        _buildStatCardShimmer(tokens),
+        const ShimmerCard(height: 120),
         const SizedBox(height: AppConstants.spacing12),
-        _buildStatCardShimmer(tokens),
+        const ShimmerCard(height: 100),
         const SizedBox(height: AppConstants.spacing12),
-        _buildStatCardShimmer(tokens),
+        const ShimmerCard(height: 200),
       ]),
-    );
-  }
-
-  Widget _buildStatCardShimmer(AppUiTokens tokens) {
-    return Shimmer.fromColors(
-      baseColor: tokens.cardColor.withOpacity(0.4),
-      highlightColor: tokens.cardColor.withOpacity(0.7),
-      period: const Duration(milliseconds: 1200),
-      child: Container(
-        height: 120,
-        decoration: BoxDecoration(
-          color: tokens.cardColor.withOpacity(0.6),
-          borderRadius: BorderRadius.circular(AppConstants.radius16),
-          border: Border.all(color: tokens.cardBorderColor),
-        ),
-      ),
     );
   }
 

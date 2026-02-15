@@ -52,6 +52,18 @@ class DetectedItem(BaseModel):
     bounding_box: Optional[BoundingBox] = None
     detailed_description: Optional[str] = None
     status: str = "detected"
+    person_id: Optional[str] = None
+    person_label: Optional[str] = None
+    is_current_user_person: Optional[bool] = None
+    include_in_wardrobe: Optional[bool] = None
+
+
+class DetectedPerson(BaseModel):
+    """A person detected in extraction image."""
+    person_id: str
+    person_label: str
+    is_current_user_person: bool = False
+    confidence: float = Field(0.0, ge=0, le=1)
 
 
 class ExtractItemsRequest(BaseModel):
@@ -62,10 +74,13 @@ class ExtractItemsRequest(BaseModel):
 class ExtractItemsResponse(BaseModel):
     """Response from item extraction."""
     items: List[DetectedItem] = Field(default_factory=list)
+    people: List[DetectedPerson] = Field(default_factory=list)
     overall_confidence: float = Field(0.0, ge=0, le=1)
     image_description: str = ""
     item_count: int = 0
     requires_review: bool = True
+    has_profile_reference: bool = False
+    profile_match_found: bool = False
 
 
 class ExtractSingleItemRequest(BaseModel):

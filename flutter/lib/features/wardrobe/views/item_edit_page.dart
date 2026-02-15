@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
 import '../../../domain/enums/condition.dart' as domain;
 import '../controllers/wardrobe_controller.dart';
@@ -14,10 +15,7 @@ import '../repositories/item_repository.dart';
 class ItemEditPage extends StatefulWidget {
   final String itemId;
 
-  const ItemEditPage({
-    super.key,
-    required this.itemId,
-  });
+  const ItemEditPage({super.key, required this.itemId});
 
   @override
   State<ItemEditPage> createState() => _ItemEditPageState();
@@ -37,12 +35,14 @@ class _ItemEditPageState extends State<ItemEditPage> {
   late TextEditingController _patternController;
   late TextEditingController _priceController;
   late TextEditingController _locationController;
+  late TextEditingController _customUseCaseController;
 
   // Reactive state
   final Rx<Category> selectedCategory = Category.tops.obs;
   final Rx<domain.Condition> selectedCondition = domain.Condition.clean.obs;
   final RxSet<String> selectedColors = <String>{}.obs;
   final RxSet<String> selectedTags = <String>{}.obs;
+  final RxSet<String> selectedUseCases = <String>{}.obs;
   final RxBool isSaving = false.obs;
   final RxList<File> newImages = <File>[].obs;
   final RxSet<String> imagesToDelete = <String>{}.obs;
@@ -51,8 +51,20 @@ class _ItemEditPageState extends State<ItemEditPage> {
 
   // Common color options
   static const List<String> commonColors = [
-    'Black', 'White', 'Gray', 'Red', 'Blue', 'Green', 'Yellow',
-    'Pink', 'Purple', 'Orange', 'Brown', 'Beige', 'Navy', 'Cream',
+    'Black',
+    'White',
+    'Gray',
+    'Red',
+    'Blue',
+    'Green',
+    'Yellow',
+    'Pink',
+    'Purple',
+    'Orange',
+    'Brown',
+    'Beige',
+    'Navy',
+    'Cream',
   ];
 
   ItemModel? _item;
@@ -60,7 +72,9 @@ class _ItemEditPageState extends State<ItemEditPage> {
   @override
   void initState() {
     super.initState();
-    _item = _wardrobeController.items.firstWhereOrNull((i) => i.id == widget.itemId);
+    _item = _wardrobeController.items.firstWhereOrNull(
+      (i) => i.id == widget.itemId,
+    );
     if (_item != null) {
       _initializeControllers(_item!);
     }
@@ -68,18 +82,26 @@ class _ItemEditPageState extends State<ItemEditPage> {
 
   void _initializeControllers(ItemModel item) {
     _nameController = TextEditingController(text: item.name);
-    _descriptionController = TextEditingController(text: item.description ?? '');
+    _descriptionController = TextEditingController(
+      text: item.description ?? '',
+    );
     _brandController = TextEditingController(text: item.brand ?? '');
     _sizeController = TextEditingController(text: item.size ?? '');
     _materialController = TextEditingController(text: item.material ?? '');
     _patternController = TextEditingController(text: item.pattern ?? '');
-    _priceController = TextEditingController(text: item.price?.toString() ?? '');
+    _priceController = TextEditingController(
+      text: item.price?.toString() ?? '',
+    );
     _locationController = TextEditingController(text: item.location ?? '');
+    _customUseCaseController = TextEditingController();
 
     selectedCategory.value = item.category;
     selectedCondition.value = item.condition;
     if (item.colors != null) selectedColors.addAll(item.colors!);
     if (item.tags != null) selectedTags.addAll(item.tags!);
+    if (item.occasionTags != null) {
+      selectedUseCases.addAll(UseCases.normalizeList(item.occasionTags));
+    }
   }
 
   Future<void> _pickImage() async {
@@ -148,22 +170,37 @@ class _ItemEditPageState extends State<ItemEditPage> {
         description: _descriptionController.text.trim().isEmpty
             ? null
             : _descriptionController.text.trim(),
-        category: _nameController.text.trim() != _item!.name ? selectedCategory.value : null,
+        category: _nameController.text.trim() != _item!.name
+            ? selectedCategory.value
+            : null,
         colors: selectedColors.isEmpty ? null : selectedColors.toList(),
-        brand: _brandController.text.trim().isEmpty ? null : _brandController.text.trim(),
-        size: _sizeController.text.trim().isEmpty ? null : _sizeController.text.trim(),
-        material: _materialController.text.trim().isEmpty ? null : _materialController.text.trim(),
-        pattern: _patternController.text.trim().isEmpty ? null : _patternController.text.trim(),
+        brand: _brandController.text.trim().isEmpty
+            ? null
+            : _brandController.text.trim(),
+        size: _sizeController.text.trim().isEmpty
+            ? null
+            : _sizeController.text.trim(),
+        material: _materialController.text.trim().isEmpty
+            ? null
+            : _materialController.text.trim(),
+        pattern: _patternController.text.trim().isEmpty
+            ? null
+            : _patternController.text.trim(),
         condition: selectedCondition.value,
         price: _priceController.text.trim().isEmpty
             ? null
             : double.tryParse(_priceController.text.trim()),
-        location: _locationController.text.trim().isEmpty ? null : _locationController.text.trim(),
+        location: _locationController.text.trim().isEmpty
+            ? null
+            : _locationController.text.trim(),
         tags: selectedTags.isEmpty ? null : selectedTags.toList(),
+        occasionTags: selectedUseCases.isEmpty
+            ? null
+            : UseCases.normalizeList(selectedUseCases),
       );
 
       // Update item
-      final updated = await _itemRepository.updateItem(widget.itemId, request);
+      await _itemRepository.updateItem(widget.itemId, request);
 
       // Delete images if any
       for (final imageId in imagesToDelete) {
@@ -206,6 +243,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
     _patternController.dispose();
     _priceController.dispose();
     _locationController.dispose();
+    _customUseCaseController.dispose();
     super.dispose();
   }
 
@@ -269,42 +307,46 @@ class _ItemEditPageState extends State<ItemEditPage> {
                   const SizedBox(height: AppConstants.spacing16),
 
                   // Category
-                  Obx(() => DropdownButtonFormField<Category>(
-                        value: selectedCategory.value,
-                        decoration: const InputDecoration(
-                          labelText: 'Category *',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: Category.values.map((category) {
-                          return DropdownMenuItem(
-                            value: category,
-                            child: Text(category.displayName),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) selectedCategory.value = value;
-                        },
-                      )),
+                  Obx(
+                    () => DropdownButtonFormField<Category>(
+                      value: selectedCategory.value,
+                      decoration: const InputDecoration(
+                        labelText: 'Category *',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: Category.values.map((category) {
+                        return DropdownMenuItem(
+                          value: category,
+                          child: Text(category.displayName),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) selectedCategory.value = value;
+                      },
+                    ),
+                  ),
 
                   const SizedBox(height: AppConstants.spacing16),
 
                   // Condition
-                  Obx(() => DropdownButtonFormField<domain.Condition>(
-                        value: selectedCondition.value,
-                        decoration: const InputDecoration(
-                          labelText: 'Condition *',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: domain.Condition.values.map((condition) {
-                          return DropdownMenuItem(
-                            value: condition,
-                            child: Text(condition.displayName),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) selectedCondition.value = value;
-                        },
-                      )),
+                  Obx(
+                    () => DropdownButtonFormField<domain.Condition>(
+                      value: selectedCondition.value,
+                      decoration: const InputDecoration(
+                        labelText: 'Condition *',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: domain.Condition.values.map((condition) {
+                        return DropdownMenuItem(
+                          value: condition,
+                          child: Text(condition.displayName),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) selectedCondition.value = value;
+                      },
+                    ),
+                  ),
 
                   const SizedBox(height: AppConstants.spacing16),
 
@@ -322,6 +364,11 @@ class _ItemEditPageState extends State<ItemEditPage> {
 
                   // Colors
                   _buildColorSelector(tokens),
+
+                  const SizedBox(height: AppConstants.spacing16),
+
+                  // Use cases
+                  _buildUseCaseSelector(tokens),
 
                   const SizedBox(height: AppConstants.spacing16),
 
@@ -438,9 +485,9 @@ class _ItemEditPageState extends State<ItemEditPage> {
             Text(
               'Photos',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
             ),
             Row(
               children: [
@@ -459,7 +506,8 @@ class _ItemEditPageState extends State<ItemEditPage> {
           ],
         ),
 
-        if (_item!.itemImages != null && _item!.itemImages!.isNotEmpty || newImages.isNotEmpty)
+        if (_item!.itemImages != null && _item!.itemImages!.isNotEmpty ||
+            newImages.isNotEmpty)
           SizedBox(
             height: 120,
             child: ListView(
@@ -469,11 +517,15 @@ class _ItemEditPageState extends State<ItemEditPage> {
                 ...?_item!.itemImages!.map((image) {
                   final isDeleting = imagesToDelete.contains(image.id);
                   return Padding(
-                    padding: const EdgeInsets.only(right: AppConstants.spacing8),
+                    padding: const EdgeInsets.only(
+                      right: AppConstants.spacing8,
+                    ),
                     child: Stack(
                       children: [
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(AppConstants.radius8),
+                          borderRadius: BorderRadius.circular(
+                            AppConstants.radius8,
+                          ),
                           child: SizedBox(
                             width: 100,
                             height: 100,
@@ -491,7 +543,9 @@ class _ItemEditPageState extends State<ItemEditPage> {
                           top: 4,
                           right: 4,
                           child: CircleAvatar(
-                            backgroundColor: isDeleting ? Colors.red : Colors.white,
+                            backgroundColor: isDeleting
+                                ? Colors.red
+                                : Colors.white,
                             child: IconButton(
                               icon: Icon(
                                 isDeleting ? Icons.close : Icons.delete_outline,
@@ -515,18 +569,19 @@ class _ItemEditPageState extends State<ItemEditPage> {
                   final index = entry.key;
                   final image = entry.value;
                   return Padding(
-                    padding: const EdgeInsets.only(right: AppConstants.spacing8),
+                    padding: const EdgeInsets.only(
+                      right: AppConstants.spacing8,
+                    ),
                     child: Stack(
                       children: [
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(AppConstants.radius8),
+                          borderRadius: BorderRadius.circular(
+                            AppConstants.radius8,
+                          ),
                           child: SizedBox(
                             width: 100,
                             height: 100,
-                            child: Image.file(
-                              image,
-                              fit: BoxFit.cover,
-                            ),
+                            child: Image.file(image, fit: BoxFit.cover),
                           ),
                         ),
                         Positioned(
@@ -535,7 +590,10 @@ class _ItemEditPageState extends State<ItemEditPage> {
                           child: CircleAvatar(
                             backgroundColor: Colors.white,
                             child: IconButton(
-                              icon: const Icon(Icons.close, color: Colors.black),
+                              icon: const Icon(
+                                Icons.close,
+                                color: Colors.black,
+                              ),
                               onPressed: () => _removeNewImage(index),
                               constraints: const BoxConstraints(
                                 minWidth: 32,
@@ -575,7 +633,8 @@ class _ItemEditPageState extends State<ItemEditPage> {
           ),
 
         // Empty state
-        if ((_item!.itemImages == null || _item!.itemImages!.isEmpty) && newImages.isEmpty)
+        if ((_item!.itemImages == null || _item!.itemImages!.isEmpty) &&
+            newImages.isEmpty)
           Container(
             height: 100,
             decoration: BoxDecoration(
@@ -585,9 +644,9 @@ class _ItemEditPageState extends State<ItemEditPage> {
             child: Center(
               child: Text(
                 'No photos yet',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: tokens.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
               ),
             ),
           ),
@@ -602,9 +661,9 @@ class _ItemEditPageState extends State<ItemEditPage> {
         Text(
           'Colors',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: tokens.textPrimary,
-                fontWeight: FontWeight.w500,
-              ),
+            color: tokens.textPrimary,
+            fontWeight: FontWeight.w500,
+          ),
         ),
         const SizedBox(height: AppConstants.spacing8),
         Wrap(
@@ -632,16 +691,99 @@ class _ItemEditPageState extends State<ItemEditPage> {
     );
   }
 
+  Widget _buildUseCaseSelector(AppUiTokens tokens) {
+    return Obx(
+      () => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Use Cases',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: tokens.textPrimary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: AppConstants.spacing8),
+          Wrap(
+            spacing: AppConstants.spacing8,
+            runSpacing: AppConstants.spacing8,
+            children: UseCases.defaults.map((useCase) {
+              final isSelected = selectedUseCases.contains(useCase);
+              return FilterChip(
+                label: Text(UseCases.displayLabel(useCase)),
+                selected: isSelected,
+                onSelected: (selected) {
+                  if (selected) {
+                    selectedUseCases.add(useCase);
+                  } else {
+                    selectedUseCases.remove(useCase);
+                  }
+                  selectedUseCases.refresh();
+                },
+                selectedColor: tokens.brandColor.withOpacity(0.2),
+                checkmarkColor: tokens.brandColor,
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: AppConstants.spacing8),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _customUseCaseController,
+                  decoration: const InputDecoration(
+                    labelText: 'Custom use case',
+                    hintText: 'e.g., brunch',
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => _addCustomUseCase(),
+                ),
+              ),
+              const SizedBox(width: AppConstants.spacing8),
+              OutlinedButton(
+                onPressed: _addCustomUseCase,
+                child: const Text('Add'),
+              ),
+            ],
+          ),
+          if (selectedUseCases.isNotEmpty) ...[
+            const SizedBox(height: AppConstants.spacing8),
+            Wrap(
+              spacing: AppConstants.spacing8,
+              runSpacing: AppConstants.spacing8,
+              children: selectedUseCases.map((useCase) {
+                return Chip(
+                  label: Text(UseCases.displayLabel(useCase)),
+                  onDeleted: () {
+                    selectedUseCases.remove(useCase);
+                    selectedUseCases.refresh();
+                  },
+                );
+              }).toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _addCustomUseCase() {
+    final normalized = UseCases.normalize(_customUseCaseController.text);
+    if (normalized.isEmpty) return;
+    selectedUseCases.add(normalized);
+    selectedUseCases.refresh();
+    _customUseCaseController.clear();
+  }
+
   void _showDeleteConfirmation() {
     Get.dialog(
       AlertDialog(
         title: const Text('Delete Item?'),
-        content: const Text('This action cannot be undone. The item will be permanently removed from your wardrobe.'),
+        content: const Text(
+          'This action cannot be undone. The item will be permanently removed from your wardrobe.',
+        ),
         actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               Get.back(); // Close dialog

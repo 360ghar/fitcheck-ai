@@ -1,235 +1,192 @@
 # FitCheck AI
 
-Virtual closet with AI-powered outfit visualization
+FitCheck AI is a multi-platform wardrobe intelligence product with AI-assisted item extraction, outfit planning, outfit generation, recommendations, and social sharing.
 
-FitCheck AI is a comprehensive wardrobe management application that uses artificial intelligence to help users organize their clothing, create outfit combinations, and visualize how outfits will look before wearing them.
+## Monorepo Apps
 
-## Features
+- `backend/`: FastAPI API and business logic
+- `frontend/`: React + TypeScript web app (Vite)
+- `flutter/`: Flutter mobile app (GetX)
+- `remotion/`: Remotion promo/video compositions
+- `docs/`: Product, technical, and implementation documentation
 
-### Core Functionality
-- **Digital Wardrobe**: Upload outfit photos and let AI extract individual clothing items automatically
-- **Smart Categorization**: Auto-tag items by category (tops, bottoms, shoes, accessories, outerwear)
-- **Color Detection**: Automatic color palette extraction for each item
-- **Mix & Match**: Select items from your wardrobe to create new outfit combinations
-- **AI Outfit Generation**: Generate realistic images showing outfit combinations
+## Core Capabilities
 
-### Planning & Organization
-- **Calendar Integration**: Plan outfits for specific dates and events
-- **Weather-Based Suggestions**: Get outfit recommendations based on weather forecasts
-- **Usage Analytics**: Track most/least worn items with cost-per-wear calculations
-- **Condition Tracking**: Mark items as clean, dirty, needs repair, or donate
+- AI wardrobe extraction from single or batch image uploads
+- Wardrobe CRUD, filtering, condition tracking, and analytics
+- Outfit creation and generation workflows
+- Virtual try-on flow
+- Calendar and weather-informed outfit planning
+- Recommendations (matching items, complete look, shopping/gap-oriented suggestions)
+- Photoshoot image generation flow
+- Social sharing and public outfit links
+- Gamification and referral/subscription flows
+- Optional social import pipeline with OAuth/session support
 
-### AI-Powered Recommendations
-- **Style Matching**: Find complementary pieces from your wardrobe
-- **Complete Look Suggestions**: Get AI-generated outfit ideas
-- **Shopping Recommendations**: Identify gaps in your wardrobe
+## High-Level Architecture
 
-### Social & Gamification
-- **Share Outfits**: Get feedback from friends before events
-- **Streak Tracking**: Build consistency with outfit planning
-- **Achievements**: Unlock badges for wardrobe milestones
-- **Leaderboard**: Compare style stats with the community
+1. Web and mobile clients call FastAPI endpoints under `/api/v1/*`.
+2. Backend validates auth and coordinates domain services (`backend/app/services/`).
+3. Supabase provides Postgres + storage.
+4. AI provider abstraction supports Gemini, OpenAI, and custom OpenAI-compatible endpoints.
+5. Optional vector features use Pinecone.
 
-## Technology Stack
+## Project Structure
 
-### Backend
-- **Framework**: FastAPI (Python)
-- **Database**: Supabase (PostgreSQL)
-- **Vector DB**: Pinecone
-- **Storage**: Supabase Storage
-- **AI Services**: Google Gemini, OpenAI (configurable)
+```text
+fitcheck-ai/
+├── AGENTS.md
+├── README.md
+├── run-dev.sh
+├── backend/
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── api/v1/
+│   │   ├── services/
+│   │   ├── models/
+│   │   ├── core/
+│   │   └── db/
+│   ├── db/supabase/migrations/
+│   ├── tests/
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx
+│   │   ├── pages/
+│   │   ├── components/
+│   │   ├── api/
+│   │   ├── stores/
+│   │   └── lib/
+│   ├── package.json
+│   └── vite.config.ts
+├── flutter/
+│   ├── lib/
+│   │   ├── app/
+│   │   ├── core/
+│   │   └── features/
+│   └── pubspec.yaml
+├── remotion/
+│   ├── src/
+│   └── package.json
+└── docs/
+    ├── README.md
+    ├── PROJECT_OVERVIEW.md
+    ├── SUMMARY.md
+    ├── 1-product/
+    ├── 2-technical/
+    ├── 3-features/
+    ├── 4-implementation/
+    └── 5-development/
+```
 
-### Frontend
-- **Framework**: React 18 + TypeScript
-- **Build Tool**: Vite 5
-- **UI**: shadcn/ui + Tailwind CSS
-- **State**: TanStack Query + Zustand
-- **Forms**: React Hook Form + Zod
+## Local Development
 
-## Quick Start
+This repository uses hosted Supabase. Do not run Supabase locally.
 
 ### Prerequisites
+
 - Python 3.12+
 - Node.js 18+
-- Supabase account (hosted)
-- AI API keys (Gemini or OpenAI)
+- Hosted Supabase project
+- Optional: Pinecone account for vector features
+- Optional: AI provider keys (Gemini/OpenAI/custom endpoint)
 
-### Environment Setup
+### Fastest Start (Web + API)
 
-1. Clone the repository:
-```bash
-git clone https://github.com/your-org/fitcheck-ai.git
-cd fitcheck-ai
-```
-
-2. Copy environment files:
-```bash
-cp .env.example .env
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env  # if exists
-```
-
-3. Configure your `.env` files with:
-   - Supabase URL and keys
-   - AI provider API keys (Gemini/OpenAI)
-   - JWT secrets
-
-### Running Locally
-
-**Option 1: Using the dev script (recommended)**
 ```bash
 ./run-dev.sh
 ```
-This starts both backend (port 8000) and frontend (port 3000).
 
-**Option 2: Manual start**
+Starts:
+- Backend: `http://localhost:8000`
+- Frontend: `http://localhost:3000`
+- API docs: `http://localhost:8000/api/v1/docs`
+
+### Manual Start
 
 Backend:
+
 ```bash
 cd backend
 python -m venv .venv
-source .venv/bin/activate  # or `.venv\Scripts\activate` on Windows
+source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
 Frontend:
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-### Access the Application
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
+Flutter:
 
-## Project Structure
+```bash
+cd flutter
+flutter pub get
+flutter run --dart-define=API_BASE_URL=http://localhost:8000 --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
+```
 
-```
-fitcheck-ai/
-├── backend/                 # FastAPI backend
-│   ├── app/
-│   │   ├── api/v1/         # API routes
-│   │   ├── services/       # Business logic
-│   │   ├── models/         # Pydantic models
-│   │   └── main.py         # Entry point
-│   ├── db/                 # Database migrations
-│   └── requirements.txt
-├── frontend/               # React frontend
-│   ├── src/
-│   │   ├── components/     # UI components
-│   │   ├── pages/          # Route pages
-│   │   ├── stores/         # Zustand stores
-│   │   ├── api/            # API client
-│   │   ├── lib/            # Utilities
-│   │   └── types/          # TypeScript types
-│   └── package.json
-├── docs/                   # Comprehensive documentation
-│   ├── 1-product/          # Product specs & user stories
-│   ├── 2-technical/        # Architecture & API specs
-│   ├── 3-features/         # Feature implementations
-│   ├── 4-implementation/   # Development guides
-│   └── 5-development/      # Setup & deployment
-└── docker-compose.yml      # Container orchestration
-```
+## Environment Configuration
+
+All required keys for this workspace are already present in `.env`.
+
+Reference templates:
+- Backend: `backend/.env.example`
+- Frontend: `frontend/.env.example`
+- Flutter: `flutter/.env.example`
+
+Common keys:
+
+- Backend Supabase: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_SECRET`
+- Frontend: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_API_BASE_URL`
+- Flutter: `API_BASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- AI: `AI_DEFAULT_PROVIDER`, `AI_GEMINI_*`, `AI_OPENAI_*`, `AI_CUSTOM_*`
+
+## Backend API Domains
+
+Route modules in `backend/app/api/v1/`:
+
+- `auth.py`: auth and token flows
+- `users.py`: profile/settings/preferences
+- `items.py`: wardrobe item CRUD and metadata
+- `outfits.py`: outfit CRUD and generation-related flows
+- `ai.py`: extraction/generation and AI operations
+- `ai_settings.py`: provider settings and health checks
+- `batch_processing.py`: batch extraction jobs and SSE streams
+- `recommendations.py`: recommendation endpoints
+- `calendar.py`: calendar planning endpoints
+- `weather.py`: weather-related endpoints
+- `gamification.py`: streaks/achievements/leaderboard
+- `photoshoot.py`: photoshoot generation and demo/use-case endpoints
+- `social_import.py`: social account/media import (feature-flagged)
+- `shared_outfits.py`: public shared outfit access/feedback
+- `subscription.py` and `referral.py`: billing/referral flows
+- `feedback.py` and `waitlist.py`: support and pre-launch endpoints
 
 ## Documentation
 
-Comprehensive documentation is available in the `/docs` folder:
+See `docs/README.md` for the full index.
 
-| Section | Description |
-|---------|-------------|
-| [Product Overview](./docs/1-product/overview.md) | Vision, target users, business model |
-| [User Stories](./docs/1-product/user-stories.md) | 40+ detailed user journeys |
-| [Architecture](./docs/2-technical/architecture.md) | System design & diagrams |
-| [API Specification](./docs/2-technical/api-spec.md) | 90+ endpoints documented |
-| [Data Models](./docs/2-technical/data-models.md) | Database schemas |
-| [Setup Guide](./docs/5-development/setup.md) | Local development setup |
+Recommended starting points:
+- Complete implementation map: `docs/PROJECT_OVERVIEW.md`
+- Setup: `docs/5-development/setup.md`
+- Architecture: `docs/2-technical/architecture.md`
+- API spec: `docs/2-technical/api-spec.md`
 
-See [docs/README.md](./docs/README.md) for the complete documentation index.
+## Validation Commands
 
-## Development Commands
+- Backend tests: `cd backend && pytest`
+- Frontend lint: `cd frontend && npm run lint`
+- Frontend build/type check: `cd frontend && npm run build`
+- Flutter tests: `cd flutter && flutter test`
+- Remotion preview: `cd remotion && npm run dev`
 
-### Backend
-```bash
-cd backend
-pytest                      # Run tests
-uvicorn app.main:app --reload  # Dev server
-```
+## Notes
 
-### Frontend
-```bash
-cd frontend
-npm run dev                 # Dev server
-npm run build              # Production build
-npm run lint               # Lint check
-npm run preview            # Preview build
-```
-
-### Docker (optional)
-```bash
-docker compose up --build   # Run full stack
-```
-
-## AI Configuration
-
-FitCheck AI supports multiple AI providers. Configure in the app settings or via environment:
-
-| Provider | Use Case | Models |
-|----------|----------|--------|
-| Google Gemini | Vision, Generation | gemini-3-flash, gemini-3-pro |
-| OpenAI | Vision, Generation | gpt-4o, dall-e-3 |
-| Custom | Self-hosted endpoints | Any OpenAI-compatible |
-
-## Implementation Status
-
-### Fully Implemented
-- Core wardrobe management (upload, categorize, filter, edit)
-- AI-powered item extraction from photos
-- Outfit creation and generation
-- Calendar integration with outfit planning
-- Weather-based recommendations
-- Gamification (streaks, achievements, leaderboard)
-- Virtual try-on
-- Social sharing and feedback
-
-### In Progress
-- Duplicate detection (embedding-based)
-- Multi-pose outfit generation
-- Personal style learning
-- Wardrobe gap analysis
-
-### Planned
-- Community style feed
-- Price tracking and alerts
-- Sustainability scoring
-- Export to PDF/lookbook
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Commit Convention
-Use conventional commits: `type: description`
-- `feat:` - New feature
-- `fix:` - Bug fix
-- `docs:` - Documentation
-- `refactor:` - Code refactoring
-- `test:` - Tests
-
-## License
-
-This project is proprietary. All rights reserved.
-
-## Support
-
-For questions or issues:
-- Check the [documentation](./docs/README.md)
-- Review [AGENTS.md](./AGENTS.md) for AI agent guidelines
-- Open a GitHub issue
+- Local Docker-based workflows are intentionally not used in this project workflow.
+- Keep business logic in backend services and avoid route-layer bloat.
+- Update docs whenever endpoint, schema, feature, or env changes are made.

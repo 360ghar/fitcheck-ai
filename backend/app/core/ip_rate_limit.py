@@ -27,9 +27,7 @@ logger = get_context_logger(__name__)
 
 # In-memory storage for IP rate limits
 # Structure: { "ip_address": { "operation_type": [(timestamp1), (timestamp2), ...] } }
-_ip_usage: Dict[str, Dict[str, List[datetime]]] = defaultdict(
-    lambda: defaultdict(list)
-)
+_ip_usage: Dict[str, Dict[str, List[datetime]]] = defaultdict(lambda: defaultdict(list))
 _lock = asyncio.Lock()
 
 # Rate limit configuration for demo features
@@ -38,6 +36,15 @@ DEMO_RATE_LIMITS = {
     "try_on": 2,  # 2 try-ons per day per IP
     "photoshoot": 1,  # 1 demo photoshoot per day per IP (2 images per generation)
 }
+
+# Rate limit configuration for auth endpoints (stricter, shorter window)
+AUTH_RATE_LIMITS = {
+    "login": 10,  # 10 login attempts per hour per IP
+    "register": 5,  # 5 registration attempts per hour per IP
+    "password_reset": 5,  # 5 password reset requests per hour per IP
+}
+
+AUTH_RATE_LIMIT_WINDOW = timedelta(hours=1)
 
 RATE_LIMIT_WINDOW = timedelta(hours=24)
 
@@ -64,7 +71,7 @@ def get_client_ip(request: Request) -> str:
         # Take the first IP (original client from proxy chain)
         forwarded_ip = forwarded.split(",")[0].strip()
         # Basic validation: ensure it looks like an IP
-        if forwarded_ip and "." in forwarded_ip or ":" in forwarded_ip:
+        if forwarded_ip and ("." in forwarded_ip or ":" in forwarded_ip):
             return forwarded_ip
 
     # Check X-Real-IP header
@@ -191,3 +198,92 @@ async def get_ip_usage_stats(ip_address: str) -> dict:
             }
 
     return stats
+
+
+async def check_auth_rate_limit(
+    ip_address: str,
+    operation_type: str,
+) -> dict:
+    """
+    Check if IP has exceeded auth rate limit (stricter than demo).
+
+    Args:
+        ip_address: The client IP address
+        operation_type: Type of auth operation (login, register, password_reset)
+
+    Returns:
+        Dict with allowed, current_count, limit, remaining
+    """
+    limit = AUTH_RATE_LIMITS.get(operation_type, 10)
+    cutoff = datetime.utcnow() - AUTH_RATE_LIMIT_WINDOW
+
+    async with _lock:
+        # Use auth-specific key to avoid collision with demo limits
+        auth_key = f"auth_{operation_type}"
+        current_usage = _ip_usage[ip_address][auth_key]
+        current_usage[:] = [ts for ts in current_usage if ts > cutoff]
+
+        current_count = len(current_usage)
+        allowed = current_count < limit
+
+        return {
+            "allowed": allowed,
+            "current_count": current_count,
+            "limit": limit,
+            "remaining": max(0, limit - current_count),
+        }
+
+
+async def increment_auth_usage(ip_address: str, operation_type: str) -> None:
+    """Record an auth attempt for rate limiting."""
+    async with _lock:
+        auth_key = f"auth_{operation_type}"
+        _ip_usage[ip_address][auth_key].append(datetime.utcnow())
+
+
+@asynccontextmanager
+async def auth_rate_limited_operation(request: Request, operation_type: str):
+    """
+    Context manager for IP-based rate-limited auth operations.
+
+    Checks rate limit before operation, increments after attempt (success or failure).
+
+    Args:
+        request: FastAPI request object
+        operation_type: Type of auth operation (login, register, password_reset)
+
+    Raises:
+        RateLimitError: If rate limit exceeded
+
+    Usage:
+        async with auth_rate_limited_operation(request, "login"):
+            # perform login
+    """
+    ip_address = get_client_ip(request)
+
+    rate_check = await check_auth_rate_limit(ip_address, operation_type)
+    if not rate_check["allowed"]:
+        logger.warning(
+            "Auth rate limit exceeded",
+            ip=ip_address,
+            operation=operation_type,
+            limit=rate_check["limit"],
+        )
+        raise RateLimitError(
+            message=(
+                f"Too many {operation_type} attempts. Please wait before trying again."
+            ),
+            retry_after=3600,  # 1 hour in seconds
+        )
+
+    logger.debug(
+        "Auth rate limit check passed",
+        ip=ip_address,
+        operation=operation_type,
+        remaining=rate_check["remaining"] - 1,
+    )
+
+    # Increment before yielding - count all attempts, not just successful ones
+    await increment_auth_usage(ip_address, operation_type)
+
+    yield rate_check
