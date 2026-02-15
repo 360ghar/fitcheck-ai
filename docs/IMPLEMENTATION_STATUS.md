@@ -1,6 +1,6 @@
 # FitCheck AI - Implementation Status
 
-Last Updated: 2026-01-16
+Last Updated: 2026-02-15
 
 This document tracks the implementation status of all FitCheck AI features, comparing the documented specifications against actual implementation.
 
@@ -147,7 +147,7 @@ This document tracks the implementation status of all FitCheck AI features, comp
 | Photo upload (1-4 photos) | ✅ | Flutter + React components |
 | Use case selection | ✅ | LinkedIn, Dating, Portfolio, Instagram, Custom |
 | Image count slider | ✅ | 1-10 images selection |
-| Image generation | ✅ | Nano Banana Pro integration |
+| Image generation | ✅ | Backend AI provider integration (configurable models) |
 | Results gallery | ✅ | Download individual/all |
 | Daily usage limits | ✅ | Free: 10/day, Pro: 50/day |
 | Landing page demo | ✅ | 2 images, IP-limited |
@@ -278,14 +278,14 @@ Based on user impact and AI capability:
 | Photoshoot | `lib/features/photoshoot/views/photoshoot_content.dart` |
 | Try-On | `lib/features/tryon/views/tryon_content.dart` |
 | Wardrobe | `lib/features/wardrobe/views/wardrobe_page.dart` |
-| Outfits | `lib/features/outfits/views/outfit_page.dart` |
+| Outfits | `lib/features/outfits/views/outfits_page.dart` |
 | Dashboard | `lib/features/dashboard/views/dashboard_page.dart` |
 
 ---
 
 ## Notes
 
-- AI Photoshoot Generator uses Nano Banana Pro for professional image generation
+- AI Photoshoot Generator uses backend-managed provider/model configuration for professional image generation
 - System also supports Gemini/OpenAI for other AI features (extraction, outfit generation)
 - Documentation exists for all features (docs/ folder is comprehensive)
 - Mobile support is excellent with responsive design throughout

@@ -98,7 +98,7 @@ The AI Photoshoot Generator creates professional-style images of users based on 
 **Description:** Generate AI-powered professional images.
 
 **Generation Process:**
-- Send photos and configuration to AI model (Nano Banana Pro)
+- Send photos and configuration to the configured backend AI provider/model
 - Generate requested number of images
 - Show progress indicator
 - Display results in gallery format
@@ -325,10 +325,10 @@ DEMO_RATE_LIMITS = {
 | Component | Location |
 |-----------|----------|
 | PhotoshootPage | `src/pages/photoshoot/PhotoshootPage.tsx` |
-| PhotoUploadStep | `src/pages/photoshoot/components/PhotoUploadStep.tsx` |
-| ConfigureStep | `src/pages/photoshoot/components/ConfigureStep.tsx` |
-| GeneratingStep | `src/pages/photoshoot/components/GeneratingStep.tsx` |
-| ResultsStep | `src/pages/photoshoot/components/ResultsStep.tsx` |
+| PhotoshootUploadStep | `src/pages/photoshoot/components/PhotoshootUploadStep.tsx` |
+| PhotoshootConfigureStep | `src/pages/photoshoot/components/PhotoshootConfigureStep.tsx` |
+| PhotoshootGeneratingStep | `src/pages/photoshoot/components/PhotoshootGeneratingStep.tsx` |
+| PhotoshootResultsStep | `src/pages/photoshoot/components/PhotoshootResultsStep.tsx` |
 | PhotoshootDemo | `src/components/landing/PhotoshootDemo.tsx` |
 
 ---
@@ -345,7 +345,7 @@ DEMO_RATE_LIMITS = {
 
 ### Setup Notes
 - Supabase: run `backend/db/supabase/migrations/010_photoshoot_generator.sql` in the Supabase SQL editor to enable daily usage tracking.
-- Backend: set `NANO_BANANA_API_KEY` (and optionally `NANO_BANANA_API_URL`) in `.env` for Nano Banana Pro generation.
+- Backend: configure AI provider keys in `.env` (`AI_GEMINI_*`, `AI_OPENAI_*`, or `AI_CUSTOM_*`) and set `AI_DEFAULT_PROVIDER` as needed.
 
 ---
 

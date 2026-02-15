@@ -1,16 +1,65 @@
-# fitcheck_ai
+# FitCheck AI Flutter App
 
-A new Flutter project.
+Flutter mobile app for FitCheck AI.
 
-## Getting Started
+## Architecture
 
-This project is a starting point for a Flutter application.
+- State management and routing via GetX
+- Feature-first modules under `lib/features/`
+- Shared infrastructure in `lib/core/`
+- App-level routes/bindings/themes in `lib/app/`
 
-A few resources to get you started if this is your first Flutter project:
+## Main Features
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- Authentication
+- Dashboard and shell navigation
+- Wardrobe and batch extraction flows
+- Outfits and try-on
+- Recommendations
+- Photoshoot generation
+- Subscription and referral UX
+- Profile/settings/legal/feedback screens
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Setup
+
+```bash
+cd flutter
+flutter pub get
+```
+
+Run app:
+
+```bash
+flutter run \
+  --dart-define=API_BASE_URL=http://localhost:8000 \
+  --dart-define=SUPABASE_URL=... \
+  --dart-define=SUPABASE_ANON_KEY=...
+```
+
+## Environment
+
+Template: `flutter/.env.example`
+
+Environment loading is handled by `lib/core/config/env_config.dart`:
+- compile-time defines via `--dart-define`
+- fallback to `.env` asset values when present
+
+Key values:
+- `API_BASE_URL`
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- optional: `POSTHOG_API_KEY`, `POSTHOG_HOST`
+
+## Project Layout
+
+- `lib/main.dart`: app bootstrap
+- `lib/app/`: routes, bindings, theming
+- `lib/core/`: config, services, network, utils, widgets
+- `lib/features/`: domain feature modules
+
+## Testing
+
+```bash
+cd flutter
+flutter test
+```

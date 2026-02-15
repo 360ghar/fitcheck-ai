@@ -2575,7 +2575,11 @@ wss://api.fitcheckaiapp.com/ws
 The complete OpenAPI specification is available at:
 
 ```
-GET /api/v1/docs
+GET /api/v1/openapi.json
 ```
 
-This provides an interactive Swagger UI for testing all endpoints.
+Interactive docs are available at:
+
+```
+GET /api/v1/docs
+```
