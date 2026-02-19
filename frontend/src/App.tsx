@@ -116,109 +116,110 @@ function App() {
       <PostHogIdentify />
 
       <Routes>
-      {/* Public marketing routes */}
-      <Route element={<PublicLayout />}>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="/terms" element={<TermsPage />} />
-        <Route path="/privacy" element={<PrivacyPage />} />
-        <Route path="/faq" element={<FAQPage />} />
-        <Route path="/blog" element={<BlogIndexPage />} />
-        <Route path="/blog/:slug" element={<BlogPostPage />} />
+        {/* Public marketing routes */}
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/faq" element={<FAQPage />} />
+          <Route path="/blog" element={<BlogIndexPage />} />
+          <Route path="/blog/category/:category" element={<BlogIndexPage />} />
+          <Route path="/blog/:slug" element={<BlogPostPage />} />
 
-        {/* Feature landing pages */}
-        <Route path="/features/ai-wardrobe-extraction" element={<AIWardrobeExtractionPage />} />
-        <Route path="/features/virtual-try-on" element={<VirtualTryOnPage />} />
-        <Route path="/features/ai-photoshoot-generator" element={<AIPhotoshootGeneratorPage />} />
-        <Route path="/features/outfit-recommendations" element={<OutfitRecommendationsPage />} />
-        <Route path="/features/wardrobe-analytics" element={<WardrobeAnalyticsPage />} />
-      </Route>
+          {/* Feature landing pages */}
+          <Route path="/features/ai-wardrobe-extraction" element={<AIWardrobeExtractionPage />} />
+          <Route path="/features/virtual-try-on" element={<VirtualTryOnPage />} />
+          <Route path="/features/ai-photoshoot-generator" element={<AIPhotoshootGeneratorPage />} />
+          <Route path="/features/outfit-recommendations" element={<OutfitRecommendationsPage />} />
+          <Route path="/features/wardrobe-analytics" element={<WardrobeAnalyticsPage />} />
+        </Route>
 
-      {/* Auth routes */}
-      <Route
-        path="/auth/login"
-        element={
-          <PublicRoute>
+        {/* Auth routes */}
+        <Route
+          path="/auth/login"
+          element={
+            <PublicRoute>
+              <AuthLayout>
+                <LoginPage />
+              </AuthLayout>
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/auth/register"
+          element={
+            <PublicRoute>
+              <AuthLayout>
+                <RegisterPage />
+              </AuthLayout>
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/auth/forgot-password"
+          element={
             <AuthLayout>
-              <LoginPage />
+              <ForgotPasswordPage />
             </AuthLayout>
-          </PublicRoute>
-        }
-      />
-      <Route
-        path="/auth/register"
-        element={
-          <PublicRoute>
+          }
+        />
+        <Route
+          path="/auth/reset-password"
+          element={
             <AuthLayout>
-              <RegisterPage />
+              <ResetPasswordPage />
             </AuthLayout>
-          </PublicRoute>
-        }
-      />
-      <Route
-        path="/auth/forgot-password"
-        element={
-          <AuthLayout>
-            <ForgotPasswordPage />
-          </AuthLayout>
-        }
-      />
-      <Route
-        path="/auth/reset-password"
-        element={
-          <AuthLayout>
-            <ResetPasswordPage />
-          </AuthLayout>
-        }
-      />
-      <Route
-        path="/auth/callback"
-        element={<AuthCallbackPage />}
-      />
+          }
+        />
+        <Route
+          path="/auth/callback"
+          element={<AuthCallbackPage />}
+        />
 
-      {/* Public share routes */}
-      <Route path="/shared/outfits/:id" element={<SharedOutfitPage />} />
+        {/* Public share routes */}
+        <Route path="/shared/outfits/:id" element={<SharedOutfitPage />} />
 
-      {/* Main app routes - protected */}
-      <Route
-        element={
-          <ProtectedRoute>
-            <AppLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/wardrobe" element={<WardrobePage />} />
-        <Route path="/wardrobe/:id" element={<WardrobePage />} />
-        <Route path="/outfits" element={<OutfitsPage />} />
-        <Route path="/outfits/:id" element={<OutfitsPage />} />
-        <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/recommendations" element={<RecommendationsPage />} />
-        <Route path="/photoshoot" element={<PhotoshootPage />} />
-        <Route path="/try-on" element={<TryOnPage />} />
-        <Route path="/gamification" element={<GamificationPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/settings" element={<Navigate to="/profile" replace />} />
-      </Route>
+        {/* Main app routes - protected */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/wardrobe" element={<WardrobePage />} />
+          <Route path="/wardrobe/:id" element={<WardrobePage />} />
+          <Route path="/outfits" element={<OutfitsPage />} />
+          <Route path="/outfits/:id" element={<OutfitsPage />} />
+          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/recommendations" element={<RecommendationsPage />} />
+          <Route path="/photoshoot" element={<PhotoshootPage />} />
+          <Route path="/try-on" element={<TryOnPage />} />
+          <Route path="/gamification" element={<GamificationPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/settings" element={<Navigate to="/profile" replace />} />
+        </Route>
 
-      {/* Admin routes - protected */}
-      <Route
-        element={
-          <ProtectedRoute>
-            <BlogAdminLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route path="/admin/blog" element={<BlogDashboardPage />} />
-        <Route path="/admin/blog/posts" element={<BlogListPage />} />
-        <Route path="/admin/blog/new" element={<BlogEditorPage />} />
-        <Route path="/admin/blog/edit/:slug" element={<BlogEditorPage />} />
-        <Route path="/admin/blog/categories" element={<BlogCategoriesPage />} />
-      </Route>
+        {/* Admin routes - protected */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <BlogAdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/admin/blog" element={<BlogDashboardPage />} />
+          <Route path="/admin/blog/posts" element={<BlogListPage />} />
+          <Route path="/admin/blog/new" element={<BlogEditorPage />} />
+          <Route path="/admin/blog/edit/:slug" element={<BlogEditorPage />} />
+          <Route path="/admin/blog/categories" element={<BlogCategoriesPage />} />
+        </Route>
 
-      {/* Catch all - redirect to dashboard or landing */}
-      <Route path="*" element={<CatchAllRoute />} />
-    </Routes>
+        {/* Catch all - redirect to dashboard or landing */}
+        <Route path="*" element={<CatchAllRoute />} />
+      </Routes>
     </>
   )
 }
