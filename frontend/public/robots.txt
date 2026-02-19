@@ -4,21 +4,43 @@
 User-agent: *
 Allow: /
 Allow: /shared/outfits/
+Allow: /blog/
+Allow: /features/
+Allow: /about
+Allow: /faq
 
 # Block authenticated app routes from indexing
 Disallow: /dashboard
+Disallow: /dashboard/
 Disallow: /wardrobe
+Disallow: /wardrobe/
 Disallow: /outfits
+Disallow: /outfits/
 Disallow: /calendar
+Disallow: /calendar/
 Disallow: /recommendations
+Disallow: /recommendations/
 Disallow: /try-on
+Disallow: /try-on/
 Disallow: /gamification
+Disallow: /gamification/
 Disallow: /profile
+Disallow: /profile/
 Disallow: /settings
+Disallow: /settings/
+Disallow: /photoshoot
+Disallow: /photoshoot/
 Disallow: /auth/
 
 # Block API routes
 Disallow: /api/
+
+# Block search parameters and filters
+Disallow: /*?*
+Disallow: /*&*
+
+# Crawl rate optimization
+Crawl-delay: 1
 
 # Sitemap location
 Sitemap: https://fitcheckaiapp.com/sitemap.xml

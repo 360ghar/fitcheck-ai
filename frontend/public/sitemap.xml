@@ -1,21 +1,82 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <!-- Homepage - Highest Priority -->
   <url>
     <loc>https://fitcheckaiapp.com/</loc>
-    <lastmod>2025-01-09</lastmod>
+    <lastmod>2026-02-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://fitcheckaiapp.com/og-default.svg</image:loc>
+      <image:title>FitCheck AI - AI-Powered Virtual Closet</image:title>
+      <image:caption>Transform your wardrobe with AI outfit recommendations and virtual try-on</image:caption>
+    </image:image>
   </url>
+
+  <!-- Feature Landing Pages - High Priority for SEO -->
   <url>
-    <loc>https://fitcheckaiapp.com/auth/login</loc>
-    <lastmod>2025-01-09</lastmod>
+    <loc>https://fitcheckaiapp.com/features/ai-wardrobe-extraction</loc>
+    <lastmod>2026-02-18</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://fitcheckaiapp.com/auth/register</loc>
-    <lastmod>2025-01-09</lastmod>
+    <loc>https://fitcheckaiapp.com/features/virtual-try-on</loc>
+    <lastmod>2026-02-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://fitcheckaiapp.com/features/ai-photoshoot-generator</loc>
+    <lastmod>2026-02-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://fitcheckaiapp.com/features/outfit-recommendations</loc>
+    <lastmod>2026-02-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://fitcheckaiapp.com/features/wardrobe-analytics</loc>
+    <lastmod>2026-02-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Company Pages -->
+  <url>
+    <loc>https://fitcheckaiapp.com/about</loc>
+    <lastmod>2026-02-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://fitcheckaiapp.com/blog</loc>
+    <lastmod>2026-02-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://fitcheckaiapp.com/faq</loc>
+    <lastmod>2026-02-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Legal Pages -->
+  <url>
+    <loc>https://fitcheckaiapp.com/privacy</loc>
+    <lastmod>2026-02-18</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://fitcheckaiapp.com/terms</loc>
+    <lastmod>2026-02-18</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
   </url>
 </urlset>

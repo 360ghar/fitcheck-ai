@@ -8,6 +8,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AlertCircle, CheckCircle, Lock } from 'lucide-react'
 import { confirmPasswordReset } from '@/api/auth'
 import { Button } from '@/components/ui/button'
+import SEO from '@/components/seo/SEO'
 
 function getHashParams(): URLSearchParams {
   const raw = typeof window !== 'undefined' ? window.location.hash : ''
@@ -83,6 +84,11 @@ export default function ResetPasswordPage() {
 
   return (
     <>
+      <SEO
+        title="Set New Password | FitCheck AI"
+        description="Set a new password for your FitCheck AI account."
+        noIndex={true}
+      />
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <h2 className="text-xl md:text-2xl font-extrabold text-foreground">Choose a new password</h2>
         <p className="mt-2 text-sm text-muted-foreground">Your new password must be at least 8 characters.</p>

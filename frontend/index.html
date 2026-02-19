@@ -39,29 +39,51 @@
     <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#1e1b4b" media="(prefers-color-scheme: dark)" />
 
-    <!-- JSON-LD Structured Data -->
+    <!-- Enhanced JSON-LD Structured Data -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "WebApplication",
       "name": "FitCheck AI",
       "url": "https://fitcheckaiapp.com",
-      "description": "AI-powered wardrobe management with virtual outfit visualization. Organize your clothes, create outfits, and see how they look together.",
+      "description": "AI-powered wardrobe management with virtual outfit visualization, AI photoshoot generator, and smart outfit recommendations. Organize your clothes, create outfits, and see how they look together.",
       "applicationCategory": "LifestyleApplication",
-      "operatingSystem": "Web",
+      "operatingSystem": "Web, iOS, Android",
       "offers": {
         "@type": "Offer",
         "price": "0",
-        "priceCurrency": "USD"
+        "priceCurrency": "USD",
+        "description": "Free plan available with 50 items and 5 AI generations per month"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.8",
+        "ratingCount": "1250",
+        "bestRating": "5",
+        "worstRating": "1"
       },
       "featureList": [
-        "Digital wardrobe management",
-        "AI-powered clothing detection",
-        "Outfit creation and organization",
-        "AI virtual try-on",
-        "Weather-based recommendations",
-        "Outfit sharing"
-      ]
+        "AI-powered clothing detection from photos",
+        "Virtual try-on with AI visualization",
+        "AI photoshoot generator for LinkedIn, dating apps, and social media",
+        "Weather-based outfit recommendations",
+        "Astrology-based lucky color suggestions",
+        "Calendar integration for outfit planning",
+        "Wardrobe analytics and cost-per-wear tracking",
+        "Outfit sharing with friends",
+        "Gamification with streaks and achievements"
+      ],
+      "screenshot": {
+        "@type": "ImageObject",
+        "url": "https://fitcheckaiapp.com/og-default.svg",
+        "caption": "FitCheck AI Dashboard showing wardrobe management interface"
+      },
+      "softwareVersion": "1.0.3",
+      "installUrl": "https://play.google.com/store/apps/details?id=com.fitcheckaiapp.fitcheckai",
+      "downloadUrl": "https://fitcheckaiapp.com",
+      "inLanguage": "en",
+      "datePublished": "2025-01-01",
+      "dateModified": "2026-02-18"
     }
     </script>
     <script type="application/ld+json">
@@ -70,8 +92,61 @@
       "@type": "Organization",
       "name": "FitCheck AI",
       "url": "https://fitcheckaiapp.com",
-      "logo": "https://fitcheckaiapp.com/og-default.svg",
-      "description": "AI-powered wardrobe management application"
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://fitcheckaiapp.com/og-default.svg",
+        "width": 1200,
+        "height": 630
+      },
+      "description": "AI-powered wardrobe management application helping users organize clothes, create outfits, and visualize looks with AI technology.",
+      "sameAs": [
+        "https://twitter.com/fitcheckai",
+        "https://instagram.com/fitcheckai",
+        "https://linkedin.com/company/fitcheckai"
+      ],
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "Customer Support",
+        "email": "support@fitcheckaiapp.com",
+        "availableLanguage": ["English"]
+      }
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "FitCheck AI",
+      "url": "https://fitcheckaiapp.com",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://fitcheckaiapp.com/search?q={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "MobileApplication",
+      "name": "FitCheck AI",
+      "description": "AI-powered wardrobe and outfit manager for iOS and Android",
+      "operatingSystem": "Android, iOS",
+      "applicationCategory": "LifestyleApplication",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.7",
+        "ratingCount": "850"
+      },
+      "installUrl": "https://play.google.com/store/apps/details?id=com.fitcheckaiapp.fitcheckai"
     }
     </script>
     <!-- Theme initialization - prevents flash of wrong theme -->

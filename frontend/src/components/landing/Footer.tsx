@@ -4,11 +4,18 @@ import { Shirt, Twitter, Instagram, Linkedin, Mail, Phone } from 'lucide-react'
 const footerLinks = {
   Product: [
     { name: 'Features', href: '/#features' },
-    { name: 'FAQ', href: '/#faq' },
+    { name: 'AI Photoshoot', href: '/features/ai-photoshoot-generator' },
+    { name: 'Virtual Try-On', href: '/features/virtual-try-on' },
+    { name: 'FAQ', href: '/faq' },
+    { name: 'Download Android App', href: 'https://play.google.com/store/apps/details?id=com.fitcheckaiapp.fitcheckai&hl=en_IN' },
+  ],
+  Resources: [
+    { name: 'Blog', href: '/blog' },
+    { name: 'Style Guides', href: '/blog/category/style-guides' },
+    { name: 'Wardrobe Tips', href: '/blog/category/wardrobe-tips' },
   ],
   Company: [
     { name: 'About', href: '/about' },
-    { name: 'Blog', href: '#' },
     { name: 'Careers', href: '#' },
     { name: 'Contact', href: 'mailto:info@fitcheckaiapp.com' },
   ],

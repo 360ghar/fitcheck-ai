@@ -1082,3 +1082,105 @@ export interface PlanDetails {
 export interface PlansResponse {
   plans: PlanDetails[];
 }
+
+// ============================================================================
+// BLOG TYPES
+// ============================================================================
+
+export interface BlogPost {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  category: string;
+  date: string; // ISO date string
+  read_time: string;
+  emoji: string;
+  keywords: string[];
+  author: string;
+  author_title?: string;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+  featured_image_url?: string;
+}
+
+export interface BlogPostSummary {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  category: string;
+  date: string;
+  read_time: string;
+  emoji: string;
+  keywords: string[];
+  author: string;
+  author_title?: string;
+  is_published: boolean;
+  featured_image_url?: string;
+}
+
+export interface BlogPostCreateRequest {
+  slug: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  category: string;
+  date: string; // ISO date string
+  read_time: string;
+  emoji: string;
+  keywords: string[];
+  author: string;
+  author_title?: string;
+  is_published?: boolean;
+  featured_image_url?: string;
+}
+
+export interface BlogPostUpdateRequest {
+  slug?: string;
+  title?: string;
+  excerpt?: string;
+  content?: string;
+  category?: string;
+  date?: string;
+  read_time?: string;
+  emoji?: string;
+  keywords?: string[];
+  author?: string;
+  author_title?: string;
+  is_published?: boolean;
+  featured_image_url?: string;
+}
+
+export interface BlogPostListResponse {
+  posts: BlogPostSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
+export interface BlogPostCategoriesResponse {
+  categories: string[];
+}
+
+// Legacy types for backward compatibility
+export interface BlogPostFilters {
+  search?: string;
+  category?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export interface PaginatedBlogPostsResponse {
+  posts: BlogPostSummary[];
+  total: number;
+  page: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}

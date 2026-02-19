@@ -15,6 +15,11 @@ import LandingPage from './pages/public/LandingPage'
 import AboutPage from './pages/public/AboutPage'
 import TermsPage from './pages/public/TermsPage'
 import PrivacyPage from './pages/public/PrivacyPage'
+import FAQPage from './pages/public/FAQPage'
+
+// Blog pages
+import BlogIndexPage from './pages/blog/BlogIndexPage'
+import BlogPostPage from './pages/blog/BlogPostPage'
 
 // Auth pages
 import LoginPage from './pages/auth/LoginPage'
@@ -34,6 +39,20 @@ import GamificationPage from './pages/gamification/GamificationPage'
 import SharedOutfitPage from './pages/shared/SharedOutfitPage'
 import TryOnPage from './pages/try-on/TryOnPage'
 import PhotoshootPage from './pages/photoshoot/PhotoshootPage'
+
+// Admin pages
+import BlogAdminLayout from './pages/admin/BlogAdminLayout'
+import BlogDashboardPage from './pages/admin/BlogDashboardPage'
+import BlogListPage from './pages/admin/BlogListPage'
+import BlogEditorPage from './pages/admin/BlogEditorPage'
+import BlogCategoriesPage from './pages/admin/BlogCategoriesPage'
+
+// Feature landing pages
+import AIWardrobeExtractionPage from './pages/features/AIWardrobeExtractionPage'
+import VirtualTryOnPage from './pages/features/VirtualTryOnPage'
+import AIPhotoshootGeneratorPage from './pages/features/AIPhotoshootGeneratorPage'
+import OutfitRecommendationsPage from './pages/features/OutfitRecommendationsPage'
+import WardrobeAnalyticsPage from './pages/features/WardrobeAnalyticsPage'
 
 // Loading spinner for hydration state
 function LoadingSpinner() {
@@ -103,6 +122,16 @@ function App() {
         <Route path="/about" element={<AboutPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/faq" element={<FAQPage />} />
+        <Route path="/blog" element={<BlogIndexPage />} />
+        <Route path="/blog/:slug" element={<BlogPostPage />} />
+
+        {/* Feature landing pages */}
+        <Route path="/features/ai-wardrobe-extraction" element={<AIWardrobeExtractionPage />} />
+        <Route path="/features/virtual-try-on" element={<VirtualTryOnPage />} />
+        <Route path="/features/ai-photoshoot-generator" element={<AIPhotoshootGeneratorPage />} />
+        <Route path="/features/outfit-recommendations" element={<OutfitRecommendationsPage />} />
+        <Route path="/features/wardrobe-analytics" element={<WardrobeAnalyticsPage />} />
       </Route>
 
       {/* Auth routes */}
@@ -170,6 +199,21 @@ function App() {
         <Route path="/gamification" element={<GamificationPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/settings" element={<Navigate to="/profile" replace />} />
+      </Route>
+
+      {/* Admin routes - protected */}
+      <Route
+        element={
+          <ProtectedRoute>
+            <BlogAdminLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/admin/blog" element={<BlogDashboardPage />} />
+        <Route path="/admin/blog/posts" element={<BlogListPage />} />
+        <Route path="/admin/blog/new" element={<BlogEditorPage />} />
+        <Route path="/admin/blog/edit/:slug" element={<BlogEditorPage />} />
+        <Route path="/admin/blog/categories" element={<BlogCategoriesPage />} />
       </Route>
 
       {/* Catch all - redirect to dashboard or landing */}

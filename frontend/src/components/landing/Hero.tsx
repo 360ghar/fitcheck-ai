@@ -51,9 +51,15 @@ export default function Hero() {
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
               </Button>
-              <Button size="lg" variant="outline" className="text-lg px-8 py-6">
-                <Play className="mr-2 h-5 w-5" />
-                Watch Demo
+              <Button size="lg" variant="outline" className="text-lg px-8 py-6" asChild>
+                <a
+                  href="https://play.google.com/store/apps/details?id=com.fitcheckaiapp.fitcheckai&hl=en_IN"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Play className="mr-2 h-5 w-5 fill-current" />
+                  Download App
+                </a>
               </Button>
             </div>
 

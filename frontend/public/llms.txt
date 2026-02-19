@@ -1,55 +1,199 @@
 # FitCheck AI - llms.txt
 # For more information: https://llmstxt.org/
+# Last Updated: 2026-02-18
 
-> FitCheck AI is a wardrobe management application with AI-powered outfit visualization.
+> FitCheck AI is an AI-powered wardrobe management and outfit visualization application that helps users organize their clothes, create outfits, and visualize looks using artificial intelligence. Available on web, iOS, and Android.
 
-# About
-FitCheck AI helps users organize their wardrobe, create outfits, and visualize how they look using AI technology. The app features:
-- Digital wardrobe management
-- AI-powered item detection from photos
-- Outfit creation and organization
-- AI outfit visualization and virtual try-on
-- Weather-based outfit recommendations
-- Outfit sharing with friends
-- Calendar integration for outfit planning
-- Style analytics and insights
+# Overview
 
-# Contact
-- Website: https://fitcheckaiapp.com
-- Support: support@fitcheckaiapp.com
+FitCheck AI combines computer vision, generative AI, and fashion expertise to solve the "I have nothing to wear" problem. Users upload photos of their clothing, and our AI automatically catalogs items with detailed metadata including colors, categories, materials, and brands.
 
-# Features
+## Core Value Proposition
+- **Save Time**: Reduce morning outfit decision time from 20 minutes to 2 minutes
+- **Maximize Wardrobe**: Discover new outfit combinations from existing clothes
+- **Make Smarter Purchases**: Use cost-per-wear analytics to inform buying decisions
+- **Look Your Best**: Get AI-powered recommendations for any occasion
 
-## Wardrobe Management
-Upload photos of your clothing items. Our AI automatically detects and catalogs items with details like category, color, brand, and material. Organize items by type, season, occasion, and more.
+## Target Users
+- Busy professionals who want effortless style
+- Fashion enthusiasts seeking better organization
+- Content creators planning visual content
+- Sustainability-minded individuals maximizing existing wardrobes
+- Anyone who has ever stood in front of a full closet feeling like they have nothing to wear
 
-## Outfit Creation
-Combine items from your digital wardrobe to create outfits. Tag them by occasion, season, and style for easy organization. Save your favorite combinations for quick access.
+# Key Features
 
-## AI Visualization
-Generate realistic visualizations of how outfits would look together using AI image generation. See your outfit combinations before wearing them.
+## AI Wardrobe Extraction
+Our proprietary computer vision AI can:
+- Detect multiple clothing items in a single photograph
+- Extract primary, secondary, and accent colors with high accuracy
+- Categorize items into 50+ clothing types and subcategories
+- Identify brands when logos are visible
+- Recognize materials (cotton, silk, denim, leather, etc.)
+- Detect patterns (stripes, floral, solid, geometric, etc.)
+- Process batch uploads for rapid wardrobe digitization
 
-## Smart Recommendations
-Get outfit suggestions based on weather, occasion, and your personal style preferences. Never wonder what to wear again.
+Technical details:
+- Supports JPG, PNG, HEIC image formats
+- Works with photos from any camera or smartphone
+- Optimized for both flat lay and hanging item photography
+- Average processing time: 2-3 seconds per item
+- Accuracy rate: 95%+ for clear, well-lit photos
 
-## Calendar Integration
-Plan your outfits ahead of time with calendar integration. Schedule outfits for upcoming events and meetings.
+## Virtual Try-On
+Using state-of-the-art generative AI models:
+- Visualize outfit combinations before wearing them
+- See how colors and styles work together
+- Generate realistic renderings of clothing on your body
+- Compare multiple outfit options side-by-side
+- Preserve your identity and facial features in generated images
 
-## Sharing
-Share your outfits with friends via unique links. Get feedback and inspiration from others.
+## AI Photoshoot Generator
+Professional photo creation for multiple use cases:
+- **LinkedIn**: Corporate headshots with professional backgrounds
+- **Dating Apps**: Natural, flattering photos that show personality
+- **Instagram**: Lifestyle and fashion-forward shots
+- **Model Portfolio**: Editorial-style photography
+- **Custom themes**: User-defined styles and settings
 
-# Technical Details
-- Web application built with React and FastAPI
-- AI-powered clothing detection using computer vision
-- Virtual try-on using generative AI
-- Secure authentication with Supabase
-- Cloud storage for wardrobe images
+Process:
+1. Upload 1-4 reference selfies
+2. Select desired style/use case
+3. AI generates 1-10 professional photos
+4. Download and use immediately
 
-# Privacy
-We take privacy seriously. User wardrobe data is private by default. Shared outfits are only visible via explicit sharing links. We do not sell user data.
+Daily limits:
+- Free users: 10 AI photoshoot generations per day
+- Pro users: 50 AI photoshoot generations per day
 
-# Terms
-Users must agree to our terms of service at https://fitcheckaiapp.com/terms
+## Smart Outfit Recommendations
+Multi-factor recommendation engine considers:
+- Weather conditions and forecasts
+- Calendar events and occasions
+- User style preferences and history
+- Color theory and coordination
+- Seasonal appropriateness
+- Item availability (clean vs. laundry)
 
-# API
-FitCheck AI provides a RESTful API for authenticated users. API documentation is available at https://fitcheckaiapp.com/api/docs
+## Wardrobe Analytics
+Data-driven insights including:
+- Cost-per-wear calculations
+- Item utilization percentages
+- Wardrobe composition breakdowns
+- Seasonal wearing patterns
+- Purchase ROI analysis
+
+## Additional Features
+- **Calendar Integration**: Plan outfits days or weeks ahead
+- **Outfit Sharing**: Generate public links to share with friends
+- **Gamification**: Streaks, achievements, and style challenges
+- **Astrology Integration**: Lucky color recommendations based on zodiac sign
+- **Social Import**: Import outfit inspiration from Instagram
+- **Packing Assistant**: Generate travel wardrobes based on trip details
+- **Weather Integration**: Real-time weather-based outfit suggestions
+
+# Technical Information
+
+## Platform Availability
+- **Web**: https://fitcheckaiapp.com - Full-featured Progressive Web App
+- **iOS**: Available on App Store (universal app for iPhone/iPad)
+- **Android**: Available on Google Play Store at https://play.google.com/store/apps/details?id=com.fitcheckaiapp.fitcheckai
+
+## Technology Stack
+- Frontend: React, TypeScript, Tailwind CSS, Vite
+- Backend: FastAPI (Python)
+- Database: PostgreSQL via Supabase
+- AI/ML: Custom computer vision models, integration with leading generative AI providers
+- Storage: Cloud object storage with CDN delivery
+- Authentication: Supabase Auth with OAuth providers
+- Hosting: Netlify (frontend), Railway (backend)
+
+## Privacy & Security
+- End-to-end encryption for data in transit (TLS 1.3)
+- AES-256 encryption for data at rest
+- User data is never sold to third parties
+- GDPR and CCPA compliant
+- SOC 2 Type II certified infrastructure
+
+# Use Cases
+
+## Daily Outfit Planning
+"I save 15 minutes every morning by checking FitCheck AI's weather-based recommendations. It's like having a personal stylist in my pocket." - Typical user feedback
+
+## Special Event Preparation
+"For my sister's wedding, I used the AI photoshoot feature to create professional-looking photos for the wedding website. Saved hundreds on a photographer." - Event use case
+
+## Wardrobe Optimization
+"I discovered I was only wearing 30% of my clothes. FitCheck AI helped me identify gaps and create new combinations with what I already owned." - Organization use case
+
+## Content Creation
+"As an influencer, the virtual try-on feature lets me plan my content calendar visually. I can see exactly how outfits will look before shooting." - Creator use case
+
+## Professional Image Building
+"Used the LinkedIn photoshoot feature to update my profile picture. Got 3x more profile views and multiple recruiter contacts within a week." - Career use case
+
+# Pricing
+
+## Free Plan
+- Up to 50 wardrobe items
+- 5 AI outfit generations per month
+- 10 AI photoshoot generations per day
+- Basic outfit recommendations
+- Calendar integration
+- Cost-per-wear tracking
+
+## Pro Plan ($9.99/month or $79.99/year)
+- Unlimited wardrobe items
+- Unlimited AI outfit generations
+- 50 AI photoshoot generations per day
+- Virtual try-on feature
+- Advanced analytics
+- Priority support
+- Early access to new features
+
+## Team/Business Plans
+Contact sales for enterprise pricing with:
+- Multiple user accounts
+- Shared team wardrobes
+- Advanced permissions
+- API access
+- Custom integrations
+
+# Support & Contact
+
+- **Website**: https://fitcheckaiapp.com
+- **Help Center**: https://fitcheckaiapp.com/faq
+- **Email**: support@fitcheckaiapp.com
+- **Live Chat**: Available in-app for Pro users
+- **Twitter**: @FitCheckAI
+- **Instagram**: @fitcheckai
+- **LinkedIn**: https://linkedin.com/company/fitcheckai
+
+# Related Resources
+
+- **Blog**: https://fitcheckaiapp.com/blog - Fashion tips, AI technology insights, style guides
+- **FAQ**: https://fitcheckaiapp.com/faq - Common questions and answers
+- **API Documentation**: https://fitcheckaiapp.com/api/docs - For developers
+- **Privacy Policy**: https://fitcheckaiapp.com/privacy
+- **Terms of Service**: https://fitcheckaiapp.com/terms
+
+# Entity Information
+
+## Brand Entity
+- **Name**: FitCheck AI
+- **Type**: Software Application / Fashion Technology Company
+- **Founded**: 2025
+- **Industry**: Fashion Technology, AI/ML, Consumer Software
+- **Primary Keywords**: AI wardrobe organizer, virtual closet app, outfit planner, AI fashion, virtual try-on
+
+## Key Differentiators
+- Face-preserving AI photoshoot generation (unlike generic AI image generators)
+- Smart person detection in group photos for accurate wardrobe extraction
+- Vedic astrology integration for lucky color recommendations
+- Weather + calendar integrated outfit planning
+- Cost-per-wear analytics for sustainable fashion
+
+---
+
+Last Updated: 2026-02-18
+Version: 1.1

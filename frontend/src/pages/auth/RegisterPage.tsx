@@ -10,6 +10,7 @@ import { Mail, Lock, User, AlertCircle, CheckCircle, Loader2, Gift, Check } from
 import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
 import { validateReferralCode } from '@/api/subscription'
+import SEO from '@/components/seo/SEO'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
@@ -160,6 +161,11 @@ export default function RegisterPage() {
 
   return (
     <>
+      <SEO
+        title="Create Account | FitCheck AI"
+        description="Create a free FitCheck AI account and start organizing your wardrobe with AI-powered tools."
+        noIndex={true}
+      />
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <h2 className="text-xl md:text-2xl font-extrabold text-foreground">
           Create your account

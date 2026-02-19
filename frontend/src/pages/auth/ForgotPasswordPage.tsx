@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom'
 import { Mail, AlertCircle, CheckCircle } from 'lucide-react'
 import { requestPasswordReset } from '@/api/auth'
 import { Button } from '@/components/ui/button'
+import SEO from '@/components/seo/SEO'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -33,6 +34,11 @@ export default function ForgotPasswordPage() {
 
   return (
     <>
+      <SEO
+        title="Reset Password | FitCheck AI"
+        description="Reset your FitCheck AI account password. Enter your email to receive a password reset link."
+        noIndex={true}
+      />
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <h2 className="text-xl md:text-2xl font-extrabold text-foreground">Reset your password</h2>
         <p className="mt-2 text-sm text-muted-foreground">

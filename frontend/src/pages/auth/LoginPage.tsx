@@ -8,6 +8,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
 import { Mail, Lock, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import SEO from '@/components/seo/SEO'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -46,6 +47,11 @@ export default function LoginPage() {
 
   return (
     <>
+      <SEO
+        title="Sign In | FitCheck AI"
+        description="Sign in to your FitCheck AI account to access your virtual wardrobe and outfit recommendations."
+        noIndex={true}
+      />
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <h2 className="text-xl md:text-2xl font-extrabold text-foreground">
           Sign in to your account

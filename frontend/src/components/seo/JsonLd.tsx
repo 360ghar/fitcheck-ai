@@ -127,3 +127,12 @@ export function BreadcrumbJsonLd({ items }: { items: BreadcrumbItem[] }) {
     </Helmet>
   )
 }
+
+// HowTo schema for tutorials and step-by-step guides
+export function HowToJsonLd(schema: Record<string, unknown>) {
+  return (
+    <Helmet>
+      <script type="application/ld+json">{JSON.stringify(schema)}</script>
+    </Helmet>
+  )
+}
