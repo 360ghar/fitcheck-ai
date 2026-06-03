@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../core/widgets/report_content_sheet.dart';
 import '../controllers/photoshoot_controller.dart';
 import '../models/photoshoot_models.dart';
 
@@ -241,6 +242,32 @@ class PhotoshootResultsStep extends GetView<PhotoshootController> {
                   color: Colors.white,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+
+          // Report image button (Apple Guideline 1.2 — generated UGC must be
+          // reportable).
+          Positioned(
+            top: 4,
+            right: 4,
+            child: Material(
+              color: Colors.black54,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () => showReportContentSheet(
+                  contentType: 'AI photoshoot image',
+                  contentId: image.id,
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(
+                    Icons.flag_outlined,
+                    color: Colors.white,
+                    size: 16,
+                  ),
                 ),
               ),
             ),

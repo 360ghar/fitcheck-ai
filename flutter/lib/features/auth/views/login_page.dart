@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../app/routes/app_routes.dart';
@@ -68,6 +69,16 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  Future<void> _handleAppleSignIn() async {
+    final authController = Get.find<AuthController>();
+
+    try {
+      await authController.signInWithApple();
+    } catch (e) {
+      // Error is already handled by controller
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authController = Get.find<AuthController>();
@@ -129,11 +140,22 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: AppConstants.spacing8),
                       Obx(() => _buildLoginButton(authController, tokens)),
-                      Obx(() => _buildEmailVerificationError(authController, tokens)),
+                      Obx(
+                        () => _buildEmailVerificationError(
+                          authController,
+                          tokens,
+                        ),
+                      ),
                       const SizedBox(height: AppConstants.spacing16),
                       _buildDivider(tokens),
                       const SizedBox(height: AppConstants.spacing16),
-                      Obx(() => _buildGoogleSignInButton(authController, tokens)),
+                      if (Platform.isIOS) ...[
+                        Obx(() => _buildAppleSignInButton(authController)),
+                        const SizedBox(height: AppConstants.spacing12),
+                      ],
+                      Obx(
+                        () => _buildGoogleSignInButton(authController, tokens),
+                      ),
                     ],
                   ),
                 ),
@@ -172,40 +194,42 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildPasswordField(AuthUiTokens tokens) {
-    return Obx(() => TextFormField(
-          controller: _passwordController,
-          obscureText: !_isPasswordVisible.value,
-          textInputAction: TextInputAction.done,
-          onFieldSubmitted: (_) => _handleLogin(),
-          style: TextStyle(color: tokens.textColor),
-          cursorColor: tokens.brandColor,
-          decoration: AuthFormStyles.inputDecoration(
-            context: context,
-            label: 'Password',
-            hint: 'Enter your password',
-            icon: Icons.lock,
-            suffixIcon: IconButton(
-              icon: Icon(
-                _isPasswordVisible.value
-                    ? Icons.visibility
-                    : Icons.visibility_off,
-                color: tokens.fieldIconColor,
-              ),
-              onPressed: () {
-                _isPasswordVisible.value = !_isPasswordVisible.value;
-              },
+    return Obx(
+      () => TextFormField(
+        controller: _passwordController,
+        obscureText: !_isPasswordVisible.value,
+        textInputAction: TextInputAction.done,
+        onFieldSubmitted: (_) => _handleLogin(),
+        style: TextStyle(color: tokens.textColor),
+        cursorColor: tokens.brandColor,
+        decoration: AuthFormStyles.inputDecoration(
+          context: context,
+          label: 'Password',
+          hint: 'Enter your password',
+          icon: Icons.lock,
+          suffixIcon: IconButton(
+            icon: Icon(
+              _isPasswordVisible.value
+                  ? Icons.visibility
+                  : Icons.visibility_off,
+              color: tokens.fieldIconColor,
             ),
+            onPressed: () {
+              _isPasswordVisible.value = !_isPasswordVisible.value;
+            },
           ),
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please enter your password';
-            }
-            if (value.length < 6) {
-              return 'Password must be at least 6 characters';
-            }
-            return null;
-          },
-        ));
+        ),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Please enter your password';
+          }
+          if (value.length < 6) {
+            return 'Password must be at least 6 characters';
+          }
+          return null;
+        },
+      ),
+    );
   }
 
   Widget _buildLoginButton(AuthController authController, AuthUiTokens tokens) {
@@ -214,9 +238,7 @@ class _LoginPageState extends State<LoginPage> {
       style: ElevatedButton.styleFrom(
         backgroundColor: tokens.brandColor,
         foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(
-          vertical: AppConstants.spacing16,
-        ),
+        padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radius16),
         ),
@@ -236,7 +258,10 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _buildEmailVerificationError(AuthController authController, AuthUiTokens tokens) {
+  Widget _buildEmailVerificationError(
+    AuthController authController,
+    AuthUiTokens tokens,
+  ) {
     if (!authController.showEmailNotVerifiedError.value) {
       return const SizedBox.shrink();
     }
@@ -286,7 +311,10 @@ class _LoginPageState extends State<LoginPage> {
                           width: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : Icon(Icons.email_outlined, color: Colors.orange.shade700),
+                      : Icon(
+                          Icons.email_outlined,
+                          color: Colors.orange.shade700,
+                        ),
                   label: Text(
                     authController.isResendingVerification.value
                         ? 'Sending...'
@@ -311,11 +339,11 @@ class _LoginPageState extends State<LoginPage> {
   Widget _buildDivider(AuthUiTokens tokens) {
     return Row(
       children: [
-        Expanded(
-          child: Divider(color: tokens.textColor.withOpacity(0.2)),
-        ),
+        Expanded(child: Divider(color: tokens.textColor.withOpacity(0.2))),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppConstants.spacing16,
+          ),
           child: Text(
             'OR',
             style: TextStyle(
@@ -326,14 +354,23 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ),
         ),
-        Expanded(
-          child: Divider(color: tokens.textColor.withOpacity(0.2)),
-        ),
+        Expanded(child: Divider(color: tokens.textColor.withOpacity(0.2))),
       ],
     );
   }
 
-  Widget _buildGoogleSignInButton(AuthController authController, AuthUiTokens tokens) {
+  Widget _buildAppleSignInButton(AuthController authController) {
+    final isLoading = authController.isAppleSigningIn.value;
+    return AppleSignInButton(
+      isLoading: isLoading,
+      onPressed: isLoading ? () {} : _handleAppleSignIn,
+    );
+  }
+
+  Widget _buildGoogleSignInButton(
+    AuthController authController,
+    AuthUiTokens tokens,
+  ) {
     final isLoading = authController.isGoogleSigningIn.value;
     return OutlinedButton.icon(
       onPressed: isLoading ? null : _handleGoogleSignIn,
@@ -348,9 +385,7 @@ class _LoginPageState extends State<LoginPage> {
       style: OutlinedButton.styleFrom(
         foregroundColor: tokens.textColor,
         side: BorderSide(color: tokens.textColor.withOpacity(0.4)),
-        padding: const EdgeInsets.symmetric(
-          vertical: AppConstants.spacing16,
-        ),
+        padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radius16),
         ),
@@ -372,16 +407,11 @@ class _LoginPageState extends State<LoginPage> {
           children: [
             Text(
               "Don't have an account? ",
-              style: TextStyle(
-                color: tokens.secondaryTextColor,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: tokens.secondaryTextColor, fontSize: 14),
             ),
             TextButton(
               onPressed: () => Get.toNamed(Routes.register),
-              style: TextButton.styleFrom(
-                foregroundColor: tokens.textColor,
-              ),
+              style: TextButton.styleFrom(foregroundColor: tokens.textColor),
               child: const Text('Sign Up'),
             ),
           ],

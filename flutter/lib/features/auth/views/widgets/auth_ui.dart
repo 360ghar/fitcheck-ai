@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/constants/app_constants.dart';
 
@@ -50,11 +51,13 @@ class AuthUiTokens {
               Colors.white.withOpacity(0.75),
             ],
     );
-    final cardColor =
-        isDarkMode ? Colors.black.withOpacity(0.48) : Colors.white.withOpacity(0.85);
+    final cardColor = isDarkMode
+        ? Colors.black.withOpacity(0.48)
+        : Colors.white.withOpacity(0.85);
     final cardBorderColor = textColor.withOpacity(isDarkMode ? 0.18 : 0.12);
-    final fieldFillColor =
-        isDarkMode ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05);
+    final fieldFillColor = isDarkMode
+        ? Colors.white.withOpacity(0.08)
+        : Colors.black.withOpacity(0.05);
     final fieldBorderColor = textColor.withOpacity(isDarkMode ? 0.25 : 0.2);
     final fieldHintColor = textColor.withOpacity(isDarkMode ? 0.55 : 0.5);
     final fieldIconColor = textColor.withOpacity(isDarkMode ? 0.7 : 0.6);
@@ -76,11 +79,7 @@ class AuthUiTokens {
 }
 
 class AuthScaffold extends StatelessWidget {
-  const AuthScaffold({
-    super.key,
-    required this.child,
-    this.padding,
-  });
+  const AuthScaffold({super.key, required this.child, this.padding});
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
@@ -94,7 +93,8 @@ class AuthScaffold extends StatelessWidget {
     final horizontalPadding = screenSize.width < 360
         ? AppConstants.spacing16
         : AppConstants.spacing24;
-    final resolvedPadding = padding ??
+    final resolvedPadding =
+        padding ??
         EdgeInsets.symmetric(
           horizontal: horizontalPadding,
           vertical: AppConstants.spacing24,
@@ -116,29 +116,31 @@ class AuthScaffold extends StatelessWidget {
             ),
           ),
           AnnotatedRegion<SystemUiOverlayStyle>(
-            value: (tokens.isDarkMode
-                    ? SystemUiOverlayStyle.light
-                    : SystemUiOverlayStyle.dark)
-                .copyWith(
-              statusBarColor: Colors.transparent,
-              systemNavigationBarColor:
-                  tokens.isDarkMode ? Colors.black : Colors.white,
-              statusBarIconBrightness:
-                  tokens.isDarkMode ? Brightness.light : Brightness.dark,
-              systemNavigationBarIconBrightness:
-                  tokens.isDarkMode ? Brightness.light : Brightness.dark,
-            ),
+            value:
+                (tokens.isDarkMode
+                        ? SystemUiOverlayStyle.light
+                        : SystemUiOverlayStyle.dark)
+                    .copyWith(
+                      statusBarColor: Colors.transparent,
+                      systemNavigationBarColor: tokens.isDarkMode
+                          ? Colors.black
+                          : Colors.white,
+                      statusBarIconBrightness: tokens.isDarkMode
+                          ? Brightness.light
+                          : Brightness.dark,
+                      systemNavigationBarIconBrightness: tokens.isDarkMode
+                          ? Brightness.light
+                          : Brightness.dark,
+                    ),
             child: SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   return SingleChildScrollView(
                     child: ConstrainedBox(
-                      constraints:
-                          BoxConstraints(minHeight: constraints.maxHeight),
-                      child: Padding(
-                        padding: resolvedPadding,
-                        child: child,
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
                       ),
+                      child: Padding(padding: resolvedPadding, child: child),
                     ),
                   );
                 },
@@ -201,11 +203,7 @@ class AuthHeaderBar extends StatelessWidget {
 }
 
 class AuthGlassCard extends StatelessWidget {
-  const AuthGlassCard({
-    super.key,
-    required this.child,
-    this.padding,
-  });
+  const AuthGlassCard({super.key, required this.child, this.padding});
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
@@ -232,11 +230,64 @@ class AuthGlassCard extends StatelessWidget {
   }
 }
 
-class AuthFooterText extends StatelessWidget {
-  const AuthFooterText({
+/// HIG-compliant "Sign in with Apple" button.
+///
+/// Uses the native [SignInWithAppleButton] from the `sign_in_with_apple`
+/// package, choosing black/white style based on the app's dark mode token and
+/// matching the border radius / rhythm of the Google button. When [isLoading]
+/// is true, taps are disabled and a spinner is shown in place of the button.
+class AppleSignInButton extends StatelessWidget {
+  const AppleSignInButton({
     super.key,
-    required this.textColor,
+    required this.onPressed,
+    this.isLoading = false,
   });
+
+  final VoidCallback onPressed;
+  final bool isLoading;
+
+  // Match the vertical rhythm of the Google OutlinedButton (spacing16 padding
+  // around ~20px content => ~52px tall).
+  static const double _buttonHeight = 52;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AuthUiTokens.of(context);
+
+    if (isLoading) {
+      return Container(
+        height: _buttonHeight,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: tokens.isDarkMode ? Colors.white : Colors.black,
+          borderRadius: BorderRadius.circular(AppConstants.radius16),
+        ),
+        child: SizedBox(
+          height: 20,
+          width: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              tokens.isDarkMode ? Colors.black : Colors.white,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SignInWithAppleButton(
+      onPressed: onPressed,
+      height: _buttonHeight,
+      borderRadius: BorderRadius.circular(AppConstants.radius16),
+      style: tokens.isDarkMode
+          ? SignInWithAppleButtonStyle.white
+          : SignInWithAppleButtonStyle.black,
+    );
+  }
+}
+
+class AuthFooterText extends StatelessWidget {
+  const AuthFooterText({super.key, required this.textColor});
 
   final Color textColor;
 

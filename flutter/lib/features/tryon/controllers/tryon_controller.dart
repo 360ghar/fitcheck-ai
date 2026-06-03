@@ -8,6 +8,8 @@ import 'package:dio/dio.dart' hide FormData, MultipartFile;
 import 'package:dio/dio.dart' as dio show FormData, MultipartFile;
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
+import '../../../core/services/ai_consent_service.dart';
+import '../../../core/utils/permission_helper.dart';
 import '../../wardrobe/models/item_model.dart';
 
 /// Try-On controller
@@ -18,10 +20,12 @@ class TryOnController extends GetxController {
 
   // Reactive state
   final Rx<File?> clothingImage = Rx<File?>(null);
-  final RxList<File> clothingImages = <File>[].obs; // Support multiple clothing images
+  final RxList<File> clothingImages =
+      <File>[].obs; // Support multiple clothing images
   final RxList<File> tempFiles = <File>[].obs; // Track temp files for cleanup
   final Rx<ItemModel?> selectedWardrobeItem = Rx<ItemModel?>(null);
-  final RxList<ItemModel> selectedWardrobeItems = <ItemModel>[].obs; // Support multiple wardrobe items
+  final RxList<ItemModel> selectedWardrobeItems =
+      <ItemModel>[].obs; // Support multiple wardrobe items
   final RxString userAvatarUrl = ''.obs;
   final RxBool isLoading = false.obs;
   final RxBool isUploadingAvatar = false.obs;
@@ -30,7 +34,8 @@ class TryOnController extends GetxController {
   final RxString generatedImageUrl = ''.obs;
   final RxString generatedImageBase64 = ''.obs;
   final RxString error = ''.obs;
-  final RxInt currentImageIndex = 0.obs; // For switching between multiple images
+  final RxInt currentImageIndex =
+      0.obs; // For switching between multiple images
 
   // Options
   final RxString selectedStyle = 'casual'.obs;
@@ -39,17 +44,29 @@ class TryOnController extends GetxController {
 
   // Style options
   static const List<String> styles = [
-    'casual', 'formal', 'business', 'sporty', 'streetwear', 'elegant'
+    'casual',
+    'formal',
+    'business',
+    'sporty',
+    'streetwear',
+    'elegant',
   ];
 
   // Background options
   static const List<String> backgrounds = [
-    'studio white', 'studio gray', 'urban street', 'nature', 'minimal'
+    'studio white',
+    'studio gray',
+    'urban street',
+    'nature',
+    'minimal',
   ];
 
   // Pose options
   static const List<String> poses = [
-    'standing front', 'standing side', 'walking', 'casual'
+    'standing front',
+    'standing side',
+    'walking',
+    'casual',
   ];
 
   @override
@@ -84,7 +101,8 @@ class TryOnController extends GetxController {
       final response = await _apiClient.get('${ApiConstants.users}/me');
       final data = response.data;
       if (data is Map<String, dynamic>) {
-        final avatar = (data['data'] as Map<String, dynamic>?)?['avatar_url']?.toString();
+        final avatar = (data['data'] as Map<String, dynamic>?)?['avatar_url']
+            ?.toString();
         if (avatar != null && avatar.isNotEmpty) {
           userAvatarUrl.value = avatar;
           isAvatarReady.value = true;
@@ -96,10 +114,16 @@ class TryOnController extends GetxController {
   }
 
   Future<void> pickClothingImage() async {
-    // Support multiple image selection
-    final List<XFile> images = await _imagePicker.pickMultipleMedia(
-      imageQuality: 85,
-    );
+    if (!await PermissionHelper.confirmPhotoRationale()) return;
+
+    final List<XFile> images;
+    try {
+      // Support multiple image selection
+      images = await _imagePicker.pickMultipleMedia(imageQuality: 85);
+    } catch (e) {
+      await PermissionHelper.showDeniedRecovery(permissionName: 'Photos');
+      return;
+    }
 
     if (images.isNotEmpty) {
       // Clear previous selection
@@ -136,12 +160,20 @@ class TryOnController extends GetxController {
   }
 
   Future<void> pickClothingFromCamera() async {
-    final XFile? image = await _imagePicker.pickImage(
-      source: ImageSource.camera,
-      maxWidth: 1024,
-      maxHeight: 1024,
-      imageQuality: 85,
-    );
+    if (!await PermissionHelper.confirmCameraRationale()) return;
+
+    final XFile? image;
+    try {
+      image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+    } catch (e) {
+      await PermissionHelper.showDeniedRecovery(permissionName: 'Camera');
+      return;
+    }
 
     if (image != null) {
       // Add to existing images or start new list
@@ -164,7 +196,8 @@ class TryOnController extends GetxController {
   /// Switch to next clothing image
   void nextImage() {
     if (clothingImages.length > 1) {
-      currentImageIndex.value = (currentImageIndex.value + 1) % clothingImages.length;
+      currentImageIndex.value =
+          (currentImageIndex.value + 1) % clothingImages.length;
       clothingImage.value = clothingImages[currentImageIndex.value];
       generatedImageUrl.value = ''; // Clear previous result when switching
     }
@@ -173,7 +206,9 @@ class TryOnController extends GetxController {
   /// Switch to previous clothing image
   void previousImage() {
     if (clothingImages.length > 1) {
-      currentImageIndex.value = (currentImageIndex.value - 1 + clothingImages.length) % clothingImages.length;
+      currentImageIndex.value =
+          (currentImageIndex.value - 1 + clothingImages.length) %
+          clothingImages.length;
       clothingImage.value = clothingImages[currentImageIndex.value];
       generatedImageUrl.value = ''; // Clear previous result when switching
     }
@@ -229,13 +264,11 @@ class TryOnController extends GetxController {
       // Download the image from URL and save as temp file
       // Reuse the existing Dio instance from ApiClient to avoid memory leaks
       final tempDir = Directory.systemTemp;
-      final fileName = 'tryon_${item.id}_${DateTime.now().millisecondsSinceEpoch}.png';
+      final fileName =
+          'tryon_${item.id}_${DateTime.now().millisecondsSinceEpoch}.png';
       final filePath = '${tempDir.path}/$fileName';
 
-      await _apiClient.dio.download(
-        primaryImage.url,
-        filePath,
-      );
+      await _apiClient.dio.download(primaryImage.url, filePath);
 
       // Track temp file for cleanup
       final tempFile = File(filePath);
@@ -304,13 +337,24 @@ class TryOnController extends GetxController {
           currentImageIndex.value = clothingImages.length - 1;
         }
         clothingImage.value = clothingImages[currentImageIndex.value];
-        selectedWardrobeItem.value = selectedWardrobeItems[currentImageIndex.value];
+        selectedWardrobeItem.value =
+            selectedWardrobeItems[currentImageIndex.value];
       }
       generatedImageUrl.value = '';
     }
   }
 
   Future<void> uploadUserAvatar() async {
+    // Third-party AI data-sharing consent gate (Apple 5.1.2(i)) — the avatar
+    // (face photo) is sent to AI providers for generation.
+    if (!await Get.find<AiConsentService>().ensureConsent(
+      featureLabel: 'Virtual Try-On',
+    )) {
+      return;
+    }
+
+    if (!await PermissionHelper.confirmPhotoRationale()) return;
+
     final XFile? image = await _imagePicker.pickImage(
       source: ImageSource.gallery,
       maxWidth: 400,
@@ -363,6 +407,14 @@ class TryOnController extends GetxController {
   }
 
   Future<void> generateTryOn() async {
+    // Third-party AI data-sharing consent gate (Apple 5.1.2(i)) — must run
+    // before any image bytes are read or uploaded.
+    if (!await Get.find<AiConsentService>().ensureConsent(
+      featureLabel: 'Virtual Try-On',
+    )) {
+      return;
+    }
+
     if (clothingImage.value == null) {
       Get.snackbar('Error', 'Please select a clothing image first');
       return;
@@ -411,7 +463,8 @@ class TryOnController extends GetxController {
       generatedImageUrl.value = imageUrl ?? '';
       generatedImageBase64.value = imageBase64 ?? '';
 
-      if (generatedImageUrl.value.isEmpty && generatedImageBase64.value.isEmpty) {
+      if (generatedImageUrl.value.isEmpty &&
+          generatedImageBase64.value.isEmpty) {
         throw Exception('No image returned from server');
       }
 

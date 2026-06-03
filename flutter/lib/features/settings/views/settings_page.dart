@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/config/env_config.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
@@ -27,7 +28,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = AppBottomNavigationBar.getIndexForRoute(Get.currentRoute);
+    final currentIndex = AppBottomNavigationBar.getIndexForRoute(
+      Get.currentRoute,
+    );
 
     return Scaffold(
       body: AppPageBackground(
@@ -56,9 +59,9 @@ class _SettingsPageState extends State<SettingsPage> {
       title: Text(
         'Settings',
         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: tokens.textPrimary,
-            ),
+          fontWeight: FontWeight.w700,
+          color: tokens.textPrimary,
+        ),
       ),
     );
   }
@@ -181,20 +184,26 @@ class _SettingsPageState extends State<SettingsPage> {
         ListTile(
           leading: const Icon(Icons.style),
           title: const Text('Preferred Styles'),
-          subtitle: prefs.preferredStyles == null || prefs.preferredStyles!.isEmpty
+          subtitle:
+              prefs.preferredStyles == null || prefs.preferredStyles!.isEmpty
               ? const Text('No preferences set')
-              : Text(prefs.preferredStyles!.take(3).join(', ') +
-                  (prefs.preferredStyles!.length > 3 ? '...' : '')),
+              : Text(
+                  prefs.preferredStyles!.take(3).join(', ') +
+                      (prefs.preferredStyles!.length > 3 ? '...' : ''),
+                ),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => _showStylePreferencesDialog(prefs),
         ),
         ListTile(
           leading: const Icon(Icons.color_lens),
           title: const Text('Preferred Colors'),
-          subtitle: prefs.preferredColors == null || prefs.preferredColors!.isEmpty
+          subtitle:
+              prefs.preferredColors == null || prefs.preferredColors!.isEmpty
               ? const Text('No preferences set')
-              : Text(prefs.preferredColors!.take(3).join(', ') +
-                  (prefs.preferredColors!.length > 3 ? '...' : '')),
+              : Text(
+                  prefs.preferredColors!.take(3).join(', ') +
+                      (prefs.preferredColors!.length > 3 ? '...' : ''),
+                ),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => _showColorPreferencesDialog(prefs),
         ),
@@ -221,7 +230,10 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         ListTile(
           leading: const Icon(Icons.delete_forever, color: Colors.red),
-          title: const Text('Delete Account', style: TextStyle(color: Colors.red)),
+          title: const Text(
+            'Delete Account',
+            style: TextStyle(color: Colors.red),
+          ),
           subtitle: const Text('Permanently delete your account'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => _showDeleteAccountDialog(),
@@ -252,7 +264,12 @@ class _SettingsPageState extends State<SettingsPage> {
         ListTile(
           leading: const Icon(Icons.credit_card),
           title: const Text('Manage Subscription'),
-          subtitle: const Text('View plan, usage, and upgrade'),
+          // WS3: hide upgrade messaging when the paywall is disabled.
+          subtitle: Text(
+            EnvConfig.paywallEnabled
+                ? 'View plan, usage, and upgrade'
+                : 'View your plan and usage',
+          ),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Get.toNamed(Routes.subscription),
         ),
@@ -278,11 +295,21 @@ class _SettingsPageState extends State<SettingsPage> {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Get.toNamed(Routes.legal),
         ),
+        ListTile(
+          leading: const Icon(Icons.flag_outlined),
+          title: const Text('Report a Problem'),
+          subtitle: const Text('Report content, abuse, or other issues'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Get.toNamed(Routes.feedback),
+        ),
       ],
     );
   }
 
-  Widget _buildSection({required String title, required List<Widget> children}) {
+  Widget _buildSection({
+    required String title,
+    required List<Widget> children,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -329,7 +356,7 @@ class _SettingsPageState extends State<SettingsPage> {
       'Minimalist',
       'Streetwear',
       'Vintage',
-      'Preppy'
+      'Preppy',
     ];
     final selected = prefs.preferredStyles ?? [];
 
@@ -397,7 +424,7 @@ class _SettingsPageState extends State<SettingsPage> {
       'Pink',
       'Purple',
       'Yellow',
-      'Orange'
+      'Orange',
     ];
     final selected = prefs.preferredColors ?? [];
 
@@ -470,173 +497,205 @@ class _SettingsPageState extends State<SettingsPage> {
             disposeControllers();
           }
         },
-        child: Obx(() => AlertDialog(
-        title: const Text('Change Password'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: currentPasswordController,
-              decoration: const InputDecoration(
-                labelText: 'Current Password',
-                border: OutlineInputBorder(),
-              ),
-              obscureText: true,
-              enabled: !controller.isChangingPassword.value,
+        child: Obx(
+          () => AlertDialog(
+            title: const Text('Change Password'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: currentPasswordController,
+                  decoration: const InputDecoration(
+                    labelText: 'Current Password',
+                    border: OutlineInputBorder(),
+                  ),
+                  obscureText: true,
+                  enabled: !controller.isChangingPassword.value,
+                ),
+                const SizedBox(height: AppConstants.spacing12),
+                TextField(
+                  controller: newPasswordController,
+                  decoration: const InputDecoration(
+                    labelText: 'New Password',
+                    border: OutlineInputBorder(),
+                  ),
+                  obscureText: true,
+                  enabled: !controller.isChangingPassword.value,
+                ),
+                const SizedBox(height: AppConstants.spacing12),
+                TextField(
+                  controller: confirmPasswordController,
+                  decoration: const InputDecoration(
+                    labelText: 'Confirm New Password',
+                    border: OutlineInputBorder(),
+                  ),
+                  obscureText: true,
+                  enabled: !controller.isChangingPassword.value,
+                ),
+              ],
             ),
-            const SizedBox(height: AppConstants.spacing12),
-            TextField(
-              controller: newPasswordController,
-              decoration: const InputDecoration(
-                labelText: 'New Password',
-                border: OutlineInputBorder(),
+            actions: [
+              TextButton(
+                onPressed: controller.isChangingPassword.value
+                    ? null
+                    : () => Get.back(),
+                child: const Text('Cancel'),
               ),
-              obscureText: true,
-              enabled: !controller.isChangingPassword.value,
-            ),
-            const SizedBox(height: AppConstants.spacing12),
-            TextField(
-              controller: confirmPasswordController,
-              decoration: const InputDecoration(
-                labelText: 'Confirm New Password',
-                border: OutlineInputBorder(),
+              ElevatedButton(
+                onPressed: controller.isChangingPassword.value
+                    ? null
+                    : () async {
+                        if (currentPasswordController.text.isEmpty) {
+                          Get.snackbar(
+                            'Error',
+                            'Please enter your current password',
+                          );
+                          return;
+                        }
+                        if (newPasswordController.text.isEmpty) {
+                          Get.snackbar('Error', 'Please enter a new password');
+                          return;
+                        }
+                        // Password strength validation
+                        final password = newPasswordController.text;
+                        if (password.length < 8) {
+                          Get.snackbar(
+                            'Weak Password',
+                            'Password must be at least 8 characters',
+                          );
+                          return;
+                        }
+                        if (!password.contains(RegExp(r'[A-Z]'))) {
+                          Get.snackbar(
+                            'Weak Password',
+                            'Password must contain at least one uppercase letter',
+                          );
+                          return;
+                        }
+                        if (!password.contains(RegExp(r'[a-z]'))) {
+                          Get.snackbar(
+                            'Weak Password',
+                            'Password must contain at least one lowercase letter',
+                          );
+                          return;
+                        }
+                        if (!password.contains(RegExp(r'[0-9]'))) {
+                          Get.snackbar(
+                            'Weak Password',
+                            'Password must contain at least one number',
+                          );
+                          return;
+                        }
+                        if (newPasswordController.text !=
+                            confirmPasswordController.text) {
+                          Get.snackbar('Error', 'Passwords do not match');
+                          return;
+                        }
+                        try {
+                          await controller.changePassword(
+                            currentPasswordController.text,
+                            newPasswordController.text,
+                          );
+                        } catch (e) {
+                          // Error handled by controller
+                        }
+                      },
+                child: controller.isChangingPassword.value
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Change'),
               ),
-              obscureText: true,
-              enabled: !controller.isChangingPassword.value,
-            ),
-          ],
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: controller.isChangingPassword.value ? null : () => Get.back(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: controller.isChangingPassword.value
-                ? null
-                : () async {
-                    if (currentPasswordController.text.isEmpty) {
-                      Get.snackbar('Error', 'Please enter your current password');
-                      return;
-                    }
-                    if (newPasswordController.text.isEmpty) {
-                      Get.snackbar('Error', 'Please enter a new password');
-                      return;
-                    }
-                    // Password strength validation
-                    final password = newPasswordController.text;
-                    if (password.length < 8) {
-                      Get.snackbar('Weak Password', 'Password must be at least 8 characters');
-                      return;
-                    }
-                    if (!password.contains(RegExp(r'[A-Z]'))) {
-                      Get.snackbar('Weak Password', 'Password must contain at least one uppercase letter');
-                      return;
-                    }
-                    if (!password.contains(RegExp(r'[a-z]'))) {
-                      Get.snackbar('Weak Password', 'Password must contain at least one lowercase letter');
-                      return;
-                    }
-                    if (!password.contains(RegExp(r'[0-9]'))) {
-                      Get.snackbar('Weak Password', 'Password must contain at least one number');
-                      return;
-                    }
-                    if (newPasswordController.text != confirmPasswordController.text) {
-                      Get.snackbar('Error', 'Passwords do not match');
-                      return;
-                    }
-                    try {
-                      await controller.changePassword(
-                        currentPasswordController.text,
-                        newPasswordController.text,
-                      );
-                    } catch (e) {
-                      // Error handled by controller
-                    }
-                  },
-            child: controller.isChangingPassword.value
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Change'),
-          ),
-        ],
-      ))),
+      ),
       barrierDismissible: false,
     );
   }
 
   void _showExportDataDialog() {
     Get.dialog(
-      Obx(() => AlertDialog(
-        title: const Text('Export Data'),
-        content: const Text(
-          'We will prepare a download link with all your data. You will receive an email when it\'s ready.',
+      Obx(
+        () => AlertDialog(
+          title: const Text('Export Data'),
+          content: const Text(
+            'We will prepare a download link with all your data. You will receive an email when it\'s ready.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: controller.isExportingData.value
+                  ? null
+                  : () => Get.back(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: controller.isExportingData.value
+                  ? null
+                  : () async {
+                      await controller.exportData();
+                      Get.back();
+                    },
+              child: controller.isExportingData.value
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Export'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: controller.isExportingData.value ? null : () => Get.back(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: controller.isExportingData.value
-                ? null
-                : () async {
-                    await controller.exportData();
-                    Get.back();
-                  },
-            child: controller.isExportingData.value
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Export'),
-          ),
-        ],
-      )),
+      ),
       barrierDismissible: false,
     );
   }
 
   void _showDeleteAccountDialog() {
     Get.dialog(
-      Obx(() => AlertDialog(
-        title: const Text('Delete Account?'),
-        content: const Text(
-          'This action cannot be undone. All your data will be permanently deleted.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: controller.isDeletingAccount.value ? null : () => Get.back(),
-            child: const Text('Cancel'),
+      Obx(
+        () => AlertDialog(
+          title: const Text('Delete Account?'),
+          content: const Text(
+            'This action cannot be undone. All your data will be permanently deleted.',
           ),
-          ElevatedButton(
-            onPressed: controller.isDeletingAccount.value
-                ? null
-                : () async {
-                    try {
-                      await controller.deleteAccount();
-                    } catch (e) {
-                      // Error handled by controller
-                    }
-                  },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onError,
+          actions: [
+            TextButton(
+              onPressed: controller.isDeletingAccount.value
+                  ? null
+                  : () => Get.back(),
+              child: const Text('Cancel'),
             ),
-            child: controller.isDeletingAccount.value
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('Delete'),
-          ),
-        ],
-      )),
+            ElevatedButton(
+              onPressed: controller.isDeletingAccount.value
+                  ? null
+                  : () async {
+                      try {
+                        await controller.deleteAccount();
+                      } catch (e) {
+                        // Error handled by controller
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              ),
+              child: controller.isDeletingAccount.value
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Delete'),
+            ),
+          ],
+        ),
+      ),
       barrierDismissible: false,
     );
   }

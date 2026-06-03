@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Loads environment values from an asset `.env` file with
@@ -7,12 +10,19 @@ class EnvConfig {
 
   static const String _apiBaseUrlEnv = String.fromEnvironment('API_BASE_URL');
   static const String _supabaseUrlEnv = String.fromEnvironment('SUPABASE_URL');
-  static const String _supabaseAnonKeyEnv =
-      String.fromEnvironment('SUPABASE_ANON_KEY');
-  static const String _supabasePublishableKeyEnv =
-      String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
-  static const String _posthogApiKeyEnv = String.fromEnvironment('POSTHOG_API_KEY');
+  static const String _supabaseAnonKeyEnv = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+  );
+  static const String _supabasePublishableKeyEnv = String.fromEnvironment(
+    'SUPABASE_PUBLISHABLE_KEY',
+  );
+  static const String _posthogApiKeyEnv = String.fromEnvironment(
+    'POSTHOG_API_KEY',
+  );
   static const String _posthogHostEnv = String.fromEnvironment('POSTHOG_HOST');
+  static const String _paywallEnabledEnv = String.fromEnvironment(
+    'PAYWALL_ENABLED',
+  );
 
   static final Map<String, String> _fileValues = {};
   static bool _loaded = false;
@@ -60,6 +70,16 @@ class EnvConfig {
     return _posthogHostEnv.isNotEmpty
         ? _posthogHostEnv
         : (_fileValues['POSTHOG_HOST'] ?? '');
+  }
+
+  /// Monetization CTAs (paywall, Stripe checkout, pricing). OFF on iOS for v1
+  /// (App Store Guideline 3.1.1 anti-steering). Override: --dart-define=PAYWALL_ENABLED=true
+  static bool get paywallEnabled {
+    if (_paywallEnabledEnv.isNotEmpty) {
+      return _paywallEnabledEnv.toLowerCase() == 'true';
+    }
+    if (kIsWeb) return true;
+    return !Platform.isIOS;
   }
 
   static Future<void> _loadAsset(String path) async {

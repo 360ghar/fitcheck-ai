@@ -15,10 +15,7 @@ class LegalPage extends StatelessWidget {
     final tokens = AppUiTokens.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Legal'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Legal'), elevation: 0),
       body: AppPageBackground(
         child: SafeArea(
           child: SingleChildScrollView(
@@ -33,16 +30,12 @@ class LegalPage extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Icon(
-                            Icons.shield_outlined,
-                            color: tokens.brandColor,
-                          ),
+                          Icon(Icons.shield_outlined, color: tokens.brandColor),
                           const SizedBox(width: AppConstants.spacing12),
                           Text(
                             'Legal Information',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ],
                       ),
@@ -50,8 +43,8 @@ class LegalPage extends StatelessWidget {
                       Text(
                         'Review our policies to understand how we protect your privacy and the terms governing your use of FitCheck AI.',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: tokens.textMuted,
-                            ),
+                          color: tokens.textMuted,
+                        ),
                       ),
                     ],
                   ),
@@ -93,14 +86,32 @@ class LegalPage extends StatelessWidget {
 
                 const SizedBox(height: AppConstants.spacing24),
 
-                // Open Source Licenses
+                // Report a Problem / Abuse — visible without login so App Store
+                // reviewers can find the abuse/support contact (Guideline 1.2).
                 AppGlassCard(
                   padding: EdgeInsets.zero,
                   child: ListTile(
                     leading: Icon(
-                      Icons.code,
-                      color: tokens.textMuted,
+                      Icons.flag_outlined,
+                      color: tokens.brandColor,
                     ),
+                    title: const Text('Report a Problem / Abuse'),
+                    subtitle: const Text(
+                      'Email ${AppConstants.supportEmail} to report '
+                      'objectionable content or abuse',
+                    ),
+                    trailing: const Icon(Icons.email_outlined),
+                    onTap: _openSupportEmail,
+                  ),
+                ),
+
+                const SizedBox(height: AppConstants.spacing24),
+
+                // Open Source Licenses
+                AppGlassCard(
+                  padding: EdgeInsets.zero,
+                  child: ListTile(
+                    leading: Icon(Icons.code, color: tokens.textMuted),
                     title: const Text('Open Source Licenses'),
                     subtitle: const Text('Third-party software licenses'),
                     trailing: const Icon(Icons.chevron_right),
@@ -122,6 +133,17 @@ class LegalPage extends StatelessWidget {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _openSupportEmail() async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: AppConstants.supportEmail,
+      query: 'subject=${Uri.encodeComponent('Report a Problem / Abuse')}',
+    );
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
     }
   }
 }

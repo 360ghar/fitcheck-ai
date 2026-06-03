@@ -1,5 +1,9 @@
+import 'dart:convert';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/env_config.dart';
 import '../constants/api_constants.dart';
@@ -158,6 +162,74 @@ class SupabaseService extends GetxService {
     }
   }
 
+  /// Generate a cryptographically secure raw nonce string
+  String _generateRawNonce([int length = 32]) {
+    const charset =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(
+      length,
+      (_) => charset[random.nextInt(charset.length)],
+    ).join();
+  }
+
+  /// SHA-256 hash (hex) of the provided input
+  String _sha256Hex(String input) {
+    final bytes = utf8.encode(input);
+    return sha256.convert(bytes).toString();
+  }
+
+  /// Sign in with Apple using the native flow (iOS).
+  ///
+  /// Uses a raw nonce hashed with SHA-256: the HASHED nonce is sent to Apple,
+  /// while the RAW nonce is sent to Supabase. These must NOT be swapped.
+  /// Returns the [AuthResponse] from Supabase on success.
+  Future<AuthResponse> signInWithApple() async {
+    // Raw nonce goes to Supabase; its SHA-256 hash goes to Apple.
+    final rawNonce = _generateRawNonce();
+    final hashedNonce = _sha256Hex(rawNonce);
+
+    final credential = await SignInWithApple.getAppleIDCredential(
+      scopes: [
+        AppleIDAuthorizationScopes.email,
+        AppleIDAuthorizationScopes.fullName,
+      ],
+      nonce: hashedNonce,
+    );
+
+    final idToken = credential.identityToken;
+    if (idToken == null) {
+      throw const AuthException(
+        'Apple sign-in failed: no identity token returned.',
+      );
+    }
+
+    final response = await _client.auth.signInWithIdToken(
+      provider: OAuthProvider.apple,
+      idToken: idToken,
+      nonce: rawNonce,
+    );
+
+    // Apple only returns the name on the FIRST authorization. Persist it as
+    // full_name when present and the user metadata does not already have one.
+    final givenName = credential.givenName;
+    final familyName = credential.familyName;
+    final fullName = [givenName, familyName]
+        .where((part) => part != null && part.trim().isNotEmpty)
+        .map((part) => part!.trim())
+        .join(' ');
+    final existingFullName =
+        response.user?.userMetadata?['full_name'] as String?;
+    if (fullName.isNotEmpty &&
+        (existingFullName == null || existingFullName.trim().isEmpty)) {
+      await _client.auth.updateUser(
+        UserAttributes(data: {'full_name': fullName}),
+      );
+    }
+
+    return response;
+  }
+
   /// Sign out current user
   Future<void> signOut() async {
     await _client.auth.signOut();
@@ -173,9 +245,7 @@ class SupabaseService extends GetxService {
 
   /// Update user password
   Future<void> updatePassword(String newPassword) async {
-    await _client.auth.updateUser(
-      UserAttributes(password: newPassword),
-    );
+    await _client.auth.updateUser(UserAttributes(password: newPassword));
   }
 
   /// Refresh the session
@@ -185,9 +255,6 @@ class SupabaseService extends GetxService {
 
   /// Resend verification email
   Future<void> resendVerificationEmail(String email) async {
-    await _client.auth.resend(
-      type: OtpType.signup,
-      email: email,
-    );
+    await _client.auth.resend(type: OtpType.signup, email: email);
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../app/routes/app_routes.dart';
+import '../../../core/config/env_config.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/photoshoot_controller.dart';
@@ -23,9 +24,9 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
           Text(
             'Choose Your Style',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+            ),
           ),
           const SizedBox(height: AppConstants.spacing12),
 
@@ -49,9 +50,9 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
                 Text(
                   'Custom Prompt',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary,
-                      ),
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
                 ),
                 const SizedBox(height: AppConstants.spacing8),
                 TextField(
@@ -61,7 +62,9 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
                   decoration: InputDecoration(
                     hintText: 'Describe the style you want...',
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppConstants.radius12),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radius12,
+                      ),
                     ),
                   ),
                 ),
@@ -74,9 +77,9 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
           Text(
             'Image Format',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+            ),
           ),
           const SizedBox(height: AppConstants.spacing8),
 
@@ -88,9 +91,9 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
           Text(
             'Number of Images',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+            ),
           ),
           const SizedBox(height: AppConstants.spacing8),
 
@@ -118,13 +121,19 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
               const SizedBox(width: AppConstants.spacing12),
               Expanded(
                 flex: 2,
-                child: Obx(() => ElevatedButton(
-                      onPressed: controller.canGenerate ? controller.nextStep : null,
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(0, 48),
-                      ),
-                      child: Text('Generate ${controller.numImages.value} Images'),
-                    )),
+                child: Obx(
+                  () => ElevatedButton(
+                    onPressed: controller.canGenerate
+                        ? controller.nextStep
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                    ),
+                    child: Text(
+                      'Generate ${controller.numImages.value} Images',
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -178,18 +187,15 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              useCase.icon,
-              style: const TextStyle(fontSize: 22),
-            ),
+            Text(useCase.icon, style: const TextStyle(fontSize: 22)),
             const SizedBox(height: 4),
             Text(
               useCase.label,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: isSelected ? tokens.brandColor : tokens.textPrimary,
-                  ),
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected ? tokens.brandColor : tokens.textPrimary,
+              ),
             ),
           ],
         ),
@@ -211,15 +217,15 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
               Text(
                 '${controller.numImages.value} images',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: tokens.brandColor,
-                    ),
+                  fontWeight: FontWeight.w700,
+                  color: tokens.brandColor,
+                ),
               ),
               Text(
                 '$remaining remaining today',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: tokens.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
               ),
             ],
           ),
@@ -265,7 +271,10 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
     if (usage == null) return const SizedBox.shrink();
 
     // Check if user is on a pro plan (matches pro_monthly, pro_yearly, etc.)
-    final isPro = RegExp(r'^pro[_-]?', caseSensitive: false).hasMatch(usage.planType);
+    final isPro = RegExp(
+      r'^pro[_-]?',
+      caseSensitive: false,
+    ).hasMatch(usage.planType);
 
     return AppGlassCard(
       padding: const EdgeInsets.all(AppConstants.spacing12),
@@ -282,12 +291,14 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
               isPro
                   ? 'Pro: ${usage.remaining} of ${usage.limitToday} images remaining'
                   : 'Free: ${usage.remaining} of ${usage.limitToday} images remaining',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: tokens.textMuted,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
             ),
           ),
-          if (!isPro)
+          // Upgrade CTA is hidden when the paywall is disabled (iOS v1,
+          // App Store Guideline 3.1.1 anti-steering). Benign usage text stays.
+          if (!isPro && EnvConfig.paywallEnabled)
             TextButton(
               onPressed: () => Get.toNamed(Routes.subscription),
               child: const Text('Upgrade'),
@@ -319,8 +330,9 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(AppConstants.radius12),
                   border: Border.all(
-                    color:
-                        isSelected ? tokens.brandColor : tokens.cardBorderColor,
+                    color: isSelected
+                        ? tokens.brandColor
+                        : tokens.cardBorderColor,
                     width: isSelected ? 2 : 1,
                   ),
                   color: isSelected
@@ -336,12 +348,13 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
                     Text(
                       ratio.ratio,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontWeight:
-                                isSelected ? FontWeight.w600 : FontWeight.w500,
-                            color: isSelected
-                                ? tokens.brandColor
-                                : tokens.textPrimary,
-                          ),
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                        color: isSelected
+                            ? tokens.brandColor
+                            : tokens.textPrimary,
+                      ),
                     ),
                   ],
                 ),
@@ -382,7 +395,9 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
           width: 2,
         ),
         borderRadius: BorderRadius.circular(4),
-        color: isSelected ? tokens.brandColor.withOpacity(0.2) : tokens.cardColor,
+        color: isSelected
+            ? tokens.brandColor.withOpacity(0.2)
+            : tokens.cardColor,
       ),
     );
   }

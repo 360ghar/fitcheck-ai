@@ -9,7 +9,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/services/ai_consent_service.dart';
 import '../../../core/utils/image_utils.dart';
+import '../../../core/utils/permission_helper.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/condition.dart' as domain;
 import '../models/batch_extraction_models.dart';
@@ -232,6 +234,8 @@ class BatchExtractionController extends GetxController {
 
   /// Pick images from gallery
   Future<void> pickFromGallery() async {
+    if (!await PermissionHelper.confirmPhotoRationale()) return;
+
     try {
       final images = await _imagePicker.pickMultiImage(
         maxWidth: 1920,
@@ -263,18 +267,20 @@ class BatchExtractionController extends GetxController {
 
       _updateRemainingSlots();
     } catch (e) {
-      error.value = 'Failed to pick images: $e';
+      await PermissionHelper.showDeniedRecovery(permissionName: 'Photos');
     }
   }
 
   /// Take a photo with camera
   Future<void> pickFromCamera() async {
-    try {
-      if (remainingSlots.value <= 0) {
-        error.value = 'Maximum $maxImages images allowed';
-        return;
-      }
+    if (remainingSlots.value <= 0) {
+      error.value = 'Maximum $maxImages images allowed';
+      return;
+    }
 
+    if (!await PermissionHelper.confirmCameraRationale()) return;
+
+    try {
       final image = await _imagePicker.pickImage(
         source: ImageSource.camera,
         maxWidth: 1920,
@@ -298,7 +304,7 @@ class BatchExtractionController extends GetxController {
       selectedImages.add(batchImage);
       _updateRemainingSlots();
     } catch (e) {
-      error.value = 'Failed to capture image: $e';
+      await PermissionHelper.showDeniedRecovery(permissionName: 'Camera');
     }
   }
 
@@ -328,6 +334,14 @@ class BatchExtractionController extends GetxController {
   }
 
   Future<void> startSocialImport(String sourceUrl) async {
+    // Third-party AI data-sharing consent gate (Apple 5.1.2(i)) — imported
+    // photos are processed by AI providers.
+    if (!await Get.find<AiConsentService>().ensureConsent(
+      featureLabel: 'AI Wardrobe Extraction',
+    )) {
+      return;
+    }
+
     final normalized = sourceUrl.trim();
     if (normalized.isEmpty) {
       socialError.value = 'Profile URL is required';
@@ -791,6 +805,14 @@ class BatchExtractionController extends GetxController {
 
   /// Start the batch extraction process
   Future<void> startExtraction() async {
+    // Third-party AI data-sharing consent gate (Apple 5.1.2(i)) — must run
+    // before any image bytes are compressed/encoded or uploaded.
+    if (!await Get.find<AiConsentService>().ensureConsent(
+      featureLabel: 'AI Wardrobe Extraction',
+    )) {
+      return;
+    }
+
     if (selectedImages.isEmpty) {
       error.value = 'No images selected';
       return;

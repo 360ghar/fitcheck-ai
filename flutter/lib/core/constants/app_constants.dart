@@ -6,6 +6,11 @@ class AppConstants {
   static const String appName = 'FitCheck AI';
   static const String appVersion = '1.0.0';
 
+  // Support / Legal
+  static const String supportEmail = 'support@fitcheckaiapp.com';
+  static const String privacyPolicyUrl = 'https://fitcheckaiapp.com/privacy';
+  static const String termsOfServiceUrl = 'https://fitcheckaiapp.com/terms';
+
   // Pagination
   static const int defaultPageSize = 20;
   static const int maxFileSize = 10 * 1024 * 1024; // 10MB

@@ -17,12 +17,10 @@ class SubscriptionPage extends GetView<SubscriptionController> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Subscription'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Subscription'), elevation: 0),
       body: Obx(() {
-        if (controller.isLoading.value && controller.subscription.value == null) {
+        if (controller.isLoading.value &&
+            controller.subscription.value == null) {
           return Padding(
             padding: const EdgeInsets.all(AppConstants.spacing16),
             child: Column(
@@ -55,8 +53,9 @@ class SubscriptionPage extends GetView<SubscriptionController> {
               _buildUsageSection(context, theme),
               const SizedBox(height: 24),
 
-              // Upgrade section (for free users)
-              if (!controller.isPro) ...[
+              // Upgrade section (for free users).
+              // Hidden when the paywall is disabled (iOS v1, Guideline 3.1.1).
+              if (!controller.isPro && controller.showPaywall) ...[
                 _buildUpgradeSection(context, theme),
                 const SizedBox(height: 24),
               ],
@@ -86,7 +85,9 @@ class SubscriptionPage extends GetView<SubscriptionController> {
             children: [
               Icon(
                 controller.isPro ? Icons.star : Icons.person,
-                color: controller.isPro ? Colors.amber : theme.colorScheme.primary,
+                color: controller.isPro
+                    ? Colors.amber
+                    : theme.colorScheme.primary,
                 size: 28,
               ),
               const SizedBox(width: 12),
@@ -111,7 +112,10 @@ class SubscriptionPage extends GetView<SubscriptionController> {
               ),
               if (controller.isPro)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFF6366F1), Color(0xFF9333EA)],
@@ -139,19 +143,27 @@ class SubscriptionPage extends GetView<SubscriptionController> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                  const Icon(
+                    Icons.info_outline,
+                    color: Colors.orange,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Subscription ends on ${_formatDate(sub!.currentPeriodEnd!)}',
-                      style: TextStyle(color: Colors.orange.shade800, fontSize: 13),
+                      style: TextStyle(
+                        color: Colors.orange.shade800,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
           ],
-          if (sub?.referralCreditMonths != null && sub!.referralCreditMonths > 0) ...[
+          if (sub?.referralCreditMonths != null &&
+              sub!.referralCreditMonths > 0) ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -161,11 +173,18 @@ class SubscriptionPage extends GetView<SubscriptionController> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.card_giftcard, color: Colors.green, size: 20),
+                  const Icon(
+                    Icons.card_giftcard,
+                    color: Colors.green,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     '${sub.referralCreditMonths} month${sub.referralCreditMonths > 1 ? 's' : ''} of referral credit',
-                    style: TextStyle(color: Colors.green.shade800, fontSize: 13),
+                    style: TextStyle(
+                      color: Colors.green.shade800,
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ),
@@ -214,12 +233,21 @@ class SubscriptionPage extends GetView<SubscriptionController> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber, color: Colors.amber, size: 20),
+                  const Icon(
+                    Icons.warning_amber,
+                    color: Colors.amber,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'You\'re approaching your usage limit. Upgrade for more!',
-                      style: TextStyle(color: Colors.amber.shade800, fontSize: 13),
+                      controller.showPaywall
+                          ? 'You\'re approaching your usage limit. Upgrade for more!'
+                          : 'You\'re approaching your monthly limit. It resets at the start of next month.',
+                      style: TextStyle(
+                        color: Colors.amber.shade800,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ],

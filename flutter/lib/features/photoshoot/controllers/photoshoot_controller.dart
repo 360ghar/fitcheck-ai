@@ -10,7 +10,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:gal/gal.dart';
 
 import '../../../app/routes/app_routes.dart';
+import '../../../core/config/env_config.dart';
+import '../../../core/services/ai_consent_service.dart';
 import '../../../core/services/sse_service.dart';
+import '../../../core/utils/permission_helper.dart';
 import '../models/photoshoot_models.dart';
 import '../repositories/photoshoot_repository.dart';
 
@@ -113,6 +116,8 @@ class PhotoshootController extends GetxController {
 
   /// Pick photos from gallery (adds to existing photos)
   Future<void> pickPhotos() async {
+    if (!await PermissionHelper.confirmPhotoRationale()) return;
+
     try {
       final List<XFile> images = await _imagePicker.pickMultiImage(
         maxWidth: 1024,
@@ -137,7 +142,7 @@ class PhotoshootController extends GetxController {
         error.value = '';
       }
     } catch (e) {
-      Get.snackbar('Error', 'Failed to pick photos: ${e.toString()}');
+      await PermissionHelper.showDeniedRecovery(permissionName: 'Photos');
     }
   }
 
@@ -147,6 +152,8 @@ class PhotoshootController extends GetxController {
       Get.snackbar('Limit Reached', 'Maximum $maxPhotos photos allowed');
       return;
     }
+
+    if (!await PermissionHelper.confirmCameraRationale()) return;
 
     try {
       final XFile? image = await _imagePicker.pickImage(
@@ -161,7 +168,7 @@ class PhotoshootController extends GetxController {
         error.value = '';
       }
     } catch (e) {
-      Get.snackbar('Error', 'Failed to access camera: ${e.toString()}');
+      await PermissionHelper.showDeniedRecovery(permissionName: 'Camera');
     }
   }
 
@@ -252,6 +259,14 @@ class PhotoshootController extends GetxController {
 
   /// Generate photoshoot images with SSE progress
   Future<void> generatePhotoshoot() async {
+    // Third-party AI data-sharing consent gate (Apple 5.1.2(i)) — must run
+    // before any photo bytes are read or uploaded.
+    if (!await Get.find<AiConsentService>().ensureConsent(
+      featureLabel: 'AI Photoshoot',
+    )) {
+      return;
+    }
+
     if (!canGenerate) return;
 
     // Cancel any existing SSE subscription
@@ -499,6 +514,14 @@ class PhotoshootController extends GetxController {
 
   /// Retry a single failed slot by generating one new image and filling the slot index.
   Future<void> retryFailedSlot(int failedIndex) async {
+    // Third-party AI data-sharing consent gate (Apple 5.1.2(i)) — must run
+    // before any photo bytes are read or uploaded.
+    if (!await Get.find<AiConsentService>().ensureConsent(
+      featureLabel: 'AI Photoshoot',
+    )) {
+      return;
+    }
+
     if (!failedIndices.contains(failedIndex)) return;
     if (retryingFailedIndex.value != -1) return;
     if (selectedPhotos.isEmpty) return;
@@ -668,10 +691,15 @@ class PhotoshootController extends GetxController {
           Get.back();
           Get.toNamed(Routes.referral);
         },
-        onUpgrade: () {
-          Get.back();
-          Get.toNamed(Routes.subscription);
-        },
+        // WS3: only offer the paid upgrade path when the paywall is enabled.
+        // When disabled, the dialog still shows the free referral option and
+        // daily-reset messaging without any upgrade CTA.
+        onUpgrade: EnvConfig.paywallEnabled
+            ? () {
+                Get.back();
+                Get.toNamed(Routes.subscription);
+              }
+            : null,
       ),
       barrierDismissible: true,
     );
@@ -736,12 +764,14 @@ String _encodeBase64(Uint8List bytes) => base64Encode(bytes);
 /// Referral limit dialog widget
 class ReferralLimitDialog extends StatelessWidget {
   final VoidCallback onReferFriend;
-  final VoidCallback onUpgrade;
+
+  /// When null, the upgrade CTA is hidden (WS3 paywall disabled).
+  final VoidCallback? onUpgrade;
 
   const ReferralLimitDialog({
     super.key,
     required this.onReferFriend,
-    required this.onUpgrade,
+    this.onUpgrade,
   });
 
   @override
@@ -760,14 +790,16 @@ class ReferralLimitDialog extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Refer a friend and both get 1 month Pro free!',
+            'Your free images reset tomorrow. Refer a friend and both get '
+            '1 month Pro free!',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14, color: Colors.grey[600]),
           ),
         ],
       ),
       actions: [
-        TextButton(onPressed: onUpgrade, child: const Text('Upgrade to Pro')),
+        if (onUpgrade != null)
+          TextButton(onPressed: onUpgrade, child: const Text('Upgrade to Pro')),
         ElevatedButton(
           onPressed: onReferFriend,
           child: const Text('Refer a Friend'),

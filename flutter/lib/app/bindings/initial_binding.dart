@@ -6,6 +6,7 @@ import '../../core/services/notification_service.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/services/offline_queue_service.dart';
 import '../../core/services/theme_service.dart';
+import '../../core/services/ai_consent_service.dart';
 import '../../features/auth/controllers/auth_controller.dart';
 
 /// Initial binding - sets up global services and singletons
@@ -17,6 +18,10 @@ class InitialBinding extends Bindings {
 
     // Initialize ThemeService early for immediate theme loading
     Get.put(ThemeService());
+
+    // Initialize AiConsentService eagerly so Get.find never throws when an AI
+    // feature checks third-party data-sharing consent.
+    Get.put(AiConsentService());
 
     // Initialize NetworkService for connectivity monitoring
     Get.put(NetworkService());

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../app/routes/app_routes.dart';
@@ -75,6 +76,23 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  Future<void> _handleAppleSignIn() async {
+    final authController = Get.find<AuthController>();
+    final referralCode = _referralCodeController.text.trim();
+
+    // Persist referral code so it survives the Apple sign-in flow and is
+    // redeemed via handleOAuthCallback after authentication.
+    if (referralCode.isNotEmpty) {
+      await authController.setPendingReferralCode(referralCode);
+    }
+
+    try {
+      await authController.signInWithApple();
+    } catch (e) {
+      // Error is already handled by controller
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authController = Get.find<AuthController>();
@@ -134,6 +152,10 @@ class _RegisterPageState extends State<RegisterPage> {
                       const SizedBox(height: AppConstants.spacing16),
                       _buildDivider(tokens),
                       const SizedBox(height: AppConstants.spacing16),
+                      if (Platform.isIOS) ...[
+                        Obx(() => _buildAppleSignInButton(authController)),
+                        const SizedBox(height: AppConstants.spacing12),
+                      ],
                       _buildGoogleSignInButton(tokens),
                     ],
                   ),
@@ -195,146 +217,156 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Widget _buildPasswordField(AuthUiTokens tokens) {
-    return Obx(() => TextFormField(
-          controller: _passwordController,
-          obscureText: !_isPasswordVisible.value,
-          textInputAction: TextInputAction.next,
-          style: TextStyle(color: tokens.textColor),
-          cursorColor: tokens.brandColor,
-          decoration: AuthFormStyles.inputDecoration(
-            context: context,
-            label: 'Password',
-            hint: 'Create a password',
-            icon: Icons.lock,
-            suffixIcon: IconButton(
-              icon: Icon(
-                _isPasswordVisible.value
-                    ? Icons.visibility
-                    : Icons.visibility_off,
-                color: tokens.fieldIconColor,
-              ),
-              onPressed: () {
-                _isPasswordVisible.value = !_isPasswordVisible.value;
-              },
+    return Obx(
+      () => TextFormField(
+        controller: _passwordController,
+        obscureText: !_isPasswordVisible.value,
+        textInputAction: TextInputAction.next,
+        style: TextStyle(color: tokens.textColor),
+        cursorColor: tokens.brandColor,
+        decoration: AuthFormStyles.inputDecoration(
+          context: context,
+          label: 'Password',
+          hint: 'Create a password',
+          icon: Icons.lock,
+          suffixIcon: IconButton(
+            icon: Icon(
+              _isPasswordVisible.value
+                  ? Icons.visibility
+                  : Icons.visibility_off,
+              color: tokens.fieldIconColor,
             ),
+            onPressed: () {
+              _isPasswordVisible.value = !_isPasswordVisible.value;
+            },
           ),
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please enter a password';
-            }
-            if (value.length < 6) {
-              return 'Password must be at least 6 characters';
-            }
-            return null;
-          },
-        ));
+        ),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Please enter a password';
+          }
+          if (value.length < 6) {
+            return 'Password must be at least 6 characters';
+          }
+          return null;
+        },
+      ),
+    );
   }
 
   Widget _buildConfirmPasswordField(AuthUiTokens tokens) {
-    return Obx(() => TextFormField(
-          controller: _confirmPasswordController,
-          obscureText: !_isConfirmPasswordVisible.value,
-          textInputAction: TextInputAction.done,
-          onFieldSubmitted: (_) => _handleRegister(),
-          style: TextStyle(color: tokens.textColor),
-          cursorColor: tokens.brandColor,
-          decoration: AuthFormStyles.inputDecoration(
-            context: context,
-            label: 'Confirm Password',
-            hint: 'Confirm your password',
-            icon: Icons.lock,
-            suffixIcon: IconButton(
-              icon: Icon(
-                _isConfirmPasswordVisible.value
-                    ? Icons.visibility
-                    : Icons.visibility_off,
-                color: tokens.fieldIconColor,
-              ),
-              onPressed: () {
-                _isConfirmPasswordVisible.value =
-                    !_isConfirmPasswordVisible.value;
-              },
+    return Obx(
+      () => TextFormField(
+        controller: _confirmPasswordController,
+        obscureText: !_isConfirmPasswordVisible.value,
+        textInputAction: TextInputAction.done,
+        onFieldSubmitted: (_) => _handleRegister(),
+        style: TextStyle(color: tokens.textColor),
+        cursorColor: tokens.brandColor,
+        decoration: AuthFormStyles.inputDecoration(
+          context: context,
+          label: 'Confirm Password',
+          hint: 'Confirm your password',
+          icon: Icons.lock,
+          suffixIcon: IconButton(
+            icon: Icon(
+              _isConfirmPasswordVisible.value
+                  ? Icons.visibility
+                  : Icons.visibility_off,
+              color: tokens.fieldIconColor,
             ),
+            onPressed: () {
+              _isConfirmPasswordVisible.value =
+                  !_isConfirmPasswordVisible.value;
+            },
           ),
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please confirm your password';
-            }
-            if (value != _passwordController.text) {
-              return 'Passwords do not match';
-            }
-            return null;
-          },
-        ));
+        ),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Please confirm your password';
+          }
+          if (value != _passwordController.text) {
+            return 'Passwords do not match';
+          }
+          return null;
+        },
+      ),
+    );
   }
 
   Widget _buildReferralCodeField(AuthUiTokens tokens) {
-    return Obx(() => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextFormField(
-              controller: _referralCodeController,
-              textInputAction: TextInputAction.done,
-              style: TextStyle(color: tokens.textColor),
-              cursorColor: tokens.brandColor,
-              decoration: AuthFormStyles.inputDecoration(
-                context: context,
-                label: 'Referral Code (Optional)',
-                hint: 'Enter referral code',
-                icon: Icons.card_giftcard,
-                suffixIcon: _referralValid.value == null
-                    ? null
-                    : Icon(
-                        _referralValid.value! ? Icons.check_circle : Icons.error,
-                        color: _referralValid.value! ? Colors.green : Colors.red,
-                      ),
-              ),
-              onChanged: (value) {
-                // Reset validation state when typing
-                _referralValid.value = null;
-                _referralReferrerName.value = null;
+    return Obx(
+      () => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            controller: _referralCodeController,
+            textInputAction: TextInputAction.done,
+            style: TextStyle(color: tokens.textColor),
+            cursorColor: tokens.brandColor,
+            decoration: AuthFormStyles.inputDecoration(
+              context: context,
+              label: 'Referral Code (Optional)',
+              hint: 'Enter referral code',
+              icon: Icons.card_giftcard,
+              suffixIcon: _referralValid.value == null
+                  ? null
+                  : Icon(
+                      _referralValid.value! ? Icons.check_circle : Icons.error,
+                      color: _referralValid.value! ? Colors.green : Colors.red,
+                    ),
+            ),
+            onChanged: (value) {
+              // Reset validation state when typing
+              _referralValid.value = null;
+              _referralReferrerName.value = null;
 
-                // Debounced validation
-                _referralDebounce?.cancel();
-                final trimmedValue = value.trim();
-                if (trimmedValue.isNotEmpty) {
-                  _referralDebounce = Timer(const Duration(milliseconds: 500), () async {
+              // Debounced validation
+              _referralDebounce?.cancel();
+              final trimmedValue = value.trim();
+              if (trimmedValue.isNotEmpty) {
+                _referralDebounce = Timer(
+                  const Duration(milliseconds: 500),
+                  () async {
                     try {
                       final repo = SubscriptionRepository();
-                      final result = await repo.validateReferralCode(trimmedValue);
+                      final result = await repo.validateReferralCode(
+                        trimmedValue,
+                      );
                       _referralValid.value = result.valid;
                       _referralReferrerName.value = result.referrerName;
                     } catch (e) {
                       _referralValid.value = false;
                     }
-                  });
-                }
-              },
-            ),
-            if (_referralValid.value == true && _referralReferrerName.value != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 4, left: 12),
-                child: Text(
-                  'Referred by ${_referralReferrerName.value}. You both get 1 month free!',
-                  style: TextStyle(
-                    color: Colors.green.shade700,
-                    fontSize: 12,
-                  ),
-                ),
+                  },
+                );
+              }
+            },
+          ),
+          if (_referralValid.value == true &&
+              _referralReferrerName.value != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, left: 12),
+              child: Text(
+                'Referred by ${_referralReferrerName.value}. You both get 1 month free!',
+                style: TextStyle(color: Colors.green.shade700, fontSize: 12),
               ),
-          ],
-        ));
+            ),
+        ],
+      ),
+    );
   }
 
-  Widget _buildRegisterButton(AuthController authController, AuthUiTokens tokens) {
+  Widget _buildRegisterButton(
+    AuthController authController,
+    AuthUiTokens tokens,
+  ) {
     return ElevatedButton(
       onPressed: authController.isLoading.value ? null : _handleRegister,
       style: ElevatedButton.styleFrom(
         backgroundColor: tokens.brandColor,
         foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(
-          vertical: AppConstants.spacing16,
-        ),
+        padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radius16),
         ),
@@ -357,11 +389,11 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget _buildDivider(AuthUiTokens tokens) {
     return Row(
       children: [
-        Expanded(
-          child: Divider(color: tokens.textColor.withOpacity(0.2)),
-        ),
+        Expanded(child: Divider(color: tokens.textColor.withOpacity(0.2))),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppConstants.spacing16,
+          ),
           child: Text(
             'OR',
             style: TextStyle(
@@ -372,10 +404,16 @@ class _RegisterPageState extends State<RegisterPage> {
             ),
           ),
         ),
-        Expanded(
-          child: Divider(color: tokens.textColor.withOpacity(0.2)),
-        ),
+        Expanded(child: Divider(color: tokens.textColor.withOpacity(0.2))),
       ],
+    );
+  }
+
+  Widget _buildAppleSignInButton(AuthController authController) {
+    final isLoading = authController.isAppleSigningIn.value;
+    return AppleSignInButton(
+      isLoading: isLoading,
+      onPressed: isLoading ? () {} : _handleAppleSignIn,
     );
   }
 
@@ -387,9 +425,7 @@ class _RegisterPageState extends State<RegisterPage> {
       style: OutlinedButton.styleFrom(
         foregroundColor: tokens.textColor,
         side: BorderSide(color: tokens.textColor.withOpacity(0.4)),
-        padding: const EdgeInsets.symmetric(
-          vertical: AppConstants.spacing16,
-        ),
+        padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radius16),
         ),
@@ -411,16 +447,11 @@ class _RegisterPageState extends State<RegisterPage> {
           children: [
             Text(
               'Already have an account? ',
-              style: TextStyle(
-                color: tokens.secondaryTextColor,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: tokens.secondaryTextColor, fontSize: 14),
             ),
             TextButton(
               onPressed: () => Get.offNamed(Routes.login),
-              style: TextButton.styleFrom(
-                foregroundColor: tokens.textColor,
-              ),
+              style: TextButton.styleFrom(foregroundColor: tokens.textColor),
               child: const Text('Log In'),
             ),
           ],

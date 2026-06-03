@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:photo_view/photo_view.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../core/widgets/report_content_sheet.dart';
 import '../controllers/tryon_controller.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../../wardrobe/repositories/item_repository.dart';
@@ -24,9 +25,10 @@ void showFullScreenFileImage(BuildContext context, File imageFile) {
       return FadeTransition(
         opacity: animation,
         child: ScaleTransition(
-          scale: Tween<double>(begin: 0.95, end: 1.0).animate(
-            CurvedAnimation(parent: animation, curve: Curves.easeOut),
-          ),
+          scale: Tween<double>(
+            begin: 0.95,
+            end: 1.0,
+          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
           child: child,
         ),
       );
@@ -49,9 +51,10 @@ void showFullScreenNetworkImage(BuildContext context, String imageUrl) {
       return FadeTransition(
         opacity: animation,
         child: ScaleTransition(
-          scale: Tween<double>(begin: 0.95, end: 1.0).animate(
-            CurvedAnimation(parent: animation, curve: Curves.easeOut),
-          ),
+          scale: Tween<double>(
+            begin: 0.95,
+            end: 1.0,
+          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
           child: child,
         ),
       );
@@ -74,9 +77,10 @@ void showFullScreenImageFromBase64(BuildContext context, String base64Image) {
       return FadeTransition(
         opacity: animation,
         child: ScaleTransition(
-          scale: Tween<double>(begin: 0.95, end: 1.0).animate(
-            CurvedAnimation(parent: animation, curve: Curves.easeOut),
-          ),
+          scale: Tween<double>(
+            begin: 0.95,
+            end: 1.0,
+          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
           child: child,
         ),
       );
@@ -104,18 +108,18 @@ class TryOnContent extends StatelessWidget {
               Text(
                 'Virtual Try-On',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: tokens.textPrimary,
-                    ),
+                  fontWeight: FontWeight.w700,
+                  color: tokens.textPrimary,
+                ),
               ),
 
               const SizedBox(height: AppConstants.spacing8),
 
               Text(
                 'See how clothes look on you',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: tokens.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
               ),
 
               const SizedBox(height: AppConstants.spacing24),
@@ -131,8 +135,8 @@ class TryOnContent extends StatelessWidget {
                       child: Text(
                         controller.error.value,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: tokens.textMuted,
-                            ),
+                          color: tokens.textMuted,
+                        ),
                       ),
                     ),
                     const SizedBox(height: AppConstants.spacing16),
@@ -161,27 +165,30 @@ class TryOnContent extends StatelessWidget {
               const SizedBox(height: AppConstants.spacing32),
 
               // Generate button
-              Obx(() => ElevatedButton.icon(
-                    onPressed: controller.isGenerating.value ||
-                            controller.clothingImage.value == null
-                        ? null
-                        : () => controller.generateTryOn(),
-                    icon: controller.isGenerating.value
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.auto_awesome),
-                    label: Text(
-                      controller.isGenerating.value
-                          ? 'Generating...'
-                          : 'Generate Try-On',
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                    ),
-                  )),
+              Obx(
+                () => ElevatedButton.icon(
+                  onPressed:
+                      controller.isGenerating.value ||
+                          controller.clothingImage.value == null
+                      ? null
+                      : () => controller.generateTryOn(),
+                  icon: controller.isGenerating.value
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.auto_awesome),
+                  label: Text(
+                    controller.isGenerating.value
+                        ? 'Generating...'
+                        : 'Generate Try-On',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                  ),
+                ),
+              ),
 
               Obx(() {
                 if (controller.generatedImageUrl.value.isNotEmpty) {
@@ -221,9 +228,9 @@ class TryOnContent extends StatelessWidget {
           Text(
             'Your Avatar',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+            ),
           ),
           const SizedBox(height: AppConstants.spacing12),
           Row(
@@ -243,16 +250,9 @@ class TryOnContent extends StatelessWidget {
                       ? ClipOval(
                           child: isRemote
                               ? Image.network(avatarPath, fit: BoxFit.cover)
-                              : Image.file(
-                                  File(avatarPath),
-                                  fit: BoxFit.cover,
-                                ),
+                              : Image.file(File(avatarPath), fit: BoxFit.cover),
                         )
-                      : Icon(
-                          Icons.person,
-                          size: 40,
-                          color: tokens.brandColor,
-                        ),
+                      : Icon(Icons.person, size: 40, color: tokens.brandColor),
                 );
               }),
               const SizedBox(width: AppConstants.spacing16),
@@ -262,29 +262,35 @@ class TryOnContent extends StatelessWidget {
                   children: [
                     Text(
                       'Upload a full-body photo',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: tokens.textMuted,
-                          ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                     ),
                     const SizedBox(height: AppConstants.spacing8),
-                    Obx(() => ElevatedButton.icon(
-                          onPressed: controller.isUploadingAvatar.value
-                              ? null
-                              : () => controller.uploadUserAvatar(),
-                          icon: controller.isUploadingAvatar.value
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.camera_alt),
-                          label: Text(
-                            controller.isUploadingAvatar.value ? 'Uploading...' : 'Upload Avatar',
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(36),
-                          ),
-                        )),
+                    Obx(
+                      () => ElevatedButton.icon(
+                        onPressed: controller.isUploadingAvatar.value
+                            ? null
+                            : () => controller.uploadUserAvatar(),
+                        icon: controller.isUploadingAvatar.value
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.camera_alt),
+                        label: Text(
+                          controller.isUploadingAvatar.value
+                              ? 'Uploading...'
+                              : 'Upload Avatar',
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(36),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -308,9 +314,9 @@ class TryOnContent extends StatelessWidget {
           Text(
             'Clothing Item',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+            ),
           ),
           const SizedBox(height: AppConstants.spacing12),
           Obx(() {
@@ -367,7 +373,9 @@ class TryOnContent extends StatelessWidget {
                 Stack(
                   children: [
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(AppConstants.radius12),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radius12,
+                      ),
                       child: GestureDetector(
                         onTap: () => showFullScreenFileImage(context, image),
                         child: Image.file(
@@ -391,7 +399,9 @@ class TryOnContent extends StatelessWidget {
                             iconSize: 32,
                             color: tokens.textPrimary,
                             style: IconButton.styleFrom(
-                              backgroundColor: tokens.cardColor.withOpacity(0.7),
+                              backgroundColor: tokens.cardColor.withOpacity(
+                                0.7,
+                              ),
                             ),
                             onPressed: controller.previousImage,
                           ),
@@ -408,7 +418,9 @@ class TryOnContent extends StatelessWidget {
                             iconSize: 32,
                             color: tokens.textPrimary,
                             style: IconButton.styleFrom(
-                              backgroundColor: tokens.cardColor.withOpacity(0.7),
+                              backgroundColor: tokens.cardColor.withOpacity(
+                                0.7,
+                              ),
                             ),
                             onPressed: controller.nextImage,
                           ),
@@ -416,29 +428,31 @@ class TryOnContent extends StatelessWidget {
                       ),
                       // Image counter badge
                       Positioned(
-                            top: AppConstants.spacing8,
-                            left: AppConstants.spacing8,
-                            right: AppConstants.spacing8,
-                            child: Center(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppConstants.spacing12,
-                                  vertical: AppConstants.spacing4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: tokens.cardColor.withOpacity(0.8),
-                                  borderRadius: BorderRadius.circular(AppConstants.radius12),
-                                ),
-                                child: Text(
-                                  controller.currentImageDisplay,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    color: tokens.textPrimary,
-                                  ),
-                                ),
+                        top: AppConstants.spacing8,
+                        left: AppConstants.spacing8,
+                        right: AppConstants.spacing8,
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppConstants.spacing12,
+                              vertical: AppConstants.spacing4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: tokens.cardColor.withOpacity(0.8),
+                              borderRadius: BorderRadius.circular(
+                                AppConstants.radius12,
+                              ),
+                            ),
+                            child: Text(
+                              controller.currentImageDisplay,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                                color: tokens.textPrimary,
                               ),
                             ),
                           ),
+                        ),
+                      ),
                     ],
                   ],
                 ),
@@ -448,23 +462,23 @@ class TryOnContent extends StatelessWidget {
                   Text(
                     'From your wardrobe: ${wardrobeItem.name}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: tokens.textMuted,
-                          fontStyle: FontStyle.italic,
-                        ),
+                      color: tokens.textMuted,
+                      fontStyle: FontStyle.italic,
+                    ),
                   )
                 else if (controller.selectedWardrobeItems.isNotEmpty)
                   Text(
                     '${controller.selectedWardrobeItems.length} wardrobe items selected',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: tokens.textMuted,
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   )
                 else if (images.length > 1)
                   Text(
                     '${images.length} items selected • Swipe or tap arrows to browse',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: tokens.textMuted,
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   ),
                 const SizedBox(height: AppConstants.spacing12),
                 // Action buttons
@@ -482,8 +496,14 @@ class TryOnContent extends StatelessWidget {
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: controller.removeCurrentImage,
-                          icon: const Icon(Icons.delete_outline, color: Colors.red),
-                          label: const Text('Remove', style: TextStyle(color: Colors.red)),
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.red,
+                          ),
+                          label: const Text(
+                            'Remove',
+                            style: TextStyle(color: Colors.red),
+                          ),
                         ),
                       ),
                     ],
@@ -529,15 +549,15 @@ class TryOnContent extends StatelessWidget {
                     Text(
                       label,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
-                          ),
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                     if (subtitle != null)
                       Text(
                         subtitle,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: tokens.textMuted,
-                            ),
+                          color: tokens.textMuted,
+                        ),
                       ),
                   ],
                 ),
@@ -564,9 +584,9 @@ class TryOnContent extends StatelessWidget {
             const SizedBox(height: AppConstants.spacing8),
             Text(
               label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
               textAlign: TextAlign.center,
             ),
             if (subtitle != null)
@@ -574,9 +594,9 @@ class TryOnContent extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 2),
                 child: Text(
                   subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -612,75 +632,96 @@ class TryOnContent extends StatelessWidget {
           Text(
             'Options',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+            ),
           ),
           const SizedBox(height: AppConstants.spacing16),
 
           // Style dropdown
-          Obx(() => DropdownButtonFormField<String>(
-                value: controller.selectedStyle.value,
-                decoration: InputDecoration(
-                  labelText: 'Style',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radius12),
-                  ),
+          Obx(
+            () => DropdownButtonFormField<String>(
+              value: controller.selectedStyle.value,
+              decoration: InputDecoration(
+                labelText: 'Style',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppConstants.radius12),
                 ),
-                items: TryOnController.styles.map((style) {
-                  return DropdownMenuItem(
-                    value: style,
-                    child: Text(style.split(' ').map((s) => s[0].toUpperCase() + s.substring(1)).join(' ')),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) controller.selectedStyle.value = value;
-                },
-              )),
+              ),
+              items: TryOnController.styles.map((style) {
+                return DropdownMenuItem(
+                  value: style,
+                  child: Text(
+                    style
+                        .split(' ')
+                        .map((s) => s[0].toUpperCase() + s.substring(1))
+                        .join(' '),
+                  ),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) controller.selectedStyle.value = value;
+              },
+            ),
+          ),
 
           const SizedBox(height: AppConstants.spacing12),
 
           // Background dropdown
-          Obx(() => DropdownButtonFormField<String>(
-                value: controller.selectedBackground.value,
-                decoration: InputDecoration(
-                  labelText: 'Background',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radius12),
-                  ),
+          Obx(
+            () => DropdownButtonFormField<String>(
+              value: controller.selectedBackground.value,
+              decoration: InputDecoration(
+                labelText: 'Background',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppConstants.radius12),
                 ),
-                items: TryOnController.backgrounds.map((bg) {
-                  return DropdownMenuItem(
-                    value: bg,
-                    child: Text(bg.split(' ').map((s) => s[0].toUpperCase() + s.substring(1)).join(' ')),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) controller.selectedBackground.value = value;
-                },
-              )),
+              ),
+              items: TryOnController.backgrounds.map((bg) {
+                return DropdownMenuItem(
+                  value: bg,
+                  child: Text(
+                    bg
+                        .split(' ')
+                        .map((s) => s[0].toUpperCase() + s.substring(1))
+                        .join(' '),
+                  ),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) controller.selectedBackground.value = value;
+              },
+            ),
+          ),
 
           const SizedBox(height: AppConstants.spacing12),
 
           // Pose dropdown
-          Obx(() => DropdownButtonFormField<String>(
-                value: controller.selectedPose.value,
-                decoration: InputDecoration(
-                  labelText: 'Pose',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radius12),
-                  ),
+          Obx(
+            () => DropdownButtonFormField<String>(
+              value: controller.selectedPose.value,
+              decoration: InputDecoration(
+                labelText: 'Pose',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppConstants.radius12),
                 ),
-                items: TryOnController.poses.map((pose) {
-                  return DropdownMenuItem(
-                    value: pose,
-                    child: Text(pose.split(' ').map((s) => s[0].toUpperCase() + s.substring(1)).join(' ')),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) controller.selectedPose.value = value;
-                },
-              )),
+              ),
+              items: TryOnController.poses.map((pose) {
+                return DropdownMenuItem(
+                  value: pose,
+                  child: Text(
+                    pose
+                        .split(' ')
+                        .map((s) => s[0].toUpperCase() + s.substring(1))
+                        .join(' '),
+                  ),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) controller.selectedPose.value = value;
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -698,17 +739,13 @@ class TryOnContent extends StatelessWidget {
           padding: const EdgeInsets.all(AppConstants.spacing32),
           child: Column(
             children: [
-              Icon(
-                Icons.image_outlined,
-                size: 64,
-                color: tokens.textMuted,
-              ),
+              Icon(Icons.image_outlined, size: 64, color: tokens.textMuted),
               const SizedBox(height: AppConstants.spacing16),
               Text(
                 'Generated image will appear here',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: tokens.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: tokens.textMuted),
               ),
             ],
           ),
@@ -719,39 +756,77 @@ class TryOnContent extends StatelessWidget {
           controller.generatedImageBase64.value.isNotEmpty) {
         return AppGlassCard(
           padding: const EdgeInsets.all(AppConstants.spacing8),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppConstants.radius12),
-            child: GestureDetector(
-              onTap: () => showFullScreenImageFromBase64(
-                context,
-                controller.generatedImageBase64.value,
+          child: Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppConstants.radius12),
+                child: GestureDetector(
+                  onTap: () => showFullScreenImageFromBase64(
+                    context,
+                    controller.generatedImageBase64.value,
+                  ),
+                  child: Image.memory(
+                    base64Decode(controller.generatedImageBase64.value),
+                    fit: BoxFit.cover,
+                  ),
+                ),
               ),
-              child: Image.memory(
-                base64Decode(controller.generatedImageBase64.value),
-                fit: BoxFit.cover,
-              ),
-            ),
+              _buildReportBadge(context),
+            ],
           ),
         );
       }
 
       return AppGlassCard(
         padding: const EdgeInsets.all(AppConstants.spacing8),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppConstants.radius12),
-          child: GestureDetector(
-            onTap: () => showFullScreenNetworkImage(
-              context,
-              controller.generatedImageUrl.value,
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppConstants.radius12),
+              child: GestureDetector(
+                onTap: () => showFullScreenNetworkImage(
+                  context,
+                  controller.generatedImageUrl.value,
+                ),
+                child: Image.network(
+                  controller.generatedImageUrl.value,
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
-            child: Image.network(
-              controller.generatedImageUrl.value,
-              fit: BoxFit.cover,
-            ),
-          ),
+            _buildReportBadge(context),
+          ],
         ),
       );
     });
+  }
+
+  /// Small overlay button so users can report a generated try-on result
+  /// (Apple Guideline 1.2).
+  Widget _buildReportBadge(BuildContext context) {
+    final controller = Get.find<TryOnController>();
+    return Positioned(
+      top: AppConstants.spacing8,
+      right: AppConstants.spacing8,
+      child: Material(
+        color: Colors.black54,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () {
+            final url = controller.generatedImageUrl.value;
+            showReportContentSheet(
+              contentType: 'AI try-on image',
+              contentId: url.isNotEmpty ? url : 'tryon-result',
+            );
+          },
+          child: const Padding(
+            padding: EdgeInsets.all(6),
+            child: Icon(Icons.flag_outlined, color: Colors.white, size: 16),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -834,16 +909,18 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
                       Text(
                         'Select from Wardrobe',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       // Show count of selected items
                       Obx(() {
-                        final count = widget.controller.selectedWardrobeItems.length;
+                        final count =
+                            widget.controller.selectedWardrobeItems.length;
                         if (count > 0) {
                           return Text(
                             '$count item${count > 1 ? 's' : ''} selected',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
                                   color: tokens.brandColor,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -874,7 +951,9 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
 
             return Container(
               height: 90,
-              margin: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
+              margin: const EdgeInsets.symmetric(
+                horizontal: AppConstants.spacing16,
+              ),
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 itemCount: selectedItems.length,
@@ -890,10 +969,15 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
                     child: Stack(
                       children: [
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(AppConstants.radius8),
+                          borderRadius: BorderRadius.circular(
+                            AppConstants.radius8,
+                          ),
                           child: imageUrl != null
                               ? GestureDetector(
-                                  onTap: () => showFullScreenNetworkImage(context, imageUrl),
+                                  onTap: () => showFullScreenNetworkImage(
+                                    context,
+                                    imageUrl,
+                                  ),
                                   child: Image.network(
                                     imageUrl,
                                     width: 70,
@@ -902,16 +986,22 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
                                     errorBuilder: (context, error, stackTrace) {
                                       return Container(
                                         color: tokens.cardColor,
-                                        child: Icon(Icons.image_not_supported,
-                                          size: 24, color: tokens.textMuted),
+                                        child: Icon(
+                                          Icons.image_not_supported,
+                                          size: 24,
+                                          color: tokens.textMuted,
+                                        ),
                                       );
                                     },
                                   ),
                                 )
                               : Container(
                                   color: tokens.cardColor,
-                                  child: Icon(Icons.image_not_supported,
-                                    size: 24, color: tokens.textMuted),
+                                  child: Icon(
+                                    Icons.image_not_supported,
+                                    size: 24,
+                                    color: tokens.textMuted,
+                                  ),
                                 ),
                         ),
                         // Remove button
@@ -919,7 +1009,8 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
                           top: 0,
                           right: 0,
                           child: GestureDetector(
-                            onTap: () => widget.controller.removeWardrobeItem(item.id),
+                            onTap: () =>
+                                widget.controller.removeWardrobeItem(item.id),
                             child: Container(
                               width: 22,
                               height: 22,
@@ -927,7 +1018,11 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
                                 color: Colors.red,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.close, size: 14, color: Colors.white),
+                              child: const Icon(
+                                Icons.close,
+                                size: 14,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -941,7 +1036,9 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
 
           // Search bar
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.spacing16,
+            ),
             child: TextField(
               decoration: InputDecoration(
                 hintText: 'Search items...',
@@ -968,13 +1065,17 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.error_outline, size: 48, color: tokens.textMuted),
+                      Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: tokens.textMuted,
+                      ),
                       const SizedBox(height: AppConstants.spacing16),
                       Text(
                         'Failed to load items',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: tokens.textMuted,
-                            ),
+                          color: tokens.textMuted,
+                        ),
                       ),
                       const SizedBox(height: AppConstants.spacing16),
                       ElevatedButton(
@@ -991,15 +1092,19 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.inventory_2_outlined, size: 48, color: tokens.textMuted),
+                      Icon(
+                        Icons.inventory_2_outlined,
+                        size: 48,
+                        color: tokens.textMuted,
+                      ),
                       const SizedBox(height: AppConstants.spacing16),
                       Text(
                         searchQuery.value.isEmpty
                             ? 'No items in your wardrobe'
                             : 'No items found',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: tokens.textMuted,
-                            ),
+                          color: tokens.textMuted,
+                        ),
                       ),
                     ],
                   ),
@@ -1017,11 +1122,14 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
                 itemCount: _filteredItems.length,
                 itemBuilder: (context, index) {
                   final item = _filteredItems[index];
-                  final isSelected = widget.controller.isWardrobeItemSelected(item.id);
+                  final isSelected = widget.controller.isWardrobeItemSelected(
+                    item.id,
+                  );
                   return _WardrobeItemTile(
                     item: item,
                     isSelected: isSelected,
-                    onTap: () => widget.controller.pickClothingFromWardrobe(item),
+                    onTap: () =>
+                        widget.controller.pickClothingFromWardrobe(item),
                   );
                 },
               );
@@ -1110,16 +1218,16 @@ class _WardrobeItemTile extends StatelessWidget {
                       Text(
                         item.name,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
+                          fontWeight: FontWeight.w500,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         item.category.name,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: tokens.textMuted,
-                            ),
+                          color: tokens.textMuted,
+                        ),
                       ),
                     ],
                   ),
@@ -1166,7 +1274,9 @@ class _FullScreenFileImageViewer extends StatelessWidget {
                   minScale: PhotoViewComputedScale.contained,
                   maxScale: PhotoViewComputedScale.covered * 3,
                   initialScale: PhotoViewComputedScale.contained,
-                  backgroundDecoration: const BoxDecoration(color: Colors.transparent),
+                  backgroundDecoration: const BoxDecoration(
+                    color: Colors.transparent,
+                  ),
                 ),
               ),
             ),
@@ -1214,12 +1324,15 @@ class _FullScreenNetworkImageViewer extends StatelessWidget {
                   minScale: PhotoViewComputedScale.contained,
                   maxScale: PhotoViewComputedScale.covered * 3,
                   initialScale: PhotoViewComputedScale.contained,
-                  backgroundDecoration: const BoxDecoration(color: Colors.transparent),
+                  backgroundDecoration: const BoxDecoration(
+                    color: Colors.transparent,
+                  ),
                   loadingBuilder: (context, event) => Center(
                     child: CircularProgressIndicator(
                       value: event == null
                           ? null
-                          : event.cumulativeBytesLoaded / (event.expectedTotalBytes ?? 1),
+                          : event.cumulativeBytesLoaded /
+                                (event.expectedTotalBytes ?? 1),
                       color: Colors.white,
                     ),
                   ),
@@ -1277,7 +1390,9 @@ class _FullScreenBase64ImageViewer extends StatelessWidget {
                   minScale: PhotoViewComputedScale.contained,
                   maxScale: PhotoViewComputedScale.covered * 3,
                   initialScale: PhotoViewComputedScale.contained,
-                  backgroundDecoration: const BoxDecoration(color: Colors.transparent),
+                  backgroundDecoration: const BoxDecoration(
+                    color: Colors.transparent,
+                  ),
                 ),
               ),
             ),

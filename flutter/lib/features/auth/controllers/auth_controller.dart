@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../app/routes/app_routes.dart';
@@ -30,6 +31,7 @@ class AuthController extends GetxController {
   // Action-specific loading states
   final RxBool isLoggingOut = false.obs;
   final RxBool isGoogleSigningIn = false.obs;
+  final RxBool isAppleSigningIn = false.obs;
   final RxBool isResendingVerification = false.obs;
 
   // Email verification state for login page
@@ -330,6 +332,71 @@ class AuthController extends GetxController {
       rethrow;
     } finally {
       isGoogleSigningIn.value = false;
+    }
+  }
+
+  /// Sign in with Apple (native flow).
+  ///
+  /// Unlike Google's OAuth redirect, the native Apple flow returns an
+  /// [AuthResponse] in-process, so we sync state directly like [login].
+  Future<void> signInWithApple() async {
+    try {
+      isAppleSigningIn.value = true;
+      error.value = '';
+
+      final response = await _supabase.signInWithApple();
+
+      if (response.user != null) {
+        _supabase.syncFromAuthResponse(response);
+        await _loadUserData(supabaseUser: response.user);
+        // Sync backend profile and redeem any pending referral code.
+        await handleOAuthCallback();
+        AnalyticsService.instance.track(
+          'auth_login',
+          properties: {'method': 'apple'},
+        );
+
+        // Navigate to home
+        Get.offAllNamed(Routes.home);
+      } else {
+        throw Exception('Apple sign-in failed. Please try again.');
+      }
+    } on SignInWithAppleAuthorizationException catch (e) {
+      // User cancelled the native sheet - fail silently, no snackbar.
+      if (e.code == AuthorizationErrorCode.canceled) {
+        return;
+      }
+      error.value = e.message;
+      Get.snackbar(
+        'Apple Sign-In Failed',
+        e.message,
+        snackPosition: SnackPosition.TOP,
+        backgroundColor: Colors.red.shade50,
+        colorText: Colors.red.shade900,
+      );
+      rethrow;
+    } on AuthException catch (e) {
+      error.value = e.message;
+      Get.snackbar(
+        'Apple Sign-In Failed',
+        e.message,
+        snackPosition: SnackPosition.TOP,
+        backgroundColor: Colors.red.shade50,
+        colorText: Colors.red.shade900,
+      );
+      rethrow;
+    } catch (e) {
+      error.value = e.toString().replaceAll('Exception: ', '');
+      Get.snackbar(
+        'Apple Sign-In Failed',
+        error.value,
+        snackPosition: SnackPosition.TOP,
+        backgroundColor: Colors.red.shade50,
+        colorText: Colors.red.shade900,
+      );
+      rethrow;
+    } finally {
+      isAppleSigningIn.value = false;
     }
   }
 

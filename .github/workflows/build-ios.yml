@@ -1,0 +1,329 @@
+name: Build iOS IPA
+
+# ==============================================================================
+# WS5 - iOS build/CI pipeline for FitCheck AI (Flutter app under ./flutter)
+# ------------------------------------------------------------------------------
+# This workflow mirrors the secrets/structure of .github/workflows/build-apk.yml
+# (the Android pipeline) and adds the iOS-specific code-signing + TestFlight
+# upload plumbing.
+#
+# WHY manual + tags only (not "push: main"):
+#   iOS builds run on macOS runners which are slow and billed at ~10x the
+#   Linux minute rate. We therefore gate them to explicit, intentional runs:
+#   manual dispatch and version tags (v*). The Android APK workflow still runs
+#   on every push/PR for fast feedback.
+#
+# ------------------------------------------------------------------------------
+# REQUIRED GITHUB SECRETS
+# ------------------------------------------------------------------------------
+# App configuration (SHARED with the Android APK workflow - already exist):
+#   SUPABASE_URL                     - Supabase project URL
+#   SUPABASE_ANON_KEY                - Supabase anon/public key
+#   API_BASE_URL                     - Backend base URL (Railway prod URL)
+#   POSTHOG_API_KEY                  - PostHog project API key (optional)
+#   POSTHOG_HOST                     - PostHog host (e.g. https://app.posthog.com)
+#
+# iOS code signing (NEW - must be created in the Apple Developer account):
+#   APPLE_CERT_P12_BASE64            - Base64 of the Apple Distribution .p12
+#                                      (cert + private key) exported from Keychain.
+#   APPLE_CERT_PASSWORD              - Password protecting the .p12 export.
+#   APPLE_PROVISIONING_PROFILE_BASE64- Base64 of the App Store provisioning
+#                                      profile (.mobileprovision) for the bundle
+#                                      id com.fitcheck.fitcheckAi.
+#   KEYCHAIN_PASSWORD                - (OPTIONAL) Password for the temp CI
+#                                      keychain. Defaults to a random value if
+#                                      unset; only needs to be set if you want a
+#                                      stable value. Safe to omit.
+#
+# App Store Connect API (NEW - for TestFlight upload):
+#   APP_STORE_CONNECT_KEY_ID         - The Key ID of the App Store Connect API
+#                                      key (e.g. ABCD1234EF).
+#   APP_STORE_CONNECT_ISSUER_ID      - The Issuer ID (UUID) shown on the App
+#                                      Store Connect "Keys" page.
+#   APP_STORE_CONNECT_API_KEY_BASE64 - Base64 of the AuthKey_XXXXXXXXXX.p8 file
+#                                      downloaded when the API key was created.
+#
+# ------------------------------------------------------------------------------
+# MANUAL PREREQUISITES (must be done ONCE before this workflow can fully succeed)
+# ------------------------------------------------------------------------------
+#   1. Enrol in the Apple Developer Program (paid) and create the app record in
+#      App Store Connect with bundle id `com.fitcheck.fitcheckAi`.
+#   2. Create an "Apple Distribution" signing certificate, export it from
+#      Keychain Access as a .p12 (with private key), and base64 it for
+#      APPLE_CERT_P12_BASE64 / APPLE_CERT_PASSWORD.
+#   3. Create an "App Store" provisioning profile for the bundle id, download
+#      the .mobileprovision, and base64 it for APPLE_PROVISIONING_PROFILE_BASE64.
+#   4. In App Store Connect > Users and Access > Integrations > App Store
+#      Connect API, generate an API key with the "App Manager" role. Save the
+#      Key ID, Issuer ID, and the one-time .p8 download for the
+#      APP_STORE_CONNECT_* secrets above.
+#   5. Set DEVELOPMENT_TEAM / signing identity below to match your team's
+#      values (see the `env` block) so the generated ExportOptions.plist is
+#      correct. The Runner target in project.pbxproj currently uses
+#      CODE_SIGN_STYLE = Automatic; this workflow exports with manual signing.
+#
+# If the signing/ASC secrets are not yet configured, the build steps that need
+# them are guarded so the workflow still produces and uploads an unsigned-path
+# attempt's artifacts where possible, and the upload step is skipped instead of
+# failing the whole run.
+# ==============================================================================
+
+on:
+  # Manual run from the Actions tab.
+  workflow_dispatch:
+    inputs:
+      upload_to_testflight:
+        description: 'Upload the built IPA to TestFlight (requires ASC secrets)'
+        required: false
+        default: true
+        type: boolean
+  # Version tags only (e.g. v1.0.3). Intentionally NOT on push to main.
+  push:
+    tags:
+      - 'v*'
+
+env:
+  # Keep in lock-step with .github/workflows/build-apk.yml
+  FLUTTER_VERSION: '3.41.1'
+  # Bundle identifier from flutter/ios/Runner.xcodeproj/project.pbxproj
+  BUNDLE_ID: com.fitcheck.fitcheckAi
+  # Apple Developer Team ID used for manual signing in the export step.
+  # TODO: replace with your real 10-char Team ID (App Store Connect > Membership).
+  DEVELOPMENT_TEAM: REPLACE_WITH_TEAM_ID
+  # Code signing identity for distribution builds.
+  SIGNING_IDENTITY: 'Apple Distribution'
+
+jobs:
+  build-ios:
+    name: Build iOS IPA
+    # macOS runner is required for Xcode. macos-14 is a stable, current image.
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: flutter
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Select a recent Xcode. NOTE: As of 2026-04-28 the App Store / TestFlight
+      # require apps to be built with Xcode 26 (iOS 26 SDK). The macos-14 image
+      # ships multiple Xcodes; pin explicitly so builds remain reproducible.
+      # If '26.0' is not present on the runner image yet, change this to the
+      # newest available (e.g. '16.4') or bump the runner to macos-15.
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 'latest-stable'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      # Recreate the .env asset EXACTLY as the Android APK workflow does. The app
+      # bundles flutter/.env as a Flutter asset (see pubspec.yaml `assets: - .env`).
+      - name: Create .env file
+        run: |
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
+          echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> .env
+          echo "API_BASE_URL=${{ secrets.API_BASE_URL }}" >> .env
+          echo "POSTHOG_API_KEY=${{ secrets.POSTHOG_API_KEY }}" >> .env
+          echo "POSTHOG_HOST=${{ secrets.POSTHOG_HOST }}" >> .env
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      # pod install must run after `flutter pub get` so Generated.xcconfig exists.
+      - name: Install CocoaPods dependencies
+        working-directory: flutter/ios
+        run: pod install --repo-update
+
+      # ----------------------------------------------------------------------
+      # Code signing: import the distribution cert (.p12) and the provisioning
+      # profile into a temporary keychain. This uses the standard inline
+      # `security` pattern (equivalent to apple-actions/import-codesign-certs).
+      # Guarded by `if:` so a fork/no-secrets run skips signing and still
+      # exercises the rest of the pipeline.
+      # ----------------------------------------------------------------------
+      - name: Import code signing assets
+        id: signing
+        if: ${{ secrets.APPLE_CERT_P12_BASE64 != '' && secrets.APPLE_PROVISIONING_PROFILE_BASE64 != '' }}
+        env:
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CERT_PATH="$RUNNER_TEMP/dist_cert.p12"
+          PROFILE_PATH="$RUNNER_TEMP/profile.mobileprovision"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KC_PW="${KEYCHAIN_PASSWORD:-$(openssl rand -base64 24)}"
+
+          # Decode secrets to files.
+          echo -n "$APPLE_CERT_P12_BASE64" | base64 --decode > "$CERT_PATH"
+          echo -n "$APPLE_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+
+          # Create and unlock a temporary keychain.
+          security create-keychain -p "$KC_PW" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KC_PW" "$KEYCHAIN_PATH"
+
+          # Import the distribution certificate.
+          security import "$CERT_PATH" -P "$APPLE_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+
+          # Allow codesign/xcodebuild to use the key without an interactive prompt.
+          security set-key-partition-list -S apple-tool:,apple: -k "$KC_PW" "$KEYCHAIN_PATH"
+
+          # Make the temp keychain the default search list (keep login keychain too).
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+          # Install the provisioning profile where Xcode looks for it.
+          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES_DIR"
+          # Extract the profile UUID so the ExportOptions can reference it by name.
+          PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" \
+            | plutil -extract UUID raw -o - -)
+          cp "$PROFILE_PATH" "$PROFILES_DIR/$PROFILE_UUID.mobileprovision"
+
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+          echo "profile_uuid=$PROFILE_UUID" >> "$GITHUB_OUTPUT"
+          echo "Imported certificate and profile UUID $PROFILE_UUID"
+
+      # Generate ExportOptions.plist at runtime (we do not own ios/ in the repo,
+      # so we write it to the runner temp dir instead of committing a file).
+      - name: Generate ExportOptions.plist
+        id: export_opts
+        if: ${{ steps.signing.outputs.signed == 'true' }}
+        run: |
+          set -euo pipefail
+          EXPORT_PLIST="$RUNNER_TEMP/ExportOptions.plist"
+          cat > "$EXPORT_PLIST" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>${DEVELOPMENT_TEAM}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>signingCertificate</key>
+            <string>${SIGNING_IDENTITY}</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${BUNDLE_ID}</key>
+              <string>${{ steps.signing.outputs.profile_uuid }}</string>
+            </dict>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>uploadBitcode</key>
+            <false/>
+            <key>destination</key>
+            <string>export</string>
+          </dict>
+          </plist>
+          EOF
+          echo "export_plist=$EXPORT_PLIST" >> "$GITHUB_OUTPUT"
+          echo "Generated ExportOptions.plist at $EXPORT_PLIST"
+          cat "$EXPORT_PLIST"
+
+      # SIGNED build path: uses the generated ExportOptions.plist (manual signing).
+      - name: Build signed IPA (App Store)
+        if: ${{ steps.signing.outputs.signed == 'true' }}
+        run: |
+          set -euo pipefail
+          flutter build ipa --release \
+            --export-options-plist="${{ steps.export_opts.outputs.export_plist }}"
+
+      # UNSIGNED build path (no secrets): still produce an artifact for inspection.
+      # `flutter build ipa --no-codesign` archives without signing so PRs/forks
+      # without the Apple secrets still validate that the iOS build compiles.
+      - name: Build unsigned IPA (no signing secrets)
+        if: ${{ steps.signing.outputs.signed != 'true' }}
+        run: |
+          set -euo pipefail
+          flutter build ipa --release --no-codesign || \
+            flutter build ios --release --no-codesign
+
+      - name: Locate build outputs
+        id: outputs
+        run: |
+          set -euo pipefail
+          IPA_PATH=$(find build/ios/ipa -name "*.ipa" 2>/dev/null | head -n1 || true)
+          echo "ipa_path=${IPA_PATH}" >> "$GITHUB_OUTPUT"
+          if [ -n "${IPA_PATH}" ]; then
+            echo "Found IPA: ${IPA_PATH} ($(du -h "${IPA_PATH}" | cut -f1))"
+          else
+            echo "No .ipa produced (expected for the --no-codesign path)."
+          fi
+
+      # ----------------------------------------------------------------------
+      # Upload to TestFlight using the App Store Connect API key with notarytool's
+      # sibling tool `xcrun altool --upload-app`. Guarded so it only runs when a
+      # signed .ipa exists AND the ASC secrets are present AND (for manual runs)
+      # the user opted in. Marked continue-on-error so a transient ASC failure
+      # does not discard the already-built artifact.
+      # ----------------------------------------------------------------------
+      - name: Upload to TestFlight
+        id: testflight
+        continue-on-error: true
+        if: >-
+          steps.signing.outputs.signed == 'true' &&
+          steps.outputs.outputs.ipa_path != '' &&
+          secrets.APP_STORE_CONNECT_API_KEY_BASE64 != '' &&
+          (github.event_name != 'workflow_dispatch' || inputs.upload_to_testflight)
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          # altool looks for the key at one of the private_keys search paths:
+          #   ./private_keys, ~/private_keys, ~/.private_keys,
+          #   ~/.appstoreconnect/private_keys
+          KEY_DIR="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$KEY_DIR"
+          echo -n "$APP_STORE_CONNECT_API_KEY_BASE64" \
+            | base64 --decode > "$KEY_DIR/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+
+          xcrun altool --upload-app \
+            -f "${{ steps.outputs.outputs.ipa_path }}" \
+            -t ios \
+            --apiKey "$APP_STORE_CONNECT_KEY_ID" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+
+      - name: Build summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo "## iOS Build Summary"
+            echo ""
+            echo "| Property | Value |"
+            echo "|----------|-------|"
+            echo "| App Name | FitCheck AI |"
+            echo "| Bundle ID | ${BUNDLE_ID} |"
+            echo "| Build Type | Release |"
+            echo "| Flutter Version | ${FLUTTER_VERSION} |"
+            echo "| Signed | ${{ steps.signing.outputs.signed == 'true' && 'yes' || 'no (no signing secrets)' }} |"
+            echo "| IPA | ${{ steps.outputs.outputs.ipa_path != '' && steps.outputs.outputs.ipa_path || 'not produced' }} |"
+            echo "| TestFlight upload | ${{ steps.testflight.outcome || 'skipped' }} |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Ref | ${{ github.ref_name }} |"
+            echo "| Triggered By | ${{ github.actor }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Always upload whatever IPA was produced as a workflow artifact.
+      - name: Upload IPA artifact
+        if: ${{ steps.outputs.outputs.ipa_path != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: fitcheck-ai-release-ipa
+          path: flutter/build/ios/ipa/*.ipa
+          retention-days: 30
+          if-no-files-found: warn

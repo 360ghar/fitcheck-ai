@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
+import '../../../core/config/env_config.dart';
 import '../repositories/subscription_repository.dart';
 import '../models/subscription_model.dart';
 
@@ -22,6 +23,10 @@ class SubscriptionController extends GetxController {
   // Computed properties
   bool get isPro => subscription.value?.planType != PlanType.free;
   bool get isCancelled => subscription.value?.cancelAtPeriodEnd ?? false;
+
+  /// Whether monetization CTAs (paywall, Stripe checkout, pricing) may render.
+  /// OFF on iOS for v1 (App Store Guideline 3.1.1 anti-steering).
+  bool get showPaywall => EnvConfig.paywallEnabled;
 
   String get planName {
     switch (subscription.value?.planType) {
@@ -47,7 +52,8 @@ class SubscriptionController extends GetxController {
     return (u.monthlyGenerations / u.monthlyGenerationsLimit).clamp(0.0, 1.0);
   }
 
-  bool get isNearLimit => extractionsPercentage > 0.8 || generationsPercentage > 0.8;
+  bool get isNearLimit =>
+      extractionsPercentage > 0.8 || generationsPercentage > 0.8;
 
   @override
   void onInit() {
@@ -112,10 +118,15 @@ class SubscriptionController extends GetxController {
 
   /// Start checkout for a plan
   Future<void> startCheckout(String planType) async {
+    // Hard guard: never open external Stripe checkout when the paywall is
+    // disabled (e.g. iOS v1). Prevents a stray call during App Review.
+    if (!showPaywall) return;
     isCheckingOut.value = true;
     error.value = '';
     try {
-      final session = await _repository.createCheckoutSession(planType: planType);
+      final session = await _repository.createCheckoutSession(
+        planType: planType,
+      );
       final url = Uri.parse(session.checkoutUrl);
       if (await canLaunchUrl(url)) {
         await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -136,7 +147,10 @@ class SubscriptionController extends GetxController {
     try {
       await _repository.cancelSubscription();
       await fetchSubscription();
-      Get.snackbar('Success', 'Subscription cancelled. You\'ll retain access until period end.');
+      Get.snackbar(
+        'Success',
+        'Subscription cancelled. You\'ll retain access until period end.',
+      );
     } catch (e) {
       error.value = e.toString();
       Get.snackbar('Error', 'Failed to cancel subscription');

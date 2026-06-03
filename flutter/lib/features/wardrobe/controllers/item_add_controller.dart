@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/config/env_config.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
 import '../../../domain/enums/condition.dart' as app_condition;
@@ -390,17 +391,30 @@ class ItemAddController extends GetxController {
     } else if (errorMsg.contains('rate limit') ||
         errorMsg.contains('limit exceeded')) {
       // Rate limit exceeded
-      Get.defaultDialog(
-        title: 'Daily Limit Reached',
-        middleText:
-            'You\'ve reached your daily extraction limit. Upgrade to Pro for more.',
-        textConfirm: 'View Plans',
-        textCancel: 'Cancel',
-        onConfirm: () {
-          Get.back();
-          Get.toNamed('/subscription'); // Navigate to subscription page
-        },
-      );
+      if (EnvConfig.paywallEnabled) {
+        // Paywall enabled (Android/web/future IAP): offer an upgrade path.
+        Get.defaultDialog(
+          title: 'Daily Limit Reached',
+          middleText:
+              'You\'ve reached your daily extraction limit. Upgrade to Pro for more.',
+          textConfirm: 'View Plans',
+          textCancel: 'Cancel',
+          onConfirm: () {
+            Get.back();
+            Get.toNamed('/subscription'); // Navigate to subscription page
+          },
+        );
+      } else {
+        // Paywall disabled (iOS v1, App Store Guideline 3.1.1 anti-steering):
+        // graceful dead-end with NO upgrade CTA.
+        Get.defaultDialog(
+          title: 'Daily Limit Reached',
+          middleText:
+              'You\'ve reached your daily extraction limit. It resets tomorrow — check back then!',
+          textConfirm: 'Got it',
+          onConfirm: () => Get.back(),
+        );
+      }
     } else if (errorMsg.contains('no items') ||
         errorMsg.contains('not detected')) {
       // No items detected
