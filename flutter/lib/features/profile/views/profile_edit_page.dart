@@ -144,8 +144,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       if (skippedBirthFields.isNotEmpty) {
         Get.snackbar(
           'Profile Partially Updated',
-          'Birth details could not be saved. Backend DB migration is missing '
-              '(run 002_astrology_profile.sql).',
+          'Birth details couldn’t be saved right now. Please try again later.',
           snackPosition: SnackPosition.TOP,
           duration: const Duration(seconds: 5),
         );

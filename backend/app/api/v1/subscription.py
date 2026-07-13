@@ -1,28 +1,26 @@
 """
 Subscription API endpoints for managing user subscriptions and billing.
 """
-import logging
 from typing import Any, Dict, Optional
 
 import stripe
-from fastapi import APIRouter, Depends, Request, HTTPException, status
+from fastapi import APIRouter, Depends, Request, HTTPException
 from supabase import Client
 
 from app.api.v1.deps import get_current_user, get_db
 from app.core.config import settings
 from app.core.exceptions import ServiceError, ValidationError
+from app.core.logging_config import get_context_logger
 from app.models.subscription import (
     PlanType,
-    SubscriptionResponse,
-    SubscriptionWithUsage,
-    UsageLimits,
     CreateCheckoutRequest,
     CheckoutSessionResponse,
     PortalSessionResponse,
 )
 from app.services.subscription_service import SubscriptionService
+from app.utils import maybe_single_data
 
-logger = logging.getLogger(__name__)
+logger = get_context_logger(__name__)
 
 router = APIRouter()
 
@@ -159,8 +157,9 @@ async def create_checkout_session(
         raise ServiceError("Stripe price not configured. Please contact support.")
 
     try:
-        # Get or create Stripe customer
-        subscription = await SubscriptionService.get_subscription(user["id"], db)
+        # Get or create Stripe customer (side effect: creates a default
+        # subscription row if the user doesn't have one yet)
+        await SubscriptionService.get_subscription(user["id"], db)
 
         # Check existing stripe customer
         customer_id = None
@@ -172,8 +171,9 @@ async def create_checkout_session(
             .execute()
         )
 
-        if sub_result.data and sub_result.data.get("stripe_customer_id"):
-            customer_id = sub_result.data["stripe_customer_id"]
+        sub_data = maybe_single_data(sub_result)
+        if sub_data and sub_data.get("stripe_customer_id"):
+            customer_id = sub_data["stripe_customer_id"]
         else:
             # Create new customer
             customer = stripe.Customer.create(
@@ -246,12 +246,13 @@ async def create_portal_session(
         .execute()
     )
 
-    if not sub_result.data or not sub_result.data.get("stripe_customer_id"):
+    sub_data = maybe_single_data(sub_result)
+    if not sub_data or not sub_data.get("stripe_customer_id"):
         raise ValidationError("No billing account found. Please upgrade to Pro first.")
 
     try:
         portal_session = stripe.billing_portal.Session.create(
-            customer=sub_result.data["stripe_customer_id"],
+            customer=sub_data["stripe_customer_id"],
             return_url=return_url or settings.FRONTEND_URL,
         )
 
@@ -287,11 +288,12 @@ async def cancel_subscription(
         .execute()
     )
 
-    if sub_result.data and sub_result.data.get("stripe_subscription_id") and settings.STRIPE_SECRET_KEY:
+    sub_data = maybe_single_data(sub_result)
+    if sub_data and sub_data.get("stripe_subscription_id") and settings.STRIPE_SECRET_KEY:
         try:
             stripe.api_key = settings.STRIPE_SECRET_KEY
             stripe.Subscription.modify(
-                sub_result.data["stripe_subscription_id"],
+                sub_data["stripe_subscription_id"],
                 cancel_at_period_end=True,
             )
         except stripe.error.StripeError as e:
@@ -388,14 +390,24 @@ async def stripe_webhook(request: Request, db: Client = Depends(get_db)):
                     "stripe_subscription_id", subscription_id
                 ).maybe_single().execute()
 
-                if result.data:
+                result_data = maybe_single_data(result)
+                if result_data:
                     db.table("subscriptions").update({
                         "status": "past_due",
-                    }).eq("user_id", result.data["user_id"]).execute()
+                    }).eq("user_id", result_data["user_id"]).execute()
                     logger.info(f"Marked subscription as past_due for subscription {subscription_id}")
 
     except Exception as e:
-        logger.error(f"Error processing webhook event {event['type']}: {e}")
-        # Don't raise - return 200 to acknowledge receipt
+        # Re-raise as a 500 so Stripe retries the event (per its exponential
+        # backoff schedule) instead of treating a failed activation/cancellation
+        # as delivered. Swallowing this and returning 200 previously meant a
+        # customer could be charged without their subscription ever upgrading.
+        logger.error(
+            f"Error processing webhook event {event['type']}: {e}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process webhook event {event['type']}",
+        )
 
     return {"received": True}

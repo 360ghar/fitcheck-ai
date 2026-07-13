@@ -34,8 +34,9 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
         body: AppPageBackground(
           child: SafeArea(
             child: Obx(() {
-              // Navigate to review when complete
-              if (controller.isComplete) {
+              // Navigate to review once when complete (guard against rebuild storms)
+              if (controller.isComplete && !controller.hasNavigatedToReview) {
+                controller.hasNavigatedToReview = true;
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   Get.offNamed(Routes.wardrobeBatchReview);
                 });

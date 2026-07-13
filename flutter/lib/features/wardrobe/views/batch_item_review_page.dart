@@ -652,7 +652,7 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
           ),
         ],
       ),
-    );
+    ).then((_) => inputController.dispose());
   }
 
   Widget _buildInfoRow(

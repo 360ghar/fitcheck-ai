@@ -70,6 +70,7 @@ export default function CalendarPage() {
   })
 
   const [createOpen, setCreateOpen] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
   const [createTitle, setCreateTitle] = useState('')
   const [createDescription, setCreateDescription] = useState('')
   const [createLocation, setCreateLocation] = useState('')
@@ -198,6 +199,7 @@ export default function CalendarPage() {
   }
 
   const submitCreate = async () => {
+    if (isCreating) return
     if (!createTitle.trim()) {
       toast({ title: 'Title is required', variant: 'destructive' })
       return
@@ -207,6 +209,7 @@ export default function CalendarPage() {
       return
     }
 
+    setIsCreating(true)
     try {
       const created = await createCalendarEvent({
         title: createTitle.trim(),
@@ -237,6 +240,8 @@ export default function CalendarPage() {
         description: err instanceof Error ? err.message : 'An error occurred',
         variant: 'destructive',
       })
+    } finally {
+      setIsCreating(false)
     }
   }
 
@@ -459,12 +464,25 @@ export default function CalendarPage() {
             </div>
           </div>
           <DialogFooter className="flex-col md:flex-row gap-2">
-            <Button variant="outline" onClick={() => setCreateOpen(false)} className="w-full md:w-auto">
+            <Button
+              variant="outline"
+              onClick={() => setCreateOpen(false)}
+              disabled={isCreating}
+              className="w-full md:w-auto"
+            >
               Cancel
             </Button>
-            <Button onClick={submitCreate} className="w-full md:w-auto">
-              <Plus className="h-4 w-4 mr-2" />
-              Create
+            <Button
+              onClick={() => void submitCreate()}
+              disabled={isCreating}
+              className="w-full md:w-auto"
+            >
+              {isCreating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4 mr-2" />
+              )}
+              {isCreating ? 'Creating...' : 'Create'}
             </Button>
           </DialogFooter>
         </DialogContent>

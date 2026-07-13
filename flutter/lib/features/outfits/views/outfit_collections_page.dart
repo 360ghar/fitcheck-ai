@@ -419,7 +419,10 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
           ),
         ],
       ),
-    );
+    ).then((_) {
+      nameController.dispose();
+      descriptionController.dispose();
+    });
   }
 
   void _showCollectionDetail(Map<String, dynamic> collection) {
@@ -650,7 +653,10 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
           ),
         ],
       ),
-    );
+    ).then((_) {
+      nameController.dispose();
+      descriptionController.dispose();
+    });
   }
 
   /// Update collection

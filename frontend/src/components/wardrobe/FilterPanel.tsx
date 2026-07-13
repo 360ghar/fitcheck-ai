@@ -168,7 +168,16 @@ export function FilterPanel({
         <div className="md:hidden">
           <BottomSheet open={isOpen} onOpenChange={setIsOpen}>
             <BottomSheetTrigger asChild>
-              <Button variant="outline" size="icon" className="relative shrink-0">
+              <Button
+                variant="outline"
+                size="icon"
+                className="relative shrink-0"
+                aria-label={
+                  activeFilterCount > 0
+                    ? `Filters and sort, ${activeFilterCount} active`
+                    : 'Filters and sort'
+                }
+              >
                 <SlidersHorizontal className="h-4 w-4" />
                 {activeFilterCount > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-xs rounded-full flex items-center justify-center">
@@ -339,6 +348,7 @@ export function FilterPanel({
                     <Button
                       variant="outline"
                       size="icon"
+                      aria-label={sort.sortOrder === 'asc' ? 'Sort ascending' : 'Sort descending'}
                       onClick={() => onSortChange('sortOrder', sort.sortOrder === 'asc' ? 'desc' : 'asc')}
                     >
                       {sort.sortOrder === 'asc' ? (
@@ -469,6 +479,7 @@ export function FilterPanel({
               size="icon"
               onClick={() => onSortChange('sortOrder', sort.sortOrder === 'asc' ? 'desc' : 'asc')}
               title={sort.sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+              aria-label={sort.sortOrder === 'asc' ? 'Sort ascending' : 'Sort descending'}
             >
               {sort.sortOrder === 'asc' ? (
                 <SortAsc className="h-5 w-5" />
@@ -483,6 +494,7 @@ export function FilterPanel({
             <Button
               variant={sort.isGridView ? 'default' : 'outline'}
               size="icon"
+              aria-label="Grid view"
               onClick={() => onSortChange('isGridView', true)}
             >
               <Grid3x3 className="h-5 w-5" />
@@ -490,6 +502,7 @@ export function FilterPanel({
             <Button
               variant={!sort.isGridView ? 'default' : 'outline'}
               size="icon"
+              aria-label="List view"
               onClick={() => onSortChange('isGridView', false)}
             >
               <List className="h-5 w-5" />

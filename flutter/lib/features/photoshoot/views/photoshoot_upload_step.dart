@@ -198,17 +198,23 @@ class PhotoshootUploadStep extends GetView<PhotoshootController> {
           ),
         ),
         Positioned(
-          top: 4,
-          right: 4,
-          child: GestureDetector(
-            onTap: () => controller.removePhoto(index),
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
-                color: Colors.black54,
-                shape: BoxShape.circle,
+          top: 0,
+          right: 0,
+          child: Material(
+            color: Colors.transparent,
+            child: IconButton(
+              tooltip: 'Remove photo',
+              onPressed: () => controller.removePhoto(index),
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              padding: EdgeInsets.zero,
+              icon: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: const BoxDecoration(
+                  color: Colors.black54,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.close, color: Colors.white, size: 16),
               ),
-              child: const Icon(Icons.close, color: Colors.white, size: 14),
             ),
           ),
         ),

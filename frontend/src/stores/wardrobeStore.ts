@@ -57,7 +57,7 @@ interface WardrobeState {
   setSortBy: (sortBy: WardrobeState['sortBy']) => void;
   setSortOrder: (order: 'asc' | 'desc') => void;
   setGridView: (isGrid: boolean) => void;
-  toggleItemFavorite: (itemId: string) => Promise<void>;
+  toggleItemFavorite: (itemId: string) => Promise<{ id: string; is_favorite: boolean }>;
   deleteItem: (itemId: string) => Promise<void>;
   deleteSelectedItems: () => Promise<void>;
   setPage: (page: number) => void;
@@ -327,11 +327,12 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
     set({ isGridView: isGrid });
   },
 
-  // Toggle item favorite
+  // Toggle item favorite (single API call; returns updated item)
   toggleItemFavorite: async (itemId: string) => {
     try {
-      const state = get();
       const updated = await itemsApi.toggleItemFavorite(itemId);
+      // Re-read after await so concurrent list updates are not overwritten
+      const state = get();
       const newItems = state.items.map((item) =>
         item.id === itemId ? { ...item, is_favorite: updated.is_favorite } : item
       );
@@ -343,9 +344,11 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
             : state.selectedItem,
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
       });
+      return updated;
     } catch (error) {
       const apiError = getApiError(error);
       set({ error: apiError });
+      throw error;
     }
   },
 

@@ -33,8 +33,14 @@ class _OutfitsContentState extends State<OutfitsContent> {
                 child: CustomScrollView(
                   slivers: [
                     _buildAppBar(),
+                    // Extra bottom inset so extended FAB + bottom nav don't cover last row
                     SliverPadding(
-                      padding: const EdgeInsets.all(AppConstants.spacing16),
+                      padding: const EdgeInsets.fromLTRB(
+                        AppConstants.spacing16,
+                        AppConstants.spacing16,
+                        AppConstants.spacing16,
+                        AppConstants.spacing16 + 96,
+                      ),
                       sliver: Obx(() {
                         if (controller.isLoading.value && controller.outfits.isEmpty) {
                           return const ShimmerGridLoader(
@@ -78,9 +84,13 @@ class _OutfitsContentState extends State<OutfitsContent> {
             ),
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.search),
-          onPressed: () => _showSearchDialog(),
+        Semantics(
+          label: 'Search outfits',
+          button: true,
+          child: IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () => _showSearchDialog(),
+          ),
         ),
         PopupMenuButton<String>(
           onSelected: (value) {
@@ -149,7 +159,9 @@ class _OutfitsContentState extends State<OutfitsContent> {
     return GestureDetector(
       onTap: () => Get.toNamed('/outfits/${outfit.id}'),
       onLongPress: () => _showOutfitDetail(outfit),
-      child: Container(
+      child: Semantics(
+        label: 'Outfit: ${outfit.name}',
+        child: Container(
         decoration: BoxDecoration(
           color: tokens.cardColor,
           borderRadius: BorderRadius.circular(AppConstants.radius16),
@@ -283,6 +295,7 @@ class _OutfitsContentState extends State<OutfitsContent> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

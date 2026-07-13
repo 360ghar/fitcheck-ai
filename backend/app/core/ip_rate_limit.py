@@ -7,9 +7,10 @@ Uses in-memory storage with configurable limits.
 LIMITATIONS:
 - In-memory storage: Rate limit state is lost on server restart and not shared
   across multiple server instances. For production, consider using Redis.
-- IP spoofing: When behind a reverse proxy, we trust X-Forwarded-For which can
-  be spoofed by direct clients. This rate limiting is best-effort for demos.
-  For critical rate limiting, use authenticated user-based limits instead.
+- Client IP resolution relies on uvicorn's --proxy-headers (see Dockerfile) to
+  safely parse X-Forwarded-For, since this container is only reachable via
+  Railway's edge proxy. If ever deployed somewhere directly internet-facing,
+  that flag/trust assumption would need revisiting.
 """
 
 import asyncio
@@ -51,40 +52,20 @@ RATE_LIMIT_WINDOW = timedelta(hours=24)
 
 def get_client_ip(request: Request) -> str:
     """
-    Extract client IP from request, handling proxies.
+    Extract the client IP from the request.
 
-    Checks common proxy headers before falling back to direct client IP.
-
-    Note: This trusts X-Forwarded-For headers which can be spoofed by clients
-    connecting directly (not through a trusted reverse proxy). This is acceptable
-    for demo rate limiting where the goal is friction, not strict enforcement.
-    For production-critical rate limiting, use authenticated user-based limits.
+    uvicorn is run with --proxy-headers --forwarded-allow-ips='*' (see
+    Dockerfile) because this container is only ever reachable through
+    Railway's edge proxy, never directly from the internet. That makes
+    uvicorn's own ProxyHeadersMiddleware responsible for resolving
+    request.client.host from X-Forwarded-For - trusting the proxy's own
+    appended hop, not a client-supplied header value. The app itself no
+    longer hand-parses X-Forwarded-For/X-Real-IP: doing so here trusted
+    whatever header any connecting client sent, letting a single caller
+    fake a different IP on every request to bypass the per-IP daily limit
+    entirely.
     """
-    # Fall back to direct client IP first if no proxy headers
-    # This prevents spoofing when clients connect directly
-    client_ip = request.client.host if request.client else None
-
-    # Check X-Forwarded-For header (for reverse proxies)
-    # Only trust if we have a valid direct connection
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded and client_ip:
-        # Take the first IP (original client from proxy chain)
-        forwarded_ip = forwarded.split(",")[0].strip()
-        # Basic validation: ensure it looks like an IP
-        if forwarded_ip and ("." in forwarded_ip or ":" in forwarded_ip):
-            return forwarded_ip
-
-    # Check X-Real-IP header
-    real_ip = request.headers.get("X-Real-IP")
-    if real_ip and client_ip:
-        if "." in real_ip or ":" in real_ip:
-            return real_ip
-
-    # Fall back to direct client IP
-    if client_ip:
-        return client_ip
-
-    return "unknown"
+    return request.client.host if request.client else "unknown"
 
 
 async def check_ip_rate_limit(
@@ -170,9 +151,12 @@ async def ip_rate_limited_operation(request: Request, operation_type: str):
         remaining=rate_check["remaining"] - 1,
     )
 
-    yield rate_check
-
+    # Reserve before yielding, not after - otherwise concurrent requests from
+    # the same IP all read the same pre-increment count and collectively
+    # exceed the daily limit. Matches auth_rate_limited_operation's pattern.
     await increment_ip_usage(ip_address, operation_type)
+
+    yield rate_check
 
 
 async def get_ip_usage_stats(ip_address: str) -> dict:

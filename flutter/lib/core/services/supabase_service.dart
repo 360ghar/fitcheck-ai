@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/env_config.dart';
 import '../constants/api_constants.dart';
 import 'analytics_service.dart';
+import 'secure_local_storage.dart';
 
 /// Supabase configuration and service
 /// Manages Supabase client initialization and authentication state
@@ -51,10 +52,26 @@ class SupabaseService extends GetxService {
       );
     }
 
+    // Matches supabase_flutter's own default SharedPreferencesLocalStorage
+    // key (see its Supabase.initialize source) so SecureLocalStorage can
+    // find and migrate an already-signed-in user's session on first run.
+    final legacySessionKey =
+        'sb-${Uri.parse(supabaseUrl).host.split(".").first}-auth-token';
+
     await Supabase.initialize(
       url: supabaseUrl,
       anonKey: resolvedAnonKey,
       debug: kDebugMode,
+      // Keychain/Keystore-backed session storage instead of the package
+      // default (plaintext SharedPreferences/NSUserDefaults) - a device
+      // backup or filesystem access on a rooted/jailbroken device would
+      // otherwise expose the long-lived refresh token in cleartext.
+      authOptions: FlutterAuthClientOptions(
+        localStorage: SecureLocalStorage(
+          persistSessionKey: 'fitcheck_supabase_auth_token',
+          legacySharedPreferencesKey: legacySessionKey,
+        ),
+      ),
     );
 
     _client = Supabase.instance.client;

@@ -228,7 +228,8 @@ export default function RegisterPage() {
             {/* Full Name */}
             <div>
               <label htmlFor="fullName" className="block text-sm font-medium text-foreground">
-                Full name
+                Full name{' '}
+                <span className="font-normal text-muted-foreground">(optional)</span>
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

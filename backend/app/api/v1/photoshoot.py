@@ -12,7 +12,6 @@ Provides endpoints for:
 
 import asyncio
 import json
-import logging
 import uuid
 from datetime import datetime
 from typing import Any, Dict
@@ -25,23 +24,21 @@ from supabase import Client
 from app.api.v1.deps import get_current_user, get_db
 from app.core.exceptions import AIServiceError, FitCheckException, RateLimitError, ValidationError
 from app.core.ip_rate_limit import ip_rate_limited_operation
+from app.core.logging_config import get_context_logger
 from app.models.photoshoot import (
     StartPhotoshootRequest,
     DemoPhotoshootRequest,
-    PhotoshootResultResponse,
     DemoPhotoshootResponse,
-    PhotoshootUsage,
     UseCasesResponse,
     PhotoshootUseCase,
     PhotoshootStatus,
     PhotoshootJobStatus,
     PhotoshootJobResponse,
-    PhotoshootJobStatusResponse,
 )
 from app.services.photoshoot_service import PhotoshootService, PhotoshootStreamingService
 from app.services.photoshoot_job_service import PhotoshootJobService
 
-logger = logging.getLogger(__name__)
+logger = get_context_logger(__name__)
 
 router = APIRouter()
 

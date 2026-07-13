@@ -9,12 +9,11 @@ import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 from supabase import Client
 
-from app.core.config import settings
 from app.core.exceptions import RateLimitError
 from app.core.logging_config import get_context_logger
 from app.core.security import get_current_user_id
@@ -340,38 +339,6 @@ async def get_batch_job_status(
         raise HTTPException(status_code=404, detail="Job not found")
 
     return BatchJobStatusResponse(**status_data)
-
-
-@router.get(
-    "/pending-jobs",
-    response_model=List[BatchJobStatusResponse],
-)
-async def get_pending_jobs(
-    user_id: str = Depends(get_current_user_id),
-):
-    """
-    Get all pending/in-progress jobs for the current user.
-
-    Returns jobs that can be resumed (status: pending, extracting, or generating).
-    Used by frontend to check for incomplete jobs on app startup.
-    """
-    try:
-        pending_jobs = []
-
-        # Get all jobs from the in-memory service
-        # Note: This currently returns empty list as jobs are in-memory only
-        # In production with database persistence, this would query the extraction_jobs table
-
-        # TODO: Query extraction_jobs table when persistence is implemented
-        # For now, return empty list
-        return pending_jobs
-
-    except Exception as e:
-        logger.error("Failed to get pending jobs", extra={"error": str(e)})
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get pending jobs: {str(e)}",
-        )
 
 
 @router.post(

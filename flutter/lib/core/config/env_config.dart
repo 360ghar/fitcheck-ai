@@ -23,6 +23,7 @@ class EnvConfig {
   static const String _paywallEnabledEnv = String.fromEnvironment(
     'PAYWALL_ENABLED',
   );
+  static const String _sentryDsnEnv = String.fromEnvironment('SENTRY_DSN');
 
   static final Map<String, String> _fileValues = {};
   static bool _loaded = false;
@@ -80,6 +81,12 @@ class EnvConfig {
     }
     if (kIsWeb) return true;
     return !Platform.isIOS;
+  }
+
+  static String get sentryDsn {
+    return _sentryDsnEnv.isNotEmpty
+        ? _sentryDsnEnv
+        : (_fileValues['SENTRY_DSN'] ?? '');
   }
 
   static Future<void> _loadAsset(String path) async {

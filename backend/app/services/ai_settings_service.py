@@ -9,9 +9,6 @@ This service handles:
 - Reset rate limits daily
 """
 
-import base64
-import hashlib
-import os
 from datetime import date
 from typing import Any, Dict, Optional
 
@@ -27,8 +24,11 @@ from app.services.ai_provider_service import (
     get_system_provider_config,
     get_default_provider,
 )
+from app.utils.crypto import derive_fernet_key, legacy_derive_fernet_key
 
 logger = get_context_logger(__name__)
+
+_KEY_PURPOSE = b"fitcheck-ai-settings-api-key-v1"
 
 
 # =============================================================================
@@ -37,23 +37,27 @@ logger = get_context_logger(__name__)
 
 
 def _get_encryption_key() -> Optional[bytes]:
-    """Get the Fernet encryption key from settings."""
+    """Get the purpose-scoped Fernet encryption key for user AI-provider API keys."""
     key = settings.AI_ENCRYPTION_KEY
     if not key:
         return None
 
-    # If the key is a hex string, convert to bytes and derive a Fernet key
     try:
-        if len(key) == 64:  # Hex-encoded 32-byte key
-            raw_key = bytes.fromhex(key)
-        else:
-            raw_key = key.encode()
-
-        # Derive a proper Fernet key (32 bytes, base64-encoded)
-        derived = hashlib.sha256(raw_key).digest()
-        return base64.urlsafe_b64encode(derived)
+        return derive_fernet_key(key, _KEY_PURPOSE)
     except Exception as e:
         logger.error("Failed to derive encryption key", error=str(e))
+        return None
+
+
+def _get_legacy_encryption_key() -> Optional[bytes]:
+    """Pre-domain-separation key, tried only as a decrypt fallback so
+    already-encrypted API keys stay readable across the migration window."""
+    key = settings.AI_ENCRYPTION_KEY
+    if not key:
+        return None
+    try:
+        return legacy_derive_fernet_key(key)
+    except Exception:
         return None
 
 
@@ -106,16 +110,22 @@ def decrypt_api_key(encrypted_key: str) -> Optional[str]:
         logger.error("Cannot decrypt: encryption key not configured")
         return None
 
-    try:
-        fernet = Fernet(fernet_key)
-        decrypted = fernet.decrypt(encrypted_key.encode())
-        return decrypted.decode()
-    except InvalidToken:
-        logger.error("Failed to decrypt API key: invalid token")
-        return None
-    except Exception as e:
-        logger.error("Failed to decrypt API key", error=str(e))
-        return None
+    # Try the current purpose-scoped key first, then the legacy
+    # (pre-domain-separation) key for API keys encrypted before this change.
+    for key in (fernet_key, _get_legacy_encryption_key()):
+        if not key:
+            continue
+        try:
+            decrypted = Fernet(key).decrypt(encrypted_key.encode())
+            return decrypted.decode()
+        except InvalidToken:
+            continue
+        except Exception as e:
+            logger.error("Failed to decrypt API key", error=str(e))
+            return None
+
+    logger.error("Failed to decrypt API key: invalid token")
+    return None
 
 
 # =============================================================================

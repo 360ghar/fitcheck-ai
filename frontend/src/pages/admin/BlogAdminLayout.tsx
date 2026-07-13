@@ -43,20 +43,44 @@ function NavItem({ to, icon, label, end }: NavItemProps) {
   );
 }
 
+function isBlogAdmin(email: string | undefined | null): boolean {
+  if (!email) return false
+  // Comma-separated allowlist via env; empty list denies all in production builds
+  const raw = (import.meta.env.VITE_BLOG_ADMIN_EMAILS as string | undefined) || ''
+  const allowlist = raw
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+  if (allowlist.length === 0) {
+    // Dev fallback: allow any authenticated user only in DEV
+    return import.meta.env.DEV
+  }
+  return allowlist.includes(email.toLowerCase())
+}
+
 export default function BlogAdminLayout() {
   const user = useCurrentUser();
   const navigate = useNavigate();
+  const allowed = isBlogAdmin(user?.email)
 
-  // Check if user is admin
-  // Note: In a real app, you'd check user.role or similar
-  // For now, we'll allow all authenticated users but show a warning
   useEffect(() => {
-    // TODO: Implement proper admin check when user roles are available
-    // if (!user?.is_admin) {
-    //   showError('You do not have permission to access this area');
-    //   navigate('/dashboard');
-    // }
-  }, [user, navigate]);
+    if (!allowed) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [allowed, navigate]);
+
+  if (!allowed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-6">
+        <div className="text-center space-y-2 max-w-md">
+          <h1 className="text-lg font-semibold text-foreground">Access denied</h1>
+          <p className="text-sm text-muted-foreground">
+            You do not have permission to access the blog admin area.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background">

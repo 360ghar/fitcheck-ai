@@ -7,7 +7,6 @@ and usage tracking for daily limits.
 
 import asyncio
 import json
-import logging
 import re
 import uuid
 from datetime import datetime, date, timedelta
@@ -15,8 +14,16 @@ from typing import List, Optional, Tuple
 
 from supabase import Client
 
+from app.agents.prompt_fidelity import (
+    FACE_VISIBLE_POSE_RULE,
+    IDENTITY_SAFE_DIVERSITY_RULE,
+    PHOTOSHOOT_FIDELITY_APPENDIX,
+    SUBJECT_LOCK_FIELDS,
+    sandwich_prompt,
+)
 from app.core.config import settings
 from app.core.exceptions import AIServiceError, DatabaseError, RateLimitError, ServiceError, ValidationError
+from app.core.logging_config import get_context_logger
 from app.models.photoshoot import (
     PhotoshootUseCase,
     PhotoshootStatus,
@@ -28,29 +35,36 @@ from app.models.photoshoot import (
     UseCaseInfo,
 )
 from app.models.subscription import PlanType
+from app.services.photoshoot_job_service import PhotoshootJob
 from app.services.subscription_service import SubscriptionService
 
-logger = logging.getLogger(__name__)
+logger = get_context_logger(__name__)
 
 
 # =============================================================================
 # Use Case Templates
 # =============================================================================
 
+_IDENTITY_SAFE_SUFFIX = f"""
+IDENTITY RULES (mandatory for every prompt):
+- {IDENTITY_SAFE_DIVERSITY_RULE}
+- {FACE_VISIBLE_POSE_RULE}
+- Outfit descriptions must be item-level (top, bottom, outerwear, footwear, accessories) with color shade, material, and silhouette — never vague "stylish look".
+"""
+
 USE_CASE_TEMPLATES = {
     PhotoshootUseCase.LINKEDIN: {
         "name": "LinkedIn Profile",
         "description": "Professional headshots for LinkedIn and business profiles",
-        "prompt_guidance": """Generate diverse professional headshot prompts for LinkedIn. Include variations of:
-- Indoor office/modern workspace settings with floor-to-ceiling windows
+        "prompt_guidance": """Generate diverse professional headshot prompts for LinkedIn. Vary ONLY setting, outfit, pose, and lighting:
+- Indoor office/modern workspace with large windows
 - Outdoor professional settings (city architecture, urban backgrounds)
 - Neutral studio backgrounds (white, gray, gradient)
-Mix of:
-- Business formal attire (tailored suits, blazers, professional dresses)
-- Business casual (button-down shirts, smart casual)
-- Confident, approachable expressions with natural smiles
-- Various angles (front view, 3/4 view, slight turn)
-Lighting should be professional, flattering, soft natural or studio lighting.""",
+Outfits: business formal (suits, blazers) and business casual (button-downs)
+Expressions: confident, approachable, natural smile — keep the same face identity
+Angles: front view or slight 3/4 only
+Lighting: soft natural or soft studio light, even on the face
+""" + _IDENTITY_SAFE_SUFFIX,
         "example_prompts": [
             "Professional headshot in modern office",
             "Business portrait with city skyline background",
@@ -60,16 +74,14 @@ Lighting should be professional, flattering, soft natural or studio lighting."""
     PhotoshootUseCase.DATING_APP: {
         "name": "Dating App Profile",
         "description": "Attractive, genuine photos for dating profiles",
-        "prompt_guidance": """Generate diverse dating profile photo prompts. Include variations of:
-- Casual outdoor settings (trendy cafes, parks, beaches, city streets)
-- Lifestyle activities (travel destinations, hobbies, social settings)
+        "prompt_guidance": """Generate diverse dating profile photo prompts. Vary ONLY setting, outfit, pose, and lighting:
+- Casual outdoor settings (cafes, parks, beaches, city streets)
+- Lifestyle activities (travel, hobbies) with face still clearly visible
 - Well-lit indoor settings with warm ambiance
-Mix of:
-- Casual, stylish everyday attire
-- Relaxed, genuine smiles showing personality
-- Full body and upper body shots
-- Candid-style action shots that feel natural
-Mood should be warm, inviting, approachable, and authentic.""",
+Outfits: casual everyday with concrete item detail
+Shots: upper body and full body; avoid face occlusion and sunglasses
+Mood: warm, approachable, authentic — not glamorized or beauty-filtered
+""" + _IDENTITY_SAFE_SUFFIX,
         "example_prompts": [
             "Casual portrait at a coffee shop",
             "Outdoor photo in a park at golden hour",
@@ -79,37 +91,31 @@ Mood should be warm, inviting, approachable, and authentic.""",
     PhotoshootUseCase.MODEL_PORTFOLIO: {
         "name": "Model Portfolio",
         "description": "High-fashion model portfolio shots",
-        "prompt_guidance": """Generate diverse high-fashion model portfolio prompts. Include variations of:
-- Professional studio setups with dramatic lighting
-- Editorial/magazine-style on-location settings
-- High-fashion outdoor locations (rooftops, architecture, urban)
-Mix of:
-- Various editorial poses (confident, artistic, dynamic)
-- Different outfit styles (haute couture, streetwear, formal wear, avant-garde)
-- Dramatic and high-contrast lighting setups
-- Full body, 3/4 length, and dramatic close-up shots
-Style should be high-end fashion photography with editorial quality.""",
+        "prompt_guidance": """Generate diverse portfolio prompts. Vary ONLY setting, outfit, pose, and lighting — keep the same real person (not a generic model face):
+- Studio setups and on-location editorial settings
+- Outdoor locations (rooftops, architecture, urban)
+Outfits: couture, streetwear, formal — item-level detail required
+Poses: confident/editorial but face still readable (avoid extreme profile)
+Lighting can be dramatic but keep face features recognizable
+""" + _IDENTITY_SAFE_SUFFIX,
         "example_prompts": [
             "Editorial fashion shot in studio",
-            "High-fashion portrait with dramatic lighting",
+            "Fashion portrait with dramatic lighting",
             "Streetwear lookbook style photo",
         ],
     },
     PhotoshootUseCase.INSTAGRAM: {
         "name": "Instagram Content",
         "description": "Trendy, aesthetic Instagram-worthy content",
-        "prompt_guidance": """Generate diverse Instagram-worthy photo prompts. Include variations of:
-- Aesthetic cafes, rooftops, Instagrammable spots
-- Golden hour and blue hour lighting conditions
-- Trendy urban and natural backdrops
-Mix of:
-- Lifestyle and candid moments that feel curated
-- Fashion-forward, on-trend outfits
-- Flattering angles and poses that photograph well
-- Mix of portrait, full body, and environmental shots
-Aesthetic should be curated, cohesive, and scroll-stopping with high visual appeal.""",
+        "prompt_guidance": """Generate diverse Instagram-style prompts. Vary ONLY setting, outfit, pose, and lighting:
+- Cafes, rooftops, urban and natural backdrops
+- Golden hour / blue hour lighting with face still evenly lit enough to recognize
+Outfits: on-trend with concrete item detail
+Mix portrait, 3/4, and full body — face must remain clearly visible
+Avoid beauty-filter language and idealized skin
+""" + _IDENTITY_SAFE_SUFFIX,
         "example_prompts": [
-            "Aesthetic cafe photo with good lighting",
+            "Cafe photo with good lighting",
             "Golden hour portrait in the city",
             "Lifestyle shot at a trendy location",
         ],
@@ -117,20 +123,16 @@ Aesthetic should be curated, cohesive, and scroll-stopping with high visual appe
     PhotoshootUseCase.AESTHETIC: {
         "name": "Aesthetic",
         "description": "Trendy, artistic aesthetic photos with creative styling",
-        "prompt_guidance": """Generate diverse aesthetic photo prompts with artistic flair. Include variations of:
-- Minimalist backgrounds with clean compositions
-- Soft pastel or moody color palettes
-- Artistic architectural elements and textures
-- Natural settings with dreamy, ethereal quality
-Mix of:
-- Fashion-forward, curated outfit styling
-- Artistic and creative poses
-- Soft, diffused lighting with gentle shadows
-- Mix of close-ups and environmental portraits
-Style should be visually cohesive, Instagram-worthy, and artistically compelling.""",
+        "prompt_guidance": """Generate diverse aesthetic prompts. Vary ONLY setting, outfit, pose, and lighting:
+- Minimalist backgrounds, pastel or moody palettes, architectural textures
+- Soft diffused light with gentle shadows (face still recognizable)
+Outfits: curated with item-level detail
+Poses can be creative but not extreme profile; no face occlusion
+Do not invent a different face or idealized beauty look
+""" + _IDENTITY_SAFE_SUFFIX,
         "example_prompts": [
             "Minimalist portrait with soft natural light",
-            "Dreamy aesthetic photo at golden hour",
+            "Soft aesthetic photo at golden hour",
             "Artistic portrait with pastel backdrop",
         ],
     },
@@ -141,37 +143,6 @@ Style should be visually cohesive, Instagram-worthy, and artistically compelling
         "example_prompts": [],
     },
 }
-
-PHOTOSHOOT_FIDELITY_APPENDIX = """CRITICAL FACE ADHERENCE REQUIREMENTS:
-This is a photoshoot of the EXACT SAME PERSON shown in the reference image(s).
-The generated image MUST be this specific individual - not someone who looks similar.
-
-FACE IDENTITY - MANDATORY EXACT MATCH:
-- EXACT facial structure: face shape, jawline, chin, cheekbones must be identical
-- EXACT eye features: eye shape, eye color, eye spacing, eyebrows, eyelid shape
-- EXACT nose: nose shape, nose bridge, nostril shape, nose size and proportions
-- EXACT mouth: lip shape, lip fullness, mouth width, smile characteristics
-- EXACT skin: skin tone, skin texture, any visible marks, moles, or features
-- EXACT hair: hair color, hair texture, hairstyle, hairline, facial hair if any
-- EXACT age appearance: maintain the same apparent age
-- EXACT gender presentation: maintain the same gender appearance
-
-OUTFIT ITEM FIDELITY - MANDATORY EXACT MATCH:
-- Treat the outfit in this prompt as a strict inventory.
-- Match all clothing, footwear, and accessories exactly as described.
-- Preserve exact silhouettes, fit, layering, color shades, textures, prints, trims, and hardware.
-- Do not add, remove, swap, or restyle outfit items.
-- Do not invent extra props or fashion elements.
-
-MANDATORY PRE-GENERATION QUALITY CONTROL (INTERNAL):
-- Think twice before you generate.
-- Re-evaluate the reference image(s) and outfit instructions a second time before rendering.
-- Build a detailed internal checklist for face identity and each outfit item.
-- Verify every checklist item is satisfied before finalizing.
-- If uncertain, prioritize the reference person features and explicit outfit text over assumptions.
-- Do not output your checklist; output only the final image.
-
-Generate a single high-quality photorealistic image of THIS EXACT PERSON."""
 
 
 class PhotoshootService:
@@ -378,60 +349,55 @@ class PhotoshootService:
 
         # Get the prompt guidance for this use case
         if use_case == PhotoshootUseCase.CUSTOM and custom_prompt:
-            guidance = f"User's custom request: {custom_prompt}\n\nGenerate diverse variations based on this theme."
+            guidance = (
+                f"User's custom request: {custom_prompt}\n\n"
+                f"Generate diverse variations based on this theme.\n{_IDENTITY_SAFE_SUFFIX}"
+            )
         else:
             template = USE_CASE_TEMPLATES.get(use_case, USE_CASE_TEMPLATES[PhotoshootUseCase.LINKEDIN])
             guidance = template["prompt_guidance"]
 
-        # Combined system prompt that does both subject analysis and prompt generation
-        system_prompt = f"""You are a professional fashion photographer planning a photoshoot.
+        # Combined system prompt: low-creativity identity analysis + scene diversity
+        system_prompt = f"""You are a professional fashion photographer planning a photoshoot for a WEAK image model.
+Your job is to lock identity tightly and only vary setting/outfit/pose/lighting.
 
-TASK: Analyze the person in the reference image AND generate {num_prompts} diverse photoshoot prompts.
+TASK: Analyze the person in the reference image AND generate {num_prompts} photoshoot scene plans.
 
-STEP 1 - ANALYZE THE PERSON:
-First, carefully analyze the person in the provided reference image. Create a detailed description including:
-1. FACE: Face shape, jawline definition, chin shape, cheekbone prominence
-2. EYES: Eye shape, eye color, eye spacing, eyebrow shape and thickness
-3. NOSE: Nose shape, nose bridge, nostril shape, nose size
-4. MOUTH: Lip shape, lip fullness, mouth width, smile characteristics
-5. SKIN: Skin tone (specific shade), skin texture, any visible marks, moles, freckles
-6. HAIR: Hair color, hair texture (straight/wavy/curly), hairstyle, hairline, facial hair if any
-7. GENDER & AGE: Apparent gender presentation, approximate age range
-8. BUILD: Body type, build, approximate proportions
-9. DISTINCTIVE FEATURES: Any unique or distinguishing characteristics
+STEP 1 - SUBJECT LOCK (identity source of truth):
+{SUBJECT_LOCK_FIELDS}
+Also set subject_description to the same subject_lock text.
 
-STEP 2 - GENERATE PROMPTS:
-Generate exactly {num_prompts} diverse, detailed image generation prompts for this person.
-Each full_prompt MUST start with the complete person description from Step 1.
-For each prompt, provide an outfit description with explicit item-level detail:
+STEP 2 - SCENE PLANS:
+Generate exactly {num_prompts} diverse scenes. Diversity = setting, outfit, pose, lighting only.
+For each scene, outfit must list concrete items:
 - top(s), bottom(s), outerwear (if any), footwear, accessories
-- include color shades, materials, textures, silhouette/fit, and notable details
-- avoid vague outfit phrases like "stylish look" without concrete item details
+- color shades, materials, textures, silhouette/fit, notable details
+- never vague phrases like "stylish look"
 
 Return a JSON object with this exact structure:
 {{
-  "subject_description": "The complete detailed description of the person from Step 1",
+  "subject_lock": "Dense biometric paragraph from Step 1 (concrete visual tokens only)",
+  "subject_description": "Same as subject_lock",
   "prompts": [
     {{
       "index": 0,
-      "setting": "Description of the location/background",
-      "outfit": "Description of the clothing/attire",
-      "pose": "Description of the pose and body position",
-      "lighting": "Description of the lighting setup",
+      "setting": "Location/background only",
+      "outfit": "Item-level clothing inventory",
+      "pose": "Pose with face clearly visible",
+      "lighting": "Lighting setup",
       "style": "Overall style category",
-      "mood": "The emotional tone/mood",
-      "full_prompt": "Complete detailed prompt - MUST start with the person description, then the scene"
+      "mood": "Mood (do not describe a new face)",
+      "scene_body": "Setting + outfit + pose + lighting + style + mood only — NO person description"
     }}
   ]
 }}
 
-CRITICAL REQUIREMENTS:
-- Each full_prompt MUST begin with the complete person description
-- This ensures every generated image depicts the EXACT SAME PERSON with identical features
-- The scene description (setting, outfit, pose, etc.) comes AFTER the person description
-- Each prompt should be unique and cover different aspects of the use case
-- Think twice and re-evaluate before finalizing each prompt
-- Re-check face details, outfit item details, and internal consistency before returning JSON
+RULES:
+- {IDENTITY_SAFE_DIVERSITY_RULE}
+- {FACE_VISIBLE_POSE_RULE}
+- Do NOT invent facial features not visible in the reference
+- Do NOT put person identity text in scene_body (we sandwich subject_lock in code)
+- Keep subject_lock factual and dense; avoid beauty language
 """
 
         subject_hint = ""  # Will be extracted from response if available
@@ -455,7 +421,11 @@ CRITICAL REQUIREMENTS:
                         },
                         {
                             "type": "text",
-                            "text": f"Use case guidance:\n{guidance}\n\nAnalyze this person and generate {num_prompts} photoshoot prompts following the instructions above. Think twice and re-evaluate before finalizing the JSON."
+                            "text": (
+                                f"Use case guidance:\n{guidance}\n\n"
+                                f"Analyze this person and generate {num_prompts} scene plans as JSON. "
+                                "Be factual about identity; only invent diversity in setting/outfit/pose/lighting."
+                            ),
                         }
                     ]
 
@@ -464,7 +434,8 @@ CRITICAL REQUIREMENTS:
                             ChatMessage(role="system", content=system_prompt),
                             ChatMessage(role="user", content=user_content),
                         ],
-                        temperature=0.8,
+                        # Low temperature: identity extraction must not invent features
+                        temperature=0.3,
                     )
                 else:
                     # No reference photo - use text-only prompt with fallback
@@ -473,10 +444,13 @@ CRITICAL REQUIREMENTS:
                             ChatMessage(role="system", content=system_prompt),
                             ChatMessage(
                                 role="user",
-                                content=f"{guidance}\n\nThink twice and re-evaluate before finalizing the JSON.",
+                                content=(
+                                    f"{guidance}\n\nGenerate {num_prompts} scene plans as JSON. "
+                                    "Without a reference photo, use a neutral adult subject_lock and keep it consistent."
+                                ),
                             ),
                         ],
-                        temperature=0.8,
+                        temperature=0.3,
                     )
             finally:
                 await ai_service.close()
@@ -492,8 +466,13 @@ CRITICAL REQUIREMENTS:
             # Handle both old array format and new object format
             if isinstance(response_data, list):
                 prompts_data = response_data
+                subject_lock = ""
             elif isinstance(response_data, dict):
-                subject_hint = response_data.get("subject_description", "")
+                subject_lock = (
+                    (response_data.get("subject_lock") or "").strip()
+                    or (response_data.get("subject_description") or "").strip()
+                )
+                subject_hint = subject_lock
                 prompts_data = response_data.get("prompts", [])
             else:
                 raise AIServiceError("Prompt generation response was not valid JSON")
@@ -502,18 +481,52 @@ CRITICAL REQUIREMENTS:
             for i, p in enumerate(prompts_data[:num_prompts]):
                 if not isinstance(p, dict):
                     continue
-                full_prompt = (p.get("full_prompt") or "").strip()
+                setting = (p.get("setting") or "").strip()
+                outfit = (p.get("outfit") or "").strip()
+                pose = (p.get("pose") or "").strip()
+                lighting = (p.get("lighting") or "").strip()
+                style = (p.get("style") or "").strip()
+                mood = (p.get("mood") or "").strip()
+
+                # Prefer model-provided scene_body; otherwise compose from fields
+                scene_body = (p.get("scene_body") or "").strip()
+                if not scene_body:
+                    scene_parts = []
+                    if setting:
+                        scene_parts.append(f"Setting: {setting}")
+                    if outfit:
+                        scene_parts.append(f"Outfit inventory: {outfit}")
+                    if pose:
+                        scene_parts.append(f"Pose: {pose}")
+                    if lighting:
+                        scene_parts.append(f"Lighting: {lighting}")
+                    if style:
+                        scene_parts.append(f"Style: {style}")
+                    if mood:
+                        scene_parts.append(f"Mood: {mood}")
+                    scene_body = ". ".join(scene_parts)
+
+                # Prefer sandwich(subject_lock, scene); fall back to legacy full_prompt
+                if subject_lock and scene_body:
+                    full_prompt = sandwich_prompt(subject_lock, scene_body)
+                else:
+                    full_prompt = (p.get("full_prompt") or "").strip()
+                    if full_prompt and subject_lock and subject_lock not in full_prompt:
+                        full_prompt = sandwich_prompt(subject_lock, full_prompt)
+                    elif not full_prompt and scene_body:
+                        full_prompt = sandwich_prompt(subject_lock, scene_body)
+
                 if not full_prompt:
                     continue
                 prompts.append(
                     PhotoshootPrompt(
                         index=int(p.get("index", i)),
-                        setting=(p.get("setting") or "").strip(),
-                        outfit=(p.get("outfit") or "").strip(),
-                        pose=(p.get("pose") or "").strip(),
-                        lighting=(p.get("lighting") or "").strip(),
-                        style=(p.get("style") or "").strip(),
-                        mood=(p.get("mood") or "").strip(),
+                        setting=setting,
+                        outfit=outfit,
+                        pose=pose,
+                        lighting=lighting,
+                        style=style,
+                        mood=mood,
                         full_prompt=full_prompt,
                     )
                 )
@@ -599,9 +612,9 @@ CRITICAL REQUIREMENTS:
         custom_prompt: Optional[str],
         subject_hint: str,
     ) -> List[PhotoshootPrompt]:
-        base = "Professional photorealistic portrait photo of the same person as the reference photos."
-        if subject_hint:
-            base = f"{base} {subject_hint}"
+        subject_lock = (subject_hint or "").strip() or (
+            "Same adult person as the reference photo(s); keep exact face, hair, skin, age, and body proportions."
+        )
 
         if use_case == PhotoshootUseCase.CUSTOM and custom_prompt:
             theme = f"Theme: {custom_prompt.strip()}."
@@ -612,31 +625,31 @@ CRITICAL REQUIREMENTS:
             (
                 "modern studio",
                 "black structured blazer over ivory silk blouse, high-waisted black tailored trousers, black pointed-toe loafers, slim silver watch and stud earrings",
-                "3/4 angle portrait",
-                "softbox key light",
+                "front to slight 3/4 portrait, face clear, eyes near camera",
+                "softbox key light, even on face",
                 "editorial",
                 "confident",
             ),
             (
                 "sunlit cafe",
                 "light blue button-down shirt with rolled sleeves, beige straight-leg chinos, white low-top sneakers, brown leather belt, minimal bracelet",
-                "candid seated",
-                "natural window light",
+                "seated upper body, face clearly visible",
+                "natural window light, soft",
                 "lifestyle",
                 "approachable",
             ),
             (
                 "city street",
                 "charcoal tailored blazer, crisp white crew-neck tee, dark indigo slim jeans, black Chelsea boots, matte black crossbody bag",
-                "walking mid-step",
-                "golden hour",
+                "standing mid-step, face toward camera",
+                "golden hour, soft fill on face",
                 "street style",
                 "energetic",
             ),
             (
                 "office",
                 "navy suit jacket and matching trousers, pale blue shirt, polished brown oxford shoes, subtle tie clip, classic wristwatch",
-                "front-facing headshot",
+                "front-facing headshot, face large in frame",
                 "soft natural light",
                 "corporate",
                 "professional",
@@ -644,15 +657,15 @@ CRITICAL REQUIREMENTS:
             (
                 "rooftop",
                 "structured monochrome trench coat, fitted mock-neck top, tailored wide-leg pants, clean leather ankle boots, geometric statement earrings",
-                "power stance",
-                "dramatic rim light",
-                "high-fashion",
+                "power stance, face clear, slight 3/4",
+                "rim light with soft front fill",
+                "fashion",
                 "bold",
             ),
             (
                 "park",
                 "olive utility jacket over white tee, medium-wash straight jeans, tan sneakers, canvas tote bag, simple necklace",
-                "relaxed smile",
+                "relaxed smile, face fully visible, no sunglasses",
                 "diffused daylight",
                 "candid",
                 "warm",
@@ -660,32 +673,32 @@ CRITICAL REQUIREMENTS:
             (
                 "neutral backdrop",
                 "classic black sheath dress with clean neckline, fitted blazer layer, black closed-toe heels, pearl studs, slim bracelet",
-                "close-up portrait",
-                "studio lighting",
+                "close-up portrait, face dominant in frame",
+                "soft studio lighting",
                 "headshot",
                 "friendly",
             ),
             (
                 "hotel lobby",
                 "deep emerald evening blazer, satin camisole, tailored tapered trousers, black heeled sandals, metallic clutch, layered pendant necklace",
-                "three-quarter body",
-                "warm ambient light",
+                "three-quarter body, face toward camera",
+                "warm ambient light with soft key",
                 "luxury",
                 "poised",
             ),
             (
                 "beach",
-                "light linen button shirt, sand-colored relaxed shorts, minimalist leather sandals, woven hat, lightweight sunglasses",
-                "looking over shoulder",
-                "sunset light",
+                "light linen button shirt, sand-colored relaxed shorts, minimalist leather sandals, woven hat held in hand (not covering face)",
+                "looking near camera, face unobstructed",
+                "sunset light with soft fill",
                 "travel",
                 "joyful",
             ),
             (
                 "gallery",
                 "cream oversized blazer over black turtleneck, pleated midi skirt, pointed ankle boots, sculptural ring set, structured mini bag",
-                "artistic pose",
-                "moody spotlight",
+                "standing portrait, face clear, slight 3/4",
+                "soft spotlight with gentle fill",
                 "editorial",
                 "thoughtful",
             ),
@@ -694,14 +707,11 @@ CRITICAL REQUIREMENTS:
         prompts: List[PhotoshootPrompt] = []
         for i in range(num_prompts):
             setting, outfit, pose, lighting, style, mood = seeds[i % len(seeds)]
-            full_prompt = (
-                f"{base} {theme} "
-                f"Setting: {setting}. Outfit: {outfit}. Pose: {pose}. "
-                f"Lighting: {lighting}. Style: {style}. Mood: {mood}. "
-                "Outfit fidelity is mandatory: match every listed clothing item, footwear item, and accessory exactly; do not add or remove items. "
-                "Think twice and re-evaluate before rendering. "
-                "High-end professional photography, sharp focus, flattering composition."
+            scene_body = (
+                f"{theme} Setting: {setting}. Outfit inventory: {outfit}. "
+                f"Pose: {pose}. Lighting: {lighting}. Style: {style}. Mood: {mood}."
             )
+            full_prompt = sandwich_prompt(subject_lock, scene_body)
             prompts.append(
                 PhotoshootPrompt(
                     index=i,
@@ -929,7 +939,7 @@ class PhotoshootStreamingService:
         self.user_id = user_id
         self.db = db
 
-    async def run_pipeline(self, job: "PhotoshootJob") -> None:
+    async def run_pipeline(self, job: PhotoshootJob) -> None:
         """Run the photoshoot generation pipeline with SSE updates.
 
         1. Validate and check limits
@@ -938,7 +948,6 @@ class PhotoshootStreamingService:
         4. Update usage and broadcast completion
         """
         from app.services.photoshoot_job_service import (
-            PhotoshootJob,
             PhotoshootJobService,
             PhotoshootJobStatus,
         )
@@ -1024,7 +1033,7 @@ class PhotoshootStreamingService:
 
     async def _generate_images_streaming(
         self,
-        job: "PhotoshootJob",
+        job: PhotoshootJob,
         prompts: List[PhotoshootPrompt],
     ) -> None:
         """Generate images in batches, broadcasting progress via SSE."""
@@ -1100,7 +1109,7 @@ class PhotoshootStreamingService:
 
     async def _generate_single_image(
         self,
-        job: "PhotoshootJob",
+        job: PhotoshootJob,
         prompt: PhotoshootPrompt,
         ai_service,
         normalized_refs: List[str],

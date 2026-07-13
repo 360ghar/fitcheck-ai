@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 // Layout provided by parent route in App.tsx
 import SEO from '@/components/seo/SEO'
-import { BreadcrumbJsonLd, HowToJsonLd } from '@/components/seo/JsonLd'
+import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
 import {
   Sparkles,
@@ -176,14 +176,14 @@ export default function OutfitRecommendationsPage() {
   return (
     <>
       <SEO
-        title="AI Outfit Recommendations | Daily Style Suggestions | FitCheck AI"
-        description="Get personalized daily outfit recommendations powered by AI. Considers your wardrobe, weather, calendar, and style preferences for perfect suggestions every day."
+        title="AI Outfit Recommendations | What to Wear Today"
+        description="Get daily outfit ideas from clothes you already own. Weather-aware, occasion-ready recommendations in seconds."
         canonicalUrl="https://fitcheckaiapp.com/features/outfit-recommendations"
-        ogType="article"
+        keywords="AI outfit recommendations, what to wear today, AI outfit planner"
+        ogType="website"
         jsonLd={howToSchema}
       />
       <BreadcrumbJsonLd items={breadcrumbs} />
-      <HowToJsonLd {...howToSchema} />
 
       <div className="pt-20">
         {/* Hero Section */}

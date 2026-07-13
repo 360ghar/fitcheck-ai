@@ -142,27 +142,40 @@ class _DashboardContentState extends State<DashboardContent> {
             // Avatar wrapped in single Obx
             child: Obx(() {
               final user = authController.user.value;
+              final initial = (user?.fullName?.isNotEmpty == true
+                      ? user!.fullName!.substring(0, 1).toUpperCase()
+                      : null) ??
+                  (user?.email.isNotEmpty == true
+                      ? user!.email.substring(0, 1).toUpperCase()
+                      : null) ??
+                  'U';
+              final avatarUrl = user?.avatarUrl;
               return CircleAvatar(
                 radius: 22,
                 backgroundColor: tokens.brandColor.withOpacity(0.15),
-                backgroundImage: user?.avatarUrl != null
-                    ? NetworkImage(user!.avatarUrl!)
-                    : null,
-                child: user?.avatarUrl == null
-                    ? Text(
-                        (user?.fullName?.isNotEmpty == true
-                                ? user!.fullName!.substring(0, 1).toUpperCase()
-                                : null) ??
-                            (user?.email.isNotEmpty == true
-                                ? user!.email.substring(0, 1).toUpperCase()
-                                : null) ??
-                            'U',
+                child: avatarUrl != null && avatarUrl.isNotEmpty
+                    ? ClipOval(
+                        child: Image.network(
+                          avatarUrl,
+                          width: 44,
+                          height: 44,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Text(
+                            initial,
+                            style: TextStyle(
+                              color: tokens.brandColor,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      )
+                    : Text(
+                        initial,
                         style: TextStyle(
                           color: tokens.brandColor,
                           fontWeight: FontWeight.w700,
                         ),
-                      )
-                    : null,
+                      ),
               );
             }),
           ),

@@ -313,14 +313,34 @@ class AuthFooterText extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        GestureDetector(
-          onTap: () => _openUrl(privacyPolicyUrl),
-          child: Text('PRIVACY POLICY', style: linkStyle),
+        Semantics(
+          button: true,
+          label: 'Privacy policy',
+          child: TextButton(
+            onPressed: () => _openUrl(privacyPolicyUrl),
+            style: TextButton.styleFrom(
+              minimumSize: const Size(48, 44),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+              foregroundColor: textColor.withOpacity(0.65),
+              textStyle: linkStyle,
+            ),
+            child: const Text('PRIVACY POLICY'),
+          ),
         ),
         Text('  |  ', style: linkStyle),
-        GestureDetector(
-          onTap: () => _openUrl(termsOfServiceUrl),
-          child: Text('TERMS OF SERVICE', style: linkStyle),
+        Semantics(
+          button: true,
+          label: 'Terms of service',
+          child: TextButton(
+            onPressed: () => _openUrl(termsOfServiceUrl),
+            style: TextButton.styleFrom(
+              minimumSize: const Size(48, 44),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+              foregroundColor: textColor.withOpacity(0.65),
+              textStyle: linkStyle,
+            ),
+            child: const Text('TERMS OF SERVICE'),
+          ),
         ),
       ],
     );

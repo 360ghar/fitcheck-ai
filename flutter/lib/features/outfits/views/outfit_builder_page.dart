@@ -111,8 +111,16 @@ class OutfitBuilderPage extends StatelessWidget {
       child: Column(
         children: [
           // Name input
-          TextField(
+          TextFormField(
+            initialValue: controller.name.value,
             onChanged: (value) => controller.name.value = value,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Please enter an outfit name';
+              }
+              return null;
+            },
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             decoration: InputDecoration(
               labelText: 'Outfit Name *',
               hintText: 'My Casual Outfit',
@@ -121,6 +129,10 @@ class OutfitBuilderPage extends StatelessWidget {
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppConstants.radius12),
                 borderSide: BorderSide.none,
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppConstants.radius12),
+                borderSide: BorderSide(color: Theme.of(context).colorScheme.error),
               ),
             ),
           ),

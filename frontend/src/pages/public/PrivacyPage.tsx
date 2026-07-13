@@ -1,7 +1,15 @@
-import { AnimatedSection } from "@/components/landing/AnimatedSection";
+import { AnimatedSection } from '@/components/landing/AnimatedSection'
+import SEO from '@/components/seo/SEO'
+import { PAGE_SEO, SEO_CONFIG } from '@/components/seo/seo-config'
 
 export default function PrivacyPage() {
   return (
+    <>
+      <SEO
+        title={PAGE_SEO.privacy.title}
+        description={PAGE_SEO.privacy.description}
+        canonicalUrl={`${SEO_CONFIG.siteUrl}/privacy`}
+      />
     <div className="pt-20">
       <section className="py-24 bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-950">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -11,7 +19,7 @@ export default function PrivacyPage() {
                 Privacy Policy
               </h1>
               <p className="text-gray-600 dark:text-gray-300">
-                Last updated: January 1, 2026
+                Last updated: July 13, 2026
               </p>
             </div>
           </AnimatedSection>
@@ -27,7 +35,7 @@ export default function PrivacyPage() {
                 FitCheck AI ("we," "our," or "us") is committed to protecting
                 your privacy. This Privacy Policy explains how we collect, use,
                 disclose, and safeguard your information when you use our
-                Service.
+                website, web app, and mobile applications (the "Service").
               </p>
 
               <h2>2. Information We Collect</h2>
@@ -36,19 +44,28 @@ export default function PrivacyPage() {
               <ul>
                 <li>
                   <strong>Account Information:</strong> Name, email address,
-                  password
+                  and authentication credentials (including Sign in with Apple
+                  or Google)
                 </li>
                 <li>
-                  <strong>Profile Information:</strong> Body measurements, style
-                  preferences
+                  <strong>Profile Information:</strong> Body measurements
+                  (height, weight, body shape, skin tone), style preferences
                 </li>
                 <li>
-                  <strong>Wardrobe Content:</strong> Photos of clothing items
-                  you upload
+                  <strong>Wardrobe &amp; Media Content:</strong> Photos of
+                  clothing, selfies or body photos for try-on and AI
+                  photoshoot, outfits you create, and content you choose to
+                  share
                 </li>
                 <li>
-                  <strong>Payment Information:</strong> Billing details for paid
-                  subscriptions (processed securely by our payment provider)
+                  <strong>Support Content:</strong> Messages, bug reports, and
+                  content reports you submit to our team
+                </li>
+                <li>
+                  <strong>Payment Information (web/Android where offered):</strong>{' '}
+                  Billing is processed by our payment provider (e.g. Stripe).
+                  We do not store full card numbers. The iOS app free v1 does
+                  not offer in-app purchases or subscriptions.
                 </li>
               </ul>
 
@@ -56,19 +73,19 @@ export default function PrivacyPage() {
               <ul>
                 <li>
                   <strong>Usage Data:</strong> Features used, outfits created,
-                  time spent in app
+                  product interactions
                 </li>
                 <li>
                   <strong>Device Information:</strong> Device type, operating
-                  system, browser type
+                  system, app version
                 </li>
                 <li>
-                  <strong>Log Data:</strong> IP address, access times, pages
-                  viewed
+                  <strong>Log &amp; Diagnostic Data:</strong> IP address, access
+                  times, crash reports, and performance diagnostics
                 </li>
                 <li>
-                  <strong>Location Data:</strong> General location for
-                  weather-based features (with your permission)
+                  <strong>Location Data:</strong> Approximate location for
+                  weather-based outfit suggestions when you use those features
                 </li>
               </ul>
 
@@ -77,49 +94,73 @@ export default function PrivacyPage() {
               <ul>
                 <li>Provide, maintain, and improve the Service</li>
                 <li>
-                  Process your wardrobe photos using AI to extract and
-                  categorize items
+                  Process photos with AI to extract and catalog wardrobe items,
+                  generate try-on visualizations, photoshoot images, and
+                  recommendations
                 </li>
                 <li>Generate personalized outfit recommendations</li>
                 <li>Provide weather-appropriate suggestions</li>
                 <li>
-                  Send you updates, newsletters, and marketing communications
-                  (with your consent)
-                </li>
-                <li>Respond to your inquiries and provide customer support</li>
-                <li>
-                  Monitor and analyze usage patterns to improve user experience
+                  Authenticate you and sync your wardrobe across devices
                 </li>
                 <li>
-                  Detect, prevent, and address technical issues and security
-                  threats
+                  Send service-related notices; marketing only with your consent
+                </li>
+                <li>Respond to support requests and content reports</li>
+                <li>
+                  Monitor reliability, prevent abuse, and secure the Service
                 </li>
               </ul>
 
-              <h2>4. How We Share Your Information</h2>
+              <h2>4. AI Processing and Third-Party Service Providers</h2>
               <p>
-                We do not sell your personal information. We may share your
-                information with:
+                We do not sell your personal information. To operate the
+                Service we use trusted third-party processors. When you use AI
+                features, relevant content (for example clothing photos,
+                selfies, or text prompts) is sent through our backend to these
+                processors solely to fulfill your request. On mobile, we ask
+                for consent before the first AI use that shares data with
+                third-party AI providers.
               </p>
               <ul>
                 <li>
-                  <strong>Service Providers:</strong> Third-party vendors who
-                  help us operate the Service (hosting, AI processing,
-                  analytics)
+                  <strong>Supabase:</strong> Authentication, database, and
+                  file storage for your account, wardrobe, and media
                 </li>
                 <li>
-                  <strong>Legal Requirements:</strong> When required by law or
-                  to protect our rights
+                  <strong>Google Gemini:</strong> AI models used for clothing
+                  detection, recommendations, try-on, and related image/text
+                  generation
                 </li>
                 <li>
-                  <strong>Business Transfers:</strong> In connection with a
-                  merger, acquisition, or sale of assets
+                  <strong>OpenAI:</strong> AI models used for selected
+                  generation and styling features when configured by our
+                  backend
                 </li>
                 <li>
-                  <strong>With Your Consent:</strong> When you explicitly agree
-                  to share information
+                  <strong>PostHog:</strong> Product analytics (feature usage).
+                  We do not use the advertising identifier (IDFA) for tracking
+                  across apps or websites
+                </li>
+                <li>
+                  <strong>Sentry:</strong> Crash reporting and performance
+                  diagnostics to improve app stability
+                </li>
+                <li>
+                  <strong>Hosting &amp; infrastructure:</strong> Cloud hosts
+                  that run our API and website
+                </li>
+                <li>
+                  <strong>Payment processors</strong> (where paid plans are
+                  offered outside iOS free v1): e.g. Stripe for web billing
                 </li>
               </ul>
+              <p>
+                These providers process data under their own privacy policies
+                and contractual safeguards. We may also share information when
+                required by law, to protect our rights, or in connection with a
+                business transfer.
+              </p>
 
               <h2>5. Data Security</h2>
               <p>
@@ -128,18 +169,18 @@ export default function PrivacyPage() {
               </p>
               <ul>
                 <li>
-                  Encryption of data in transit (TLS/SSL) and at rest (AES-256)
+                  Encryption of data in transit (TLS/SSL) and at rest where
+                  supported by our providers
                 </li>
-                <li>Regular security audits and penetration testing</li>
                 <li>Access controls and authentication requirements</li>
-                <li>Secure data centers with physical security measures</li>
+                <li>Monitoring for technical issues and abuse</li>
               </ul>
               <p>
-                However, no method of transmission over the Internet is 100%
-                secure. We cannot guarantee absolute security of your data.
+                No method of transmission over the Internet is 100% secure. We
+                cannot guarantee absolute security of your data.
               </p>
 
-              <h2>6. Your Rights and Choices</h2>
+              <h2>6. Account Deletion and Your Rights</h2>
               <p>You have the right to:</p>
               <ul>
                 <li>
@@ -147,57 +188,48 @@ export default function PrivacyPage() {
                 </li>
                 <li>
                   <strong>Correction:</strong> Update or correct inaccurate
-                  information
+                  information in Settings or by contacting us
                 </li>
                 <li>
-                  <strong>Deletion:</strong> Request deletion of your data
-                  (subject to legal obligations)
+                  <strong>Deletion:</strong> Delete your account and associated
+                  data in the app or web app via{' '}
+                  <strong>Settings → Delete Account</strong>. This removes your
+                  user record and associated wardrobe, outfits, photos, and
+                  profile data from our systems, subject to short-term backups
+                  and legal retention requirements. You may also email{' '}
+                  <a
+                    href="mailto:privacy@fitcheckaiapp.com"
+                    className="text-indigo-600 hover:text-indigo-500"
+                  >
+                    privacy@fitcheckaiapp.com
+                  </a>
                 </li>
                 <li>
-                  <strong>Portability:</strong> Export your wardrobe data in a
-                  common format
+                  <strong>Portability:</strong> Request a data export from
+                  Settings (where available)
                 </li>
                 <li>
                   <strong>Opt-out:</strong> Unsubscribe from marketing
                   communications
                 </li>
-                <li>
-                  <strong>Restrict Processing:</strong> Limit how we use your
-                  data
-                </li>
               </ul>
               <p>
-                To exercise these rights, contact us at{" "}
-                <a
-                  href="mailto:privacy@fitcheckaiapp.com"
-                  className="text-indigo-600 hover:text-indigo-500"
-                >
-                  privacy@fitcheckaiapp.com
-                </a>
+                We aim to complete deletion requests promptly. Residual copies
+                in encrypted backups may persist for a limited period (typically
+                up to 30 days) before automatic purge.
               </p>
 
-              <h2>7. Cookies and Tracking</h2>
+              <h2>7. Cookies and Similar Technologies</h2>
               <p>
-                We use cookies and similar technologies to enhance your
-                experience. You can control cookie settings through your
-                browser. We use:
+                On the website we use cookies and similar technologies for
+                essential functionality, preferences, and analytics. You can
+                control cookies through your browser. The mobile apps use
+                platform storage and first-party analytics as described above;
+                they are not used to track you across other companies&apos; apps
+                or websites for advertising.
               </p>
-              <ul>
-                <li>
-                  <strong>Essential Cookies:</strong> Required for the Service
-                  to function
-                </li>
-                <li>
-                  <strong>Analytics Cookies:</strong> Help us understand how you
-                  use the Service
-                </li>
-                <li>
-                  <strong>Preference Cookies:</strong> Remember your settings
-                  and preferences
-                </li>
-              </ul>
 
-              <h2>8. Children's Privacy</h2>
+              <h2>8. Children&apos;s Privacy</h2>
               <p>
                 The Service is not intended for children under 13. We do not
                 knowingly collect information from children under 13. If we
@@ -208,16 +240,18 @@ export default function PrivacyPage() {
               <h2>9. International Data Transfers</h2>
               <p>
                 Your data may be transferred to and processed in countries other
-                than your own. We ensure appropriate safeguards are in place to
-                protect your data in compliance with applicable laws.
+                than your own, including where our AI and infrastructure
+                providers operate. We use appropriate safeguards consistent with
+                applicable law.
               </p>
 
               <h2>10. Data Retention</h2>
               <p>
                 We retain your data for as long as your account is active or as
-                needed to provide the Service. You can request deletion of your
-                data at any time. Some data may be retained for legal or
-                legitimate business purposes.
+                needed to provide the Service. After account deletion, we remove
+                personal data as described in Section 6, except where retention
+                is required for legal, security, or legitimate business
+                purposes (for example, fraud prevention logs).
               </p>
 
               <h2>11. Changes to This Policy</h2>
@@ -234,7 +268,7 @@ export default function PrivacyPage() {
               </p>
               <ul>
                 <li>
-                  Email:{" "}
+                  Privacy:{' '}
                   <a
                     href="mailto:privacy@fitcheckaiapp.com"
                     className="text-indigo-600 hover:text-indigo-500"
@@ -242,12 +276,30 @@ export default function PrivacyPage() {
                     privacy@fitcheckaiapp.com
                   </a>
                 </li>
-                <li>Address: 123 Fashion Street, San Francisco, CA 94102</li>
+                <li>
+                  Support:{' '}
+                  <a
+                    href="mailto:support@fitcheckaiapp.com"
+                    className="text-indigo-600 hover:text-indigo-500"
+                  >
+                    support@fitcheckaiapp.com
+                  </a>
+                </li>
+                <li>
+                  Web:{' '}
+                  <a
+                    href="https://fitcheckaiapp.com/support"
+                    className="text-indigo-600 hover:text-indigo-500"
+                  >
+                    fitcheckaiapp.com/support
+                  </a>
+                </li>
               </ul>
             </div>
           </AnimatedSection>
         </div>
       </section>
     </div>
-  );
+    </>
+  )
 }

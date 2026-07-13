@@ -169,6 +169,11 @@ class FeedbackPage extends GetView<FeedbackController> {
 
                       const SizedBox(height: AppConstants.spacing16),
 
+                      Form(
+                        key: controller.formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
                       // Subject field
                       Text(
                         'Subject *',
@@ -178,7 +183,7 @@ class FeedbackPage extends GetView<FeedbackController> {
                       ),
                       const SizedBox(height: AppConstants.spacing8),
                       TextFormField(
-                        onChanged: (value) => controller.subject.value = value,
+                        controller: controller.subjectController,
                         decoration: InputDecoration(
                           hintText: 'Brief summary of your feedback',
                           border: OutlineInputBorder(
@@ -190,6 +195,12 @@ class FeedbackPage extends GetView<FeedbackController> {
                           ),
                         ),
                         maxLength: 200,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Subject is required';
+                          }
+                          return null;
+                        },
                       ),
 
                       const SizedBox(height: AppConstants.spacing16),
@@ -214,8 +225,9 @@ class FeedbackPage extends GetView<FeedbackController> {
                           default:
                             hint = 'Share your thoughts, suggestions, or questions';
                         }
+                        // Stable TextEditingController keeps typed text when category changes
                         return TextFormField(
-                          onChanged: (value) => controller.description.value = value,
+                          controller: controller.descriptionController,
                           decoration: InputDecoration(
                             hintText: hint,
                             border: OutlineInputBorder(
@@ -225,8 +237,17 @@ class FeedbackPage extends GetView<FeedbackController> {
                           ),
                           maxLines: 5,
                           maxLength: 5000,
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Description is required';
+                            }
+                            return null;
+                          },
                         );
                       }),
+                          ],
+                        ),
+                      ),
 
                       const SizedBox(height: AppConstants.spacing16),
 

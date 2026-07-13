@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../repositories/feedback_repository.dart';
@@ -15,6 +16,11 @@ class FeedbackController extends GetxController {
   final RxString description = ''.obs;
   final RxList<File> attachments = <File>[].obs;
 
+  /// Stable controllers so category/Obx rebuilds don't wipe typed text
+  final TextEditingController subjectController = TextEditingController();
+  final TextEditingController descriptionController = TextEditingController();
+  final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+
   // Loading states
   final RxBool isSubmitting = false.obs;
   final RxBool isLoadingTickets = false.obs;
@@ -29,7 +35,20 @@ class FeedbackController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    subjectController.addListener(() {
+      subject.value = subjectController.text;
+    });
+    descriptionController.addListener(() {
+      description.value = descriptionController.text;
+    });
     fetchTickets();
+  }
+
+  @override
+  void onClose() {
+    subjectController.dispose();
+    descriptionController.dispose();
+    super.onClose();
   }
 
   /// Pick image from gallery
@@ -86,7 +105,19 @@ class FeedbackController extends GetxController {
     );
 
     if (pickedFile != null) {
-      attachments.add(File(pickedFile.path));
+      final file = File(pickedFile.path);
+      final size = await file.length();
+
+      if (size > 5 * 1024 * 1024) {
+        Get.snackbar(
+          'File Too Large',
+          'Image must be under 5MB',
+          snackPosition: SnackPosition.TOP,
+        );
+        return;
+      }
+
+      attachments.add(file);
     }
   }
 
@@ -97,12 +128,7 @@ class FeedbackController extends GetxController {
 
   /// Submit feedback
   Future<void> submit() async {
-    if (subject.value.trim().isEmpty || description.value.trim().isEmpty) {
-      Get.snackbar(
-        'Error',
-        'Please fill in all required fields',
-        snackPosition: SnackPosition.TOP,
-      );
+    if (!(formKey.currentState?.validate() ?? false)) {
       return;
     }
 
@@ -112,13 +138,15 @@ class FeedbackController extends GetxController {
     try {
       await _repository.submitFeedback(
         category: category.value,
-        subject: subject.value.trim(),
-        description: description.value.trim(),
+        subject: subjectController.text.trim(),
+        description: descriptionController.text.trim(),
         attachments: attachments.isNotEmpty ? attachments.toList() : null,
       );
 
       // Reset form
       category.value = TicketCategory.generalFeedback;
+      subjectController.clear();
+      descriptionController.clear();
       subject.value = '';
       description.value = '';
       attachments.clear();

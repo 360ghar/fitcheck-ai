@@ -60,7 +60,7 @@ export function TryOnDemo() {
         const demoError = err as DemoApiError
         setError(
           demoError.isRateLimit
-            ? 'Daily demo limit reached. Sign up for unlimited access!'
+            ? 'Daily demo limit reached. Sign up free to keep using try-on.'
             : demoError.message || 'Failed to generate try-on'
         )
         setState('error')
@@ -97,14 +97,14 @@ export function TryOnDemo() {
   return (
     <GlassCard className="p-6 h-full flex flex-col">
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center">
           <Wand2 className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h3 className="font-semibold text-gray-900 dark:text-white">
-            Virtual Try-On
+          <h3 className="font-semibold text-stone-900 dark:text-stone-50">
+            Virtual try-on
           </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-stone-500 dark:text-stone-400">
             See yourself in any outfit
           </p>
         </div>
@@ -117,7 +117,7 @@ export function TryOnDemo() {
             {...personDropzone.getRootProps()}
             className={`h-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors flex flex-col items-center justify-center ${
               personDropzone.isDragActive
-                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30'
                 : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
             }`}
           >
@@ -160,7 +160,7 @@ export function TryOnDemo() {
               {...outfitDropzone.getRootProps()}
               className={`flex-1 border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors flex flex-col items-center justify-center ${
                 outfitDropzone.isDragActive
-                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30'
                   : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
               }`}
             >
@@ -196,7 +196,7 @@ export function TryOnDemo() {
                 />
               )}
             </div>
-            <Loader2 className="w-8 h-8 text-purple-500 animate-spin mb-2" />
+            <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-2" />
             <p className="text-gray-600 dark:text-gray-400">
               Creating your look...
             </p>
@@ -223,7 +223,7 @@ export function TryOnDemo() {
               </Button>
               <Button
                 size="sm"
-                className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
                 onClick={() => setShowLoginModal(true)}
               >
                 Get Unlimited Access

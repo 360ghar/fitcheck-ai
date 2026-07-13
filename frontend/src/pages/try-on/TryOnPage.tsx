@@ -4,7 +4,7 @@
  * Allows users to upload a clothing image and see how they would look wearing it.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Download, Upload, RefreshCw, Loader2, Sparkles, X, Check } from 'lucide-react';
 import { useUserAvatar } from '@/stores/authStore';
@@ -124,21 +124,33 @@ export default function TryOnPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<TryOnResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
 
-  // Check for avatar - show prompt if missing
-  if (!userAvatar) {
-    return <AvatarRequiredPrompt />;
-  }
+  const revokePreviewUrl = useCallback(() => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      revokePreviewUrl();
+    };
+  }, [revokePreviewUrl]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (file) {
+      revokePreviewUrl();
+      const url = URL.createObjectURL(file);
+      previewUrlRef.current = url;
       setClothingFile(file);
-      setClothingPreview(URL.createObjectURL(file));
+      setClothingPreview(url);
       setStep('options');
       setError(null);
     }
-  }, []);
+  }, [revokePreviewUrl]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -148,6 +160,11 @@ export default function TryOnPage() {
     multiple: false,
     maxSize: 10 * 1024 * 1024, // 10MB
   });
+
+  // Check for avatar - show prompt if missing (after hooks for Rules of Hooks)
+  if (!userAvatar) {
+    return <AvatarRequiredPrompt />;
+  }
 
   const handleGenerate = async () => {
     if (!clothingFile) return;
@@ -182,6 +199,7 @@ export default function TryOnPage() {
   };
 
   const handleReset = () => {
+    revokePreviewUrl();
     setClothingFile(null);
     setClothingPreview(null);
     setClothingDescription('');

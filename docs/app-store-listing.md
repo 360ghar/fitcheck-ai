@@ -349,8 +349,19 @@ Two practical options; pick whichever matches your access:
 5. (Optional) Create a calendar entry: `POST /api/v1/calendar` (see
    `backend/app/api/v1/calendar.py`).
 
-A small seeding script can be written against these endpoints; coordinate with the backend owner —
-seeding scripts live under `backend/` which is outside this work stream's file ownership.
+Use the seeding script:
+
+```bash
+cd backend
+export API_BASE_URL=https://api.fitcheckaiapp.com
+export SUPABASE_URL=...
+export SUPABASE_ANON_KEY=...
+export REVIEW_EMAIL=review@fitcheckaiapp.com
+export REVIEW_PASSWORD='...'
+python scripts/seed_app_store_reviewer.py
+```
+
+Script path: `backend/scripts/seed_app_store_reviewer.py`.
 
 **Option B — directly in Supabase.**
 - Create the auth user in Supabase Auth (Apple/email provider).

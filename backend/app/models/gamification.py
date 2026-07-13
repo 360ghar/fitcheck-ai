@@ -8,12 +8,11 @@ Implements user engagement features including:
 - Reward points
 """
 
-from datetime import datetime, timedelta
-from typing import Optional, List
-from uuid import UUID, uuid4
+from datetime import datetime
+from uuid import uuid4
 from enum import Enum
 
-from sqlalchemy import Column, String, DateTime, Boolean, Integer, Text, ForeignKey, Float, JSON
+from sqlalchemy import Column, String, DateTime, Boolean, Integer, Text, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID as PGUUID, ARRAY
 from sqlalchemy.orm import relationship
 
@@ -288,7 +287,6 @@ class UserPoints(Base):
         level = 1
         while UserPoints.calculate_xp_for_level(level + 1) <= total_xp:
             level += 1
-        xp_for_current = UserPoints.calculate_xp_for_level(level)
         xp_to_next = UserPoints.calculate_xp_for_level(level + 1) - total_xp
         return level, xp_to_next
 

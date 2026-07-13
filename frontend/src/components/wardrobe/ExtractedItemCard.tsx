@@ -254,6 +254,7 @@ export function ExtractedItemCard({
               className="h-7 w-7 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-700"
               onClick={() => onRegenerate(item.tempId)}
               disabled={isRegenerating}
+              aria-label="Regenerate item"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
             </Button>
@@ -262,6 +263,7 @@ export function ExtractedItemCard({
               size="icon"
               className="h-7 w-7 bg-white/90 dark:bg-gray-800/90 hover:bg-red-100 dark:hover:bg-red-900/30"
               onClick={() => setShowConfirmDelete(true)}
+              aria-label="Delete item"
             >
               <Trash2 className="h-3.5 w-3.5 text-red-500" />
             </Button>

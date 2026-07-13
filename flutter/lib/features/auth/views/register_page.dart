@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../app/routes/app_routes.dart';
@@ -152,7 +153,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       const SizedBox(height: AppConstants.spacing16),
                       _buildDivider(tokens),
                       const SizedBox(height: AppConstants.spacing16),
-                      if (Platform.isIOS) ...[
+                      if (!kIsWeb && Platform.isIOS) ...[
                         Obx(() => _buildAppleSignInButton(authController)),
                         const SizedBox(height: AppConstants.spacing12),
                       ],
@@ -170,8 +171,11 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Widget _buildNameField(AuthUiTokens tokens) {
-    return TextFormField(
-      controller: _nameController,
+    return Semantics(
+      label: 'Full Name',
+      textField: true,
+      child: TextFormField(
+        controller: _nameController,
       textCapitalization: TextCapitalization.words,
       textInputAction: TextInputAction.next,
       style: TextStyle(color: tokens.textColor),
@@ -188,38 +192,46 @@ class _RegisterPageState extends State<RegisterPage> {
         }
         return null;
       },
+    ),
     );
   }
 
   Widget _buildEmailField(AuthUiTokens tokens) {
-    return TextFormField(
-      controller: _emailController,
-      keyboardType: TextInputType.emailAddress,
-      textInputAction: TextInputAction.next,
-      style: TextStyle(color: tokens.textColor),
-      cursorColor: tokens.brandColor,
-      decoration: AuthFormStyles.inputDecoration(
-        context: context,
-        label: 'Email',
-        hint: 'Enter your email',
-        icon: Icons.mail,
+    return Semantics(
+      label: 'Email',
+      textField: true,
+      child: TextFormField(
+        controller: _emailController,
+        keyboardType: TextInputType.emailAddress,
+        textInputAction: TextInputAction.next,
+        style: TextStyle(color: tokens.textColor),
+        cursorColor: tokens.brandColor,
+        decoration: AuthFormStyles.inputDecoration(
+          context: context,
+          label: 'Email',
+          hint: 'Enter your email',
+          icon: Icons.mail,
+        ),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Please enter your email';
+          }
+          if (!GetUtils.isEmail(value)) {
+            return 'Please enter a valid email';
+          }
+          return null;
+        },
       ),
-      validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Please enter your email';
-        }
-        if (!GetUtils.isEmail(value)) {
-          return 'Please enter a valid email';
-        }
-        return null;
-      },
     );
   }
 
   Widget _buildPasswordField(AuthUiTokens tokens) {
     return Obx(
-      () => TextFormField(
-        controller: _passwordController,
+      () => Semantics(
+        label: 'Password',
+        textField: true,
+        child: TextFormField(
+          controller: _passwordController,
         obscureText: !_isPasswordVisible.value,
         textInputAction: TextInputAction.next,
         style: TextStyle(color: tokens.textColor),
@@ -230,6 +242,7 @@ class _RegisterPageState extends State<RegisterPage> {
           hint: 'Create a password',
           icon: Icons.lock,
           suffixIcon: IconButton(
+            tooltip: _isPasswordVisible.value ? 'Hide password' : 'Show password',
             icon: Icon(
               _isPasswordVisible.value
                   ? Icons.visibility
@@ -251,13 +264,17 @@ class _RegisterPageState extends State<RegisterPage> {
           return null;
         },
       ),
+      ),
     );
   }
 
   Widget _buildConfirmPasswordField(AuthUiTokens tokens) {
     return Obx(
-      () => TextFormField(
-        controller: _confirmPasswordController,
+      () => Semantics(
+        label: 'Confirm Password',
+        textField: true,
+        child: TextFormField(
+          controller: _confirmPasswordController,
         obscureText: !_isConfirmPasswordVisible.value,
         textInputAction: TextInputAction.done,
         onFieldSubmitted: (_) => _handleRegister(),
@@ -269,6 +286,9 @@ class _RegisterPageState extends State<RegisterPage> {
           hint: 'Confirm your password',
           icon: Icons.lock,
           suffixIcon: IconButton(
+            tooltip: _isConfirmPasswordVisible.value
+                ? 'Hide password'
+                : 'Show password',
             icon: Icon(
               _isConfirmPasswordVisible.value
                   ? Icons.visibility
@@ -290,6 +310,7 @@ class _RegisterPageState extends State<RegisterPage> {
           }
           return null;
         },
+      ),
       ),
     );
   }
@@ -361,8 +382,12 @@ class _RegisterPageState extends State<RegisterPage> {
     AuthController authController,
     AuthUiTokens tokens,
   ) {
-    return ElevatedButton(
-      onPressed: authController.isLoading.value ? null : _handleRegister,
+    return Semantics(
+      label: 'Create Account',
+      button: true,
+      enabled: !authController.isLoading.value,
+      child: ElevatedButton(
+        onPressed: authController.isLoading.value ? null : _handleRegister,
       style: ElevatedButton.styleFrom(
         backgroundColor: tokens.brandColor,
         foregroundColor: Colors.white,
@@ -383,6 +408,7 @@ class _RegisterPageState extends State<RegisterPage> {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : const Text('Create Account'),
+    ),
     );
   }
 
@@ -418,8 +444,11 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Widget _buildGoogleSignInButton(AuthUiTokens tokens) {
-    return OutlinedButton.icon(
-      onPressed: _handleGoogleSignIn,
+    return Semantics(
+      label: 'Continue with Google',
+      button: true,
+      child: OutlinedButton.icon(
+        onPressed: _handleGoogleSignIn,
       icon: const Icon(Icons.login),
       label: const Text('Continue with Google'),
       style: OutlinedButton.styleFrom(
@@ -435,6 +464,7 @@ class _RegisterPageState extends State<RegisterPage> {
           letterSpacing: 0.3,
         ),
       ),
+    ),
     );
   }
 
@@ -449,10 +479,14 @@ class _RegisterPageState extends State<RegisterPage> {
               'Already have an account? ',
               style: TextStyle(color: tokens.secondaryTextColor, fontSize: 14),
             ),
-            TextButton(
-              onPressed: () => Get.offNamed(Routes.login),
-              style: TextButton.styleFrom(foregroundColor: tokens.textColor),
-              child: const Text('Log In'),
+            Semantics(
+              label: 'Log In',
+              button: true,
+              child: TextButton(
+                onPressed: () => Get.offNamed(Routes.login),
+                style: TextButton.styleFrom(foregroundColor: tokens.textColor),
+                child: const Text('Log In'),
+              ),
             ),
           ],
         ),

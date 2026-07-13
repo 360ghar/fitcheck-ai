@@ -1,7 +1,6 @@
 """
 Referral service for managing referral codes and redemptions.
 """
-import logging
 import re
 from datetime import datetime
 from typing import Optional
@@ -9,7 +8,8 @@ from typing import Optional
 from supabase import Client
 
 from app.core.config import settings
-from app.core.exceptions import DatabaseError, ValidationError
+from app.core.exceptions import DatabaseError
+from app.core.logging_config import get_context_logger
 from app.models.subscription import (
     ReferralCodeResponse,
     ReferralStats,
@@ -18,7 +18,7 @@ from app.models.subscription import (
 )
 from app.services.subscription_service import SubscriptionService
 
-logger = logging.getLogger(__name__)
+logger = get_context_logger(__name__)
 
 
 class ReferralService:
@@ -74,7 +74,7 @@ class ReferralService:
                 .execute()
             )
 
-            if result.data:
+            if result and result.data:
                 return ReferralCodeResponse(
                     code=result.data["code"],
                     times_used=result.data.get("times_used", 0),
@@ -137,7 +137,7 @@ class ReferralService:
                 .execute()
             )
 
-            if not code_result.data:
+            if not code_result or not code_result.data:
                 # Create one
                 user_result = (
                     db.table("users")
@@ -146,7 +146,7 @@ class ReferralService:
                     .maybe_single()
                     .execute()
                 )
-                full_name = user_result.data.get("full_name") if user_result.data else None
+                full_name = user_result.data.get("full_name") if user_result and user_result.data else None
                 code_response = await ReferralService.get_or_create_referral_code(user_id, full_name, db)
                 code = code_response.code
                 times_used = 0
@@ -174,14 +174,14 @@ class ReferralService:
                     )
                     email = (
                         referred_user.data.get("email")
-                        if referred_user.data and referred_user.data.get("email")
+                        if referred_user and referred_user.data and referred_user.data.get("email")
                         else "unknown"
                     )
 
                     credit_applied = redemption.get("referrer_credit_applied", False)
                     referrals.append({
                         "email": email,
-                        "full_name": referred_user.data.get("full_name") if referred_user.data else None,
+                        "full_name": referred_user.data.get("full_name") if referred_user and referred_user.data else None,
                         "redeemed_at": redemption["redeemed_at"],
                         "credit_applied": credit_applied,
                     })
@@ -223,7 +223,7 @@ class ReferralService:
                 "*, users(full_name)"
             ).eq("code", normalized_code).maybe_single().execute()
 
-            if not result.data:
+            if not result or not result.data:
                 return ValidateReferralResponse(
                     valid=False,
                     message="Invalid referral code",
@@ -242,7 +242,7 @@ class ReferralService:
                     .maybe_single()
                     .execute()
                 )
-                if user_result.data:
+                if user_result and user_result.data:
                     referrer_name = user_result.data.get("full_name", "A friend")
 
             credit_months = settings.REFERRAL_CREDIT_MONTHS
@@ -288,7 +288,7 @@ class ReferralService:
                 .execute()
             )
 
-            if not code_result.data:
+            if not code_result or not code_result.data:
                 return RedeemReferralResponse(
                     success=False,
                     message="Referral code not found",
@@ -377,7 +377,7 @@ class ReferralService:
                 .execute()
             )
 
-            if not result.data or not result.data.get("referred_by_code"):
+            if not result or not result.data or not result.data.get("referred_by_code"):
                 return None
 
             # Check if already redeemed

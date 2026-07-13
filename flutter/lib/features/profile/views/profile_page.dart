@@ -369,6 +369,8 @@ class ProfilePage extends StatelessWidget {
     BuildContext context,
     SettingsController settingsController,
   ) {
+    final tokens = AppUiTokens.of(context);
+
     return AppGlassCard(
       padding: const EdgeInsets.all(0),
       child: Column(
@@ -377,11 +379,12 @@ class ProfilePage extends StatelessWidget {
             context,
             icon: Icons.notifications,
             title: 'Notifications',
-            trailing: Switch(
-              value: true,
-              onChanged: (value) {
-                // TODO: Toggle notifications
-              },
+            // Push notifications not wired yet — badge only (no dead switch)
+            trailing: Text(
+              'Coming soon',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: tokens.textMuted,
+                  ),
             ),
           ),
           _buildDivider(context),

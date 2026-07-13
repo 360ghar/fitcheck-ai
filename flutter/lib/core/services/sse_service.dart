@@ -98,11 +98,22 @@ class SSEService {
       }
 
       String buffer = '';
+      // ponytail: cap the buffer so a stalled/malformed stream (no "\n\n"
+      // boundary ever arriving) can't grow it unbounded. 512KB is generous
+      // for real SSE events; bump if legitimate payloads ever exceed it.
+      const maxBufferBytes = 512 * 1024;
 
       await for (final chunk in response.stream.transform(utf8.decoder)) {
         // Normalize line endings because many SSE servers (including
         // sse-starlette) emit CRLF. Our parser operates on LF-delimited chunks.
         buffer += chunk.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+
+        if (buffer.length > maxBufferBytes) {
+          throw SSEException(
+            'SSE buffer exceeded maximum size of $maxBufferBytes bytes '
+            'without a complete event',
+          );
+        }
 
         // Parse SSE format: "event: type\ndata: {...}\n\n"
         while (true) {

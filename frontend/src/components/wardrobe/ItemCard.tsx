@@ -104,6 +104,17 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
   ) => {
     const conditionConfig = getConditionConfig(item.condition)
     const primaryImage = item.images?.[0]
+    const [imageError, setImageError] = React.useState(false)
+
+    // Reset error when image source changes
+    React.useEffect(() => {
+      setImageError(false)
+    }, [primaryImage?.thumbnail_url, primaryImage?.image_url, item.id])
+
+    const imageSrc =
+      !imageError && primaryImage
+        ? primaryImage.thumbnail_url || primaryImage.image_url
+        : null
 
     if (variant === 'list') {
       return (
@@ -120,12 +131,13 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
         >
           {/* Image */}
           <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0">
-            {primaryImage ? (
+            {imageSrc ? (
               <img
-                src={primaryImage.thumbnail_url || primaryImage.image_url}
+                src={imageSrc}
                 alt={item.name}
                 className="w-full h-full object-cover"
                 loading="lazy"
+                onError={() => setImageError(true)}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
@@ -150,6 +162,8 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
             </Badge>
             {showFavorite && (
               <button
+                type="button"
+                aria-label={item.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
                 className={cn(
                   'p-2 rounded-full touch-target',
                   item.is_favorite
@@ -184,9 +198,9 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
         onClick={onClick}
       >
         {/* Full-bleed Image */}
-        {primaryImage ? (
+        {imageSrc ? (
           <img
-            src={primaryImage.thumbnail_url || primaryImage.image_url}
+            src={imageSrc}
             alt={item.name}
             className={cn(
               'absolute inset-0 w-full h-full object-cover',
@@ -194,6 +208,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
               'group-hover:scale-105'
             )}
             loading="lazy"
+            onError={() => setImageError(true)}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">

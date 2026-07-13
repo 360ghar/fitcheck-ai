@@ -263,14 +263,8 @@ class FindMatchesTab extends StatelessWidget {
                 return RecommendationCard(
                   item: item,
                   onTap: () => _showItemDetails(item, context),
-                  onFavorite: () {
-                  Get.snackbar(
-                    'Coming Soon',
-                    'Favoriting recommendations will be available in a future update',
-                    snackPosition: SnackPosition.TOP,
-                    duration: const Duration(seconds: 2),
-                  );
-                },
+                  // Hide favorite until backend wiring exists (avoid "Coming Soon" heart)
+                  onFavorite: null,
                 );
               },
             );

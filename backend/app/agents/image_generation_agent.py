@@ -14,6 +14,12 @@ import base64
 import uuid
 from typing import Any, Dict, List, Optional
 
+from app.agents.prompt_fidelity import (
+    OUTFIT_LOCK,
+    PERSON_REFERENCE_FIDELITY,
+    PRODUCT_REFERENCE_LOCK,
+    SHORT_NEGATIVES,
+)
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
 from app.services.ai_provider_service import AIProviderService
@@ -22,54 +28,6 @@ from app.services.storage_service import StorageService
 from app.utils.parallel import parallel_with_retry
 
 logger = get_context_logger(__name__)
-
-
-# =============================================================================
-# NEGATIVE PROMPTS FOR IMAGE QUALITY
-# =============================================================================
-
-NEGATIVE_PROMPTS = """
-AVOID these issues:
-
-FACE IDENTITY (CRITICAL):
-- Do NOT change any facial features from the reference image - face must be IDENTICAL
-- Do NOT alter eye shape, eye color, eye spacing, eyebrows, or eyelid appearance
-- Do NOT modify nose shape, nose size, nostril shape, or nose bridge
-- Do NOT change lip shape, lip fullness, mouth width, or smile characteristics
-- Do NOT alter face shape, jawline, chin, cheekbones, or bone structure
-- Do NOT change apparent age - maintain exact same age appearance
-- Do NOT change or ambiguate gender presentation
-- Do NOT smooth, filter, or idealize skin - preserve exact texture and features
-- Do NOT remove or add moles, freckles, scars, or distinguishing marks
-
-OUTFIT AND ITEM FIDELITY (CRITICAL):
-- Do NOT add, remove, replace, or restyle any required clothing item
-- Do NOT add or remove footwear, accessories, jewelry, bags, hats, belts, watches, or eyewear
-- Do NOT change garment silhouette, fit, cut, length, or layering structure
-- Do NOT change color shades, patterns, textures, stitching, trims, or fabric appearance
-- Do NOT modify logos, labels, hardware, laces, buckles, zippers, buttons, or embellishments
-
-SKIN AND BODY:
-- Do NOT alter skin tone - match reference exactly
-- Do NOT generate extra limbs, fingers, or distorted body parts
-- AVOID uncanny valley effects or plastic-looking skin
-- AVOID inconsistent lighting between face and body
-
-TECHNICAL:
-- Do NOT create floating or disconnected clothing
-- Do NOT blend face features unnaturally
-- Do NOT generate text, watermarks, or logos
-"""
-
-QUALITY_CONTROL_PROMPT = """
-MANDATORY PRE-GENERATION QUALITY CONTROL (INTERNAL):
-- Think twice before you generate.
-- Re-evaluate the requirements (and reference image(s), if provided) a second time before rendering.
-- Build a detailed internal checklist for face identity and every outfit item (tops, bottoms, outerwear, footwear, accessories, and other visible items).
-- Verify no required item is missing, altered, swapped, or invented.
-- If anything is ambiguous, use the reference image as the source of truth when available.
-- Do not output your checklist or analysis; output only the final generated image.
-"""
 
 
 # =============================================================================
@@ -222,67 +180,42 @@ class ImageGenerationAgent:
 
         # Build prompt based on whether we have user avatar
         if wants_flat_lay:
-            base_prompt = f"Professional flat lay fashion photography of a cohesive {style} outfit: {items_list}."
-            prompt = f"""{base_prompt}
+            prompt = f"""Professional flat lay fashion photo of a cohesive {style} outfit: {items_list}.
 
 {outfit_inventory}
 
-CRITICAL OUTFIT FIDELITY:
-- Match every listed item exactly, including apparel, footwear, and accessories.
-- Preserve exact colors, patterns, textures, silhouettes, trims, logos, and small design details.
-- Do not add or remove items.
+{OUTFIT_LOCK}
 
-Style specifications:
+Style:
 - Background: {background}
 - Pose: flat lay (top-down)
 - View angle: {view_angle}
 - Lighting: {lighting}
-- Image quality: high-end editorial fashion photography, sharp focus, realistic fabric textures, accurate colors
+- Sharp focus, realistic fabric textures, accurate colors
 
-{QUALITY_CONTROL_PROMPT}
-
-{NEGATIVE_PROMPTS}
+{SHORT_NEGATIVES}
 
 {f"Additional instructions: {custom_prompt}" if custom_prompt else ""}""".strip()
 
             return await self._generate_image(prompt)
 
         elif user_avatar_base64:
-            # Use Try-On style prompt with comprehensive face identity preservation
-            base_prompt = f"""Create a photorealistic fashion photograph showing the person from the reference image wearing a cohesive {style} outfit featuring: {items_list}.
+            # Reference image = identity source; text inventory = garments only
+            base_prompt = f"""REFERENCE IMAGE = person identity (source of truth for face/body/hair/skin).
+TASK: Photoreal fashion photo of that same person wearing the outfit below.
 
-CRITICAL REQUIREMENTS:
-1. PRESERVE EXACT FACE IDENTITY (MOST IMPORTANT):
-   - This must look like the EXACT SAME PERSON from the reference image
-   - Maintain identical facial structure: face shape, jawline, chin, cheekbones
-   - Preserve exact eye features: eye shape, color, spacing, eyebrows, eyelids
-   - Keep identical nose: shape, bridge, nostrils, size, proportions
-   - Maintain exact mouth: lip shape, fullness, width, smile characteristics
-   - Preserve exact skin tone, texture, and any distinguishing marks (moles, freckles)
-   - Keep the same apparent age and gender presentation
-   - Match hair color, style, texture, and hairline exactly
+{PERSON_REFERENCE_FIDELITY}
 
-2. CLOTHING ACCURACY: Render the outfit items exactly as described with accurate colors, patterns, textures, and styling.
-   - Match each inventory item exactly: tops, bottoms, outerwear, footwear, accessories, and other pieces
-   - Preserve exact silhouette, fit, layering, logos, labels, hardware, and small details
-   - Do not omit any listed item and do not add any unlisted item
-
-3. NATURAL INTEGRATION: The clothing should fit naturally on the person's body with realistic draping, shadows, and fabric behavior.
-
-4. SINGLE OUTPUT: Generate one cohesive image of the person wearing the complete outfit.
 {outfit_inventory}
 {body_desc}
 
-Style specifications:
+SCENE (change only these):
+- Style: {style}
 - Background: {background}
-- Pose: {pose}
+- Pose: {pose} (face clearly visible; front or slight 3/4; no sunglasses)
 - View angle: {view_angle}
-- Lighting: {lighting}
-- Image quality: High-end editorial fashion photography, sharp focus, realistic fabric textures, accurate colors
-
-{NEGATIVE_PROMPTS}
-
-{QUALITY_CONTROL_PROMPT}
+- Lighting: {lighting} (even face light; no beauty-filter look)
+- Clothing fits naturally with realistic draping and shadows
 
 {f"Additional instructions: {custom_prompt}" if custom_prompt else ""}""".strip()
 
@@ -323,28 +256,21 @@ Style specifications:
 
         else:
             # Generic model generation (no avatar)
-            base_prompt = f"Professional fashion photography of a {model_gender} model wearing a cohesive {style} outfit featuring: {items_list}."
-            prompt = f"""{base_prompt}
+            prompt = f"""Professional fashion photo of a {model_gender} model wearing a cohesive {style} outfit: {items_list}.
 
 {outfit_inventory}
 
-CRITICAL OUTFIT FIDELITY:
-- Keep the listed clothing items exactly as specified.
-- Match apparel, footwear, and accessories precisely (colors, patterns, materials, silhouettes, and detail work).
-- Do not add extra garments, accessories, or props.
-- Do not remove any required outfit item.
+{OUTFIT_LOCK}
 {body_desc}
 
-Style specifications:
+Style:
 - Background: {background}
 - Pose: {pose}
 - View angle: {view_angle}
 - Lighting: {lighting}
-- Image quality: high-end editorial fashion photography, sharp focus, realistic fabric textures, accurate colors
+- Sharp focus, realistic fabric textures, accurate colors
 
-{QUALITY_CONTROL_PROMPT}
-
-{NEGATIVE_PROMPTS}
+{SHORT_NEGATIVES}
 
 {f"Additional instructions: {custom_prompt}" if custom_prompt else ""}""".strip()
 
@@ -403,59 +329,33 @@ Style specifications:
         color_desc = " and ".join(colors) if colors else ""
 
         if reference_image:
-            # Image-to-image prompt: extract exact item from reference
-            prompt = f"""Look at the reference image and extract ONLY the {category_name} item. Create a clean e-commerce product photo of this EXACT item.
+            prompt = f"""REFERENCE IMAGE = product appearance source of truth.
+Extract ONLY the {category_name} item into a clean e-commerce product photo.
 
-CRITICAL - The generated item must be IDENTICAL to the one in the reference image:
-- EXACT same colors, shades, and tones
-- EXACT same pattern, print, or design details
-- EXACT same style, cut, and silhouette
-- EXACT same fabric texture and material appearance
-- EXACT same brand logos, labels, or embellishments if visible
-- EXACT same proportions and fit
-- EXACT same accessories/hardware/details if part of the item (laces, buckles, straps, buttons, zippers, jewelry clasps, etc.)
+{PRODUCT_REFERENCE_LOCK}
 
-MANDATORY QUALITY CONTROL (INTERNAL):
-- Think twice before you generate.
-- Re-evaluate the reference image and item details twice before rendering.
-- Build a detailed internal blueprint of the item (shape, seams, trims, closures, logos, texture, color zones) and verify all details match.
-- If uncertain, copy the reference detail rather than inventing.
+Item details: {item_description}
 
-Item details from reference: {item_description}
-
-Output specifications:
+Output:
 - {background_map.get(background, background_map["white"])}
 - {view_map.get(view_angle, view_map["front"])}
-- {"Subtle natural drop shadow for depth" if include_shadows else "No shadows, completely clean and isolated"}
-- Professional studio lighting with soft highlights
-- Display flat or on an invisible mannequin
-- ONLY this single {category_name} - remove the person/model completely
-- High-end fashion catalog quality, sharp focus
-- Clean, isolated product shot suitable for an online store""".strip()
+- {"Subtle natural drop shadow" if include_shadows else "No shadows; fully isolated"}
+- Soft studio light, sharp focus, catalog quality
+- Flat or invisible mannequin; no person""".strip()
         else:
-            # Text-to-image prompt: generate from description only
-            prompt = f"""Professional e-commerce product photography of a single clothing item:
+            prompt = f"""Professional e-commerce product photo of a single {category_name}:
 
 {item_description}
 
-Photography specifications:
+Specs:
 - {background_map.get(background, background_map["white"])}
 - {view_map.get(view_angle, view_map["front"])}
-- {"Subtle natural drop shadow for depth" if include_shadows else "No shadows, completely clean and isolated"}
-- High-end fashion catalog quality
-- Sharp focus throughout
-- Accurate, true-to-life colors{f": {color_desc}" if color_desc else ""}
-- Realistic fabric textures{f" showing {material} clearly" if material else ""}
-- Professional studio lighting with soft highlights
-- The item should be displayed flat or on an invisible mannequin
-- ONLY this single {category_name} should be visible
-- No model, no other clothing items, no accessories unless part of this item
-- Clean, isolated product shot suitable for an online store listing
+- {"Subtle natural drop shadow" if include_shadows else "No shadows; fully isolated"}
+- Accurate colors{f": {color_desc}" if color_desc else ""}, realistic fabric{f" ({material})" if material else ""}
+- Soft studio light, sharp focus
+- Only this item; no model or extra garments
 
-MANDATORY QUALITY CONTROL (INTERNAL):
-- Think twice before you generate.
-- Re-evaluate the item description before rendering.
-- Internally verify category, shape, materials, colors, and all specified details match exactly.""".strip()
+{SHORT_NEGATIVES}""".strip()
 
         return await self._generate_image(prompt, reference_image=reference_image)
 
@@ -612,42 +512,28 @@ MANDATORY QUALITY CONTROL (INTERNAL):
             pose=pose,
         )
 
-        clothing_desc = f"\n\nClothing details: {clothing_description}" if clothing_description else ""
+        clothing_desc = f"\nGarment notes: {clothing_description}" if clothing_description else ""
 
-        prompt = f"""Create a photorealistic fashion photograph showing the person from the first image wearing the clothing item shown in the second image.
+        prompt = f"""REFERENCE A (first image) = person identity (face/body/hair/skin source of truth).
+REFERENCE B (second image) = garment appearance only.
 
-CRITICAL REQUIREMENTS:
-1. PRESERVE EXACT FACE IDENTITY (MOST IMPORTANT):
-   - This must look like the EXACT SAME PERSON from the first (reference) image
-   - Maintain identical facial structure: face shape, jawline, chin, cheekbones
-   - Preserve exact eye features: eye shape, color, spacing, eyebrows, eyelids
-   - Keep identical nose: shape, bridge, nostrils, size, proportions
-   - Maintain exact mouth: lip shape, fullness, width, smile characteristics
-   - Preserve exact skin tone, texture, and any distinguishing marks (moles, freckles)
-   - Keep the same apparent age and gender presentation
-   - Match hair color, style, texture, and hairline exactly
+TASK: Photoreal photo of person A wearing garment B.
 
-2. CLOTHING ACCURACY: The clothing item must be rendered exactly as shown in the second image - same colors, patterns, textures, style, and fit.
-   - Keep exact garment/accessory/footwear details if visible (logos, seams, stitching, hardware, laces, buckles, zippers, embellishments)
-   - Do not add or remove any clothing element
-   - Do not swap style, cut, silhouette, or layer structure
+{PERSON_REFERENCE_FIDELITY}
 
-3. NATURAL INTEGRATION: The clothing should fit naturally on the person's body with realistic draping, shadows, and fabric behavior.
+GARMENT LOCK (from reference B):
+- Same colors, pattern, cut, fabric look, logos, seams, and hardware as reference B.
+- Do not invent or restyle the garment.
+{clothing_desc}
 
-4. SINGLE OUTPUT: Generate one cohesive image of the person wearing the clothes.
-
-Style specifications:
-- Overall style: {style}
+SCENE (change only these):
+- Style: {style}
 - Background: {background}
-- Pose: {pose}
-- Lighting: {lighting}
-- Image quality: High-end editorial fashion photography, sharp focus, realistic fabric textures, accurate colors{clothing_desc}
+- Pose: {pose} (face clearly visible; front or slight 3/4; no sunglasses)
+- Lighting: {lighting} (even face light; no beauty-filter look)
+- Natural fit, draping, and shadows
 
-{NEGATIVE_PROMPTS}
-
-{QUALITY_CONTROL_PROMPT}
-
-Output a single, high-quality photorealistic image that looks like a professional fashion photograph of THIS EXACT PERSON wearing these specific clothes."""
+Output one cohesive image of THIS same person wearing that exact garment."""
 
         try:
             # Use chat_with_vision for multi-image input with image generation

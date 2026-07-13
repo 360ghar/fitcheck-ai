@@ -269,6 +269,15 @@ class CompleteLookTab extends StatelessWidget {
                     width: 120,
                     height: 120,
                     fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 120,
+                      height: 120,
+                      color: tokens.cardColor.withOpacity(0.5),
+                      child: Icon(
+                        _getCategoryIcon(item.category),
+                        color: tokens.textMuted,
+                      ),
+                    ),
                   )
                 : Container(
                     width: 120,

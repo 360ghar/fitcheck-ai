@@ -354,17 +354,6 @@ export function ShareOutfitDialog({
                 </CardContent>
               </Card>
 
-              {/* QR Code placeholder */}
-              <Card>
-                <CardContent className="pt-6">
-                  <Label>QR Code</Label>
-                  <div className="mt-2 aspect-square max-w-[200px] mx-auto bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center px-4">
-                      QR Code would be generated here
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
             </TabsContent>
 
             {/* Options Tab */}

@@ -1,11 +1,11 @@
 """
 Feedback service for managing support tickets.
 """
-import logging
 from typing import Optional, List
 
 from supabase import Client
 
+from app.core.logging_config import get_context_logger
 from app.models.feedback import (
     CreateFeedbackRequest,
     FeedbackResponse,
@@ -14,7 +14,7 @@ from app.models.feedback import (
     TicketStatus,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_context_logger(__name__)
 
 
 class FeedbackService:

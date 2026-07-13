@@ -5,26 +5,25 @@ Provides CRUD operations for blog posts with public read access
 and admin-only write access.
 """
 
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from supabase import Client
 
 from app.api.v1.deps import get_current_user, get_db
-from app.core.config import settings
 from app.core.exceptions import NotFoundError, PermissionDeniedError, ValidationError
+from app.core.logging_config import get_context_logger
 from app.models.blog import (
     BlogPost,
     BlogPostCreate,
-    BlogPostCategoriesResponse,
     BlogPostListParams,
     BlogPostListResponse,
     BlogPostSummary,
     BlogPostUpdate,
 )
+from app.utils import maybe_single_data
 
-logger = logging.getLogger(__name__)
+logger = get_context_logger(__name__)
 
 router = APIRouter()
 
@@ -223,7 +222,7 @@ async def create_post(
             .execute()
         )
 
-        if existing.data:
+        if maybe_single_data(existing):
             raise ValidationError(
                 message=f"A post with slug '{post_data.slug}' already exists",
                 details={"field": "slug", "value": post_data.slug},
@@ -277,7 +276,7 @@ async def update_post(
             .execute()
         )
 
-        if not existing.data:
+        if not maybe_single_data(existing):
             raise NotFoundError(
                 message=f"Blog post '{slug}' not found",
                 resource_type="blog_post",
@@ -294,14 +293,15 @@ async def update_post(
                 .execute()
             )
 
-            if slug_check.data:
+            if maybe_single_data(slug_check):
                 raise ValidationError(
                     message=f"A post with slug '{post_data.slug}' already exists",
                     details={"field": "slug", "value": post_data.slug},
                 )
 
-        # Build update data (exclude None values)
-        update_data = {k: v for k, v in post_data.model_dump().items() if v is not None}
+        # Build update data - only fields the client actually sent, so a PATCH
+        # that omits a field doesn't get conflated with explicitly clearing it.
+        update_data = post_data.model_dump(exclude_unset=True)
 
         if not update_data:
             raise ValidationError(
@@ -355,7 +355,7 @@ async def delete_post(
             .execute()
         )
 
-        if not existing.data:
+        if not maybe_single_data(existing):
             raise NotFoundError(
                 message=f"Blog post '{slug}' not found",
                 resource_type="blog_post",

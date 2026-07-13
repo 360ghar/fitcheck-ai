@@ -69,6 +69,8 @@
 
   body {
     @apply bg-background text-foreground overflow-x-hidden w-full max-w-[100vw];
+    font-family: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-feature-settings: 'ss01' on, 'cv11' on;
     min-height: 100svh;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -95,18 +97,35 @@
     container-type: normal;
   }
 
-  /* Glass morphism */
+  /* Glass morphism (legacy; landing prefers solid panels) */
   .glass {
     @apply bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/20 dark:border-gray-700/30;
   }
 
   .glass-card {
-    @apply bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg border border-white/30 dark:border-gray-700/40 shadow-elevated;
+    @apply bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 shadow-sm;
   }
 
-  /* Gradient text */
+  /* Solid brand accent (landing) */
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-primary;
+    @apply text-indigo-600 dark:text-indigo-400;
+  }
+
+  /* Landing surface helpers */
+  .landing-surface {
+    @apply bg-stone-50 dark:bg-stone-950;
+  }
+
+  .landing-surface-raised {
+    @apply bg-white dark:bg-stone-900;
+  }
+
+  .landing-panel {
+    @apply rounded-2xl border border-stone-200/90 bg-white dark:border-stone-800 dark:bg-stone-900;
+  }
+
+  .landing-display {
+    @apply font-display tracking-tight;
   }
 
   .line-clamp-2 {
@@ -168,6 +187,17 @@
   /* Bottom nav spacing utility */
   .pb-bottom-nav {
     padding-bottom: calc(var(--bottom-nav-height) + var(--safe-area-bottom));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 

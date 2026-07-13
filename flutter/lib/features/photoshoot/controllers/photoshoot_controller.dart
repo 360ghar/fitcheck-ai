@@ -13,6 +13,7 @@ import '../../../app/routes/app_routes.dart';
 import '../../../core/config/env_config.dart';
 import '../../../core/services/ai_consent_service.dart';
 import '../../../core/services/sse_service.dart';
+import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/permission_helper.dart';
 import '../models/photoshoot_models.dart';
 import '../repositories/photoshoot_repository.dart';
@@ -311,8 +312,9 @@ class PhotoshootController extends GetxController {
 
       // Subscribe to SSE events for real-time progress
       _subscribeToEvents(response.jobId);
-    } catch (e) {
+    } catch (e, stackTrace) {
       error.value = e.toString().replaceAll('Exception: ', '');
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
 
       if (error.value.contains('limit') || error.value.contains('exceeded')) {
         _showReferralPrompt();
@@ -504,7 +506,10 @@ class PhotoshootController extends GetxController {
       }
     } catch (e) {
       debugPrint('Poll status error: $e');
-      // Retry after delay
+      // Not reported to telemetry here: this loop currently retries with no
+      // max-attempts cap (a separate known issue), so reporting every
+      // iteration would spam Sentry/PostHog rather than surface a real
+      // signal. Revisit once that loop has a bounded retry count.
       await Future.delayed(const Duration(seconds: 3));
       if (isGenerating.value) {
         _pollJobStatus(id);

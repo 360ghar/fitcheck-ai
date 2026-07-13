@@ -7,7 +7,6 @@ Uses SHA256 hash of image content as cache key with 24-hour TTL.
 
 import asyncio
 import hashlib
-import json
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 

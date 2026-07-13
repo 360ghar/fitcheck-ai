@@ -64,7 +64,15 @@ class OutfitImage(OutfitImageBase):
 
 
 class OutfitBase(BaseModel):
-    """Base outfit model with common fields."""
+    """Base outfit model with common fields, shared by both the input
+    (OutfitCreate) and output (OutfitResponse) models.
+
+    Deliberately carries no validators: "must contain at least one item" is
+    an input-only business rule (see OutfitCreate) - a persisted outfit
+    could legitimately end up with zero items later (e.g. all items
+    individually removed), and reusing an input validator for response
+    serialization would 500 on any such outfit instead of returning it.
+    """
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     item_ids: List[UUID] = Field(default_factory=list)
@@ -76,6 +84,10 @@ class OutfitBase(BaseModel):
     is_draft: bool = True
     is_public: bool = False
 
+
+class OutfitCreate(OutfitBase):
+    """Model for creating a new outfit."""
+
     @field_validator("item_ids")
     @classmethod
     def validate_item_ids(cls, v: List[UUID]) -> List[UUID]:
@@ -84,11 +96,6 @@ class OutfitBase(BaseModel):
         if len(v) != len(set(v)):
             raise ValueError("Outfit cannot contain duplicate items")
         return v
-
-
-class OutfitCreate(OutfitBase):
-    """Model for creating a new outfit."""
-    pass
 
 
 class OutfitUpdate(BaseModel):
@@ -117,7 +124,14 @@ class OutfitUpdate(BaseModel):
 
 
 class OutfitResponse(OutfitBase):
-    """Model for outfit response with all fields."""
+    """Model for outfit response with all fields.
+
+    `items` is included here (not only on a separate "detail" variant) since
+    the Flutter client uses a single OutfitModel for both list and detail
+    views (outfit_model.dart declares `items` directly) and both
+    list_outfits and get_outfit already attach an items array to every
+    outfit object.
+    """
     id: UUID
     user_id: UUID
     worn_count: int = 0
@@ -125,6 +139,7 @@ class OutfitResponse(OutfitBase):
     created_at: datetime
     updated_at: datetime
     images: List[OutfitImage] = Field(default_factory=list)
+    items: Optional[List[Dict[str, Any]]] = None  # Full item objects
 
     class Config:
         from_attributes = True
@@ -138,11 +153,6 @@ class OutfitListResponse(BaseModel):
     total_pages: int
     has_next: bool = False
     has_prev: bool = False
-
-
-class OutfitDetailResponse(OutfitResponse):
-    """Detailed outfit response with full item details."""
-    items_details: Optional[List[Dict[str, Any]]] = None  # Full item objects
 
 
 # ============================================================================

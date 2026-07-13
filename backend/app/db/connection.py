@@ -8,6 +8,18 @@ layer via Supabase JWT verification (see app.core.security).
 We also expose an "anon" client for operations that must be performed with the
 publishable key (e.g., certain Auth flows), but most route handlers should use
 the service client.
+
+NOTE on async: `Client` here is supabase-py's *synchronous* client, called
+directly inside `async def` route handlers/services throughout the app -
+each `.execute()` call blocks the event loop for the request's duration.
+supabase-py also ships `create_async_client`/`AsyncClient` (same API shape,
+`await`-able), which would remove this entirely, but migrating all ~300
+call sites is a dedicated project requiring live integration testing (see
+architecture review, section 7) - not something to do as one more
+incremental change late in a launch-prep session. As a stopgap, the highest-
+traffic call site (`get_current_user` in app/api/v1/deps.py) offloads its
+query via `asyncio.to_thread` so it stops blocking the loop on nearly every
+authenticated request, without changing the client architecture.
 """
 
 from supabase import create_client, Client

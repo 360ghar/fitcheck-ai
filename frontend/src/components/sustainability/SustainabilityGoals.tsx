@@ -94,6 +94,7 @@ function GoalCard({ progress, onDelete }: GoalCardProps) {
             size="icon"
             className="h-8 w-8 text-muted-foreground hover:text-destructive"
             onClick={onDelete}
+            aria-label="Delete sustainability goal"
           >
             <Trash2 className="w-4 h-4" />
           </Button>

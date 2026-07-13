@@ -362,6 +362,7 @@ function WearEventCard({
           size="icon"
           className="h-8 w-8 text-muted-foreground hover:text-destructive"
           onClick={onDelete}
+          aria-label="Delete wear event"
         >
           <Trash2 className="w-4 h-4" />
         </Button>

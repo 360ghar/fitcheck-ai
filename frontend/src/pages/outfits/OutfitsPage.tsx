@@ -42,6 +42,7 @@ export default function OutfitsPage() {
 
   const filteredOutfits = useOutfitStore((state) => state.filteredOutfits)
   const isLoading = useOutfitStore((state) => state.isLoading)
+  const error = useOutfitStore((state) => state.error)
   const isGridView = useOutfitStore((state) => state.isGridView)
   const startCreating = useOutfitStore((state) => state.startCreating)
   const toggleOutfitFavorite = useOutfitStore((state) => state.toggleOutfitFavorite)
@@ -50,6 +51,7 @@ export default function OutfitsPage() {
   const fetchOutfits = useOutfitStore((state) => state.fetchOutfits)
   const fetchOutfitById = useOutfitStore((state) => state.fetchOutfitById)
   const startGeneration = useOutfitStore((state) => state.startGeneration)
+  const startGenerationForNewOutfit = useOutfitStore((state) => state.startGenerationForNewOutfit)
   const resetGeneration = useOutfitStore((state) => state.resetGeneration)
   const isGenerating = useOutfitStore((state) => state.isGenerating)
   const generationStatus = useOutfitStore((state) => state.generationStatus)
@@ -58,6 +60,7 @@ export default function OutfitsPage() {
   const markOutfitAsWorn = useOutfitStore((state) => state.markOutfitAsWorn)
   const duplicateOutfit = useOutfitStore((state) => state.duplicateOutfit)
   const deleteOutfit = useOutfitStore((state) => state.deleteOutfit)
+  const clearError = useOutfitStore((state) => state.clearError)
 
   useEffect(() => {
     const action = searchParams.get('action')
@@ -120,6 +123,23 @@ export default function OutfitsPage() {
           <div className="inline-block animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-b-2 border-primary"></div>
           <p className="mt-4 text-muted-foreground">Loading outfits...</p>
         </div>
+      ) : error ? (
+        <div className="text-center py-12 bg-card rounded-lg shadow border border-destructive/20">
+          <Layers className="mx-auto h-12 w-12 md:h-16 md:w-16 text-destructive/60" />
+          <h3 className="mt-4 text-lg font-medium text-foreground">Couldn&apos;t load outfits</h3>
+          <p className="mt-2 text-sm text-muted-foreground px-4">
+            {error.message || 'Something went wrong. Please try again.'}
+          </p>
+          <Button
+            className="mt-6"
+            onClick={() => {
+              clearError()
+              void fetchOutfits(true)
+            }}
+          >
+            Try again
+          </Button>
+        </div>
       ) : filteredOutfits.length === 0 ? (
         <div className="text-center py-12 bg-card rounded-lg shadow">
           <Layers className="mx-auto h-12 w-12 md:h-16 md:w-16 text-muted-foreground" />
@@ -146,7 +166,14 @@ export default function OutfitsPage() {
                 outfit={outfit}
                 variant={isGridView ? 'default' : 'list'}
                 generationStatus={genStatus}
-                onClick={() => setSelectedOutfit(outfit)}
+                onClick={() => {
+                  // Failed auto-generation card says "Click to retry"
+                  if (genStatus === 'failed') {
+                    void startGenerationForNewOutfit(outfit.id)
+                    return
+                  }
+                  setSelectedOutfit(outfit)
+                }}
                 onToggleFavorite={(e) => {
                   e.stopPropagation()
                   toggleOutfitFavorite(outfit.id)
@@ -157,14 +184,7 @@ export default function OutfitsPage() {
         </div>
       )}
 
-      {/* Floating Action Button for mobile */}
-      <button
-        onClick={startCreating}
-        className="fixed bottom-[calc(var(--bottom-nav-height)+16px+var(--safe-area-bottom))] right-[calc(var(--safe-area-right)+1rem)] w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center md:hidden z-[90] hover:bg-primary/90 active:scale-95 transition-transform"
-        aria-label="Create new outfit"
-      >
-        <Plus className="h-6 w-6" />
-      </button>
+      {/* Mobile primary create action is the BottomNav center FAB — avoid dual FABs */}
 
       {/* Outfit details + AI generation */}
       <Dialog

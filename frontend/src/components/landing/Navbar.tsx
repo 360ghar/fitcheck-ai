@@ -8,8 +8,9 @@ import { useIsAuthenticated } from '@/stores/authStore'
 import { ThemeToggle } from '@/components/theme'
 
 const navLinks = [
-  { name: 'Features', href: '/#features' },
+  { name: 'Features', href: '/features' },
   { name: 'How It Works', href: '/#how-it-works' },
+  { name: 'Guides', href: '/guides/what-to-wear-today' },
   { name: 'Blog', href: '/blog' },
   { name: 'FAQ', href: '/faq' },
   { name: 'About', href: '/about' },
@@ -40,103 +41,120 @@ export default function Navbar() {
         }
       }
       setIsMobileMenuOpen(false)
+      return
     }
+    // SPA routes: close mobile menu; let React Router handle navigation via Link
+    setIsMobileMenuOpen(false)
   }
+
+  const isHashLink = (href: string) => href.startsWith('/#')
 
   return (
     <nav
       className={cn(
         'fixed top-0 left-0 right-0 z-50 transition-all duration-300',
         isScrolled
-          ? 'bg-white/80 dark:bg-gray-950/80 backdrop-blur-lg shadow-sm border-b border-gray-200/50 dark:border-gray-800/50'
+          ? 'bg-stone-50/90 dark:bg-stone-950/90 backdrop-blur-md border-b border-stone-200/70 dark:border-stone-800/70'
           : 'bg-transparent'
       )}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 lg:h-20">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
-              <Shirt className="w-5 h-5 text-white" />
+        <div className="flex items-center justify-between h-16">
+          <Link to="/" className="flex items-center gap-2.5 shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+              <Shirt className="w-4 h-4 text-white" />
             </div>
-            <span className="text-xl font-bold text-indigo-600">FitCheck</span>
-            <span className="text-xl font-light text-gray-600 dark:text-gray-300">AI</span>
+            <span className="text-[17px] font-semibold tracking-tight text-stone-900 dark:text-stone-50">
+              FitCheck<span className="font-normal text-stone-500 dark:text-stone-400"> AI</span>
+            </span>
           </Link>
 
-          {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center gap-8">
-            {navLinks.map((link) => (
-              <a
-                key={link.name}
-                href={link.href}
-                onClick={(e) => handleNavClick(e, link.href)}
-                className="text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors"
-              >
-                {link.name}
-              </a>
-            ))}
+          <div className="hidden lg:flex items-center gap-7">
+            {navLinks.map((link) =>
+              isHashLink(link.href) ? (
+                <a
+                  key={link.name}
+                  href={link.href}
+                  onClick={(e) => handleNavClick(e, link.href)}
+                  className="text-sm font-medium text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100 transition-colors"
+                >
+                  {link.name}
+                </a>
+              ) : (
+                <Link
+                  key={link.name}
+                  to={link.href}
+                  className="text-sm font-medium text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100 transition-colors"
+                >
+                  {link.name}
+                </Link>
+              )
+            )}
           </div>
 
-          {/* Desktop CTAs */}
-          <div className="hidden lg:flex items-center gap-4">
+          <div className="hidden lg:flex items-center gap-3">
             <ThemeToggle />
             {isAuthenticated ? (
-              <Button asChild>
-                <Link to="/dashboard">Go to Dashboard</Link>
+              <Button asChild className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-none">
+                <Link to="/dashboard">Dashboard</Link>
               </Button>
             ) : (
               <>
-                <Button variant="ghost" asChild>
-                  <Link to="/auth/login">Login</Link>
+                <Button variant="ghost" asChild className="text-stone-700 dark:text-stone-300">
+                  <Link to="/auth/login">Log in</Link>
                 </Button>
-                <Button
-                  asChild
-                  className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25"
-                >
-                  <Link to="/auth/register">Get Started</Link>
+                <Button asChild className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-none">
+                  <Link to="/auth/register">Use free</Link>
                 </Button>
               </>
             )}
           </div>
 
-          {/* Mobile Menu */}
           <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
             <SheetTrigger asChild className="lg:hidden">
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" aria-label="Open menu">
                 <Menu className="w-5 h-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[300px] sm:w-[400px]">
-              <div className="flex flex-col gap-6 mt-6">
-                {navLinks.map((link) => (
-                  <a
-                    key={link.name}
-                    href={link.href}
-                    onClick={(e) => handleNavClick(e, link.href)}
-                    className="text-lg font-medium text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                  >
-                    {link.name}
-                  </a>
-                ))}
+            <SheetContent side="right" className="w-[300px] sm:w-[360px] bg-stone-50 dark:bg-stone-950">
+              <div className="flex flex-col gap-5 mt-6">
+                {navLinks.map((link) =>
+                  isHashLink(link.href) ? (
+                    <a
+                      key={link.name}
+                      href={link.href}
+                      onClick={(e) => handleNavClick(e, link.href)}
+                      className="text-lg font-medium text-stone-900 dark:text-stone-50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    >
+                      {link.name}
+                    </a>
+                  ) : (
+                    <Link
+                      key={link.name}
+                      to={link.href}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="text-lg font-medium text-stone-900 dark:text-stone-50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    >
+                      {link.name}
+                    </Link>
+                  )
+                )}
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Theme</span>
+                  <span className="text-sm text-stone-500">Theme</span>
                   <ThemeToggle />
                 </div>
-                <hr className="border-gray-200 dark:border-gray-700" />
+                <hr className="border-stone-200 dark:border-stone-800" />
                 {isAuthenticated ? (
-                  <Button asChild className="w-full">
-                    <Link to="/dashboard">Go to Dashboard</Link>
+                  <Button asChild className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+                    <Link to="/dashboard">Dashboard</Link>
                   </Button>
                 ) : (
                   <>
-                    <Button variant="outline" asChild className="w-full">
-                      <Link to="/auth/login">Login</Link>
+                    <Button variant="outline" asChild className="w-full border-stone-300 dark:border-stone-700">
+                      <Link to="/auth/login">Log in</Link>
                     </Button>
-                    <Button
-                      asChild
-                      className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-                    >
-                      <Link to="/auth/register">Get Started</Link>
+                    <Button asChild className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+                      <Link to="/auth/register">Use free</Link>
                     </Button>
                   </>
                 )}

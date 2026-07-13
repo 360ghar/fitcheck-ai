@@ -43,9 +43,14 @@ export default function BlogIndexPage() {
   return (
     <>
       <SEO
-        title={category ? `${categoryFilter} - FitCheck AI Blog` : "FitCheck AI Blog - Fashion Tips, AI Trends & Style Guides"}
-        description="Discover the latest in AI fashion technology, wardrobe organization tips, style guides, and outfit inspiration from FitCheck AI."
+        title={category ? `${categoryFilter} | FitCheck AI Blog` : 'Style & Wardrobe Blog | FitCheck AI'}
+        description={
+          category
+            ? `${categoryFilter} articles on digital closets, AI outfit planning, and style from FitCheck AI.`
+            : 'Guides on digital closets, AI outfit planning, virtual try-on, cost-per-wear, and getting more from clothes you own.'
+        }
         canonicalUrl={`https://fitcheckaiapp.com/blog${category ? `/category/${category}` : ''}`}
+        keywords="wardrobe blog, AI fashion tips, digital closet guides, outfit planning"
       />
 
       <div className="pt-20">

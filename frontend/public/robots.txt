@@ -8,6 +8,11 @@ Allow: /blog/
 Allow: /features/
 Allow: /about
 Allow: /faq
+Allow: /best/
+Allow: /compare/
+Allow: /for/
+Allow: /guides/
+Allow: /alternatives/
 
 # Block authenticated app routes from indexing
 Disallow: /dashboard
@@ -31,6 +36,7 @@ Disallow: /settings/
 Disallow: /photoshoot
 Disallow: /photoshoot/
 Disallow: /auth/
+Disallow: /admin/
 
 # Block API routes
 Disallow: /api/
@@ -39,11 +45,37 @@ Disallow: /api/
 Disallow: /*?*
 Disallow: /*&*
 
-# Crawl rate optimization
-Crawl-delay: 1
+# AI / search crawlers — explicit allow for GEO visibility
+User-agent: Googlebot
+Allow: /
 
-# Sitemap location
+User-agent: Bingbot
+Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: cohere-ai
+Allow: /
+
+# Sitemap & AI discovery
 Sitemap: https://fitcheckaiapp.com/sitemap.xml
-
-# LLMs.txt for AI crawlers
-# See https://llmstxt.org/
+# LLM-oriented site summary: https://fitcheckaiapp.com/llms.txt

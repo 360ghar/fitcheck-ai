@@ -54,7 +54,7 @@ export function ExtractionDemo() {
       const demoError = err as DemoApiError
       setError(
         demoError.isRateLimit
-          ? 'Daily demo limit reached. Sign up for unlimited access!'
+          ? 'Daily demo limit reached. Sign up free to keep using extraction.'
           : demoError.message || 'Failed to analyze image'
       )
       setState('error')
@@ -83,14 +83,14 @@ export function ExtractionDemo() {
   return (
     <GlassCard className="p-6 h-full flex flex-col">
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center">
           <Camera className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h3 className="font-semibold text-gray-900 dark:text-white">
-            AI Item Extraction
+          <h3 className="font-semibold text-stone-900 dark:text-stone-50">
+            Item extraction
           </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-stone-500 dark:text-stone-400">
             Upload a photo to detect clothing
           </p>
         </div>
@@ -167,7 +167,7 @@ export function ExtractionDemo() {
               </Button>
               <Button
                 size="sm"
-                className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
                 onClick={handleSaveToWardrobe}
               >
                 Save to Wardrobe
@@ -201,7 +201,7 @@ export function ExtractionDemo() {
 function ExtractedItemCard({ item }: { item: DemoDetectedItem }) {
   return (
     <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-      <div className="w-8 h-8 rounded bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
+      <div className="w-8 h-8 rounded bg-indigo-600 flex items-center justify-center">
         <Shirt className="w-4 h-4 text-white" />
       </div>
       <div className="flex-1 min-w-0">

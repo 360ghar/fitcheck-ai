@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../../../app/routes/app_routes.dart';
+import '../../outfits/controllers/outfit_list_controller.dart';
 import '../controllers/calendar_controller.dart';
 import '../models/calendar_event_model.dart';
 import '../models/calendar_connection_model.dart';
@@ -352,7 +352,7 @@ class _CalendarPageState extends State<CalendarPage> {
                       _showEditEventDialog(event);
                       break;
                     case 'link_outfit':
-                      Get.toNamed(Routes.outfits);
+                      _showLinkOutfitSheet(event);
                       break;
                     case 'unlink_outfit':
                       controller.removeOutfit(event.id);
@@ -846,11 +846,90 @@ class _CalendarPageState extends State<CalendarPage> {
     return ListTile(
       leading: Icon(icon),
       title: Text(name),
-      trailing: const Icon(Icons.chevron_right),
+      subtitle: const Text('Coming soon'),
+      trailing: const Icon(Icons.schedule),
       onTap: () {
         Get.back();
         controller.connectCalendar(provider);
       },
+    );
+  }
+
+  Future<void> _showLinkOutfitSheet(CalendarEventModel event) async {
+    OutfitListController? outfitController;
+    if (Get.isRegistered<OutfitListController>()) {
+      outfitController = Get.find<OutfitListController>();
+    }
+
+    if (outfitController == null) {
+      Get.snackbar(
+        'Outfits unavailable',
+        'Open the Outfits tab once, then try linking again.',
+        snackPosition: SnackPosition.TOP,
+      );
+      return;
+    }
+
+    if (outfitController.outfits.isEmpty) {
+      await outfitController.fetchOutfits(refresh: true);
+    }
+
+    if (!mounted) return;
+
+    if (outfitController.outfits.isEmpty) {
+      Get.snackbar(
+        'No outfits',
+        'Create an outfit first, then link it to this event.',
+        snackPosition: SnackPosition.TOP,
+      );
+      return;
+    }
+
+    final tokens = AppUiTokens.of(context);
+    final maxHeight = MediaQuery.of(context).size.height * 0.6;
+    await Get.bottomSheet(
+      Container(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        decoration: BoxDecoration(
+          color: tokens.cardColor,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppConstants.radius24),
+          ),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppConstants.spacing16),
+              child: Text(
+                'Link outfit to event',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                itemCount: outfitController.outfits.length,
+                itemBuilder: (context, index) {
+                  final outfit = outfitController!.outfits[index];
+                  return ListTile(
+                    leading: const Icon(Icons.checkroom),
+                    title: Text(outfit.name),
+                    subtitle: outfit.style != null
+                        ? Text(outfit.style!.name)
+                        : null,
+                    onTap: () async {
+                      Get.back();
+                      await controller.linkOutfit(event.id, outfit.id);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      isScrollControlled: true,
     );
   }
 

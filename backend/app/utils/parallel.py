@@ -15,7 +15,7 @@ from .retry import with_retry
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
-I = TypeVar("I")
+ItemT = TypeVar("ItemT")
 
 
 @dataclass
@@ -36,8 +36,8 @@ class ParallelResult:
 
 
 async def parallel_with_retry(
-    items: List[I],
-    fn: Callable[[I, int], Awaitable[T]],
+    items: List[ItemT],
+    fn: Callable[[ItemT, int], Awaitable[T]],
     max_retries: int = 3,
     initial_delay: float = 1.0,
     max_delay: float = 30.0,
@@ -67,7 +67,7 @@ async def parallel_with_retry(
         List of ParallelResult objects in the same order as input items
     """
 
-    async def process_item(item: I, index: int) -> ParallelResult:
+    async def process_item(item: ItemT, index: int) -> ParallelResult:
         try:
             result = await with_retry(
                 lambda: fn(item, index),
@@ -101,8 +101,8 @@ async def parallel_with_retry(
 
 
 async def parallel_map(
-    items: List[I],
-    fn: Callable[[I], Awaitable[T]],
+    items: List[ItemT],
+    fn: Callable[[ItemT], Awaitable[T]],
     on_item_complete: Optional[Callable[[int, T], None]] = None,
 ) -> List[T]:
     """
@@ -120,7 +120,7 @@ async def parallel_map(
         Exception if any item fails
     """
 
-    async def process_item(item: I, index: int) -> T:
+    async def process_item(item: ItemT, index: int) -> T:
         result = await fn(item)
         if on_item_complete:
             on_item_complete(index, result)
@@ -131,8 +131,8 @@ async def parallel_map(
 
 
 async def parallel_map_settled(
-    items: List[I],
-    fn: Callable[[I], Awaitable[T]],
+    items: List[ItemT],
+    fn: Callable[[ItemT], Awaitable[T]],
 ) -> List[ParallelResult]:
     """
     Parallel map that doesn't raise on individual failures.
@@ -147,7 +147,7 @@ async def parallel_map_settled(
         List of ParallelResult objects in the same order as input items
     """
 
-    async def process_item(item: I, index: int) -> ParallelResult:
+    async def process_item(item: ItemT, index: int) -> ParallelResult:
         try:
             result = await fn(item)
             return ParallelResult(success=True, data=result, index=index)

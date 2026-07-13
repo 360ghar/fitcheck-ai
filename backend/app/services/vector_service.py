@@ -3,14 +3,13 @@ Vector service for managing Pinecone vector database.
 Handles item embeddings and similarity search.
 """
 
-import logging
 from typing import Optional, List, Dict, Any, Tuple
-from datetime import datetime
 
 from pinecone import Pinecone, ServerlessSpec
 from app.core.config import settings
+from app.core.logging_config import get_context_logger
 
-logger = logging.getLogger(__name__)
+logger = get_context_logger(__name__)
 
 
 class VectorService:

@@ -6,14 +6,15 @@ Jobs are stored in memory and auto-expire after 1 hour.
 """
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 from uuid import uuid4
 
-logger = logging.getLogger(__name__)
+from app.core.logging_config import get_context_logger
+
+logger = get_context_logger(__name__)
 
 
 class BatchJobStatus(str, Enum):

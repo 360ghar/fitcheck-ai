@@ -10,7 +10,7 @@ Following the server-side architecture:
 @see https://docs.fitcheck.ai/technical/architecture
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from google import genai
 from google.genai import types

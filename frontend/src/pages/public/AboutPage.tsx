@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
+import SEO from '@/components/seo/SEO'
+import { PAGE_SEO, SEO_CONFIG } from '@/components/seo/seo-config'
 import { ArrowRight, Heart, Shield, Sparkles, Users } from 'lucide-react'
 
 const values = [
@@ -45,6 +47,13 @@ const stats = [
 
 export default function AboutPage() {
   return (
+    <>
+      <SEO
+        title={PAGE_SEO.about.title}
+        description={PAGE_SEO.about.description}
+        canonicalUrl={`${SEO_CONFIG.siteUrl}/about`}
+        keywords="about FitCheck AI, AI wardrobe company, virtual closet app"
+      />
     <div className="pt-20">
       {/* Hero */}
       <section className="py-24 bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-950">
@@ -180,5 +189,6 @@ export default function AboutPage() {
         </div>
       </section>
     </div>
+    </>
   )
 }

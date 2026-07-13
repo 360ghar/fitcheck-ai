@@ -56,7 +56,7 @@ class AIProviderHealthService:
         Uses cached result if within TTL.
 
         Args:
-            base_url: Provider base URL (e.g., "http://localhost:8317/v1")
+            base_url: Provider base URL (e.g., "https://apihub.agnes-ai.com/v1")
             api_key: API key for authentication
             timeout_seconds: Timeout for health check (default: 5s)
 

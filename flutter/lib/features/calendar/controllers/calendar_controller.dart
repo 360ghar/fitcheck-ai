@@ -136,19 +136,15 @@ class CalendarController extends GetxController {
     calendarFormat.value = format;
   }
 
-  /// Connect calendar (OAuth flow placeholder)
+  /// Connect calendar (OAuth not shipped yet — do not imply a real connection)
   Future<void> connectCalendar(CalendarProvider provider) async {
-    try {
-      isConnecting.value = true;
-      // TODO: Implement OAuth flow for Google/Apple calendar
-      Get.snackbar(
-        'Coming Soon',
-        'Calendar connection via ${provider.name} will be available soon',
-        snackPosition: SnackPosition.TOP,
-      );
-    } finally {
-      isConnecting.value = false;
-    }
+    // Avoid fake loading; surface a clear unavailable state
+    Get.snackbar(
+      'Not available yet',
+      'Connecting ${provider.name} calendars is not available in this version. You can still create events locally.',
+      snackPosition: SnackPosition.TOP,
+      duration: const Duration(seconds: 3),
+    );
   }
 
   /// Disconnect calendar

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 // Layout provided by parent route in App.tsx
 import SEO from '@/components/seo/SEO'
-import { BreadcrumbJsonLd, HowToJsonLd } from '@/components/seo/JsonLd'
+import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
 import {
   Camera,
@@ -145,14 +145,14 @@ export default function AIWardrobeExtractionPage() {
   return (
     <>
       <SEO
-        title="AI Wardrobe Extraction | Digitize Your Closet in Minutes | FitCheck AI"
-        description="Transform your wardrobe with AI-powered clothing recognition. Upload photos and automatically catalog items with colors, categories, brands & materials detected."
+        title="AI Wardrobe Extraction | Digitize Your Closet in Minutes"
+        description="Upload photos of your clothes. AI detects items, colors, and categories so you build a digital wardrobe without manual tagging."
         canonicalUrl="https://fitcheckaiapp.com/features/ai-wardrobe-extraction"
-        ogType="article"
+        keywords="AI wardrobe extraction, digitize closet, digital wardrobe organizer"
+        ogType="website"
         jsonLd={howToSchema}
       />
       <BreadcrumbJsonLd items={breadcrumbs} />
-      <HowToJsonLd {...howToSchema} />
 
       <div className="pt-20">
         {/* Hero Section */}

@@ -57,6 +57,16 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
     const hasAiImage = outfit.images?.some((img) => img.generation_type === 'ai')
     const isGenerating = generationStatus === 'pending' || generationStatus === 'processing'
     const generationFailed = generationStatus === 'failed'
+    const [imageError, setImageError] = React.useState(false)
+
+    React.useEffect(() => {
+      setImageError(false)
+    }, [primaryImage?.thumbnail_url, primaryImage?.image_url, outfit.id])
+
+    const imageSrc =
+      !imageError && primaryImage
+        ? primaryImage.thumbnail_url || primaryImage.image_url
+        : null
 
     if (variant === 'list') {
       return (
@@ -73,11 +83,12 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
         >
           {/* Image */}
           <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0">
-            {primaryImage ? (
+            {imageSrc ? (
               <img
-                src={primaryImage.thumbnail_url || primaryImage.image_url}
+                src={imageSrc}
                 alt={outfit.name}
                 className="w-full h-full object-cover"
+                onError={() => setImageError(true)}
                 loading="lazy"
               />
             ) : (
@@ -110,6 +121,8 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
             )}
             {showFavorite && (
               <button
+                type="button"
+                aria-label={outfit.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
                 className={cn(
                   'p-2 rounded-full touch-target',
                   outfit.is_favorite
@@ -154,9 +167,9 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
             <p className="text-xs text-muted-foreground mt-2">Generation failed</p>
             <p className="text-[10px] text-muted-foreground">Click to retry</p>
           </div>
-        ) : primaryImage ? (
+        ) : imageSrc ? (
           <img
-            src={primaryImage.thumbnail_url || primaryImage.image_url}
+            src={imageSrc}
             alt={outfit.name}
             className={cn(
               'absolute inset-0 w-full h-full object-cover',
@@ -164,6 +177,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
               'group-hover:scale-105'
             )}
             loading="lazy"
+            onError={() => setImageError(true)}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center p-4">
@@ -181,7 +195,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
         )}
 
         {/* Gradient Overlay */}
-        {(primaryImage || isGenerating) && (
+        {(imageSrc || isGenerating) && (
           <div
             className={cn(
               'absolute inset-0',

@@ -101,10 +101,14 @@ class AppBottomNavigationBar extends StatelessWidget {
               final isSelected = currentIndex == index;
 
               return Expanded(
-                child: GestureDetector(
-                  onTap: () => _onTabTapped(index),
-                  behavior: HitTestBehavior.opaque,
-                  child: AnimatedContainer(
+                child: Semantics(
+                  label: item.label,
+                  button: true,
+                  selected: isSelected,
+                  child: GestureDetector(
+                    onTap: () => _onTabTapped(index),
+                    behavior: HitTestBehavior.opaque,
+                    child: AnimatedContainer(
                     duration: AppConstants.animationDurationShort,
                     curve: Curves.easeInOut,
                     padding: const EdgeInsets.symmetric(vertical: 6),
@@ -138,6 +142,7 @@ class AppBottomNavigationBar extends StatelessWidget {
                       ],
                     ),
                   ),
+                ),
                 ),
               );
             }).toList(),

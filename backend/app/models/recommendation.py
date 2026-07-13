@@ -23,7 +23,7 @@ class RecommendationType(str, Enum):
     SHOPPING = "shopping"  # Shopping suggestions
 
 
-class MatchReason(str, Enum):
+class MatchReasonType(str, Enum):
     """Reasons why items match."""
     COLOR_HARMONY = "color_harmony"
     STYLE_COMPATIBLE = "style_compatible"

@@ -1,4 +1,3 @@
-import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { LucideIcon } from 'lucide-react'
 
@@ -6,31 +5,19 @@ interface FeatureCardProps {
   icon: LucideIcon
   title: string
   description: string
-  gradient: string
+  /** @deprecated Kept for call-site compatibility; accent is solid indigo. */
+  gradient?: string
 }
 
-export function FeatureCard({ icon: Icon, title, description, gradient }: FeatureCardProps) {
+export function FeatureCard({ icon: Icon, title, description }: FeatureCardProps) {
   return (
-    <Card className="group relative overflow-hidden border-0 bg-white dark:bg-gray-800 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-      {/* Gradient accent on hover */}
-      <div
-        className={cn(
-          'absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-5 transition-opacity',
-          gradient
-        )}
-      />
-
+    <Card className="group relative overflow-hidden border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 transition-colors hover:border-indigo-300 dark:hover:border-indigo-700">
       <CardContent className="p-6">
-        <div
-          className={cn(
-            'w-12 h-12 rounded-xl flex items-center justify-center mb-4 bg-gradient-to-br',
-            gradient
-          )}
-        >
-          <Icon className="w-6 h-6 text-white" />
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-4 bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
+          <Icon className="w-6 h-6" />
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{title}</h3>
-        <p className="text-gray-600 dark:text-gray-400 text-sm">{description}</p>
+        <h3 className="text-lg font-semibold text-stone-900 dark:text-stone-50 mb-2">{title}</h3>
+        <p className="text-stone-600 dark:text-stone-400 text-sm">{description}</p>
       </CardContent>
     </Card>
   )

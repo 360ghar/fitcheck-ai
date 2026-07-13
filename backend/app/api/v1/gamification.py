@@ -80,9 +80,7 @@ async def get_streak(
 ):
     try:
         result = db.table("user_streaks").select("*").eq("user_id", user_id).maybe_single().execute()
-        if result is None:
-            raise DatabaseError("Database query returned None")
-        row = result.data
+        row = result.data if result else None
         if not row:
             now = _now()
             insert = {

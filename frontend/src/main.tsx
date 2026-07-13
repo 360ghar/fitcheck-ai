@@ -9,6 +9,7 @@ import { Toaster } from './components/ui/toaster'
 import { TooltipProvider } from './components/ui/tooltip'
 import ErrorBoundary from './components/errors/ErrorBoundary'
 import { ThemeProvider } from './components/theme'
+import '@fontsource-variable/plus-jakarta-sans'
 import './index.css'
 
 // Create a client for React Query

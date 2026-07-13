@@ -2,26 +2,23 @@
 Feedback API endpoints for submitting bug reports, feature requests, and feedback.
 """
 import json
-import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, Header, UploadFile, HTTPException
+from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
 from supabase import Client
 
 from app.api.v1.deps import get_current_user, get_db
 from app.core.exceptions import ValidationError
-from app.core.security import verify_token, TokenData
+from app.core.logging_config import get_context_logger
 from app.models.feedback import (
     TicketCategory,
-    FeedbackResponse,
-    TicketListResponse,
     DeviceInfo,
     CreateFeedbackRequest,
 )
 from app.services.feedback_service import FeedbackService
 from app.services.storage_service import StorageService
 
-logger = logging.getLogger(__name__)
+logger = get_context_logger(__name__)
 
 router = APIRouter()
 

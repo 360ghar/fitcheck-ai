@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/services/analytics_service.dart';
+import '../../../core/utils/error_handler.dart';
 import '../../subscription/repositories/subscription_repository.dart';
 import '../models/user_model.dart';
 import '../repositories/auth_repository.dart';
@@ -182,20 +183,18 @@ class AuthController extends GetxController {
           properties: {'method': 'email'},
         );
 
+        // Navigate first so snackbar isn't dismissed by stack replacement
+        Get.offAllNamed(Routes.home);
         Get.snackbar(
           'Welcome back!',
           'Successfully logged in as ${user.value?.fullName ?? user.value?.email}',
           snackPosition: SnackPosition.TOP,
-          backgroundColor: Colors.green.shade50,
-          colorText: Colors.green.shade900,
+          duration: const Duration(seconds: 2),
         );
-
-        // Navigate to home
-        Get.offAllNamed(Routes.home);
       } else {
         throw Exception('Login failed. Please try again.');
       }
-    } on AuthException catch (e) {
+    } on AuthException catch (e, stackTrace) {
       error.value = e.message;
       // Check for email not confirmed error
       if (e.message.toLowerCase().contains('email not confirmed')) {
@@ -203,23 +202,22 @@ class AuthController extends GetxController {
         unverifiedEmail.value = email;
         // Don't show snackbar for this error, we show inline UI instead
       } else {
+        ErrorHandler.reportError(e, e.message, stackTrace: stackTrace);
         Get.snackbar(
           'Login Failed',
           e.message,
           snackPosition: SnackPosition.TOP,
-          backgroundColor: Colors.red.shade50,
-          colorText: Colors.red.shade900,
+          duration: const Duration(seconds: 3),
         );
       }
       rethrow;
-    } catch (e) {
+    } catch (e, stackTrace) {
       error.value = e.toString().replaceAll('Exception: ', '');
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
       Get.snackbar(
         'Login Failed',
         error.value,
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red.shade50,
-        colorText: Colors.red.shade900,
       );
       rethrow;
     } finally {
@@ -264,8 +262,6 @@ class AuthController extends GetxController {
           'Welcome to Fit Check!',
           'Account created successfully',
           snackPosition: SnackPosition.TOP,
-          backgroundColor: Colors.green.shade50,
-          colorText: Colors.green.shade900,
         );
 
         // Navigate to home
@@ -273,24 +269,22 @@ class AuthController extends GetxController {
       } else {
         throw Exception('Registration failed. Please try again.');
       }
-    } on AuthException catch (e) {
+    } on AuthException catch (e, stackTrace) {
       error.value = e.message;
+      ErrorHandler.reportError(e, e.message, stackTrace: stackTrace);
       Get.snackbar(
         'Registration Failed',
         e.message,
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red.shade50,
-        colorText: Colors.red.shade900,
       );
       rethrow;
-    } catch (e) {
+    } catch (e, stackTrace) {
       error.value = e.toString().replaceAll('Exception: ', '');
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
       Get.snackbar(
         'Registration Failed',
         error.value,
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red.shade50,
-        colorText: Colors.red.shade900,
       );
       rethrow;
     } finally {
@@ -310,24 +304,22 @@ class AuthController extends GetxController {
         properties: {'method': 'google'},
       );
       // OAuth flow will redirect - state will be updated via deep link
-    } on AuthException catch (e) {
+    } on AuthException catch (e, stackTrace) {
       error.value = e.message;
+      ErrorHandler.reportError(e, e.message, stackTrace: stackTrace);
       Get.snackbar(
         'Google Sign-In Failed',
         e.message,
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red.shade50,
-        colorText: Colors.red.shade900,
       );
       rethrow;
-    } catch (e) {
+    } catch (e, stackTrace) {
       error.value = e.toString().replaceAll('Exception: ', '');
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
       Get.snackbar(
         'Google Sign-In Failed',
         error.value,
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red.shade50,
-        colorText: Colors.red.shade900,
       );
       rethrow;
     } finally {
@@ -361,38 +353,35 @@ class AuthController extends GetxController {
       } else {
         throw Exception('Apple sign-in failed. Please try again.');
       }
-    } on SignInWithAppleAuthorizationException catch (e) {
-      // User cancelled the native sheet - fail silently, no snackbar.
+    } on SignInWithAppleAuthorizationException catch (e, stackTrace) {
+      // User cancelled the native sheet - fail silently, no snackbar/report.
       if (e.code == AuthorizationErrorCode.canceled) {
         return;
       }
       error.value = e.message;
+      ErrorHandler.reportError(e, e.message, stackTrace: stackTrace);
       Get.snackbar(
         'Apple Sign-In Failed',
         e.message,
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red.shade50,
-        colorText: Colors.red.shade900,
       );
       rethrow;
-    } on AuthException catch (e) {
+    } on AuthException catch (e, stackTrace) {
       error.value = e.message;
+      ErrorHandler.reportError(e, e.message, stackTrace: stackTrace);
       Get.snackbar(
         'Apple Sign-In Failed',
         e.message,
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red.shade50,
-        colorText: Colors.red.shade900,
       );
       rethrow;
-    } catch (e) {
+    } catch (e, stackTrace) {
       error.value = e.toString().replaceAll('Exception: ', '');
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
       Get.snackbar(
         'Apple Sign-In Failed',
         error.value,
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red.shade50,
-        colorText: Colors.red.shade900,
       );
       rethrow;
     } finally {
@@ -435,8 +424,6 @@ class AuthController extends GetxController {
         'Email Sent',
         'Check your email for password reset instructions',
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.green.shade50,
-        colorText: Colors.green.shade900,
       );
     } on AuthException catch (e) {
       error.value = e.message;
@@ -444,8 +431,6 @@ class AuthController extends GetxController {
         'Request Failed',
         e.message,
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red.shade50,
-        colorText: Colors.red.shade900,
       );
       rethrow;
     } catch (e) {
@@ -454,8 +439,6 @@ class AuthController extends GetxController {
         'Request Failed',
         error.value,
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red.shade50,
-        colorText: Colors.red.shade900,
       );
       rethrow;
     } finally {
@@ -475,8 +458,6 @@ class AuthController extends GetxController {
         'Password Updated',
         'Your password has been updated successfully',
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.green.shade50,
-        colorText: Colors.green.shade900,
       );
     } on AuthException catch (e) {
       error.value = e.message;
@@ -484,8 +465,6 @@ class AuthController extends GetxController {
         'Update Failed',
         e.message,
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red.shade50,
-        colorText: Colors.red.shade900,
       );
       rethrow;
     } catch (e) {
@@ -494,8 +473,6 @@ class AuthController extends GetxController {
         'Update Failed',
         error.value,
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red.shade50,
-        colorText: Colors.red.shade900,
       );
       rethrow;
     } finally {
@@ -533,8 +510,6 @@ class AuthController extends GetxController {
         'Email Sent',
         'Verification email has been sent. Please check your inbox.',
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.green.shade50,
-        colorText: Colors.green.shade900,
       );
     } on AuthException catch (e) {
       error.value = e.message;
@@ -542,8 +517,6 @@ class AuthController extends GetxController {
         'Failed to Send Email',
         e.message,
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red.shade50,
-        colorText: Colors.red.shade900,
       );
     } catch (e) {
       error.value = e.toString().replaceAll('Exception: ', '');
@@ -551,8 +524,6 @@ class AuthController extends GetxController {
         'Failed to Send Email',
         error.value,
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red.shade50,
-        colorText: Colors.red.shade900,
       );
     } finally {
       isResendingVerification.value = false;
@@ -586,8 +557,6 @@ class AuthController extends GetxController {
         'Referral Applied!',
         'You and your friend both get 1 month of Pro free!',
         snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.green.shade50,
-        colorText: Colors.green.shade900,
         duration: const Duration(seconds: 4),
       );
     } catch (e) {

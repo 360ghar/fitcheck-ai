@@ -12,17 +12,15 @@ import re
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, model_validator
 from supabase import Client
 
 from app.core.exceptions import (
-    AIServiceError,
     DatabaseError,
     FitCheckException,
     ItemNotFoundError,
     ValidationError,
-    WeatherServiceError,
 )
 from app.core.logging_config import get_context_logger
 from app.core.security import get_current_user_id

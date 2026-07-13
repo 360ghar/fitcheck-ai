@@ -31,10 +31,13 @@ from app.core.exceptions import (
 from app.core.security import get_current_user_id
 from app.core.config import settings
 from app.db.connection import get_db
+from app.models.common import DataResponse
 from app.models.outfit import (
     GenerationRequest,
     GenerationStatus,
     OutfitCreate,
+    OutfitListResponse,
+    OutfitResponse,
     OutfitUpdate,
     OutfitCollectionCreate,
     OutfitCollectionUpdate,
@@ -242,7 +245,7 @@ async def create_outfit(
         raise DatabaseError("Failed to create outfit", operation="insert")
 
 
-@router.get("", response_model=Dict[str, Any])
+@router.get("", response_model=DataResponse[OutfitListResponse])
 async def list_outfits(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -369,7 +372,7 @@ async def available_items(
         raise DatabaseError("Failed to fetch available items", operation="select")
 
 
-@router.get("/{outfit_id}", response_model=Dict[str, Any])
+@router.get("/{outfit_id}", response_model=DataResponse[OutfitResponse])
 async def get_outfit(
     outfit_id: UUID,
     user_id: str = Depends(get_current_user_id),

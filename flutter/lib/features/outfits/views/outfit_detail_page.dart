@@ -175,6 +175,9 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                                           ),
                                         )
                                       : IconButton(
+                                          tooltip: outfit.isFavorite
+                                              ? 'Remove from favorites'
+                                              : 'Add to favorites',
                                           onPressed: () => _controller.toggleFavorite(outfit.id),
                                           icon: Icon(
                                             outfit.isFavorite ? Icons.favorite : Icons.favorite_border,

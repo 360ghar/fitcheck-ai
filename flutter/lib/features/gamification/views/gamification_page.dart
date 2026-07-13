@@ -416,23 +416,33 @@ class GamificationPage extends StatelessWidget {
       ),
       title: Row(
         children: [
-          if (entry.avatarUrl != null)
-            CircleAvatar(
-              backgroundImage: NetworkImage(entry.avatarUrl!),
-              radius: 16,
-            )
-          else
-            CircleAvatar(
-              backgroundColor: tokens.brandColor,
-              radius: 16,
-              child: Text(
-                entry.username[0].toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
+          CircleAvatar(
+            backgroundColor: tokens.brandColor,
+            radius: 16,
+            child: entry.avatarUrl != null
+                ? ClipOval(
+                    child: Image.network(
+                      entry.avatarUrl!,
+                      width: 32,
+                      height: 32,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Text(
+                        entry.username[0].toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  )
+                : Text(
+                    entry.username[0].toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+          ),
           const SizedBox(width: AppConstants.spacing12),
           Text(
             entry.username,

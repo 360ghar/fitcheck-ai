@@ -94,8 +94,8 @@ export function PhotoshootResultsStep() {
 
       {/* Partial success warning */}
       {partialSuccess && failedCount > 0 && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">
-          <AlertTriangle className="mt-0.5 h-4 w-4" />
+        <div className="flex items-start gap-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 p-3 text-amber-900 dark:text-amber-100">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p className="text-sm">
             {failedCount} image{failedCount > 1 ? 's' : ''} couldn&apos;t be generated. You can retry each failed slot.
           </p>
@@ -121,13 +121,15 @@ export function PhotoshootResultsStep() {
               <span className="text-xs text-white font-medium">{index + 1}</span>
             </div>
 
-            {/* Download Button */}
+            {/* Download Button — always visible on touch/mobile; hover-reveal on md+ */}
             <button
+              type="button"
+              aria-label={`Download image ${index + 1}`}
               onClick={(e) => {
                 e.stopPropagation();
                 downloadImage(index, true);
               }}
-              className="absolute bottom-2 right-2 p-2 bg-primary rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute bottom-2 right-2 p-2.5 min-h-11 min-w-11 flex items-center justify-center bg-primary rounded-full text-white opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
             >
               <Download className="w-4 h-4" />
             </button>
@@ -137,13 +139,13 @@ export function PhotoshootResultsStep() {
         {failedIndices.map((failedIndex) => (
           <div
             key={`failed-${failedIndex}`}
-            className="relative aspect-[3/4] rounded-lg overflow-hidden border border-dashed border-amber-300 bg-amber-50/60 p-3 flex flex-col justify-between"
+            className="relative aspect-[3/4] rounded-lg overflow-hidden border border-dashed border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-950/40 p-3 flex flex-col justify-between"
           >
             <div>
-              <div className="mb-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+              <div className="mb-2 inline-flex rounded-full bg-amber-100 dark:bg-amber-900/60 px-2 py-1 text-xs font-medium text-amber-800 dark:text-amber-100">
                 Failed slot #{failedIndex + 1}
               </div>
-              <p className="text-xs text-amber-800">Generation failed for this slot. Retry to fill it.</p>
+              <p className="text-xs text-amber-800 dark:text-amber-100">Generation failed for this slot. Retry to fill it.</p>
             </div>
             <Button
               size="sm"

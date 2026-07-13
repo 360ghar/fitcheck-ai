@@ -13,7 +13,7 @@ Features:
 import json
 import re
 import uuid
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError

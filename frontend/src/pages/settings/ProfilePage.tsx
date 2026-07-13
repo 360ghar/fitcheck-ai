@@ -366,7 +366,7 @@ export default function ProfilePage() {
               {userAvatar ? (
                 <img
                   src={userAvatar}
-                  alt=""
+                  alt={`${userDisplayName} avatar`}
                   className="h-16 w-16 md:h-24 md:w-24 rounded-full object-cover"
                 />
               ) : (
@@ -384,9 +384,11 @@ export default function ProfilePage() {
                 onChange={(e) => handleAvatarSelected(e.target.files?.[0] || null)}
               />
               <button
+                type="button"
                 onClick={handleAvatarClick}
                 disabled={isUploadingAvatar}
                 className="absolute bottom-0 right-0 p-2 md:p-2.5 bg-primary rounded-full text-primary-foreground hover:bg-primary/90 disabled:opacity-60 touch-target shadow-md"
+                aria-label="Change avatar"
                 title="Change avatar"
               >
                 <Camera className="h-4 w-4 md:h-5 md:w-5" />

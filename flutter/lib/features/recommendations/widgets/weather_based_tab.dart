@@ -269,9 +269,10 @@ class WeatherBasedTab extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppConstants.radius8),
               child: item.itemImages != null && item.itemImages!.isNotEmpty
                   ? Image.network(
-                      item.itemImages!.first.url,
-                      fit: BoxFit.cover,
-                    )
+                  item.itemImages!.first.url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined),
+                )
                   : Container(
                       color: tokens.cardColor.withOpacity(0.5),
                       child: Icon(

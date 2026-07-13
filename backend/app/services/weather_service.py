@@ -4,7 +4,7 @@ Used to provide weather-based outfit recommendations.
 """
 
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from collections import Counter, defaultdict
 import re
 

@@ -87,17 +87,20 @@ class ReferralPromoBanner extends StatelessWidget {
                         ],
                       ),
                     ),
-                    // Dismiss button (hidden when urgent)
+                    // Dismiss button (hidden when urgent) — 44pt touch target
                     if (!isUrgent && onDismiss != null)
-                      GestureDetector(
-                        onTap: onDismiss,
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Icon(
-                            Icons.close,
-                            color: Colors.white.withAlpha(179),
-                            size: 20,
-                          ),
+                      IconButton(
+                        onPressed: onDismiss,
+                        tooltip: 'Dismiss',
+                        constraints: const BoxConstraints(
+                          minWidth: 44,
+                          minHeight: 44,
+                        ),
+                        padding: EdgeInsets.zero,
+                        icon: Icon(
+                          Icons.close,
+                          color: Colors.white.withAlpha(179),
+                          size: 20,
                         ),
                       ),
                   ],

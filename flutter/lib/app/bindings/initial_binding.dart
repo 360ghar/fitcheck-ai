@@ -5,7 +5,6 @@ import '../../core/services/network_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/services/offline_queue_service.dart';
-import '../../core/services/theme_service.dart';
 import '../../core/services/ai_consent_service.dart';
 import '../../features/auth/controllers/auth_controller.dart';
 
@@ -16,8 +15,8 @@ class InitialBinding extends Bindings {
     // Initialize Supabase service (must be first)
     Get.put(SupabaseService.instance);
 
-    // Initialize ThemeService early for immediate theme loading
-    Get.put(ThemeService());
+    // ThemeService is registered in main() before runApp, since
+    // FitCheckApp's GetMaterialApp reads it eagerly before this binding runs.
 
     // Initialize AiConsentService eagerly so Get.find never throws when an AI
     // feature checks third-party data-sharing consent.

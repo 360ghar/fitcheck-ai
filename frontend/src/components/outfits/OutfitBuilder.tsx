@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
 import { ZoomableImage } from '@/components/ui/zoomable-image'
+import { cn } from '@/lib/utils'
 import { generateOutfit } from '@/api/ai'
 import type { Item, Category, Style, Season } from '@/types'
 
@@ -139,29 +140,44 @@ function CanvasItem({
         width: '120px',
       }}
     >
-      {/* Drag handle */}
-      <div className="absolute top-1 left-1 p-1 bg-gray-100 dark:bg-gray-700 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Drag handle — always visible when selected (touch), hover on desktop */}
+      <div
+        className={cn(
+          'absolute top-1 left-1 p-1 bg-gray-100 dark:bg-gray-700 rounded transition-opacity',
+          isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        )}
+      >
         <GripVertical className="h-3 w-3 text-gray-500" />
       </div>
 
       {/* Remove button */}
       <button
+        type="button"
+        aria-label="Remove item from outfit"
         onClick={(e) => {
           e.stopPropagation()
           onRemove()
         }}
-        className="absolute top-1 right-1 p-1 bg-red-100 dark:bg-red-900/30 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200"
+        className={cn(
+          'absolute top-1 right-1 p-1.5 min-h-9 min-w-9 flex items-center justify-center bg-red-100 dark:bg-red-900/30 rounded-full transition-opacity hover:bg-red-200',
+          isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        )}
       >
         <Trash2 className="h-3 w-3 text-red-600 dark:text-red-400" />
       </button>
 
       {/* Visibility toggle */}
       <button
+        type="button"
+        aria-label={outfitItem.isVisible ? 'Hide item' : 'Show item'}
         onClick={(e) => {
           e.stopPropagation()
           onToggleVisibility()
         }}
-        className="absolute top-1 left-1/2 -translate-x-1/2 p-1 bg-gray-100 dark:bg-gray-700 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200"
+        className={cn(
+          'absolute top-1 left-1/2 -translate-x-1/2 p-1.5 min-h-9 min-w-9 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-full transition-opacity hover:bg-gray-200',
+          isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        )}
       >
         {outfitItem.isVisible ? (
           <Eye className="h-3 w-3 text-gray-600 dark:text-gray-400" />

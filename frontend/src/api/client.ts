@@ -214,6 +214,24 @@ apiClient.interceptors.response.use(
         };
 
         setTokens(newTokens);
+
+        // Keep Zustand persist in sync so rehydrate does not restore stale tokens
+        try {
+          const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw) as {
+              state?: { tokens?: AuthTokens; isAuthenticated?: boolean };
+            };
+            if (parsed?.state) {
+              parsed.state.tokens = newTokens;
+              parsed.state.isAuthenticated = true;
+              localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(parsed));
+            }
+          }
+        } catch {
+          // Non-fatal: request-path tokens are already updated via setTokens
+        }
+
         processQueue(null);
 
         // Retry original request with new token

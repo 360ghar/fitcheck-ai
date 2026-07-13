@@ -63,6 +63,9 @@ class ItemDetailPage extends StatelessWidget {
                                   ),
                                 ),
                                 IconButton(
+                                  tooltip: item.isFavorite
+                                      ? 'Remove from favorites'
+                                      : 'Add to favorites',
                                   onPressed:
                                       wardrobeController.isFavoriting(item.id)
                                       ? null

@@ -279,6 +279,19 @@ async def disconnect_calendar(
         )
 
 
+def _parse_date_only(value: str, field_name: str) -> str:
+    """Normalize a client-supplied date/datetime string to YYYY-MM-DD.
+
+    Accepts both a bare date (web frontend) and a full ISO datetime with
+    milliseconds (Flutter's DateTime.toIso8601String()) - either way we only
+    need the date component for the day-boundary filters below.
+    """
+    try:
+        return datetime.fromisoformat(value).date().isoformat()
+    except ValueError:
+        raise ValidationError(f"Invalid {field_name}: {value}")
+
+
 @router.get("/events", response_model=Dict[str, Any])
 async def get_calendar_events(
     start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
@@ -291,9 +304,9 @@ async def get_calendar_events(
         query = db.table("calendar_events").select("*").eq("user_id", user_id)
 
         if start_date:
-            query = query.gte("start_time", f"{start_date}T00:00:00")
+            query = query.gte("start_time", f"{_parse_date_only(start_date, 'start_date')}T00:00:00")
         if end_date:
-            query = query.lte("start_time", f"{end_date}T23:59:59")
+            query = query.lte("start_time", f"{_parse_date_only(end_date, 'end_date')}T23:59:59")
 
         result = query.order("start_time", desc=False).execute()
         events: List[CalendarEventData] = []
@@ -320,6 +333,8 @@ async def get_calendar_events(
         )
         return {"data": {"events": [e.model_dump() for e in events]}, "message": "OK"}
 
+    except ValidationError:
+        raise
     except Exception as e:
         logger.error(
             "Calendar events error",

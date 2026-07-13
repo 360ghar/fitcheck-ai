@@ -1301,7 +1301,11 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
           ),
         ],
       ),
-    );
+    ).then((_) {
+      username.dispose();
+      password.dispose();
+      otp.dispose();
+    });
   }
 
   void _showOtpDialog(BuildContext context, AppUiTokens tokens) {
@@ -1564,6 +1568,10 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
         ],
       ),
     );
+    name.dispose();
+    category.dispose();
+    colors.dispose();
+    material.dispose();
   }
 
   Widget _buildEmptyState(BuildContext context, AppUiTokens tokens) {

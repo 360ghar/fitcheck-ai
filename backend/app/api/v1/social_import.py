@@ -105,6 +105,21 @@ def _build_oauth_payload(
     }
 
 
+def _json_for_inline_script(obj: Any) -> str:
+    """
+    Serialize to JSON safe for interpolation into an inline <script> tag.
+
+    json.dumps does not escape '<', '>' or '&', so a value containing
+    "</script><script>..." would otherwise break out of the script block.
+    """
+    return (
+        json.dumps(obj)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
+
+
 def _oauth_popup_response(
     *,
     job_id: str,
@@ -114,8 +129,8 @@ def _oauth_popup_response(
 ) -> HTMLResponse:
     payload = _build_oauth_payload(job_id, status_value, message)
     target_origin = _validate_target_origin(target_origin).rstrip("/")
-    payload_json = json.dumps(payload)
-    target_origin_json = json.dumps(target_origin)
+    payload_json = _json_for_inline_script(payload)
+    target_origin_json = _json_for_inline_script(target_origin)
     safe_message = escape(message)
 
     html = f"""<!doctype html>

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 // Layout provided by parent route in App.tsx
 import SEO from '@/components/seo/SEO'
-import { BreadcrumbJsonLd, HowToJsonLd } from '@/components/seo/JsonLd'
+import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
 import {
   Camera,
@@ -173,14 +173,14 @@ export default function AIPhotoshootGeneratorPage() {
   return (
     <>
       <SEO
-        title="AI Photoshoot Generator | Professional Headshots | FitCheck AI"
-        description="Create professional LinkedIn photos, dating profile pictures, and Instagram-worthy shots with AI. Studio-quality results in minutes for free."
+        title="AI Photoshoot Generator | LinkedIn, Dating & Social Photos"
+        description="Create professional-looking photos from your selfies for LinkedIn, dating apps, and social media — without a studio."
         canonicalUrl="https://fitcheckaiapp.com/features/ai-photoshoot-generator"
-        ogType="article"
+        keywords="AI photoshoot, AI headshot, LinkedIn photo AI, dating profile photos"
+        ogType="website"
         jsonLd={linkedinHowToSchema}
       />
       <BreadcrumbJsonLd items={breadcrumbs} />
-      <HowToJsonLd {...linkedinHowToSchema} />
 
       <div className="pt-20">
         {/* Hero Section */}

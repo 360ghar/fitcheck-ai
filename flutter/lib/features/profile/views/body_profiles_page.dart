@@ -419,7 +419,13 @@ class BodyProfilesPage extends StatelessWidget {
         ),
       ),
       isScrollControlled: true,
-    );
+    ).then((_) {
+      nameController.dispose();
+      heightController.dispose();
+      weightController.dispose();
+      bodyShapeController.dispose();
+      skinToneController.dispose();
+    });
   }
 
   void _showEditProfileDialog(
@@ -596,7 +602,13 @@ class BodyProfilesPage extends StatelessWidget {
         ),
       ),
       isScrollControlled: true,
-    );
+    ).then((_) {
+      nameController.dispose();
+      heightController.dispose();
+      weightController.dispose();
+      bodyShapeController.dispose();
+      skinToneController.dispose();
+    });
   }
 
   void _confirmDelete(

@@ -522,10 +522,20 @@ export function CalendarView({
           </h2>
           {viewMode !== 'agenda' && (
             <div className="flex items-center gap-1">
-              <Button variant="outline" size="icon" onClick={() => navigate('prev')}>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Previous period"
+                onClick={() => navigate('prev')}
+              >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <Button variant="outline" size="icon" onClick={() => navigate('next')}>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Next period"
+                onClick={() => navigate('next')}
+              >
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -771,11 +781,12 @@ export function CalendarView({
       {viewMode === 'month' && (
         <Card>
           <CardContent className="p-2 md:p-4 overflow-x-auto scrollbar-hide">
-            <div className="min-w-[560px] md:min-w-0">
+            {/* Fit viewport without forced horizontal scroll; cells shrink on narrow screens */}
+            <div className="w-full min-w-0">
               {/* Weekday headers */}
-              <div className="grid grid-cols-7 gap-1 md:gap-2 mb-2">
+              <div className="grid grid-cols-7 gap-0.5 sm:gap-1 md:gap-2 mb-2">
                 {WEEKDAYS.map((day) => (
-                  <div key={day} className="text-center text-xs md:text-sm font-medium text-muted-foreground">
+                  <div key={day} className="text-center text-[10px] sm:text-xs md:text-sm font-medium text-muted-foreground">
                     <span className="hidden md:inline">{day}</span>
                     <span className="md:hidden">{day.charAt(0)}</span>
                   </div>
@@ -783,13 +794,13 @@ export function CalendarView({
               </div>
 
               {/* Days grid */}
-              <div className="grid grid-cols-7 gap-1 md:gap-2">
+              <div className="grid grid-cols-7 gap-0.5 sm:gap-1 md:gap-2">
                 {days.map((day, index) => (
                   <div
                     key={index}
                     onClick={() => handleDayClick(day)}
                     className={cn(
-                      'group min-h-[60px] md:min-h-24 p-1 md:p-2 rounded-lg border transition-all cursor-pointer',
+                      'group min-h-[52px] sm:min-h-[60px] md:min-h-24 p-0.5 sm:p-1 md:p-2 rounded-lg border transition-all cursor-pointer overflow-hidden',
                       day.isCurrentMonth
                         ? day.isToday
                           ? 'bg-primary/5 border-primary'

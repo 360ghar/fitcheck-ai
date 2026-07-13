@@ -29,8 +29,6 @@ from app.core.security import get_current_user_id
 from app.db.connection import get_db
 from app.models.item import (
     ItemCreate,
-    ItemListResponse,
-    ItemResponse,
     ItemUpdate,
     VALID_CATEGORIES,
     VALID_CONDITIONS,

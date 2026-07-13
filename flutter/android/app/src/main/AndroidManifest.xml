@@ -27,7 +27,8 @@
     <application
         android:label="FitCheck AI"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false">
         <!-- Placeholder for OAuth redirect scheme (used by flutter_appauth) -->
         <meta-data
             android:name="appAuthRedirectScheme"

@@ -179,59 +179,33 @@ async def login_user(credentials: LoginRequest):
 
 ### 3. Token Verification (Middleware)
 
-**FastAPI Dependency:**
+Implementation: `backend/app/core/security.py` (`verify_token`).
+
+Supabase projects that use **JWT Signing Keys** issue **ES256** (or RS256) access tokens.
+Verification must use the project's JWKS endpoint, not only the legacy HS256 shared secret.
+
+```
+GET {SUPABASE_URL}/auth/v1/.well-known/jwks.json
+```
+
+**Verification rules:**
+
+| Token `alg` | How the backend verifies |
+|-------------|---------------------------|
+| `ES256` / `RS256` | Public key from JWKS (`kid` match), audience `authenticated` |
+| `HS256` (legacy) | `SUPABASE_JWT_SECRET`, audience `authenticated` |
+
+JWKS keys are cached in-process (~1 hour). On unknown `kid`, the client is reset and JWKS is re-fetched once.
+
+**Why this matters:** Login goes through Supabase Auth and can return 200 with tokens even when local verification is wrong. If `verify_token` only accepts HS256 while Supabase issues ES256, every protected route returns 401 and clients force-logout back to the login page.
+
+**FastAPI usage:**
 
 ```python
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import jwt
-from datetime import datetime
+from app.core.security import verify_token, get_current_user_id
 
-security = HTTPBearer()
-
-async def verify_token(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-) -> dict:
-    """
-    Verify JWT token and extract user claims.
-    """
-    token = credentials.credentials
-
-    try:
-        # Verify with Supabase JWT secret
-        decoded = jwt.decode(
-            token,
-            os.getenv("SUPABASE_JWT_SECRET"),
-            algorithms=["HS256"],
-            audience="authenticated"
-        )
-
-        # Check expiration
-        if decoded.get("exp", 0) < datetime.now().timestamp():
-            raise HTTPException(
-                status_code=401,
-                detail="Token expired"
-            )
-
-        return decoded
-
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=401,
-            detail="Token expired"
-        )
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid token"
-        )
-
-# Usage in routes
 @router.get("/items")
-async def get_items(
-    user_claims: dict = Depends(verify_token)
-):
-    user_id = user_claims.get("sub")
+async def get_items(user_id: str = Depends(get_current_user_id)):
     # Fetch items for user_id
     pass
 ```

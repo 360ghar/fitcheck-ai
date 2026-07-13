@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 // Layout provided by parent route in App.tsx
 import SEO from '@/components/seo/SEO'
-import { BreadcrumbJsonLd, HowToJsonLd } from '@/components/seo/JsonLd'
+import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
 import {
   Smartphone,
@@ -169,14 +169,14 @@ export default function VirtualTryOnPage() {
   return (
     <>
       <SEO
-        title="Virtual Try-On | See Clothes on Yourself Before Buying | FitCheck AI"
-        description="Experience AI-powered virtual try-on technology. See how any outfit looks on your body before purchasing or getting dressed. Save time and reduce returns."
+        title="AI Virtual Try-On | See Outfits on You Before You Wear Them"
+        description="Visualize any outfit from your wardrobe on your body with AI virtual try-on. Mix pieces, save looks, shop with confidence."
         canonicalUrl="https://fitcheckaiapp.com/features/virtual-try-on"
-        ogType="article"
+        keywords="AI virtual try-on, try on clothes online, virtual outfit try on"
+        ogType="website"
         jsonLd={howToSchema}
       />
       <BreadcrumbJsonLd items={breadcrumbs} />
-      <HowToJsonLd {...howToSchema} />
 
       <div className="pt-20">
         {/* Hero Section */}

@@ -22,6 +22,7 @@ name: Build iOS IPA
 #   API_BASE_URL                     - Backend base URL (Railway prod URL)
 #   POSTHOG_API_KEY                  - PostHog project API key (optional)
 #   POSTHOG_HOST                     - PostHog host (e.g. https://app.posthog.com)
+#   SENTRY_DSN                       - Sentry DSN for crash reporting (optional)
 #
 # iOS code signing (NEW - must be created in the Apple Developer account):
 #   APPLE_CERT_P12_BASE64            - Base64 of the Apple Distribution .p12
@@ -88,8 +89,8 @@ env:
   # Bundle identifier from flutter/ios/Runner.xcodeproj/project.pbxproj
   BUNDLE_ID: com.fitcheck.fitcheckAi
   # Apple Developer Team ID used for manual signing in the export step.
-  # TODO: replace with your real 10-char Team ID (App Store Connect > Membership).
-  DEVELOPMENT_TEAM: REPLACE_WITH_TEAM_ID
+  # Matches flutter/ios/ExportOptions.plist teamID.
+  DEVELOPMENT_TEAM: HMWGCVU4SV
   # Code signing identity for distribution builds.
   SIGNING_IDENTITY: 'Apple Distribution'
 
@@ -125,6 +126,7 @@ jobs:
 
       # Recreate the .env asset EXACTLY as the Android APK workflow does. The app
       # bundles flutter/.env as a Flutter asset (see pubspec.yaml `assets: - .env`).
+      # Only publishable/client keys — never service-role or secret API keys.
       - name: Create .env file
         run: |
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
@@ -132,6 +134,7 @@ jobs:
           echo "API_BASE_URL=${{ secrets.API_BASE_URL }}" >> .env
           echo "POSTHOG_API_KEY=${{ secrets.POSTHOG_API_KEY }}" >> .env
           echo "POSTHOG_HOST=${{ secrets.POSTHOG_HOST }}" >> .env
+          echo "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" >> .env
 
       - name: Get dependencies
         run: flutter pub get
@@ -234,11 +237,18 @@ jobs:
           cat "$EXPORT_PLIST"
 
       # SIGNED build path: uses the generated ExportOptions.plist (manual signing).
+      # dart-defines mirror the .env asset so release never falls back to localhost.
       - name: Build signed IPA (App Store)
         if: ${{ steps.signing.outputs.signed == 'true' }}
         run: |
           set -euo pipefail
           flutter build ipa --release \
+            --dart-define=API_BASE_URL="${{ secrets.API_BASE_URL }}" \
+            --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
+            --dart-define=POSTHOG_API_KEY="${{ secrets.POSTHOG_API_KEY }}" \
+            --dart-define=POSTHOG_HOST="${{ secrets.POSTHOG_HOST }}" \
+            --dart-define=SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
             --export-options-plist="${{ steps.export_opts.outputs.export_plist }}"
 
       # UNSIGNED build path (no secrets): still produce an artifact for inspection.
@@ -248,8 +258,14 @@ jobs:
         if: ${{ steps.signing.outputs.signed != 'true' }}
         run: |
           set -euo pipefail
-          flutter build ipa --release --no-codesign || \
-            flutter build ios --release --no-codesign
+          flutter build ipa --release --no-codesign \
+            --dart-define=API_BASE_URL="${{ secrets.API_BASE_URL }}" \
+            --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
+            --dart-define=POSTHOG_API_KEY="${{ secrets.POSTHOG_API_KEY }}" \
+            --dart-define=POSTHOG_HOST="${{ secrets.POSTHOG_HOST }}" \
+            --dart-define=SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
+            || flutter build ios --release --no-codesign
 
       - name: Locate build outputs
         id: outputs

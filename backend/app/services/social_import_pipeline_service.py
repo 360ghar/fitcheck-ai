@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -33,6 +32,7 @@ from app.services.social_import_job_store import SocialImportJobStore
 from app.services.social_scraper_service import SocialScraperService
 from app.services.storage_service import StorageService
 from app.services.vector_service import get_vector_service
+from app.utils.retry import with_retry
 
 logger = get_context_logger(__name__)
 
@@ -247,41 +247,40 @@ class SocialImportPipelineService:
                 job_id=job_id,
                 user_id=self.user_id,
             )
-            result = None
-            last_discovery_error: Optional[Exception] = None
-            for attempt in range(self.DISCOVERY_RETRY_ATTEMPTS):
-                try:
-                    result = await SocialScraperService.discover_profile_photos(
-                        normalized_url=job["normalized_url"],
-                        platform=SocialPlatform(job["platform"]),
-                        auth_session=auth_session,
-                        cursor=cursor,
-                    )
-                    if result is None:
-                        raise RuntimeError(
-                            "Photo discovery returned no result"
-                        )
-                    break
-                except Exception as discovery_error:
-                    last_discovery_error = discovery_error
-                    if attempt < self.DISCOVERY_RETRY_ATTEMPTS - 1:
-                        retry_delay = self.DISCOVERY_RETRY_BASE_DELAY_SECONDS * (attempt + 1)
-                        logger.warning(
-                            "Retrying photo discovery",
-                            job_id=job_id,
-                            user_id=self.user_id,
-                            attempt=attempt + 1,
-                            max_attempts=self.DISCOVERY_RETRY_ATTEMPTS,
-                            error=str(discovery_error),
-                            retry_delay_seconds=retry_delay,
-                        )
-                        await asyncio.sleep(retry_delay)
+            async def _discover() -> Any:
+                discovered = await SocialScraperService.discover_profile_photos(
+                    normalized_url=job["normalized_url"],
+                    platform=SocialPlatform(job["platform"]),
+                    auth_session=auth_session,
+                    cursor=cursor,
+                )
+                if discovered is None:
+                    raise RuntimeError("Photo discovery returned no result")
+                return discovered
 
-            if result is None:
+            def _log_discovery_retry(attempt: int, error: Exception, delay: float) -> None:
+                logger.warning(
+                    "Retrying photo discovery",
+                    job_id=job_id,
+                    user_id=self.user_id,
+                    attempt=attempt,
+                    max_attempts=self.DISCOVERY_RETRY_ATTEMPTS,
+                    error=str(error),
+                    retry_delay_seconds=round(delay, 2),
+                )
+
+            try:
+                result = await with_retry(
+                    _discover,
+                    max_retries=self.DISCOVERY_RETRY_ATTEMPTS - 1,
+                    initial_delay=self.DISCOVERY_RETRY_BASE_DELAY_SECONDS,
+                    backoff_factor=1.5,
+                    max_delay=10.0,
+                    on_retry=_log_discovery_retry,
+                )
+            except Exception as discovery_error:
                 raise RuntimeError(
-                    "Photo discovery failed after retries"
-                    if last_discovery_error is None
-                    else f"Photo discovery failed after retries: {last_discovery_error}"
+                    f"Photo discovery failed after retries: {discovery_error}"
                 )
 
             await self._persist_scraper_session_from_payload(

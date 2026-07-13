@@ -8,7 +8,8 @@ interface SEOProps {
   ogType?: 'website' | 'article'
   canonicalUrl?: string
   noIndex?: boolean
-  jsonLd?: object
+  jsonLd?: object | object[]
+  keywords?: string
   children?: React.ReactNode
 }
 
@@ -20,6 +21,7 @@ export function SEO({
   canonicalUrl,
   noIndex = false,
   jsonLd,
+  keywords,
   children,
 }: SEOProps) {
   const pageTitle = title || SEO_CONFIG.defaultTitle
@@ -29,16 +31,25 @@ export function SEO({
     canonicalUrl ||
     (typeof window !== 'undefined' ? window.location.href : SEO_CONFIG.siteUrl)
 
+  const jsonLdBlocks = jsonLd
+    ? Array.isArray(jsonLd)
+      ? jsonLd
+      : [jsonLd]
+    : []
+
   return (
     <Helmet>
-      {/* Primary Meta Tags */}
       <title>{pageTitle}</title>
       <meta name="title" content={pageTitle} />
       <meta name="description" content={pageDescription} />
-      {noIndex && <meta name="robots" content="noindex, nofollow" />}
+      {keywords && <meta name="keywords" content={keywords} />}
+      {noIndex ? (
+        <meta name="robots" content="noindex, nofollow" />
+      ) : (
+        <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+      )}
       {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
 
-      {/* Open Graph / Facebook */}
       <meta property="og:type" content={ogType} />
       <meta property="og:url" content={pageUrl} />
       <meta property="og:title" content={pageTitle} />
@@ -49,17 +60,20 @@ export function SEO({
       <meta property="og:site_name" content={SEO_CONFIG.siteName} />
       <meta property="og:locale" content={SEO_CONFIG.locale} />
 
-      {/* Twitter */}
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:url" content={pageUrl} />
       <meta name="twitter:title" content={pageTitle} />
       <meta name="twitter:description" content={pageDescription} />
       <meta name="twitter:image" content={pageImage} />
-
-      {/* JSON-LD Structured Data */}
-      {jsonLd && (
-        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+      {SEO_CONFIG.twitterHandle && (
+        <meta name="twitter:site" content={SEO_CONFIG.twitterHandle} />
       )}
+
+      {jsonLdBlocks.map((block, i) => (
+        <script key={i} type="application/ld+json">
+          {JSON.stringify(block)}
+        </script>
+      ))}
 
       {children}
     </Helmet>

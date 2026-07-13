@@ -17,5 +17,9 @@ void main() {
 
     // Verify that app launches without crashing
     expect(find.byType(MaterialApp), findsOneWidget);
+
+    // Let the splash page's post-init navigation timer complete so the
+    // widget tree has no pending timers when the test tears down.
+    await tester.pumpAndSettle(const Duration(seconds: 2));
   });
 }

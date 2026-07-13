@@ -96,8 +96,10 @@ export function PhotoshootUploadStep() {
                 className="w-full h-full object-cover"
               />
               <button
+                type="button"
+                aria-label={`Remove photo ${index + 1}`}
                 onClick={() => removePhoto(index)}
-                className="absolute top-2 right-2 p-1 bg-black/50 rounded-full hover:bg-black/70 transition-colors"
+                className="absolute top-2 right-2 p-2 min-h-11 min-w-11 flex items-center justify-center bg-black/50 rounded-full hover:bg-black/70 transition-colors"
               >
                 <X className="w-4 h-4 text-white" />
               </button>

@@ -1,24 +1,20 @@
 """
 Referral API endpoints for managing referral codes and redemptions.
 """
-import logging
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends
 from supabase import Client
 
 from app.api.v1.deps import get_current_user, get_db
+from app.core.logging_config import get_context_logger
 from app.models.subscription import (
-    ReferralCodeResponse,
-    ReferralStats,
     ValidateReferralRequest,
-    ValidateReferralResponse,
     RedeemReferralRequest,
-    RedeemReferralResponse,
 )
 from app.services.referral_service import ReferralService
 
-logger = logging.getLogger(__name__)
+logger = get_context_logger(__name__)
 
 router = APIRouter()
 

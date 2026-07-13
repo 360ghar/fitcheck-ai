@@ -64,16 +64,24 @@ class MainShellPage extends StatelessWidget {
   Widget _buildFloatingActionButton(int currentIndex) {
     switch (currentIndex) {
       case 2: // Wardrobe
-        return FloatingActionButton.extended(
-          onPressed: () => Get.toNamed(Routes.wardrobeAdd),
-          icon: const Icon(Icons.add),
-          label: const Text('Add Item'),
+        return Semantics(
+          label: 'Add wardrobe item',
+          button: true,
+          child: FloatingActionButton.extended(
+            onPressed: () => Get.toNamed(Routes.wardrobeAdd),
+            icon: const Icon(Icons.add),
+            label: const Text('Add Item'),
+          ),
         );
       case 3: // Outfits
-        return FloatingActionButton.extended(
-          onPressed: () => Get.toNamed(Routes.outfitBuilder),
-          icon: const Icon(Icons.add),
-          label: const Text('Create Outfit'),
+        return Semantics(
+          label: 'Create new outfit',
+          button: true,
+          child: FloatingActionButton.extended(
+            onPressed: () => Get.toNamed(Routes.outfitBuilder),
+            icon: const Icon(Icons.add),
+            label: const Text('Create Outfit'),
+          ),
         );
       default:
         return const SizedBox.shrink();

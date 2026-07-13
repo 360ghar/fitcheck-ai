@@ -1,0 +1,49 @@
+name: Backend Lint & Test
+
+# Previously there was NO CI workflow that ever imported or executed the
+# backend - the only two GitHub Actions workflows built the Flutter mobile
+# app. A PR could break auth, billing, or any other backend code and merge
+# to main with a green checkmark unrelated to the backend at all.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Pytest
+        env:
+          # Dummy values so Settings() can be constructed without real
+          # credentials - unit tests mock the Supabase client itself.
+          SUPABASE_URL: https://ci-placeholder.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: ci-placeholder-publishable-key
+          SUPABASE_SECRET_KEY: ci-placeholder-secret-key
+          SUPABASE_JWT_SECRET: ci-placeholder-jwt-secret-at-least-32-characters
+        run: pytest -v

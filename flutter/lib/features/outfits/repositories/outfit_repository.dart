@@ -136,6 +136,17 @@ class OutfitRepository {
     }
   }
 
+  /// Delete a single outfit image
+  Future<void> deleteOutfitImage(String outfitId, String imageId) async {
+    try {
+      await _apiClient.delete(
+        '${ApiConstants.outfits}/$outfitId/images/$imageId',
+      );
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    }
+  }
+
   /// Upload outfit images
   Future<List<OutfitImage>> uploadImages(
     String outfitId,

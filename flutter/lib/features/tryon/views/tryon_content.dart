@@ -249,8 +249,24 @@ class TryOnContent extends StatelessWidget {
                   child: hasAvatar
                       ? ClipOval(
                           child: isRemote
-                              ? Image.network(avatarPath, fit: BoxFit.cover)
-                              : Image.file(File(avatarPath), fit: BoxFit.cover),
+                              ? Image.network(
+                                  avatarPath,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Icon(
+                                    Icons.person,
+                                    size: 40,
+                                    color: tokens.brandColor,
+                                  ),
+                                )
+                              : Image.file(
+                                  File(avatarPath),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Icon(
+                                    Icons.person,
+                                    size: 40,
+                                    color: tokens.brandColor,
+                                  ),
+                                ),
                         )
                       : Icon(Icons.person, size: 40, color: tokens.brandColor),
                 );
@@ -791,6 +807,9 @@ class TryOnContent extends StatelessWidget {
                 child: Image.network(
                   controller.generatedImageUrl.value,
                   fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Center(
+                    child: Icon(Icons.broken_image_outlined, size: 48),
+                  ),
                 ),
               ),
             ),

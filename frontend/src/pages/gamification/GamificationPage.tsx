@@ -19,6 +19,7 @@ import { useAuthStore } from '@/stores/authStore'
 
 export default function GamificationPage() {
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [streak, setStreak] = useState<StreakData | null>(null)
   const [achievements, setAchievements] = useState<AchievementsData | null>(null)
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntryData[]>([])
@@ -27,32 +28,40 @@ export default function GamificationPage() {
 
   const { toast } = useToast()
 
-  useEffect(() => {
-    const load = async () => {
-      setIsLoading(true)
-      try {
-        const [streakRes, achievementsRes, leaderboardRes]: [StreakData, AchievementsData, LeaderboardData] =
-          await Promise.all([
-          getStreak(),
-          getAchievements(),
-          getLeaderboard(),
-        ])
-        setStreak(streakRes)
-        setAchievements(achievementsRes)
-        setLeaderboard(leaderboardRes.entries)
-        setUserRank(leaderboardRes.user_rank ?? null)
-      } catch (err) {
-        toast({
-          title: 'Failed to load gamification',
-          description: err instanceof Error ? err.message : 'An error occurred',
-          variant: 'destructive',
-        })
-      } finally {
-        setIsLoading(false)
-      }
+  const load = async () => {
+    setIsLoading(true)
+    setLoadError(null)
+    try {
+      const [streakRes, achievementsRes, leaderboardRes]: [StreakData, AchievementsData, LeaderboardData] =
+        await Promise.all([
+        getStreak(),
+        getAchievements(),
+        getLeaderboard(),
+      ])
+      setStreak(streakRes)
+      setAchievements(achievementsRes)
+      setLeaderboard(leaderboardRes.entries)
+      setUserRank(leaderboardRes.user_rank ?? null)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'An error occurred'
+      setLoadError(message)
+      setStreak(null)
+      setAchievements(null)
+      setLeaderboard([])
+      setUserRank(null)
+      toast({
+        title: 'Failed to load gamification',
+        description: message,
+        variant: 'destructive',
+      })
+    } finally {
+      setIsLoading(false)
     }
+  }
 
-    load()
+  useEffect(() => {
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast])
 
   const nextMilestoneDays = streak?.next_milestone?.days
@@ -69,7 +78,7 @@ export default function GamificationPage() {
         </div>
         <Button
           variant="outline"
-          onClick={() => window.location.reload()}
+          onClick={() => void load()}
           disabled={isLoading}
           className="w-full md:w-auto"
         >
@@ -78,6 +87,19 @@ export default function GamificationPage() {
         </Button>
       </div>
 
+      {loadError ? (
+        <Card className="border-destructive/30">
+          <CardContent className="py-10 text-center space-y-3">
+            <Trophy className="h-10 w-10 mx-auto text-destructive/60" />
+            <p className="text-lg font-medium text-foreground">Couldn&apos;t load gamification</p>
+            <p className="text-sm text-muted-foreground">{loadError}</p>
+            <Button onClick={() => void load()} disabled={isLoading}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
@@ -87,16 +109,22 @@ export default function GamificationPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Current: {streak?.current_streak ?? 0} days</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Best: {streak?.longest_streak ?? 0} days</p>
-            {streak?.next_milestone && (
-              <div className="pt-2">
-                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-                  <span>Next milestone</span>
-                  <span>{streak.next_milestone.days} days</span>
-                </div>
-                <Progress value={nextMilestoneProgress} className="h-2" />
-              </div>
+            {isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading streak…</p>
+            ) : (
+              <>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Current: {streak?.current_streak ?? 0} days</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Best: {streak?.longest_streak ?? 0} days</p>
+                {streak?.next_milestone && (
+                  <div className="pt-2">
+                    <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                      <span>Next milestone</span>
+                      <span>{streak.next_milestone.days} days</span>
+                    </div>
+                    <Progress value={nextMilestoneProgress} className="h-2" />
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -109,15 +137,21 @@ export default function GamificationPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Earned: {achievements?.earned?.length ?? 0}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Available: {achievements?.available?.length ?? 0}</p>
-            <div className="pt-2 space-y-1">
-              {(achievements?.available || []).slice(0, 3).map((a) => (
-                <div key={a.id} className="text-xs text-gray-700 dark:text-gray-300">
-                  <span className="font-medium">{a.name}</span>: {a.description}
+            {isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading achievements…</p>
+            ) : (
+              <>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Earned: {achievements?.earned?.length ?? 0}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Available: {achievements?.available?.length ?? 0}</p>
+                <div className="pt-2 space-y-1">
+                  {(achievements?.available || []).slice(0, 3).map((a) => (
+                    <div key={a.id} className="text-xs text-gray-700 dark:text-gray-300">
+                      <span className="font-medium">{a.name}</span>: {a.description}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -127,6 +161,8 @@ export default function GamificationPage() {
         currentUserId={currentUserId}
         userRank={userRank || undefined}
       />
+        </>
+      )}
     </div>
   )
 }

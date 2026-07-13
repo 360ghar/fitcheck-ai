@@ -1,0 +1,47 @@
+FitCheck AI is your AI-powered virtual closet and personal stylist. Digitize your wardrobe, plan outfits, visualize new looks, and generate professional photos — all powered by cutting-edge artificial intelligence.
+
+AI WARDROBE EXTRACTION
+Snap or upload photos of your clothes and watch the AI automatically detect, categorize, and catalog every item. Batch processing digitizes your whole closet fast. The AI recognizes colors, materials, and patterns so each piece is tagged and searchable.
+
+VIRTUAL TRY-ON
+See how an outfit looks before you wear it. The AI generates a realistic visualization of any clothing combination on your body. Perfect for planning daily looks or deciding what to wear to a big event.
+
+AI PHOTOSHOOT GENERATOR
+Create professional photos for LinkedIn, dating apps, Instagram, and portfolios. Upload a few selfies and get studio-quality headshots in minutes. Choose professional, casual, or creative styles.
+
+SMART OUTFIT RECOMMENDATIONS
+Get personalized outfit suggestions based on weather, occasion, and your personal style. Stop wondering what to wear — the recommendations adapt to your preferences over time.
+
+OUTFIT PLANNER & CALENDAR
+Plan outfits ahead on a calendar, schedule looks for upcoming events, and let weather-aware suggestions keep you ready for the day.
+
+WARDROBE ANALYTICS
+Track cost-per-wear, surface underused items, and make smarter buying decisions with data-driven insights into your closet.
+
+KEY FEATURES
+- AI clothing detection from single or batch photo uploads
+- Virtual outfit visualization and try-on
+- Professional AI photoshoot generator
+- Weather-based outfit recommendations
+- Astrology lucky-color suggestions
+- Calendar planning for outfits
+- Cost-per-wear and wardrobe analytics
+- Outfit sharing with friends
+- Style streaks and achievements
+- Sync across iPhone, iPad, and the web
+
+PERFECT FOR
+- Fashion lovers who want their wardrobe organized
+- Professionals making fast daily outfit decisions
+- Content creators planning photoshoots
+- Anyone wanting to get more out of the clothes they already own
+- Job seekers who need a polished headshot
+- Anyone refreshing their dating or social profile photos
+
+PRICING
+FitCheck AI is free to download and use. There are no in-app purchases in this version.
+
+HOW IT WORKS
+FitCheck AI connects to a secure cloud backend to run its AI features (item extraction, try-on, photoshoot, and recommendations). An account is required so your wardrobe and outfits sync across your devices. You can delete your account and all associated data at any time from Settings.
+
+Download FitCheck AI and transform how you get dressed.

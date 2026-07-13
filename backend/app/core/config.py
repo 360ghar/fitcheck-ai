@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     VERSION: str = "0.1.0"
     DEBUG: bool = False
+    # Railway sets this automatically on every build; exposed via /health so
+    # a deployed instance can be traced back to the exact commit that's
+    # running (VERSION alone never changes deploy-to-deploy).
+    RAILWAY_GIT_COMMIT_SHA: str = "unknown"
 
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = [
@@ -103,12 +107,28 @@ class Settings(BaseSettings):
     AI_OPENAI_VISION_MODEL: str = "gpt-4o"
     AI_OPENAI_IMAGE_MODEL: str = "dall-e-3"
 
-    # Custom Proxy Defaults (e.g., local proxy at localhost:8317)
-    AI_CUSTOM_API_URL: str = "http://localhost:8317/v1"
+    # Custom provider defaults: Agnes AI OpenAI-compatible gateway
+    # Chat/vision: /v1/chat/completions | Images: /v1/images/generations
+    AI_CUSTOM_API_URL: str = "https://apihub.agnes-ai.com/v1"
     AI_CUSTOM_API_KEY: Optional[str] = None
-    AI_CUSTOM_CHAT_MODEL: str = "gemini-3-flash-preview"
-    AI_CUSTOM_VISION_MODEL: str = "gemini-3-flash-preview"
-    AI_CUSTOM_IMAGE_MODEL: str = "gemini-3-pro-image-preview"
+    AI_CUSTOM_CHAT_MODEL: str = "agnes-2.0-flash"
+    AI_CUSTOM_VISION_MODEL: str = "agnes-2.0-flash"
+    AI_CUSTOM_IMAGE_MODEL: str = "agnes-image-2.0-flash"
+
+    # Generic OpenAI-compatible overrides for the "custom" provider (Agnes, etc.)
+    # All optional; unset values fall back to AI_CUSTOM_* above. LLM and Image
+    # can point at different hosts/keys if needed.
+    OPENAI_LLM_URL: Optional[str] = None
+    OPENAI_LLM_API_KEY: Optional[str] = None
+    OPENAI_LLM_MODEL: Optional[str] = None
+    OPENAI_LLM_VISION_MODEL: Optional[str] = None
+
+    OPENAI_IMAGE_URL: Optional[str] = None
+    OPENAI_IMAGE_API_KEY: Optional[str] = None
+    OPENAI_IMAGE_MODEL: Optional[str] = None
+    # "chat" (response_modalities on /chat/completions, legacy Gemini-proxy trick)
+    # "images" (real OpenAI-compatible /images/generations endpoint, e.g. Agnes)
+    OPENAI_IMAGE_API_STYLE: str = "images"
 
     # Rate Limiting (legacy daily limits - used as fallback)
     AI_DAILY_EXTRACTION_LIMIT: int = 100
@@ -155,7 +175,6 @@ class Settings(BaseSettings):
     SOCIAL_IMPORT_MAX_PHOTOS_PER_JOB: int = 2000
     SOCIAL_IMPORT_AUTH_SESSION_TTL_MINUTES: int = 120
     SOCIAL_IMPORT_DISCOVERY_PAGE_SIZE: int = 50
-    SOCIAL_IMPORT_MAX_DISCOVERY_ITERATIONS: int = 100  # Max pages to fetch per job
 
     # Meta OAuth (optional for social import)
     META_OAUTH_CLIENT_ID: Optional[str] = None
@@ -182,20 +201,6 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = "logs"
-
-    # Token Refresh Configuration
-    TOKEN_REFRESH_CACHE_TTL_MINUTES: int = 55  # Cache refreshed tokens (5min buffer before 60min expiry)
-    TOKEN_REFRESH_LOCK_TIMEOUT_SECONDS: int = 10  # Max time to wait for lock acquisition
-
-    # AI Provider Health & Reliability Configuration
-    AI_PROVIDER_HEALTH_CHECK_ENABLED: bool = True
-    AI_PROVIDER_HEALTH_CHECK_TIMEOUT: float = 5.0
-    AI_PROVIDER_CIRCUIT_BREAKER_THRESHOLD: int = 3
-    AI_PROVIDER_CIRCUIT_BREAKER_RESET_TIMEOUT: int = 120
-
-    # Connection Pool Configuration
-    AI_CONNECTION_POOL_MAX_CONNECTIONS: int = 100
-    AI_CONNECTION_POOL_MAX_KEEPALIVE: int = 20
 
     # Timeout Configuration (seconds)
     AI_CONNECT_TIMEOUT: float = 5.0      # Connection establishment

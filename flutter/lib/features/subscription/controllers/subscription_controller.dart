@@ -3,6 +3,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
 import '../../../core/config/env_config.dart';
+import '../../../core/utils/error_handler.dart';
 import '../repositories/subscription_repository.dart';
 import '../models/subscription_model.dart';
 
@@ -72,8 +73,9 @@ class SubscriptionController extends GetxController {
       final data = await _repository.getSubscription();
       subscription.value = data.subscription;
       usage.value = data.usage;
-    } catch (e) {
+    } catch (e, stackTrace) {
       error.value = e.toString();
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
     } finally {
       isLoading.value = false;
     }
@@ -83,8 +85,9 @@ class SubscriptionController extends GetxController {
   Future<void> fetchUsage() async {
     try {
       usage.value = await _repository.getUsage();
-    } catch (e) {
+    } catch (e, stackTrace) {
       error.value = e.toString();
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
     }
   }
 
@@ -93,8 +96,9 @@ class SubscriptionController extends GetxController {
     try {
       final result = await _repository.getPlans();
       plans.assignAll(result);
-    } catch (e) {
+    } catch (e, stackTrace) {
       error.value = e.toString();
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
     }
   }
 
@@ -103,7 +107,8 @@ class SubscriptionController extends GetxController {
     try {
       referralCode.value = await _repository.getReferralCode();
     } catch (e) {
-      // Referral code might not exist yet
+      // Referral code might not exist yet - not reported, this is expected
+      // for new users and isn't a real error.
     }
   }
 
@@ -111,8 +116,9 @@ class SubscriptionController extends GetxController {
   Future<void> fetchReferralStats() async {
     try {
       referralStats.value = await _repository.getReferralStats();
-    } catch (e) {
+    } catch (e, stackTrace) {
       error.value = e.toString();
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
     }
   }
 
@@ -133,8 +139,9 @@ class SubscriptionController extends GetxController {
       } else {
         error.value = 'Could not open checkout page';
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       error.value = e.toString();
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
     } finally {
       isCheckingOut.value = false;
     }
@@ -151,8 +158,9 @@ class SubscriptionController extends GetxController {
         'Success',
         'Subscription cancelled. You\'ll retain access until period end.',
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
       error.value = e.toString();
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
       Get.snackbar('Error', 'Failed to cancel subscription');
     } finally {
       isLoading.value = false;

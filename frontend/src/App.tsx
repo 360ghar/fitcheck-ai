@@ -15,6 +15,7 @@ import LandingPage from './pages/public/LandingPage'
 import AboutPage from './pages/public/AboutPage'
 import TermsPage from './pages/public/TermsPage'
 import PrivacyPage from './pages/public/PrivacyPage'
+import SupportPage from './pages/public/SupportPage'
 import FAQPage from './pages/public/FAQPage'
 
 // Blog pages
@@ -48,17 +49,21 @@ import BlogEditorPage from './pages/admin/BlogEditorPage'
 import BlogCategoriesPage from './pages/admin/BlogCategoriesPage'
 
 // Feature landing pages
+import FeaturesIndexPage from './pages/features/FeaturesIndexPage'
 import AIWardrobeExtractionPage from './pages/features/AIWardrobeExtractionPage'
 import VirtualTryOnPage from './pages/features/VirtualTryOnPage'
 import AIPhotoshootGeneratorPage from './pages/features/AIPhotoshootGeneratorPage'
 import OutfitRecommendationsPage from './pages/features/OutfitRecommendationsPage'
 import WardrobeAnalyticsPage from './pages/features/WardrobeAnalyticsPage'
 
-// Loading spinner for hydration state
+// Intent SEO pages (compare, best-of, personas, guides)
+import IntentSeoPage from './pages/seo/IntentSeoPage'
+
+// Loading spinner for hydration state (theme-aware)
 function LoadingSpinner() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
     </div>
   )
 }
@@ -122,17 +127,33 @@ function App() {
           <Route path="/about" element={<AboutPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/support" element={<SupportPage />} />
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/blog" element={<BlogIndexPage />} />
           <Route path="/blog/category/:category" element={<BlogIndexPage />} />
           <Route path="/blog/:slug" element={<BlogPostPage />} />
 
           {/* Feature landing pages */}
+          <Route path="/features" element={<FeaturesIndexPage />} />
           <Route path="/features/ai-wardrobe-extraction" element={<AIWardrobeExtractionPage />} />
           <Route path="/features/virtual-try-on" element={<VirtualTryOnPage />} />
           <Route path="/features/ai-photoshoot-generator" element={<AIPhotoshootGeneratorPage />} />
           <Route path="/features/outfit-recommendations" element={<OutfitRecommendationsPage />} />
           <Route path="/features/wardrobe-analytics" element={<WardrobeAnalyticsPage />} />
+
+          {/* SEO intent pages: best-of, comparisons, personas, guides */}
+          <Route path="/best/virtual-closet-apps" element={<IntentSeoPage />} />
+          <Route path="/best/ai-outfit-planners" element={<IntentSeoPage />} />
+          <Route path="/compare/fitcheck-vs-acloset" element={<IntentSeoPage />} />
+          <Route path="/compare/fitcheck-vs-whering" element={<IntentSeoPage />} />
+          <Route path="/alternatives/acloset-alternatives" element={<IntentSeoPage />} />
+          <Route path="/for/busy-professionals" element={<IntentSeoPage />} />
+          <Route path="/for/content-creators" element={<IntentSeoPage />} />
+          <Route path="/for/festive-and-wedding-outfits" element={<IntentSeoPage />} />
+          <Route path="/guides/how-to-digitize-your-wardrobe" element={<IntentSeoPage />} />
+          <Route path="/guides/what-to-wear-today" element={<IntentSeoPage />} />
+          <Route path="/guides/cost-per-wear-calculator-explained" element={<IntentSeoPage />} />
+          <Route path="/guides/how-to-reduce-clothing-returns-with-virtual-try-on" element={<IntentSeoPage />} />
         </Route>
 
         {/* Auth routes */}

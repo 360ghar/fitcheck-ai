@@ -9,6 +9,7 @@ import '../../../domain/enums/style.dart';
 import '../../../domain/enums/season.dart';
 import '../controllers/outfit_list_controller.dart';
 import '../models/outfit_model.dart';
+import '../repositories/outfit_repository.dart';
 
 /// Edit page for an existing outfit
 class OutfitEditPage extends StatefulWidget {
@@ -26,10 +27,12 @@ class OutfitEditPage extends StatefulWidget {
 class _OutfitEditPageState extends State<OutfitEditPage> {
   final _formKey = GlobalKey<FormState>();
   final OutfitListController _outfitsController = Get.find<OutfitListController>();
+  final OutfitRepository _outfitRepository = OutfitRepository();
 
-  late TextEditingController _nameController;
-  late TextEditingController _descriptionController;
-  late TextEditingController _tagsController;
+  // Always initialized so dispose is safe even if load fails / user pops early
+  late final TextEditingController _nameController = TextEditingController();
+  late final TextEditingController _descriptionController = TextEditingController();
+  late final TextEditingController _tagsController = TextEditingController();
 
   final Rx<Style?> selectedStyle = Rx<Style?>(null);
   final Rx<Season?> selectedSeason = Rx<Season?>(null);
@@ -38,6 +41,8 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
   final RxBool isDraft = false.obs;
   final RxBool isPublic = false.obs;
   final RxBool isSaving = false.obs;
+  final RxBool isLoadingOutfit = true.obs;
+  final RxString loadError = ''.obs;
   final RxList<File> newImages = <File>[].obs;
   final RxSet<String> imagesToDelete = <String>{}.obs;
 
@@ -54,16 +59,35 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
   @override
   void initState() {
     super.initState();
-    _outfit = _outfitsController.outfits.firstWhereOrNull((o) => o.id == widget.outfitId);
-    if (_outfit != null) {
-      _initializeControllers(_outfit!);
+    _loadOutfit();
+  }
+
+  Future<void> _loadOutfit() async {
+    isLoadingOutfit.value = true;
+    loadError.value = '';
+    try {
+      final outfit = await _outfitsController.fetchOutfitById(widget.outfitId);
+      if (!mounted) return;
+      if (outfit == null) {
+        loadError.value = 'Outfit not found';
+        return;
+      }
+      _outfit = outfit;
+      _applyOutfitToForm(outfit);
+    } catch (e) {
+      if (!mounted) return;
+      loadError.value = e.toString().replaceAll('Exception: ', '');
+    } finally {
+      if (mounted) {
+        isLoadingOutfit.value = false;
+      }
     }
   }
 
-  void _initializeControllers(OutfitModel outfit) {
-    _nameController = TextEditingController(text: outfit.name);
-    _descriptionController = TextEditingController(text: outfit.description ?? '');
-    _tagsController = TextEditingController(text: outfit.tags?.join(', ') ?? '');
+  void _applyOutfitToForm(OutfitModel outfit) {
+    _nameController.text = outfit.name;
+    _descriptionController.text = outfit.description ?? '';
+    _tagsController.text = outfit.tags?.join(', ') ?? '';
     selectedStyle.value = outfit.style;
     selectedSeason.value = outfit.season;
     selectedOccasion.value = outfit.occasion ?? '';
@@ -125,12 +149,15 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
 
       // Handle image deletions
       for (final imageId in imagesToDelete) {
-        // Would call delete API here
+        await _outfitRepository.deleteOutfitImage(widget.outfitId, imageId);
       }
 
       // Upload new images
       if (newImages.isNotEmpty) {
-        // Would call upload API here
+        await _outfitRepository.uploadImages(
+          widget.outfitId,
+          newImages.toList(),
+        );
       }
 
       _outfitsController.fetchOutfits(refresh: true);
@@ -165,11 +192,48 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
 
+    return Obx(() {
+      if (isLoadingOutfit.value) {
+        return Scaffold(
+          appBar: AppBar(title: const Text('Edit Outfit')),
+          body: const Center(child: CircularProgressIndicator()),
+        );
+      }
+
+      if (_outfit == null || loadError.value.isNotEmpty) {
+        return Scaffold(
+          appBar: AppBar(title: const Text('Edit Outfit')),
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(AppConstants.spacing24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    loadError.value.isNotEmpty
+                        ? loadError.value
+                        : 'Outfit not found',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppConstants.spacing16),
+                  ElevatedButton(
+                    onPressed: () => Get.back(),
+                    child: const Text('Go back'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
+      return _buildEditor(context, tokens);
+    });
+  }
+
+  Widget _buildEditor(BuildContext context, AppUiTokens tokens) {
     if (_outfit == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Edit Outfit')),
-        body: const Center(child: CircularProgressIndicator()),
-      );
+      return const SizedBox.shrink();
     }
 
     return Scaffold(

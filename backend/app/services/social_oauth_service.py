@@ -23,6 +23,7 @@ from app.core.exceptions import (
     SocialImportOAuthStateError,
 )
 from app.models.social_import import SocialPlatform
+from app.utils.crypto import derive_key
 
 
 @dataclass
@@ -71,15 +72,24 @@ class SocialOAuthService:
         sanitized = parsed._replace(fragment="")
         return urlunparse(sanitized)
 
+    _STATE_KEY_PURPOSE = b"fitcheck-social-oauth-state-v1"
+
     @classmethod
     def _state_secret(cls) -> bytes:
-        # Prefer AI_ENCRYPTION_KEY to keep social import security keys grouped.
-        secret = settings.AI_ENCRYPTION_KEY or settings.SUPABASE_JWT_SECRET
+        # No fallback to SUPABASE_JWT_SECRET - reusing a JWT-signing secret to
+        # sign unrelated OAuth CSRF state would be key reuse across security
+        # domains. Fail closed if AI_ENCRYPTION_KEY is unset. HKDF-derived
+        # with a purpose label distinct from the other AI_ENCRYPTION_KEY
+        # consumers (ai_settings_service, social_auth_service) so the three
+        # domains don't share a derived key. State tokens are short-lived
+        # (_STATE_TTL_SECONDS) and never persisted, so there's no
+        # already-encrypted-data migration concern for this one.
+        secret = settings.AI_ENCRYPTION_KEY
         if not secret:
             raise SocialImportOAuthConfigError(
-                "Set AI_ENCRYPTION_KEY (preferred) or SUPABASE_JWT_SECRET to enable OAuth state signing"
+                "Set AI_ENCRYPTION_KEY to enable OAuth state signing"
             )
-        return secret.encode("utf-8")
+        return derive_key(secret, cls._STATE_KEY_PURPOSE)
 
     @staticmethod
     def _b64_url_encode(raw: bytes) -> str:

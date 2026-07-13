@@ -39,7 +39,13 @@ class _WardrobeContentState extends State<WardrobeContent> {
 
                   // Content
                   SliverPadding(
-                    padding: const EdgeInsets.all(AppConstants.spacing16),
+                    // Extra bottom inset so extended FAB + bottom nav don't cover last row
+                    padding: const EdgeInsets.fromLTRB(
+                      AppConstants.spacing16,
+                      AppConstants.spacing16,
+                      AppConstants.spacing16,
+                      AppConstants.spacing16 + 96,
+                    ),
                     sliver: Obx(() {
                       if (controller.isLoading.value &&
                           controller.items.isEmpty) {
@@ -93,12 +99,18 @@ class _WardrobeContentState extends State<WardrobeContent> {
         Obx(
           () => controller.selectedIds.isNotEmpty
               ? IconButton(
+                  tooltip: 'Delete selected',
                   icon: const Icon(Icons.delete),
                   onPressed: () => _showDeleteConfirmation(),
                 )
-              : IconButton(
-                  icon: const Icon(Icons.search),
-                  onPressed: () => _showSearchDialog(),
+              : Semantics(
+                  label: 'Search wardrobe',
+                  button: true,
+                  child: IconButton(
+                    tooltip: 'Search wardrobe',
+                    icon: const Icon(Icons.search),
+                    onPressed: () => _showSearchDialog(),
+                  ),
                 ),
         ),
         Obx(
@@ -108,6 +120,9 @@ class _WardrobeContentState extends State<WardrobeContent> {
                   child: Text('${controller.selectedCount} selected'),
                 )
               : IconButton(
+                  tooltip: controller.viewMode.value == 'grid'
+                      ? 'List view'
+                      : 'Grid view',
                   icon: Icon(
                     controller.viewMode.value == 'grid'
                         ? Icons.view_list
@@ -315,7 +330,10 @@ class _WardrobeContentState extends State<WardrobeContent> {
             controller.setSelectedItem(item);
             _showItemOptions(item);
           },
-          child: _buildItemCard(item, isSelected),
+          child: Semantics(
+            label: 'Wardrobe item: ${item.name}',
+            child: _buildItemCard(item, isSelected),
+          ),
         );
       }, childCount: controller.filteredItems.length),
     );
@@ -339,7 +357,10 @@ class _WardrobeContentState extends State<WardrobeContent> {
             controller.setSelectedItem(item);
             _showItemOptions(item);
           },
-          child: _buildListItemCard(item, isSelected),
+          child: Semantics(
+            label: 'Wardrobe item: ${item.name}',
+            child: _buildListItemCard(item, isSelected),
+          ),
         );
       }, childCount: controller.filteredItems.length),
     );
@@ -722,14 +743,18 @@ class _WardrobeContentState extends State<WardrobeContent> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: AppConstants.spacing24),
-                ElevatedButton.icon(
-                  onPressed: () => _showAddItemOptions(),
-                  icon: const Icon(Icons.add_a_photo),
-                  label: const Text('Add Your First Item'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.spacing24,
-                      vertical: AppConstants.spacing16,
+                Semantics(
+                  label: 'Add your first wardrobe item',
+                  button: true,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _showAddItemOptions(),
+                    icon: const Icon(Icons.add_a_photo),
+                    label: const Text('Add Your First Item'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppConstants.spacing24,
+                        vertical: AppConstants.spacing16,
+                      ),
                     ),
                   ),
                 ),
@@ -880,7 +905,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
           ),
         ),
       ),
-    );
+    ).then((_) => customUseCaseController.dispose());
   }
 
   void _showSortBottomSheet() {

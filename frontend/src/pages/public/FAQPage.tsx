@@ -100,6 +100,27 @@ const faqCategories = [
         a: 'When you refer friends to FitCheck AI, both you and your friend receive 1 month of Pro free when they sign up using your referral code. There is no limit to how many friends you can refer!'
       }
     ]
+  },
+  {
+    category: 'Comparisons & Buying Decisions',
+    questions: [
+      {
+        q: 'What is the best free virtual closet app?',
+        a: 'The best free virtual closet is the one that lets you digitize real clothes quickly and still get outfit help. FitCheck AI offers a free plan with wardrobe item limits and monthly AI generations so you can validate value before upgrading. Compare options on our best virtual closet apps guide.'
+      },
+      {
+        q: 'How is FitCheck AI different from Acloset or Whering?',
+        a: 'FitCheck AI emphasizes AI photo extraction, generative virtual try-on, AI photoshoot generation, and cost-per-wear style analytics in one product. Acloset and Whering are strong digital wardrobe apps with different feature mixes — see our comparison pages for a side-by-side overview.'
+      },
+      {
+        q: 'Can virtual try-on replace trying clothes in a store?',
+        a: 'Virtual try-on is decision support, not a perfect fit guarantee. It helps you visualize color, silhouette, and full outfits with clothes you already own. Always check size charts for purchases; use try-on to reduce obvious mismatches before you buy or pack.'
+      },
+      {
+        q: 'Does FitCheck AI work for festive and wedding guest outfits?',
+        a: 'Yes. Digitize ethnic and formal pieces, tag occasions, and generate event-ready looks from your real wardrobe. See our festive and wedding outfit planning page for a practical workflow.'
+      }
+    ]
   }
 ]
 
@@ -156,9 +177,10 @@ export default function FAQPage() {
   return (
     <>
       <SEO
-        title="Frequently Asked Questions | FitCheck AI"
-        description="Find answers to common questions about FitCheck AI's wardrobe management, AI features, privacy, and billing. Get help with virtual try-on, outfit recommendations, and more."
+        title="FAQ | FitCheck AI Virtual Closet & Outfit Planner"
+        description="Answers about AI wardrobe extraction, virtual try-on, photoshoots, pricing, privacy, and how FitCheck AI organizes your clothes."
         canonicalUrl="https://fitcheckaiapp.com/faq"
+        keywords="FitCheck AI FAQ, virtual closet questions, AI outfit planner help"
         jsonLd={faqSchema}
       />
       <BreadcrumbJsonLd items={breadcrumbs} />

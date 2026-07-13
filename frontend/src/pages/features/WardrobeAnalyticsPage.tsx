@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 // Layout provided by parent route in App.tsx
 import SEO from '@/components/seo/SEO'
-import { BreadcrumbJsonLd, HowToJsonLd } from '@/components/seo/JsonLd'
+import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
 import {
   BarChart3,
@@ -173,14 +173,14 @@ export default function WardrobeAnalyticsPage() {
   return (
     <>
       <SEO
-        title="Wardrobe Analytics | Cost-Per-Wear Tracker | FitCheck AI"
-        description="Track cost-per-wear, analyze wardrobe usage, and get data-driven insights to build a smarter, more valuable closet. Make informed fashion decisions."
+        title="Wardrobe Analytics & Cost-Per-Wear | FitCheck AI"
+        description="See what you wear, what you ignore, and cost-per-wear for every item. Buy smarter and wear more of your closet."
         canonicalUrl="https://fitcheckaiapp.com/features/wardrobe-analytics"
-        ogType="article"
+        keywords="wardrobe analytics, cost per wear tracker, closet utilization"
+        ogType="website"
         jsonLd={howToSchema}
       />
       <BreadcrumbJsonLd items={breadcrumbs} />
-      <HowToJsonLd {...howToSchema} />
 
       <div className="pt-20">
         {/* Hero Section */}

@@ -351,6 +351,7 @@ class PhotoshootResultsStep extends GetView<PhotoshootController> {
               top: 0,
               right: 0,
               child: IconButton(
+                tooltip: 'Close',
                 onPressed: () => Navigator.of(context).pop(),
                 icon: const Icon(Icons.close, color: Colors.white, size: 28),
               ),

@@ -117,6 +117,7 @@ export function BatchExtractionFlow({
   // Local state for saving
   const [savingProgress, setSavingProgress] = useState(0);
   const [regeneratingItemId, setRegeneratingItemId] = useState<string | null>(null);
+  const [isSavePending, setIsSavePending] = useState(false);
   const isBatchProcessing = ['uploading', 'extracting', 'generating', 'saving'].includes(state.step);
   const isSocialProcessing =
     !!socialImport.state.jobId &&
@@ -241,6 +242,7 @@ export function BatchExtractionFlow({
   // ============================================================================
 
   const saveAllItems = useCallback(async () => {
+    if (isSavePending) return;
     // Get items that are ready to save (generated and not deleted)
     const itemsToSave = state.allDetectedItems.filter(
       (item) =>
@@ -255,6 +257,7 @@ export function BatchExtractionFlow({
       return;
     }
 
+    setIsSavePending(true);
     proceedToSaving();
     setSavingProgress(0);
 
@@ -333,9 +336,10 @@ export function BatchExtractionFlow({
     });
 
     // Cleanup and notify
+    setIsSavePending(false);
     reset();
     onUploadComplete?.(results);
-  }, [state.allDetectedItems, proceedToSaving, reset, onUploadComplete]);
+  }, [state.allDetectedItems, proceedToSaving, reset, onUploadComplete, isSavePending]);
 
   // ============================================================================
   // RENDER HELPERS
@@ -644,7 +648,7 @@ export function BatchExtractionFlow({
                 onItemRegenerate={regenerateItem}
                 onSaveAll={saveAllItems}
                 onBack={handleBack}
-                isSaving={false}
+                isSaving={isSavePending}
                 regeneratingItemId={regeneratingItemId}
                 backLabel="Upload Different Images"
               />

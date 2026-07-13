@@ -8,6 +8,7 @@ class AppConstants {
 
   // Support / Legal
   static const String supportEmail = 'support@fitcheckaiapp.com';
+  static const String supportUrl = 'https://fitcheckaiapp.com/support';
   static const String privacyPolicyUrl = 'https://fitcheckaiapp.com/privacy';
   static const String termsOfServiceUrl = 'https://fitcheckaiapp.com/terms';
 

@@ -6,7 +6,6 @@ Uses subscription-based monthly limits as primary, with daily limits as fallback
 """
 
 from contextlib import asynccontextmanager
-from typing import Any, Dict, Optional
 
 from supabase import Client
 
@@ -55,19 +54,24 @@ async def rate_limited_operation(
         msg += " Upgrade to Pro for more!"
         raise RateLimitError(msg)
 
-    # Convert to dict for backward compatibility
-    yield {
-        "allowed": rate_check.allowed,
-        "limit": rate_check.limit,
-        "used": rate_check.current_count,
-        "remaining": rate_check.remaining,
-        "plan_type": rate_check.plan_type.value,
-    }
-
-    # Increment monthly usage after successful operation
+    # Reserve usage before yielding (not after the operation completes) so
+    # concurrent requests can't all read the same pre-increment count and
+    # collectively exceed the limit. Matches auth_rate_limited_operation's
+    # already-correct pattern, which also counts every attempt rather than
+    # only successful ones - appropriate here too since a failed AI call
+    # still costs real provider spend.
     await SubscriptionService.increment_usage(
         user_id=user_id,
         operation_type=operation_type,
         db=db,
         count=count,
     )
+
+    # Convert to dict for backward compatibility
+    yield {
+        "allowed": rate_check.allowed,
+        "limit": rate_check.limit,
+        "used": rate_check.current_count,
+        "remaining": rate_check.remaining - count,
+        "plan_type": rate_check.plan_type.value,
+    }

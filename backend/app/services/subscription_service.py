@@ -1,15 +1,16 @@
 """
 Subscription service for managing user subscriptions and usage tracking.
 """
-import logging
 from datetime import datetime, date, timedelta
 from typing import Optional
 from dateutil.relativedelta import relativedelta
 
+import httpx
 from supabase import Client
 
 from app.core.config import settings
-from app.core.exceptions import DatabaseError, NotFoundError, ServiceError
+from app.core.exceptions import DatabaseError
+from app.core.logging_config import get_context_logger
 from app.models.subscription import (
     PlanType,
     SubscriptionStatus,
@@ -18,8 +19,9 @@ from app.models.subscription import (
     SubscriptionWithUsage,
     UsageCheckResult,
 )
+from app.utils import maybe_single_data
 
-logger = logging.getLogger(__name__)
+logger = get_context_logger(__name__)
 
 
 class SubscriptionService:
@@ -74,7 +76,8 @@ class SubscriptionService:
                 .execute()
             )
 
-            if not result.data:
+            data = maybe_single_data(result)
+            if not data:
                 # Create a default free subscription if none exists
                 logger.info(f"Creating default subscription for user {user_id}")
                 await SubscriptionService.create_default_subscription(user_id, db)
@@ -85,11 +88,11 @@ class SubscriptionService:
                     .maybe_single()
                     .execute()
                 )
+                data = maybe_single_data(result)
 
-            if not result.data:
+            if not data:
                 raise DatabaseError("Subscription record could not be loaded after creation")
 
-            data = result.data
             plan_type = PlanType(data.get("plan_type", "free"))
 
             return SubscriptionResponse(
@@ -142,7 +145,7 @@ class SubscriptionService:
             else:
                 period_end = now + relativedelta(months=1)
 
-            result = db.table("subscriptions").upsert({
+            db.table("subscriptions").upsert({
                 "user_id": user_id,
                 "plan_type": plan_type.value,
                 "status": "active",
@@ -174,7 +177,8 @@ class SubscriptionService:
                 .execute()
             )
 
-            if not result.data:
+            current_data = maybe_single_data(result)
+            if not current_data:
                 await SubscriptionService.create_default_subscription(user_id, db)
                 result = (
                     db.table("subscriptions")
@@ -183,11 +187,11 @@ class SubscriptionService:
                     .maybe_single()
                     .execute()
                 )
+                current_data = maybe_single_data(result)
 
-            if not result.data:
+            if not current_data:
                 raise DatabaseError("Subscription record could not be loaded after creation")
 
-            current_data = result.data
             current_credits = current_data.get("referral_credit_months", 0)
 
             # If user is on free plan, upgrade them to trial Pro
@@ -364,12 +368,15 @@ class SubscriptionService:
             )
 
         except Exception as e:
-            error_str = str(e)
-            # Retry once on connection errors (HTTP/2 connection terminated)
-            if _retry and ("ConnectionTerminated" in error_str or "RemoteProtocolError" in error_str):
+            # Retry once on a dead pooled HTTP/2 connection - matches
+            # ai_provider_service.py's isinstance-based check for the same
+            # error class, instead of fragile string-matching on str(e)
+            # (which silently stops working if the wrapped exception's
+            # repr format ever changes).
+            if _retry and isinstance(e, httpx.RemoteProtocolError):
                 logger.warning(f"Connection error for user {user_id}, retrying: {e}")
                 from app.db.connection import SupabaseDB
-                SupabaseDB._service_instance = None
+                SupabaseDB.reset()
                 new_db = SupabaseDB.get_service_client()
                 return await SubscriptionService.check_limit(
                     user_id, operation_type, new_db, count, _retry=False

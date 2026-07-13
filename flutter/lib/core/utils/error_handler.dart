@@ -1,7 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import '../exceptions/app_exceptions.dart';
+import '../services/analytics_service.dart';
 
 /// Utility class for handling errors consistently across the app
 class ErrorHandler {
@@ -37,9 +39,16 @@ class ErrorHandler {
     return 'An unexpected error occurred';
   }
 
-  /// Show error to user via snackbar
-  static void showError(dynamic error, {String? title}) {
+  /// Show error to user via snackbar, and report it for telemetry.
+  ///
+  /// Previously a caught error only ever reached the user via this snackbar -
+  /// it never reached Sentry/PostHog, so a production regression in any
+  /// caught path was invisible until a user complained. Every handled error
+  /// generates telemetry now, matching what the global uncaught-error
+  /// handlers in main.dart already do.
+  static void showError(dynamic error, {String? title, StackTrace? stackTrace}) {
     final message = extractMessage(error);
+    reportError(error, message, stackTrace: stackTrace);
     Get.snackbar(
       title ?? 'Error',
       message,
@@ -52,6 +61,17 @@ class ErrorHandler {
         color: Colors.red,
       ),
     );
+  }
+
+  /// Report a handled error to telemetry without showing any UI. Useful for
+  /// silent/background failures that don't warrant interrupting the user
+  /// but should still be visible to the team.
+  static void reportError(dynamic error, String message, {StackTrace? stackTrace}) {
+    AnalyticsService.instance.recordNonFatalError(
+      message,
+      context: {'error_type': error?.runtimeType.toString() ?? 'unknown'},
+    );
+    Sentry.captureException(error, stackTrace: stackTrace);
   }
 
   /// Show success message via snackbar
@@ -105,8 +125,8 @@ class ErrorHandler {
 
 /// Extension to easily show errors from controllers
 extension ErrorHandlerExtension on GetxController {
-  void handleError(dynamic error, {String? title}) {
-    ErrorHandler.showError(error, title: title);
+  void handleError(dynamic error, {String? title, StackTrace? stackTrace}) {
+    ErrorHandler.showError(error, title: title, stackTrace: stackTrace);
   }
 
   void handleSuccess(String message, {String? title}) {

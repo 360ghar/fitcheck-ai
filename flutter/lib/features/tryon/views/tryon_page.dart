@@ -163,7 +163,7 @@ class TryOnPage extends StatelessWidget {
                   child: hasAvatar
                       ? ClipOval(
                           child: isRemote
-                              ? Image.network(avatarPath, fit: BoxFit.cover)
+                              ? Image.network(avatarPath, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person))
                               : Image.file(
                                   File(avatarPath),
                                   fit: BoxFit.cover,
@@ -456,6 +456,9 @@ class TryOnPage extends StatelessWidget {
           child: Image.network(
             controller.generatedImageUrl.value,
             fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const Center(
+              child: Icon(Icons.broken_image_outlined, size: 48),
+            ),
           ),
         ),
       );

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart' as getx;
 import '../../app/routes/app_routes.dart';
+import '../constants/api_constants.dart';
 import '../services/supabase_service.dart';
 
 /// Interceptor to add Supabase auth token to API requests
@@ -28,14 +29,7 @@ class AuthInterceptor extends Interceptor {
   }
 
   bool _isPublicEndpoint(String path) {
-    final publicEndpoints = [
-      '/auth/login',
-      '/auth/register',
-      '/auth/reset-password',
-      '/auth/verify-email',
-      '/waitlist',
-    ];
-    return publicEndpoints.any((endpoint) => path.contains(endpoint));
+    return ApiConstants.publicEndpoints.any((endpoint) => path.contains(endpoint));
   }
 }
 
@@ -84,13 +78,6 @@ class TokenRefreshInterceptor extends Interceptor {
   }
 
   bool _isPublicEndpoint(String path) {
-    final publicEndpoints = [
-      '/auth/login',
-      '/auth/register',
-      '/auth/reset-password',
-      '/auth/verify-email',
-      '/waitlist',
-    ];
-    return publicEndpoints.any((endpoint) => path.contains(endpoint));
+    return ApiConstants.publicEndpoints.any((endpoint) => path.contains(endpoint));
   }
 }

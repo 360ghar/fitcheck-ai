@@ -23,7 +23,7 @@ from app.core.exceptions import (
     SchemaNotInitializedError,
     DatabaseError,
 )
-from app.core.ip_rate_limit import auth_rate_limited_operation, get_client_ip
+from app.core.ip_rate_limit import auth_rate_limited_operation
 from app.services.referral_service import ReferralService
 from supabase import Client
 from supabase_auth.errors import AuthApiError
@@ -34,12 +34,24 @@ logger = get_context_logger(__name__)
 router = APIRouter()
 
 
+_schema_confirmed_ready = False
+
+
 def _require_schema(db: Client) -> None:
     """Fail fast when Supabase migrations haven't been applied.
 
     We intentionally check a few tables/columns introduced in `001_full_schema.sql`
     so we don't create orphaned Supabase Auth users when the public schema isn't ready.
+
+    Whether migrations are applied doesn't change while the process is
+    running, so once this succeeds once we stop re-running it on every
+    register/login/oauth_sync call - it was previously 4 extra DB round trips
+    on the hottest auth paths for an answer that's effectively static post-deploy.
     """
+    global _schema_confirmed_ready
+    if _schema_confirmed_ready:
+        return
+
     try:
         db.table("users").select("id").limit(1).execute()
         db.table("user_preferences").select("preferred_occasions").limit(1).execute()
@@ -50,6 +62,8 @@ def _require_schema(db: Client) -> None:
         if code in {"PGRST205", "42703"}:
             raise SchemaNotInitializedError()
         raise
+    else:
+        _schema_confirmed_ready = True
 
 
 async def _upsert_user_profile(
@@ -297,7 +311,7 @@ async def register(
                         )
                         if referral_result.success:
                             logger.info(
-                                f"Referral code redeemed during registration",
+                                "Referral code redeemed during registration",
                                 user_id=user_id,
                                 code=register_request.referral_code,
                             )
@@ -321,7 +335,7 @@ async def register(
                 )
             except (EmailAlreadyExistsError, DatabaseError):
                 raise
-            except Exception as e:
+            except Exception:
                 logger.error("Error creating user profile")
                 raise DatabaseError(
                     "User profile could not be created. Ensure Supabase migrations have been applied.",
@@ -624,7 +638,7 @@ async def confirm_reset_password(
 
     except ValidationError:
         raise
-    except Exception as e:
+    except Exception:
         logger.error("Confirm password reset error")
         raise DatabaseError("An error occurred while resetting password")
 
@@ -737,7 +751,7 @@ async def oauth_sync(
                         db=db,
                     )
                     if referral_result.success:
-                        logger.info(f"Referral code redeemed during OAuth sync", user_id=user_id, code=request.referral_code)
+                        logger.info("Referral code redeemed during OAuth sync", user_id=user_id, code=request.referral_code)
                 except Exception as e:
                     logger.warning(f"Failed to redeem referral code during OAuth sync: {e}")
 

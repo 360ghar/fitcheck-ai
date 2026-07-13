@@ -86,6 +86,25 @@ class LegalPage extends StatelessWidget {
 
                 const SizedBox(height: AppConstants.spacing24),
 
+                // Support hub (ASC Support URL) + abuse contact.
+                AppGlassCard(
+                  padding: EdgeInsets.zero,
+                  child: ListTile(
+                    leading: Icon(
+                      Icons.support_agent_outlined,
+                      color: tokens.brandColor,
+                    ),
+                    title: const Text('Support'),
+                    subtitle: const Text(
+                      'Help, contact, and privacy requests',
+                    ),
+                    trailing: const Icon(Icons.open_in_new),
+                    onTap: () => _openUrl(AppConstants.supportUrl),
+                  ),
+                ),
+
+                const SizedBox(height: AppConstants.spacing12),
+
                 // Report a Problem / Abuse — visible without login so App Store
                 // reviewers can find the abuse/support contact (Guideline 1.2).
                 AppGlassCard(
@@ -98,7 +117,8 @@ class LegalPage extends StatelessWidget {
                     title: const Text('Report a Problem / Abuse'),
                     subtitle: const Text(
                       'Email ${AppConstants.supportEmail} to report '
-                      'objectionable content or abuse',
+                      'objectionable content or abuse. We aim to review '
+                      'within 24 hours.',
                     ),
                     trailing: const Icon(Icons.email_outlined),
                     onTap: _openSupportEmail,

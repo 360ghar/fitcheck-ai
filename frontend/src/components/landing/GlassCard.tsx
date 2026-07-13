@@ -5,11 +5,12 @@ interface GlassCardProps {
   className?: string
 }
 
+/** Solid editorial panel used by landing demos (name kept for API stability). */
 export function GlassCard({ children, className }: GlassCardProps) {
   return (
     <div
       className={cn(
-        'bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-gray-700/30 shadow-xl',
+        'rounded-2xl border border-stone-200/90 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900',
         className
       )}
     >

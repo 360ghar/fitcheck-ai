@@ -6,15 +6,15 @@ Jobs are stored in memory and auto-expire after 1 hour.
 """
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set
 from uuid import uuid4
 
+from app.core.logging_config import get_context_logger
 from app.models.photoshoot import PhotoshootJobStatus
 
-logger = logging.getLogger(__name__)
+logger = get_context_logger(__name__)
 
 
 @dataclass

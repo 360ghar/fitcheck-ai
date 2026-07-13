@@ -117,9 +117,14 @@ class AppImage extends StatelessWidget {
     }
 
     if (enableZoom && imageUrl != null && imageUrl!.isNotEmpty) {
-      imageWidget = GestureDetector(
-        onTap: () => _openViewer(context),
-        child: imageWidget,
+      imageWidget = Semantics(
+        button: true,
+        label: 'View full image',
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _openViewer(context),
+          child: imageWidget,
+        ),
       );
     }
 

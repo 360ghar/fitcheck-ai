@@ -11,7 +11,7 @@
  * @see https://docs.fitcheck.ai/features/wardrobe/item-management
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Shirt,
   Edit,
@@ -24,6 +24,7 @@ import {
   DollarSign,
   Zap,
   Image as ImageIcon,
+  Loader2,
 } from 'lucide-react'
 import { ZoomableImage } from '@/components/ui/zoomable-image'
 import { Button } from '@/components/ui/button'
@@ -53,7 +54,7 @@ interface ItemDetailModalProps {
   item: Item | null
   isOpen: boolean
   onClose: () => void
-  onEdit?: (item: Item) => void
+  onEdit?: (item: Item) => void | Promise<void>
   onDelete?: (itemId: string) => void
   onToggleFavorite?: (itemId: string) => void
   onMarkAsWorn?: (itemId: string) => void
@@ -93,8 +94,24 @@ export function ItemDetailModal({
   onMarkAsWorn,
 }: ItemDetailModalProps) {
   const [isEditing, setIsEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [editForm, setEditForm] = useState<Partial<Item>>({})
   const [customUseCase, setCustomUseCase] = useState('')
+
+  // Reset edit state when modal closes or a different item is opened
+  useEffect(() => {
+    if (!isOpen) {
+      setIsEditing(false)
+      setIsSaving(false)
+      setEditForm({})
+      setCustomUseCase('')
+      return
+    }
+    setIsEditing(false)
+    setIsSaving(false)
+    setEditForm({})
+    setCustomUseCase('')
+  }, [isOpen, item?.id])
 
   if (!item) return null
 
@@ -106,9 +123,17 @@ export function ItemDetailModal({
     setIsEditing(true)
   }
 
-  const handleSave = () => {
-    onEdit?.(editForm as Item)
-    setIsEditing(false)
+  const handleSave = async () => {
+    if (!onEdit || isSaving) return
+    setIsSaving(true)
+    try {
+      await onEdit(editForm as Item)
+      setIsEditing(false)
+    } catch {
+      // Parent shows toast; stay in edit mode so user can retry
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleCancel = () => {
@@ -157,13 +182,14 @@ export function ItemDetailModal({
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label={item.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
                     onClick={() => onToggleFavorite?.(item.id)}
                   >
                     <Heart
                       className={`h-5 w-5 ${item.is_favorite ? 'fill-pink-500 text-pink-500' : ''}`}
                     />
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={handleEdit}>
+                  <Button variant="ghost" size="icon" aria-label="Edit item" onClick={handleEdit}>
                     <Edit className="h-5 w-5" />
                   </Button>
                 </>
@@ -314,6 +340,7 @@ export function ItemDetailModal({
                             type="button"
                             variant="outline"
                             size="icon"
+                            aria-label="Add custom use case"
                             onClick={addCustomOccasionTag}
                           >
                             <Plus className="h-4 w-4" />
@@ -498,13 +525,17 @@ export function ItemDetailModal({
         <DialogFooter className="border-t dark:border-gray-700 pt-4">
           {isEditing ? (
             <>
-              <Button variant="outline" onClick={handleCancel}>
+              <Button variant="outline" onClick={handleCancel} disabled={isSaving}>
                 <X className="h-4 w-4 mr-2" />
                 Cancel
               </Button>
-              <Button onClick={handleSave}>
-                <Check className="h-4 w-4 mr-2" />
-                Save Changes
+              <Button onClick={() => void handleSave()} disabled={isSaving}>
+                {isSaving ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4 mr-2" />
+                )}
+                {isSaving ? 'Saving...' : 'Save Changes'}
               </Button>
             </>
           ) : (

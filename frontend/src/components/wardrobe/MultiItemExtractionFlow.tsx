@@ -97,6 +97,7 @@ export function MultiItemExtractionFlow({
   })
 
   const [regeneratingItemId, setRegeneratingItemId] = useState<string | null>(null)
+  const [isSavePending, setIsSavePending] = useState(false)
   const [processingItems, setProcessingItems] = useState<Set<string>>(new Set())
 
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -375,6 +376,8 @@ export function MultiItemExtractionFlow({
   // ============================================================================
 
   const saveAllItems = async () => {
+    if (isSavePending) return
+    setIsSavePending(true)
     setState((prev) => ({ ...prev, step: 'saving', savingProgress: 0 }))
 
     const itemsToSave = state.detectedItems.filter(
@@ -386,6 +389,7 @@ export function MultiItemExtractionFlow({
 
     if (itemsToSave.length === 0) {
       // No items to save, reset state
+      setIsSavePending(false)
       resetAndCleanup()
       onUploadComplete?.([])
       return
@@ -492,6 +496,7 @@ export function MultiItemExtractionFlow({
 
     abortControllerRef.current = null
     setProcessingItems(new Set())
+    setIsSavePending(false)
   }
 
   // ============================================================================
@@ -608,7 +613,7 @@ export function MultiItemExtractionFlow({
               onItemRegenerate={regenerateItem}
               onSaveAll={saveAllItems}
               onBack={handleBack}
-              isSaving={false}
+              isSaving={isSavePending}
               regeneratingItemId={regeneratingItemId}
             />
           )}

@@ -5,10 +5,9 @@ Stores calendar connections and events for outfit planning.
 """
 
 from datetime import datetime
-from typing import Optional
-from uuid import UUID, uuid4
+from uuid import uuid4
 
-from sqlalchemy import Column, String, DateTime, Boolean, Integer, Text, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, String, DateTime, Boolean, Integer, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 

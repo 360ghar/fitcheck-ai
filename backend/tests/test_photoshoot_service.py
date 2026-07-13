@@ -4,29 +4,29 @@ Tests for photoshoot service with retry logic.
 
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, AsyncMock
-import asyncio
+from unittest.mock import Mock, patch
 
 from app.services.photoshoot_service import PhotoshootService, USE_CASE_TEMPLATES, PhotoshootUseCase
 from app.services.photoshoot_job_service import PhotoshootJobService, PhotoshootJob
-from app.models.photoshoot import PhotoshootJobStatus, PhotoshootUseCase as PhotoshootUseCaseEnum
-from app.core.exceptions import AIServiceError, RateLimitError
+from app.models.photoshoot import PhotoshootJobStatus
+from app.core.exceptions import AIServiceError
 from app.models.subscription import PlanType
+
+
+@pytest.fixture
+def mock_db():
+    """Create a mock database client."""
+    db = Mock()
+    db.table = Mock(return_value=db)
+    db.select = Mock(return_value=db)
+    db.eq = Mock(return_value=db)
+    db.single = Mock(return_value=db)
+    db.execute = Mock(return_value=Mock(data={"plan_type": "free"}))
+    return db
 
 
 class TestPhotoshootRetryLogic:
     """Test retry behavior for photoshoot image generation."""
-
-    @pytest.fixture
-    def mock_db(self):
-        """Create a mock database client."""
-        db = Mock()
-        db.table = Mock(return_value=db)
-        db.select = Mock(return_value=db)
-        db.eq = Mock(return_value=db)
-        db.single = Mock(return_value=db)
-        db.execute = Mock(return_value=Mock(data={"plan_type": "free"}))
-        return db
 
     @pytest.fixture
     def mock_job(self):
@@ -45,7 +45,7 @@ class TestPhotoshootRetryLogic:
     @pytest.mark.asyncio
     async def test_parallel_retry_on_transient_failure(self):
         """Test that transient failures are retried with exponential backoff."""
-        from app.utils.parallel import parallel_with_retry, ParallelResult
+        from app.utils.parallel import parallel_with_retry
 
         call_count = 0
 
@@ -128,7 +128,7 @@ class TestPhotoshootRetryLogic:
                 raise AIServiceError("Fail")
             return f"success-{item}"
 
-        results = await parallel_with_retry(
+        await parallel_with_retry(
             items=["a", "fail", "c"],
             fn=process_item,
             max_retries=1,
@@ -137,15 +137,16 @@ class TestPhotoshootRetryLogic:
             on_item_complete=on_complete,
         )
 
-        assert len(callbacks) == 3
-        assert callbacks[0] == (0, True)
-        assert callbacks[1] == (1, False)
-        assert callbacks[2] == (2, True)
+        # Items run concurrently and the failing item retries with a real delay,
+        # so it completes (and fires its callback) later than the immediate
+        # successes - assert the per-index outcome, not callback arrival order.
+        assert dict(callbacks) == {0: True, 1: False, 2: True}
 
     @pytest.mark.asyncio
     async def test_photoshoot_job_tracks_failed_indices(self, mock_job):
         """Test that failed image indices are tracked in the job."""
-        await PhotoshootJobService._jobs.clear() if hasattr(PhotoshootJobService._jobs, 'clear') else None
+        async with PhotoshootJobService._lock:
+            PhotoshootJobService._jobs.clear()
 
         async with PhotoshootJobService._lock:
             PhotoshootJobService._jobs[mock_job.job_id] = mock_job
@@ -324,17 +325,16 @@ class TestPhotoshootUsageTracking:
 
     @pytest.mark.asyncio
     async def test_usage_increment(self, mock_db):
-        """Test that usage is incremented correctly."""
-        with patch.object(PhotoshootService, 'get_or_create_daily_usage') as mock_get:
-            mock_get.return_value = {"daily_photoshoot_images": 5}
+        """Test that usage is incremented via the SQL-update fallback when the
+        atomic increment_usage RPC isn't available (e.g. migration not applied)."""
+        mock_db.rpc.return_value.execute.side_effect = Exception("RPC not available")
 
-            with patch.object(mock_db.table.return_value, 'update') as mock_update:
-                mock_update.return_value = mock_update
-                mock_update.eq = Mock(return_value=mock_update)
-                mock_update.eq.return_value = mock_update
-                mock_update.execute = Mock()
+        with patch.object(mock_db.table.return_value, 'update') as mock_update:
+            mock_update.return_value = mock_update
+            mock_update.eq = Mock(return_value=mock_update)
+            mock_update.eq.return_value = mock_update
+            mock_update.execute = Mock()
 
-                await PhotoshootService.increment_usage("user-123", 3, mock_db)
+            await PhotoshootService.increment_usage("user-123", 3, mock_db)
 
-                # Verify update was called (actual assertion depends on implementation)
-                mock_update.execute.assert_called_once()
+            mock_update.execute.assert_called_once()

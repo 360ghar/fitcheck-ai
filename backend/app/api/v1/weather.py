@@ -9,10 +9,9 @@ Weather data is fetched from OpenWeatherMap when configured; otherwise a safe
 mock is returned for local development.
 """
 
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from supabase import Client
 

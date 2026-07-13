@@ -3,6 +3,7 @@ FitCheck AI - Main Application Entry Point
 """
 
 import logging
+from datetime import datetime, timedelta
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -130,6 +131,43 @@ def _schema_missing(db) -> list[str]:
     return deduped
 
 
+_SCHEMA_STATUS_CACHE = {"missing": None, "checked_at": None}
+_SCHEMA_STATUS_TTL = timedelta(minutes=5)
+
+
+def _get_cached_schema_status() -> tuple[bool, list[str]]:
+    """Schema readiness, refreshed at most every _SCHEMA_STATUS_TTL.
+
+    /health is polled repeatedly by the hosting platform; re-running ~30-40
+    sequential table/column existence queries on every single hit blocked the
+    event loop for no benefit once the schema was known to be stable.
+    """
+    now = datetime.utcnow()
+    cached_at = _SCHEMA_STATUS_CACHE["checked_at"]
+    if cached_at is not None and now - cached_at < _SCHEMA_STATUS_TTL:
+        missing = _SCHEMA_STATUS_CACHE["missing"]
+        return len(missing) == 0, missing
+
+    try:
+        db = SupabaseDB.get_service_client()
+        missing = _schema_missing(db)
+    except Exception:
+        if _SCHEMA_STATUS_CACHE["missing"] is not None:
+            # A prior check succeeded - keep serving that rather than
+            # flipping to "not ready" on a transient DB hiccup during the
+            # health check itself.
+            missing = _SCHEMA_STATUS_CACHE["missing"]
+        else:
+            # No prior successful check to fall back on - fail closed,
+            # matching the pre-caching behavior (report not-ready rather
+            # than silently reporting healthy when the check itself failed).
+            missing = ["schema_check_failed"]
+
+    _SCHEMA_STATUS_CACHE["missing"] = missing
+    _SCHEMA_STATUS_CACHE["checked_at"] = now
+    return len(missing) == 0, missing
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
@@ -143,10 +181,13 @@ async def lifespan(app: FastAPI):
     logger.info(f"API v1 endpoint: {settings.API_V1_STR}")
     logger.info(f"Debug mode: {settings.DEBUG}")
 
-    # Best-effort schema readiness check to help local setup.
+    # Best-effort schema readiness check to help local setup. Also seeds
+    # _SCHEMA_STATUS_CACHE so the first /health hit doesn't repeat this.
     try:
         db = SupabaseDB.get_service_client()
         missing = _schema_missing(db)
+        _SCHEMA_STATUS_CACHE["missing"] = missing
+        _SCHEMA_STATUS_CACHE["checked_at"] = datetime.utcnow()
         if missing:
             logger.warning(
                 "Supabase schema not initialized/complete. Run `backend/db/supabase/migrations/001_full_schema.sql` in Supabase SQL Editor."
@@ -285,11 +326,14 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for monitoring."""
+    """Health check endpoint for monitoring.
+
+    Schema readiness is cached (see _get_cached_schema_status) rather than
+    re-checked on every hit, since this is polled repeatedly by the hosting
+    platform and each check was up to ~30-40 sequential DB queries.
+    """
     try:
-        db = SupabaseDB.get_service_client()
-        missing = _schema_missing(db)
-        schema_ready = len(missing) == 0
+        schema_ready, missing = _get_cached_schema_status()
     except Exception:
         missing = []
         schema_ready = False
@@ -298,6 +342,7 @@ async def health_check():
         "status": "healthy",
         "service": settings.PROJECT_NAME,
         "version": settings.VERSION,
+        "commit": settings.RAILWAY_GIT_COMMIT_SHA,
         "schema_ready": schema_ready,
     }
 
@@ -359,7 +404,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     # Format validation errors for readability
     formatted_errors = []
     for error in exc.errors():
-        loc = ".".join(str(l) for l in error.get("loc", []))
+        loc = ".".join(str(part) for part in error.get("loc", []))
         msg = error.get("msg", "Invalid value")
         formatted_errors.append({"field": loc, "message": msg})
     

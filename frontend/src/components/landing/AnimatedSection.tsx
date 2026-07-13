@@ -9,9 +9,22 @@ interface AnimatedSectionProps {
 
 export function AnimatedSection({ children, delay = 0, className }: AnimatedSectionProps) {
   const [isVisible, setIsVisible] = useState(false)
+  const [reduceMotion, setReduceMotion] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setReduceMotion(mq.matches)
+    const onChange = () => setReduceMotion(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+
+  useEffect(() => {
+    if (reduceMotion) {
+      setIsVisible(true)
+      return
+    }
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -24,17 +37,17 @@ export function AnimatedSection({ children, delay = 0, className }: AnimatedSect
 
     if (ref.current) observer.observe(ref.current)
     return () => observer.disconnect()
-  }, [])
+  }, [reduceMotion])
 
   return (
     <div
       ref={ref}
       className={cn(
-        'transition-all duration-700',
-        isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8',
+        !reduceMotion && 'transition-all duration-700 ease-out',
+        isVisible || reduceMotion ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6',
         className
       )}
-      style={{ transitionDelay: `${delay}ms` }}
+      style={reduceMotion ? undefined : { transitionDelay: `${delay}ms` }}
     >
       {children}
     </div>

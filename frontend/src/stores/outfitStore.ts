@@ -259,6 +259,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         hasMore: response.has_next,
         page: newPage,
         isLoading: false,
+        // Clear sticky failed/pending auto-generation badges on full refresh
+        ...(refresh || newPage === 1 ? { generatingOutfits: new Map() } : {}),
       });
 
       // Apply filters and sort after outfits are set
@@ -634,8 +636,9 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
             : 'processing',
       });
 
-      // Poll for status (generation completes when image is uploaded to backend)
-      get().checkGenerationStatus();
+      // Do not poll generation status in parallel: this path generates and
+      // uploads client-side, and concurrent polling can flip isGenerating/status
+      // to completed/failed before the upload finishes.
 
       // Generate outfit via backend AI service, then upload to backend to mark completion.
       const state = get();

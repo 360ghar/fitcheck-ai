@@ -105,15 +105,20 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
             return
 
         try:
-            from jose import jwt
-            from app.core.config import settings
+            import jwt as pyjwt
 
             token = auth_header[7:]
-            # Decode without verification - just to extract user_id for logging
-            # Actual verification happens in the security dependency
-            payload = jwt.decode(
+            # Decode without verification — only for log context user_id.
+            # Actual verification happens in app.core.security.verify_token.
+            # Support both legacy HS256 and Supabase JWT Signing Keys (ES256/RS256).
+            payload = pyjwt.decode(
                 token,
-                options={"verify_signature": False, "verify_exp": False}
+                options={
+                    "verify_signature": False,
+                    "verify_exp": False,
+                    "verify_aud": False,
+                },
+                algorithms=["HS256", "ES256", "RS256"],
             )
             user_id = payload.get("sub")
             if user_id:

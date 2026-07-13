@@ -57,7 +57,7 @@ export default function BlogPostPage() {
       name: 'FitCheck AI',
       logo: {
         '@type': 'ImageObject',
-        url: 'https://fitcheckaiapp.com/og-default.svg'
+        url: 'https://fitcheckaiapp.com/og-default.jpg'
       }
     },
     datePublished: new Date(post.date).toISOString(),

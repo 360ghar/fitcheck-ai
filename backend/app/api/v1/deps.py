@@ -3,6 +3,7 @@ FastAPI dependency functions for routes.
 Provides commonly used dependencies like database client and current user.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from fastapi import Depends
@@ -35,7 +36,16 @@ async def get_current_user(
         AuthenticationError: If user profile could not be loaded or created
     """
     try:
-        user = db.table("users").select("*").eq("id", token_data.sub).single().execute()
+        # supabase-py's Client is synchronous; this blocks the event loop for
+        # the duration of the network call. get_current_user runs on nearly
+        # every authenticated request (~140 routes), so it's the highest-
+        # value place to stop blocking, without migrating the whole app off
+        # the sync client (a much larger, separately-planned effort - see
+        # app/db/connection.py for the full migration path this stops short
+        # of). asyncio.to_thread offloads just this call to a worker thread.
+        user = await asyncio.to_thread(
+            lambda: db.table("users").select("*").eq("id", token_data.sub).single().execute()
+        )
         if user.data:
             # Add email from token if not in database
             if not user.data.get("email") and token_data.email:

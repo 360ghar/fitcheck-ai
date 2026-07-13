@@ -8,8 +8,6 @@ Supports two auth session types:
 
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -24,35 +22,37 @@ from app.core.exceptions import (
     SocialImportMFARequiredError,
 )
 from app.models.social_import import SocialAuthType
+from app.utils.crypto import derive_fernet_key, legacy_derive_fernet_key
+
+_KEY_PURPOSE = b"fitcheck-social-auth-session-v1"
 
 
 class SocialAuthService:
     """Manage ephemeral encrypted auth sessions for social import jobs."""
 
     _logger = logging.getLogger(__name__)
-    _warned_encryption_fallback = False
 
     @staticmethod
     def _fernet() -> Optional[Fernet]:
-        key = settings.AI_ENCRYPTION_KEY or settings.SUPABASE_JWT_SECRET
+        # ponytail: no fallback to SUPABASE_JWT_SECRET - reusing a JWT-signing
+        # secret to encrypt stored scraper credentials would be key reuse
+        # across security domains. Fail closed if AI_ENCRYPTION_KEY is unset.
+        key = settings.AI_ENCRYPTION_KEY
         if not key:
             return None
+        return Fernet(derive_fernet_key(key, _KEY_PURPOSE))
 
-        if not settings.AI_ENCRYPTION_KEY:
-            if not SocialAuthService._warned_encryption_fallback:
-                SocialAuthService._logger.warning(
-                    "AI_ENCRYPTION_KEY is not set; falling back to SUPABASE_JWT_SECRET for social auth encryption"
-                )
-                SocialAuthService._warned_encryption_fallback = True
-
-        if len(key) == 64:
-            raw_key = bytes.fromhex(key)
-        else:
-            raw_key = key.encode("utf-8")
-
-        derived = hashlib.sha256(raw_key).digest()
-        fernet_key = base64.urlsafe_b64encode(derived)
-        return Fernet(fernet_key)
+    @staticmethod
+    def _legacy_fernet() -> Optional[Fernet]:
+        """Pre-domain-separation key, tried only as a decrypt fallback so
+        sessions encrypted before this change stay readable during the
+        migration window (these are short-TTL/ephemeral, so this fallback
+        is only relevant for a brief period after deploy)."""
+        key = settings.AI_ENCRYPTION_KEY
+        if not key:
+            return None
+        legacy_key = legacy_derive_fernet_key(key)
+        return Fernet(legacy_key) if legacy_key else None
 
     @classmethod
     def encrypt_session_payload(cls, payload: Dict[str, Any]) -> str:
@@ -70,15 +70,16 @@ class SocialAuthService:
         if not encrypted_payload:
             return None
 
-        fernet = cls._fernet()
-        if not fernet:
-            return None
+        for fernet in (cls._fernet(), cls._legacy_fernet()):
+            if not fernet:
+                continue
+            try:
+                decrypted = fernet.decrypt(encrypted_payload.encode("utf-8")).decode("utf-8")
+                return json.loads(decrypted)
+            except (InvalidToken, ValueError, TypeError):
+                continue
 
-        try:
-            decrypted = fernet.decrypt(encrypted_payload.encode("utf-8")).decode("utf-8")
-            return json.loads(decrypted)
-        except (InvalidToken, ValueError, TypeError):
-            return None
+        return None
 
     @staticmethod
     def _expiry() -> datetime:

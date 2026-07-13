@@ -1,0 +1,45 @@
+name: Flutter Analyze & Test
+
+# Fast feedback job, independent of the slower APK/IPA build workflows.
+# Neither build-apk.yml nor build-ios.yml runs `flutter analyze`/`flutter test`,
+# so a broken test or analyzer error could previously merge to main unnoticed.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  analyze-and-test:
+    name: Analyze & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.1'
+          channel: 'stable'
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        # Only true analyzer errors fail the build for now - the repo has ~546
+        # pre-existing info/warning-level issues (mostly `withOpacity`
+        # deprecation notices) that are tracked separately as tech debt rather
+        # than gating every PR on a pre-existing backlog unrelated to the change.
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Test
+        run: flutter test

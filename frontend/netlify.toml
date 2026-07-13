@@ -7,10 +7,14 @@
 [build.environment]
   NODE_VERSION = "18"
 
-# Edge Functions for dynamic OG tags on shared outfits
+# Edge Functions for dynamic OG/SEO tags (crawlers)
 [[edge_functions]]
   path = "/shared/outfits/*"
   function = "og-tags"
+
+[[edge_functions]]
+  path = "/blog/*"
+  function = "seo-html"
 
 # API proxy - forward API requests to backend (Railway)
 # IMPORTANT: This must come before the SPA fallback
@@ -64,3 +68,9 @@
   [headers.values]
     Cache-Control = "public, max-age=604800"
     Content-Type = "image/svg+xml"
+
+[[headers]]
+  for = "/og-*.jpg"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+    Content-Type = "image/jpeg"

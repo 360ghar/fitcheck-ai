@@ -2,7 +2,7 @@ import type { Context } from '@netlify/edge-functions'
 
 const BACKEND_API_URL = 'https://fitcheck-backend.railway.app'
 const SITE_URL = 'https://fitcheckaiapp.com'
-const DEFAULT_OG_IMAGE = `${SITE_URL}/og-default.svg`
+const DEFAULT_OG_IMAGE = `${SITE_URL}/og-default.jpg`
 const OUTFIT_FALLBACK_IMAGE = `${SITE_URL}/og-outfit-fallback.svg`
 
 interface OutfitImage {
@@ -47,9 +47,14 @@ const CRAWLER_USER_AGENTS = [
   'ChatGPT-User',
   'GPTBot',
   'Claude-Web',
+  'ClaudeBot',
   'Anthropic-AI',
+  'anthropic-ai',
   'CCBot',
   'Google-Extended',
+  'PerplexityBot',
+  'Bytespider',
+  'cohere-ai',
 ]
 
 function isCrawler(userAgent: string | null): boolean {

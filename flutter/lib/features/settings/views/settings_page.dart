@@ -147,10 +147,10 @@ class _SettingsPageState extends State<SettingsPage> {
       children: [
         SwitchListTile(
           secondary: const Icon(Icons.notifications),
-          title: const Text('Push Notifications'),
-          subtitle: const Text('Receive notifications on your device'),
-          value: prefs.notificationsEnabled ?? true,
-          onChanged: controller.toggleNotifications,
+          title: const Text('Push Notifications (Coming Soon)'),
+          subtitle: const Text('Push notifications are not yet available'),
+          value: false,
+          onChanged: null,
         ),
         SwitchListTile(
           secondary: const Icon(Icons.email),

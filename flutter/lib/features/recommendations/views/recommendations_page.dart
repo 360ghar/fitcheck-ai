@@ -80,6 +80,7 @@ class RecommendationsPage extends StatelessWidget {
               const Spacer(),
               Obx(
                 () => IconButton(
+                  tooltip: 'Refresh recommendations',
                   onPressed: controller.isLoading.value
                       ? null
                       : () => controller.refreshCurrentTab(),
@@ -172,13 +173,14 @@ class SelectedItemsChips extends StatelessWidget {
 class RecommendationCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final VoidCallback onTap;
-  final VoidCallback onFavorite;
+  /// Optional favorite action; omit when favorites are not wired yet
+  final VoidCallback? onFavorite;
 
   const RecommendationCard({
     super.key,
     required this.item,
     required this.onTap,
-    required this.onFavorite,
+    this.onFavorite,
   });
 
   @override

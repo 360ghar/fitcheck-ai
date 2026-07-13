@@ -13,23 +13,23 @@ Features:
 - Provider abstraction for easy switching
 - Per-user configuration with system defaults
 
-Sample request format:
-    curl --location 'http://localhost:8317/v1/chat/completions' \
+Sample request format (Agnes chat/vision):
+    curl --location 'https://apihub.agnes-ai.com/v1/chat/completions' \
     --header 'Content-Type: application/json' \
     --header 'Authorization: Bearer api-key' \
     --data '{
-        "model": "gemini-3-pro-image-preview",
+        "model": "agnes-2.0-flash",
         "messages": [
-          {"role": "user", "content": "A sleek futuristic cityscape"}
-        ],
-        "response_modalities": ["TEXT","IMAGE"]
+          {"role": "user", "content": "Describe this outfit"}
+        ]
       }'
 """
 
 import asyncio
+import base64
 import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlparse
@@ -39,6 +39,7 @@ import httpx
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
+from app.utils.retry import with_retry
 
 logger = get_context_logger(__name__)
 
@@ -65,6 +66,14 @@ class ProviderConfig:
     image_gen_model: Optional[str] = None
     max_tokens: int = 64096
 
+    # Optional separate endpoint/key for image generation (OpenAI-compatible providers
+    # that host LLM and image models on different hosts/keys, e.g. agnes-ai.com).
+    # Falls back to api_url/api_key when unset.
+    image_api_url: Optional[str] = None
+    image_api_key: Optional[str] = None
+    # "chat" (response_modalities on /chat/completions) | "images" (real /images/generations)
+    image_api_style: str = "chat"
+
     # Optimized timeout configuration (separate connect vs read)
     connect_timeout: float = 5.0     # 5s for connection establishment
     read_timeout: float = 120.0      # 2min for reading response
@@ -85,6 +94,14 @@ class ProviderConfig:
     def get_image_gen_model(self) -> str:
         """Get the image generation model, falling back to the default model."""
         return self.image_gen_model or self.model
+
+    def get_image_api_url(self) -> str:
+        """Get the image generation endpoint, falling back to the main api_url."""
+        return self.image_api_url or self.api_url
+
+    def get_image_api_key(self) -> str:
+        """Get the image generation API key, falling back to the main api_key."""
+        return self.image_api_key or self.api_key
 
 
 @dataclass
@@ -135,11 +152,14 @@ def get_system_provider_config(provider: AIProvider) -> Optional[ProviderConfig]
         )
     elif provider == AIProvider.CUSTOM:
         return ProviderConfig(
-            api_url=settings.AI_CUSTOM_API_URL,
-            api_key=settings.AI_CUSTOM_API_KEY,
-            model=settings.AI_CUSTOM_CHAT_MODEL,
-            vision_model=settings.AI_CUSTOM_VISION_MODEL,
-            image_gen_model=settings.AI_CUSTOM_IMAGE_MODEL,
+            api_url=settings.OPENAI_LLM_URL or settings.AI_CUSTOM_API_URL,
+            api_key=settings.OPENAI_LLM_API_KEY or settings.AI_CUSTOM_API_KEY,
+            model=settings.OPENAI_LLM_MODEL or settings.AI_CUSTOM_CHAT_MODEL,
+            vision_model=settings.OPENAI_LLM_VISION_MODEL or settings.AI_CUSTOM_VISION_MODEL,
+            image_gen_model=settings.OPENAI_IMAGE_MODEL or settings.AI_CUSTOM_IMAGE_MODEL,
+            image_api_url=settings.OPENAI_IMAGE_URL,
+            image_api_key=settings.OPENAI_IMAGE_API_KEY,
+            image_api_style=settings.OPENAI_IMAGE_API_STYLE,
         )
     return None
 
@@ -205,16 +225,46 @@ class AIProviderService:
             await self._client.aclose()
             self._client = None
 
-    def _build_chat_url(self) -> str:
+    @staticmethod
+    def _build_url(base_url: str, endpoint: str) -> str:
+        """Build a full endpoint URL from a provider base URL."""
+        base = base_url.rstrip("/")
+        if base.endswith(f"/{endpoint}"):
+            return base
+        if base.endswith("/v1"):
+            return f"{base}/{endpoint}"
+        return f"{base}/v1/{endpoint}"
+
+    def _build_chat_url(self, base_url: Optional[str] = None) -> str:
         """Build the chat completions URL."""
-        base_url = self.config.api_url.rstrip("/")
-        # Ensure we have the /chat/completions endpoint
-        if not base_url.endswith("/chat/completions"):
-            if base_url.endswith("/v1"):
-                return f"{base_url}/chat/completions"
-            else:
-                return f"{base_url}/v1/chat/completions"
-        return base_url
+        return self._build_url(base_url or self.config.api_url, "chat/completions")
+
+    def _build_images_url(self, base_url: Optional[str] = None) -> str:
+        """Build the images generations URL."""
+        return self._build_url(base_url or self.config.get_image_api_url(), "images/generations")
+
+    @staticmethod
+    def _extract_prompt_and_images(messages: List[ChatMessage]) -> tuple[str, List[str]]:
+        """Split OpenAI-style multimodal chat messages back into a flat prompt
+        string and reference image URLs, for providers whose image generation
+        only exists behind /images/generations."""
+        text_parts: List[str] = []
+        images: List[str] = []
+        for message in messages:
+            content = message.content
+            if isinstance(content, str):
+                text_parts.append(content)
+                continue
+            for part in content:
+                if not isinstance(part, dict):
+                    continue
+                if part.get("type") == "text":
+                    text_parts.append(part.get("text", ""))
+                elif part.get("type") == "image_url":
+                    url = part.get("image_url", {}).get("url", "")
+                    if url:
+                        images.append(url)
+        return "\n".join(t for t in text_parts if t), images
 
     @staticmethod
     def _count_image_inputs(messages: List[ChatMessage]) -> int:
@@ -234,20 +284,22 @@ class AIProviderService:
             return f"{exc.__class__.__name__}: {detail}"
         return exc.__class__.__name__
 
-    @staticmethod
-    def _is_transient_transport_error(exc: Exception) -> bool:
-        return isinstance(
-            exc,
-            (
-                httpx.ReadError,
-                httpx.ConnectError,
-                httpx.RemoteProtocolError,
-                httpx.WriteError,
-                httpx.PoolTimeout,
-                httpx.ConnectTimeout,
-                httpx.ReadTimeout,
-            ),
-        )
+    class _TransientImageAPIOverload(Exception):
+        """Marks a 503 from /images/generations as retry-worthy without retrying real 4xx/5xx errors."""
+
+    _TRANSIENT_TRANSPORT_ERRORS = (
+        httpx.ReadError,
+        httpx.ConnectError,
+        httpx.RemoteProtocolError,
+        httpx.WriteError,
+        httpx.PoolTimeout,
+        httpx.ConnectTimeout,
+        httpx.ReadTimeout,
+    )
+
+    @classmethod
+    def _is_transient_transport_error(cls, exc: Exception) -> bool:
+        return isinstance(exc, cls._TRANSIENT_TRANSPORT_ERRORS)
 
     @staticmethod
     def _retry_delay_seconds(attempt: int) -> float:
@@ -279,8 +331,29 @@ class AIProviderService:
         Returns:
             AIResponse with text and/or images
         """
+        is_image_request = bool(response_modalities)
+
+        if is_image_request and self.config.image_api_style == "images":
+            # Image-style providers (e.g. Agnes) generate images via
+            # /images/generations, not response_modalities on /chat/completions.
+            # Chat/vision still use /chat/completions. Every image-generation
+            # caller reaches chat() with response_modalities (generate_image(),
+            # photoshoot/outfit multi-image content), so intercepting here
+            # fixes all of them at the root instead of duplicating per caller.
+            prompt_text, reference_images = self._extract_prompt_and_images(messages)
+            return await self._generate_image_via_images_api(
+                prompt_text,
+                model=model or self.config.get_image_gen_model(),
+                reference_images=reference_images,
+            )
+
+        # Image generation (response_modalities) uses the image-specific endpoint/key
+        # when configured, so LLM and image hosts can differ (e.g. agnes-ai.com).
+        active_base_url = self.config.get_image_api_url() if is_image_request else self.config.api_url
+        active_api_key = self.config.get_image_api_key() if is_image_request else self.config.api_key
+
         client = await self._get_client()
-        url = self._build_chat_url()
+        url = self._build_chat_url(active_base_url)
         use_model = model or self.config.model
 
         # Build request payload
@@ -329,47 +402,52 @@ class AIProviderService:
         health_service = get_health_service()
 
         health_status = await health_service.check_provider_health(
-            base_url=self.config.api_url,
-            api_key=self.config.api_key,
+            base_url=active_base_url,
+            api_key=active_api_key,
             timeout_seconds=3.0,
         )
 
         if not health_status.available:
             # Provider is down - fail fast instead of retrying
             error_msg = (
-                f"AI provider {self.config.api_url} is unavailable. "
+                f"AI provider {active_base_url} is unavailable. "
                 f"Error: {health_status.error}. "
                 "Please check if the service is running or configure an alternative provider."
             )
             logger.error(
                 "Provider unavailable, failing fast",
-                provider_url=self.config.api_url,
+                provider_url=active_base_url,
                 error=health_status.error,
                 consecutive_failures=health_status.consecutive_failures,
             )
             raise AIServiceError(error_msg)
 
         async def _post_chat(req_payload: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
+            nonlocal client
             max_retries = 2  # Reduced from 3
             attempt = 0
 
             while True:
                 try:
-                    response = await client.post(url, json=req_payload)
+                    response = await client.post(
+                        url,
+                        json=req_payload,
+                        headers={"Authorization": f"Bearer {active_api_key}"},
+                    )
                     response.raise_for_status()
                     return response.json(), response.status_code
                 except httpx.ConnectError as transport_error:
                     # Connection refused - mark provider as unhealthy
-                    health_service.clear_cache(self.config.api_url)
+                    health_service.clear_cache(active_base_url)
 
                     if attempt >= max_retries:
                         logger.error(
                             "Cannot connect to AI provider after retries",
-                            provider_url=self.config.api_url,
+                            provider_url=active_base_url,
                             attempts=attempt + 1,
                         )
                         raise AIServiceError(
-                            f"Cannot connect to AI provider at {self.config.api_url}. "
+                            f"Cannot connect to AI provider at {active_base_url}. "
                             "Please ensure the service is running or configure an alternative provider."
                         )
 
@@ -404,6 +482,12 @@ class AIProviderService:
                         delay_seconds=round(delay, 2),
                         error=self._format_exception_message(transport_error),
                     )
+                    if isinstance(transport_error, httpx.RemoteProtocolError):
+                        # ponytail: pooled HTTP/2 connection was killed by the peer;
+                        # retrying on the same client just fails again. Rebuild it,
+                        # mirroring subscription_service.py's fix for the same error class.
+                        await self.close()
+                        client = await self._get_client()
                     attempt += 1
                     await asyncio.sleep(delay)
 
@@ -418,7 +502,7 @@ class AIProviderService:
                 choices_count=len(data.get("choices", [])) if isinstance(data, dict) else 0,
             )
 
-            return self._parse_chat_response(data, use_model)
+            return self._parse_chat_response(data, use_model, active_base_url)
 
         except httpx.HTTPStatusError as e:
             error_detail = ""
@@ -448,7 +532,7 @@ class AIProviderService:
                         latency_ms=round((time.monotonic() - started_at) * 1000, 2),
                         choices_count=len(data.get("choices", [])) if isinstance(data, dict) else 0,
                     )
-                    return self._parse_chat_response(data, use_model)
+                    return self._parse_chat_response(data, use_model, active_base_url)
                 except httpx.HTTPStatusError as fallback_error:
                     try:
                         fallback_error_data = fallback_error.response.json()
@@ -480,7 +564,9 @@ class AIProviderService:
             logger.error("Chat request error", error=error_message)
             raise AIServiceError(f"AI request failed: {error_message}")
 
-    def _parse_chat_response(self, data: Dict[str, Any], model: str) -> AIResponse:
+    def _parse_chat_response(
+        self, data: Dict[str, Any], model: str, provider_url: Optional[str] = None
+    ) -> AIResponse:
         """Parse the chat completion response."""
         text = None
         images = []
@@ -561,7 +647,7 @@ class AIProviderService:
             text=text,
             images=images if images else None,
             model=model,
-            provider=self.config.api_url,
+            provider=provider_url or self.config.api_url,
             usage=usage,
             raw_response=data,
         )
@@ -670,6 +756,112 @@ class AIProviderService:
             messages=messages,
             model=use_model,
             response_modalities=["TEXT", "IMAGE"],
+        )
+
+    async def _generate_image_via_images_api(
+        self, prompt: str, model: str, size: str = "1024x1024",
+        reference_images: Optional[List[str]] = None,
+    ) -> AIResponse:
+        """
+        Generate an image using the real OpenAI-compatible /images/generations
+        endpoint (e.g. agnes-ai.com, OpenAI).
+        """
+        image_url = self.config.get_image_api_url()
+        image_key = self.config.get_image_api_key()
+        url = self._build_images_url(image_url)
+
+        from app.services.ai_provider_health_service import get_health_service
+        health_service = get_health_service()
+
+        health_status = await health_service.check_provider_health(
+            base_url=image_url,
+            api_key=image_key,
+            timeout_seconds=3.0,
+        )
+        if not health_status.available:
+            raise AIServiceError(
+                f"AI image provider {image_url} is unavailable. Error: {health_status.error}. "
+                "Please check if the service is running or configure an alternative provider."
+            )
+
+        client = await self._get_client()
+        payload: Dict[str, Any] = {
+            "model": model,
+            "prompt": prompt,
+            "n": 1,
+            "size": size,
+            # ponytail: Agnes's gateway 400s if response_format sits at the top
+            # level, and silently ignores a top-level "image" field (falls back
+            # to text-to-image) - both must be nested under extra_body instead.
+            # Real OpenAI wants them flat; this method is currently only used
+            # in "images" style by Agnes, so hardcoding this is fine - add a
+            # style variant if a second, flat-contract provider needs this path.
+            "extra_body": {"response_format": "b64_json"},
+        }
+        if reference_images:
+            payload["extra_body"]["image"] = [
+                img if img.startswith("data:") else f"data:image/jpeg;base64,{img}"
+                for img in reference_images
+            ]
+
+        logger.info("AI image generation request started", provider_host=urlparse(url).netloc, model=model)
+
+        async def _post_image_request() -> httpx.Response:
+            response = await client.post(
+                url,
+                json=payload,
+                headers={"Authorization": f"Bearer {image_key}"},
+            )
+            if response.status_code == 503:
+                # ponytail: Agnes's free-tier gateway 503s with transient
+                # "queue full"/"memory overloaded" errors fairly often (observed
+                # ~1-in-4 in testing) - worth a couple retries, unlike a real
+                # 4xx/5xx failure which shouldn't be retried.
+                raise self._TransientImageAPIOverload(response.text[:300])
+            response.raise_for_status()
+            return response
+
+        try:
+            response = await with_retry(
+                _post_image_request,
+                max_retries=2,
+                initial_delay=0.5,
+                backoff_factor=1.5,
+                max_delay=5.0,
+                retryable_exceptions=self._TRANSIENT_TRANSPORT_ERRORS + (self._TransientImageAPIOverload,),
+            )
+            data = response.json()
+        except self._TransientImageAPIOverload as e:
+            raise AIServiceError(f"AI image provider overloaded after retries: {e}")
+        except httpx.HTTPStatusError as e:
+            error_detail = ""
+            try:
+                error_detail = e.response.json().get("error", {}).get("message", "")
+            except Exception:
+                error_detail = e.response.text[:500]
+            raise AIServiceError(f"AI image request failed ({e.response.status_code}): {error_detail}")
+        except Exception as e:
+            raise AIServiceError(f"AI image request failed: {self._format_exception_message(e)}")
+
+        images = []
+        for item in data.get("data", []):
+            if item.get("b64_json"):
+                images.append(item["b64_json"])
+            elif item.get("url"):
+                # Fetch with a bare client (no Authorization header) - this is a
+                # provider-hosted asset URL, not the API endpoint, and shouldn't
+                # receive our API key.
+                async with httpx.AsyncClient() as asset_client:
+                    image_response = await asset_client.get(item["url"])
+                    image_response.raise_for_status()
+                images.append(base64.b64encode(image_response.content).decode())
+
+        return AIResponse(
+            text=None,
+            images=images if images else None,
+            model=model,
+            provider=image_url,
+            raw_response=data,
         )
 
     async def test_connection(self) -> Dict[str, Any]:

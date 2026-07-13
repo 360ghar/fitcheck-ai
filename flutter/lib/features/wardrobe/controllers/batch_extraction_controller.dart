@@ -74,6 +74,13 @@ class BatchExtractionController extends GetxController {
   // Batch SSE subscription
   StreamSubscription? _sseSubscription;
 
+  // Guards the recursive SSE-fallback polling loops (_pollJobStatus,
+  // _pollSocialStatus) so they stop rescheduling once this controller is
+  // disposed - they previously had no reference stored anywhere to cancel,
+  // so they'd keep polling the network in the background indefinitely after
+  // the user navigated away.
+  bool _isClosed = false;
+
   // Social import state
   final RxString socialJobId = ''.obs;
   final Rx<SocialImportJobData?> socialJob = Rx<SocialImportJobData?>(null);
@@ -104,6 +111,8 @@ class BatchExtractionController extends GetxController {
   bool get isExtracting => jobStatus.value == BatchJobStatus.extracting;
   bool get isGenerating => jobStatus.value == BatchJobStatus.generating;
   bool get isComplete => jobStatus.value == BatchJobStatus.complete;
+  /// One-shot guard so progress UI doesn't schedule navigation on every rebuild
+  bool hasNavigatedToReview = false;
   bool get isFailed => jobStatus.value == BatchJobStatus.failed;
   bool get isCancelled => jobStatus.value == BatchJobStatus.cancelled;
   bool get isProcessing => isUploading || isExtracting || isGenerating;
@@ -225,6 +234,7 @@ class BatchExtractionController extends GetxController {
 
   @override
   void onClose() {
+    _isClosed = true;
     _sseSubscription?.cancel();
     _socialSseSubscription?.cancel();
     _socialOAuthLinkSubscription?.cancel();
@@ -654,13 +664,13 @@ class BatchExtractionController extends GetxController {
   }
 
   Future<void> _pollSocialStatus(String id) async {
-    if (id.isEmpty || id != socialJobId.value) return;
+    if (_isClosed || id.isEmpty || id != socialJobId.value) return;
     try {
       final job = await _socialRepo.getStatus(id);
       _applySocialJob(job);
       if (!job.isTerminal && !socialIsConnected.value) {
         await Future.delayed(const Duration(seconds: 2));
-        if (!socialIsConnected.value) {
+        if (!_isClosed && !socialIsConnected.value) {
           await _pollSocialStatus(id);
         }
       }
@@ -1106,6 +1116,7 @@ class BatchExtractionController extends GetxController {
 
   /// Fallback polling for job status
   Future<void> _pollJobStatus(String id) async {
+    if (_isClosed) return;
     try {
       final status = await _batchRepo.getJobStatus(id);
 
@@ -1129,12 +1140,12 @@ class BatchExtractionController extends GetxController {
           jobStatus.value = BatchJobStatus.extracting;
           // Continue polling
           await Future.delayed(const Duration(seconds: 2));
-          _pollJobStatus(id);
+          if (!_isClosed) _pollJobStatus(id);
           break;
         case 'generating':
           jobStatus.value = BatchJobStatus.generating;
           await Future.delayed(const Duration(seconds: 2));
-          _pollJobStatus(id);
+          if (!_isClosed) _pollJobStatus(id);
           break;
         case 'completed':
           jobStatus.value = BatchJobStatus.complete;

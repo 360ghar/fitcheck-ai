@@ -249,7 +249,13 @@ export function DuplicateDetection({
               </p>
             </div>
             {onCancel && (
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onCancel}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={onCancel}
+                aria-label="Dismiss duplicate warning"
+              >
                 <X className="h-4 w-4" />
               </Button>
             )}

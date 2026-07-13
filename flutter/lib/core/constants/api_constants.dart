@@ -35,6 +35,17 @@ class ApiConstants {
   // API Version
   static const String apiVersion = '/api/v1';
 
+  /// Path fragments that don't require an auth token and are exempt from
+  /// 401 token-refresh handling. Shared by [AuthInterceptor] and
+  /// [TokenRefreshInterceptor] so the list only needs to be updated once.
+  static const List<String> publicEndpoints = [
+    '/auth/login',
+    '/auth/register',
+    '/auth/reset-password',
+    '/auth/verify-email',
+    '/waitlist',
+  ];
+
   // Endpoints
   static const String auth = '$apiVersion/auth';
   static const String items = '$apiVersion/items';

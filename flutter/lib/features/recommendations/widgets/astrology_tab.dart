@@ -423,7 +423,7 @@ class AstrologyTab extends StatelessWidget {
                                 width: 48,
                                 height: 48,
                                 child: imageUrl != null
-                                    ? Image.network(imageUrl, fit: BoxFit.cover)
+                                    ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined))
                                     : Container(
                                         color: tokens.cardColor.withOpacity(
                                           0.4,

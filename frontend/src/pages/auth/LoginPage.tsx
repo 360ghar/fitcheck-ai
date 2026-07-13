@@ -157,20 +157,8 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Remember me and forgot password */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center touch-target">
-                <input
-                  id="remember-me"
-                  name="remember-me"
-                  type="checkbox"
-                  className="h-5 w-5 text-primary focus:ring-primary border-border rounded bg-background"
-                />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-foreground">
-                  Remember me
-                </label>
-              </div>
-
+            {/* Forgot password */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
               <div className="text-sm">
                 <Link
                   to="/auth/forgot-password"

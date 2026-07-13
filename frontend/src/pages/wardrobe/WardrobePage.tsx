@@ -29,7 +29,6 @@ import { ItemDetailModal } from '@/components/wardrobe/ItemDetailModal'
 import { ItemCard } from '@/components/wardrobe/ItemCard'
 import { useToast } from '@/components/ui/use-toast'
 import {
-  toggleItemFavorite as apiToggleFavorite,
   markItemAsWorn as apiMarkAsWorn,
   deleteItem as apiDeleteItem,
   updateItem as apiUpdateItem,
@@ -44,15 +43,21 @@ export default function WardrobePage() {
   const filteredItems = useWardrobeStore((state) => state.filteredItems)
   const isLoading = useWardrobeStore((state) => state.isLoading)
   const error = useWardrobeStore((state) => state.error)
+  // Subscribe so multi-select checkboxes re-render when selection changes
+  const selectedItems = useWardrobeStore((state) => state.selectedItems)
 
   // Store actions
   const fetchItems = useWardrobeStore((state) => state.fetchItems)
+  const fetchItemById = useWardrobeStore((state) => state.fetchItemById)
   const toggleItemFavorite = useWardrobeStore((state) => state.toggleItemFavorite)
+  const setFilter = useWardrobeStore((state) => state.setFilter)
+  const toggleItemSelected = useWardrobeStore((state) => state.toggleItemSelected)
 
   // Local state
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [selectedItemDetail, setSelectedItemDetail] = useState<Item | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  const [favoritingIds, setFavoritingIds] = useState<Set<string>>(new Set())
 
   // Filters and sort
   const [filters, setFilters] = useState<ItemFilters>({
@@ -81,19 +86,46 @@ export default function WardrobePage() {
     if (action === 'add') {
       setIsUploadModalOpen(true)
     }
+
+    // Dashboard Favorites card links to /wardrobe?favorites=true.
+    // Always sync from the URL so leaving favorites mode re-fetches the full list
+    // (server-side is_favorite filter otherwise leaves items stuck as favorites-only).
+    const favoritesOnly = searchParams.get('favorites') === 'true'
+    setFilters((prev) => ({ ...prev, isFavorite: favoritesOnly }))
+    setFilter('isFavorite', favoritesOnly)
+
     fetchItems(true)
-  }, [fetchItems, searchParams])
+  }, [fetchItems, searchParams, setFilter])
 
   useEffect(() => {
-    if (id) {
-      // Load single item details if id is present
-      const item = filteredItems.find((i) => i.id === id)
-      if (item) {
-        setSelectedItemDetail(item)
-        setIsDetailModalOpen(true)
-      }
+    if (!id) return
+
+    // Prefer already-loaded list data, then fetch by id for deep links
+    const item = filteredItems.find((i) => i.id === id)
+    if (item) {
+      setSelectedItemDetail(item)
+      setIsDetailModalOpen(true)
+      return
     }
-  }, [id, filteredItems])
+
+    let cancelled = false
+    fetchItemById(id)
+      .then(() => {
+        if (cancelled) return
+        const loaded = useWardrobeStore.getState().selectedItem
+        if (loaded?.id === id) {
+          setSelectedItemDetail(loaded)
+          setIsDetailModalOpen(true)
+        }
+      })
+      .catch(() => {
+        // Store sets error; leave modal closed
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [id, filteredItems, fetchItemById])
 
   // ============================================================================
   // HANDLERS
@@ -103,6 +135,11 @@ export default function WardrobePage() {
     setFilters((prev) => ({ ...prev, [key]: value }))
     // Update store filters
     useWardrobeStore.getState().setFilter(key, value)
+    // Favorites uses server-side is_favorite and can leave `items` as a subset;
+    // re-fetch when it flips so "all items" is restored when cleared.
+    if (key === 'isFavorite') {
+      void useWardrobeStore.getState().fetchItems(true)
+    }
   }, [])
 
   const handleSortChange = useCallback((key: keyof SortOptions, value: any) => {
@@ -127,6 +164,7 @@ export default function WardrobePage() {
       isFavorite: false,
     })
     useWardrobeStore.getState().resetFilters()
+    void useWardrobeStore.getState().fetchItems(true)
   }, [])
 
   const handleItemClick = (item: Item) => {
@@ -135,9 +173,11 @@ export default function WardrobePage() {
   }
 
   const handleToggleFavorite = async (itemId: string) => {
+    if (favoritingIds.has(itemId)) return
+    setFavoritingIds((prev) => new Set(prev).add(itemId))
     try {
-      const updated = await apiToggleFavorite(itemId)
-      toggleItemFavorite(itemId)
+      // Single store path → single API call (avoids double-toggle race)
+      const updated = await toggleItemFavorite(itemId)
       toast({
         title: updated.is_favorite ? 'Added to favorites' : 'Removed from favorites',
       })
@@ -150,6 +190,12 @@ export default function WardrobePage() {
         title: 'Error',
         description: 'Failed to update favorite status',
         variant: 'destructive',
+      })
+    } finally {
+      setFavoritingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(itemId)
+        return next
       })
     }
   }
@@ -216,7 +262,7 @@ export default function WardrobePage() {
         description: 'Your changes have been saved',
       })
       setSelectedItemDetail(savedItem)
-      setIsDetailModalOpen(false)
+      // Keep modal open so user can review; edit mode exits via modal on success
       fetchItems(true)
     } catch (err) {
       toast({
@@ -224,6 +270,7 @@ export default function WardrobePage() {
         description: 'Failed to save item changes',
         variant: 'destructive',
       })
+      throw err
     }
   }
 
@@ -321,7 +368,7 @@ export default function WardrobePage() {
           }`}
         >
           {filteredItems.map((item) => {
-            const isSelected = useWardrobeStore.getState().selectedItems.has(item.id)
+            const isSelected = selectedItems.has(item.id)
             return (
               <ItemCard
                 key={item.id}
@@ -335,7 +382,7 @@ export default function WardrobePage() {
                 }}
                 onSelect={(e) => {
                   e.stopPropagation()
-                  useWardrobeStore.getState().toggleItemSelected(item.id)
+                  toggleItemSelected(item.id)
                 }}
               />
             )
@@ -343,14 +390,7 @@ export default function WardrobePage() {
         </div>
       )}
 
-      {/* Floating Action Button for mobile */}
-      <button
-        onClick={() => setIsUploadModalOpen(true)}
-        className="fixed bottom-[calc(var(--bottom-nav-height)+16px+var(--safe-area-bottom))] right-[calc(var(--safe-area-right)+1rem)] w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center md:hidden z-[90] hover:bg-primary/90 active:scale-95 transition-transform"
-        aria-label="Add new item"
-      >
-        <Plus className="h-6 w-6" />
-      </button>
+      {/* Mobile primary add action is the BottomNav center FAB — avoid dual FABs */}
 
       {/* Modals */}
       <ItemUpload

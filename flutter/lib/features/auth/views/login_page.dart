@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../app/routes/app_routes.dart';
@@ -130,12 +131,16 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: AppConstants.spacing8),
                       Align(
                         alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: () => Get.toNamed(Routes.forgotPassword),
-                          style: TextButton.styleFrom(
-                            foregroundColor: tokens.textColor.withOpacity(0.85),
+                        child: Semantics(
+                          label: 'Forgot Password',
+                          button: true,
+                          child: TextButton(
+                            onPressed: () => Get.toNamed(Routes.forgotPassword),
+                            style: TextButton.styleFrom(
+                              foregroundColor: tokens.textColor.withOpacity(0.85),
+                            ),
+                            child: const Text('Forgot Password?'),
                           ),
-                          child: const Text('Forgot Password?'),
                         ),
                       ),
                       const SizedBox(height: AppConstants.spacing8),
@@ -149,7 +154,7 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: AppConstants.spacing16),
                       _buildDivider(tokens),
                       const SizedBox(height: AppConstants.spacing16),
-                      if (Platform.isIOS) ...[
+                      if (!kIsWeb && Platform.isIOS) ...[
                         Obx(() => _buildAppleSignInButton(authController)),
                         const SizedBox(height: AppConstants.spacing12),
                       ],
@@ -169,10 +174,13 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildEmailField(AuthUiTokens tokens) {
-    return TextFormField(
-      controller: _emailController,
-      keyboardType: TextInputType.emailAddress,
-      textInputAction: TextInputAction.next,
+    return Semantics(
+      label: 'Email',
+      textField: true,
+      child: TextFormField(
+        controller: _emailController,
+        keyboardType: TextInputType.emailAddress,
+        textInputAction: TextInputAction.next,
       style: TextStyle(color: tokens.textColor),
       cursorColor: tokens.brandColor,
       decoration: AuthFormStyles.inputDecoration(
@@ -190,13 +198,17 @@ class _LoginPageState extends State<LoginPage> {
         }
         return null;
       },
+    ),
     );
   }
 
   Widget _buildPasswordField(AuthUiTokens tokens) {
     return Obx(
-      () => TextFormField(
-        controller: _passwordController,
+      () => Semantics(
+        label: 'Password',
+        textField: true,
+        child: TextFormField(
+          controller: _passwordController,
         obscureText: !_isPasswordVisible.value,
         textInputAction: TextInputAction.done,
         onFieldSubmitted: (_) => _handleLogin(),
@@ -208,6 +220,7 @@ class _LoginPageState extends State<LoginPage> {
           hint: 'Enter your password',
           icon: Icons.lock,
           suffixIcon: IconButton(
+            tooltip: _isPasswordVisible.value ? 'Hide password' : 'Show password',
             icon: Icon(
               _isPasswordVisible.value
                   ? Icons.visibility
@@ -229,12 +242,17 @@ class _LoginPageState extends State<LoginPage> {
           return null;
         },
       ),
+      ),
     );
   }
 
   Widget _buildLoginButton(AuthController authController, AuthUiTokens tokens) {
-    return ElevatedButton(
-      onPressed: authController.isLoading.value ? null : _handleLogin,
+    return Semantics(
+      label: 'Sign In',
+      button: true,
+      enabled: !authController.isLoading.value,
+      child: ElevatedButton(
+        onPressed: authController.isLoading.value ? null : _handleLogin,
       style: ElevatedButton.styleFrom(
         backgroundColor: tokens.brandColor,
         foregroundColor: Colors.white,
@@ -255,6 +273,7 @@ class _LoginPageState extends State<LoginPage> {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : const Text('Sign In'),
+    ),
     );
   }
 
@@ -372,8 +391,12 @@ class _LoginPageState extends State<LoginPage> {
     AuthUiTokens tokens,
   ) {
     final isLoading = authController.isGoogleSigningIn.value;
-    return OutlinedButton.icon(
-      onPressed: isLoading ? null : _handleGoogleSignIn,
+    return Semantics(
+      label: 'Continue with Google',
+      button: true,
+      enabled: !isLoading,
+      child: OutlinedButton.icon(
+        onPressed: isLoading ? null : _handleGoogleSignIn,
       icon: isLoading
           ? const SizedBox(
               height: 18,
@@ -395,6 +418,7 @@ class _LoginPageState extends State<LoginPage> {
           letterSpacing: 0.3,
         ),
       ),
+    ),
     );
   }
 
@@ -409,10 +433,14 @@ class _LoginPageState extends State<LoginPage> {
               "Don't have an account? ",
               style: TextStyle(color: tokens.secondaryTextColor, fontSize: 14),
             ),
-            TextButton(
-              onPressed: () => Get.toNamed(Routes.register),
-              style: TextButton.styleFrom(foregroundColor: tokens.textColor),
-              child: const Text('Sign Up'),
+            Semantics(
+              label: 'Sign Up',
+              button: true,
+              child: TextButton(
+                onPressed: () => Get.toNamed(Routes.register),
+                style: TextButton.styleFrom(foregroundColor: tokens.textColor),
+                child: const Text('Sign Up'),
+              ),
             ),
           ],
         ),

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../core/services/notification_service.dart';
 import '../repositories/outfit_repository.dart';
 import 'outfit_list_controller.dart';
@@ -172,6 +174,27 @@ class OutfitGenerationController extends GetxController {
             ],
           ),
           actions: [
+            TextButton(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: shareUrl));
+                Get.snackbar(
+                  'Copied',
+                  'Share link copied to clipboard',
+                  snackPosition: SnackPosition.TOP,
+                  duration: const Duration(seconds: 2),
+                );
+              },
+              child: const Text('Copy'),
+            ),
+            TextButton(
+              onPressed: () async {
+                await Share.share(
+                  'Check out my outfit on FitCheck AI!\n\n$shareUrl',
+                  subject: 'Check out my outfit!',
+                );
+              },
+              child: const Text('Share'),
+            ),
             TextButton(
               onPressed: () => Get.back(),
               child: const Text('Close'),
