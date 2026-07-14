@@ -126,8 +126,8 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
   startCheckout: async (planType: PlanType) => {
     set({ isCheckingOut: true, error: null });
     try {
-      const successUrl = `${window.location.origin}/settings?tab=subscription&success=true`;
-      const cancelUrl = `${window.location.origin}/settings?tab=subscription&cancelled=true`;
+      const successUrl = `${window.location.origin}/profile?tab=plan&success=true`;
+      const cancelUrl = `${window.location.origin}/profile?tab=plan&cancelled=true`;
 
       const session = await subscriptionApi.createCheckoutSession(
         planType,
@@ -148,7 +148,7 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
   openBillingPortal: async () => {
     set({ isLoading: true, error: null });
     try {
-      const returnUrl = `${window.location.origin}/settings?tab=subscription`;
+      const returnUrl = `${window.location.origin}/profile?tab=plan`;
       const session = await subscriptionApi.createPortalSession(returnUrl);
       window.location.href = session.portal_url;
     } catch (error) {

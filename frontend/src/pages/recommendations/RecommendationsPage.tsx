@@ -4,15 +4,17 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Layers, Palette, Search, Shirt, Sparkles, Stars, TrendingUp } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Layers, Palette, Search, Shirt, Sparkles, Stars, Sun, TrendingUp } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { ScrollableTabs } from '@/components/ui/scrollable-tabs'
+import { ScrollableTabs, ScrollableTab } from '@/components/ui/scrollable-tabs'
 import { useToast } from '@/components/ui/use-toast'
 import { ItemImage } from '@/components/ui/item-image'
+import { EmptyState } from '@/components/ui/empty-state'
 import { cn } from '@/lib/utils'
 import { generateFallbackOutfits } from '@/lib/outfit-generator'
 import { AstrologyTab } from '@/components/recommendations'
@@ -27,7 +29,13 @@ import {
 } from '@/api/recommendations'
 import type { AstrologyRecommendationMode, CompleteLookSuggestion, MatchResult, Item } from '@/types'
 
-type TabType = 'match' | 'complete' | 'weather' | 'astrology' | 'shopping'
+type TabType = 'today' | 'match' | 'complete' | 'weather' | 'astrology' | 'shopping'
+
+function formatScore(score: number | undefined | null): string {
+  if (score == null || Number.isNaN(score)) return '—'
+  const pct = score <= 1 ? Math.round(score * 100) : Math.round(score)
+  return `${pct}%`
+}
 
 function localDateISO(): string {
   const now = new Date()
@@ -58,7 +66,7 @@ const enrichItemWithImages = (item: Item, wardrobeItems: Item[]): Item => {
 }
 
 export default function RecommendationsPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('match')
+  const [activeTab, setActiveTab] = useState<TabType>('today')
   const { toast } = useToast()
 
   const items = useWardrobeStore((s) => s.items)
@@ -76,8 +84,10 @@ export default function RecommendationsPage() {
   // ============================================================================
 
   const [matchItemId, setMatchItemId] = useState<string>('')
+  const [matchSearch, setMatchSearch] = useState('')
   const [matchData, setMatchData] = useState<{ matches: MatchResult[]; complete_looks: CompleteLookSuggestion[] } | null>(null)
   const [isLoadingMatch, setIsLoadingMatch] = useState(false)
+  const [todayAutoRan, setTodayAutoRan] = useState(false)
 
   const selectedMatchItem = useMemo(
     () => items.find((i) => i.id === matchItemId) || null,
@@ -182,6 +192,34 @@ export default function RecommendationsPage() {
     }
   }
 
+  // Auto-load weather for "Today" default tab once items are ready
+  useEffect(() => {
+    if (activeTab !== 'today' || todayAutoRan || isLoadingItems) return
+    setTodayAutoRan(true)
+    void runWeather()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, todayAutoRan, isLoadingItems])
+
+  const weatherSuggestedItems = useMemo(() => {
+    if (!weatherData?.preferred_categories?.length || items.length === 0) return []
+    const cats = new Set(weatherData.preferred_categories.map((c) => c.toLowerCase()))
+    return items
+      .filter((i) => cats.has(String(i.category).toLowerCase()))
+      .filter((i) => i.condition === 'clean' || !i.condition)
+      .slice(0, 12)
+  }, [weatherData, items])
+
+  const filteredMatchItems = useMemo(() => {
+    const q = matchSearch.trim().toLowerCase()
+    if (!q) return items
+    return items.filter(
+      (i) =>
+        i.name.toLowerCase().includes(q) ||
+        i.category.toLowerCase().includes(q) ||
+        (i.brand || '').toLowerCase().includes(q)
+    )
+  }, [items, matchSearch])
+
   // ============================================================================
   // ASTROLOGY TAB
   // ============================================================================
@@ -247,9 +285,10 @@ export default function RecommendationsPage() {
   }
 
   const tabs = [
+    { id: 'today' as TabType, name: 'Today', icon: Sun },
     { id: 'match' as TabType, name: 'Find Matches', icon: Shirt },
     { id: 'complete' as TabType, name: 'Complete Look', icon: Layers },
-    { id: 'weather' as TabType, name: 'Weather-Based', icon: TrendingUp },
+    { id: 'weather' as TabType, name: 'Weather', icon: TrendingUp },
     { id: 'astrology' as TabType, name: 'Astrology', icon: Stars },
     { id: 'shopping' as TabType, name: 'Shopping', icon: Palette },
   ]
@@ -280,132 +319,228 @@ export default function RecommendationsPage() {
         </p>
       </div>
 
-      {/* Scrollable Tabs for mobile, regular tabs for desktop */}
-      <ScrollableTabs className="mb-4 md:mb-6">
+      <ScrollableTabs className="mb-4 md:mb-6" aria-label="Recommendation tools">
         {tabs.map((tab) => (
-          <button
+          <ScrollableTab
             key={tab.id}
+            isActive={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={cn(
-              'flex items-center gap-2 px-4 py-3 md:py-4 text-sm font-medium whitespace-nowrap transition-colors touch-target border-b-2 scroll-snap-start min-w-[100px] justify-center',
-              activeTab === tab.id
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-            )}
+            className="min-w-[100px] justify-center"
           >
             <tab.icon className="h-4 w-4" />
             <span className="hidden xs:inline">{tab.name}</span>
             <span className="xs:hidden">{tab.name.split(' ')[0]}</span>
-          </button>
+          </ScrollableTab>
         ))}
       </ScrollableTabs>
 
-      {/* Tab content */}
       <div className="space-y-4">
+        {activeTab === 'today' && (
+          <Card>
+            <CardHeader className="px-4 py-3 md:px-6 md:py-4">
+              <CardTitle className="text-base md:text-lg">What to wear today</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
+              {items.length === 0 && !isLoadingItems ? (
+                <EmptyState
+                  icon={Shirt}
+                  title="Add clothes first"
+                  description="Digitize a few wardrobe items to get daily outfit ideas."
+                  actionLabel="Go to wardrobe"
+                  onAction={() => { window.location.href = '/wardrobe?action=add' }}
+                />
+              ) : (
+                <>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <p className="text-sm text-muted-foreground">
+                      Weather-aware picks from your wardrobe for right now.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void runWeather()}
+                      disabled={isLoadingWeather}
+                    >
+                      {isLoadingWeather ? 'Refreshing…' : 'Refresh'}
+                    </Button>
+                  </div>
+
+                  {isLoadingWeather && !weatherData && (
+                    <p className="text-sm text-muted-foreground">Loading today’s recommendations…</p>
+                  )}
+
+                  {weatherData && (
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary">{Math.round(weatherData.temperature)}°C</Badge>
+                        <Badge variant="outline" className="capitalize">{weatherData.weather_state}</Badge>
+                        <span className="text-sm text-muted-foreground capitalize">
+                          {weatherData.temp_category}
+                        </span>
+                        <span className="text-xs text-muted-foreground">· current conditions</span>
+                      </div>
+                      {weatherData.notes?.length > 0 && (
+                        <p className="text-sm text-foreground">{weatherData.notes.join(' ')}</p>
+                      )}
+                      <div>
+                        <p className="text-sm font-semibold mb-2">From your wardrobe</p>
+                        {weatherSuggestedItems.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No matching clean items for preferred categories (
+                            {weatherData.preferred_categories.join(', ')}). Add more pieces or open
+                            Complete Look.
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                            {weatherSuggestedItems.map((item) => (
+                              <div
+                                key={item.id}
+                                className="p-2 rounded-lg border border-border bg-card"
+                              >
+                                {renderItemCard(item)}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button asChild variant="outline" size="sm">
+                          <Link to="/outfits?action=create">Save as outfit</Link>
+                        </Button>
+                        <Button asChild variant="outline" size="sm">
+                          <Link to="/try-on">Try on</Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setActiveTab('complete')}>
+                          Complete look tools
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {activeTab === 'match' && (
           <Card>
             <CardHeader className="px-4 py-3 md:px-6 md:py-4">
               <CardTitle className="text-base md:text-lg">Find Matches</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
-              <div className="flex flex-col gap-3 md:flex-row md:items-end">
-                <div className="flex-1 w-full space-y-2">
-                  <div className="text-sm font-medium text-foreground">Pick an item</div>
+              {items.length === 0 && !isLoadingItems ? (
+                <EmptyState
+                  icon={Shirt}
+                  title="Add items first"
+                  description="Add wardrobe items to find matching pieces."
+                  actionLabel="Add item"
+                  onAction={() => { window.location.href = '/wardrobe?action=add' }}
+                />
+              ) : (
+                <>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <select
-                      className="w-full h-12 pl-9 pr-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground appearance-none"
-                      value={matchItemId}
-                      onChange={(e) => setMatchItemId(e.target.value)}
-                      disabled={isLoadingItems}
-                    >
-                      <option value="">Select an item…</option>
-                      {items.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name} ({item.category})
-                        </option>
-                      ))}
-                    </select>
+                    <Input
+                      value={matchSearch}
+                      onChange={(e) => setMatchSearch(e.target.value)}
+                      placeholder="Search wardrobe…"
+                      className="pl-9"
+                      aria-label="Search items to match"
+                    />
                   </div>
-                </div>
-                <Button
-                  onClick={() => runMatch(matchItemId)}
-                  disabled={!matchItemId || isLoadingMatch}
-                  className="w-full md:w-auto"
-                >
-                  {isLoadingMatch ? 'Finding…' : 'Find Matches'}
-                </Button>
-              </div>
-
-              {selectedMatchItem && (
-                <div className="p-3 rounded-lg bg-muted">
-                  <div className="text-sm text-muted-foreground mb-2">Selected</div>
-                  {renderItemCard(selectedMatchItem)}
-                </div>
-              )}
-
-              {matchData && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="text-sm font-semibold text-foreground">Matching items</div>
-                    {matchData.matches.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">No matches found.</div>
-                    ) : (
-                      <div className="flex overflow-x-auto gap-3 pb-2 scrollbar-hide scroll-snap-x md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
-                        {matchData.matches
-                          .filter((m) => m.item?.id)
-                          .slice(0, 10)
-                          .map((m, idx) => (
-                          <div key={`${m.item.id}-${idx}`} className="p-3 rounded-lg border border-border min-w-[200px] md:min-w-0 scroll-snap-start">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">{renderItemCard(m.item)}</div>
-                              <Badge variant="secondary">{m.score}</Badge>
-                            </div>
-                            {m.reasons?.length > 0 && (
-                              <div className="mt-2 text-xs text-muted-foreground">
-                                {m.reasons.join(' • ')}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-[40vh] overflow-y-auto pr-1">
+                    {filteredMatchItems.map((item) => {
+                      const selected = matchItemId === item.id
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setMatchItemId(item.id)}
+                          className={cn(
+                            'text-left p-2 rounded-lg border transition-colors',
+                            selected
+                              ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                              : 'border-border hover:border-primary/40'
+                          )}
+                        >
+                          {renderItemCard(item)}
+                        </button>
+                      )
+                    })}
                   </div>
+                  <Button
+                    onClick={() => runMatch(matchItemId)}
+                    disabled={!matchItemId || isLoadingMatch}
+                    className="w-full md:w-auto"
+                  >
+                    {isLoadingMatch ? 'Finding…' : 'Find matches'}
+                  </Button>
 
-                  <div className="space-y-2">
-                    <div className="text-sm font-semibold text-foreground">Complete looks</div>
-                    {matchData.complete_looks.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">No complete looks yet.</div>
-                    ) : (
-                      <div className="flex overflow-x-auto gap-3 pb-2 scrollbar-hide scroll-snap-x md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
-                        {matchData.complete_looks.slice(0, 4).map((look, idx) => (
-                          <div key={idx} className="p-3 rounded-lg border border-border min-w-[250px] md:min-w-0 scroll-snap-start">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="text-sm font-medium text-foreground">{look.description}</div>
-                              <Badge variant="outline">{look.match_score}</Badge>
-                            </div>
-                            <div className="mt-2 space-y-2">
-                              {(look.items || [])
-                                .filter((it) => it?.id)
-                                .slice(0, 4)
-                                .map((it) => (
-                                <div key={it.id} className="text-sm">
-                                  {renderItemCard(it)}
+                  {selectedMatchItem && (
+                    <div className="p-3 rounded-lg bg-muted">
+                      <div className="text-sm text-muted-foreground mb-2">Selected</div>
+                      {renderItemCard(selectedMatchItem)}
+                    </div>
+                  )}
+
+                  {matchData && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <div className="text-sm font-semibold text-foreground">Matching items</div>
+                        {matchData.matches.length === 0 ? (
+                          <div className="text-sm text-muted-foreground">No matches found.</div>
+                        ) : (
+                          <div className="flex overflow-x-auto gap-3 pb-2 scrollbar-hide scroll-snap-x md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
+                            {matchData.matches
+                              .filter((m) => m.item?.id)
+                              .slice(0, 10)
+                              .map((m, idx) => (
+                              <div key={`${m.item.id}-${idx}`} className="p-3 rounded-lg border border-border min-w-[200px] md:min-w-0 scroll-snap-start">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">{renderItemCard(m.item)}</div>
+                                  <Badge variant="secondary">{formatScore(m.score)}</Badge>
                                 </div>
-                              ))}
-                            </div>
+                                {m.reasons?.length > 0 && (
+                                  <div className="mt-2 text-xs text-muted-foreground">
+                                    {m.reasons.join(' • ')}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
-              )}
 
-              {items.length === 0 && !isLoadingItems && (
-                <div className="text-sm text-muted-foreground">
-                  Add items to your wardrobe first to unlock recommendations.
-                </div>
+                      <div className="space-y-2">
+                        <div className="text-sm font-semibold text-foreground">Complete looks</div>
+                        {matchData.complete_looks.length === 0 ? (
+                          <div className="text-sm text-muted-foreground">No complete looks yet.</div>
+                        ) : (
+                          <div className="flex overflow-x-auto gap-3 pb-2 scrollbar-hide scroll-snap-x md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
+                            {matchData.complete_looks.slice(0, 4).map((look, idx) => (
+                              <div key={idx} className="p-3 rounded-lg border border-border min-w-[250px] md:min-w-0 scroll-snap-start">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-sm font-medium text-foreground">{look.description}</div>
+                                  <Badge variant="outline">{formatScore(look.match_score)}</Badge>
+                                </div>
+                                <div className="mt-2 space-y-2">
+                                  {(look.items || [])
+                                    .filter((it) => it?.id)
+                                    .slice(0, 4)
+                                    .map((it) => (
+                                    <div key={it.id} className="text-sm">
+                                      {renderItemCard(it)}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -459,7 +594,7 @@ export default function RecommendationsPage() {
                       <div key={idx} className="p-3 rounded-lg border border-border">
                         <div className="flex items-center justify-between gap-3">
                           <div className="text-sm font-medium text-foreground">{look.description}</div>
-                          <Badge variant="outline">{look.match_score}</Badge>
+                          <Badge variant="outline">{formatScore(look.match_score)}</Badge>
                         </div>
                         <div className="mt-2 space-y-2">
                           {(look.items || [])
@@ -521,6 +656,7 @@ export default function RecommendationsPage() {
                     <Badge variant="secondary">{Math.round(weatherData.temperature)}°C</Badge>
                     <Badge variant="outline" className="capitalize">{weatherData.weather_state}</Badge>
                     <span className="text-sm text-muted-foreground capitalize">{weatherData.temp_category}</span>
+                    <span className="text-xs text-muted-foreground">· current conditions for location</span>
                   </div>
 
                   {weatherData.notes?.length > 0 && (
@@ -555,6 +691,19 @@ export default function RecommendationsPage() {
                       </div>
                     </div>
                   </div>
+
+                  {weatherSuggestedItems.length > 0 && (
+                    <div>
+                      <div className="text-sm font-semibold text-foreground mb-2">Pieces from your wardrobe</div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {weatherSuggestedItems.map((item) => (
+                          <div key={item.id} className="p-2 rounded-lg border border-border">
+                            {renderItemCard(item)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>

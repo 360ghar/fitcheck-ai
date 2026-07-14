@@ -73,8 +73,29 @@ Current route modules in `app/api/v1/`:
 
 ```bash
 cd backend
-pytest
+# From backend/ so the `app` package is importable
+PYTHONPATH=. pytest
 ```
+
+## Railway (production deploy)
+
+This monorepo keeps Railway config under `backend/`, not the repo root:
+
+- Config file: `backend/railway.json`
+- Dockerfile: `backend/Dockerfile`
+- Healthcheck: `GET /health` (see `railway.json`)
+
+Railway **Config-as-Code does not follow Root Directory**. Set service settings to:
+
+| Setting | Value |
+|---------|--------|
+| Root Directory | `/backend` |
+| Config as Code | `/backend/railway.json` |
+| Watch Paths (optional) | `/backend/**` |
+
+If Config as Code is left as `railway.json`, Railway looks at the **repo root** and fails with `service config at 'railway.json' not found` even though `backend/railway.json` exists.
+
+Required env vars on the service (no defaults): `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_SECRET`.
 
 ## Development Notes
 

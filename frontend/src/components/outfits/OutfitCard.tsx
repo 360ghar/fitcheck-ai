@@ -180,17 +180,12 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
             onError={() => setImageError(true)}
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="grid grid-cols-3 gap-2">
-              {outfit.item_ids.slice(0, 6).map((_, index) => (
-                <div
-                  key={index}
-                  className="aspect-square bg-muted-foreground/10 rounded flex items-center justify-center"
-                >
-                  <Layers className="h-4 w-4 md:h-6 md:w-6 text-muted-foreground/50" />
-                </div>
-              ))}
-            </div>
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-gradient-to-br from-primary/5 to-muted">
+            <Sparkles className="h-8 w-8 text-primary/40 mb-2" />
+            <p className="text-xs font-medium text-foreground">Generate look</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              {outfit.item_ids.length} piece{outfit.item_ids.length === 1 ? '' : 's'}
+            </p>
           </div>
         )}
 

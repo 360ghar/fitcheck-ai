@@ -184,7 +184,7 @@ export default function AIPhotoshootGeneratorPage() {
 
       <div className="pt-20">
         {/* Hero Section */}
-        <section className="relative overflow-hidden bg-gradient-to-br from-amber-500 via-orange-500 to-pink-500 dark:from-amber-950 dark:via-orange-950 dark:to-pink-950">
+        <section className="relative overflow-hidden bg-stone-900 dark:bg-stone-950">
           {/* Background Pattern */}
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-20 left-1/4 w-72 h-72 bg-white rounded-full blur-3xl" />
@@ -215,7 +215,7 @@ export default function AIPhotoshootGeneratorPage() {
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   <Link
                     to="/auth/register"
-                    className="inline-flex items-center justify-center gap-2 bg-white text-orange-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
+                    className="inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
                   >
                     Create Free Photos
                     <ArrowRight className="w-5 h-5" />
@@ -317,7 +317,7 @@ export default function AIPhotoshootGeneratorPage() {
         </section>
 
         {/* Features Grid */}
-        <section className="py-20 md:py-28 bg-gradient-to-br from-gray-50 to-orange-50 dark:from-gray-900 dark:to-orange-950">
+        <section className="py-20 md:py-28 bg-stone-50 dark:bg-stone-950">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center max-w-3xl mx-auto mb-16">
@@ -377,7 +377,7 @@ export default function AIPhotoshootGeneratorPage() {
               </AnimatedSection>
 
               <AnimatedSection delay={200}>
-                <div className="bg-gradient-to-br from-orange-500 to-pink-600 rounded-3xl p-8 text-white">
+                <div className="bg-indigo-600 rounded-3xl p-8 text-white">
                   <div className="flex items-center gap-3 mb-6">
                     <DollarSign className="w-8 h-8" />
                     <h3 className="text-2xl font-bold">Cost Comparison</h3>
@@ -403,7 +403,7 @@ export default function AIPhotoshootGeneratorPage() {
                       <div className="w-full bg-white/30 rounded-full h-2">
                         <div className="bg-white rounded-full h-2 w-0" />
                       </div>
-                      <p className="text-sm text-orange-100 mt-2">Results in 5 minutes, unlimited retakes</p>
+                      <p className="text-sm text-orange-100 mt-2">Fast generation within your plan limits</p>
                     </div>
                   </div>
 
@@ -420,7 +420,7 @@ export default function AIPhotoshootGeneratorPage() {
         </section>
 
         {/* LinkedIn Impact Section */}
-        <section className="py-20 md:py-28 bg-gradient-to-br from-blue-600 to-indigo-700 text-white">
+        <section className="py-20 md:py-28 bg-stone-900 text-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center max-w-3xl mx-auto mb-16">
@@ -494,7 +494,7 @@ export default function AIPhotoshootGeneratorPage() {
         </section>
 
         {/* CTA Section */}
-        <section className="py-20 md:py-28 bg-gradient-to-br from-orange-500 to-pink-600">
+        <section className="py-20 md:py-28 bg-indigo-600">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <AnimatedSection>
               <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">
@@ -506,7 +506,7 @@ export default function AIPhotoshootGeneratorPage() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link
                   to="/auth/register"
-                  className="inline-flex items-center justify-center gap-2 bg-white text-orange-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
+                  className="inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
                 >
                   Generate Free Photos
                   <ArrowRight className="w-5 h-5" />

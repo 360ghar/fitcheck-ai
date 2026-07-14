@@ -59,7 +59,7 @@ export function LoginPromptModal({ isOpen, onClose, feature }: LoginPromptModalP
               asChild
             >
               <Link to="/auth/register">
-                Use free
+                Start free
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Link>
             </Button>

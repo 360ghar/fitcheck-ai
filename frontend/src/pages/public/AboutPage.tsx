@@ -10,39 +10,28 @@ import { ArrowRight, Heart, Shield, Sparkles, Users } from 'lucide-react'
 const values = [
   {
     icon: Sparkles,
-    title: 'Innovation First',
+    title: 'Innovation first',
     description:
-      'We push the boundaries of AI and fashion technology to create tools that genuinely improve your life.',
-    gradient: 'from-purple-500 to-pink-500',
+      'We push AI and fashion tech so everyday dressing gets easier—not more complicated.',
   },
   {
     icon: Users,
-    title: 'User-Centric',
+    title: 'User-centric',
     description:
-      'Every feature we build starts with understanding your needs. Your feedback shapes our roadmap.',
-    gradient: 'from-blue-500 to-cyan-500',
+      'Every feature starts with real closet friction. Your feedback shapes the roadmap.',
   },
   {
     icon: Shield,
-    title: 'Privacy Matters',
+    title: 'Privacy matters',
     description:
-      'Your wardrobe data is personal. We never sell your data and give you complete control over it.',
-    gradient: 'from-green-500 to-teal-500',
+      'Your wardrobe is personal. We do not sell your data and you control what you share.',
   },
   {
     icon: Heart,
     title: 'Sustainability',
     description:
-      "By helping you use what you own, we're reducing fashion waste and promoting conscious consumption.",
-    gradient: 'from-red-500 to-orange-500',
+      'Helping you wear what you own reduces waste and impulse buys that do not fit your life.',
   },
-]
-
-const stats = [
-  { value: '10K+', label: 'Active Users' },
-  { value: '500K+', label: 'Outfits Created' },
-  { value: '2M+', label: 'Items Cataloged' },
-  { value: '98%', label: 'User Satisfaction' },
 ]
 
 export default function AboutPage() {
@@ -54,141 +43,111 @@ export default function AboutPage() {
         canonicalUrl={`${SEO_CONFIG.siteUrl}/about`}
         keywords="about FitCheck AI, AI wardrobe company, virtual closet app"
       />
-    <div className="pt-20">
-      {/* Hero */}
-      <section className="py-24 bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-950">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <AnimatedSection>
-            <div className="text-center max-w-3xl mx-auto">
-              <Badge className="mb-6 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border-0">
-                About Us
-              </Badge>
-              <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 dark:text-white mb-6">
-                Making fashion{' '}
-                <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                  effortless
-                </span>
-              </h1>
-              <p className="text-lg md:text-xl text-gray-600 dark:text-gray-300">
-                We believe everyone deserves to feel confident in what they wear. Our mission is to
-                democratize personal styling through AI, making it accessible to everyone.
-              </p>
-            </div>
-          </AnimatedSection>
-        </div>
-      </section>
-
-      {/* Story */}
-      <section className="py-24 bg-white dark:bg-gray-950">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+      <div className="pt-16 landing-surface">
+        <section className="py-20 md:py-28 bg-stone-50 dark:bg-stone-950">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
-              <div>
-                <Badge className="mb-4 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border-0">
-                  Our Story
+              <div className="text-center max-w-3xl mx-auto">
+                <Badge className="mb-6 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border-0">
+                  About us
                 </Badge>
-                <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-6">
+                <h1 className="landing-display text-4xl sm:text-5xl font-semibold text-stone-900 dark:text-stone-50 mb-6">
+                  Making everyday outfits effortless
+                </h1>
+                <p className="text-lg text-stone-600 dark:text-stone-400 leading-relaxed">
+                  We believe everyone deserves to feel confident in what they wear. FitCheck AI
+                  helps you digitize the closet you already own and get AI outfit ideas that fit
+                  the day.
+                </p>
+              </div>
+            </AnimatedSection>
+          </div>
+        </section>
+
+        <section className="py-20 bg-white dark:bg-stone-900">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid lg:grid-cols-2 gap-12 items-center">
+              <AnimatedSection>
+                <Badge className="mb-4 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border-0">
+                  Our story
+                </Badge>
+                <h2 className="landing-display text-3xl font-semibold text-stone-900 dark:text-stone-50 mb-6">
                   Born from a simple frustration
                 </h2>
-                <div className="space-y-4 text-gray-600 dark:text-gray-300">
+                <div className="space-y-4 text-stone-600 dark:text-stone-400">
                   <p>
-                    Like many people, our founders stood in front of overflowing closets every morning,
-                    feeling like they had nothing to wear. Despite owning hundreds of clothing items,
-                    they cycled through the same 10 outfits.
+                    Like many people, our founders stood in front of full closets every morning and
+                    still felt like they had nothing to wear—cycling through the same few outfits.
                   </p>
                   <p>
-                    That's when the idea for FitCheck AI was born - what if AI could help you see your
-                    wardrobe with fresh eyes? What if technology could unlock the hidden potential in
-                    clothes you already own?
-                  </p>
-                  <p>
-                    Today, FitCheck AI helps thousands of users rediscover their wardrobes, save time
-                    getting dressed, and make smarter fashion choices. We're just getting started.
+                    FitCheck AI started as a question: what if AI could help you see and use what you
+                    already own? Photograph clothes once, get outfits for weather, occasions, and
+                    try-on previews when you need them.
                   </p>
                 </div>
+              </AnimatedSection>
+              <AnimatedSection delay={100}>
+                <div className="landing-panel p-8 md:p-10">
+                  <h3 className="text-lg font-semibold text-stone-900 dark:text-stone-50 mb-4">
+                    What we build for
+                  </h3>
+                  <ul className="space-y-3 text-stone-600 dark:text-stone-400 text-sm">
+                    <li>· Busy people who want a faster morning decision</li>
+                    <li>· Creators and professionals who need reliable looks</li>
+                    <li>· Anyone trying to buy less and wear more of what fits</li>
+                  </ul>
+                </div>
+              </AnimatedSection>
+            </div>
+          </div>
+        </section>
+
+        <section className="py-20 bg-stone-50 dark:bg-stone-950">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <AnimatedSection>
+              <div className="text-center mb-12">
+                <h2 className="landing-display text-3xl font-semibold text-stone-900 dark:text-stone-50">
+                  What we value
+                </h2>
               </div>
             </AnimatedSection>
-
-            <AnimatedSection delay={200}>
-              <div className="grid grid-cols-2 gap-4">
-                {stats.map((stat) => (
-                  <Card key={stat.label} className="border-0 bg-gray-50 dark:bg-gray-800">
-                    <CardContent className="p-6 text-center">
-                      <p className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                        {stat.value}
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {values.map((value, i) => (
+                <AnimatedSection key={value.title} delay={i * 80}>
+                  <Card className="h-full border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-none">
+                    <CardContent className="p-6">
+                      <div className="w-11 h-11 rounded-xl bg-indigo-600 flex items-center justify-center mb-4">
+                        <value.icon className="w-5 h-5 text-white" />
+                      </div>
+                      <h3 className="font-semibold text-stone-900 dark:text-stone-50 mb-2">
+                        {value.title}
+                      </h3>
+                      <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
+                        {value.description}
                       </p>
-                      <p className="text-gray-600 dark:text-gray-400 mt-1">{stat.label}</p>
                     </CardContent>
                   </Card>
-                ))}
-              </div>
-            </AnimatedSection>
-          </div>
-        </div>
-      </section>
-
-      {/* Values */}
-      <section className="py-24 bg-gray-50 dark:bg-gray-900">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <AnimatedSection>
-            <div className="text-center mb-16">
-              <Badge className="mb-4 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border-0">
-                Our Values
-              </Badge>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">
-                What drives us forward
-              </h2>
+                </AnimatedSection>
+              ))}
             </div>
-          </AnimatedSection>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {values.map((value, index) => (
-              <AnimatedSection key={value.title} delay={index * 100}>
-                <Card className="h-full border-0 bg-white dark:bg-gray-800">
-                  <CardContent className="p-6">
-                    <div
-                      className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 bg-gradient-to-br ${value.gradient}`}
-                    >
-                      <value.icon className="w-6 h-6 text-white" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                      {value.title}
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm">{value.description}</p>
-                  </CardContent>
-                </Card>
-              </AnimatedSection>
-            ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* CTA */}
-      <section className="py-24 bg-white dark:bg-gray-950">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <AnimatedSection>
-            <div className="text-center">
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-6">
-                Ready to join our journey?
-              </h2>
-              <p className="text-lg text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto">
-                Experience the future of personal styling. Start your free trial today.
-              </p>
-              <Button
-                size="lg"
-                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-lg px-8 py-6"
-                asChild
-              >
-                <Link to="/auth/register">
-                  Get Started
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
-              </Button>
-            </div>
-          </AnimatedSection>
-        </div>
-      </section>
-    </div>
+        <section className="py-20 bg-stone-900 text-stone-50">
+          <div className="max-w-3xl mx-auto px-4 text-center">
+            <h2 className="landing-display text-3xl font-semibold mb-4">Start free today</h2>
+            <p className="text-stone-400 mb-8">
+              Create an account on the web or get the Android app on Google Play.
+            </p>
+            <Button asChild size="lg" className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-none">
+              <Link to="/auth/register">
+                Start free
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+        </section>
+      </div>
     </>
   )
 }

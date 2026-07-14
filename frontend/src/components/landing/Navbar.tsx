@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Menu, Shirt } from 'lucide-react'
 import { useIsAuthenticated } from '@/stores/authStore'
 import { ThemeToggle } from '@/components/theme'
@@ -104,7 +104,7 @@ export default function Navbar() {
                   <Link to="/auth/login">Log in</Link>
                 </Button>
                 <Button asChild className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-none">
-                  <Link to="/auth/register">Use free</Link>
+                  <Link to="/auth/register">Start free</Link>
                 </Button>
               </>
             )}
@@ -117,6 +117,7 @@ export default function Navbar() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-[300px] sm:w-[360px] bg-stone-50 dark:bg-stone-950">
+              <SheetTitle className="sr-only">Navigation menu</SheetTitle>
               <div className="flex flex-col gap-5 mt-6">
                 {navLinks.map((link) =>
                   isHashLink(link.href) ? (
@@ -154,7 +155,7 @@ export default function Navbar() {
                       <Link to="/auth/login">Log in</Link>
                     </Button>
                     <Button asChild className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
-                      <Link to="/auth/register">Use free</Link>
+                      <Link to="/auth/register">Start free</Link>
                     </Button>
                   </>
                 )}

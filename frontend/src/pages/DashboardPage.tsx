@@ -17,6 +17,8 @@ import {
   Plus,
   ArrowRight,
   Heart,
+  Camera,
+  Wand2,
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { StatCard } from '@/components/dashboard/StatCard'
@@ -118,6 +120,34 @@ export default function DashboardPage() {
     },
   ]
 
+  // Mobile-first discovery for AI tools buried in the hamburger on small screens
+  const aiTools = [
+    {
+      name: 'Photoshoot',
+      description: 'Pro-style portraits',
+      icon: Camera,
+      link: '/photoshoot',
+    },
+    {
+      name: 'Try On',
+      description: 'See clothes on you',
+      icon: Wand2,
+      link: '/try-on',
+    },
+    {
+      name: 'What to wear',
+      description: 'Daily outfit ideas',
+      icon: Sparkles,
+      link: '/recommendations',
+    },
+    {
+      name: 'Calendar',
+      description: 'Plan looks ahead',
+      icon: Calendar,
+      link: '/calendar',
+    },
+  ]
+
   return (
     <div className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
       {/* Welcome header */}
@@ -153,6 +183,34 @@ export default function DashboardPage() {
             isLoading={isLoadingItems || isLoadingOutfits}
           />
         ))}
+      </div>
+
+      {/* AI tools — discoverable on mobile (not only in sidebar sheet) */}
+      <div className="mb-6 md:mb-8">
+        <div className="flex items-center justify-between mb-3 md:mb-4 px-1">
+          <h2 className="text-base md:text-lg font-semibold text-foreground">AI tools</h2>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-3">
+          {aiTools.map((tool) => (
+            <Link
+              key={tool.name}
+              to={tool.link}
+              className={cn(
+                'flex flex-col gap-2 rounded-xl border border-border bg-card p-3 md:p-4',
+                'hover:bg-accent/50 hover:border-primary/20 transition-colors',
+                'touch-target'
+              )}
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <tool.icon className="h-4 w-4 md:h-5 md:w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">{tool.name}</p>
+                <p className="text-xs text-muted-foreground line-clamp-1">{tool.description}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
 
       {/* Quick actions - responsive grid */}
@@ -223,7 +281,7 @@ export default function DashboardPage() {
       <div className="bg-card shadow-sm rounded-xl overflow-hidden">
         <div className="px-4 py-4 md:py-5 md:px-6 border-b border-border">
           <div className="flex items-center justify-between">
-            <h3 className="text-base md:text-lg font-semibold text-foreground">Recent Activity</h3>
+            <h3 className="text-base md:text-lg font-semibold text-foreground">Recent items</h3>
             <div className="p-2 rounded-lg bg-muted">
               <Calendar className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
             </div>

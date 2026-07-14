@@ -59,7 +59,7 @@ export default function CTASection() {
                     asChild
                   >
                     <Link to="/auth/register">
-                      Use free on web
+                      Start free on web
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
                   </Button>

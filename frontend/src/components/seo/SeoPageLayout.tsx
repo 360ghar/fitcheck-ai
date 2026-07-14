@@ -50,7 +50,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
   }))
 
   const faqSchema = content.faqs.length ? buildFaqSchema(content.faqs) : undefined
-  const primary = content.ctaPrimary || { label: 'Use free', href: '/auth/register' }
+  const primary = content.ctaPrimary || { label: 'Start free', href: '/auth/register' }
   const secondary = content.ctaSecondary || {
     label: 'Get the app',
     href: PLAY_STORE,
@@ -225,7 +225,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
                 asChild
               >
                 <Link to="/auth/register">
-                  Use free
+                  Start free
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>

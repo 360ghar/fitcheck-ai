@@ -95,7 +95,7 @@ export default function FeaturesIndexPage() {
                   asChild
                 >
                   <Link to="/auth/register">
-                    Use free
+                    Start free
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>

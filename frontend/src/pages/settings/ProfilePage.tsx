@@ -6,11 +6,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuthStore, useCurrentUser, useUserDisplayName, useUserAvatar } from '../../stores/authStore'
-import { User, Mail, Camera, Shield, Bell, Palette, Cpu, Sun, Moon, Monitor, MapPin, CreditCard, MessageSquarePlus } from 'lucide-react'
+import { User, Mail, Camera, Shield, Settings2, Palette, Cpu, Sun, Moon, Monitor, MapPin, CreditCard, MessageSquarePlus } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
-import { ScrollableTabs } from '@/components/ui/scrollable-tabs'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { ScrollableTabs, ScrollableTab } from '@/components/ui/scrollable-tabs'
+import { ChipGroup } from '@/components/ui/chip-group'
 import { getCurrentUser, updateCurrentUser, uploadAvatar, getUserPreferences, updateUserPreferences, getUserSettings, updateUserSettings, deleteAccount } from '@/api/users'
 import { requestPasswordReset } from '@/api/auth'
 import { AISettingsPanel, LocationInput, SubscriptionPanel, SupportPanel } from '@/components/settings'
@@ -20,7 +31,28 @@ import { cn } from '@/lib/utils'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import type { UserPreferences, UserSettings } from '@/types'
 
-type TabType = 'profile' | 'preferences' | 'settings' | 'ai' | 'subscription' | 'support' | 'security'
+/** Grouped settings IA (legacy ?tab= values still resolve). */
+type TabType = 'account' | 'style' | 'app' | 'plan' | 'help'
+
+const LEGACY_TAB_MAP: Record<string, TabType> = {
+  account: 'account',
+  style: 'style',
+  app: 'app',
+  plan: 'plan',
+  help: 'help',
+  profile: 'account',
+  security: 'account',
+  preferences: 'style',
+  settings: 'app',
+  ai: 'app',
+  subscription: 'plan',
+  support: 'help',
+}
+
+const COLOR_SUGGESTIONS = ['Black', 'White', 'Navy', 'Gray', 'Beige', 'Brown', 'Red', 'Blue', 'Green', 'Pink', 'Olive']
+const STYLE_SUGGESTIONS = ['Casual', 'Formal', 'Business', 'Streetwear', 'Minimalist', 'Sporty', 'Bohemian', 'Classic', 'Elegant']
+const OCCASION_SUGGESTIONS = ['Work', 'Date night', 'Travel', 'Wedding', 'Gym', 'Weekend', 'Party', 'Interview']
+const PATTERN_SUGGESTIONS = ['Plaid', 'Stripes', 'Polka dots', 'Floral', 'Camo', 'Animal print', 'Logo']
 
 const themeIcons = {
   light: Sun,
@@ -43,7 +75,9 @@ function ThemeSelector() {
           return (
             <button
               key={option.value}
+              type="button"
               onClick={() => setTheme(option.value)}
+              aria-pressed={theme === option.value}
               className={cn(
                 'flex-1 sm:flex-none px-3 py-2 text-sm rounded-md transition-colors flex items-center gap-1.5 touch-target',
                 theme === option.value
@@ -61,17 +95,6 @@ function ThemeSelector() {
   );
 }
 
-function parseCsv(value: string): string[] {
-  return value
-    .split(',')
-    .map((v) => v.trim())
-    .filter(Boolean)
-}
-
-function toCsv(value: string[] | undefined | null): string {
-  return (value || []).join(', ')
-}
-
 function normalizeBirthTimeForInput(value?: string | null): string {
   if (!value) return ''
   return value.length >= 5 ? value.slice(0, 5) : value
@@ -84,8 +107,10 @@ function normalizeBirthTimeForApi(value: string): string | undefined {
   return trimmed
 }
 
-const isValidTab = (value: string): value is TabType =>
-  ['profile', 'preferences', 'settings', 'ai', 'subscription', 'support', 'security'].includes(value)
+function resolveTab(value: string | null): TabType {
+  if (!value) return 'account'
+  return LEGACY_TAB_MAP[value] ?? 'account'
+}
 
 export default function ProfilePage() {
   const user = useCurrentUser()
@@ -95,11 +120,7 @@ export default function ProfilePage() {
   const setUser = useAuthStore((state) => state.setUser)
   const [searchParams, setSearchParams] = useSearchParams()
 
-  // Initialize activeTab from URL or default to 'profile'
-  const [activeTab, setActiveTab] = useState<TabType>(() => {
-    const tabParam = searchParams.get('tab')
-    return tabParam && isValidTab(tabParam) ? tabParam : 'profile'
-  })
+  const [activeTab, setActiveTab] = useState<TabType>(() => resolveTab(searchParams.get('tab')))
   const [isEditing, setIsEditing] = useState(false)
   const [fullName, setFullName] = useState(user?.full_name || '')
   const [gender, setGender] = useState<string>(user?.gender || '')
@@ -113,11 +134,11 @@ export default function ProfilePage() {
   const [isLoadingPreferences, setIsLoadingPreferences] = useState(false)
   const [isSavingPreferences, setIsSavingPreferences] = useState(false)
   const [preferences, setPreferences] = useState<UserPreferences | null>(null)
-  const [favoriteColorsCsv, setFavoriteColorsCsv] = useState('')
-  const [preferredStylesCsv, setPreferredStylesCsv] = useState('')
-  const [preferredOccasionsCsv, setPreferredOccasionsCsv] = useState('')
-  const [likedBrandsCsv, setLikedBrandsCsv] = useState('')
-  const [dislikedPatternsCsv, setDislikedPatternsCsv] = useState('')
+  const [favoriteColors, setFavoriteColors] = useState<string[]>([])
+  const [preferredStyles, setPreferredStyles] = useState<string[]>([])
+  const [preferredOccasions, setPreferredOccasions] = useState<string[]>([])
+  const [likedBrands, setLikedBrands] = useState<string[]>([])
+  const [dislikedPatterns, setDislikedPatterns] = useState<string[]>([])
   const [colorTemperature, setColorTemperature] = useState<string>('')
   const [stylePersonality, setStylePersonality] = useState<string>('')
 
@@ -125,7 +146,10 @@ export default function ProfilePage() {
   const [isSavingSettings, setIsSavingSettings] = useState(false)
   const [settings, setSettings] = useState<UserSettings | null>(null)
   const [locationValue, setLocationValue] = useState('')
+  const [settingsDirty, setSettingsDirty] = useState(false)
   const { state: geoState, requestLocation } = useGeolocation()
+  const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false)
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
 
   const { toast } = useToast()
 
@@ -140,13 +164,11 @@ export default function ProfilePage() {
   }, [activeTab]) // Only react to activeTab changes, not searchParams
 
   const tabs = [
-    { id: 'profile' as TabType, name: 'Profile', icon: User },
-    { id: 'preferences' as TabType, name: 'Preferences', icon: Palette },
-    { id: 'settings' as TabType, name: 'Settings', icon: Bell },
-    { id: 'ai' as TabType, name: 'AI Settings', icon: Cpu },
-    { id: 'subscription' as TabType, name: 'Subscription', icon: CreditCard },
-    { id: 'support' as TabType, name: 'Support', icon: MessageSquarePlus },
-    { id: 'security' as TabType, name: 'Security', icon: Shield },
+    { id: 'account' as TabType, name: 'Account', icon: User },
+    { id: 'style' as TabType, name: 'Style', icon: Palette },
+    { id: 'app' as TabType, name: 'App', icon: Settings2 },
+    { id: 'plan' as TabType, name: 'Plan', icon: CreditCard },
+    { id: 'help' as TabType, name: 'Help', icon: MessageSquarePlus },
   ]
 
   const handleLogout = async () => {
@@ -174,11 +196,11 @@ export default function ProfilePage() {
     getUserPreferences()
       .then((prefs) => {
         setPreferences(prefs)
-        setFavoriteColorsCsv(toCsv(prefs.favorite_colors))
-        setPreferredStylesCsv(toCsv(prefs.preferred_styles))
-        setPreferredOccasionsCsv(toCsv(prefs.preferred_occasions))
-        setLikedBrandsCsv(toCsv(prefs.liked_brands))
-        setDislikedPatternsCsv(toCsv(prefs.disliked_patterns))
+        setFavoriteColors(prefs.favorite_colors || [])
+        setPreferredStyles(prefs.preferred_styles || [])
+        setPreferredOccasions(prefs.preferred_occasions || [])
+        setLikedBrands(prefs.liked_brands || [])
+        setDislikedPatterns(prefs.disliked_patterns || [])
         setColorTemperature(prefs.color_temperature || '')
         setStylePersonality(prefs.style_personality || '')
       })
@@ -221,8 +243,7 @@ export default function ProfilePage() {
         toast({
           title: 'Profile partially updated',
           description:
-            'Birth details could not be saved to DB columns and were stored in fallback metadata. '
-            + 'Apply migrations 002/014 on production.',
+            'Some birth details could not be saved. Please try again or contact support if this continues.',
           variant: 'destructive',
         })
       } else {
@@ -244,11 +265,11 @@ export default function ProfilePage() {
     setIsSavingPreferences(true)
     try {
       const updated = await updateUserPreferences({
-        favorite_colors: parseCsv(favoriteColorsCsv),
-        preferred_styles: parseCsv(preferredStylesCsv),
-        preferred_occasions: parseCsv(preferredOccasionsCsv),
-        liked_brands: parseCsv(likedBrandsCsv),
-        disliked_patterns: parseCsv(dislikedPatternsCsv),
+        favorite_colors: favoriteColors,
+        preferred_styles: preferredStyles,
+        preferred_occasions: preferredOccasions,
+        liked_brands: likedBrands,
+        disliked_patterns: dislikedPatterns,
         color_temperature: colorTemperature || undefined,
         style_personality: stylePersonality || undefined,
       })
@@ -265,8 +286,9 @@ export default function ProfilePage() {
     }
   }
 
-  const handleUpdateSettings = async (patch: Partial<UserSettings>) => {
+  const handleUpdateSettings = (patch: Partial<UserSettings>) => {
     setSettings((prev) => (prev ? { ...prev, ...patch } : prev))
+    setSettingsDirty(true)
   }
 
   const handleSaveSettings = async () => {
@@ -283,6 +305,7 @@ export default function ProfilePage() {
       })
       setSettings(updated)
       setLocationValue(updated.default_location || '')
+      setSettingsDirty(false)
       toast({ title: 'Settings saved' })
     } catch (err) {
       toast({
@@ -313,8 +336,7 @@ export default function ProfilePage() {
   }
 
   const handleDeleteAccount = async () => {
-    if (!confirm('Delete your FitCheck AI account? This cannot be undone.')) return
-
+    setIsDeletingAccount(true)
     try {
       await deleteAccount()
       await logout()
@@ -325,6 +347,7 @@ export default function ProfilePage() {
         description: err instanceof Error ? err.message : 'An error occurred',
         variant: 'destructive',
       })
+      setIsDeletingAccount(false)
     }
   }
 
@@ -402,28 +425,27 @@ export default function ProfilePage() {
         </div>
 
         {/* Scrollable Tabs */}
-        <ScrollableTabs className="border-b border-border px-0 md:px-6 lg:px-8 w-full sticky top-[calc(var(--mobile-header-height)+var(--safe-area-top))] z-20 bg-card/95 backdrop-blur-sm md:static">
+        <ScrollableTabs
+          aria-label="Profile sections"
+          className="border-b border-border px-0 md:px-6 lg:px-8 w-full sticky top-[calc(var(--mobile-header-height)+var(--safe-area-top))] z-20 bg-card/95 backdrop-blur-sm md:static"
+        >
           {tabs.map((tab) => (
-            <button
+            <ScrollableTab
               key={tab.id}
+              isActive={activeTab === tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                'flex items-center gap-2 px-4 py-3 md:py-4 text-sm font-medium whitespace-nowrap transition-colors touch-target border-b-2 scroll-snap-start min-w-[100px] justify-center',
-                activeTab === tab.id
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-              )}
+              className="min-w-[100px] justify-center"
             >
               <tab.icon className="h-4 w-4" />
               <span className="hidden xs:inline">{tab.name}</span>
               <span className="xs:hidden">{tab.name.split(' ')[0]}</span>
-            </button>
+            </ScrollableTab>
           ))}
         </ScrollableTabs>
 
         {/* Tab content */}
         <div className="px-4 py-4 md:px-6 md:py-6 lg:px-8">
-          {activeTab === 'profile' && (
+          {activeTab === 'account' && (
             <div className="space-y-6">
               <div>
                 <h3 className="text-base md:text-lg font-medium text-foreground mb-4">Profile Information</h3>
@@ -580,78 +602,95 @@ export default function ProfilePage() {
                   )}
                 </div>
               </div>
+
+              <div className="border-t border-border pt-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-muted-foreground" />
+                  <h3 className="text-base md:text-lg font-medium text-foreground">Security</h3>
+                </div>
+                <div className="p-4 border border-border rounded-md">
+                  <h4 className="text-sm font-medium text-foreground">Password</h4>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Change your password to keep your account secure
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={handleSendPasswordReset}
+                    className="mt-3 w-full md:w-auto"
+                  >
+                    Send Password Reset Email
+                  </Button>
+                </div>
+                <div className="p-4 border border-destructive/30 rounded-md bg-destructive/5">
+                  <h4 className="text-sm font-medium text-destructive">Danger Zone</h4>
+                  <p className="text-sm text-destructive/80 mt-1">
+                    Once you delete your account, there is no going back
+                  </p>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setIsDeleteAccountOpen(true)}
+                    className="mt-3 w-full md:w-auto"
+                  >
+                    Delete Account
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
 
-          {activeTab === 'preferences' && (
+          {activeTab === 'style' && (
             <div className="space-y-6">
               <div>
                 <h3 className="text-base md:text-lg font-medium text-foreground">Style Preferences</h3>
                 <p className="text-sm text-muted-foreground">
-                  Configure your style preferences to get better recommendations.
+                  Tap suggestions or add your own chips for better recommendations.
                 </p>
               </div>
 
               {isLoadingPreferences ? (
                 <div className="p-4 bg-muted rounded-md text-center text-muted-foreground">Loading…</div>
               ) : (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground">Favorite colors</label>
-                    <input
-                      value={favoriteColorsCsv}
-                      onChange={(e) => setFavoriteColorsCsv(e.target.value)}
-                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
-                      placeholder="e.g. black, white, navy"
-                    />
-                    <p className="mt-1 text-xs text-muted-foreground">Comma-separated list.</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground">Preferred styles</label>
-                    <input
-                      value={preferredStylesCsv}
-                      onChange={(e) => setPreferredStylesCsv(e.target.value)}
-                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
-                      placeholder="e.g. casual, streetwear, minimalist"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground">Preferred occasions</label>
-                    <input
-                      value={preferredOccasionsCsv}
-                      onChange={(e) => setPreferredOccasionsCsv(e.target.value)}
-                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
-                      placeholder="e.g. work, date night, travel"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground">Liked brands</label>
-                      <input
-                        value={likedBrandsCsv}
-                        onChange={(e) => setLikedBrandsCsv(e.target.value)}
-                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
-                        placeholder="e.g. Nike, Uniqlo"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-foreground">Disliked patterns</label>
-                      <input
-                        value={dislikedPatternsCsv}
-                        onChange={(e) => setDislikedPatternsCsv(e.target.value)}
-                        className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
-                        placeholder="e.g. plaid, polka dots"
-                      />
-                    </div>
-                  </div>
+                <div className="space-y-5">
+                  <ChipGroup
+                    label="Favorite colors"
+                    value={favoriteColors}
+                    onChange={setFavoriteColors}
+                    suggestions={COLOR_SUGGESTIONS}
+                    placeholder="Add a color"
+                  />
+                  <ChipGroup
+                    label="Preferred styles"
+                    value={preferredStyles}
+                    onChange={setPreferredStyles}
+                    suggestions={STYLE_SUGGESTIONS}
+                    placeholder="Add a style"
+                  />
+                  <ChipGroup
+                    label="Preferred occasions"
+                    value={preferredOccasions}
+                    onChange={setPreferredOccasions}
+                    suggestions={OCCASION_SUGGESTIONS}
+                    placeholder="Add an occasion"
+                  />
+                  <ChipGroup
+                    label="Liked brands"
+                    value={likedBrands}
+                    onChange={setLikedBrands}
+                    placeholder="e.g. Uniqlo"
+                  />
+                  <ChipGroup
+                    label="Disliked patterns"
+                    value={dislikedPatterns}
+                    onChange={setDislikedPatterns}
+                    suggestions={PATTERN_SUGGESTIONS}
+                    placeholder="Add a pattern"
+                  />
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-foreground">Color temperature</label>
+                      <label htmlFor="color-temp" className="block text-sm font-medium text-foreground">Color temperature</label>
                       <select
+                        id="color-temp"
                         value={colorTemperature}
                         onChange={(e) => setColorTemperature(e.target.value)}
                         className="mt-1 block w-full h-12 px-3 pr-10 text-base md:text-sm border border-border rounded-md bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
@@ -663,8 +702,9 @@ export default function ProfilePage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-foreground">Style personality</label>
+                      <label htmlFor="style-personality" className="block text-sm font-medium text-foreground">Style personality</label>
                       <input
+                        id="style-personality"
                         value={stylePersonality}
                         onChange={(e) => setStylePersonality(e.target.value)}
                         className="mt-1 block w-full h-12 px-3 border border-border rounded-md text-base md:text-sm bg-background text-foreground focus:ring-primary focus:border-primary appearance-none"
@@ -693,8 +733,9 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {activeTab === 'settings' && (
-            <div className="space-y-6">
+          {activeTab === 'app' && (
+            <div className="space-y-8">
+              <div className="space-y-6">
               <h3 className="text-base md:text-lg font-medium text-foreground">App Settings</h3>
 
               {isLoadingSettings ? (
@@ -771,12 +812,16 @@ export default function ProfilePage() {
                     </div>
                     <LocationInput
                       value={locationValue}
-                      onChange={(val) => setLocationValue(val)}
+                      onChange={(val) => {
+                        setLocationValue(val)
+                        setSettingsDirty(true)
+                      }}
                       onAutoDetect={async () => {
                         const coords = await requestLocation()
                         if (coords) {
                           const locationString = `${coords.lat.toFixed(4)},${coords.lon.toFixed(4)}`
                           setLocationValue(locationString)
+                          setSettingsDirty(true)
                         }
                       }}
                       isAutoDetecting={geoState.isLoading}
@@ -786,10 +831,15 @@ export default function ProfilePage() {
                     />
                   </div>
 
-                  <div className="flex flex-col-reverse gap-3 md:flex-row md:justify-end pt-2">
+                  <div className="flex flex-col-reverse gap-3 md:flex-row md:items-center md:justify-end pt-2">
+                    {settingsDirty && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 md:mr-auto">
+                        Unsaved changes — click Save Settings to apply.
+                      </p>
+                    )}
                     <Button
                       onClick={handleSaveSettings}
-                      disabled={isSavingSettings}
+                      disabled={isSavingSettings || !settingsDirty}
                       className="w-full md:w-auto"
                     >
                       {isSavingSettings ? 'Saving…' : 'Save Settings'}
@@ -797,55 +847,24 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
+              </div>
+
+              <div className="border-t border-border pt-8 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Cpu className="h-5 w-5 text-muted-foreground" />
+                  <h3 className="text-base md:text-lg font-medium text-foreground">AI Settings</h3>
+                </div>
+                <AISettingsPanel />
+              </div>
             </div>
           )}
 
-          {activeTab === 'ai' && (
-            <AISettingsPanel />
-          )}
-
-          {activeTab === 'subscription' && (
+          {activeTab === 'plan' && (
             <SubscriptionPanel />
           )}
 
-          {activeTab === 'support' && (
+          {activeTab === 'help' && (
             <SupportPanel />
-          )}
-
-          {activeTab === 'security' && (
-            <div className="space-y-6">
-              <h3 className="text-base md:text-lg font-medium text-foreground">Security</h3>
-
-              <div className="space-y-4">
-                <div className="p-4 border border-border rounded-md">
-                  <h4 className="text-sm font-medium text-foreground">Password</h4>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Change your password to keep your account secure
-                  </p>
-                  <Button
-                    variant="outline"
-                    onClick={handleSendPasswordReset}
-                    className="mt-3 w-full md:w-auto"
-                  >
-                    Send Password Reset Email
-                  </Button>
-                </div>
-
-                <div className="p-4 border border-destructive/30 rounded-md bg-destructive/5">
-                  <h4 className="text-sm font-medium text-destructive">Danger Zone</h4>
-                  <p className="text-sm text-destructive/80 mt-1">
-                    Once you delete your account, there is no going back
-                  </p>
-                  <Button
-                    variant="destructive"
-                    onClick={handleDeleteAccount}
-                    className="mt-3 w-full md:w-auto"
-                  >
-                    Delete Account
-                  </Button>
-                </div>
-              </div>
-            </div>
           )}
         </div>
       </div>
@@ -860,6 +879,36 @@ export default function ProfilePage() {
           Sign Out
         </Button>
       </div>
+
+      <AlertDialog
+        open={isDeleteAccountOpen}
+        onOpenChange={(open) => {
+          if (!isDeletingAccount) setIsDeleteAccountOpen(open)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes your FitCheck AI account, wardrobe, and outfits.
+              This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingAccount}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeletingAccount}
+              onClick={(e) => {
+                e.preventDefault()
+                void handleDeleteAccount()
+              }}
+            >
+              {isDeletingAccount ? 'Deleting…' : 'Delete account'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

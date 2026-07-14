@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { Shirt, Twitter, Instagram, Linkedin, Mail, Phone } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { Shirt, Mail, Phone } from 'lucide-react'
 
 const footerLinks = {
   Product: [
@@ -33,11 +34,8 @@ const footerLinks = {
   ],
 }
 
-const socialLinks = [
-  { name: 'Twitter', href: '#', icon: Twitter },
-  { name: 'Instagram', href: '#', icon: Instagram },
-  { name: 'LinkedIn', href: '#', icon: Linkedin },
-]
+// Only list real profiles — omit placeholders that link to "#"
+const socialLinks: { name: string; href: string; icon: LucideIcon }[] = []
 
 export default function Footer() {
   return (
@@ -56,18 +54,22 @@ export default function Footer() {
             <p className="max-w-xs text-sm leading-relaxed">
               Photograph your clothes. Get outfits that fit the day. A quieter way to use what you own.
             </p>
-            <div className="flex gap-4 mt-5">
-              {socialLinks.map((social) => (
-                <a
-                  key={social.name}
-                  href={social.href}
-                  className="hover:text-stone-100 transition-colors"
-                  aria-label={social.name}
-                >
-                  <social.icon className="w-5 h-5" />
-                </a>
-              ))}
-            </div>
+            {socialLinks.length > 0 && (
+              <div className="flex gap-4 mt-5">
+                {socialLinks.map((social) => (
+                  <a
+                    key={social.name}
+                    href={social.href}
+                    className="hover:text-stone-100 transition-colors"
+                    aria-label={social.name}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <social.icon className="w-5 h-5" />
+                  </a>
+                ))}
+              </div>
+            )}
             <div className="mt-6 space-y-2 text-sm">
               <a
                 href="mailto:info@fitcheckaiapp.com"

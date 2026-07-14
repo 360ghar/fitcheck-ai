@@ -7,36 +7,22 @@ import { Switch } from '@/components/ui/switch'
 import { AnimatedSection } from './AnimatedSection'
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { freePlanFeatureBullets, proPlanFeatureBullets } from '@/lib/plan-limits'
 
 const tiers = [
   {
     name: 'Free',
     price: { monthly: 0, yearly: 0 },
     description: 'Perfect for getting started',
-    features: [
-      '25 item extractions/month',
-      '50 outfit visualizations/month',
-      'Basic wardrobe management',
-      'Weather-based suggestions',
-      'Mobile app access',
-    ],
-    cta: 'Get Started Free',
+    features: freePlanFeatureBullets(),
+    cta: 'Start free',
     highlighted: false,
   },
   {
     name: 'Pro',
     price: { monthly: 20, yearly: 200 },
     description: 'For the fashion-forward',
-    features: [
-      '200 item extractions/month',
-      '1,000 outfit visualizations/month',
-      'Virtual try-on visualization',
-      'Advanced wardrobe analytics',
-      'Calendar integration',
-      'Priority support',
-      'AI style recommendations',
-      'Early access to new features',
-    ],
+    features: proPlanFeatureBullets(),
     cta: 'Upgrade to Pro',
     highlighted: true,
     badge: 'Best Value',
@@ -75,7 +61,7 @@ function PricingCard({
       )}
     >
       {badge && (
-        <div className="absolute top-0 right-0 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-1 text-sm font-medium rounded-bl-lg">
+        <div className="absolute top-0 right-0 bg-indigo-600 text-white px-4 py-1 text-sm font-medium rounded-bl-lg">
           {badge}
         </div>
       )}
@@ -87,19 +73,19 @@ function PricingCard({
 
       <CardContent className="space-y-6">
         <div>
-          <span className="text-5xl font-bold text-gray-900 dark:text-white">
+          <span className="text-5xl font-bold text-stone-900 dark:text-stone-50">
             ${displayPrice.toFixed(displayPrice % 1 === 0 ? 0 : 2)}
           </span>
           {displayPrice > 0 && (
-            <span className="text-gray-500 dark:text-gray-400">/{isYearly ? 'year' : 'month'}</span>
+            <span className="text-stone-500 dark:text-stone-400">/{isYearly ? 'year' : 'month'}</span>
           )}
         </div>
 
         <ul className="space-y-3">
           {features.map((feature) => (
             <li key={feature} className="flex items-start gap-3">
-              <Check className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
-              <span className="text-gray-600 dark:text-gray-300">{feature}</span>
+              <Check className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+              <span className="text-stone-600 dark:text-stone-300">{feature}</span>
             </li>
           ))}
         </ul>

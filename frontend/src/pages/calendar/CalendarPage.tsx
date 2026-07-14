@@ -50,6 +50,14 @@ export default function CalendarPage() {
   const [activeMonthKey, setActiveMonthKey] = useState<string>('')
 
   const [isConnecting, setIsConnecting] = useState(false)
+  const [isCalendarConnected, setIsCalendarConnected] = useState(() => {
+    try {
+      return localStorage.getItem('fitcheck_calendar_connected') === '1'
+    } catch {
+      return false
+    }
+  })
+  const [assignOutfitOpen, setAssignOutfitOpen] = useState(false)
 
   // Location state for weather
   const [userLocation, setUserLocation] = useState<string | null>(null)
@@ -173,7 +181,16 @@ export default function CalendarPage() {
     setIsConnecting(true)
     try {
       await connectCalendar('local')
-      toast({ title: 'Calendar connected', description: 'Local planning calendar enabled.' })
+      setIsCalendarConnected(true)
+      try {
+        localStorage.setItem('fitcheck_calendar_connected', '1')
+      } catch {
+        /* ignore */
+      }
+      toast({
+        title: 'Local calendar enabled',
+        description: 'Events stay in FitCheck. External calendar sync may come later.',
+      })
     } catch (err) {
       toast({
         title: 'Failed to connect calendar',
@@ -284,7 +301,9 @@ export default function CalendarPage() {
           temperature: rec.temperature,
           temp_category: rec.temp_category,
           weather_state: rec.weather_state,
-          description: (rec.notes || []).join(' ') || rec.weather_state,
+          // Same current-conditions payload for all days until multi-day forecast is available
+          description:
+            ((rec.notes || []).join(' ') || rec.weather_state) + ' (current conditions)',
           icon: rec.weather_state,
         }
         cache.data = weather
@@ -372,14 +391,21 @@ export default function CalendarPage() {
             )}
           </div>
         </div>
-        <Button onClick={handleConnect} variant="outline" disabled={isConnecting} className="w-full md:w-auto">
+        <Button
+          onClick={handleConnect}
+          variant="outline"
+          disabled={isConnecting || isCalendarConnected}
+          className="w-full md:w-auto"
+        >
           {isConnecting ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               Connecting…
             </>
+          ) : isCalendarConnected ? (
+            'Local calendar active'
           ) : (
-            'Connect Calendar'
+            'Enable local calendar'
           )}
         </Button>
       </div>
@@ -394,7 +420,20 @@ export default function CalendarPage() {
             </div>
           )}
         </CardHeader>
-        <CardContent className="p-2 md:p-4">
+        <CardContent className="p-2 md:p-4 space-y-3">
+          {!isLoadingEvents && events.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+              No events yet. Tap a day to plan your first outfit, or use{' '}
+              <button
+                type="button"
+                className="text-primary font-medium underline-offset-2 hover:underline"
+                onClick={() => openCreate(new Date())}
+              >
+                create event
+              </button>
+              . Weather chips show <span className="font-medium text-foreground">current conditions</span> for your location (not a multi-day forecast).
+            </div>
+          )}
           <CalendarView
             events={decoratedEvents}
             outfits={outfits}
@@ -515,12 +554,19 @@ export default function CalendarPage() {
               <div className="text-sm text-muted-foreground mt-1">{selectedEvent.outfit_name || selectedEvent.outfit_id}</div>
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">No outfit assigned yet. Use "+ Outfit" on the calendar.</div>
+            <div className="text-sm text-muted-foreground">No outfit assigned yet.</div>
           )}
 
           <DialogFooter className="flex-col md:flex-row gap-2">
             <Button variant="outline" onClick={() => setSelectedEvent(null)} className="w-full md:w-auto">
               Close
+            </Button>
+            <Button
+              className="w-full md:w-auto"
+              onClick={() => setAssignOutfitOpen(true)}
+              disabled={!selectedEvent}
+            >
+              {selectedEvent?.outfit_id ? 'Change outfit' : 'Assign outfit'}
             </Button>
             {selectedEvent?.outfit_id && (
               <Button
@@ -531,7 +577,7 @@ export default function CalendarPage() {
                   try {
                     await handleRemoveOutfit(selectedEvent.id)
                     toast({ title: 'Outfit removed' })
-                    setSelectedEvent({ ...selectedEvent, outfit_id: undefined })
+                    setSelectedEvent({ ...selectedEvent, outfit_id: undefined, outfit_name: undefined })
                   } catch (err) {
                     toast({
                       title: 'Failed to remove outfit',
@@ -545,6 +591,67 @@ export default function CalendarPage() {
                 Remove outfit
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign outfit from event detail */}
+      <Dialog open={assignOutfitOpen} onOpenChange={setAssignOutfitOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign outfit</DialogTitle>
+            <DialogDescription>Pick an outfit for this event.</DialogDescription>
+          </DialogHeader>
+          {outfits.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No outfits yet. Create one from the Outfits page first.
+            </p>
+          ) : (
+            <div className="max-h-64 overflow-y-auto space-y-2">
+              {outfits.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  className="w-full text-left p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-accent/40 transition-colors"
+                  onClick={async () => {
+                    if (!selectedEvent) return
+                    try {
+                      await assignOutfitToEvent(selectedEvent.id, o.id)
+                      setSelectedEvent({
+                        ...selectedEvent,
+                        outfit_id: o.id,
+                        outfit_name: o.name,
+                      })
+                      setEvents((prev) =>
+                        prev.map((e) =>
+                          e.id === selectedEvent.id
+                            ? { ...e, outfit_id: o.id, outfit_name: o.name }
+                            : e
+                        )
+                      )
+                      setAssignOutfitOpen(false)
+                      toast({ title: 'Outfit assigned' })
+                    } catch (err) {
+                      toast({
+                        title: 'Failed to assign outfit',
+                        description: err instanceof Error ? err.message : 'An error occurred',
+                        variant: 'destructive',
+                      })
+                    }
+                  }}
+                >
+                  <p className="text-sm font-medium text-foreground">{o.name}</p>
+                  {o.occasion && (
+                    <p className="text-xs text-muted-foreground capitalize">{o.occasion}</p>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignOutfitOpen(false)}>
+              Cancel
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

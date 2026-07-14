@@ -489,6 +489,21 @@ export function FilterPanel({
             </Button>
           </div>
 
+          {/* Favorites (parity with mobile sheet) */}
+          <Button
+            type="button"
+            variant={filters.isFavorite ? 'default' : 'outline'}
+            size="icon"
+            aria-label={filters.isFavorite ? 'Show all items' : 'Show favorites only'}
+            aria-pressed={filters.isFavorite}
+            onClick={() => onFilterChange('isFavorite', !filters.isFavorite)}
+            className={cn(
+              filters.isFavorite && 'bg-pink-500 hover:bg-pink-500/90 border-pink-500 text-white'
+            )}
+          >
+            <Heart className={cn('h-5 w-5', filters.isFavorite && 'fill-current')} />
+          </Button>
+
           {/* View toggle */}
           <div className="flex items-center gap-2">
             <Button

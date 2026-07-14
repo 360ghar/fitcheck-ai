@@ -183,8 +183,10 @@ export function PhotoshootResultsStep() {
                 className="w-full h-auto max-h-[80vh] object-contain"
               />
               <button
+                type="button"
                 onClick={() => setPreviewIndex(null)}
-                className="absolute top-4 right-4 p-2 bg-black/50 rounded-full text-white hover:bg-black/70"
+                className="absolute top-4 right-4 p-2 bg-black/50 rounded-full text-white hover:bg-black/70 touch-target"
+                aria-label="Close preview"
               >
                 <X className="w-5 h-5" />
               </button>

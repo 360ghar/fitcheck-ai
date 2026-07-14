@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/collapsible'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { freeVsProSummary, platformsSummary } from '@/lib/plan-limits'
 
 /** Shared with LandingPage FAQ schema so visible copy and JSON-LD stay in sync. */
 export const LANDING_FAQS = [
@@ -22,13 +23,11 @@ export const LANDING_FAQS = [
   },
   {
     question: 'Can I use FitCheck on mobile?',
-    answer:
-      'Yes. The web app works in any modern mobile browser, and the Android app is on Google Play. Join the updates list if you want iOS and product news.',
+    answer: platformsSummary(),
   },
   {
     question: "What's free vs Pro?",
-    answer:
-      'Free covers up to 50 items and a limited number of AI generations each month. Pro unlocks higher limits, virtual try-on, advanced analytics, calendar planning, and priority support.',
+    answer: freeVsProSummary(),
   },
   {
     question: 'How do outfit recommendations work?',

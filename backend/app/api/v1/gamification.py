@@ -146,21 +146,39 @@ async def get_achievements(
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
 ):
-    available = [
+    catalog = [
         {"id": "first_upload", "name": "First Upload", "description": "Add your first wardrobe item", "xp_reward": 50},
         {"id": "first_outfit", "name": "First Outfit", "description": "Create your first outfit", "xp_reward": 50},
         {"id": "streak_7", "name": "7-day Streak", "description": "Plan outfits 7 days in a row", "xp_reward": 100},
     ]
+    catalog_by_id = {row["id"]: row for row in catalog}
+
+    def enrich_earned(rows: list) -> list:
+        """Attach name/description from catalog when achievement_id matches slug ids."""
+        enriched = []
+        for row in rows or []:
+            item = dict(row) if isinstance(row, dict) else {"raw": row}
+            aid = str(item.get("achievement_id") or item.get("id") or "")
+            meta = catalog_by_id.get(aid)
+            if meta:
+                item["name"] = meta["name"]
+                item["description"] = meta["description"]
+                item["xp_reward"] = meta.get("xp_reward")
+            else:
+                item.setdefault("name", "Achievement unlocked")
+                item.setdefault("description", None)
+            enriched.append(item)
+        return enriched
 
     try:
         result = db.table("user_achievements").select("*").eq("user_id", user_id).order("earned_at", desc=True).execute()
-        earned_rows = result.data if result else []
+        earned_rows = enrich_earned(result.data if result else [])
         logger.debug(
             "Achievements retrieved",
             user_id=user_id,
             earned_count=len(earned_rows)
         )
-        return {"data": {"earned": earned_rows, "available": available}, "message": "OK"}
+        return {"data": {"earned": earned_rows, "available": catalog}, "message": "OK"}
     except Exception as e:
         logger.warning(
             "Achievements retrieval failed, returning defaults",
@@ -168,7 +186,7 @@ async def get_achievements(
             error=str(e),
             exc_info=False
         )
-        return {"data": {"earned": [], "available": available}, "message": "OK"}
+        return {"data": {"earned": [], "available": catalog}, "message": "OK"}
 
 
 @router.get("/leaderboard", response_model=Dict[str, Any])

@@ -11,7 +11,7 @@ export default function TermsPage() {
         canonicalUrl={`${SEO_CONFIG.siteUrl}/terms`}
       />
     <div className="pt-20">
-      <section className="py-24 bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-950">
+      <section className="py-24 bg-stone-50 dark:bg-stone-950">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimatedSection>
             <div className="text-center mb-12">

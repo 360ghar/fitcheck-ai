@@ -136,7 +136,7 @@ export function AstrologyTab({
                 </div>
               )}
               <Button asChild>
-                <Link to="/settings?tab=profile">Complete Profile</Link>
+                <Link to="/profile?tab=account">Complete Profile</Link>
               </Button>
             </div>
           </CardContent>

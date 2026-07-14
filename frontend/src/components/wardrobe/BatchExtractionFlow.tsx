@@ -5,7 +5,7 @@
  * Handles the complete pipeline: select -> upload -> extract -> generate -> review -> save.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Sparkles, Loader2, Upload, CheckCircle2 } from 'lucide-react';
 import {
   Dialog,
@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ToastAction } from '@/components/ui/toast';
 import { useToast } from '@/components/ui/use-toast';
+import { WizardSteps } from '@/components/ui/wizard-steps';
 import { useBatchExtraction, useSocialImportQueue } from '@/hooks';
 import { createItem, uploadItemImages } from '@/api/items';
 import { parallelWithRetry } from '@/lib/retry';
@@ -32,6 +33,21 @@ import { SocialImportAuthPrompt } from './SocialImportAuthPrompt';
 import { SocialImportQueueReview } from './SocialImportQueueReview';
 import { SocialImportProgress } from './SocialImportProgress';
 import type { DetectedItem, ItemCreate } from '@/types';
+
+const BATCH_WIZARD_STEPS = [
+  { id: 'select', label: 'Select' },
+  { id: 'process', label: 'Process' },
+  { id: 'review', label: 'Review' },
+  { id: 'saving', label: 'Save' },
+] as const;
+
+function mapBatchStepToWizard(step: string): string {
+  if (step === 'select') return 'select'
+  if (step === 'review') return 'review'
+  if (step === 'saving') return 'saving'
+  // uploading | extracting | generating
+  return 'process'
+}
 
 // ============================================================================
 // TYPES
@@ -392,6 +408,7 @@ export function BatchExtractionFlow({
   const failedCount = state.allDetectedItems.filter((i) => i.status === 'failed').length;
   const deletedCount = state.allDetectedItems.filter((i) => i.status === 'deleted').length;
   const activeItems = state.allDetectedItems.filter((i) => i.status !== 'deleted');
+  const wizardStepId = useMemo(() => mapBatchStepToWizard(state.step), [state.step]);
 
   // ============================================================================
   // RENDER
@@ -402,7 +419,7 @@ export function BatchExtractionFlow({
       <DialogContent className="sm:max-w-[95vw] lg:max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-indigo-500" />
+            <Sparkles className="h-5 w-5 text-primary" />
             {getStepTitle()}
             {(isConnected || socialImport.state.isConnected) && (
               <span className="inline-flex items-center gap-1 text-xs font-normal text-green-600 dark:text-green-400 ml-2">
@@ -413,6 +430,15 @@ export function BatchExtractionFlow({
           </DialogTitle>
           <DialogDescription>{getStepDescription()}</DialogDescription>
         </DialogHeader>
+
+        {!socialImportEnabled || inputMode === 'upload' ? (
+          <WizardSteps
+            className="mb-2 px-1"
+            variant="bars"
+            steps={[...BATCH_WIZARD_STEPS]}
+            currentStepId={wizardStepId}
+          />
+        ) : null}
 
         <div className="flex-1 overflow-y-auto min-h-[400px] min-w-0">
           {/* Step 1: Select Images */}

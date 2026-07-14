@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { ArrowRight, Play } from 'lucide-react'
+import { ArrowRight, Smartphone } from 'lucide-react'
+import { PLATFORM_AVAILABILITY } from '@/lib/plan-limits'
 
 export default function Hero() {
   return (
@@ -33,7 +34,7 @@ export default function Hero() {
                 asChild
               >
                 <Link to="/auth/register">
-                  Use free
+                  Start free
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
@@ -44,12 +45,12 @@ export default function Hero() {
                 asChild
               >
                 <a
-                  href="https://play.google.com/store/apps/details?id=com.fitcheckaiapp.fitcheckai&hl=en_IN"
+                  href={PLATFORM_AVAILABILITY.androidStoreUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  <Play className="mr-2 h-4 w-4 fill-current" />
-                  Get the app
+                  <Smartphone className="mr-2 h-4 w-4" />
+                  Get the Android app
                 </a>
               </Button>
             </div>

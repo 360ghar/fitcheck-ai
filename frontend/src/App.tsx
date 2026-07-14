@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useIsAuthenticated, useHasHydrated } from './stores/authStore'
 import { memo } from 'react'
 
@@ -114,6 +114,12 @@ const CatchAllRoute = memo(function CatchAllRoute() {
   return <Navigate to={isAuthenticated ? '/dashboard' : '/'} replace />
 })
 
+/** Preserve query string when redirecting /settings → /profile (Stripe, deep links). */
+function SettingsRedirect() {
+  const location = useLocation()
+  return <Navigate to={{ pathname: '/profile', search: location.search }} replace />
+}
+
 function App() {
   return (
     <>
@@ -220,7 +226,7 @@ function App() {
           <Route path="/try-on" element={<TryOnPage />} />
           <Route path="/gamification" element={<GamificationPage />} />
           <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/settings" element={<Navigate to="/profile" replace />} />
+          <Route path="/settings" element={<SettingsRedirect />} />
         </Route>
 
         {/* Admin routes - protected */}

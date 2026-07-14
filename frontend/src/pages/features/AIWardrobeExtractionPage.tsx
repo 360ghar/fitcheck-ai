@@ -156,7 +156,7 @@ export default function AIWardrobeExtractionPage() {
 
       <div className="pt-20">
         {/* Hero Section */}
-        <section className="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 dark:from-indigo-950 dark:via-purple-950 dark:to-pink-950">
+        <section className="relative overflow-hidden bg-stone-900 dark:bg-stone-950">
           {/* Background Pattern */}
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-20 left-10 w-72 h-72 bg-white rounded-full blur-3xl" />
@@ -189,7 +189,7 @@ export default function AIWardrobeExtractionPage() {
                     to="/auth/register"
                     className="inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
                   >
-                    Try Free
+                    Start free
                     <ArrowRight className="w-5 h-5" />
                   </Link>
                   <Link
@@ -262,7 +262,7 @@ export default function AIWardrobeExtractionPage() {
         </section>
 
         {/* How It Works Section */}
-        <section id="how-it-works" className="py-20 md:py-28 bg-gradient-to-br from-gray-50 to-indigo-50 dark:from-gray-900 dark:to-indigo-950">
+        <section id="how-it-works" className="py-20 md:py-28 bg-stone-50 dark:bg-stone-950">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center max-w-3xl mx-auto mb-16">
@@ -350,7 +350,7 @@ export default function AIWardrobeExtractionPage() {
               </AnimatedSection>
 
               <AnimatedSection delay={200}>
-                <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-8 text-white">
+                <div className="bg-indigo-600 rounded-3xl p-8 text-white">
                   <div className="flex items-center gap-3 mb-6">
                     <Clock className="w-8 h-8" />
                     <h3 className="text-2xl font-bold">Time Comparison</h3>
@@ -432,7 +432,7 @@ export default function AIWardrobeExtractionPage() {
         </section>
 
         {/* CTA Section */}
-        <section className="py-20 md:py-28 bg-gradient-to-br from-indigo-600 to-purple-600">
+        <section className="py-20 md:py-28 bg-stone-900">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <AnimatedSection>
               <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">
@@ -446,12 +446,12 @@ export default function AIWardrobeExtractionPage() {
                   to="/auth/register"
                   className="inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
                 >
-                  Start Free Today
+                  Start free
                   <ArrowRight className="w-5 h-5" />
                 </Link>
               </div>
               <p className="text-indigo-200 mt-6 text-sm">
-                No credit card required. Free plan includes 50 AI extractions per month.
+                No credit card required. Free plan includes 25 item extractions per month.
               </p>
             </AnimatedSection>
           </div>

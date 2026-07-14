@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
-import { Mail, Lock, User, AlertCircle, CheckCircle, Loader2, Gift, Check } from 'lucide-react'
+import { Mail, Lock, User, AlertCircle, CheckCircle, Loader2, Gift, Check, Eye, EyeOff } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
 import { validateReferralCode } from '@/api/subscription'
@@ -28,6 +28,8 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   // Referral code state
   const [referralCode, setReferralCode] = useState('')
@@ -97,9 +99,10 @@ export default function RegisterPage() {
 
   const passwordStrength = getPasswordStrength(password)
   const passwordsMatch = password === confirmPassword && password.length > 0
+  // Require 8+ chars only; strength checklist is guidance, not a hard gate
   const isFormValid =
     email.length > 0 &&
-    passwordStrength === 5 &&
+    password.length >= 8 &&
     passwordsMatch &&
     agreedToTerms
 
@@ -175,7 +178,11 @@ export default function RegisterPage() {
       <div className="mt-6 md:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-card py-6 px-4 shadow rounded-lg sm:py-8 sm:px-10">
           {error && (
-            <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start">
+            <div
+              role="alert"
+              aria-live="polite"
+              className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start"
+            >
               <AlertCircle className="h-5 w-5 text-destructive mt-0.5 mr-2 flex-shrink-0" />
               <p className="text-sm text-destructive">{error}</p>
             </div>
@@ -283,19 +290,29 @@ export default function RegisterPage() {
                 <input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
+                  minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full h-12 pl-10 pr-3 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
+                  className="block w-full h-12 pl-10 pr-12 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
                   placeholder="••••••••"
+                  aria-describedby="password-hint"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground touch-target"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
 
-              {/* Password strength indicator */}
+              {/* Password strength indicator (guidance only) */}
               {password.length > 0 && (
-                <div className="mt-2">
+                <div className="mt-2" id="password-hint">
                   <div className="flex items-center space-x-2">
                     <div className="flex-1 bg-muted rounded-full h-2">
                       <div
@@ -313,48 +330,10 @@ export default function RegisterPage() {
                       {passwordStrength <= 2 ? 'Weak' : passwordStrength <= 3 ? 'Fair' : 'Strong'}
                     </span>
                   </div>
-                  <ul className="mt-1 text-xs text-muted-foreground space-y-1">
-                    <li className={password.length >= 8 ? 'text-green-600 dark:text-green-400 flex items-center' : 'flex items-center'}>
-                      {password.length >= 8 ? (
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                      ) : (
-                        <span className="w-3 h-3 mr-1" />
-                      )}
-                      At least 8 characters
-                    </li>
-                    <li className={/[A-Z]/.test(password) ? 'text-green-600 dark:text-green-400 flex items-center' : 'flex items-center'}>
-                      {/[A-Z]/.test(password) ? (
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                      ) : (
-                        <span className="w-3 h-3 mr-1" />
-                      )}
-                      Uppercase letter
-                    </li>
-                    <li className={/[a-z]/.test(password) ? 'text-green-600 dark:text-green-400 flex items-center' : 'flex items-center'}>
-                      {/[a-z]/.test(password) ? (
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                      ) : (
-                        <span className="w-3 h-3 mr-1" />
-                      )}
-                      Lowercase letter
-                    </li>
-                    <li className={/\d/.test(password) ? 'text-green-600 dark:text-green-400 flex items-center' : 'flex items-center'}>
-                      {/\d/.test(password) ? (
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                      ) : (
-                        <span className="w-3 h-3 mr-1" />
-                      )}
-                      Number
-                    </li>
-                    <li className={/[!@#$%^&*(),.?":{}|<>]/.test(password) ? 'text-green-600 dark:text-green-400 flex items-center' : 'flex items-center'}>
-                      {/[!@#$%^&*(),.?":{}|<>]/.test(password) ? (
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                      ) : (
-                        <span className="w-3 h-3 mr-1" />
-                      )}
-                      Special character
-                    </li>
-                  </ul>
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    At least 8 characters required.
+                    {password.length < 8 ? ' Keep typing…' : ' Optional: mix upper/lowercase, numbers, and symbols for a stronger password.'}
+                  </p>
                 </div>
               )}
             </div>
@@ -371,23 +350,31 @@ export default function RegisterPage() {
                 <input
                   id="confirmPassword"
                   name="confirmPassword"
-                  type="password"
+                  type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="block w-full h-12 pl-10 pr-10 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
+                  className="block w-full h-12 pl-10 pr-20 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
                   placeholder="••••••••"
                 />
-                {confirmPassword.length > 0 && (
-                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                    {passwordsMatch ? (
+                <div className="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
+                  {confirmPassword.length > 0 && (
+                    passwordsMatch ? (
                       <CheckCircle className="h-5 w-5 text-green-500" />
                     ) : (
                       <AlertCircle className="h-5 w-5 text-destructive" />
-                    )}
-                  </div>
-                )}
+                    )
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((v) => !v)}
+                    className="p-1.5 text-muted-foreground hover:text-foreground touch-target"
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
               </div>
               {!passwordsMatch && confirmPassword.length > 0 && (
                 <p className="mt-1 text-sm text-destructive">Passwords do not match</p>

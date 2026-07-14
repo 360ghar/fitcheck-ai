@@ -55,7 +55,7 @@ export function PhotoshootConfigureStep() {
               variant="link"
               size="sm"
               className="p-0 h-auto"
-              onClick={() => navigate('/profile?tab=subscription')}
+              onClick={() => navigate('/profile?tab=plan')}
             >
               Upgrade
             </Button>
@@ -158,7 +158,7 @@ export function PhotoshootConfigureStep() {
                 variant="link"
                 size="sm"
                 className="ml-auto p-0 h-auto"
-                onClick={() => navigate('/profile?tab=subscription')}
+                onClick={() => navigate('/profile?tab=plan')}
               >
                 Upgrade
               </Button>

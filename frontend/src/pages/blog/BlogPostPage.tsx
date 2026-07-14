@@ -1,4 +1,4 @@
-import { useParams, Link, Navigate } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
 import SEO from '@/components/seo/SEO'
@@ -33,7 +33,23 @@ export default function BlogPostPage() {
   }
 
   if (error || !post) {
-    return <Navigate to="/blog" replace />
+    return (
+      <div className="min-h-screen pt-32 px-4 text-center">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-50 mb-2">
+          Post not found
+        </h1>
+        <p className="text-stone-600 dark:text-stone-400 mb-6">
+          This article may have been moved or removed.
+        </p>
+        <Link
+          to="/blog"
+          className="inline-flex items-center text-indigo-600 hover:underline font-medium"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to blog
+        </Link>
+      </div>
+    )
   }
 
   const breadcrumbs = [

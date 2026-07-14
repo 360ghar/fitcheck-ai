@@ -271,18 +271,20 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
           </button>
         )}
 
-        {/* Condition Badge */}
-        <Badge
-          className={cn(
-            'absolute top-2.5 left-10 z-10',
-            'text-[10px] font-medium px-2 py-0.5',
-            'shadow-sm',
-            conditionConfig.bg,
-            conditionConfig.text
-          )}
-        >
-          {conditionConfig.label}
-        </Badge>
+        {/* Condition Badge — hide default "clean" to reduce noise; sit bottom-left to avoid select */}
+        {item.condition && item.condition !== 'clean' && (
+          <Badge
+            className={cn(
+              'absolute bottom-14 left-2.5 z-10',
+              'text-[10px] font-medium px-2 py-0.5',
+              'shadow-sm',
+              conditionConfig.bg,
+              conditionConfig.text
+            )}
+          >
+            {conditionConfig.label}
+          </Badge>
+        )}
 
         {/* Bottom Info Overlay */}
         <div className="absolute bottom-0 left-0 right-0 p-3 z-10">

@@ -2,7 +2,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
 import SEO from '@/components/seo/SEO'
-import { Calendar, Clock, ArrowRight, Loader2 } from 'lucide-react'
+import { Calendar, Clock, ArrowRight } from 'lucide-react'
 import { useBlogPosts, useBlogCategories } from '@/hooks/useBlog'
 
 export default function BlogIndexPage() {
@@ -110,18 +110,37 @@ export default function BlogIndexPage() {
         <section className="py-16 md:py-24 bg-white dark:bg-gray-950">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {isLoadingPosts ? (
-              <div className="flex justify-center py-20">
-                <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="rounded-2xl overflow-hidden border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900"
+                  >
+                    <div className="aspect-[16/9] bg-stone-200 dark:bg-stone-800 animate-pulse" />
+                    <div className="p-6 space-y-3">
+                      <div className="h-4 w-1/3 bg-stone-200 dark:bg-stone-800 rounded animate-pulse" />
+                      <div className="h-6 w-full bg-stone-200 dark:bg-stone-800 rounded animate-pulse" />
+                      <div className="h-4 w-2/3 bg-stone-200 dark:bg-stone-800 rounded animate-pulse" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : postsError ? (
-              <div className="text-center py-20">
-                <p className="text-gray-600 dark:text-gray-400">
-                  Failed to load blog posts. Please try again later.
+              <div className="text-center py-20 space-y-4">
+                <p className="text-stone-600 dark:text-stone-400">
+                  Failed to load blog posts. Please try again.
                 </p>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="inline-flex items-center px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+                >
+                  Try again
+                </button>
               </div>
             ) : posts.length === 0 ? (
               <div className="text-center py-20">
-                <p className="text-gray-600 dark:text-gray-400">
+                <p className="text-stone-600 dark:text-stone-400">
                   No blog posts found{category ? ` in ${categoryFilter}` : ''}. Check back soon!
                 </p>
                 {category && (

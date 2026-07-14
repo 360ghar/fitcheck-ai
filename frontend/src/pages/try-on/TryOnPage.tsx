@@ -6,7 +6,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Download, Upload, RefreshCw, Loader2, Sparkles, X, Check } from 'lucide-react';
+import { Download, Upload, RefreshCw, Loader2, Sparkles, X } from 'lucide-react';
 import { useUserAvatar } from '@/stores/authStore';
 import { generateTryOn, TryOnOptions, TryOnResult } from '@/api/ai';
 import { AvatarRequiredPrompt } from '@/components/try-on';
@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { ZoomableImage } from '@/components/ui/zoomable-image';
+import { WizardSteps } from '@/components/ui/wizard-steps';
 import { cn } from '@/lib/utils';
 
 type TryOnStep = 'upload' | 'options' | 'generating' | 'result';
@@ -57,58 +58,6 @@ const STEPS = [
   { id: 'generating', label: 'Generate', shortLabel: '3' },
   { id: 'result', label: 'Result', shortLabel: '4' },
 ] as const;
-
-function StepIndicator({ currentStep }: { currentStep: TryOnStep }) {
-  const currentIndex = STEPS.findIndex((s) => s.id === currentStep);
-
-  return (
-    <div className="flex items-center justify-center gap-2 md:gap-4 mb-4 md:mb-6 px-2 overflow-x-auto scrollbar-hide scroll-snap-x touch-pan-x overscroll-x-contain">
-      {STEPS.map((step, index) => {
-        const isCompleted = index < currentIndex;
-        const isCurrent = index === currentIndex;
-        const isPending = index > currentIndex;
-
-        return (
-          <div key={step.id} className="flex items-center gap-2 md:gap-4 scroll-snap-start">
-            <div className="flex flex-col items-center">
-              <div
-                className={cn(
-                  'w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors shrink-0',
-                  isCompleted && 'bg-primary text-primary-foreground',
-                  isCurrent && 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background',
-                  isPending && 'bg-muted text-muted-foreground'
-                )}
-              >
-                {isCompleted ? (
-                  <Check className="h-4 w-4" />
-                ) : (
-                  <span className="md:hidden">{step.shortLabel}</span>
-                )}
-                <span className="hidden md:inline">{index + 1}</span>
-              </div>
-              <span
-                className={cn(
-                  'mt-1 text-[10px] md:text-xs',
-                  isCurrent ? 'text-foreground font-medium' : 'text-muted-foreground'
-                )}
-              >
-                {step.label}
-              </span>
-            </div>
-            {index < STEPS.length - 1 && (
-              <div
-                className={cn(
-                  'w-4 md:w-12 h-0.5 transition-colors',
-                  index < currentIndex ? 'bg-primary' : 'bg-muted'
-                )}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 export default function TryOnPage() {
   const userAvatar = useUserAvatar();
@@ -232,7 +181,18 @@ export default function TryOnPage() {
       </div>
 
       {/* Step Indicator */}
-      <StepIndicator currentStep={step} />
+      <WizardSteps
+        steps={[...STEPS]}
+        currentStepId={step}
+        onStepClick={(id) => {
+          const order: TryOnStep[] = ['upload', 'options', 'generating', 'result'];
+          const target = order.indexOf(id as TryOnStep);
+          const current = order.indexOf(step);
+          if (target >= 0 && target < current && id !== 'generating') {
+            setStep(id as TryOnStep);
+          }
+        }}
+      />
 
       {/* Upload Step */}
       {step === 'upload' && (
@@ -261,9 +221,6 @@ export default function TryOnPage() {
               <p className="mt-2 text-sm text-muted-foreground">
                 or tap to browse
               </p>
-              <Button variant="outline" className="mt-4 md:hidden w-full">
-                Select Image
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -315,9 +272,9 @@ export default function TryOnPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Style</Label>
+                <Label htmlFor="tryon-style">Style</Label>
                 <Select value={style} onValueChange={setStyle}>
-                  <SelectTrigger>
+                  <SelectTrigger id="tryon-style">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -331,9 +288,9 @@ export default function TryOnPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Background</Label>
+                <Label htmlFor="tryon-background">Background</Label>
                 <Select value={background} onValueChange={setBackground}>
-                  <SelectTrigger>
+                  <SelectTrigger id="tryon-background">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -347,9 +304,9 @@ export default function TryOnPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Pose</Label>
+                <Label htmlFor="tryon-pose">Pose</Label>
                 <Select value={pose} onValueChange={setPose}>
-                  <SelectTrigger>
+                  <SelectTrigger id="tryon-pose">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

@@ -34,6 +34,18 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      # pubspec.yaml lists `.env` as an asset; it is gitignored and not present
+      # on CI. Create a placeholder so analyze/test can build the asset bundle.
+      - name: Create placeholder .env asset
+        run: |
+          if [ ! -f .env ]; then
+            if [ -f .env.example ]; then
+              cp .env.example .env
+            else
+              touch .env
+            fi
+          fi
+
       - name: Analyze
         # Only true analyzer errors fail the build for now - the repo has ~546
         # pre-existing info/warning-level issues (mostly `withOpacity`

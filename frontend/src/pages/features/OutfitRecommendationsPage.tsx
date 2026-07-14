@@ -187,7 +187,7 @@ export default function OutfitRecommendationsPage() {
 
       <div className="pt-20">
         {/* Hero Section */}
-        <section className="relative overflow-hidden bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 dark:from-emerald-950 dark:via-teal-950 dark:to-cyan-950">
+        <section className="relative overflow-hidden bg-stone-900 dark:bg-stone-950">
           {/* Background Pattern */}
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-20 left-10 w-72 h-72 bg-white rounded-full blur-3xl" />
@@ -218,7 +218,7 @@ export default function OutfitRecommendationsPage() {
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   <Link
                     to="/auth/register"
-                    className="inline-flex items-center justify-center gap-2 bg-white text-emerald-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
+                    className="inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
                   >
                     Get Style Recommendations
                     <ArrowRight className="w-5 h-5" />
@@ -293,7 +293,7 @@ export default function OutfitRecommendationsPage() {
         </section>
 
         {/* Weather-Aware Section */}
-        <section className="py-20 md:py-28 bg-gradient-to-br from-emerald-50 to-cyan-50 dark:from-gray-900 dark:to-emerald-950">
+        <section className="py-20 md:py-28 bg-stone-50 dark:bg-stone-950">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center max-w-3xl mx-auto mb-16">
@@ -397,7 +397,7 @@ export default function OutfitRecommendationsPage() {
         </section>
 
         {/* Benefits Section */}
-        <section className="py-20 md:py-28 bg-gradient-to-br from-gray-50 to-emerald-50 dark:from-gray-900 dark:to-emerald-950">
+        <section className="py-20 md:py-28 bg-stone-50 dark:bg-stone-950">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid lg:grid-cols-2 gap-16 items-center">
               <AnimatedSection>
@@ -423,7 +423,7 @@ export default function OutfitRecommendationsPage() {
               </AnimatedSection>
 
               <AnimatedSection delay={200}>
-                <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl p-8 text-white">
+                <div className="bg-indigo-600 rounded-3xl p-8 text-white">
                   <div className="flex items-center gap-3 mb-6">
                     <Clock className="w-8 h-8" />
                     <h3 className="text-2xl font-bold">Morning Routine</h3>
@@ -513,7 +513,7 @@ export default function OutfitRecommendationsPage() {
         </section>
 
         {/* CTA Section */}
-        <section className="py-20 md:py-28 bg-gradient-to-br from-emerald-600 to-teal-600">
+        <section className="py-20 md:py-28 bg-stone-900">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <AnimatedSection>
               <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">
@@ -525,14 +525,14 @@ export default function OutfitRecommendationsPage() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link
                   to="/auth/register"
-                  className="inline-flex items-center justify-center gap-2 bg-white text-emerald-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
+                  className="inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
                 >
                   Get Free Recommendations
                   <ArrowRight className="w-5 h-5" />
                 </Link>
               </div>
               <p className="text-emerald-200 mt-6 text-sm">
-                Free plan includes 10 AI recommendations per day. No credit card required.
+                Free plan includes weather and wardrobe-based recommendations. No credit card required.
               </p>
             </AnimatedSection>
           </div>

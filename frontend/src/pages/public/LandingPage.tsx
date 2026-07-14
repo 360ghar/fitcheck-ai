@@ -3,6 +3,7 @@ import DemoSection from '@/components/landing/DemoSection'
 import Features from '@/components/landing/Features'
 import HowItWorks from '@/components/landing/HowItWorks'
 import Testimonials from '@/components/landing/Testimonials'
+import Pricing from '@/components/landing/Pricing'
 import FAQ, { LANDING_FAQS } from '@/components/landing/FAQ'
 import CTASection from '@/components/landing/CTASection'
 import SEO from '@/components/seo/SEO'
@@ -26,6 +27,7 @@ export default function LandingPage() {
       <Features />
       <HowItWorks />
       <Testimonials />
+      <Pricing />
       <FAQ />
       <CTASection />
     </>

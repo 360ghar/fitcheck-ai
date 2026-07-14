@@ -74,35 +74,35 @@ class ErrorBoundary extends Component<Props, State> {
       const { error, errorInfo, isDetailsExpanded } = this.state
 
       return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-          <div className="max-w-lg w-full bg-gray-800/50 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-700/50 p-8">
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <div className="max-w-lg w-full bg-card rounded-2xl shadow-lg border border-border p-8">
             {/* Error Icon */}
             <div className="flex justify-center mb-6">
-              <div className="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center">
-                <AlertTriangle className="w-10 h-10 text-red-400" />
+              <div className="w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center">
+                <AlertTriangle className="w-10 h-10 text-destructive" />
               </div>
             </div>
 
             {/* Error Message */}
-            <h1 className="text-2xl font-bold text-white text-center mb-2">
+            <h1 className="text-2xl font-bold text-foreground text-center mb-2">
               Something went wrong
             </h1>
-            <p className="text-gray-400 text-center mb-8">
-              We're sorry, but something unexpected happened. Please try again or return to the home page.
+            <p className="text-muted-foreground text-center mb-8">
+              We&apos;re sorry, but something unexpected happened. Please try again or return to the home page.
             </p>
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 mb-6">
               <button
                 onClick={this.handleReset}
-                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/25"
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-xl transition-colors touch-target"
               >
                 <RefreshCw className="w-5 h-5" />
                 Try Again
               </button>
               <button
                 onClick={this.handleGoHome}
-                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-xl transition-all duration-200 hover:shadow-lg"
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-muted hover:bg-muted/80 text-foreground font-medium rounded-xl transition-colors touch-target"
               >
                 <Home className="w-5 h-5" />
                 Go Home
@@ -111,10 +111,10 @@ class ErrorBoundary extends Component<Props, State> {
 
             {/* Development Error Details */}
             {isDevelopment && error && (
-              <div className="border-t border-gray-700/50 pt-6">
+              <div className="border-t border-border pt-6">
                 <button
                   onClick={this.toggleDetails}
-                  className="flex items-center justify-between w-full text-left text-sm text-gray-400 hover:text-gray-300 transition-colors"
+                  className="flex items-center justify-between w-full text-left text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <span className="font-medium">Error Details (Development Only)</span>
                   {isDetailsExpanded ? (
@@ -128,11 +128,11 @@ class ErrorBoundary extends Component<Props, State> {
                   <div className="mt-4 space-y-4">
                     {/* Error Message */}
                     <div>
-                      <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wide mb-2">
+                      <h3 className="text-xs font-semibold text-destructive uppercase tracking-wide mb-2">
                         Error Message
                       </h3>
-                      <div className="bg-gray-900/50 rounded-lg p-3 overflow-x-auto">
-                        <code className="text-sm text-red-300 break-all">
+                      <div className="bg-muted rounded-lg p-3 overflow-x-auto">
+                        <code className="text-sm text-destructive break-all">
                           {error.message}
                         </code>
                       </div>
@@ -141,11 +141,11 @@ class ErrorBoundary extends Component<Props, State> {
                     {/* Stack Trace */}
                     {error.stack && (
                       <div>
-                        <h3 className="text-xs font-semibold text-orange-400 uppercase tracking-wide mb-2">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                           Stack Trace
                         </h3>
-                        <div className="bg-gray-900/50 rounded-lg p-3 overflow-x-auto max-h-48 overflow-y-auto">
-                          <pre className="text-xs text-gray-400 whitespace-pre-wrap break-all">
+                        <div className="bg-muted rounded-lg p-3 overflow-x-auto max-h-48 overflow-y-auto">
+                          <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-all">
                             {error.stack}
                           </pre>
                         </div>
@@ -155,11 +155,11 @@ class ErrorBoundary extends Component<Props, State> {
                     {/* Component Stack */}
                     {errorInfo?.componentStack && (
                       <div>
-                        <h3 className="text-xs font-semibold text-yellow-400 uppercase tracking-wide mb-2">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                           Component Stack
                         </h3>
-                        <div className="bg-gray-900/50 rounded-lg p-3 overflow-x-auto max-h-48 overflow-y-auto">
-                          <pre className="text-xs text-gray-400 whitespace-pre-wrap break-all">
+                        <div className="bg-muted rounded-lg p-3 overflow-x-auto max-h-48 overflow-y-auto">
+                          <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-all">
                             {errorInfo.componentStack}
                           </pre>
                         </div>

@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
 import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
+import { freeVsProSummary, platformsSummary } from '@/lib/plan-limits'
 
 const faqCategories = [
   {
@@ -22,15 +23,15 @@ const faqCategories = [
       },
       {
         q: 'Is FitCheck AI free to use?',
-        a: 'Yes! FitCheck AI offers a free plan that includes up to 50 wardrobe items and 5 AI outfit generations per month. For unlimited items, unlimited AI generations, and premium features like virtual try-on and advanced analytics, you can upgrade to our Pro plan.'
+        a: `Yes. ${freeVsProSummary()}`
       },
       {
         q: 'Do I need to download an app?',
-        a: 'FitCheck AI works in any modern web browser on your phone, tablet, or computer. We also offer native iOS and Android apps for the best mobile experience with features like camera integration and push notifications.'
+        a: platformsSummary()
       },
       {
         q: 'What devices and browsers are supported?',
-        a: 'FitCheck AI works on all modern browsers including Chrome, Safari, Firefox, and Edge. Our mobile apps support iOS 14+ and Android 8.0+. The web app is fully responsive and works on phones, tablets, and desktops.'
+        a: 'FitCheck AI works on modern browsers including Chrome, Safari, Firefox, and Edge. The Android app is on Google Play; iOS is on the waitlist. The web app is fully responsive on phones, tablets, and desktops.'
       }
     ]
   },
@@ -186,7 +187,7 @@ export default function FAQPage() {
       <BreadcrumbJsonLd items={breadcrumbs} />
 
       <div className="pt-20">
-        <section className="py-16 md:py-24 bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-950">
+        <section className="py-16 md:py-24 bg-stone-50 dark:bg-stone-950">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center mb-16">
@@ -240,7 +241,7 @@ export default function FAQPage() {
         </section>
 
         {/* CTA Section */}
-        <section className="py-16 md:py-24 bg-gradient-to-br from-indigo-600 to-purple-600">
+        <section className="py-16 md:py-24 bg-stone-900">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <AnimatedSection>
               <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">

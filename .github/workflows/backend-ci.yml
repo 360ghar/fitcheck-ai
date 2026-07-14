@@ -40,6 +40,8 @@ jobs:
 
       - name: Pytest
         env:
+          # So `from app...` imports resolve when pytest collects tests/
+          PYTHONPATH: .
           # Dummy values so Settings() can be constructed without real
           # credentials - unit tests mock the Supabase client itself.
           SUPABASE_URL: https://ci-placeholder.supabase.co

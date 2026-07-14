@@ -21,8 +21,22 @@ import { useWardrobeStore } from '../../stores/wardrobeStore'
 import {
   Shirt,
   Plus,
+  Trash2,
+  X,
+  RefreshCw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Skeleton } from '@/components/ui/skeleton'
 import { FilterPanel, type ItemFilters, type SortOptions } from '@/components/wardrobe/FilterPanel'
 import { ItemUpload } from '@/components/wardrobe/ItemUpload'
 import { ItemDetailModal } from '@/components/wardrobe/ItemDetailModal'
@@ -52,12 +66,18 @@ export default function WardrobePage() {
   const toggleItemFavorite = useWardrobeStore((state) => state.toggleItemFavorite)
   const setFilter = useWardrobeStore((state) => state.setFilter)
   const toggleItemSelected = useWardrobeStore((state) => state.toggleItemSelected)
+  const clearSelectedItems = useWardrobeStore((state) => state.clearSelectedItems)
+  const deleteSelectedItems = useWardrobeStore((state) => state.deleteSelectedItems)
+  const clearError = useWardrobeStore((state) => state.clearError)
 
   // Local state
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [selectedItemDetail, setSelectedItemDetail] = useState<Item | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [favoritingIds, setFavoritingIds] = useState<Set<string>>(new Set())
+  const [itemPendingDelete, setItemPendingDelete] = useState<Item | null>(null)
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Filters and sort
   const [filters, setFilters] = useState<ItemFilters>({
@@ -218,23 +238,56 @@ export default function WardrobePage() {
     }
   }
 
-  const handleDeleteItem = async (itemId: string) => {
-    if (!confirm('Are you sure you want to delete this item?')) return
+  const handleDeleteItem = (itemId: string) => {
+    const item =
+      selectedItemDetail?.id === itemId
+        ? selectedItemDetail
+        : filteredItems.find((i) => i.id === itemId) || null
+    setItemPendingDelete(item ?? { id: itemId, name: 'this item' } as Item)
+  }
 
+  const confirmDeleteItem = async () => {
+    if (!itemPendingDelete) return
+    setIsDeleting(true)
     try {
-      await apiDeleteItem(itemId)
+      await apiDeleteItem(itemPendingDelete.id)
       toast({
         title: 'Item deleted',
         description: 'The item has been removed from your wardrobe',
       })
       setIsDetailModalOpen(false)
+      setItemPendingDelete(null)
       fetchItems(true)
-    } catch (err) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to delete item',
         variant: 'destructive',
       })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const confirmBulkDelete = async () => {
+    const count = selectedItems.size
+    if (count === 0) return
+    setIsDeleting(true)
+    try {
+      await deleteSelectedItems()
+      toast({
+        title: 'Items deleted',
+        description: `${count} item${count === 1 ? '' : 's'} removed from your wardrobe`,
+      })
+      setIsBulkDeleteOpen(false)
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete selected items',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -325,8 +378,20 @@ export default function WardrobePage() {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md text-sm text-destructive">
-          {error.message}
+        <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-destructive/10 border border-destructive/20 rounded-md text-sm text-destructive">
+          <span>{error.message}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 border-destructive/30 text-destructive hover:bg-destructive/10"
+            onClick={() => {
+              clearError()
+              void fetchItems(true)
+            }}
+          >
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            Try again
+          </Button>
         </div>
       )}
 
@@ -339,25 +404,71 @@ export default function WardrobePage() {
         onResetFilters={handleResetFilters}
       />
 
+      {/* Bulk selection bar */}
+      {selectedItems.size > 0 && (
+        <div
+          className="sticky top-2 z-30 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card/95 backdrop-blur-sm px-3 py-2.5 shadow-sm md:top-4"
+          role="toolbar"
+          aria-label="Selected items actions"
+        >
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-primary px-2 text-xs text-primary-foreground">
+              {selectedItems.size}
+            </span>
+            selected
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => clearSelectedItems()}>
+              <X className="h-4 w-4 mr-1.5" />
+              Clear
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setIsBulkDeleteOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Delete
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Items grid/list */}
       {isLoading ? (
-        <div className="text-center py-12">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-b-2 border-primary"></div>
-          <p className="mt-4 text-muted-foreground">Loading items...</p>
+        <div
+          className={`grid gap-3 md:gap-4 ${
+            sort.isGridView
+              ? 'grid-cols-2 gap-2 xs:gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+              : 'grid-cols-1'
+          }`}
+        >
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton
+              key={i}
+              className={sort.isGridView ? 'aspect-[3/4] w-full rounded-xl' : 'h-20 w-full rounded-xl'}
+            />
+          ))}
         </div>
       ) : filteredItems.length === 0 ? (
         <div className="text-center py-12 bg-card rounded-lg shadow">
           <Shirt className="mx-auto h-12 w-12 md:h-16 md:w-16 text-muted-foreground" />
           <h3 className="mt-4 text-lg font-medium text-foreground">No items found</h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            {filters.search || filters.category !== 'all' || filters.condition !== 'all' || filters.occasion
+            {filters.search || filters.category !== 'all' || filters.condition !== 'all' || filters.occasion || filters.isFavorite
               ? 'Try adjusting your filters or search query'
               : 'Add your first item to get started'}
           </p>
-          <Button className="mt-6" onClick={() => setIsUploadModalOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add First Item
-          </Button>
+          {filters.search || filters.category !== 'all' || filters.condition !== 'all' || filters.occasion || filters.isFavorite ? (
+            <Button className="mt-6" variant="outline" onClick={handleResetFilters}>
+              Clear filters
+            </Button>
+          ) : (
+            <Button className="mt-6" onClick={() => setIsUploadModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add First Item
+            </Button>
+          )}
         </div>
       ) : (
         <div
@@ -409,6 +520,70 @@ export default function WardrobePage() {
         onToggleFavorite={handleToggleFavorite}
         onMarkAsWorn={handleMarkAsWorn}
       />
+
+      {/* Single item delete confirmation */}
+      <AlertDialog
+        open={!!itemPendingDelete}
+        onOpenChange={(open) => {
+          if (!open && !isDeleting) setItemPendingDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete item?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {itemPendingDelete
+                ? `"${itemPendingDelete.name}" will be permanently removed from your wardrobe. This cannot be undone.`
+                : 'This item will be permanently removed from your wardrobe.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+              onClick={(e) => {
+                e.preventDefault()
+                void confirmDeleteItem()
+              }}
+            >
+              {isDeleting ? 'Deleting…' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk delete confirmation */}
+      <AlertDialog
+        open={isBulkDeleteOpen}
+        onOpenChange={(open) => {
+          if (!isDeleting) setIsBulkDeleteOpen(open)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {selectedItems.size} item{selectedItems.size === 1 ? '' : 's'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Selected items will be permanently removed from your wardrobe. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+              onClick={(e) => {
+                e.preventDefault()
+                void confirmBulkDelete()
+              }}
+            >
+              {isDeleting ? 'Deleting…' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

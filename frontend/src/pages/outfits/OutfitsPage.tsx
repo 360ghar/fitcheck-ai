@@ -3,9 +3,10 @@
  * View and manage created outfits
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useOutfitStore } from '../../stores/outfitStore'
+import { useWardrobeStore } from '../../stores/wardrobeStore'
 import {
   Layers,
   Plus,
@@ -17,9 +18,26 @@ import {
   Copy,
   Check,
   Trash2,
+  Search,
+  Heart,
+  Grid3x3,
+  List,
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +49,12 @@ import { OutfitCard } from '@/components/outfits/OutfitCard'
 import { ShareOutfitDialog } from '@/components/social/ShareOutfitDialog'
 import { useToast } from '@/components/ui/use-toast'
 import { ZoomableImage } from '@/components/ui/zoomable-image'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
+import { LoadingGrid } from '@/components/ui/loading-grid'
+import { PageHeader } from '@/components/ui/page-header'
+import { ItemImage } from '@/components/ui/item-image'
+import type { Item } from '@/types'
 
 export default function OutfitsPage() {
   const { id } = useParams()
@@ -38,12 +62,16 @@ export default function OutfitsPage() {
   const navigate = useNavigate()
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [isManaging, setIsManaging] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [favoritesOnly, setFavoritesOnly] = useState(false)
   const { toast } = useToast()
 
   const filteredOutfits = useOutfitStore((state) => state.filteredOutfits)
   const isLoading = useOutfitStore((state) => state.isLoading)
   const error = useOutfitStore((state) => state.error)
   const isGridView = useOutfitStore((state) => state.isGridView)
+  const setGridView = useOutfitStore((state) => state.setGridView)
   const startCreating = useOutfitStore((state) => state.startCreating)
   const toggleOutfitFavorite = useOutfitStore((state) => state.toggleOutfitFavorite)
   const setSelectedOutfit = useOutfitStore((state) => state.setSelectedOutfit)
@@ -62,13 +90,43 @@ export default function OutfitsPage() {
   const deleteOutfit = useOutfitStore((state) => state.deleteOutfit)
   const clearError = useOutfitStore((state) => state.clearError)
 
+  const wardrobeItems = useWardrobeStore((s) => s.items)
+  const fetchItems = useWardrobeStore((s) => s.fetchItems)
+
+  const displayedOutfits = useMemo(() => {
+    let list = filteredOutfits
+    if (favoritesOnly) list = list.filter((o) => o.is_favorite)
+    const q = searchQuery.trim().toLowerCase()
+    if (q) {
+      list = list.filter(
+        (o) =>
+          o.name.toLowerCase().includes(q) ||
+          (o.description || '').toLowerCase().includes(q) ||
+          (o.occasion || '').toLowerCase().includes(q) ||
+          (o.tags || []).some((t) => t.toLowerCase().includes(q))
+      )
+    }
+    return list
+  }, [filteredOutfits, favoritesOnly, searchQuery])
+
+  const compositionItems: Item[] = useMemo(() => {
+    if (!selectedOutfit) return []
+    if (selectedOutfit.items?.length) return selectedOutfit.items
+    return selectedOutfit.item_ids
+      .map((itemId) => wardrobeItems.find((i) => i.id === itemId))
+      .filter((i): i is Item => Boolean(i))
+  }, [selectedOutfit, wardrobeItems])
+
   useEffect(() => {
     const action = searchParams.get('action')
     if (action === 'create') {
       startCreating()
     }
     fetchOutfits(true)
-  }, [fetchOutfits, searchParams, startCreating])
+    if (wardrobeItems.length === 0) {
+      void fetchItems(true).catch(() => null)
+    }
+  }, [fetchOutfits, searchParams, startCreating, fetchItems, wardrobeItems.length])
 
   // Handle single outfit view
   useEffect(() => {
@@ -77,88 +135,155 @@ export default function OutfitsPage() {
     }
   }, [fetchOutfitById, id])
 
+  const handleMarkWorn = async () => {
+    if (!selectedOutfit) return
+    setIsManaging(true)
+    try {
+      await markOutfitAsWorn(selectedOutfit.id)
+      toast({ title: 'Marked as worn' })
+    } catch (err) {
+      toast({
+        title: 'Failed to mark as worn',
+        description: err instanceof Error ? err.message : 'An error occurred',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsManaging(false)
+    }
+  }
+
+  const handleDuplicate = async () => {
+    if (!selectedOutfit) return
+    setIsManaging(true)
+    try {
+      const dup = await duplicateOutfit(selectedOutfit.id)
+      setSelectedOutfit(dup)
+      toast({ title: 'Outfit duplicated' })
+    } catch (err) {
+      toast({
+        title: 'Failed to duplicate',
+        description: err instanceof Error ? err.message : 'An error occurred',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsManaging(false)
+    }
+  }
+
+  const generationProgress =
+    generationStatus === 'pending' ? 25 : generationStatus === 'processing' ? 65 : generationStatus === 'completed' ? 100 : 0
+
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
-      {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 md:mb-6">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">Outfits</h1>
-          <p className="text-sm text-muted-foreground">
-            {filteredOutfits.length} {filteredOutfits.length === 1 ? 'outfit' : 'outfits'}
-          </p>
-        </div>
-        <div className="hidden md:flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={() => navigate('/try-on')}
-          >
-            <Camera className="h-4 w-4 mr-2" />
-            Try My Look
-          </Button>
-          <Button onClick={startCreating}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Outfit
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2 md:hidden mb-4">
-        <Button
-          variant="outline"
-          onClick={() => navigate('/try-on')}
-          className="w-full"
-        >
+      <PageHeader
+        title="Outfits"
+        description={`${displayedOutfits.length} ${displayedOutfits.length === 1 ? 'outfit' : 'outfits'}`}
+      >
+        <Button variant="outline" onClick={() => navigate('/try-on')} className="w-full md:w-auto">
           <Camera className="h-4 w-4 mr-2" />
           Try My Look
         </Button>
+        <Button onClick={startCreating} className="w-full md:w-auto hidden md:inline-flex">
+          <Plus className="h-4 w-4 mr-2" />
+          Create Outfit
+        </Button>
+      </PageHeader>
+
+      <div className="md:hidden mb-4">
         <Button onClick={startCreating} className="w-full">
           <Plus className="h-4 w-4 mr-2" />
           Create Outfit
         </Button>
       </div>
 
+      {/* Search + filters */}
+      <div className="flex flex-col sm:flex-row gap-2 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search outfits…"
+            className="pl-9"
+            aria-label="Search outfits"
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant={favoritesOnly ? 'default' : 'outline'}
+            size="icon"
+            aria-label="Favorites only"
+            aria-pressed={favoritesOnly}
+            onClick={() => setFavoritesOnly((v) => !v)}
+            className={favoritesOnly ? 'bg-pink-500 hover:bg-pink-500/90 border-pink-500' : ''}
+          >
+            <Heart className={`h-4 w-4 ${favoritesOnly ? 'fill-current' : ''}`} />
+          </Button>
+          <Button
+            type="button"
+            variant={isGridView ? 'default' : 'outline'}
+            size="icon"
+            aria-label="Grid view"
+            onClick={() => setGridView(true)}
+          >
+            <Grid3x3 className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant={!isGridView ? 'default' : 'outline'}
+            size="icon"
+            aria-label="List view"
+            onClick={() => setGridView(false)}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
       {/* Outfits grid */}
       {isLoading ? (
-        <div className="text-center py-12">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-b-2 border-primary"></div>
-          <p className="mt-4 text-muted-foreground">Loading outfits...</p>
-        </div>
+        <LoadingGrid
+          count={8}
+          variant={isGridView ? 'square' : 'list'}
+          columns={isGridView ? 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'}
+        />
       ) : error ? (
-        <div className="text-center py-12 bg-card rounded-lg shadow border border-destructive/20">
-          <Layers className="mx-auto h-12 w-12 md:h-16 md:w-16 text-destructive/60" />
-          <h3 className="mt-4 text-lg font-medium text-foreground">Couldn&apos;t load outfits</h3>
-          <p className="mt-2 text-sm text-muted-foreground px-4">
-            {error.message || 'Something went wrong. Please try again.'}
-          </p>
-          <Button
-            className="mt-6"
-            onClick={() => {
-              clearError()
-              void fetchOutfits(true)
-            }}
-          >
-            Try again
-          </Button>
-        </div>
-      ) : filteredOutfits.length === 0 ? (
-        <div className="text-center py-12 bg-card rounded-lg shadow">
-          <Layers className="mx-auto h-12 w-12 md:h-16 md:w-16 text-muted-foreground" />
-          <h3 className="mt-4 text-lg font-medium text-foreground">No outfits yet</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Create your first outfit by combining items from your wardrobe
-          </p>
-          <Button onClick={startCreating} className="mt-6">
-            <Plus className="h-4 w-4 mr-2" />
-            Create First Outfit
-          </Button>
-        </div>
+        <ErrorState
+          icon={Layers}
+          title="Couldn't load outfits"
+          description={error.message || 'Something went wrong. Please try again.'}
+          onRetry={() => {
+            clearError()
+            void fetchOutfits(true)
+          }}
+        />
+      ) : displayedOutfits.length === 0 ? (
+        <EmptyState
+          icon={Layers}
+          title={searchQuery || favoritesOnly ? 'No matching outfits' : 'No outfits yet'}
+          description={
+            searchQuery || favoritesOnly
+              ? 'Try a different search or clear filters'
+              : 'Create your first outfit by combining items from your wardrobe'
+          }
+          actionLabel={searchQuery || favoritesOnly ? 'Clear filters' : 'Create first outfit'}
+          onAction={() => {
+            if (searchQuery || favoritesOnly) {
+              setSearchQuery('')
+              setFavoritesOnly(false)
+            } else {
+              startCreating()
+            }
+          }}
+        />
       ) : (
         <div
           className={`grid gap-3 md:gap-4 ${
             isGridView ? 'grid-cols-2 gap-2 md:gap-4 md:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'
           }`}
         >
-          {filteredOutfits.map((outfit) => {
+          {displayedOutfits.map((outfit) => {
             const genStatus = generatingOutfits.get(outfit.id)?.status || null
             return (
               <OutfitCard
@@ -167,7 +292,6 @@ export default function OutfitsPage() {
                 variant={isGridView ? 'default' : 'list'}
                 generationStatus={genStatus}
                 onClick={() => {
-                  // Failed auto-generation card says "Click to retry"
                   if (genStatus === 'failed') {
                     void startGenerationForNewOutfit(outfit.id)
                     return
@@ -206,7 +330,7 @@ export default function OutfitsPage() {
           </DialogHeader>
 
           {selectedOutfit && (
-            <div className="space-y-3 sm:space-y-4">
+            <div className="space-y-4">
               <div className="aspect-square sm:aspect-[4/3] rounded-lg overflow-hidden bg-muted">
                 {generatedImageUrl ? (
                   <ZoomableImage
@@ -224,22 +348,71 @@ export default function OutfitsPage() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                    <Layers className="h-10 w-10" />
+                  <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground gap-2 p-4">
+                    <Sparkles className="h-10 w-10 text-primary/40" />
+                    <p className="text-sm font-medium text-foreground">No AI look yet</p>
+                    <p className="text-xs text-center">Generate an image to visualize this outfit</p>
                   </div>
                 )}
               </div>
 
-              {generationStatus !== 'idle' && (
-                <div className="text-xs sm:text-sm text-muted-foreground">
-                  Status: <span className="capitalize">{generationStatus}</span>
+              {/* Metadata */}
+              <div className="flex flex-wrap gap-2">
+                {selectedOutfit.occasion && (
+                  <Badge variant="secondary" className="capitalize">{selectedOutfit.occasion}</Badge>
+                )}
+                {selectedOutfit.season && (
+                  <Badge variant="outline" className="capitalize">{selectedOutfit.season}</Badge>
+                )}
+                {selectedOutfit.style && (
+                  <Badge variant="outline" className="capitalize">{selectedOutfit.style}</Badge>
+                )}
+                <Badge variant="outline">Worn {selectedOutfit.worn_count ?? 0}×</Badge>
+              </div>
+
+              {/* Composition */}
+              <div>
+                <p className="text-sm font-semibold text-foreground mb-2">Items in this outfit</p>
+                {compositionItems.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {compositionItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center gap-2 p-2 rounded-lg border border-border bg-muted/30"
+                      >
+                        <ItemImage item={item} size="sm" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{item.name}</p>
+                          <p className="text-xs text-muted-foreground capitalize">{item.category}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {selectedOutfit.item_ids.length > 0
+                      ? `${selectedOutfit.item_ids.length} item${selectedOutfit.item_ids.length === 1 ? '' : 's'} (details loading…)`
+                      : 'No items linked to this outfit.'}
+                  </p>
+                )}
+              </div>
+
+              {isGenerating && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Generating AI look…
+                    </span>
+                    <span className="capitalize">{generationStatus}</span>
+                  </div>
+                  <Progress value={generationProgress} className="h-2" />
                 </div>
               )}
             </div>
           )}
 
           <DialogFooter className="flex-col md:flex-row gap-2">
-            {/* Primary actions visible on all screens */}
             <div className="flex gap-2 w-full md:w-auto order-2 md:order-1">
               <Button
                 variant="outline"
@@ -261,21 +434,18 @@ export default function OutfitsPage() {
                   {isGenerating ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      <span className="hidden xs:inline">Generating...</span>
-                      <span className="xs:hidden">...</span>
+                      Generating…
                     </>
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4 mr-2" />
-                      <span className="hidden xs:inline">Generate AI Image</span>
-                      <span className="xs:hidden">AI Generate</span>
+                      Generate look
                     </>
                   )}
                 </Button>
               )}
             </div>
 
-            {/* Secondary actions in dropdown on mobile, visible on desktop */}
             {selectedOutfit && (
               <>
                 <div className="hidden md:flex items-center gap-2 order-2">
@@ -283,84 +453,30 @@ export default function OutfitsPage() {
                     <Share2 className="h-4 w-4 mr-2" />
                     Share
                   </Button>
-                  <Button
-                    variant="outline"
-                    disabled={isManaging || isGenerating}
-                    onClick={async () => {
-                      setIsManaging(true)
-                      try {
-                        await markOutfitAsWorn(selectedOutfit.id)
-                        toast({ title: 'Marked as worn' })
-                      } catch (err) {
-                        toast({
-                          title: 'Failed to mark as worn',
-                          description: err instanceof Error ? err.message : 'An error occurred',
-                          variant: 'destructive',
-                        })
-                      } finally {
-                        setIsManaging(false)
-                      }
-                    }}
-                  >
+                  <Button variant="outline" disabled={isManaging || isGenerating} onClick={() => void handleMarkWorn()}>
                     <Check className="h-4 w-4 mr-2" />
-                    Mark Worn
+                    Mark as worn
                   </Button>
-                  <Button
-                    variant="outline"
-                    disabled={isManaging || isGenerating}
-                    onClick={async () => {
-                      setIsManaging(true)
-                      try {
-                        const dup = await duplicateOutfit(selectedOutfit.id)
-                        setSelectedOutfit(dup)
-                        toast({ title: 'Outfit duplicated' })
-                      } catch (err) {
-                        toast({
-                          title: 'Failed to duplicate',
-                          description: err instanceof Error ? err.message : 'An error occurred',
-                          variant: 'destructive',
-                        })
-                      } finally {
-                        setIsManaging(false)
-                      }
-                    }}
-                  >
+                  <Button variant="outline" disabled={isManaging || isGenerating} onClick={() => void handleDuplicate()}>
                     <Copy className="h-4 w-4 mr-2" />
                     Duplicate
                   </Button>
                   <Button
                     variant="destructive"
                     disabled={isManaging || isGenerating}
-                    onClick={async () => {
-                      if (!confirm('Delete this outfit?')) return
-                      setIsManaging(true)
-                      try {
-                        await deleteOutfit(selectedOutfit.id)
-                        toast({ title: 'Outfit deleted' })
-                        setSelectedOutfit(null)
-                      } catch (err) {
-                        toast({
-                          title: 'Failed to delete outfit',
-                          description: err instanceof Error ? err.message : 'An error occurred',
-                          variant: 'destructive',
-                        })
-                      } finally {
-                        setIsManaging(false)
-                      }
-                    }}
+                    onClick={() => setIsDeleteDialogOpen(true)}
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete
                   </Button>
                 </div>
 
-                {/* Mobile dropdown menu for secondary actions */}
                 <div className="md:hidden order-1 w-full">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" className="w-full">
                         <MoreVertical className="h-4 w-4 mr-2" />
-                        More Actions
+                        More actions
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
@@ -368,69 +484,18 @@ export default function OutfitsPage() {
                         <Share2 className="h-4 w-4 mr-2" />
                         Share
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={isManaging || isGenerating}
-                        onClick={async () => {
-                          setIsManaging(true)
-                          try {
-                            await markOutfitAsWorn(selectedOutfit.id)
-                            toast({ title: 'Marked as worn' })
-                          } catch (err) {
-                            toast({
-                              title: 'Failed to mark as worn',
-                              description: err instanceof Error ? err.message : 'An error occurred',
-                              variant: 'destructive',
-                            })
-                          } finally {
-                            setIsManaging(false)
-                          }
-                        }}
-                      >
+                      <DropdownMenuItem disabled={isManaging || isGenerating} onClick={() => void handleMarkWorn()}>
                         <Check className="h-4 w-4 mr-2" />
-                        Mark as Worn
+                        Mark as worn
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={isManaging || isGenerating}
-                        onClick={async () => {
-                          setIsManaging(true)
-                          try {
-                            const dup = await duplicateOutfit(selectedOutfit.id)
-                            setSelectedOutfit(dup)
-                            toast({ title: 'Outfit duplicated' })
-                          } catch (err) {
-                            toast({
-                              title: 'Failed to duplicate',
-                              description: err instanceof Error ? err.message : 'An error occurred',
-                              variant: 'destructive',
-                            })
-                          } finally {
-                            setIsManaging(false)
-                          }
-                        }}
-                      >
+                      <DropdownMenuItem disabled={isManaging || isGenerating} onClick={() => void handleDuplicate()}>
                         <Copy className="h-4 w-4 mr-2" />
                         Duplicate
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-destructive"
                         disabled={isManaging || isGenerating}
-                        onClick={async () => {
-                          if (!confirm('Delete this outfit?')) return
-                          setIsManaging(true)
-                          try {
-                            await deleteOutfit(selectedOutfit.id)
-                            toast({ title: 'Outfit deleted' })
-                            setSelectedOutfit(null)
-                          } catch (err) {
-                            toast({
-                              title: 'Failed to delete outfit',
-                              description: err instanceof Error ? err.message : 'An error occurred',
-                              variant: 'destructive',
-                            })
-                          } finally {
-                            setIsManaging(false)
-                          }
-                        }}
+                        onClick={() => setIsDeleteDialogOpen(true)}
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Delete
@@ -449,6 +514,52 @@ export default function OutfitsPage() {
         onClose={() => setIsShareOpen(false)}
         outfit={selectedOutfit}
       />
+
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!isManaging) setIsDeleteDialogOpen(open)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete outfit?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedOutfit
+                ? `"${selectedOutfit.name}" will be permanently deleted. This cannot be undone.`
+                : 'This outfit will be permanently deleted.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isManaging}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isManaging || !selectedOutfit}
+              onClick={async (e) => {
+                e.preventDefault()
+                if (!selectedOutfit) return
+                setIsManaging(true)
+                try {
+                  await deleteOutfit(selectedOutfit.id)
+                  toast({ title: 'Outfit deleted' })
+                  setSelectedOutfit(null)
+                  setIsDeleteDialogOpen(false)
+                } catch (err) {
+                  toast({
+                    title: 'Failed to delete outfit',
+                    description: err instanceof Error ? err.message : 'An error occurred',
+                    variant: 'destructive',
+                  })
+                } finally {
+                  setIsManaging(false)
+                }
+              }}
+            >
+              {isManaging ? 'Deleting…' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <OutfitCreateDialog />
     </div>

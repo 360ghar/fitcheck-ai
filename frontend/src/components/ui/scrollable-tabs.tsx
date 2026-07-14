@@ -11,12 +11,15 @@ interface ScrollableTabsProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode
   /** Show gradient fade indicators on edges */
   showFade?: boolean
+  /** Accessible name for the tablist */
+  'aria-label'?: string
 }
 
 export function ScrollableTabs({
   children,
   className,
   showFade = true,
+  'aria-label': ariaLabel = 'Tabs',
   ...props
 }: ScrollableTabsProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null)
@@ -50,6 +53,8 @@ export function ScrollableTabs({
       {/* Scrollable container */}
       <div
         ref={scrollRef}
+        role="tablist"
+        aria-label={ariaLabel}
         className="overflow-x-auto scrollbar-hide scroll-snap-x px-4 md:px-0 touch-pan-x overscroll-x-contain"
       >
         <div className="flex gap-1 w-max">{children}</div>
@@ -87,6 +92,10 @@ export function ScrollableTab({
 }: ScrollableTabProps) {
   return (
     <button
+      type="button"
+      role="tab"
+      aria-selected={isActive}
+      tabIndex={isActive ? 0 : -1}
       className={cn(
         // Base styles
         'flex items-center gap-2 px-4 py-3 border-b-2 font-medium text-sm whitespace-nowrap',

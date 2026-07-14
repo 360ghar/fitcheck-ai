@@ -27,6 +27,10 @@ export interface AchievementsData {
     achievement_id: string
     earned_at: string
     reward_claimed: boolean
+    /** Present when API enriches from catalog */
+    name?: string
+    description?: string | null
+    xp_reward?: number
   }>
   available: Array<{
     id: string

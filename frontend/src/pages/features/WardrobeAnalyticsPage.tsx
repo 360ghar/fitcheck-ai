@@ -184,7 +184,7 @@ export default function WardrobeAnalyticsPage() {
 
       <div className="pt-20">
         {/* Hero Section */}
-        <section className="relative overflow-hidden bg-gradient-to-br from-sky-600 via-blue-600 to-indigo-600 dark:from-sky-950 dark:via-blue-950 dark:to-indigo-950">
+        <section className="relative overflow-hidden bg-stone-900 dark:bg-stone-950">
           {/* Background Pattern */}
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-20 right-10 w-72 h-72 bg-white rounded-full blur-3xl" />
@@ -215,7 +215,7 @@ export default function WardrobeAnalyticsPage() {
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   <Link
                     to="/auth/register"
-                    className="inline-flex items-center justify-center gap-2 bg-white text-blue-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
+                    className="inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
                   >
                     Analyze My Wardrobe
                     <ArrowRight className="w-5 h-5" />
@@ -310,7 +310,7 @@ export default function WardrobeAnalyticsPage() {
               </AnimatedSection>
 
               <AnimatedSection delay={200}>
-                <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl p-8 text-white">
+                <div className="bg-indigo-600 rounded-3xl p-8 text-white">
                   <div className="flex items-center gap-3 mb-6">
                     <Calculator className="w-8 h-8" />
                     <h3 className="text-2xl font-bold">CPW Calculator</h3>
@@ -340,7 +340,7 @@ export default function WardrobeAnalyticsPage() {
         </section>
 
         {/* Features Grid */}
-        <section className="py-20 md:py-28 bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-blue-950">
+        <section className="py-20 md:py-28 bg-stone-50 dark:bg-stone-950">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center max-w-3xl mx-auto mb-16">
@@ -413,7 +413,7 @@ export default function WardrobeAnalyticsPage() {
         </section>
 
         {/* How It Works */}
-        <section id="how-it-works" className="py-20 md:py-28 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-blue-950">
+        <section id="how-it-works" className="py-20 md:py-28 bg-stone-50 dark:bg-stone-950">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center max-w-3xl mx-auto mb-16">
@@ -501,7 +501,7 @@ export default function WardrobeAnalyticsPage() {
               </AnimatedSection>
 
               <AnimatedSection delay={200}>
-                <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl p-8 text-white">
+                <div className="bg-indigo-600 rounded-3xl p-8 text-white">
                   <div className="flex items-center gap-3 mb-6">
                     <Wallet className="w-8 h-8" />
                     <h3 className="text-2xl font-bold">Real User Savings</h3>
@@ -571,7 +571,7 @@ export default function WardrobeAnalyticsPage() {
         </section>
 
         {/* CTA Section */}
-        <section className="py-20 md:py-28 bg-gradient-to-br from-blue-600 to-indigo-600">
+        <section className="py-20 md:py-28 bg-stone-900">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <AnimatedSection>
               <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">
@@ -583,7 +583,7 @@ export default function WardrobeAnalyticsPage() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link
                   to="/auth/register"
-                  className="inline-flex items-center justify-center gap-2 bg-white text-blue-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
+                  className="inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
                 >
                   Start Tracking Analytics
                   <ArrowRight className="w-5 h-5" />
