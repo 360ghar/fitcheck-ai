@@ -562,9 +562,10 @@ export function suggestLaundryGroups(items: Item[]): {
     groups.get(key)!.items.push(item)
   })
 
-  // Convert to array and filter out empty groups
+  // Convert to array. Every group in the map already has at least one item
+  // (a group is only ever created right before an item is pushed to it above),
+  // so there is no empty-group case left to filter out.
   return Array.from(groups.entries())
-    .filter(([_, group]) => group.items.length > 0)
     .map(([key, group]) => ({
       groupName: WASH_TYPE_OPTIONS.find((o) => o.value === key)?.label || key,
       ...group,

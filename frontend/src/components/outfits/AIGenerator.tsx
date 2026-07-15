@@ -2,7 +2,7 @@
  * AIGenerator Component
  *
  * Interface for AI-powered outfit image generation using the backend AI service.
- * Supports multiple AI providers (Gemini, OpenAI, custom) for high-quality fashion visualization.
+ * Supports multiple AI providers (OpenAI, custom) for high-quality fashion visualization.
  */
 
 import { useState } from 'react'
@@ -182,6 +182,13 @@ const VIEW_ANGLE_OPTIONS = [
   { value: 'close up', label: 'Close-Up' },
 ]
 
+function handleDownload(imageUrl: string, filename: string) {
+  const link = document.createElement('a')
+  link.href = imageUrl
+  link.download = filename
+  link.click()
+}
+
 // ============================================================================
 // COMPONENT
 // ============================================================================
@@ -242,14 +249,13 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
     setProgress(0)
 
     // Simulate progress for UX
+    let simulatedProgress = 0
     const progressInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 90) {
-          clearInterval(progressInterval)
-          return 90
-        }
-        return prev + 10
-      })
+      simulatedProgress = Math.min(simulatedProgress + 10, 90)
+      setProgress(simulatedProgress)
+      if (simulatedProgress >= 90) {
+        clearInterval(progressInterval)
+      }
     }, 300)
 
     try {
@@ -331,14 +337,13 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
     setMultiPoseImages([])
 
     // Simulate progress for UX
+    let simulatedProgress = 0
     const progressInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 90) {
-          clearInterval(progressInterval)
-          return 90
-        }
-        return prev + 5
-      })
+      simulatedProgress = Math.min(simulatedProgress + 5, 90)
+      setProgress(simulatedProgress)
+      if (simulatedProgress >= 90) {
+        clearInterval(progressInterval)
+      }
     }, 500)
 
     try {
@@ -403,13 +408,6 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
     }
   }
 
-  const handleDownload = (imageUrl: string, filename: string) => {
-    const link = document.createElement('a')
-    link.href = imageUrl
-    link.download = filename
-    link.click()
-  }
-
   // ============================================================================
   // BUILD PROMPT PREVIEW
   // ============================================================================
@@ -467,6 +465,7 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
               <div className="grid grid-cols-2 gap-2 mt-2">
                 {STYLE_PRESETS.map((preset) => (
                   <button
+                    type="button"
                     key={preset.value}
                     onClick={() => setOptions((prev) => ({ ...prev, style: preset.value }))}
                     className={`p-3 rounded-lg border text-left transition-all ${
@@ -488,6 +487,7 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
               <div className="grid grid-cols-4 gap-2 mt-2">
                 {BACKGROUND_OPTIONS.map((bg) => (
                   <button
+                    type="button"
                     key={bg.value}
                     onClick={() => setOptions((prev) => ({ ...prev, background: bg.value }))}
                     className={`aspect-square rounded-lg border-2 overflow-hidden transition-all ${
@@ -518,6 +518,7 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
               <div className="grid grid-cols-4 gap-2">
                 {LIGHTING_SCENARIOS.map((scenario) => (
                   <button
+                    type="button"
                     key={scenario.value}
                     onClick={() => handleApplyScenario(scenario.value)}
                     className={`p-2 rounded-lg border text-center transition-all ${
@@ -811,6 +812,7 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
                   const angleLabels = ['Front', 'Side', 'Back']
                   return (
                     <button
+                      type="button"
                       key={img.timestamp}
                       onClick={() => setSelectedImage(img)}
                       className={`relative aspect-[3/4] rounded-lg overflow-hidden border-2 transition-all ${
@@ -847,6 +849,7 @@ export function AIGenerator({ items, onGenerated, onClose }: AIGeneratorProps) {
               <div className="grid grid-cols-4 gap-2">
                 {generatedImages.map((img) => (
                   <button
+                    type="button"
                     key={img.timestamp}
                     onClick={() => setSelectedImage(img)}
                     className={`aspect-square rounded-lg overflow-hidden border-2 ${

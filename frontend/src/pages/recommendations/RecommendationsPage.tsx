@@ -31,6 +31,15 @@ import type { AstrologyRecommendationMode, CompleteLookSuggestion, MatchResult, 
 
 type TabType = 'today' | 'match' | 'complete' | 'weather' | 'astrology' | 'shopping'
 
+const RECOMMENDATIONS_TABS = [
+  { id: 'today' as TabType, name: 'Today', icon: Sun },
+  { id: 'match' as TabType, name: 'Find Matches', icon: Shirt },
+  { id: 'complete' as TabType, name: 'Complete Look', icon: Layers },
+  { id: 'weather' as TabType, name: 'Weather', icon: TrendingUp },
+  { id: 'astrology' as TabType, name: 'Astrology', icon: Stars },
+  { id: 'shopping' as TabType, name: 'Shopping', icon: Palette },
+]
+
 function formatScore(score: number | undefined | null): string {
   if (score == null || Number.isNaN(score)) return '—'
   const pct = score <= 1 ? Math.round(score * 100) : Math.round(score)
@@ -87,7 +96,7 @@ export default function RecommendationsPage() {
   const [matchSearch, setMatchSearch] = useState('')
   const [matchData, setMatchData] = useState<{ matches: MatchResult[]; complete_looks: CompleteLookSuggestion[] } | null>(null)
   const [isLoadingMatch, setIsLoadingMatch] = useState(false)
-  const [todayAutoRan, setTodayAutoRan] = useState(false)
+  const todayAutoRanRef = useRef(false)
 
   const selectedMatchItem = useMemo(
     () => items.find((i) => i.id === matchItemId) || null,
@@ -144,14 +153,14 @@ export default function RecommendationsPage() {
 
       // Fallback: If API returns empty, generate client-side suggestions
       if (!looks || looks.length === 0) {
-        const selectedItems = items.filter((item) => ids.includes(item.id))
+        const selectedItems = items.filter((item) => completeSelection.has(item.id))
         looks = generateFallbackOutfits(selectedItems, items, 6)
       }
 
       setCompleteLooks(looks)
     } catch (err) {
       // On API error, try fallback
-      const selectedItems = items.filter((item) => ids.includes(item.id))
+      const selectedItems = items.filter((item) => completeSelection.has(item.id))
       const fallbackLooks = generateFallbackOutfits(selectedItems, items, 6)
 
       if (fallbackLooks.length > 0) {
@@ -194,18 +203,17 @@ export default function RecommendationsPage() {
 
   // Auto-load weather for "Today" default tab once items are ready
   useEffect(() => {
-    if (activeTab !== 'today' || todayAutoRan || isLoadingItems) return
-    setTodayAutoRan(true)
+    if (activeTab !== 'today' || todayAutoRanRef.current || isLoadingItems) return
+    todayAutoRanRef.current = true
     void runWeather()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, todayAutoRan, isLoadingItems])
+  }, [activeTab, isLoadingItems])
 
   const weatherSuggestedItems = useMemo(() => {
     if (!weatherData?.preferred_categories?.length || items.length === 0) return []
     const cats = new Set(weatherData.preferred_categories.map((c) => c.toLowerCase()))
     return items
-      .filter((i) => cats.has(String(i.category).toLowerCase()))
-      .filter((i) => i.condition === 'clean' || !i.condition)
+      .filter((i) => cats.has(String(i.category).toLowerCase()) && (i.condition === 'clean' || !i.condition))
       .slice(0, 12)
   }, [weatherData, items])
 
@@ -284,14 +292,7 @@ export default function RecommendationsPage() {
     }
   }
 
-  const tabs = [
-    { id: 'today' as TabType, name: 'Today', icon: Sun },
-    { id: 'match' as TabType, name: 'Find Matches', icon: Shirt },
-    { id: 'complete' as TabType, name: 'Complete Look', icon: Layers },
-    { id: 'weather' as TabType, name: 'Weather', icon: TrendingUp },
-    { id: 'astrology' as TabType, name: 'Astrology', icon: Stars },
-    { id: 'shopping' as TabType, name: 'Shopping', icon: Palette },
-  ]
+  const tabs = RECOMMENDATIONS_TABS
 
   const renderItemCard = (item: Item) => {
     const enrichedItem = enrichItemWithImages(item, items)
@@ -494,8 +495,8 @@ export default function RecommendationsPage() {
                             {matchData.matches
                               .filter((m) => m.item?.id)
                               .slice(0, 10)
-                              .map((m, idx) => (
-                              <div key={`${m.item.id}-${idx}`} className="p-3 rounded-lg border border-border min-w-[200px] md:min-w-0 scroll-snap-start">
+                              .map((m) => (
+                              <div key={m.item.id} className="p-3 rounded-lg border border-border min-w-[200px] md:min-w-0 scroll-snap-start">
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">{renderItemCard(m.item)}</div>
                                   <Badge variant="secondary">{formatScore(m.score)}</Badge>
@@ -517,8 +518,8 @@ export default function RecommendationsPage() {
                           <div className="text-sm text-muted-foreground">No complete looks yet.</div>
                         ) : (
                           <div className="flex overflow-x-auto gap-3 pb-2 scrollbar-hide scroll-snap-x md:grid md:grid-cols-1 md:overflow-visible md:gap-2">
-                            {matchData.complete_looks.slice(0, 4).map((look, idx) => (
-                              <div key={idx} className="p-3 rounded-lg border border-border min-w-[250px] md:min-w-0 scroll-snap-start">
+                            {matchData.complete_looks.slice(0, 4).map((look) => (
+                              <div key={look.items.map((it) => it.id).join('-')} className="p-3 rounded-lg border border-border min-w-[250px] md:min-w-0 scroll-snap-start">
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="text-sm font-medium text-foreground">{look.description}</div>
                                   <Badge variant="outline">{formatScore(look.match_score)}</Badge>
@@ -590,8 +591,8 @@ export default function RecommendationsPage() {
                 <div className="space-y-2">
                   <div className="text-sm font-semibold text-foreground">Suggestions</div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {completeLooks.map((look, idx) => (
-                      <div key={idx} className="p-3 rounded-lg border border-border">
+                    {completeLooks.map((look) => (
+                      <div key={look.items.map((it) => it.id).join('-')} className="p-3 rounded-lg border border-border">
                         <div className="flex items-center justify-between gap-3">
                           <div className="text-sm font-medium text-foreground">{look.description}</div>
                           <Badge variant="outline">{formatScore(look.match_score)}</Badge>
@@ -761,8 +762,8 @@ export default function RecommendationsPage() {
 
               {shopping.length > 0 && (
                 <div className="space-y-2">
-                  {shopping.map((rec, idx) => (
-                    <div key={idx} className="p-3 rounded-lg border border-border">
+                  {shopping.map((rec) => (
+                    <div key={rec.description} className="p-3 rounded-lg border border-border">
                       <div className="flex items-center justify-between gap-3">
                         <div className="font-medium text-foreground capitalize">{rec.category}</div>
                         <Badge variant={rec.priority === 'high' ? 'default' : 'secondary'}>

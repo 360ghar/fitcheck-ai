@@ -364,12 +364,14 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
     []
   );
 
+  const handleSSEError = useCallback((error: Error) => {
+    setState((prev) => ({ ...prev, error: error.message }));
+  }, []);
+
   const { isConnected, disconnect } = useBatchSSE({
     jobId: state.jobId,
     onEvent: handleSSEEvent,
-    onError: (error) => {
-      setState((prev) => ({ ...prev, error: error.message }));
-    },
+    onError: handleSSEError,
     autoConnect: true,
   });
 

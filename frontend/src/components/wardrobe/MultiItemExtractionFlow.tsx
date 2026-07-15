@@ -259,6 +259,10 @@ export function MultiItemExtractionFlow({
           console.log(`Retrying item generation, attempt ${attempt}, waiting ${delayMs}ms`, error)
         },
         onItemComplete: (index, result) => {
+          // Calculate progress based on completed items
+          completedRef.current += 1
+          const progress = (completedRef.current / items.length) * 100
+
           // Update individual item state when it completes
           setState((prev) => {
             const newItems = [...prev.detectedItems]
@@ -276,10 +280,6 @@ export function MultiItemExtractionFlow({
                 generationError: result.error?.message || 'Image generation failed',
               }
             }
-
-            // Calculate progress based on completed items
-            completedRef.current += 1
-            const progress = (completedRef.current / items.length) * 100
 
             return {
               ...prev,

@@ -43,7 +43,7 @@ export function SocialImportQueueReview({
 
           <img
             src={awaitingPhoto.source_thumb_url || awaitingPhoto.source_photo_url}
-            alt={`Photo ${awaitingPhoto.ordinal}`}
+            alt={`Social import #${awaitingPhoto.ordinal} awaiting confirmation`}
             className="h-56 w-full rounded-md object-cover"
           />
 
@@ -129,7 +129,7 @@ export function SocialImportQueueReview({
             <div className="space-y-2">
               <img
                 src={bufferedPhoto.source_thumb_url || bufferedPhoto.source_photo_url}
-                alt={`Buffered photo ${bufferedPhoto.ordinal}`}
+                alt={`Social import #${bufferedPhoto.ordinal} queued`}
                 className="h-56 w-full rounded-md object-cover"
               />
               <p className="text-xs text-muted-foreground">
@@ -140,7 +140,7 @@ export function SocialImportQueueReview({
             <div className="space-y-2">
               <img
                 src={processingPhoto.source_thumb_url || processingPhoto.source_photo_url}
-                alt={`Processing photo ${processingPhoto.ordinal}`}
+                alt={`Social import #${processingPhoto.ordinal} processing`}
                 className="h-56 w-full rounded-md object-cover opacity-80"
               />
               <p className="text-xs text-muted-foreground">Photo #{processingPhoto.ordinal} is currently being processed.</p>

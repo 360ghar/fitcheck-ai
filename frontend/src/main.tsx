@@ -8,7 +8,7 @@ import App from './App'
 import { Toaster } from './components/ui/toaster'
 import { TooltipProvider } from './components/ui/tooltip'
 import ErrorBoundary from './components/errors/ErrorBoundary'
-import { ThemeProvider } from './components/theme'
+import { ThemeProvider } from './components/theme/ThemeProvider'
 import '@fontsource-variable/plus-jakarta-sans'
 import './index.css'
 

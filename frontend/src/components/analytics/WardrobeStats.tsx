@@ -85,16 +85,16 @@ function StatCard({
   )
 }
 
-function FunFactCard({ fact }: { fact: FunFact }) {
-  const bgColors = {
-    achievement: 'bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800',
-    insight: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800',
-    fun: 'bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800',
-    tip: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800',
-  }
+const FUN_FACT_BG_COLORS = {
+  achievement: 'bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800',
+  insight: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800',
+  fun: 'bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800',
+  tip: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800',
+}
 
+function FunFactCard({ fact }: { fact: FunFact }) {
   return (
-    <div className={cn('p-4 rounded-xl border', bgColors[fact.category])}>
+    <div className={cn('p-4 rounded-xl border', FUN_FACT_BG_COLORS[fact.category])}>
       <div className="flex items-start gap-3">
         <span className="text-2xl">{fact.emoji}</span>
         <div>

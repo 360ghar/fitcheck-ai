@@ -8,7 +8,6 @@ interface SidebarNavProps {
 export function SidebarNav({ children, className }: SidebarNavProps) {
   return (
     <nav
-      role="navigation"
       aria-label="Main navigation"
       className={cn('flex-1 space-y-2 overflow-y-auto px-3 py-2', className)}
     >

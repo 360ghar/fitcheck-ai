@@ -55,7 +55,11 @@ function normalizeItem(item: Item): Item {
 
 function safeItems(items: Item[] | undefined): Item[] {
   if (!Array.isArray(items)) return []
-  return items.filter((item) => item?.id).map(normalizeItem)
+  const result: Item[] = []
+  for (const item of items) {
+    if (item?.id) result.push(normalizeItem(item))
+  }
+  return result
 }
 
 export function AstrologyTab({
@@ -86,8 +90,9 @@ export function AstrologyTab({
         <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Recommendation Type</label>
+              <label htmlFor="astrology-recommendation-type" className="block text-sm font-medium text-foreground mb-1">Recommendation Type</label>
               <select
+                id="astrology-recommendation-type"
                 value={mode}
                 onChange={(e) => onModeChange(e.target.value as AstrologyRecommendationMode)}
                 className="w-full h-11 px-3 border border-border rounded-md bg-background text-foreground"
@@ -98,10 +103,11 @@ export function AstrologyTab({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Target Date</label>
+              <label htmlFor="astrology-target-date" className="block text-sm font-medium text-foreground mb-1">Target Date</label>
               <div className="relative">
                 <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
+                  id="astrology-target-date"
                   type="date"
                   value={targetDate}
                   onChange={(e) => onTargetDateChange(e.target.value)}
@@ -238,8 +244,8 @@ export function AstrologyTab({
               {data.suggested_outfits.length === 0 ? (
                 <div className="text-sm text-muted-foreground">No complete outfit could be assembled yet.</div>
               ) : (
-                data.suggested_outfits.map((outfit, index) => (
-                  <div key={`${outfit.description}-${index}`} className="p-3 border border-border rounded-md">
+                data.suggested_outfits.map((outfit) => (
+                  <div key={outfit.item_ids.join('-')} className="p-3 border border-border rounded-md">
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-sm font-medium text-foreground">{outfit.description}</div>
                       <Badge>{outfit.match_score}</Badge>

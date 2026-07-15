@@ -89,15 +89,12 @@ class Settings(BaseSettings):
     # AI Provider Configuration (Multi-provider support)
     # ==========================================================================
 
-    # Default AI Provider (gemini, openai, custom)
+    # Default AI Provider (openai, custom)
     AI_DEFAULT_PROVIDER: str = "custom"
 
-    # Gemini Provider Defaults
-    AI_GEMINI_API_URL: str = "https://generativelanguage.googleapis.com/v1beta"
+    # Gemini is not a selectable chat/vision/image provider - these two fields
+    # are used only by ai_service.py's embeddings client (google.genai SDK).
     AI_GEMINI_API_KEY: Optional[str] = None
-    AI_GEMINI_CHAT_MODEL: str = "gemini-3-flash-preview"
-    AI_GEMINI_VISION_MODEL: str = "gemini-3-flash-preview"
-    AI_GEMINI_IMAGE_MODEL: str = "gemini-3-pro-image-preview"
     AI_GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
 
     # OpenAI Provider Defaults
@@ -113,7 +110,8 @@ class Settings(BaseSettings):
     AI_CUSTOM_API_KEY: Optional[str] = None
     AI_CUSTOM_CHAT_MODEL: str = "agnes-2.0-flash"
     AI_CUSTOM_VISION_MODEL: str = "agnes-2.0-flash"
-    AI_CUSTOM_IMAGE_MODEL: str = "agnes-image-2.0-flash"
+    AI_CUSTOM_IMAGE_MODEL: str = "agnes-image-2.1-flash"
+    AI_CUSTOM_IMAGE_FALLBACK_MODEL: str = "agnes-image-2.0-flash"
 
     # Generic OpenAI-compatible overrides for the "custom" provider (Agnes, etc.)
     # All optional; unset values fall back to AI_CUSTOM_* above. LLM and Image
@@ -126,7 +124,7 @@ class Settings(BaseSettings):
     OPENAI_IMAGE_URL: Optional[str] = None
     OPENAI_IMAGE_API_KEY: Optional[str] = None
     OPENAI_IMAGE_MODEL: Optional[str] = None
-    # "chat" (response_modalities on /chat/completions, legacy Gemini-proxy trick)
+    # "chat" (response_modalities on /chat/completions, legacy proxy-style trick)
     # "images" (real OpenAI-compatible /images/generations endpoint, e.g. Agnes)
     OPENAI_IMAGE_API_STYLE: str = "images"
 

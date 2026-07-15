@@ -68,7 +68,7 @@ class OutfitBuilderController extends GetxController {
   Future<void> _loadItemsFromRepository() async {
     try {
       isLoading.value = true;
-      final response = await _itemRepository.getItems(limit: 500);
+      final response = await _itemRepository.getItems(limit: 100);
       availableItems.value = response.items;
     } catch (e) {
       error.value = e.toString().replaceAll('Exception: ', '');

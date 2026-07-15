@@ -128,11 +128,6 @@ export default function PrivacyPage() {
                   file storage for your account, wardrobe, and media
                 </li>
                 <li>
-                  <strong>Google Gemini:</strong> AI models used for clothing
-                  detection, recommendations, try-on, and related image/text
-                  generation
-                </li>
-                <li>
                   <strong>OpenAI:</strong> AI models used for selected
                   generation and styling features when configured by our
                   backend

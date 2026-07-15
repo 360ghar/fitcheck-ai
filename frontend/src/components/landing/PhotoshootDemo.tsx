@@ -26,6 +26,29 @@ function isDemoApiError(err: unknown): err is DemoApiError {
   );
 }
 
+async function handleDownload(imageData: string, index: number) {
+  try {
+    const response = await fetch(imageData);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `photoshoot_demo_${index + 1}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    console.error('Download failed:', e);
+  }
+}
+
+function getImageSrc(img: DemoPhotoshootResult['images'][number]) {
+  if (img.image_url) return img.image_url
+  if (img.image_base64) return `data:image/png;base64,${img.image_base64}`
+  return ''
+}
+
 export function PhotoshootDemo() {
   const [state, setState] = useState<DemoState>('idle');
   const [photo, setPhoto] = useState<File | null>(null);
@@ -84,29 +107,6 @@ export function PhotoshootDemo() {
       setState('error');
     }
   };
-
-  const handleDownload = async (imageData: string, index: number) => {
-    try {
-      const response = await fetch(imageData);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `photoshoot_demo_${index + 1}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error('Download failed:', e);
-    }
-  };
-
-  const getImageSrc = (img: DemoPhotoshootResult['images'][number]) => {
-    if (img.image_url) return img.image_url
-    if (img.image_base64) return `data:image/png;base64,${img.image_base64}`
-    return ''
-  }
 
   const handleReset = () => {
     // Revoke object URL before clearing
@@ -205,7 +205,7 @@ export function PhotoshootDemo() {
             <div className="flex items-center gap-3 mb-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
               <img
                 src={photoPreview}
-                alt="Your photo"
+                alt=""
                 className="w-12 h-12 rounded-lg object-cover"
               />
               <div className="flex-1">
@@ -213,6 +213,7 @@ export function PhotoshootDemo() {
                   Photo uploaded
                 </p>
                 <button
+                  type="button"
                   className="text-xs text-green-600 hover:underline"
                   onClick={handleReset}
                 >
@@ -283,7 +284,9 @@ export function PhotoshootDemo() {
                   className="w-full aspect-[3/4] object-cover rounded-lg"
                 />
                 <button
+                  type="button"
                   onClick={() => handleDownload(getImageSrc(img), idx)}
+                  aria-label={`Download image ${idx + 1}`}
                   className="absolute bottom-2 right-2 p-2 bg-white/90 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   <Download className="w-4 h-4 text-gray-700" />

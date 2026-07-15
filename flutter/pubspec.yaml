@@ -43,7 +43,7 @@ dependencies:
   posthog_flutter: ^5.11.1
 
   # Crash Reporting
-  sentry_flutter: ^8.0.0
+  sentry_flutter: ^9.0.0
 
   # Utils
   path_provider: ^2.1.5

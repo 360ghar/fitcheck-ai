@@ -38,20 +38,20 @@ interface DuplicateCardProps {
   onView?: (id: string) => void
 }
 
+function getSimilarityColor(score: number) {
+  if (score >= 0.9) return 'text-red-600 dark:text-red-400'
+  if (score >= 0.8) return 'text-orange-600 dark:text-orange-400'
+  return 'text-yellow-600 dark:text-yellow-400'
+}
+
+function getSimilarityBg(score: number) {
+  if (score >= 0.9) return 'bg-red-100 dark:bg-red-900/30'
+  if (score >= 0.8) return 'bg-orange-100 dark:bg-orange-900/30'
+  return 'bg-yellow-100 dark:bg-yellow-900/30'
+}
+
 function DuplicateCard({ duplicate, onView }: DuplicateCardProps) {
   const similarityPercent = Math.round(duplicate.similarity_score * 100)
-
-  const getSimilarityColor = (score: number) => {
-    if (score >= 0.9) return 'text-red-600 dark:text-red-400'
-    if (score >= 0.8) return 'text-orange-600 dark:text-orange-400'
-    return 'text-yellow-600 dark:text-yellow-400'
-  }
-
-  const getSimilarityBg = (score: number) => {
-    if (score >= 0.9) return 'bg-red-100 dark:bg-red-900/30'
-    if (score >= 0.8) return 'bg-orange-100 dark:bg-orange-900/30'
-    return 'bg-yellow-100 dark:bg-yellow-900/30'
-  }
 
   return (
     <Card className="overflow-hidden">
@@ -110,8 +110,8 @@ function DuplicateCard({ duplicate, onView }: DuplicateCardProps) {
             {/* Reasons */}
             {duplicate.reasons.length > 0 && (
               <div className="mt-2 space-y-0.5">
-                {duplicate.reasons.slice(0, 2).map((reason, idx) => (
-                  <p key={idx} className="text-xs text-gray-500 dark:text-gray-400">
+                {duplicate.reasons.slice(0, 2).map((reason) => (
+                  <p key={reason} className="text-xs text-gray-500 dark:text-gray-400">
                     • {reason}
                   </p>
                 ))}

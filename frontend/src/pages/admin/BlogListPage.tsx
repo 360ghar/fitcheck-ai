@@ -67,6 +67,14 @@ import { getAllBlogPosts, deleteBlogPost, getBlogCategories } from '@/api/blog';
 import { showSuccess, showError } from '@/lib/toast-utils';
 import type { BlogPostSummary } from '@/types';
 
+function formatDate(dateString: string) {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 export default function BlogListPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -137,15 +145,6 @@ export default function BlogListPage() {
     if (postToDelete) {
       deleteMutation.mutate(postToDelete.slug);
     }
-  };
-
-  // Format date
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
   };
 
   // Pagination

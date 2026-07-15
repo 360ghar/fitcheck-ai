@@ -71,7 +71,7 @@ interface LogWearDialogProps {
 // ============================================================================
 
 function LogWearDialog({ isOpen, onClose, outfitId, onSubmit }: LogWearDialogProps) {
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0])
   const [eventName, setEventName] = useState('')
   const [eventType, setEventType] = useState<EventType>('casual')
   const [location, setLocation] = useState('')
@@ -147,6 +147,7 @@ function LogWearDialog({ isOpen, onClose, outfitId, onSubmit }: LogWearDialogPro
             <div className="flex flex-wrap gap-2">
               {EVENT_TYPES.map((type) => (
                 <button
+                  type="button"
                   key={type.value}
                   onClick={() => setEventType(type.value)}
                   className={cn(
@@ -239,9 +240,9 @@ function RepetitionWarningCard({ check }: { check: RepetitionCheck }) {
 
   return (
     <div className="space-y-2">
-      {highWarnings.map((warning, i) => (
+      {highWarnings.map((warning, index) => (
         <div
-          key={i}
+          key={`${warning.type}-${warning.lastWornDate}-${index}`}
           className="flex items-start gap-3 p-4 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800"
         >
           <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
@@ -265,9 +266,9 @@ function RepetitionWarningCard({ check }: { check: RepetitionCheck }) {
         </div>
       ))}
 
-      {otherWarnings.map((warning, i) => (
+      {otherWarnings.map((warning, index) => (
         <div
-          key={i}
+          key={`${warning.type}-${warning.lastWornDate}-${index}`}
           className={cn(
             'flex items-start gap-3 p-4 rounded-lg border',
             warning.severity === 'medium'
@@ -418,10 +419,12 @@ function StatsSection({ stats }: { stats: OutfitWearStats }) {
 // MAIN COMPONENT
 // ============================================================================
 
+const EMPTY_ATTENDEES: string[] = []
+
 export function WearHistory({
   outfit,
   plannedDate,
-  plannedAttendees = [],
+  plannedAttendees = EMPTY_ATTENDEES,
   onWearLogged,
   variant = 'full',
   className,
@@ -564,6 +567,7 @@ export function WearHistory({
       {history.length > 0 && (
         <div className="space-y-2">
           <button
+            type="button"
             onClick={() => setShowHistory(!showHistory)}
             className="flex items-center gap-2 text-sm font-medium hover:text-primary transition-colors"
           >

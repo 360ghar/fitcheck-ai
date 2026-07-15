@@ -8,16 +8,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric'
+});
+
 /**
  * Format a date to a human-readable string
  */
 export function formatDate(date: string | Date): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  }).format(d);
+  return dateFormatter.format(d);
 }
 
 /**
@@ -38,15 +40,17 @@ export function formatRelativeTime(date: string | Date): string {
   return formatDate(d);
 }
 
+const priceFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD'
+});
+
 /**
  * Format a price to currency string
  */
 export function formatPrice(price: number | undefined | null): string {
   if (price === undefined || price === null) return '—';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD'
-  }).format(price);
+  return priceFormatter.format(price);
 }
 
 /**
@@ -156,7 +160,7 @@ export function sleep(ms: number): Promise<void> {
  * Clone an object deeply
  */
 export function deepClone<T>(obj: T): T {
-  return JSON.parse(JSON.stringify(obj));
+  return structuredClone(obj);
 }
 
 /**
@@ -222,6 +226,34 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Escape HTML special characters before building an innerHTML string from
+ * user-authored text (e.g. markdown-to-HTML formatters using dangerouslySetInnerHTML).
+ */
+export function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Block execution-capable URL schemes (javascript:, data:, vbscript:, etc.) in markdown
+ * link targets. Scheme-less URLs (relative paths, protocol-relative, bare domains like
+ * "example.com") are left untouched since browsers only ever navigate to them, never
+ * execute them. Tabs/newlines are stripped first since browsers ignore them when parsing
+ * a URL scheme, a known filter-bypass trick (e.g. "java\tscript:").
+ */
+export function sanitizeMarkdownUrl(url: string): string {
+  const trimmed = url.trim().replace(/[\t\n\r]/g, '');
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) && !/^(https?|mailto|tel):/i.test(trimmed)) {
+    return '#';
+  }
+  return trimmed;
 }
 
 /**

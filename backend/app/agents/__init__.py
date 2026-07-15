@@ -2,7 +2,7 @@
 Backend AI agents for FitCheck AI.
 
 These agents replace the frontend Puter.js-based agents with server-side
-AI processing using configurable providers (Gemini, OpenAI, custom).
+AI processing using configurable providers (OpenAI, custom).
 """
 
 from app.agents.item_extraction_agent import (

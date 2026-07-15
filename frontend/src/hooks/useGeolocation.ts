@@ -42,21 +42,31 @@ export function useGeolocation(options: UseGeolocationOptions = {}) {
       return;
     }
 
+    let cancelled = false;
+    let permissionStatus: PermissionStatus | null = null;
+    const handleChange = () => {
+      setState((prev) => ({
+        ...prev,
+        permissionState: (permissionStatus?.state ?? prev.permissionState) as PermissionState,
+      }));
+    };
+
     navigator.permissions.query({ name: 'geolocation' }).then((result) => {
+      if (cancelled) return;
+      permissionStatus = result;
       setState((prev) => ({
         ...prev,
         permissionState: result.state as PermissionState,
       }));
-
-      result.addEventListener('change', () => {
-        setState((prev) => ({
-          ...prev,
-          permissionState: result.state as PermissionState,
-        }));
-      });
+      result.addEventListener('change', handleChange);
     }).catch(() => {
       // Permissions API not fully supported
     });
+
+    return () => {
+      cancelled = true;
+      permissionStatus?.removeEventListener('change', handleChange);
+    };
   }, []);
 
   const requestLocation = useCallback((): Promise<GeolocationCoordinates | null> => {

@@ -64,7 +64,7 @@ export default function TryOnPage() {
   const { toast } = useToast();
 
   const [step, setStep] = useState<TryOnStep>('upload');
-  const [clothingFile, setClothingFile] = useState<File | null>(null);
+  const clothingFileRef = useRef<File | null>(null);
   const [clothingPreview, setClothingPreview] = useState<string | null>(null);
   const [clothingDescription, setClothingDescription] = useState('');
   const [style, setStyle] = useState('casual');
@@ -94,7 +94,7 @@ export default function TryOnPage() {
       revokePreviewUrl();
       const url = URL.createObjectURL(file);
       previewUrlRef.current = url;
-      setClothingFile(file);
+      clothingFileRef.current = file;
       setClothingPreview(url);
       setStep('options');
       setError(null);
@@ -116,7 +116,7 @@ export default function TryOnPage() {
   }
 
   const handleGenerate = async () => {
-    if (!clothingFile) return;
+    if (!clothingFileRef.current) return;
 
     setIsGenerating(true);
     setStep('generating');
@@ -130,7 +130,7 @@ export default function TryOnPage() {
         pose,
       };
 
-      const tryOnResult = await generateTryOn(clothingFile, options);
+      const tryOnResult = await generateTryOn(clothingFileRef.current, options);
       setResult(tryOnResult);
       setStep('result');
     } catch (err) {
@@ -149,7 +149,7 @@ export default function TryOnPage() {
 
   const handleReset = () => {
     revokePreviewUrl();
-    setClothingFile(null);
+    clothingFileRef.current = null;
     setClothingPreview(null);
     setClothingDescription('');
     setResult(null);

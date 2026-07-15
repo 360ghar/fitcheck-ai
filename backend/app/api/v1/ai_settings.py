@@ -59,7 +59,7 @@ async def get_ai_settings(
         usage = await AISettingsService.get_usage_stats(user_id=user_id, db=db)
 
         response = AISettingsResponse(
-            default_provider=settings.get("default_provider", "gemini"),
+            default_provider=settings.get("default_provider", "custom"),
             provider_configs={
                 name: ProviderConfigDisplay(**config)
                 for name, config in display_configs.items()
@@ -99,7 +99,7 @@ async def update_ai_settings(
         updates: Dict[str, Any] = {}
 
         if request.default_provider is not None:
-            valid_providers = ["gemini", "openai", "custom"]
+            valid_providers = ["openai", "custom"]
             if request.default_provider not in valid_providers:
                 raise ValidationError(
                     "Invalid provider",
@@ -291,7 +291,7 @@ async def reset_provider_config(
     Removes any user-specific API key and URL for the specified provider.
     """
     try:
-        valid_providers = ["gemini", "openai", "custom"]
+        valid_providers = ["openai", "custom"]
         if provider not in valid_providers:
             raise ValidationError(
                 "Invalid provider",

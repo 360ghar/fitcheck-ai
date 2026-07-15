@@ -47,7 +47,7 @@ export default function CalendarPage() {
 
   const [events, setEvents] = useState<CalendarViewEvent[]>([])
   const [isLoadingEvents, setIsLoadingEvents] = useState(false)
-  const [activeMonthKey, setActiveMonthKey] = useState<string>('')
+  const activeMonthKeyRef = useRef<string>('')
 
   const [isConnecting, setIsConnecting] = useState(false)
   const [isCalendarConnected, setIsCalendarConnected] = useState(() => {
@@ -137,8 +137,8 @@ export default function CalendarPage() {
   const loadEventsForMonth = useCallback(
     async (month: Date) => {
       const monthKey = `${month.getFullYear()}-${month.getMonth()}`
-      if (monthKey === activeMonthKey) return
-      setActiveMonthKey(monthKey)
+      if (monthKey === activeMonthKeyRef.current) return
+      activeMonthKeyRef.current = monthKey
 
       setIsLoadingEvents(true)
       try {
@@ -174,7 +174,7 @@ export default function CalendarPage() {
         setIsLoadingEvents(false)
       }
     },
-    [activeMonthKey, fetchOutfits, toast]
+    [fetchOutfits, toast]
   )
 
   const handleConnect = async () => {
@@ -362,6 +362,7 @@ export default function CalendarPage() {
             <MapPin className="h-4 w-4" />
             {userLocation ? (
               <button
+                type="button"
                 onClick={() => {
                   setEditingLocation(userLocation)
                   setShowLocationDialog(true)
@@ -372,6 +373,7 @@ export default function CalendarPage() {
               </button>
             ) : (
               <button
+                type="button"
                 onClick={async () => {
                   const coords = await requestLocation()
                   if (coords) {

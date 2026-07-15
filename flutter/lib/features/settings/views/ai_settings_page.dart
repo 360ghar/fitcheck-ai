@@ -91,7 +91,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
             ),
             items: const [
               DropdownMenuItem(value: 'custom', child: Text('Custom')),
-              DropdownMenuItem(value: 'gemini', child: Text('Gemini')),
               DropdownMenuItem(value: 'openai', child: Text('OpenAI')),
             ],
             onChanged: (value) {

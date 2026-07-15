@@ -114,7 +114,7 @@ export default function SupportPage() {
                       Privacy Policy
                     </Link>
                     {' — '}
-                    how we handle photos, AI processing (Google Gemini, OpenAI),
+                    how we handle photos, AI processing (OpenAI),
                     Supabase, and account deletion
                   </li>
                   <li>

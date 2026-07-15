@@ -39,16 +39,16 @@ interface StyleInsightsProps {
   onSyncComplete?: () => void
 }
 
-function InsightCard({ insight }: { insight: StyleInsight }) {
-  const iconMap = {
-    color: Palette,
-    style: Sparkles,
-    brand: Tag,
-    category: Shirt,
-    pattern: TrendingUp,
-  }
+const INSIGHT_ICON_MAP = {
+  color: Palette,
+  style: Sparkles,
+  brand: Tag,
+  category: Shirt,
+  pattern: TrendingUp,
+}
 
-  const Icon = iconMap[insight.type] || TrendingUp
+function InsightCard({ insight }: { insight: StyleInsight }) {
+  const Icon = INSIGHT_ICON_MAP[insight.type] || TrendingUp
 
   return (
     <div className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
@@ -296,8 +296,8 @@ export function StyleInsights({ onSyncComplete }: StyleInsightsProps) {
                   Style insights
                 </h4>
                 <div className="space-y-2">
-                  {preferences.insights.map((insight, idx) => (
-                    <InsightCard key={idx} insight={insight} />
+                  {preferences.insights.map((insight) => (
+                    <InsightCard key={insight.type} insight={insight} />
                   ))}
                 </div>
               </div>

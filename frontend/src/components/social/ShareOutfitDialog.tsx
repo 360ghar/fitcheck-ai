@@ -61,6 +61,10 @@ export interface ShareOptions {
   tags?: string[]
 }
 
+function openExternal(url: string) {
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
+
 // ============================================================================
 // COMPONENT
 // ============================================================================
@@ -100,10 +104,6 @@ export function ShareOutfitDialog({
     })
     setShareLinkUrl(link.url)
     return link.url
-  }
-
-  const openExternal = (url: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   const handleShare = async (platform: string) => {

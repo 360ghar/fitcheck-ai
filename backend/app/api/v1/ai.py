@@ -527,20 +527,6 @@ async def get_available_models(
     Returns a list of recommended models for each provider type.
     """
     models = AvailableModelsResponse(
-        gemini={
-            "chat": [
-                "gemini-3-flash-preview",
-                "gemini-3-pro-preview",
-            ],
-            "vision": [
-                "gemini-3-flash-preview",
-                "gemini-3-pro-preview",
-            ],
-            "image_generation": [
-                "gemini-3-pro-image-preview",
-                "imagen-4.0-generate-preview-06-06",
-            ],
-        },
         openai={
             "chat": [
                 "gpt-4o",

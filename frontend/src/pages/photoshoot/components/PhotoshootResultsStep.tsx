@@ -109,6 +109,15 @@ export function PhotoshootResultsStep() {
             key={image.id}
             className="relative aspect-[3/4] rounded-lg overflow-hidden bg-muted cursor-pointer group"
             onClick={() => setPreviewIndex(index)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.target !== e.currentTarget) return;
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setPreviewIndex(index);
+              }
+            }}
           >
             <img
               src={getImageSrc(index) || PLACEHOLDER_IMAGE}

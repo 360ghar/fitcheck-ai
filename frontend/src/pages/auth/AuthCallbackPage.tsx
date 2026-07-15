@@ -14,6 +14,8 @@ export default function AuthCallbackPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let redirectTimeout: ReturnType<typeof setTimeout> | undefined;
+
     const processCallback = async () => {
       try {
         await handleOAuthCallback();
@@ -22,11 +24,15 @@ export default function AuthCallbackPage() {
         const message = err instanceof Error ? err.message : 'Authentication failed';
         setError(message);
         // Redirect to login after showing error
-        setTimeout(() => navigate('/auth/login', { replace: true }), 3000);
+        redirectTimeout = setTimeout(() => navigate('/auth/login', { replace: true }), 3000);
       }
     };
 
     processCallback();
+
+    return () => {
+      if (redirectTimeout) clearTimeout(redirectTimeout);
+    };
   }, [handleOAuthCallback, navigate]);
 
   if (error) {

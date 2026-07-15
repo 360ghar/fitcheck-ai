@@ -117,6 +117,23 @@ const ESSENTIAL_COUNTS: Record<Category, { short: number; medium: number; long: 
   other: { short: 0, medium: 1, long: 2 },
 }
 
+/**
+ * Occasion presets keyed by id, with categories/styles/tags pre-converted to
+ * Sets. Built once at module load so per-item matching below can do O(1)
+ * `.has()` lookups instead of re-scanning OCCASION_PRESETS and its nested
+ * arrays on every call.
+ */
+const OCCASION_LOOKUP = new Map(
+  OCCASION_PRESETS.map((o) => [
+    o.id,
+    {
+      categories: new Set(o.categories),
+      styles: new Set(o.styles),
+      tags: new Set(o.tags),
+    },
+  ])
+)
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -160,10 +177,10 @@ function scoreItemVersatility(item: Item, tripDetails: TripDetails): number {
   const matchingActivities = tripDetails.activities.filter((activity) => {
     const occasions = ACTIVITY_TO_OCCASION[activity] || []
     return occasions.some((occasionId) => {
-      const occasion = OCCASION_PRESETS.find((o) => o.id === occasionId)
+      const occasion = OCCASION_LOOKUP.get(occasionId)
       if (!occasion) return false
-      return occasion.categories.includes(item.category) ||
-        (item.style && occasion.styles.includes(item.style as Style))
+      return occasion.categories.has(item.category) ||
+        (item.style && occasion.styles.has(item.style as Style))
     })
   })
   score += matchingActivities.length * 2
@@ -189,12 +206,12 @@ function itemMatchesActivity(item: Item, activity: TripActivity): boolean {
   const occasionIds = ACTIVITY_TO_OCCASION[activity] || []
 
   return occasionIds.some((occasionId) => {
-    const occasion = OCCASION_PRESETS.find((o) => o.id === occasionId)
+    const occasion = OCCASION_LOOKUP.get(occasionId)
     if (!occasion) return false
 
-    const matchesCategory = occasion.categories.includes(item.category)
-    const matchesStyle = item.style && occasion.styles.includes(item.style as Style)
-    const matchesTags = item.tags.some((t) => occasion.tags.includes(t.toLowerCase()))
+    const matchesCategory = occasion.categories.has(item.category)
+    const matchesStyle = item.style && occasion.styles.has(item.style as Style)
+    const matchesTags = item.tags.some((t) => occasion.tags.has(t.toLowerCase()))
 
     return matchesCategory || matchesStyle || matchesTags
   })
@@ -243,6 +260,7 @@ export function generatePackingList(
 
   // Determine target counts per category
   const priorities = CLIMATE_PRIORITIES[tripDetails.climate] || CLIMATE_PRIORITIES.mild
+  const essentialCategories = new Set(priorities.slice(0, 3))
   const essentialCounts = ESSENTIAL_COUNTS
 
   // First pass: select essential items for each activity
@@ -254,7 +272,7 @@ export function generatePackingList(
     const targetCount = Math.ceil(baseCount * multiplier)
 
     if (categoryCounts[item.category] < targetCount) {
-      const isEssential = priorities.slice(0, 3).includes(item.category)
+      const isEssential = essentialCategories.has(item.category)
 
       selectedItems.push({
         item,
@@ -421,9 +439,12 @@ export function exportPackingList(packingList: PackingList): string {
   if (packingList.outfitIdeas.length > 0) {
     lines.push('\n## Outfit Ideas')
     packingList.outfitIdeas.forEach((outfit) => {
-      const itemNames = packingList.items
-        .filter((pi) => outfit.itemIds.includes(pi.item.id))
-        .map((pi) => pi.item.name)
+      const itemNames: string[] = []
+      for (const pi of packingList.items) {
+        if (outfit.itemIds.includes(pi.item.id)) {
+          itemNames.push(pi.item.name)
+        }
+      }
       lines.push(`- ${outfit.name}: ${itemNames.join(' + ')}`)
     })
   }

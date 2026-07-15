@@ -3,7 +3,6 @@ AI Provider Service - OpenAI-compatible API client for multiple AI providers.
 
 This service provides a unified interface for AI operations using OpenAI-compatible
 API format, supporting:
-- Gemini (via OpenAI-compatible proxy or direct)
 - OpenAI (direct)
 - Custom OpenAI-compatible proxies
 
@@ -51,7 +50,6 @@ logger = get_context_logger(__name__)
 
 class AIProvider(str, Enum):
     """Supported AI providers."""
-    GEMINI = "gemini"
     OPENAI = "openai"
     CUSTOM = "custom"
 
@@ -64,6 +62,7 @@ class ProviderConfig:
     model: str
     vision_model: Optional[str] = None
     image_gen_model: Optional[str] = None
+    image_fallback_model: Optional[str] = None
     max_tokens: int = 64096
 
     # Optional separate endpoint/key for image generation (OpenAI-compatible providers
@@ -129,17 +128,7 @@ class ChatMessage:
 
 def get_system_provider_config(provider: AIProvider) -> Optional[ProviderConfig]:
     """Get system-level default configuration for a provider."""
-    if provider == AIProvider.GEMINI:
-        if not settings.AI_GEMINI_API_KEY:
-            return None
-        return ProviderConfig(
-            api_url=settings.AI_GEMINI_API_URL,
-            api_key=settings.AI_GEMINI_API_KEY,
-            model=settings.AI_GEMINI_CHAT_MODEL,
-            vision_model=settings.AI_GEMINI_VISION_MODEL,
-            image_gen_model=settings.AI_GEMINI_IMAGE_MODEL,
-        )
-    elif provider == AIProvider.OPENAI:
+    if provider == AIProvider.OPENAI:
         api_key = getattr(settings, 'AI_OPENAI_API_KEY', None)
         if not api_key:
             return None
@@ -157,6 +146,7 @@ def get_system_provider_config(provider: AIProvider) -> Optional[ProviderConfig]
             model=settings.OPENAI_LLM_MODEL or settings.AI_CUSTOM_CHAT_MODEL,
             vision_model=settings.OPENAI_LLM_VISION_MODEL or settings.AI_CUSTOM_VISION_MODEL,
             image_gen_model=settings.OPENAI_IMAGE_MODEL or settings.AI_CUSTOM_IMAGE_MODEL,
+            image_fallback_model=getattr(settings, 'AI_CUSTOM_IMAGE_FALLBACK_MODEL', None),
             image_api_url=settings.OPENAI_IMAGE_URL,
             image_api_key=settings.OPENAI_IMAGE_API_KEY,
             image_api_style=settings.OPENAI_IMAGE_API_STYLE,
@@ -166,11 +156,11 @@ def get_system_provider_config(provider: AIProvider) -> Optional[ProviderConfig]
 
 def get_default_provider() -> AIProvider:
     """Get the system default provider."""
-    provider_str = getattr(settings, 'AI_DEFAULT_PROVIDER', 'gemini').lower()
+    provider_str = getattr(settings, 'AI_DEFAULT_PROVIDER', 'custom').lower()
     try:
         return AIProvider(provider_str)
     except ValueError:
-        return AIProvider.GEMINI
+        return AIProvider.CUSTOM
 
 
 # =============================================================================
@@ -183,7 +173,7 @@ class AIProviderService:
     Main AI provider service using OpenAI-compatible API format.
 
     This service handles all AI operations by making HTTP requests to
-    OpenAI-compatible endpoints (OpenAI, Gemini proxies, or custom proxies).
+    OpenAI-compatible endpoints (OpenAI, or custom proxies).
     """
 
     def __init__(self, config: ProviderConfig):
@@ -341,11 +331,40 @@ class AIProviderService:
             # photoshoot/outfit multi-image content), so intercepting here
             # fixes all of them at the root instead of duplicating per caller.
             prompt_text, reference_images = self._extract_prompt_and_images(messages)
-            return await self._generate_image_via_images_api(
-                prompt_text,
-                model=model or self.config.get_image_gen_model(),
-                reference_images=reference_images,
-            )
+            primary_model = model or self.config.get_image_gen_model()
+            fallback_model = self.config.image_fallback_model
+            models_to_try = [primary_model]
+            # Only substitute the configured fallback when the caller used the
+            # system default model - an explicit non-default `model=` should
+            # error, not silently swap in a model the caller never requested.
+            if (
+                fallback_model
+                and fallback_model != primary_model
+                and primary_model == self.config.get_image_gen_model()
+            ):
+                models_to_try.append(fallback_model)
+
+            for i, attempt_model in enumerate(models_to_try):
+                try:
+                    return await self._generate_image_via_images_api(
+                        prompt_text,
+                        model=attempt_model,
+                        reference_images=reference_images,
+                    )
+                except AIServiceError as e:
+                    # Only fall through to the next model for errors documented
+                    # as transient (429/503/timeout/no-images) - anything else
+                    # (bad key, content policy, parse failure after a possibly
+                    # successful generation) would either fail identically or
+                    # risk a second billable request, so it should propagate.
+                    if i == len(models_to_try) - 1 or not e.retryable:
+                        raise
+                    logger.warning(
+                        "Image generation failed, trying fallback model",
+                        primary_model=primary_model,
+                        fallback_model=models_to_try[i + 1],
+                        error=str(e)[:200],
+                    )
 
         # Image generation (response_modalities) uses the image-specific endpoint/key
         # when configured, so LLM and image hosts can differ (e.g. agnes-ai.com).
@@ -779,6 +798,8 @@ class AIProviderService:
             timeout_seconds=3.0,
         )
         if not health_status.available:
+            # Not retryable: primary and fallback models share this same host,
+            # so a full provider outage would fail identically on both.
             raise AIServiceError(
                 f"AI image provider {image_url} is unavailable. Error: {health_status.error}. "
                 "Please check if the service is running or configure an alternative provider."
@@ -832,15 +853,29 @@ class AIProviderService:
             )
             data = response.json()
         except self._TransientImageAPIOverload as e:
-            raise AIServiceError(f"AI image provider overloaded after retries: {e}")
+            # 503 after exhausting retries: documented as fallback-worthy.
+            raise AIServiceError(f"AI image provider overloaded after retries: {e}", retryable=True)
         except httpx.HTTPStatusError as e:
             error_detail = ""
             try:
                 error_detail = e.response.json().get("error", {}).get("message", "")
             except Exception:
                 error_detail = e.response.text[:500]
-            raise AIServiceError(f"AI image request failed ({e.response.status_code}): {error_detail}")
+            # Only 429 (rate limit) is transient; other 4xx/5xx (bad key, content
+            # policy, unknown model) would fail identically against the fallback.
+            raise AIServiceError(
+                f"AI image request failed ({e.response.status_code}): {error_detail}",
+                retryable=e.response.status_code == 429,
+            )
+        except self._TRANSIENT_TRANSPORT_ERRORS as e:
+            # Timeout/connection error that exhausted with_retry's internal
+            # attempts: no response was ever received, so retrying the
+            # fallback model can't double-bill a completed generation.
+            raise AIServiceError(f"AI image request failed: {self._format_exception_message(e)}", retryable=True)
         except Exception as e:
+            # e.g. response.json() parse failure - the primary call may have
+            # already generated (and billed) an image server-side, so this is
+            # not safe to retry against the fallback model.
             raise AIServiceError(f"AI image request failed: {self._format_exception_message(e)}")
 
         images = []
@@ -848,17 +883,32 @@ class AIProviderService:
             if item.get("b64_json"):
                 images.append(item["b64_json"])
             elif item.get("url"):
-                # Fetch with a bare client (no Authorization header) - this is a
-                # provider-hosted asset URL, not the API endpoint, and shouldn't
-                # receive our API key.
-                async with httpx.AsyncClient() as asset_client:
-                    image_response = await asset_client.get(item["url"])
-                    image_response.raise_for_status()
+                try:
+                    # Fetch with a bare client (no Authorization header) - this is
+                    # a provider-hosted asset URL, not the API endpoint, and
+                    # shouldn't receive our API key.
+                    async with httpx.AsyncClient() as asset_client:
+                        image_response = await asset_client.get(item["url"])
+                        image_response.raise_for_status()
+                except Exception as e:
+                    # Not retryable: generation already succeeded server-side,
+                    # so retrying against the fallback model would double-bill.
+                    raise AIServiceError(
+                        f"Failed to fetch generated image asset: {self._format_exception_message(e)}"
+                    )
                 images.append(base64.b64encode(image_response.content).decode())
+
+        if not images:
+            # Agnes returned 200 with no usable images - most commonly a silent
+            # content-moderation refusal. Retryable so the fallback model gets
+            # a chance, since no image was actually produced (nothing to double-bill).
+            raise AIServiceError(
+                f"AI image provider returned no images for model {model}", retryable=True
+            )
 
         return AIResponse(
             text=None,
-            images=images if images else None,
+            images=images,
             model=model,
             provider=image_url,
             raw_response=data,
@@ -924,7 +974,7 @@ async def get_ai_service(
             config = ProviderConfig(
                 api_url=user_provider_config["api_url"],
                 api_key=user_provider_config["api_key"],
-                model=user_provider_config.get("model", "gemini-3-flash-preview"),
+                model=user_provider_config.get("model", settings.AI_CUSTOM_CHAT_MODEL),
                 vision_model=user_provider_config.get("vision_model"),
                 image_gen_model=user_provider_config.get("image_gen_model"),
             )

@@ -22,154 +22,154 @@ import {
   Wand2,
 } from 'lucide-react'
 
+const breadcrumbs = [
+  { name: 'Home', url: 'https://fitcheckaiapp.com/' },
+  { name: 'Features', url: 'https://fitcheckaiapp.com/features' },
+  { name: 'Wardrobe Analytics', url: 'https://fitcheckaiapp.com/features/wardrobe-analytics' },
+]
+
+// HowTo schema for calculating cost-per-wear
+const howToSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'How to Calculate and Track Cost-Per-Wear',
+  description: 'Learn how to calculate cost-per-wear for your clothing items and use wardrobe analytics to make smarter purchasing decisions.',
+  totalTime: 'PT10M',
+  estimatedCost: {
+    '@type': 'MonetaryAmount',
+    currency: 'USD',
+    value: '0',
+  },
+  supply: [
+    { '@type': 'HowToSupply', name: 'Purchase prices of your clothing items' },
+    { '@type': 'HowToSupply', name: 'Wear tracking data' },
+  ],
+  tool: [
+    { '@type': 'HowToTool', name: 'FitCheck AI Wardrobe Analytics' },
+  ],
+  step: [
+    {
+      '@type': 'HowToStep',
+      position: 1,
+      name: 'Catalog Your Wardrobe',
+      text: 'Upload your clothes to FitCheck AI with purchase information including price and date.',
+      url: 'https://fitcheckaiapp.com/features/wardrobe-analytics#step-1',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 2,
+      name: 'Track Your Wears',
+      text: 'Log each time you wear an item using the app. This can be done manually or automatically.',
+      url: 'https://fitcheckaiapp.com/features/wardrobe-analytics#step-2',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 3,
+      name: 'View Analytics Dashboard',
+      text: 'Access your personal dashboard showing cost-per-wear, wear frequency, and wardrobe insights.',
+      url: 'https://fitcheckaiapp.com/features/wardrobe-analytics#step-3',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 4,
+      name: 'Make Data-Driven Decisions',
+      text: 'Use insights to identify best value pieces, underutilized items, and smart future purchases.',
+      url: 'https://fitcheckaiapp.com/features/wardrobe-analytics#step-4',
+    },
+  ],
+}
+
+const features = [
+  {
+    icon: DollarSign,
+    title: 'Cost-Per-Wear Tracking',
+    description: 'Automatically calculate CPW for every item. Understand the true value of your clothing investments.',
+  },
+  {
+    icon: BarChart3,
+    title: 'Wear Frequency Analysis',
+    description: 'See which items you wear most and which are just taking up space in your closet.',
+  },
+  {
+    icon: PieChart,
+    title: 'Category Breakdown',
+    description: 'Visualize your wardrobe composition by category, color, style, and season.',
+  },
+  {
+    icon: TrendingUp,
+    title: 'Spending Insights',
+    description: 'Track your clothing expenses over time and identify shopping patterns.',
+  },
+  {
+    icon: Target,
+    title: 'Wardrobe Goals',
+    description: 'Set targets for cost-per-wear and get alerts when items reach optimal value.',
+  },
+  {
+    icon: Clock,
+    title: 'Seasonal Analytics',
+    description: 'Analyze seasonal usage patterns to optimize your year-round wardrobe.',
+  },
+]
+
+const benefits = [
+  'Identify which pieces give you the best value per dollar spent',
+  'Discover forgotten items you should wear more often',
+  'Make informed decisions before purchasing new clothes',
+  'Reduce impulse purchases by understanding your patterns',
+  'Optimize your closet space by identifying unworn items',
+  'Build a more sustainable wardrobe with data-driven choices',
+]
+
+const insights = [
+  {
+    title: 'Top Value Pieces',
+    description: 'Items with the lowest cost-per-wear that should be your go-to favorites.',
+    icon: TrendingUp,
+    example: 'Your black blazer at $0.50 per wear',
+  },
+  {
+    title: 'Underutilized Items',
+    description: 'Pieces you own but rarely wear that deserve more attention.',
+    icon: AlertCircle,
+    example: 'That dress you have worn only once',
+  },
+  {
+    title: 'Shopping Recommendations',
+    description: 'Data-driven suggestions for what would add the most value to your wardrobe.',
+    icon: ShoppingBag,
+    example: 'You need more navy pieces to balance your wardrobe',
+  },
+  {
+    title: 'Wardrobe Efficiency',
+    description: 'Overall metrics on how well you utilize your existing clothing.',
+    icon: Target,
+    example: 'You wear 20% of your wardrobe 80% of the time',
+  },
+]
+
+const relatedFeatures = [
+  {
+    title: 'AI Wardrobe Extraction',
+    description: 'Digitize your closet so analytics can track every item you own.',
+    link: '/features/ai-wardrobe-extraction',
+    icon: Camera,
+  },
+  {
+    title: 'Virtual Try-On',
+    description: 'Test potential purchases to maximize value before buying.',
+    link: '/features/virtual-try-on',
+    icon: Smartphone,
+  },
+  {
+    title: 'Outfit Recommendations',
+    description: 'Get suggestions that help you wear underutilized items more.',
+    link: '/features/outfit-recommendations',
+    icon: Wand2,
+  },
+]
+
 export default function WardrobeAnalyticsPage() {
-  const breadcrumbs = [
-    { name: 'Home', url: 'https://fitcheckaiapp.com/' },
-    { name: 'Features', url: 'https://fitcheckaiapp.com/features' },
-    { name: 'Wardrobe Analytics', url: 'https://fitcheckaiapp.com/features/wardrobe-analytics' },
-  ]
-
-  // HowTo schema for calculating cost-per-wear
-  const howToSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'HowTo',
-    name: 'How to Calculate and Track Cost-Per-Wear',
-    description: 'Learn how to calculate cost-per-wear for your clothing items and use wardrobe analytics to make smarter purchasing decisions.',
-    totalTime: 'PT10M',
-    estimatedCost: {
-      '@type': 'MonetaryAmount',
-      currency: 'USD',
-      value: '0',
-    },
-    supply: [
-      { '@type': 'HowToSupply', name: 'Purchase prices of your clothing items' },
-      { '@type': 'HowToSupply', name: 'Wear tracking data' },
-    ],
-    tool: [
-      { '@type': 'HowToTool', name: 'FitCheck AI Wardrobe Analytics' },
-    ],
-    step: [
-      {
-        '@type': 'HowToStep',
-        position: 1,
-        name: 'Catalog Your Wardrobe',
-        text: 'Upload your clothes to FitCheck AI with purchase information including price and date.',
-        url: 'https://fitcheckaiapp.com/features/wardrobe-analytics#step-1',
-      },
-      {
-        '@type': 'HowToStep',
-        position: 2,
-        name: 'Track Your Wears',
-        text: 'Log each time you wear an item using the app. This can be done manually or automatically.',
-        url: 'https://fitcheckaiapp.com/features/wardrobe-analytics#step-2',
-      },
-      {
-        '@type': 'HowToStep',
-        position: 3,
-        name: 'View Analytics Dashboard',
-        text: 'Access your personal dashboard showing cost-per-wear, wear frequency, and wardrobe insights.',
-        url: 'https://fitcheckaiapp.com/features/wardrobe-analytics#step-3',
-      },
-      {
-        '@type': 'HowToStep',
-        position: 4,
-        name: 'Make Data-Driven Decisions',
-        text: 'Use insights to identify best value pieces, underutilized items, and smart future purchases.',
-        url: 'https://fitcheckaiapp.com/features/wardrobe-analytics#step-4',
-      },
-    ],
-  }
-
-  const features = [
-    {
-      icon: DollarSign,
-      title: 'Cost-Per-Wear Tracking',
-      description: 'Automatically calculate CPW for every item. Understand the true value of your clothing investments.',
-    },
-    {
-      icon: BarChart3,
-      title: 'Wear Frequency Analysis',
-      description: 'See which items you wear most and which are just taking up space in your closet.',
-    },
-    {
-      icon: PieChart,
-      title: 'Category Breakdown',
-      description: 'Visualize your wardrobe composition by category, color, style, and season.',
-    },
-    {
-      icon: TrendingUp,
-      title: 'Spending Insights',
-      description: 'Track your clothing expenses over time and identify shopping patterns.',
-    },
-    {
-      icon: Target,
-      title: 'Wardrobe Goals',
-      description: 'Set targets for cost-per-wear and get alerts when items reach optimal value.',
-    },
-    {
-      icon: Clock,
-      title: 'Seasonal Analytics',
-      description: 'Analyze seasonal usage patterns to optimize your year-round wardrobe.',
-    },
-  ]
-
-  const benefits = [
-    'Identify which pieces give you the best value per dollar spent',
-    'Discover forgotten items you should wear more often',
-    'Make informed decisions before purchasing new clothes',
-    'Reduce impulse purchases by understanding your patterns',
-    'Optimize your closet space by identifying unworn items',
-    'Build a more sustainable wardrobe with data-driven choices',
-  ]
-
-  const insights = [
-    {
-      title: 'Top Value Pieces',
-      description: 'Items with the lowest cost-per-wear that should be your go-to favorites.',
-      icon: TrendingUp,
-      example: 'Your black blazer at $0.50 per wear',
-    },
-    {
-      title: 'Underutilized Items',
-      description: 'Pieces you own but rarely wear that deserve more attention.',
-      icon: AlertCircle,
-      example: 'That dress you have worn only once',
-    },
-    {
-      title: 'Shopping Recommendations',
-      description: 'Data-driven suggestions for what would add the most value to your wardrobe.',
-      icon: ShoppingBag,
-      example: 'You need more navy pieces to balance your wardrobe',
-    },
-    {
-      title: 'Wardrobe Efficiency',
-      description: 'Overall metrics on how well you utilize your existing clothing.',
-      icon: Target,
-      example: 'You wear 20% of your wardrobe 80% of the time',
-    },
-  ]
-
-  const relatedFeatures = [
-    {
-      title: 'AI Wardrobe Extraction',
-      description: 'Digitize your closet so analytics can track every item you own.',
-      link: '/features/ai-wardrobe-extraction',
-      icon: Camera,
-    },
-    {
-      title: 'Virtual Try-On',
-      description: 'Test potential purchases to maximize value before buying.',
-      link: '/features/virtual-try-on',
-      icon: Smartphone,
-    },
-    {
-      title: 'Outfit Recommendations',
-      description: 'Get suggestions that help you wear underutilized items more.',
-      link: '/features/outfit-recommendations',
-      icon: Wand2,
-    },
-  ]
-
   return (
     <>
       <SEO
@@ -318,17 +318,17 @@ export default function WardrobeAnalyticsPage() {
 
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-blue-100 text-sm mb-2">Purchase Price</label>
+                      <span className="block text-blue-100 text-sm mb-2">Purchase Price</span>
                       <div className="text-3xl font-bold">$150</div>
                     </div>
 
                     <div>
-                      <label className="block text-blue-100 text-sm mb-2">Times Worn</label>
+                      <span className="block text-blue-100 text-sm mb-2">Times Worn</span>
                       <div className="text-3xl font-bold">100</div>
                     </div>
 
                     <div className="pt-6 border-t border-white/20">
-                      <label className="block text-blue-100 text-sm mb-2">Cost Per Wear</label>
+                      <span className="block text-blue-100 text-sm mb-2">Cost Per Wear</span>
                       <div className="text-5xl font-bold">$1.50</div>
                       <p className="text-blue-200 mt-2">Excellent value! Under $2 per wear.</p>
                     </div>
@@ -488,8 +488,8 @@ export default function WardrobeAnalyticsPage() {
                   </p>
 
                   <div className="space-y-4">
-                    {benefits.map((benefit, index) => (
-                      <div key={index} className="flex items-start gap-4">
+                    {benefits.map((benefit) => (
+                      <div key={benefit} className="flex items-start gap-4">
                         <div className="w-6 h-6 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                           <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
                         </div>

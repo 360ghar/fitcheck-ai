@@ -20,128 +20,128 @@ import {
   Smartphone,
 } from 'lucide-react'
 
+const breadcrumbs = [
+  { name: 'Home', url: 'https://fitcheckaiapp.com/' },
+  { name: 'Features', url: 'https://fitcheckaiapp.com/features' },
+  { name: 'AI Wardrobe Extraction', url: 'https://fitcheckaiapp.com/features/ai-wardrobe-extraction' },
+]
+
+// HowTo schema for wardrobe extraction tutorial
+const howToSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'How to Organize Your Wardrobe with AI',
+  description: 'Learn how to digitize your entire wardrobe in minutes using AI-powered clothing recognition and cataloging.',
+  totalTime: 'PT15M',
+  estimatedCost: {
+    '@type': 'MonetaryAmount',
+    currency: 'USD',
+    value: '0',
+  },
+  supply: [
+    { '@type': 'HowToSupply', name: 'Smartphone or camera' },
+    { '@type': 'HowToSupply', name: 'Good lighting source' },
+    { '@type': 'HowToSupply', name: 'Clean background (optional)' },
+  ],
+  tool: [
+    { '@type': 'HowToTool', name: 'FitCheck AI app' },
+  ],
+  step: [
+    {
+      '@type': 'HowToStep',
+      position: 1,
+      name: 'Gather Your Clothes',
+      text: 'Collect 10-20 items you want to catalog. Group similar items together for faster processing.',
+      url: 'https://fitcheckaiapp.com/features/ai-wardrobe-extraction#step-1',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 2,
+      name: 'Photograph Your Items',
+      text: 'Use natural lighting and photograph items flat on a neutral background. Include multiple angles for complex items.',
+      url: 'https://fitcheckaiapp.com/features/ai-wardrobe-extraction#step-2',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 3,
+      name: 'Upload to FitCheck AI',
+      text: 'Upload photos to the app. Our AI automatically detects items, extracts colors, identifies categories, and recognizes brands.',
+      url: 'https://fitcheckaiapp.com/features/ai-wardrobe-extraction#step-3',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 4,
+      name: 'Review and Refine',
+      text: 'Review AI-generated details and make any adjustments. Add personal notes, purchase info, and care instructions.',
+      url: 'https://fitcheckaiapp.com/features/ai-wardrobe-extraction#step-4',
+    },
+  ],
+}
+
+const features = [
+  {
+    icon: Camera,
+    title: 'Multi-Item Detection',
+    description: 'Upload group photos and our AI separates individual items automatically. Perfect for flat lays and closet shots.',
+  },
+  {
+    icon: Palette,
+    title: 'Color Extraction',
+    description: 'Advanced computer vision identifies primary and secondary colors across 60+ color palettes with precision accuracy.',
+  },
+  {
+    icon: Tags,
+    title: 'Smart Categorization',
+    description: 'AI automatically sorts items into categories: tops, bottoms, shoes, accessories, outerwear, and more.',
+  },
+  {
+    icon: Search,
+    title: 'Brand Recognition',
+    description: 'Detects visible brand logos and labels, making it easy to track your favorite designers and retailers.',
+  },
+  {
+    icon: Sparkles,
+    title: 'Style Tagging',
+    description: 'Suggests style tags based on design elements, patterns, and current fashion trends.',
+  },
+  {
+    icon: Shirt,
+    title: 'Material Detection',
+    description: 'Identifies fabric types like cotton, silk, denim, leather, and more from visual texture analysis.',
+  },
+]
+
+const benefits = [
+  'Save 5+ hours compared to manual wardrobe cataloging',
+  '95%+ accuracy in item recognition and categorization',
+  'Automatic cost-per-wear tracking for smart shopping',
+  'Discover forgotten pieces in your wardrobe',
+  'Plan outfits faster with complete wardrobe visibility',
+  'Identify gaps in your wardrobe for smarter purchases',
+]
+
+const relatedFeatures = [
+  {
+    title: 'Virtual Try-On',
+    description: 'See how any outfit looks on you before wearing it.',
+    link: '/features/virtual-try-on',
+    icon: Smartphone,
+  },
+  {
+    title: 'Outfit Recommendations',
+    description: 'Get AI-powered outfit suggestions based on your style.',
+    link: '/features/outfit-recommendations',
+    icon: Sparkles,
+  },
+  {
+    title: 'Wardrobe Analytics',
+    description: 'Track usage, cost-per-wear, and wardrobe insights.',
+    link: '/features/wardrobe-analytics',
+    icon: BarChart3,
+  },
+]
+
 export default function AIWardrobeExtractionPage() {
-  const breadcrumbs = [
-    { name: 'Home', url: 'https://fitcheckaiapp.com/' },
-    { name: 'Features', url: 'https://fitcheckaiapp.com/features' },
-    { name: 'AI Wardrobe Extraction', url: 'https://fitcheckaiapp.com/features/ai-wardrobe-extraction' },
-  ]
-
-  // HowTo schema for wardrobe extraction tutorial
-  const howToSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'HowTo',
-    name: 'How to Organize Your Wardrobe with AI',
-    description: 'Learn how to digitize your entire wardrobe in minutes using AI-powered clothing recognition and cataloging.',
-    totalTime: 'PT15M',
-    estimatedCost: {
-      '@type': 'MonetaryAmount',
-      currency: 'USD',
-      value: '0',
-    },
-    supply: [
-      { '@type': 'HowToSupply', name: 'Smartphone or camera' },
-      { '@type': 'HowToSupply', name: 'Good lighting source' },
-      { '@type': 'HowToSupply', name: 'Clean background (optional)' },
-    ],
-    tool: [
-      { '@type': 'HowToTool', name: 'FitCheck AI app' },
-    ],
-    step: [
-      {
-        '@type': 'HowToStep',
-        position: 1,
-        name: 'Gather Your Clothes',
-        text: 'Collect 10-20 items you want to catalog. Group similar items together for faster processing.',
-        url: 'https://fitcheckaiapp.com/features/ai-wardrobe-extraction#step-1',
-      },
-      {
-        '@type': 'HowToStep',
-        position: 2,
-        name: 'Photograph Your Items',
-        text: 'Use natural lighting and photograph items flat on a neutral background. Include multiple angles for complex items.',
-        url: 'https://fitcheckaiapp.com/features/ai-wardrobe-extraction#step-2',
-      },
-      {
-        '@type': 'HowToStep',
-        position: 3,
-        name: 'Upload to FitCheck AI',
-        text: 'Upload photos to the app. Our AI automatically detects items, extracts colors, identifies categories, and recognizes brands.',
-        url: 'https://fitcheckaiapp.com/features/ai-wardrobe-extraction#step-3',
-      },
-      {
-        '@type': 'HowToStep',
-        position: 4,
-        name: 'Review and Refine',
-        text: 'Review AI-generated details and make any adjustments. Add personal notes, purchase info, and care instructions.',
-        url: 'https://fitcheckaiapp.com/features/ai-wardrobe-extraction#step-4',
-      },
-    ],
-  }
-
-  const features = [
-    {
-      icon: Camera,
-      title: 'Multi-Item Detection',
-      description: 'Upload group photos and our AI separates individual items automatically. Perfect for flat lays and closet shots.',
-    },
-    {
-      icon: Palette,
-      title: 'Color Extraction',
-      description: 'Advanced computer vision identifies primary and secondary colors across 60+ color palettes with precision accuracy.',
-    },
-    {
-      icon: Tags,
-      title: 'Smart Categorization',
-      description: 'AI automatically sorts items into categories: tops, bottoms, shoes, accessories, outerwear, and more.',
-    },
-    {
-      icon: Search,
-      title: 'Brand Recognition',
-      description: 'Detects visible brand logos and labels, making it easy to track your favorite designers and retailers.',
-    },
-    {
-      icon: Sparkles,
-      title: 'Style Tagging',
-      description: 'Suggests style tags based on design elements, patterns, and current fashion trends.',
-    },
-    {
-      icon: Shirt,
-      title: 'Material Detection',
-      description: 'Identifies fabric types like cotton, silk, denim, leather, and more from visual texture analysis.',
-    },
-  ]
-
-  const benefits = [
-    'Save 5+ hours compared to manual wardrobe cataloging',
-    '95%+ accuracy in item recognition and categorization',
-    'Automatic cost-per-wear tracking for smart shopping',
-    'Discover forgotten pieces in your wardrobe',
-    'Plan outfits faster with complete wardrobe visibility',
-    'Identify gaps in your wardrobe for smarter purchases',
-  ]
-
-  const relatedFeatures = [
-    {
-      title: 'Virtual Try-On',
-      description: 'See how any outfit looks on you before wearing it.',
-      link: '/features/virtual-try-on',
-      icon: Smartphone,
-    },
-    {
-      title: 'Outfit Recommendations',
-      description: 'Get AI-powered outfit suggestions based on your style.',
-      link: '/features/outfit-recommendations',
-      icon: Sparkles,
-    },
-    {
-      title: 'Wardrobe Analytics',
-      description: 'Track usage, cost-per-wear, and wardrobe insights.',
-      link: '/features/wardrobe-analytics',
-      icon: BarChart3,
-    },
-  ]
-
   return (
     <>
       <SEO
@@ -337,8 +337,8 @@ export default function AIWardrobeExtractionPage() {
                   </p>
 
                   <div className="space-y-4">
-                    {benefits.map((benefit, index) => (
-                      <div key={index} className="flex items-start gap-4">
+                    {benefits.map((benefit) => (
+                      <div key={benefit} className="flex items-start gap-4">
                         <div className="w-6 h-6 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                           <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
                         </div>

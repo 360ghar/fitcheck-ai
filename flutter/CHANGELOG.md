@@ -5,7 +5,7 @@ All notable changes to the FitCheck AI Flutter app will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.3+5] - Unreleased
+## [1.0.3+5] - 2026-07-15
 
 Note: the version jumped from 1.0.1+3 directly to 1.0.3+5 in a single
 commit (no 1.0.2 was ever tagged/shipped) - this entry covers everything

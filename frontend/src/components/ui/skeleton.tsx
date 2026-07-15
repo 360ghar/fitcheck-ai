@@ -197,14 +197,14 @@ export function TextSkeleton({ lines = 1, className }: SkeletonProps & { lines?:
 /**
  * Button skeleton
  */
-export function ButtonSkeleton({ size = 'default' }: { size?: 'sm' | 'default' | 'lg' }) {
-  const sizeClasses = {
-    sm: 'h-10 w-20',
-    default: 'h-11 w-24',
-    lg: 'h-12 w-28',
-  }
+const BUTTON_SKELETON_SIZE_CLASSES = {
+  sm: 'h-10 w-20',
+  default: 'h-11 w-24',
+  lg: 'h-12 w-28',
+}
 
-  return <Skeleton className={cn('rounded-md', sizeClasses[size])} />
+export function ButtonSkeleton({ size = 'default' }: { size?: 'sm' | 'default' | 'lg' }) {
+  return <Skeleton className={cn('rounded-md', BUTTON_SKELETON_SIZE_CLASSES[size])} />
 }
 
 /**

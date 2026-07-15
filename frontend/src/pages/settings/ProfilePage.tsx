@@ -112,6 +112,14 @@ function resolveTab(value: string | null): TabType {
   return LEGACY_TAB_MAP[value] ?? 'account'
 }
 
+const PROFILE_TABS = [
+  { id: 'account' as TabType, name: 'Account', icon: User },
+  { id: 'style' as TabType, name: 'Style', icon: Palette },
+  { id: 'app' as TabType, name: 'App', icon: Settings2 },
+  { id: 'plan' as TabType, name: 'Plan', icon: CreditCard },
+  { id: 'help' as TabType, name: 'Help', icon: MessageSquarePlus },
+]
+
 export default function ProfilePage() {
   const user = useCurrentUser()
   const userDisplayName = useUserDisplayName()
@@ -125,7 +133,7 @@ export default function ProfilePage() {
   const [fullName, setFullName] = useState(user?.full_name || '')
   const [gender, setGender] = useState<string>(user?.gender || '')
   const [birthDate, setBirthDate] = useState(user?.birth_date || '')
-  const [birthTime, setBirthTime] = useState(normalizeBirthTimeForInput(user?.birth_time))
+  const [birthTime, setBirthTime] = useState(() => normalizeBirthTimeForInput(user?.birth_time))
   const [birthPlace, setBirthPlace] = useState(user?.birth_place || '')
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
@@ -163,13 +171,7 @@ export default function ProfilePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]) // Only react to activeTab changes, not searchParams
 
-  const tabs = [
-    { id: 'account' as TabType, name: 'Account', icon: User },
-    { id: 'style' as TabType, name: 'Style', icon: Palette },
-    { id: 'app' as TabType, name: 'App', icon: Settings2 },
-    { id: 'plan' as TabType, name: 'Plan', icon: CreditCard },
-    { id: 'help' as TabType, name: 'Help', icon: MessageSquarePlus },
-  ]
+  const tabs = PROFILE_TABS
 
   const handleLogout = async () => {
     await logout()
@@ -781,6 +783,7 @@ export default function ProfilePage() {
                             measurement_units: (e.target.value as 'imperial' | 'metric') || 'imperial',
                           })
                         }
+                        aria-label="Measurement units"
                         className="mt-2 block w-full h-12 px-3 pr-10 text-base border border-border rounded-md bg-background text-foreground focus:ring-primary focus:border-primary"
                       >
                         <option value="imperial">Imperial (lbs, ft)</option>
@@ -793,6 +796,7 @@ export default function ProfilePage() {
                       <select
                         value={settings.language}
                         onChange={(e) => handleUpdateSettings({ language: e.target.value })}
+                        aria-label="Language"
                         className="mt-2 block w-full h-12 px-3 pr-10 text-base border border-border rounded-md bg-background text-foreground focus:ring-primary focus:border-primary"
                       >
                         <option value="en">English</option>

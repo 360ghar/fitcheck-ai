@@ -123,6 +123,18 @@ function DryMethodSelect({
   )
 }
 
+const URGENCY_COLORS = {
+  high: 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400',
+  medium: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-700 dark:text-yellow-400',
+  low: 'bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-400',
+}
+
+const URGENCY_ICONS = {
+  high: '⚠️',
+  medium: '⏰',
+  low: '💡',
+}
+
 function ReminderCard({
   reminder,
   onLogWash,
@@ -130,23 +142,11 @@ function ReminderCard({
   reminder: LaundryReminder
   onLogWash: () => void
 }) {
-  const urgencyColors = {
-    high: 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400',
-    medium: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-700 dark:text-yellow-400',
-    low: 'bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-400',
-  }
-
-  const urgencyIcons = {
-    high: '⚠️',
-    medium: '⏰',
-    low: '💡',
-  }
-
   return (
-    <div className={cn('p-3 rounded-lg border', urgencyColors[reminder.urgency])}>
+    <div className={cn('p-3 rounded-lg border', URGENCY_COLORS[reminder.urgency])}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2">
-          <span className="text-lg">{urgencyIcons[reminder.urgency]}</span>
+          <span className="text-lg">{URGENCY_ICONS[reminder.urgency]}</span>
           <div>
             <div className="font-medium text-sm">{reminder.itemName}</div>
             <div className="text-xs opacity-80">{reminder.message}</div>
@@ -237,7 +237,7 @@ function LogWashDialog({
   const [open, setOpen] = useState(false)
   const [washType, setWashType] = useState<WashType>('machine-regular')
   const [driedHow, setDriedHow] = useState<DryMethod | undefined>()
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0])
   const [notes, setNotes] = useState('')
   const [stainRemoved, setStainRemoved] = useState(false)
 
@@ -292,6 +292,8 @@ function LogWashDialog({
             <button
               type="button"
               onClick={() => setStainRemoved(!stainRemoved)}
+              aria-label="Removed a stain"
+              aria-pressed={stainRemoved}
               className={cn(
                 'w-10 h-5 rounded-full transition-colors relative',
                 stainRemoved ? 'bg-green-500' : 'bg-muted'
@@ -459,7 +461,7 @@ export function LaundryTracker({
   const [reminders, setReminders] = useState<LaundryReminder[]>([])
   const [batches, setBatches] = useState<LaundryBatch[]>([])
   const [suggestedGroups, setSuggestedGroups] = useState<ReturnType<typeof suggestLaundryGroups>>([])
-  const [summary, setSummary] = useState(getLaundrySummary(items))
+  const [summary, setSummary] = useState(() => getLaundrySummary(items))
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
@@ -641,10 +643,10 @@ export function LaundryTracker({
         <div className="space-y-3">
           <h3 className="font-semibold">Suggested Laundry Loads</h3>
           <div className="grid gap-3 sm:grid-cols-2">
-            {suggestedGroups.map((group, i) => {
+            {suggestedGroups.map((group) => {
               const washOption = WASH_TYPE_OPTIONS.find((o) => o.value === group.washType)
               return (
-                <div key={i} className="p-4 bg-card rounded-lg border">
+                <div key={group.washType} className="p-4 bg-card rounded-lg border">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-xl">{washOption?.icon}</span>

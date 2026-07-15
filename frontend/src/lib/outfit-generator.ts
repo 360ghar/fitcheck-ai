@@ -312,11 +312,12 @@ function calculateOccasionScore(
 
   // Check against target occasion
   const validCategories = OCCASION_CATEGORIES[targetOccasion] || []
+  const validCategoriesSet = new Set(validCategories)
   let matchCount = 0
 
   for (const item of items) {
     // Check category fit
-    if (validCategories.includes(item.category)) {
+    if (validCategoriesSet.has(item.category)) {
       matchCount++
     }
     // Check occasion tags

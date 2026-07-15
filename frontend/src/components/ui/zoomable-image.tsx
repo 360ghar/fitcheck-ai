@@ -36,6 +36,8 @@ export function ZoomableImage({
     onClick?.(e);
   };
 
+  const isZoomable = enableZoom && !!src;
+
   return (
     <>
       <img
@@ -43,9 +45,21 @@ export function ZoomableImage({
         alt={alt}
         className={cn(
           className,
-          enableZoom && src && 'cursor-zoom-in'
+          isZoomable && 'cursor-zoom-in'
         )}
         onClick={handleClick}
+        role={isZoomable ? 'button' : undefined}
+        tabIndex={isZoomable ? 0 : undefined}
+        onKeyDown={
+          isZoomable
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setIsOpen(true);
+                }
+              }
+            : undefined
+        }
         {...imgProps}
       />
       {enableZoom && src && (

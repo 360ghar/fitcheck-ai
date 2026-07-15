@@ -16,7 +16,6 @@ from enum import Enum
 
 class AIProviderEnum(str, Enum):
     """Supported AI providers."""
-    GEMINI = "gemini"
     OPENAI = "openai"
     CUSTOM = "custom"
 
@@ -266,6 +265,5 @@ class TryOnResponse(BaseModel):
 
 class AvailableModelsResponse(BaseModel):
     """Available models by provider."""
-    gemini: Dict[str, List[str]] = Field(default_factory=dict)
     openai: Dict[str, List[str]] = Field(default_factory=dict)
     custom: Dict[str, List[str]] = Field(default_factory=dict)

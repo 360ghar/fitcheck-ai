@@ -6,12 +6,16 @@
 # macOS
 .DS_Store
 
+# Playwright MCP debug output
+.playwright-mcp/
+
 # Python
 __pycache__/
 *.py[cod]
 *.log
 backend/.venv/
 backend/.pytest_cache/
+frontend/.venv/
 backend/logs/
 
 # Node / Vite

@@ -652,13 +652,12 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 
       const itemIds = new Set(outfit.item_ids);
       const availableItems = await outfitsApi.getAvailableItems();
-      const promptItems = availableItems
-        .filter((it) => itemIds.has(it.id))
-        .map((it) => ({
-          name: it.name,
-          category: it.category,
-          colors: it.colors,
-        }));
+      const promptItems: Parameters<typeof generateOutfit>[0] = [];
+      for (const it of availableItems) {
+        if (itemIds.has(it.id)) {
+          promptItems.push({ name: it.name, category: it.category, colors: it.colors });
+        }
+      }
 
       if (promptItems.length === 0) {
         throw new Error('No outfit items available for generation');
@@ -813,13 +812,12 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         // Get items for generation
         const itemIds = new Set(outfit.item_ids);
         const availableItems = await outfitsApi.getAvailableItems();
-        const promptItems = availableItems
-          .filter((it) => itemIds.has(it.id))
-          .map((it) => ({
-            name: it.name,
-            category: it.category,
-            colors: it.colors,
-          }));
+        const promptItems: Parameters<typeof generateOutfit>[0] = [];
+        for (const it of availableItems) {
+          if (itemIds.has(it.id)) {
+            promptItems.push({ name: it.name, category: it.category, colors: it.colors });
+          }
+        }
 
         if (promptItems.length === 0) {
           throw new Error('No outfit items available for generation');

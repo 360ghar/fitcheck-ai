@@ -94,6 +94,7 @@ class ErrorBoundary extends Component<Props, State> {
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 mb-6">
               <button
+                type="button"
                 onClick={this.handleReset}
                 className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-xl transition-colors touch-target"
               >
@@ -101,6 +102,7 @@ class ErrorBoundary extends Component<Props, State> {
                 Try Again
               </button>
               <button
+                type="button"
                 onClick={this.handleGoHome}
                 className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-muted hover:bg-muted/80 text-foreground font-medium rounded-xl transition-colors touch-target"
               >
@@ -113,6 +115,7 @@ class ErrorBoundary extends Component<Props, State> {
             {isDevelopment && error && (
               <div className="border-t border-border pt-6">
                 <button
+                  type="button"
                   onClick={this.toggleDetails}
                   className="flex items-center justify-between w-full text-left text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >

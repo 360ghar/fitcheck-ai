@@ -9,67 +9,67 @@ function JsonLdScript({ schema }: { schema: Record<string, unknown> }) {
   )
 }
 
-export function OrganizationJsonLd() {
-  const schema = {
-    '@context': 'https://schema.org',
-    '@type': 'Organization',
-    name: 'FitCheck AI',
-    url: SEO_CONFIG.siteUrl,
-    logo: `${SEO_CONFIG.siteUrl}/og-default.jpg`,
-    description: SEO_CONFIG.positioning,
-    sameAs: [
-      'https://twitter.com/fitcheckai',
-      'https://instagram.com/fitcheckai',
-      'https://linkedin.com/company/fitcheckai',
-    ],
-    contactPoint: {
-      '@type': 'ContactPoint',
-      contactType: 'Customer Support',
-      email: 'support@fitcheckaiapp.com',
-      availableLanguage: ['English'],
-    },
-  }
+const ORGANIZATION_SCHEMA = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'FitCheck AI',
+  url: SEO_CONFIG.siteUrl,
+  logo: `${SEO_CONFIG.siteUrl}/og-default.jpg`,
+  description: SEO_CONFIG.positioning,
+  sameAs: [
+    'https://twitter.com/fitcheckai',
+    'https://instagram.com/fitcheckai',
+    'https://linkedin.com/company/fitcheckai',
+  ],
+  contactPoint: {
+    '@type': 'ContactPoint',
+    contactType: 'Customer Support',
+    email: 'support@fitcheckaiapp.com',
+    availableLanguage: ['English'],
+  },
+}
 
-  return <JsonLdScript schema={schema} />
+export function OrganizationJsonLd() {
+  return <JsonLdScript schema={ORGANIZATION_SCHEMA} />
+}
+
+const SOFTWARE_APPLICATION_SCHEMA = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'FitCheck AI',
+  applicationCategory: 'LifestyleApplication',
+  operatingSystem: 'Web, iOS, Android',
+  url: SEO_CONFIG.siteUrl,
+  description: SEO_CONFIG.positioning,
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'USD',
+    description: 'Free plan available with wardrobe limits and monthly AI generations',
+  },
+  featureList: [
+    'AI-powered clothing detection from photos',
+    'Virtual try-on with AI visualization',
+    'AI photoshoot generator',
+    'Weather-based outfit recommendations',
+    'Wardrobe analytics and cost-per-wear tracking',
+  ],
 }
 
 export function SoftwareApplicationJsonLd() {
-  const schema = {
-    '@context': 'https://schema.org',
-    '@type': 'SoftwareApplication',
-    name: 'FitCheck AI',
-    applicationCategory: 'LifestyleApplication',
-    operatingSystem: 'Web, iOS, Android',
-    url: SEO_CONFIG.siteUrl,
-    description: SEO_CONFIG.positioning,
-    offers: {
-      '@type': 'Offer',
-      price: '0',
-      priceCurrency: 'USD',
-      description: 'Free plan available with wardrobe limits and monthly AI generations',
-    },
-    featureList: [
-      'AI-powered clothing detection from photos',
-      'Virtual try-on with AI visualization',
-      'AI photoshoot generator',
-      'Weather-based outfit recommendations',
-      'Wardrobe analytics and cost-per-wear tracking',
-    ],
-  }
+  return <JsonLdScript schema={SOFTWARE_APPLICATION_SCHEMA} />
+}
 
-  return <JsonLdScript schema={schema} />
+const WEBSITE_SCHEMA = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'FitCheck AI',
+  url: SEO_CONFIG.siteUrl,
+  description: SEO_CONFIG.positioning,
 }
 
 export function WebSiteJsonLd() {
-  const schema = {
-    '@context': 'https://schema.org',
-    '@type': 'WebSite',
-    name: 'FitCheck AI',
-    url: SEO_CONFIG.siteUrl,
-    description: SEO_CONFIG.positioning,
-  }
-
-  return <JsonLdScript schema={schema} />
+  return <JsonLdScript schema={WEBSITE_SCHEMA} />
 }
 
 interface OutfitJsonLdProps {

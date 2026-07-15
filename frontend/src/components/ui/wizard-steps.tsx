@@ -27,13 +27,13 @@ export function WizardSteps({
 
   if (variant === 'bars') {
     return (
-      <div className={cn('flex gap-2', className)} role="list" aria-label="Progress">
+      <ul className={cn('flex gap-2', className)} aria-label="Progress">
         {steps.map((step, index) => {
           const isCurrent = index === currentIndex
           const isComplete = index < currentIndex
           const canClick = onStepClick && index < currentIndex
           return (
-            <div key={step.id} className="flex-1" role="listitem">
+            <li key={step.id} className="flex-1">
               <button
                 type="button"
                 disabled={!canClick}
@@ -63,20 +63,19 @@ export function WizardSteps({
                   {step.label}
                 </p>
               </button>
-            </div>
+            </li>
           )
         })}
-      </div>
+      </ul>
     )
   }
 
   return (
-    <div
+    <ul
       className={cn(
         'flex items-center justify-center gap-2 md:gap-4 mb-4 md:mb-6 px-2 overflow-x-auto scrollbar-hide',
         className
       )}
-      role="list"
       aria-label="Progress"
     >
       {steps.map((step, index) => {
@@ -86,7 +85,7 @@ export function WizardSteps({
         const canClick = onStepClick && index < currentIndex
 
         return (
-          <div key={step.id} className="flex items-center gap-2 md:gap-4" role="listitem">
+          <li key={step.id} className="flex items-center gap-2 md:gap-4">
             <button
               type="button"
               disabled={!canClick}
@@ -132,9 +131,9 @@ export function WizardSteps({
                 )}
               />
             )}
-          </div>
+          </li>
         )
       })}
-    </div>
+    </ul>
   )
 }

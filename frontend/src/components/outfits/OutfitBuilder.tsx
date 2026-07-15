@@ -41,6 +41,9 @@ import { cn } from '@/lib/utils'
 import { generateOutfit } from '@/api/ai'
 import type { Item, Category, Style, Season } from '@/types'
 
+// ponytail: no UI for tags yet, always saved empty; wire up a tag input when the feature needs one
+const EMPTY_TAGS: string[] = []
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -132,6 +135,15 @@ function CanvasItem({
         isSelected ? 'ring-2 ring-indigo-500' : ''
       } ${!outfitItem.isVisible ? 'opacity-50' : ''}`}
       onClick={onSelect}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
       style={{
         position: 'absolute',
         left: `${outfitItem.position.x}px`,
@@ -233,7 +245,7 @@ export function OutfitBuilder({
   const [description, setDescription] = useState(initialDescription)
   const [style, setStyle] = useState<Style>('casual')
   const [season, setSeason] = useState<Season>('all-season')
-  const tags: string[] = []
+  const tags = EMPTY_TAGS
   const [isSaving, setIsSaving] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null)
@@ -416,16 +428,25 @@ export function OutfitBuilder({
     setIsGenerating(true)
 
     try {
-      const visibleItems = outfitItems
-        .filter((oi) => oi.isVisible)
-        .map((oi) => ({
+      const visibleItems: Array<{
+        name: string
+        category: Category
+        colors: string[]
+        brand?: string
+        material?: string
+        pattern?: string
+      }> = []
+      for (const oi of outfitItems) {
+        if (!oi.isVisible) continue
+        visibleItems.push({
           name: oi.item.name,
           category: oi.item.category,
           colors: oi.item.colors,
           brand: oi.item.brand,
           material: oi.item.material,
           pattern: oi.item.pattern,
-        }))
+        })
+      }
 
       const result = await generateOutfit(visibleItems, {
         style,
@@ -496,6 +517,7 @@ export function OutfitBuilder({
                 const isInOutfit = outfitItems.some((oi) => oi.item.id === item.id)
                 return (
                   <button
+                    type="button"
                     key={item.id}
                     onClick={() => !isInOutfit && handleAddItem(item)}
                     disabled={isInOutfit}

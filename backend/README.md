@@ -8,7 +8,7 @@ FastAPI backend for FitCheck AI.
 - Handles authentication and token verification
 - Orchestrates wardrobe, outfit, recommendation, photoshoot, social, referral, and subscription flows
 - Integrates with Supabase (Postgres + storage)
-- Integrates with configurable AI providers (Gemini/OpenAI/custom)
+- Integrates with configurable AI providers (OpenAI/custom)
 - Supports optional vector search and social import flows
 
 ## Main Entry Points
@@ -43,7 +43,8 @@ Template: `backend/.env.example`
 
 Core keys:
 - Supabase: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_SECRET`
-- AI provider config: `AI_DEFAULT_PROVIDER`, `AI_GEMINI_*`, `AI_OPENAI_*`, `AI_CUSTOM_*`
+- AI provider config: `AI_DEFAULT_PROVIDER`, `AI_OPENAI_*`, `AI_CUSTOM_*`
+- Embeddings (separate from the provider config above): `AI_GEMINI_API_KEY`, `AI_GEMINI_EMBEDDING_MODEL`
 - Optional integrations: `PINECONE_*`, `STRIPE_*`, `WEATHER_API_KEY`, `META_OAUTH_*`
 
 ## Route Domains

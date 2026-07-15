@@ -8,6 +8,12 @@
 
 import type { Item, Outfit, Category, Style, Season } from '@/types'
 
+const wholeCurrencyFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0,
+})
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -414,7 +420,9 @@ export function calculateWardrobeStats(items: Item[], outfits: Outfit[]): Wardro
   const costPerWearLeaders = itemsWithCPW.slice(0, 5)
 
   // Most expensive
-  const sortedByPrice = [...items]
+  // `.filter()` already returns a fresh array, so sorting it in place is safe
+  // (no need to spread `items` first just to avoid mutating it).
+  const sortedByPrice = items
     .filter((i) => i.purchase_price)
     .sort((a, b) => (b.purchase_price || 0) - (a.purchase_price || 0))
   const mostExpensiveItem = sortedByPrice[0] || null
@@ -422,11 +430,18 @@ export function calculateWardrobeStats(items: Item[], outfits: Outfit[]): Wardro
   // Category breakdown
   const categories: Category[] = ['tops', 'bottoms', 'shoes', 'outerwear', 'accessories', 'activewear', 'swimwear', 'other']
   const categoryBreakdown: CategoryStats[] = categories.map((category) => {
-    const categoryItems = items.filter((i) => i.category === category)
-    const count = categoryItems.length
-    const categoryValue = categoryItems.reduce((sum, i) => sum + (i.purchase_price || 0), 0)
-    const categoryWears = categoryItems.reduce((sum, i) => sum + i.usage_times_worn, 0)
-    const topItem = [...categoryItems].sort((a, b) => b.usage_times_worn - a.usage_times_worn)[0] || null
+    // Single pass over this category's items instead of separate filter/reduce/reduce/reduce calls.
+    let count = 0
+    let categoryValue = 0
+    let categoryWears = 0
+    let topItem: Item | null = null
+    for (const i of items) {
+      if (i.category !== category) continue
+      count++
+      categoryValue += i.purchase_price || 0
+      categoryWears += i.usage_times_worn
+      if (!topItem || i.usage_times_worn > topItem.usage_times_worn) topItem = i
+    }
 
     return {
       category,
@@ -587,11 +602,7 @@ export function getQuickStats(items: Item[], outfits: Outfit[]): {
   return {
     totalItems: items.length,
     totalOutfits: outfits.length,
-    totalValue: new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(totalValue),
+    totalValue: wholeCurrencyFormatter.format(totalValue),
     averageWears: items.length > 0 ? Math.round(totalWears / items.length) : 0,
     favoriteCount: items.filter((i) => i.is_favorite).length,
   }

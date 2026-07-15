@@ -355,6 +355,7 @@ export function ItemDetailModal({
                                   type="button"
                                   onClick={() => toggleOccasionTag(tag)}
                                   className="hover:text-foreground"
+                                  aria-label={`Remove ${formatUseCaseLabel(tag)} tag`}
                                 >
                                   <X className="h-3 w-3" />
                                 </button>

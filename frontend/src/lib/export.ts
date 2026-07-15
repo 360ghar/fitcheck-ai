@@ -6,6 +6,7 @@
  */
 
 import type { Item, Outfit, Category } from '@/types'
+import { escapeHtml } from '@/lib/utils'
 
 // ============================================================================
 // TYPES
@@ -78,14 +79,16 @@ async function getImageAsBase64(url: string): Promise<string | null> {
   }
 }
 
+const currencyFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+})
+
 /**
  * Format currency value.
  */
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(value)
+  return currencyFormatter.format(value)
 }
 
 /**
@@ -292,14 +295,20 @@ export async function exportToHTML(
   // Prepare image data if needed
   const imageCache = new Map<string, string>()
   if (includeImages) {
-    for (const item of data.items.slice(0, 50)) {
-      // Limit for performance
-      if (item.image_url) {
-        const base64 = await getImageAsBase64(item.image_url)
-        if (base64) imageCache.set(item.id, base64)
-      }
-    }
+    // Limit for performance
+    await Promise.all(
+      data.items.slice(0, 50).map(async (item) => {
+        if (item.image_url) {
+          const base64 = await getImageAsBase64(item.image_url)
+          if (base64) imageCache.set(item.id, base64)
+        }
+      })
+    )
   }
+
+  const nonEmptyCategories = Object.entries(data.stats.categoryBreakdown).filter(
+    ([, count]) => count > 0
+  )
 
   const html = `
 <!DOCTYPE html>
@@ -307,7 +316,7 @@ export async function exportToHTML(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${data.title}</title>
+  <title>${escapeHtml(data.title)}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -384,10 +393,10 @@ export async function exportToHTML(
 </head>
 <body>
   <header>
-    <h1>${data.title}</h1>
+    <h1>${escapeHtml(data.title)}</h1>
     <p class="meta">
       Exported on ${formatDate(data.exportDate)}
-      ${data.author ? ` by ${data.author}` : ''}
+      ${data.author ? ` by ${escapeHtml(data.author)}` : ''}
     </p>
   </header>
 
@@ -415,14 +424,12 @@ export async function exportToHTML(
     <h3>Items by Category</h3>
     <table>
       <tr>
-        ${Object.entries(data.stats.categoryBreakdown)
-          .filter(([, count]) => count > 0)
+        ${nonEmptyCategories
           .map(([cat]) => `<th>${cat.charAt(0).toUpperCase() + cat.slice(1)}</th>`)
           .join('')}
       </tr>
       <tr>
-        ${Object.entries(data.stats.categoryBreakdown)
-          .filter(([, count]) => count > 0)
+        ${nonEmptyCategories
           .map(([, count]) => `<td>${count}</td>`)
           .join('')}
       </tr>
@@ -444,14 +451,14 @@ export async function exportToHTML(
       ${data.items.map((item) => `
         <div class="item-card">
           ${includeImages && imageCache.has(item.id)
-            ? `<img class="item-image" src="${imageCache.get(item.id)}" alt="${item.name}">`
+            ? `<img class="item-image" src="${imageCache.get(item.id)}" alt="${escapeHtml(item.name)}">`
             : `<div class="item-image" style="display:flex;align-items:center;justify-content:center;color:#999;">No image</div>`
           }
           <div class="item-info">
-            <div class="item-name">${item.name}</div>
+            <div class="item-name">${escapeHtml(item.name)}</div>
             <div class="item-meta">
-              ${item.brand ? `${item.brand} · ` : ''}
-              ${item.category}
+              ${item.brand ? `${escapeHtml(item.brand)} · ` : ''}
+              ${escapeHtml(item.category)}
               ${item.purchase_price ? ` · ${formatCurrency(item.purchase_price)}` : ''}
             </div>
             <div class="item-meta">Worn ${item.usage_times_worn} times</div>
@@ -467,12 +474,12 @@ export async function exportToHTML(
     <div class="outfits-grid">
       ${data.outfits.map((outfit) => `
         <div class="outfit-card">
-          <div class="outfit-name">${outfit.name}</div>
-          ${outfit.description ? `<div class="outfit-desc">${outfit.description}</div>` : ''}
+          <div class="outfit-name">${escapeHtml(outfit.name)}</div>
+          ${outfit.description ? `<div class="outfit-desc">${escapeHtml(outfit.description)}</div>` : ''}
           <div>
-            ${outfit.style ? `<span class="tag">${outfit.style}</span>` : ''}
-            ${outfit.season ? `<span class="tag">${outfit.season}</span>` : ''}
-            ${outfit.occasion ? `<span class="tag">${outfit.occasion}</span>` : ''}
+            ${outfit.style ? `<span class="tag">${escapeHtml(outfit.style)}</span>` : ''}
+            ${outfit.season ? `<span class="tag">${escapeHtml(outfit.season)}</span>` : ''}
+            ${outfit.occasion ? `<span class="tag">${escapeHtml(outfit.occasion)}</span>` : ''}
           </div>
           <div class="item-meta" style="margin-top: 0.5rem;">
             ${outfit.item_ids.length} items · Worn ${outfit.worn_count} times
@@ -667,7 +674,7 @@ export async function exportLookbookToHTML(lookbook: Lookbook): Promise<string> 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${lookbook.title}</title>
+  <title>${escapeHtml(lookbook.title)}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -733,10 +740,10 @@ export async function exportLookbookToHTML(lookbook: Lookbook): Promise<string> 
 </head>
 <body>
   <div class="cover">
-    <h1>${lookbook.title}</h1>
-    ${lookbook.description ? `<p class="subtitle">${lookbook.description}</p>` : ''}
+    <h1>${escapeHtml(lookbook.title)}</h1>
+    ${lookbook.description ? `<p class="subtitle">${escapeHtml(lookbook.description)}</p>` : ''}
     <p class="meta">
-      ${lookbook.author ? `By ${lookbook.author} · ` : ''}
+      ${lookbook.author ? `By ${escapeHtml(lookbook.author)} · ` : ''}
       ${formatDate(lookbook.createdDate)}
     </p>
   </div>
@@ -744,20 +751,20 @@ export async function exportLookbookToHTML(lookbook: Lookbook): Promise<string> 
   ${lookbook.pages.map((page, i) => `
     <div class="page">
       <div class="page-number">Look ${i + 1} of ${lookbook.pages.length}</div>
-      <h2>${page.title}</h2>
-      ${page.description ? `<p class="description">${page.description}</p>` : ''}
+      <h2>${escapeHtml(page.title)}</h2>
+      ${page.description ? `<p class="description">${escapeHtml(page.description)}</p>` : ''}
 
       <div class="tags">
-        ${page.outfit.style ? `<span class="tag">${page.outfit.style}</span>` : ''}
-        ${page.outfit.season ? `<span class="tag">${page.outfit.season}</span>` : ''}
-        ${page.outfit.occasion ? `<span class="tag">${page.outfit.occasion}</span>` : ''}
+        ${page.outfit.style ? `<span class="tag">${escapeHtml(page.outfit.style)}</span>` : ''}
+        ${page.outfit.season ? `<span class="tag">${escapeHtml(page.outfit.season)}</span>` : ''}
+        ${page.outfit.occasion ? `<span class="tag">${escapeHtml(page.outfit.occasion)}</span>` : ''}
       </div>
 
       <div class="items-list">
         ${page.items.map((item) => `
           <div class="item-pill">
-            <strong>${item.name}</strong>
-            ${item.brand ? `<span class="brand"> by ${item.brand}</span>` : ''}
+            <strong>${escapeHtml(item.name)}</strong>
+            ${item.brand ? `<span class="brand"> by ${escapeHtml(item.brand)}</span>` : ''}
           </div>
         `).join('')}
       </div>

@@ -12,6 +12,16 @@ import { Button } from '@/components/ui/button'
 import { validateReferralCode } from '@/api/subscription'
 import SEO from '@/components/seo/SEO'
 
+function getPasswordStrength(pwd: string) {
+  let strength = 0
+  if (pwd.length >= 8) strength++
+  if (/[A-Z]/.test(pwd)) strength++
+  if (/[a-z]/.test(pwd)) strength++
+  if (/\d/.test(pwd)) strength++
+  if (/[!@#$%^&*(),.?":{}|<>]/.test(pwd)) strength++
+  return strength
+}
+
 export default function RegisterPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -53,7 +63,7 @@ export default function RegisterPage() {
 
   // Validate referral code
   const validateReferral = async (code: string) => {
-    if (!code.trim()) {
+    if (code.trim().length < 3) {
       setReferralValid(null)
       setReferralReferrer(null)
       return
@@ -84,17 +94,6 @@ export default function RegisterPage() {
     if (referralCode.trim()) {
       validateReferral(referralCode)
     }
-  }
-
-  // Password strength validation
-  const getPasswordStrength = (pwd: string) => {
-    let strength = 0
-    if (pwd.length >= 8) strength++
-    if (/[A-Z]/.test(pwd)) strength++
-    if (/[a-z]/.test(pwd)) strength++
-    if (/\d/.test(pwd)) strength++
-    if (/[!@#$%^&*(),.?":{}|<>]/.test(pwd)) strength++
-    return strength
   }
 
   const passwordStrength = getPasswordStrength(password)

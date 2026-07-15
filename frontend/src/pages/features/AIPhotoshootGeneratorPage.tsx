@@ -21,155 +21,155 @@ import {
   Smartphone,
 } from 'lucide-react'
 
+const breadcrumbs = [
+  { name: 'Home', url: 'https://fitcheckaiapp.com/' },
+  { name: 'Features', url: 'https://fitcheckaiapp.com/features' },
+  { name: 'AI Photoshoot Generator', url: 'https://fitcheckaiapp.com/features/ai-photoshoot-generator' },
+]
+
+// HowTo schema for LinkedIn photos
+const linkedinHowToSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'How to Create Professional LinkedIn Photos with AI',
+  description: 'Create studio-quality professional headshots for LinkedIn using AI photoshoot technology. No expensive photographer needed.',
+  totalTime: 'PT10M',
+  estimatedCost: {
+    '@type': 'MonetaryAmount',
+    currency: 'USD',
+    value: '0',
+  },
+  supply: [
+    { '@type': 'HowToSupply', name: 'Smartphone with camera' },
+    { '@type': 'HowToSupply', name: 'Good lighting (natural light or lamp)' },
+    { '@type': 'HowToSupply', name: 'Professional attire' },
+  ],
+  tool: [
+    { '@type': 'HowToTool', name: 'FitCheck AI Photoshoot Generator' },
+  ],
+  step: [
+    {
+      '@type': 'HowToStep',
+      position: 1,
+      name: 'Take Reference Photos',
+      text: 'Take 1-4 clear selfies with good lighting facing your face. Use a plain background and wear professional attire.',
+      url: 'https://fitcheckaiapp.com/features/ai-photoshoot-generator#step-1',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 2,
+      name: 'Select LinkedIn Style',
+      text: 'Choose the "LinkedIn Professional" style option for optimized professional headshot settings.',
+      url: 'https://fitcheckaiapp.com/features/ai-photoshoot-generator#step-2',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 3,
+      name: 'AI Generates Headshots',
+      text: 'Our AI creates multiple professional headshot variations with different backgrounds, lighting, and compositions.',
+      url: 'https://fitcheckaiapp.com/features/ai-photoshoot-generator#step-3',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 4,
+      name: 'Download and Use',
+      text: 'Select your favorite headshot, download in high resolution, and update your LinkedIn profile.',
+      url: 'https://fitcheckaiapp.com/features/ai-photoshoot-generator#step-4',
+    },
+  ],
+}
+
+const photoshootStyles = [
+  {
+    icon: Briefcase,
+    title: 'LinkedIn Professional',
+    description: 'Studio-quality headshots with neutral backgrounds perfect for professional networking.',
+    color: 'blue',
+  },
+  {
+    icon: Heart,
+    title: 'Dating Profile',
+    description: 'Natural, approachable photos that show your authentic self for dating apps.',
+    color: 'pink',
+  },
+  {
+    icon: Star,
+    title: 'Instagram Influencer',
+    description: 'Trendy, aesthetic shots with stylish backgrounds and professional lighting.',
+    color: 'purple',
+  },
+  {
+    icon: Camera,
+    title: 'Model Portfolio',
+    description: 'High-fashion editorial looks with dramatic lighting and artistic compositions.',
+    color: 'amber',
+  },
+]
+
+const features = [
+  {
+    icon: User,
+    title: 'Identity Preservation',
+    description: 'Advanced AI keeps your face, features, and expressions authentic while enhancing the overall image.',
+  },
+  {
+    icon: Palette,
+    title: 'Professional Backgrounds',
+    description: 'Choose from office settings, gradients, or keep it simple with neutral professional backdrops.',
+  },
+  {
+    icon: Zap,
+    title: 'Instant Generation',
+    description: 'Get multiple professional photos in minutes, not days. No waiting for photographer editing.',
+  },
+  {
+    icon: Shield,
+    title: 'Privacy Protected',
+    description: 'Your photos are processed securely and never shared. Full control over your images.',
+  },
+  {
+    icon: Share2,
+    title: 'Social Ready',
+    description: 'Optimized dimensions and quality for LinkedIn, Instagram, dating apps, and more.',
+  },
+  {
+    icon: Download,
+    title: 'High Resolution',
+    description: 'Download photos in high resolution suitable for print and all digital platforms.',
+  },
+]
+
+const benefits = [
+  'Save $200-500 compared to traditional professional headshots',
+  'Get results in minutes instead of days of waiting',
+  'Multiple style options from one photo session',
+  'No scheduling or traveling to a studio',
+  'Unlimited retakes until you get the perfect shot',
+  'Update your look anytime without another photoshoot',
+]
+
+const relatedFeatures = [
+  {
+    title: 'Virtual Try-On',
+    description: 'See how different outfits look on you before your photoshoot.',
+    link: '/features/virtual-try-on',
+    icon: Smartphone,
+  },
+  {
+    title: 'Outfit Recommendations',
+    description: 'Get AI suggestions for what to wear for your professional photos.',
+    link: '/features/outfit-recommendations',
+    icon: Wand2,
+  },
+  {
+    title: 'Wardrobe Analytics',
+    description: 'Track which pieces photograph best and get the most value.',
+    link: '/features/wardrobe-analytics',
+    icon: Camera,
+  },
+]
+
 export default function AIPhotoshootGeneratorPage() {
-  const breadcrumbs = [
-    { name: 'Home', url: 'https://fitcheckaiapp.com/' },
-    { name: 'Features', url: 'https://fitcheckaiapp.com/features' },
-    { name: 'AI Photoshoot Generator', url: 'https://fitcheckaiapp.com/features/ai-photoshoot-generator' },
-  ]
-
-  // HowTo schema for LinkedIn photos
-  const linkedinHowToSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'HowTo',
-    name: 'How to Create Professional LinkedIn Photos with AI',
-    description: 'Create studio-quality professional headshots for LinkedIn using AI photoshoot technology. No expensive photographer needed.',
-    totalTime: 'PT10M',
-    estimatedCost: {
-      '@type': 'MonetaryAmount',
-      currency: 'USD',
-      value: '0',
-    },
-    supply: [
-      { '@type': 'HowToSupply', name: 'Smartphone with camera' },
-      { '@type': 'HowToSupply', name: 'Good lighting (natural light or lamp)' },
-      { '@type': 'HowToSupply', name: 'Professional attire' },
-    ],
-    tool: [
-      { '@type': 'HowToTool', name: 'FitCheck AI Photoshoot Generator' },
-    ],
-    step: [
-      {
-        '@type': 'HowToStep',
-        position: 1,
-        name: 'Take Reference Photos',
-        text: 'Take 1-4 clear selfies with good lighting facing your face. Use a plain background and wear professional attire.',
-        url: 'https://fitcheckaiapp.com/features/ai-photoshoot-generator#step-1',
-      },
-      {
-        '@type': 'HowToStep',
-        position: 2,
-        name: 'Select LinkedIn Style',
-        text: 'Choose the "LinkedIn Professional" style option for optimized professional headshot settings.',
-        url: 'https://fitcheckaiapp.com/features/ai-photoshoot-generator#step-2',
-      },
-      {
-        '@type': 'HowToStep',
-        position: 3,
-        name: 'AI Generates Headshots',
-        text: 'Our AI creates multiple professional headshot variations with different backgrounds, lighting, and compositions.',
-        url: 'https://fitcheckaiapp.com/features/ai-photoshoot-generator#step-3',
-      },
-      {
-        '@type': 'HowToStep',
-        position: 4,
-        name: 'Download and Use',
-        text: 'Select your favorite headshot, download in high resolution, and update your LinkedIn profile.',
-        url: 'https://fitcheckaiapp.com/features/ai-photoshoot-generator#step-4',
-      },
-    ],
-  }
-
-  const photoshootStyles = [
-    {
-      icon: Briefcase,
-      title: 'LinkedIn Professional',
-      description: 'Studio-quality headshots with neutral backgrounds perfect for professional networking.',
-      color: 'blue',
-    },
-    {
-      icon: Heart,
-      title: 'Dating Profile',
-      description: 'Natural, approachable photos that show your authentic self for dating apps.',
-      color: 'pink',
-    },
-    {
-      icon: Star,
-      title: 'Instagram Influencer',
-      description: 'Trendy, aesthetic shots with stylish backgrounds and professional lighting.',
-      color: 'purple',
-    },
-    {
-      icon: Camera,
-      title: 'Model Portfolio',
-      description: 'High-fashion editorial looks with dramatic lighting and artistic compositions.',
-      color: 'amber',
-    },
-  ]
-
-  const features = [
-    {
-      icon: User,
-      title: 'Identity Preservation',
-      description: 'Advanced AI keeps your face, features, and expressions authentic while enhancing the overall image.',
-    },
-    {
-      icon: Palette,
-      title: 'Professional Backgrounds',
-      description: 'Choose from office settings, gradients, or keep it simple with neutral professional backdrops.',
-    },
-    {
-      icon: Zap,
-      title: 'Instant Generation',
-      description: 'Get multiple professional photos in minutes, not days. No waiting for photographer editing.',
-    },
-    {
-      icon: Shield,
-      title: 'Privacy Protected',
-      description: 'Your photos are processed securely and never shared. Full control over your images.',
-    },
-    {
-      icon: Share2,
-      title: 'Social Ready',
-      description: 'Optimized dimensions and quality for LinkedIn, Instagram, dating apps, and more.',
-    },
-    {
-      icon: Download,
-      title: 'High Resolution',
-      description: 'Download photos in high resolution suitable for print and all digital platforms.',
-    },
-  ]
-
-  const benefits = [
-    'Save $200-500 compared to traditional professional headshots',
-    'Get results in minutes instead of days of waiting',
-    'Multiple style options from one photo session',
-    'No scheduling or traveling to a studio',
-    'Unlimited retakes until you get the perfect shot',
-    'Update your look anytime without another photoshoot',
-  ]
-
-  const relatedFeatures = [
-    {
-      title: 'Virtual Try-On',
-      description: 'See how different outfits look on you before your photoshoot.',
-      link: '/features/virtual-try-on',
-      icon: Smartphone,
-    },
-    {
-      title: 'Outfit Recommendations',
-      description: 'Get AI suggestions for what to wear for your professional photos.',
-      link: '/features/outfit-recommendations',
-      icon: Wand2,
-    },
-    {
-      title: 'Wardrobe Analytics',
-      description: 'Track which pieces photograph best and get the most value.',
-      link: '/features/wardrobe-analytics',
-      icon: Camera,
-    },
-  ]
-
   return (
     <>
       <SEO
@@ -364,8 +364,8 @@ export default function AIPhotoshootGeneratorPage() {
                   </p>
 
                   <div className="space-y-4">
-                    {benefits.map((benefit, index) => (
-                      <div key={index} className="flex items-start gap-4">
+                    {benefits.map((benefit) => (
+                      <div key={benefit} className="flex items-start gap-4">
                         <div className="w-6 h-6 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                           <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
                         </div>

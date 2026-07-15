@@ -5,6 +5,7 @@ import SEO from '@/components/seo/SEO'
 import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 import { Calendar, Clock, ArrowLeft, User, ArrowRight, Loader2 } from 'lucide-react'
 import { useBlogPost, useBlogPosts } from '@/hooks/useBlog'
+import { escapeHtml, sanitizeMarkdownUrl } from '@/lib/utils'
 
 export default function BlogPostPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -344,13 +345,15 @@ export default function BlogPostPage() {
 
 // Helper function to format inline text (bold, links, etc.)
 function formatInlineText(text: string): string {
-  return text
+  return escapeHtml(text)
     // Bold text: **text**
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     // Italic text: *text*
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     // Links: [text](url)
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-indigo-600 dark:text-indigo-400 hover:underline">$1</a>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, url) =>
+      `<a href="${sanitizeMarkdownUrl(url)}" class="text-indigo-600 dark:text-indigo-400 hover:underline">${label}</a>`
+    )
 }
 
 /**

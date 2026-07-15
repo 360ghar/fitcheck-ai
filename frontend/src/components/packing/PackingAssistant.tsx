@@ -86,6 +86,7 @@ function ActivityToggle({
 }) {
   return (
     <button
+      type="button"
       onClick={onToggle}
       className={cn(
         'flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-sm',
@@ -113,9 +114,10 @@ function PackingItemCard({
   const primaryImage = packingItem.item.images.find((img) => img.is_primary) || packingItem.item.images[0]
 
   return (
-    <div
+    <button
+      type="button"
       className={cn(
-        'flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer',
+        'flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer w-full text-left',
         isChecked
           ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
           : 'bg-white border-gray-200 hover:border-gray-300 dark:bg-gray-800 dark:border-gray-700'
@@ -163,7 +165,7 @@ function PackingItemCard({
           {packingItem.category}
         </Badge>
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -179,7 +181,7 @@ export function PackingAssistant({ items, onClose }: PackingAssistantProps) {
   })
   const [packingList, setPackingList] = useState<PackingList | null>(null)
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set())
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['tops', 'bottoms']))
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(() => new Set(['tops', 'bottoms']))
 
   const toggleActivity = (activity: TripActivity) => {
     setTripDetails((prev) => ({
@@ -324,6 +326,7 @@ export function PackingAssistant({ items, onClose }: PackingAssistantProps) {
                 const Icon = climate.icon
                 return (
                   <button
+                    type="button"
                     key={climate.value}
                     onClick={() => setTripDetails((prev) => ({
                       ...prev,
@@ -479,8 +482,8 @@ export function PackingAssistant({ items, onClose }: PackingAssistantProps) {
                 Items to Consider
               </h4>
               <ul className="space-y-1">
-                {packingList.suggestions.map((s, i) => (
-                  <li key={i} className="text-sm text-yellow-700 dark:text-yellow-400">
+                {packingList.suggestions.map((s) => (
+                  <li key={s.description} className="text-sm text-yellow-700 dark:text-yellow-400">
                     <Badge variant="outline" className="mr-2 text-xs capitalize">
                       {s.priority}
                     </Badge>
@@ -535,22 +538,25 @@ export function PackingAssistant({ items, onClose }: PackingAssistantProps) {
                 Outfit Ideas
               </h4>
               <div className="grid gap-2 sm:grid-cols-2">
-                {packingList.outfitIdeas.map((outfit, i) => (
+                {packingList.outfitIdeas.map((outfit) => (
                   <div
-                    key={i}
+                    key={outfit.activity}
                     className="p-3 rounded-lg bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800"
                   >
                     <p className="font-medium text-sm text-indigo-700 dark:text-indigo-300">
                       {outfit.name}
                     </p>
                     <div className="flex flex-wrap gap-1 mt-2">
-                      {packingList.items
-                        .filter((pi) => outfit.itemIds.includes(pi.item.id))
-                        .map((pi) => (
-                          <Badge key={pi.item.id} variant="outline" className="text-xs">
-                            {pi.item.name}
-                          </Badge>
-                        ))}
+                      {packingList.items.reduce<React.ReactNode[]>((acc, pi) => {
+                        if (outfit.itemIds.includes(pi.item.id)) {
+                          acc.push(
+                            <Badge key={pi.item.id} variant="outline" className="text-xs">
+                              {pi.item.name}
+                            </Badge>
+                          )
+                        }
+                        return acc
+                      }, [])}
                     </div>
                   </div>
                 ))}

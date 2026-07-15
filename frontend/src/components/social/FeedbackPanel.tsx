@@ -102,16 +102,21 @@ function FeedbackForm({ onSubmit, isLoading }: { onSubmit: (rating: number, comm
       </CardHeader>
       <CardContent className="space-y-4">
         <div>
-          <label className="text-sm font-medium text-gray-900 dark:text-white">Your Rating</label>
+          <span id="feedback-rating-label" className="text-sm font-medium text-gray-900 dark:text-white">Your Rating</span>
           <div
+            role="group"
+            aria-labelledby="feedback-rating-label"
             className="flex gap-1 mt-2"
             onMouseLeave={() => setHoverRating(0)}
           >
             {[1, 2, 3, 4, 5].map((star) => (
               <button
+                type="button"
                 key={star}
                 onMouseEnter={() => setHoverRating(star)}
                 onClick={() => setRating(star)}
+                aria-label={`Rate ${star} star${star === 1 ? '' : 's'}`}
+                aria-pressed={star <= rating}
                 className="focus:outline-none transition-transform hover:scale-110"
               >
                 <Star
@@ -127,8 +132,9 @@ function FeedbackForm({ onSubmit, isLoading }: { onSubmit: (rating: number, comm
         </div>
 
         <div>
-          <label className="text-sm font-medium text-gray-900 dark:text-white">Comment (Optional)</label>
+          <label htmlFor="feedback-comment" className="text-sm font-medium text-gray-900 dark:text-white">Comment (Optional)</label>
           <Textarea
+            id="feedback-comment"
             placeholder="Share your thoughts about this outfit..."
             value={comment}
             onChange={(e) => setComment(e.target.value)}
@@ -218,8 +224,8 @@ export function FeedbackPanel({
             <div className="text-right">
               <p className="text-sm font-medium text-gray-900 dark:text-white">Top compliments</p>
               <div className="flex flex-wrap gap-1 mt-1 justify-end">
-                {stats.top_compliments.slice(0, 3).map((compliment, i) => (
-                  <Badge key={i} variant="secondary" className="text-xs">
+                {stats.top_compliments.slice(0, 3).map((compliment) => (
+                  <Badge key={compliment} variant="secondary" className="text-xs">
                     <Sparkles className="h-3 w-3 mr-1" />
                     {compliment}
                   </Badge>
@@ -308,8 +314,8 @@ export function FeedbackPanel({
 
                         {item.suggestions && item.suggestions.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
-                            {item.suggestions.map((suggestion, i) => (
-                              <Badge key={i} variant="outline" className="text-xs">
+                            {item.suggestions.map((suggestion) => (
+                              <Badge key={suggestion} variant="outline" className="text-xs">
                                 <TrendingUp className="h-3 w-3 mr-1" />
                                 {suggestion}
                               </Badge>
@@ -327,7 +333,10 @@ export function FeedbackPanel({
                               <span>Helpful?</span>
                               <div className="flex items-center gap-1">
                                 <button
+                                  type="button"
                                   onClick={() => handleVote(item.id, true)}
+                                  aria-label="Mark feedback as helpful"
+                                  aria-pressed={item.is_helpful === true}
                                   className={`p-1 rounded transition-colors ${
                                     item.is_helpful === true
                                       ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
@@ -338,7 +347,10 @@ export function FeedbackPanel({
                                 </button>
                                 <span>{item.helpful_count}</span>
                                 <button
+                                  type="button"
                                   onClick={() => handleVote(item.id, false)}
+                                  aria-label="Mark feedback as not helpful"
+                                  aria-pressed={item.is_helpful === false}
                                   className={`p-1 rounded transition-colors ${
                                     item.is_helpful === false
                                       ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
@@ -370,8 +382,8 @@ export function FeedbackPanel({
               <div>
                 <p className="text-sm font-medium mb-2 text-gray-900 dark:text-white">Most Complimented</p>
                 <div className="flex flex-wrap gap-2">
-                  {stats.top_compliments.map((compliment, i) => (
-                    <Badge key={i} className="gap-1">
+                  {stats.top_compliments.map((compliment) => (
+                    <Badge key={compliment} className="gap-1">
                       <Sparkles className="h-3 w-3" />
                       {compliment}
                     </Badge>
@@ -385,8 +397,8 @@ export function FeedbackPanel({
               <div>
                 <p className="text-sm font-medium mb-2 text-gray-900 dark:text-white">Suggested Improvements</p>
                 <div className="flex flex-wrap gap-2">
-                  {stats.top_suggestions.map((suggestion, i) => (
-                    <Badge key={i} variant="outline" className="gap-1">
+                  {stats.top_suggestions.map((suggestion) => (
+                    <Badge key={suggestion} variant="outline" className="gap-1">
                       <TrendingUp className="h-3 w-3" />
                       {suggestion}
                     </Badge>

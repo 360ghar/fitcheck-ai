@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/ai_consent_sheet.dart';
 
 /// Service that records and gates the user's consent to sharing their photos
-/// with third-party AI providers (Google Gemini / OpenAI) for image generation.
+/// with a third-party AI provider (OpenAI) for image generation.
 ///
 /// Required for Apple App Store Guideline 5.1.2(i): explicit permission must be
 /// obtained before sharing user data with third parties. Consent is captured

@@ -72,6 +72,7 @@ export function PhotoshootConfigureStep() {
             const isSelected = useCase === uc;
             return (
               <button
+                type="button"
                 key={uc}
                 onClick={() => setUseCase(uc)}
                 className={cn(

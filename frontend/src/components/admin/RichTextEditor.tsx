@@ -3,8 +3,8 @@
  * Uses markdown syntax with toolbar buttons for formatting
  */
 
-import { useState, useRef, useCallback } from 'react';
-import { cn } from '@/lib/utils';
+import { useRef, useCallback } from 'react';
+import { cn, escapeHtml, sanitizeMarkdownUrl } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -61,6 +61,143 @@ function ToolbarButton({ icon, label, onClick, active }: ToolbarButtonProps) {
   );
 }
 
+// Format inline text (bold, italic, links, code)
+function formatInlineText(text: string): string {
+  return escapeHtml(text)
+    .replace(/`([^`]+)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-sm font-mono">$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, url) =>
+      `<a href="${sanitizeMarkdownUrl(url)}" class="text-primary hover:underline" target="_blank" rel="noopener noreferrer">${label}</a>`
+    );
+}
+
+// Render markdown preview
+function renderPreview(content: string) {
+  const lines = content.split('\n');
+  let inList = false;
+  let listType: 'ul' | 'ol' | null = null;
+  let listItems: string[] = [];
+  let listStartLine = 0;
+
+  const flushList = () => {
+    if (!inList || listItems.length === 0) return null;
+    const ListTag = listType === 'ul' ? 'ul' : 'ol';
+    const result = (
+      <ListTag key={`list-${listStartLine}`} className={listType === 'ul' ? 'list-disc' : 'list-decimal'}>
+        {listItems.map((item, i) => (
+          <li key={i} dangerouslySetInnerHTML={{ __html: formatInlineText(item) }} />
+        ))}
+      </ListTag>
+    );
+    inList = false;
+    listType = null;
+    listItems = [];
+    return result;
+  };
+
+  const elements: React.ReactNode[] = [];
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+
+    // Handle empty lines
+    if (!trimmed) {
+      const listElement = flushList();
+      if (listElement) elements.push(listElement);
+      elements.push(<br key={`br-${index}`} />);
+      return;
+    }
+
+    // Headers
+    if (trimmed.startsWith('# ')) {
+      const listElement = flushList();
+      if (listElement) elements.push(listElement);
+      elements.push(
+        <h1 key={index} className="text-3xl font-bold mt-8 mb-4">
+          {trimmed.replace('# ', '')}
+        </h1>
+      );
+      return;
+    }
+    if (trimmed.startsWith('## ')) {
+      const listElement = flushList();
+      if (listElement) elements.push(listElement);
+      elements.push(
+        <h2 key={index} className="text-2xl font-bold mt-6 mb-3">
+          {trimmed.replace('## ', '')}
+        </h2>
+      );
+      return;
+    }
+    if (trimmed.startsWith('### ')) {
+      const listElement = flushList();
+      if (listElement) elements.push(listElement);
+      elements.push(
+        <h3 key={index} className="text-xl font-bold mt-4 mb-2">
+          {trimmed.replace('### ', '')}
+        </h3>
+      );
+      return;
+    }
+
+    // Blockquote
+    if (trimmed.startsWith('> ')) {
+      const listElement = flushList();
+      if (listElement) elements.push(listElement);
+      elements.push(
+        <blockquote key={index} className="border-l-4 border-primary pl-4 italic my-4 text-muted-foreground">
+          {trimmed.replace('> ', '')}
+        </blockquote>
+      );
+      return;
+    }
+
+    // Bullet list
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      if (!inList || listType !== 'ul') {
+        const listElement = flushList();
+        if (listElement) elements.push(listElement);
+        inList = true;
+        listType = 'ul';
+        listStartLine = index;
+      }
+      listItems.push(trimmed.substring(2));
+      return;
+    }
+
+    // Ordered list
+    if (/^\d+\.\s/.test(trimmed)) {
+      if (!inList || listType !== 'ol') {
+        const listElement = flushList();
+        if (listElement) elements.push(listElement);
+        inList = true;
+        listType = 'ol';
+        listStartLine = index;
+      }
+      listItems.push(trimmed.replace(/^\d+\.\s/, ''));
+      return;
+    }
+
+    // Regular paragraph
+    const listElement = flushList();
+    if (listElement) elements.push(listElement);
+    elements.push(
+      <p
+        key={index}
+        className="mb-4 leading-relaxed"
+        dangerouslySetInnerHTML={{ __html: formatInlineText(trimmed) }}
+      />
+    );
+  });
+
+  // Flush any remaining list
+  const listElement = flushList();
+  if (listElement) elements.push(listElement);
+
+  return elements;
+}
+
 export function RichTextEditor({
   value,
   onChange,
@@ -71,38 +208,36 @@ export function RichTextEditor({
   minHeight = '400px',
 }: RichTextEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [history, setHistory] = useState<string[]>([value]);
-  const [historyIndex, setHistoryIndex] = useState(0);
+  const historyRef = useRef<string[]>([value]);
+  const historyIndexRef = useRef(0);
 
   // Save state to history
   const saveToHistory = useCallback((newValue: string) => {
-    setHistory(prev => {
-      const newHistory = prev.slice(0, historyIndex + 1);
-      newHistory.push(newValue);
-      // Keep only last 50 states
-      if (newHistory.length > 50) {
-        newHistory.shift();
-      }
-      return newHistory;
-    });
-    setHistoryIndex(prev => Math.min(prev + 1, 49));
-  }, [historyIndex]);
+    const newHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
+    newHistory.push(newValue);
+    // Keep only last 50 states
+    if (newHistory.length > 50) {
+      newHistory.shift();
+    }
+    historyRef.current = newHistory;
+    historyIndexRef.current = Math.min(historyIndexRef.current + 1, 49);
+  }, []);
 
   // Undo
   const handleUndo = () => {
-    if (historyIndex > 0) {
-      const newIndex = historyIndex - 1;
-      setHistoryIndex(newIndex);
-      onChange(history[newIndex]);
+    if (historyIndexRef.current > 0) {
+      const newIndex = historyIndexRef.current - 1;
+      historyIndexRef.current = newIndex;
+      onChange(historyRef.current[newIndex]);
     }
   };
 
   // Redo
   const handleRedo = () => {
-    if (historyIndex < history.length - 1) {
-      const newIndex = historyIndex + 1;
-      setHistoryIndex(newIndex);
-      onChange(history[newIndex]);
+    if (historyIndexRef.current < historyRef.current.length - 1) {
+      const newIndex = historyIndexRef.current + 1;
+      historyIndexRef.current = newIndex;
+      onChange(historyRef.current[newIndex]);
     }
   };
 
@@ -209,138 +344,6 @@ export function RichTextEditor({
     },
     quote: () => toggleLinePrefix('> '),
     code: () => insertMarkdown('`', '`'),
-  };
-
-  // Render markdown preview
-  const renderPreview = (content: string) => {
-    const lines = content.split('\n');
-    let inList = false;
-    let listType: 'ul' | 'ol' | null = null;
-    let listItems: string[] = [];
-
-    const flushList = () => {
-      if (!inList || listItems.length === 0) return null;
-      const ListTag = listType === 'ul' ? 'ul' : 'ol';
-      const result = (
-        <ListTag key={`list-${Math.random()}`} className={listType === 'ul' ? 'list-disc' : 'list-decimal'}>
-          {listItems.map((item, i) => (
-            <li key={i} dangerouslySetInnerHTML={{ __html: formatInlineText(item) }} />
-          ))}
-        </ListTag>
-      );
-      inList = false;
-      listType = null;
-      listItems = [];
-      return result;
-    };
-
-    const elements: React.ReactNode[] = [];
-
-    lines.forEach((line, index) => {
-      const trimmed = line.trim();
-
-      // Handle empty lines
-      if (!trimmed) {
-        const listElement = flushList();
-        if (listElement) elements.push(listElement);
-        elements.push(<br key={`br-${index}`} />);
-        return;
-      }
-
-      // Headers
-      if (trimmed.startsWith('# ')) {
-        const listElement = flushList();
-        if (listElement) elements.push(listElement);
-        elements.push(
-          <h1 key={index} className="text-3xl font-bold mt-8 mb-4">
-            {trimmed.replace('# ', '')}
-          </h1>
-        );
-        return;
-      }
-      if (trimmed.startsWith('## ')) {
-        const listElement = flushList();
-        if (listElement) elements.push(listElement);
-        elements.push(
-          <h2 key={index} className="text-2xl font-bold mt-6 mb-3">
-            {trimmed.replace('## ', '')}
-          </h2>
-        );
-        return;
-      }
-      if (trimmed.startsWith('### ')) {
-        const listElement = flushList();
-        if (listElement) elements.push(listElement);
-        elements.push(
-          <h3 key={index} className="text-xl font-bold mt-4 mb-2">
-            {trimmed.replace('### ', '')}
-          </h3>
-        );
-        return;
-      }
-
-      // Blockquote
-      if (trimmed.startsWith('> ')) {
-        const listElement = flushList();
-        if (listElement) elements.push(listElement);
-        elements.push(
-          <blockquote key={index} className="border-l-4 border-primary pl-4 italic my-4 text-muted-foreground">
-            {trimmed.replace('> ', '')}
-          </blockquote>
-        );
-        return;
-      }
-
-      // Bullet list
-      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-        if (!inList || listType !== 'ul') {
-          const listElement = flushList();
-          if (listElement) elements.push(listElement);
-          inList = true;
-          listType = 'ul';
-        }
-        listItems.push(trimmed.substring(2));
-        return;
-      }
-
-      // Ordered list
-      if (/^\d+\.\s/.test(trimmed)) {
-        if (!inList || listType !== 'ol') {
-          const listElement = flushList();
-          if (listElement) elements.push(listElement);
-          inList = true;
-          listType = 'ol';
-        }
-        listItems.push(trimmed.replace(/^\d+\.\s/, ''));
-        return;
-      }
-
-      // Regular paragraph
-      const listElement = flushList();
-      if (listElement) elements.push(listElement);
-      elements.push(
-        <p
-          key={index}
-          className="mb-4 leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: formatInlineText(trimmed) }}
-        />
-      );
-    });
-
-    // Flush any remaining list
-    const listElement = flushList();
-    if (listElement) elements.push(listElement);
-
-    return elements;
-  };
-
-  // Format inline text (bold, italic, links, code)
-  const formatInlineText = (text: string): string => {
-    return text
-      .replace(/`([^`]+)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-sm font-mono">$1</code>')
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary hover:underline" target="_blank" rel="noopener noreferrer">$1</a>');
   };
 
   return (

@@ -121,8 +121,9 @@ export function ExportDialog({
   const [lookbookDescription, setLookbookDescription] = useState('')
 
   // Selected outfits for lookbook
-  const selectedOutfits = selectedOutfitIds
-    ? outfits.filter((o) => selectedOutfitIds.includes(o.id))
+  const selectedOutfitIdSet = selectedOutfitIds ? new Set(selectedOutfitIds) : null
+  const selectedOutfits = selectedOutfitIdSet
+    ? outfits.filter((o) => selectedOutfitIdSet.has(o.id))
     : outfits
 
   const handleExport = async () => {
@@ -196,6 +197,7 @@ export function ExportDialog({
             <Label>What would you like to export?</Label>
             <div className="grid grid-cols-2 gap-3">
               <button
+                type="button"
                 onClick={() => setExportType('wardrobe')}
                 className={cn(
                   'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors',
@@ -212,6 +214,7 @@ export function ExportDialog({
               </button>
 
               <button
+                type="button"
                 onClick={() => setExportType('lookbook')}
                 className={cn(
                   'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors',
@@ -241,6 +244,7 @@ export function ExportDialog({
                 const Icon = option.icon
                 return (
                   <button
+                    type="button"
                     key={option.value}
                     onClick={() => setFormat(option.value)}
                     className={cn(

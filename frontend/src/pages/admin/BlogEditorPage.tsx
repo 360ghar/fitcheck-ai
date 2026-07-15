@@ -8,7 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
-import { cn } from '@/lib/utils';
+import { cn, escapeHtml } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -522,6 +522,7 @@ export default function BlogEditorPage() {
                       type="button"
                       onClick={() => removeKeyword(keyword)}
                       className="ml-1 hover:text-destructive"
+                      aria-label={`Remove keyword ${keyword}`}
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -631,7 +632,7 @@ export default function BlogEditorPage() {
 
 // Helper function to render markdown for preview
 function renderMarkdown(content: string): string {
-  return content
+  return escapeHtml(content)
     .replace(/^# (.*$)/gim, '<h1 class="text-3xl font-bold mt-8 mb-4">$1</h1>')
     .replace(/^## (.*$)/gim, '<h2 class="text-2xl font-bold mt-6 mb-3">$1</h2>')
     .replace(/^### (.*$)/gim, '<h3 class="text-xl font-bold mt-4 mb-2">$1</h3>')

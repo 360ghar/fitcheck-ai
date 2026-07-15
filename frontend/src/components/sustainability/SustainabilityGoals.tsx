@@ -4,7 +4,7 @@
  * Displays and manages sustainability-focused wardrobe goals.
  */
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import {
   Leaf,
   Target,
@@ -162,6 +162,8 @@ function CreateGoalDialog({
   const [endDate, setEndDate] = useState<string>('')
 
   const selectedTemplate = GOAL_TEMPLATES.find((t) => t.type === selectedType)
+  const suggestedTypes = new Set(suggestedTemplates.map((s) => s.type))
+  const otherTemplates = GOAL_TEMPLATES.filter((t) => !suggestedTypes.has(t.type))
 
   const handleCreate = () => {
     if (!selectedType) return
@@ -199,6 +201,7 @@ function CreateGoalDialog({
               <div className="space-y-2">
                 {suggestedTemplates.map((template) => (
                   <button
+                    type="button"
                     key={template.type}
                     onClick={() => setSelectedType(template.type)}
                     className={cn(
@@ -233,10 +236,9 @@ function CreateGoalDialog({
           <div className="space-y-2">
             <Label className="text-sm font-medium">All Goals</Label>
             <div className="grid grid-cols-2 gap-2">
-              {GOAL_TEMPLATES.filter(
-                (t) => !suggestedTemplates.find((s) => s.type === t.type)
-              ).map((template) => (
+              {otherTemplates.map((template) => (
                 <button
+                  type="button"
                   key={template.type}
                   onClick={() => setSelectedType(template.type)}
                   className={cn(
@@ -290,8 +292,8 @@ function CreateGoalDialog({
               <div className="space-y-1">
                 <p className="text-sm font-medium">Tips</p>
                 <ul className="text-sm text-muted-foreground space-y-1">
-                  {selectedTemplate.tips.map((tip, i) => (
-                    <li key={i}>• {tip}</li>
+                  {selectedTemplate.tips.map((tip) => (
+                    <li key={tip}>• {tip}</li>
                   ))}
                 </ul>
               </div>
@@ -351,8 +353,8 @@ function ImpactCard({
 
       {impact.equivalents.length > 0 && (
         <div className="space-y-1 text-sm text-muted-foreground">
-          {impact.equivalents.map((eq, i) => (
-            <p key={i}>🌱 {eq}</p>
+          {impact.equivalents.map((eq) => (
+            <p key={eq}>🌱 {eq}</p>
           ))}
         </div>
       )}
@@ -394,12 +396,8 @@ export function SustainabilityGoals({
   className,
 }: SustainabilityGoalsProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false)
-  const [goals, setGoals] = useState<SustainabilityGoal[]>([])
-
-  // Load goals
-  useEffect(() => {
-    setGoals(getGoals())
-  }, [])
+  // Loaded synchronously on mount (localStorage read) to avoid a flash of empty goals.
+  const [goals, setGoals] = useState<SustainabilityGoal[]>(() => getGoals())
 
   const activeGoals = goals.filter((g) => g.isActive && !g.completedAt)
   const completedGoals = goals.filter((g) => g.completedAt)

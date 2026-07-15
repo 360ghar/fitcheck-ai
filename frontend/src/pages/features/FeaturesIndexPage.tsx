@@ -57,12 +57,12 @@ const features = [
   },
 ]
 
-export default function FeaturesIndexPage() {
-  const breadcrumbs = [
-    { name: 'Home', url: `${SEO_CONFIG.siteUrl}/` },
-    { name: 'Features', url: `${SEO_CONFIG.siteUrl}/features` },
-  ]
+const breadcrumbs = [
+  { name: 'Home', url: `${SEO_CONFIG.siteUrl}/` },
+  { name: 'Features', url: `${SEO_CONFIG.siteUrl}/features` },
+]
 
+export default function FeaturesIndexPage() {
   return (
     <>
       <SEO

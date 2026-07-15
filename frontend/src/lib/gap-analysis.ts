@@ -225,20 +225,19 @@ function identifyGaps(
   const gaps: WardrobeGap[] = []
 
   // Check category gaps
-  categoryDistribution
-    .filter((cd) => cd.status === 'missing' || cd.status === 'deficit')
-    .forEach((cd) => {
-      const priority = cd.status === 'missing' ? 'high' : cd.gapScore > 10 ? 'high' : 'medium'
-      gaps.push({
-        category: cd.category,
-        priority,
-        reason: cd.status === 'missing'
-          ? `You don't have any ${cd.category} in your wardrobe`
-          : `Your ${cd.category} collection (${cd.percentage}%) is below the ideal (${cd.idealPercentage}%)`,
-        suggestion: `Add versatile ${cd.category} pieces to balance your wardrobe`,
-        versatilityScore: 7,
-      })
+  categoryDistribution.forEach((cd) => {
+    if (cd.status !== 'missing' && cd.status !== 'deficit') return
+    const priority = cd.status === 'missing' ? 'high' : cd.gapScore > 10 ? 'high' : 'medium'
+    gaps.push({
+      category: cd.category,
+      priority,
+      reason: cd.status === 'missing'
+        ? `You don't have any ${cd.category} in your wardrobe`
+        : `Your ${cd.category} collection (${cd.percentage}%) is below the ideal (${cd.idealPercentage}%)`,
+      suggestion: `Add versatile ${cd.category} pieces to balance your wardrobe`,
+      versatilityScore: 7,
     })
+  })
 
   // Check for essential items
   const subCategories = new Set<string>()

@@ -3,6 +3,7 @@ Storage service for managing file uploads to Supabase Storage.
 Handles item images, outfit images, and user avatars.
 """
 
+import asyncio
 import os
 import uuid
 from typing import Optional, List, Tuple
@@ -129,13 +130,11 @@ class StorageService:
         try:
             # Upload to Supabase Storage
             bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_ITEMS
-            db.storage.from_(bucket).upload(
-                path=storage_path,
-                file=file_data
-            )
+            storage = db.storage.from_(bucket)
+            await asyncio.to_thread(storage.upload, path=storage_path, file=file_data)
 
             # Get public URL
-            image_url = db.storage.from_(bucket).get_public_url(storage_path)
+            image_url = storage.get_public_url(storage_path)
 
             # For MVP, thumbnail_url is same as image_url
             # In production, you'd generate actual thumbnails
@@ -200,12 +199,10 @@ class StorageService:
 
         try:
             bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_OUTFITS
-            db.storage.from_(bucket).upload(
-                path=storage_path,
-                file=file_data
-            )
+            storage = db.storage.from_(bucket)
+            await asyncio.to_thread(storage.upload, path=storage_path, file=file_data)
 
-            image_url = db.storage.from_(bucket).get_public_url(storage_path)
+            image_url = storage.get_public_url(storage_path)
 
             logger.info(
                 "Uploaded outfit image",
@@ -269,10 +266,8 @@ class StorageService:
 
         try:
             bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_AVATARS
-            db.storage.from_(bucket).upload(
-                path=storage_path,
-                file=file_data
-            )
+            storage = db.storage.from_(bucket)
+            await asyncio.to_thread(storage.upload, path=storage_path, file=file_data)
 
             logger.info(
                 "Uploaded avatar",
@@ -281,7 +276,7 @@ class StorageService:
                 file_size=len(file_data),
             )
 
-            return db.storage.from_(bucket).get_public_url(storage_path)
+            return storage.get_public_url(storage_path)
 
         except Exception as e:
             logger.error(
@@ -317,7 +312,7 @@ class StorageService:
             bucket = settings.SUPABASE_STORAGE_BUCKET
 
         try:
-            db.storage.from_(bucket).remove([storage_path])
+            await asyncio.to_thread(db.storage.from_(bucket).remove, [storage_path])
             logger.info(
                 "Deleted image",
                 storage_path=storage_path,
@@ -360,7 +355,7 @@ class StorageService:
             bucket = settings.SUPABASE_STORAGE_BUCKET
 
         try:
-            db.storage.from_(bucket).remove(storage_paths)
+            await asyncio.to_thread(db.storage.from_(bucket).remove, storage_paths)
             logger.info(
                 "Deleted multiple images",
                 count=len(storage_paths),
@@ -421,9 +416,10 @@ class StorageService:
 
         try:
             # Download and re-upload (Supabase doesn't have direct move)
-            file_data = db.storage.from_(bucket).download(old_path)
-            db.storage.from_(bucket).upload(path=new_path, file=file_data)
-            db.storage.from_(bucket).remove([old_path])
+            storage = db.storage.from_(bucket)
+            file_data = await asyncio.to_thread(storage.download, old_path)
+            await asyncio.to_thread(storage.upload, path=new_path, file=file_data)
+            await asyncio.to_thread(storage.remove, [old_path])
 
             logger.info(
                 "Moved image",
@@ -473,12 +469,10 @@ class StorageService:
 
         try:
             bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_FEEDBACK
-            db.storage.from_(bucket).upload(
-                path=storage_path,
-                file=file_data
-            )
+            storage = db.storage.from_(bucket)
+            await asyncio.to_thread(storage.upload, path=storage_path, file=file_data)
 
-            image_url = db.storage.from_(bucket).get_public_url(storage_path)
+            image_url = storage.get_public_url(storage_path)
 
             logger.info(
                 "Uploaded feedback attachment",
@@ -516,13 +510,15 @@ class StorageService:
             bucket = settings.SUPABASE_STORAGE_BUCKET
 
         try:
-            db.storage.from_(bucket).upload(
+            storage = db.storage.from_(bucket)
+            await asyncio.to_thread(
+                storage.upload,
                 path=file_path,
                 file=file_data,
                 file_options={"content-type": content_type, "upsert": str(upsert).lower()},
             )
             return {
-                "public_url": db.storage.from_(bucket).get_public_url(file_path),
+                "public_url": storage.get_public_url(file_path),
                 "storage_path": file_path,
                 "bucket": bucket,
             }

@@ -13,8 +13,8 @@ class CalendarRepository {
   Future<List<CalendarConnectionModel>> getConnections() async {
     try {
       final response = await _apiClient.get(
-        ApiConstants.calendar,
-      ); // Uses base /calendar endpoint
+        '${ApiConstants.calendar}/connections',
+      );
 
       final List<dynamic> data = response.data is Map
           ? response.data['connections'] ?? []

@@ -55,6 +55,7 @@ function OccasionChip({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all',
@@ -81,6 +82,7 @@ function OccasionCard({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         'p-3 rounded-lg border text-left transition-all w-full',
@@ -139,10 +141,10 @@ export function OccasionQuickFilter({
     return (
       <div className={cn('space-y-2', className)}>
         <div className="flex items-center justify-between">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
             <Tag className="h-4 w-4" />
             Quick Occasion Filter
-          </label>
+          </span>
           {selectedOccasion && onClear && (
             <Button variant="ghost" size="sm" onClick={onClear} className="h-6 text-xs">
               <X className="h-3 w-3 mr-1" />
@@ -179,10 +181,10 @@ export function OccasionQuickFilter({
     return (
       <div className={cn('space-y-3', className)}>
         <div className="flex items-center justify-between">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
             <Tag className="h-4 w-4" />
             Filter by Occasion
-          </label>
+          </span>
           {selectedOccasion && onClear && (
             <Button variant="ghost" size="sm" onClick={onClear} className="h-6 text-xs">
               <X className="h-3 w-3 mr-1" />
@@ -208,10 +210,10 @@ export function OccasionQuickFilter({
   return (
     <div className={cn('space-y-2', className)}>
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
           <Tag className="h-4 w-4" />
           Occasion Presets
-        </label>
+        </span>
         {selectedOccasion && onClear && (
           <Button variant="ghost" size="sm" onClick={onClear} className="h-6 text-xs">
             <X className="h-3 w-3 mr-1" />

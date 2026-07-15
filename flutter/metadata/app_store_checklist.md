@@ -46,7 +46,7 @@
 
 ### Legal web pages (deploy frontend to go live)
 
-- [x] Privacy Policy names Google Gemini, OpenAI, Supabase, PostHog, Sentry
+- [x] Privacy Policy names OpenAI, Supabase, PostHog, Sentry
 - [x] Privacy Policy describes in-app account deletion
 - [x] Terms cover UGC reporting / free iOS v1 pricing
 - [x] Public `/support` page added (must be deployed)

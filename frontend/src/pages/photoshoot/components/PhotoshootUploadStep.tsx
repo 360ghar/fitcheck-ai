@@ -87,12 +87,12 @@ export function PhotoshootUploadStep() {
         >
           {photos.map((photo, index) => (
             <div
-              key={index}
+              key={photoUrls.get(photo)}
               className="aspect-square rounded-lg border border-muted relative overflow-hidden"
             >
               <img
                 src={photoUrls.get(photo) || ''}
-                alt={`Photo ${index + 1}`}
+                alt={`Upload preview ${index + 1}`}
                 className="w-full h-full object-cover"
               />
               <button

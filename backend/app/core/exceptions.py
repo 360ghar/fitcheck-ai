@@ -113,7 +113,7 @@ class PermissionDeniedError(FitCheckException):
 class ValidationError(FitCheckException):
     """Raised when request validation fails."""
 
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     error_code = "VALIDATION_ERROR"
 
     def __init__(
@@ -312,11 +312,15 @@ class ServiceError(FitCheckException):
 
 
 class AIServiceError(ServiceError):
-    """Raised when AI service (Gemini) fails."""
-    
+    """Raised when an AI service call fails."""
+
     error_code = "AI_SERVICE_ERROR"
-    
-    def __init__(self, message: str = "AI service unavailable"):
+
+    def __init__(self, message: str = "AI service unavailable", retryable: bool = False):
+        # retryable: true only for transient failures (429/503/timeout) worth
+        # retrying against a fallback model; false for auth/content-policy/parse
+        # errors where a retry can't succeed or risks a duplicate billable call.
+        self.retryable = retryable
         super().__init__(message, "ai")
 
 

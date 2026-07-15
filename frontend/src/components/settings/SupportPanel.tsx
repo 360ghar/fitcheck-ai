@@ -183,11 +183,11 @@ export function SupportPanel() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Category Selection */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
+              <label htmlFor="support-category" className="block text-sm font-medium text-foreground mb-2">
                 Category *
               </label>
               <Select value={category} onValueChange={(v) => setCategory(v as TicketCategory)}>
-                <SelectTrigger>
+                <SelectTrigger id="support-category">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -205,10 +205,11 @@ export function SupportPanel() {
 
             {/* Subject */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
+              <label htmlFor="support-subject" className="block text-sm font-medium text-foreground mb-2">
                 Subject *
               </label>
               <Input
+                id="support-subject"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Brief summary of your feedback"
@@ -219,10 +220,11 @@ export function SupportPanel() {
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
+              <label htmlFor="support-description" className="block text-sm font-medium text-foreground mb-2">
                 Description *
               </label>
               <Textarea
+                id="support-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={
@@ -243,10 +245,11 @@ export function SupportPanel() {
 
             {/* Attachments */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
+              <label htmlFor="support-attachments" className="block text-sm font-medium text-foreground mb-2">
                 Attachments (optional)
               </label>
               <input
+                id="support-attachments"
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
@@ -257,7 +260,7 @@ export function SupportPanel() {
               <div className="flex flex-wrap gap-2">
                 {attachments.map((file, index) => (
                   <div
-                    key={index}
+                    key={`${file.name}-${file.size}-${file.lastModified}`}
                     className="flex items-center gap-2 bg-muted px-3 py-1.5 rounded-md text-sm"
                   >
                     <Paperclip className="h-3 w-3" />
@@ -266,6 +269,7 @@ export function SupportPanel() {
                       type="button"
                       onClick={() => removeAttachment(index)}
                       className="text-muted-foreground hover:text-foreground"
+                      aria-label={`Remove attachment ${file.name}`}
                     >
                       <X className="h-3 w-3" />
                     </button>

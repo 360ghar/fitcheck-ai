@@ -2,7 +2,7 @@
  * AISettingsPanel Component
  *
  * Settings panel for configuring AI providers, API keys, and viewing usage statistics.
- * Supports Gemini, OpenAI, and custom OpenAI-compatible providers.
+ * Supports OpenAI and custom OpenAI-compatible providers.
  */
 
 import { useState, useEffect } from "react";
@@ -74,18 +74,6 @@ interface TestResult {
 
 const PROVIDERS = [
   {
-    id: "gemini",
-    name: "Google Gemini",
-    description: "Google AI Studio - Gemini models",
-    defaultUrl: "https://generativelanguage.googleapis.com/v1beta",
-    models: {
-      chat: ["gemini-3-flash-preview", "gemini-3-pro-preview"],
-      vision: ["gemini-3-flash-preview", "gemini-3-pro-preview"],
-      image_gen: ["gemini-3-pro-image-preview", "gemini-3-flash-preview"],
-      embedding: ["gemini-embedding-001", "text-embedding-004"],
-    },
-  },
-  {
     id: "openai",
     name: "OpenAI",
     description: "OpenAI API - GPT and DALL-E models",
@@ -112,7 +100,6 @@ const PROVIDERS = [
 ];
 
 const PROVIDER_SHORT_LABELS: Record<string, string> = {
-  gemini: "Gemini",
   openai: "OpenAI",
   custom: "Custom",
 };
@@ -129,7 +116,7 @@ export function AISettingsPanel() {
     {},
   );
 
-  const [defaultProvider, setDefaultProvider] = useState("gemini");
+  const [defaultProvider, setDefaultProvider] = useState("custom");
   const [providerConfigs, setProviderConfigs] = useState<
     Record<string, ProviderConfig>
   >({});
@@ -386,7 +373,7 @@ export function AISettingsPanel() {
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
-          <Tabs defaultValue="gemini" className="w-full">
+          <Tabs defaultValue="custom" className="w-full">
             <TabsList className="flex w-full gap-2 justify-start overflow-x-auto scrollbar-hide touch-pan-x overscroll-x-contain">
               {PROVIDERS.map((provider) => (
                 <TabsTrigger
@@ -464,6 +451,7 @@ export function AISettingsPanel() {
                       />
                       <button
                         type="button"
+                        aria-label={showApiKeys[provider.id] ? "Hide API key" : "Show API key"}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
                         onClick={() =>
                           setShowApiKeys((prev) => ({

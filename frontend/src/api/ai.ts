@@ -205,7 +205,6 @@ export interface RateLimitCheck {
 }
 
 export interface AvailableModels {
-  gemini: Record<string, string[]>;
   openai: Record<string, string[]>;
   custom: Record<string, string[]>;
 }

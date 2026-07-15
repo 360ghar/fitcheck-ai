@@ -105,6 +105,25 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   other: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-600',
 }
 
+const EMPTY_EVENTS: CalendarEvent[] = []
+const EMPTY_OUTFITS: Outfit[] = []
+
+// Get week range string for display
+function getWeekRangeString(date: Date): string {
+  const startOfWeek = new Date(date)
+  startOfWeek.setDate(date.getDate() - date.getDay())
+  const endOfWeek = new Date(startOfWeek)
+  endOfWeek.setDate(startOfWeek.getDate() + 6)
+
+  const startMonth = MONTHS[startOfWeek.getMonth()]
+  const endMonth = MONTHS[endOfWeek.getMonth()]
+
+  if (startOfWeek.getMonth() === endOfWeek.getMonth()) {
+    return `${startMonth} ${startOfWeek.getDate()} - ${endOfWeek.getDate()}, ${startOfWeek.getFullYear()}`
+  }
+  return `${startMonth} ${startOfWeek.getDate()} - ${endMonth} ${endOfWeek.getDate()}, ${endOfWeek.getFullYear()}`
+}
+
 // ============================================================================
 // COMPONENTS
 // ============================================================================
@@ -138,6 +157,7 @@ function EventBadge({ event, onClick }: EventBadgeProps) {
 
   return (
     <button
+      type="button"
       onClick={() => onClick(event)}
       className={`w-full text-left px-2 py-1 rounded text-xs border truncate flex items-center gap-1 hover:opacity-80 transition-opacity ${colorClass}`}
       title={event.title}
@@ -200,6 +220,7 @@ function OutfitAssignDialog({ isOpen, onClose, event, outfits, onAssign }: Outfi
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-h-[60vh] overflow-y-auto">
           {outfits.map((outfit) => (
             <button
+              type="button"
               key={outfit.id}
               onClick={() => handleAssign(outfit.id)}
               disabled={isAssigning}
@@ -241,8 +262,8 @@ function OutfitAssignDialog({ isOpen, onClose, event, outfits, onAssign }: Outfi
 // ============================================================================
 
 export function CalendarView({
-  events = [],
-  outfits = [],
+  events = EMPTY_EVENTS,
+  outfits = EMPTY_OUTFITS,
   onDateClick,
   onEventClick,
   onAssignOutfit,
@@ -416,16 +437,25 @@ export function CalendarView({
       setIsLoadingWeather(true)
       let didUpdate = false
 
-      for (const dateStr of missingDates) {
-        try {
-          const date = new Date(dateStr)
-          const weather = await onGetWeather(date)
-          if (weather) {
-            newCache.set(dateStr, weather)
-            didUpdate = true
+      // Each day's weather is fetched independently (the fetcher itself dedupes
+      // concurrent calls per location), so fetch all missing days in parallel.
+      const results = await Promise.all(
+        missingDates.map(async (dateStr) => {
+          try {
+            const date = new Date(dateStr)
+            const weather = await onGetWeather(date)
+            return { dateStr, weather }
+          } catch (err) {
+            console.error('Failed to fetch weather:', err)
+            return { dateStr, weather: null as WeatherData | null }
           }
-        } catch (err) {
-          console.error('Failed to fetch weather:', err)
+        })
+      )
+
+      for (const { dateStr, weather } of results) {
+        if (weather) {
+          newCache.set(dateStr, weather)
+          didUpdate = true
         }
       }
 
@@ -455,22 +485,6 @@ export function CalendarView({
       }
       return newDate
     })
-  }
-
-  // Get week range string for display
-  const getWeekRangeString = (date: Date): string => {
-    const startOfWeek = new Date(date)
-    startOfWeek.setDate(date.getDate() - date.getDay())
-    const endOfWeek = new Date(startOfWeek)
-    endOfWeek.setDate(startOfWeek.getDate() + 6)
-
-    const startMonth = MONTHS[startOfWeek.getMonth()]
-    const endMonth = MONTHS[endOfWeek.getMonth()]
-
-    if (startOfWeek.getMonth() === endOfWeek.getMonth()) {
-      return `${startMonth} ${startOfWeek.getDate()} - ${endOfWeek.getDate()}, ${startOfWeek.getFullYear()}`
-    }
-    return `${startMonth} ${startOfWeek.getDate()} - ${endMonth} ${endOfWeek.getDate()}, ${endOfWeek.getFullYear()}`
   }
 
   const weekDays = viewMode === 'week' ? getWeekDays(currentDate) : []
@@ -619,8 +633,17 @@ export function CalendarView({
             <div className="space-y-2">
               {weekDays.map((day, index) => (
                 <div
-                  key={index}
+                  key={day.date.getTime()}
                   onClick={() => handleDayClick(day)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      handleDayClick(day)
+                    }
+                  }}
                   className={cn(
                     'flex items-start gap-3 p-3 rounded-lg border transition-all cursor-pointer touch-target',
                     day.isToday
@@ -658,6 +681,7 @@ export function CalendarView({
                             <EventBadge event={event} onClick={handleEventClick} />
                             {!event.outfit_id && onAssignOutfit && (
                               <button
+                                type="button"
                                 onClick={(e) => handleQuickAssign(e, event)}
                                 className="text-xs text-primary hover:text-primary/80 shrink-0"
                               >
@@ -708,6 +732,15 @@ export function CalendarView({
                     <div
                       key={event.id}
                       onClick={() => handleEventClick(event)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.target !== e.currentTarget) return
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleEventClick(event)
+                        }
+                      }}
                       className="flex items-start gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent transition-colors cursor-pointer touch-target"
                     >
                       {/* Date column */}
@@ -747,6 +780,7 @@ export function CalendarView({
 
                         {!event.outfit_id && onAssignOutfit && (
                           <button
+                            type="button"
                             onClick={(e) => handleQuickAssign(e, event)}
                             className="text-xs text-primary hover:text-primary/80 mt-1"
                           >
@@ -795,10 +829,19 @@ export function CalendarView({
 
               {/* Days grid */}
               <div className="grid grid-cols-7 gap-0.5 sm:gap-1 md:gap-2">
-                {days.map((day, index) => (
+                {days.map((day) => (
                   <div
-                    key={index}
+                    key={day.date.getTime()}
                     onClick={() => handleDayClick(day)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        handleDayClick(day)
+                      }
+                    }}
                     className={cn(
                       'group min-h-[52px] sm:min-h-[60px] md:min-h-24 p-0.5 sm:p-1 md:p-2 rounded-lg border transition-all cursor-pointer overflow-hidden',
                       day.isCurrentMonth
@@ -853,6 +896,7 @@ export function CalendarView({
                             <EventBadge event={event} onClick={handleEventClick} />
                             {!event.outfit_id && onAssignOutfit && (
                               <button
+                                type="button"
                                 onClick={(e) => handleQuickAssign(e, event)}
                                 className="text-xs text-primary hover:text-primary/80 ml-1"
                               >
@@ -872,10 +916,12 @@ export function CalendarView({
                     {/* Add event button - desktop only */}
                     {onCreateEvent && day.isCurrentMonth && (
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation()
                           handleCreateEvent(day.date)
                         }}
+                        aria-label={`Add event on ${day.date.toLocaleDateString()}`}
                         className="hidden md:flex mt-1 w-full py-1 text-xs text-muted-foreground hover:text-primary items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <Plus className="h-3 w-3" />

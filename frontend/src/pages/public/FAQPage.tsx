@@ -168,12 +168,13 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
   )
 }
 
+const breadcrumbs = [
+  { name: 'Home', url: 'https://fitcheckaiapp.com/' },
+  { name: 'FAQ', url: 'https://fitcheckaiapp.com/faq' }
+]
+
 export default function FAQPage() {
   const faqSchema = generateFaqSchema()
-  const breadcrumbs = [
-    { name: 'Home', url: 'https://fitcheckaiapp.com/' },
-    { name: 'FAQ', url: 'https://fitcheckaiapp.com/faq' }
-  ]
 
   return (
     <>

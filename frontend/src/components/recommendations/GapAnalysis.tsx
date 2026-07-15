@@ -42,6 +42,22 @@ interface GapAnalysisProps {
   onShopSuggestion?: (gap: WardrobeGap) => void
 }
 
+const GAP_PRIORITY_STYLES = {
+  high: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20',
+  medium: 'border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-900/20',
+  low: 'border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50',
+}
+
+const GAP_PRIORITY_BADGE = {
+  high: 'destructive',
+  medium: 'secondary',
+  low: 'outline',
+} as const
+
+const NAMED_COLOR_SET = new Set([
+  'black', 'white', 'gray', 'navy', 'brown', 'beige', 'red', 'blue', 'green', 'yellow', 'pink', 'purple', 'orange', 'teal',
+])
+
 function ScoreGauge({ score }: { score: number }) {
   const health = getWardrobeHealthStatus(score)
   const circumference = 2 * Math.PI * 45
@@ -155,24 +171,12 @@ function GapCard({
   gap: WardrobeGap
   onShop?: () => void
 }) {
-  const priorityStyles = {
-    high: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20',
-    medium: 'border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-900/20',
-    low: 'border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50',
-  }
-
-  const priorityBadge = {
-    high: 'destructive',
-    medium: 'secondary',
-    low: 'outline',
-  } as const
-
   return (
-    <div className={cn('p-3 rounded-lg border', priorityStyles[gap.priority])}>
+    <div className={cn('p-3 rounded-lg border', GAP_PRIORITY_STYLES[gap.priority])}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <Badge variant={priorityBadge[gap.priority]} className="capitalize text-xs">
+            <Badge variant={GAP_PRIORITY_BADGE[gap.priority]} className="capitalize text-xs">
               {gap.priority}
             </Badge>
             <span className="text-sm font-medium capitalize">
@@ -372,8 +376,8 @@ export function GapAnalysis({ items, onShopSuggestion }: GapAnalysisProps) {
                 Quick Wins
               </h4>
               <ul className="space-y-1">
-                {analysis.suggestions.map((suggestion, idx) => (
-                  <li key={idx} className="text-sm text-blue-600 dark:text-blue-400 flex items-start gap-2">
+                {analysis.suggestions.map((suggestion) => (
+                  <li key={suggestion} className="text-sm text-blue-600 dark:text-blue-400 flex items-start gap-2">
                     <span className="text-blue-400">•</span>
                     {suggestion}
                   </li>
@@ -401,9 +405,9 @@ export function GapAnalysis({ items, onShopSuggestion }: GapAnalysisProps) {
                 Recommended Additions ({analysis.gaps.length})
               </h4>
               <div className="space-y-2">
-                {analysis.gaps.slice(0, 5).map((gap, idx) => (
+                {analysis.gaps.slice(0, 5).map((gap) => (
                   <GapCard
-                    key={idx}
+                    key={gap.reason}
                     gap={gap}
                     onShop={onShopSuggestion ? () => onShopSuggestion(gap) : undefined}
                   />
@@ -433,7 +437,7 @@ export function GapAnalysis({ items, onShopSuggestion }: GapAnalysisProps) {
                       className="w-3 h-3 rounded-full border border-gray-300 dark:border-gray-600"
                       style={{
                         backgroundColor: color.color,
-                        background: ['black', 'white', 'gray', 'navy', 'brown', 'beige', 'red', 'blue', 'green', 'yellow', 'pink', 'purple', 'orange', 'teal'].includes(color.color.toLowerCase())
+                        background: NAMED_COLOR_SET.has(color.color.toLowerCase())
                           ? color.color.toLowerCase()
                           : '#9CA3AF',
                       }}

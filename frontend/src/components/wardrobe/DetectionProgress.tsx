@@ -52,7 +52,7 @@ export function DetectionProgress({
 
           <p className="text-center text-sm text-gray-500 dark:text-gray-400">
             <Sparkles className="inline h-4 w-4 mr-1" />
-            Using Gemini 3 Pro to identify clothing items
+            Using AI to identify clothing items
           </p>
         </CardContent>
       </Card>

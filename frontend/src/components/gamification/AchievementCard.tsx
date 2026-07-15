@@ -83,6 +83,24 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
   community: Eye,
 }
 
+const CARD_SIZE_CLASSES = {
+  sm: 'p-3',
+  md: 'p-4',
+  lg: 'p-6'
+}
+
+const CARD_ICON_SIZES = {
+  sm: 'h-8 w-8',
+  md: 'h-12 w-12',
+  lg: 'h-16 w-16'
+}
+
+const GRID_COLS = {
+  sm: 'grid-cols-4 sm:grid-cols-6 md:grid-cols-8',
+  md: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4',
+  lg: 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'
+}
+
 // ============================================================================
 // COMPONENTS
 // ============================================================================
@@ -105,18 +123,6 @@ export function AchievementCard({
   const colors = DIFFICULTY_COLORS[data.difficulty] || DIFFICULTY_COLORS.easy
   const TypeIcon = TYPE_ICONS[data.achievement_type] || Trophy
 
-  const sizeClasses = {
-    sm: 'p-3',
-    md: 'p-4',
-    lg: 'p-6'
-  }
-
-  const iconSizes = {
-    sm: 'h-8 w-8',
-    md: 'h-12 w-12',
-    lg: 'h-16 w-16'
-  }
-
   const isHidden = data.is_hidden && !isCompleted && !isRevealed
 
   const handleClick = () => {
@@ -137,11 +143,11 @@ export function AchievementCard({
           ${onClick ? 'hover:scale-[1.02]' : ''}
         `}
       >
-        <CardContent className={`${sizeClasses[size]} space-y-3`}>
+        <CardContent className={`${CARD_SIZE_CLASSES[size]} space-y-3`}>
           <div className="flex items-start gap-3">
             {/* Icon/Badge */}
             <div className={`
-              ${iconSizes[size]} rounded-full flex items-center justify-center
+              ${CARD_ICON_SIZES[size]} rounded-full flex items-center justify-center
               ${isCompleted ? 'bg-gradient-to-br from-yellow-400 to-orange-500' : 'bg-gray-200 dark:bg-gray-700'}
               flex-shrink-0
             `}>
@@ -240,14 +246,8 @@ export function AchievementGrid({
     return difficultyOrder.indexOf(aData.difficulty) - difficultyOrder.indexOf(bData.difficulty)
   })
 
-  const gridCols = {
-    sm: 'grid-cols-4 sm:grid-cols-6 md:grid-cols-8',
-    md: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4',
-    lg: 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'
-  }
-
   return (
-    <div className={`grid gap-4 ${gridCols[size]}`}>
+    <div className={`grid gap-4 ${GRID_COLS[size]}`}>
       {sortedAchievements.map((achievement) => (
         <AchievementCard
           key={'achievement' in achievement ? achievement.achievement.id : achievement.id}

@@ -21,158 +21,158 @@ import {
   Clock,
 } from 'lucide-react'
 
+const breadcrumbs = [
+  { name: 'Home', url: 'https://fitcheckaiapp.com/' },
+  { name: 'Features', url: 'https://fitcheckaiapp.com/features' },
+  { name: 'Outfit Recommendations', url: 'https://fitcheckaiapp.com/features/outfit-recommendations' },
+]
+
+// HowTo schema for getting outfit recommendations
+const howToSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'How to Get AI-Powered Daily Outfit Recommendations',
+  description: 'Learn how to use AI to get personalized outfit suggestions based on your wardrobe, weather, calendar, and personal style preferences.',
+  totalTime: 'PT5M',
+  estimatedCost: {
+    '@type': 'MonetaryAmount',
+    currency: 'USD',
+    value: '0',
+  },
+  supply: [
+    { '@type': 'HowToSupply', name: 'Digital wardrobe in FitCheck AI' },
+    { '@type': 'HowToSupply', name: 'Location for weather data' },
+  ],
+  tool: [
+    { '@type': 'HowToTool', name: 'FitCheck AI app' },
+  ],
+  step: [
+    {
+      '@type': 'HowToStep',
+      position: 1,
+      name: 'Build Your Digital Wardrobe',
+      text: 'Upload photos of your clothes or use AI wardrobe extraction to catalog your items with colors, categories, and styles.',
+      url: 'https://fitcheckaiapp.com/features/outfit-recommendations#step-1',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 2,
+      name: 'Set Your Preferences',
+      text: 'Tell us your style preferences, favorite colors, and any items or combinations you prefer to avoid.',
+      url: 'https://fitcheckaiapp.com/features/outfit-recommendations#step-2',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 3,
+      name: 'Connect Calendar & Location',
+      text: 'Link your calendar and set your location so AI can factor in your schedule and local weather.',
+      url: 'https://fitcheckaiapp.com/features/outfit-recommendations#step-3',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 4,
+      name: 'Get Daily Recommendations',
+      text: 'Each morning, receive personalized outfit suggestions perfect for your day, weather, and style.',
+      url: 'https://fitcheckaiapp.com/features/outfit-recommendations#step-4',
+    },
+  ],
+}
+
+const features = [
+  {
+    icon: CloudSun,
+    title: 'Weather Integration',
+    description: 'AI considers temperature, precipitation, and conditions to suggest weather-appropriate outfits.',
+  },
+  {
+    icon: Calendar,
+    title: 'Calendar Awareness',
+    description: 'Connect your calendar for occasion-appropriate suggestions—meetings, dates, workouts, and more.',
+  },
+  {
+    icon: Heart,
+    title: 'Style Learning',
+    description: 'The more you use it, the better it gets. AI learns your preferences and improves recommendations.',
+  },
+  {
+    icon: Sparkles,
+    title: 'Color Coordination',
+    description: 'Advanced color theory ensures every suggested outfit has harmonious, flattering color combinations.',
+  },
+  {
+    icon: Zap,
+    title: 'Smart Matching',
+    description: 'AI understands which items in your wardrobe work well together based on style, fit, and occasion.',
+  },
+  {
+    icon: Wand2,
+    title: 'Complete Looks',
+    description: 'Get full outfit suggestions including shoes, accessories, and jewelry that complete the look.',
+  },
+]
+
+const benefits = [
+  'Save 10+ minutes every morning deciding what to wear',
+  'Discover new combinations from clothes you already own',
+  'Never be underdressed or overdressed for any occasion',
+  'Get weather-appropriate suggestions automatically',
+  'Reduce decision fatigue and morning stress',
+  'Maximize the use of your existing wardrobe',
+]
+
+const weatherExamples = [
+  {
+    condition: 'Hot & Sunny',
+    temp: '85°F',
+    icon: Sun,
+    suggestion: 'Light cotton sundress, sandals, sun hat',
+    colors: 'White, pastels, light blues',
+  },
+  {
+    condition: 'Rainy Day',
+    temp: '65°F',
+    icon: Umbrella,
+    suggestion: 'Waterproof jacket, dark jeans, boots',
+    colors: 'Navy, charcoal, deep green',
+  },
+  {
+    condition: 'Business Meeting',
+    temp: '72°F',
+    icon: Calendar,
+    suggestion: 'Blazer, tailored pants, loafers',
+    colors: 'Navy, charcoal, white',
+  },
+  {
+    condition: 'Date Night',
+    temp: '68°F',
+    icon: Heart,
+    suggestion: 'Silk blouse, dark jeans, heels',
+    colors: 'Burgundy, black, cream',
+  },
+]
+
+const relatedFeatures = [
+  {
+    title: 'AI Wardrobe Extraction',
+    description: 'Digitize your closet so AI can make recommendations from what you own.',
+    link: '/features/ai-wardrobe-extraction',
+    icon: Camera,
+  },
+  {
+    title: 'Virtual Try-On',
+    description: 'See recommended outfits on yourself before getting dressed.',
+    link: '/features/virtual-try-on',
+    icon: Smartphone,
+  },
+  {
+    title: 'Wardrobe Analytics',
+    description: 'See which items you wear most and get suggestions for unworn pieces.',
+    link: '/features/wardrobe-analytics',
+    icon: BarChart3,
+  },
+]
+
 export default function OutfitRecommendationsPage() {
-  const breadcrumbs = [
-    { name: 'Home', url: 'https://fitcheckaiapp.com/' },
-    { name: 'Features', url: 'https://fitcheckaiapp.com/features' },
-    { name: 'Outfit Recommendations', url: 'https://fitcheckaiapp.com/features/outfit-recommendations' },
-  ]
-
-  // HowTo schema for getting outfit recommendations
-  const howToSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'HowTo',
-    name: 'How to Get AI-Powered Daily Outfit Recommendations',
-    description: 'Learn how to use AI to get personalized outfit suggestions based on your wardrobe, weather, calendar, and personal style preferences.',
-    totalTime: 'PT5M',
-    estimatedCost: {
-      '@type': 'MonetaryAmount',
-      currency: 'USD',
-      value: '0',
-    },
-    supply: [
-      { '@type': 'HowToSupply', name: 'Digital wardrobe in FitCheck AI' },
-      { '@type': 'HowToSupply', name: 'Location for weather data' },
-    ],
-    tool: [
-      { '@type': 'HowToTool', name: 'FitCheck AI app' },
-    ],
-    step: [
-      {
-        '@type': 'HowToStep',
-        position: 1,
-        name: 'Build Your Digital Wardrobe',
-        text: 'Upload photos of your clothes or use AI wardrobe extraction to catalog your items with colors, categories, and styles.',
-        url: 'https://fitcheckaiapp.com/features/outfit-recommendations#step-1',
-      },
-      {
-        '@type': 'HowToStep',
-        position: 2,
-        name: 'Set Your Preferences',
-        text: 'Tell us your style preferences, favorite colors, and any items or combinations you prefer to avoid.',
-        url: 'https://fitcheckaiapp.com/features/outfit-recommendations#step-2',
-      },
-      {
-        '@type': 'HowToStep',
-        position: 3,
-        name: 'Connect Calendar & Location',
-        text: 'Link your calendar and set your location so AI can factor in your schedule and local weather.',
-        url: 'https://fitcheckaiapp.com/features/outfit-recommendations#step-3',
-      },
-      {
-        '@type': 'HowToStep',
-        position: 4,
-        name: 'Get Daily Recommendations',
-        text: 'Each morning, receive personalized outfit suggestions perfect for your day, weather, and style.',
-        url: 'https://fitcheckaiapp.com/features/outfit-recommendations#step-4',
-      },
-    ],
-  }
-
-  const features = [
-    {
-      icon: CloudSun,
-      title: 'Weather Integration',
-      description: 'AI considers temperature, precipitation, and conditions to suggest weather-appropriate outfits.',
-    },
-    {
-      icon: Calendar,
-      title: 'Calendar Awareness',
-      description: 'Connect your calendar for occasion-appropriate suggestions—meetings, dates, workouts, and more.',
-    },
-    {
-      icon: Heart,
-      title: 'Style Learning',
-      description: 'The more you use it, the better it gets. AI learns your preferences and improves recommendations.',
-    },
-    {
-      icon: Sparkles,
-      title: 'Color Coordination',
-      description: 'Advanced color theory ensures every suggested outfit has harmonious, flattering color combinations.',
-    },
-    {
-      icon: Zap,
-      title: 'Smart Matching',
-      description: 'AI understands which items in your wardrobe work well together based on style, fit, and occasion.',
-    },
-    {
-      icon: Wand2,
-      title: 'Complete Looks',
-      description: 'Get full outfit suggestions including shoes, accessories, and jewelry that complete the look.',
-    },
-  ]
-
-  const benefits = [
-    'Save 10+ minutes every morning deciding what to wear',
-    'Discover new combinations from clothes you already own',
-    'Never be underdressed or overdressed for any occasion',
-    'Get weather-appropriate suggestions automatically',
-    'Reduce decision fatigue and morning stress',
-    'Maximize the use of your existing wardrobe',
-  ]
-
-  const weatherExamples = [
-    {
-      condition: 'Hot & Sunny',
-      temp: '85°F',
-      icon: Sun,
-      suggestion: 'Light cotton sundress, sandals, sun hat',
-      colors: 'White, pastels, light blues',
-    },
-    {
-      condition: 'Rainy Day',
-      temp: '65°F',
-      icon: Umbrella,
-      suggestion: 'Waterproof jacket, dark jeans, boots',
-      colors: 'Navy, charcoal, deep green',
-    },
-    {
-      condition: 'Business Meeting',
-      temp: '72°F',
-      icon: Calendar,
-      suggestion: 'Blazer, tailored pants, loafers',
-      colors: 'Navy, charcoal, white',
-    },
-    {
-      condition: 'Date Night',
-      temp: '68°F',
-      icon: Heart,
-      suggestion: 'Silk blouse, dark jeans, heels',
-      colors: 'Burgundy, black, cream',
-    },
-  ]
-
-  const relatedFeatures = [
-    {
-      title: 'AI Wardrobe Extraction',
-      description: 'Digitize your closet so AI can make recommendations from what you own.',
-      link: '/features/ai-wardrobe-extraction',
-      icon: Camera,
-    },
-    {
-      title: 'Virtual Try-On',
-      description: 'See recommended outfits on yourself before getting dressed.',
-      link: '/features/virtual-try-on',
-      icon: Smartphone,
-    },
-    {
-      title: 'Wardrobe Analytics',
-      description: 'See which items you wear most and get suggestions for unworn pieces.',
-      link: '/features/wardrobe-analytics',
-      icon: BarChart3,
-    },
-  ]
-
   return (
     <>
       <SEO
@@ -410,8 +410,8 @@ export default function OutfitRecommendationsPage() {
                   </p>
 
                   <div className="space-y-4">
-                    {benefits.map((benefit, index) => (
-                      <div key={index} className="flex items-start gap-4">
+                    {benefits.map((benefit) => (
+                      <div key={benefit} className="flex items-start gap-4">
                         <div className="w-6 h-6 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                           <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
                         </div>

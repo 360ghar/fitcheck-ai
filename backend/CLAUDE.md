@@ -83,24 +83,28 @@ Errors are caught by exception handlers in `main.py` and return standardized JSO
 ### AI Provider System
 Multi-provider AI support configured in `app/core/config.py`:
 - **Custom** (default): Agnes AI OpenAI-compatible gateway (`apihub.agnes-ai.com`)
-- **Gemini**: Direct Google AI API (also used for embeddings)
 - **OpenAI**: GPT-4o, DALL-E
 
 The default custom stack uses Agnes for **chat, vision, and image generation**:
 - Chat/vision: `agnes-2.0-flash` via `POST /v1/chat/completions`
-- Images: `agnes-image-2.0-flash` via `POST /v1/images/generations`
+- Images: `agnes-image-2.1-flash` (primary) → `agnes-image-2.0-flash` (fallback)
+  via `POST /v1/images/generations`. If the primary model fails transiently (429
+  rate limit, 503 overload, timeout, or a 200 with no images), the request
+  automatically retries with the fallback model. Non-transient failures (bad key,
+  content-policy rejection, unknown model) raise immediately instead of retrying.
 
 `OPENAI_LLM_*` / `OPENAI_IMAGE_*` override `AI_CUSTOM_*` so LLM and image hosts
 or keys can differ if needed. `OPENAI_IMAGE_API_STYLE` picks image routing:
 `"images"` (default for Agnes — real `/images/generations`) or `"chat"`
-(`response_modalities` on `/chat/completions`, legacy Gemini-proxy style).
+(`response_modalities` on `/chat/completions`, legacy proxy-style).
 With `"images"`, every image-generation call is intercepted inside `chat()` and
 routed to `/images/generations`. For Agnes, reference images and
 `response_format` must be nested under `extra_body` (gateway 400s on top-level
 `response_format` and ignores top-level `image`) — see the `ponytail:` comment
 in `_generate_image_via_images_api`.
 
-Embeddings use Google's `google.genai` SDK with `AI_GEMINI_API_KEY` and `AI_GEMINI_EMBEDDING_MODEL`.
+Embeddings are separate from the provider abstraction above: they always use Google's
+`google.genai` SDK directly, via `AI_GEMINI_API_KEY` and `AI_GEMINI_EMBEDDING_MODEL`.
 
 User-specific AI settings stored in `user_ai_settings` table with encrypted API keys.
 
@@ -151,13 +155,14 @@ SUPABASE_SECRET_KEY=your-service-role-key
 SUPABASE_JWT_SECRET=your-jwt-secret
 
 # AI Configuration (custom provider is default = Agnes AI)
-AI_DEFAULT_PROVIDER=custom  # Options: custom, gemini, openai
-AI_GEMINI_API_KEY=your-gemini-key  # Required for embeddings
+AI_DEFAULT_PROVIDER=custom  # Options: custom, openai
+AI_GEMINI_API_KEY=your-gemini-key  # Required for embeddings (not a selectable provider)
 AI_CUSTOM_API_URL=https://apihub.agnes-ai.com/v1
 AI_CUSTOM_API_KEY=your-agnes-key
 AI_CUSTOM_CHAT_MODEL=agnes-2.0-flash
 AI_CUSTOM_VISION_MODEL=agnes-2.0-flash
-AI_CUSTOM_IMAGE_MODEL=agnes-image-2.0-flash
+AI_CUSTOM_IMAGE_MODEL=agnes-image-2.1-flash
+AI_CUSTOM_IMAGE_FALLBACK_MODEL=agnes-image-2.0-flash
 
 # Optional overrides (fall back to AI_CUSTOM_*). LLM and Image can differ.
 OPENAI_LLM_URL=https://apihub.agnes-ai.com/v1
@@ -166,7 +171,7 @@ OPENAI_LLM_MODEL=agnes-2.0-flash
 OPENAI_LLM_VISION_MODEL=agnes-2.0-flash
 OPENAI_IMAGE_URL=https://apihub.agnes-ai.com/v1
 OPENAI_IMAGE_API_KEY=your-agnes-key
-OPENAI_IMAGE_MODEL=agnes-image-2.0-flash
+OPENAI_IMAGE_MODEL=agnes-image-2.1-flash
 OPENAI_IMAGE_API_STYLE=images  # "chat" | "images"
 
 # Optional

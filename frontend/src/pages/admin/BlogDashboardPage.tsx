@@ -165,9 +165,10 @@ export default function BlogDashboardPage() {
             ) : (
               <div className="space-y-4">
                 {recentPosts.map((post) => (
-                  <div
+                  <button
+                    type="button"
                     key={post.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                    className="flex items-center justify-between w-full p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer text-left"
                     onClick={() => navigate(`/admin/blog/edit/${post.slug}`)}
                   >
                     <div className="flex items-center gap-3">
@@ -190,7 +191,7 @@ export default function BlogDashboardPage() {
                         </Badge>
                       )}
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}

@@ -26,6 +26,34 @@ import { ReferralBanner, useReferralBannerDismissal } from '@/components/dashboa
 import { ItemUpload, type ItemUploadResult } from '@/components/wardrobe/ItemUpload'
 import { cn } from '@/lib/utils'
 
+// Mobile-first discovery for AI tools buried in the hamburger on small screens
+const aiTools = [
+  {
+    name: 'Photoshoot',
+    description: 'Pro-style portraits',
+    icon: Camera,
+    link: '/photoshoot',
+  },
+  {
+    name: 'Try On',
+    description: 'See clothes on you',
+    icon: Wand2,
+    link: '/try-on',
+  },
+  {
+    name: 'What to wear',
+    description: 'Daily outfit ideas',
+    icon: Sparkles,
+    link: '/recommendations',
+  },
+  {
+    name: 'Calendar',
+    description: 'Plan looks ahead',
+    icon: Calendar,
+    link: '/calendar',
+  },
+]
+
 export default function DashboardPage() {
   const userDisplayName = useUserDisplayName()
   const items = useWardrobeStore((state) => state.items)
@@ -117,34 +145,6 @@ export default function DashboardPage() {
       icon: Sparkles,
       link: '/recommendations',
       gradient: 'bg-gradient-to-br from-pink-500 to-rose-600',
-    },
-  ]
-
-  // Mobile-first discovery for AI tools buried in the hamburger on small screens
-  const aiTools = [
-    {
-      name: 'Photoshoot',
-      description: 'Pro-style portraits',
-      icon: Camera,
-      link: '/photoshoot',
-    },
-    {
-      name: 'Try On',
-      description: 'See clothes on you',
-      icon: Wand2,
-      link: '/try-on',
-    },
-    {
-      name: 'What to wear',
-      description: 'Daily outfit ideas',
-      icon: Sparkles,
-      link: '/recommendations',
-    },
-    {
-      name: 'Calendar',
-      description: 'Plan looks ahead',
-      icon: Calendar,
-      link: '/calendar',
     },
   ]
 

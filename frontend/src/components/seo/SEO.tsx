@@ -69,11 +69,14 @@ export function SEO({
         <meta name="twitter:site" content={SEO_CONFIG.twitterHandle} />
       )}
 
-      {jsonLdBlocks.map((block, i) => (
-        <script key={i} type="application/ld+json">
-          {JSON.stringify(block)}
-        </script>
-      ))}
+      {jsonLdBlocks.map((block) => {
+        const json = JSON.stringify(block)
+        return (
+          <script key={json} type="application/ld+json">
+            {json}
+          </script>
+        )
+      })}
 
       {children}
     </Helmet>

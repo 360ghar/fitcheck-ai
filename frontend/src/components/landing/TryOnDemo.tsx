@@ -148,6 +148,7 @@ export function TryOnDemo() {
                   Your photo uploaded
                 </p>
                 <button
+                  type="button"
                   className="text-xs text-green-600 hover:underline"
                   onClick={handleReset}
                 >

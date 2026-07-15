@@ -345,7 +345,7 @@ class _RegisterPageState extends State<RegisterPage> {
               // Debounced validation
               _referralDebounce?.cancel();
               final trimmedValue = value.trim();
-              if (trimmedValue.isNotEmpty) {
+              if (trimmedValue.length >= 3) {
                 _referralDebounce = Timer(
                   const Duration(milliseconds: 500),
                   () async {

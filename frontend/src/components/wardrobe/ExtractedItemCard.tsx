@@ -492,6 +492,7 @@ export function ExtractedItemCard({
                           type="button"
                           className="hover:text-foreground"
                           onClick={() => toggleUseCase(tag)}
+                          aria-label={`Remove ${formatUseCaseLabel(tag)} tag`}
                         >
                           <X className="h-3 w-3" />
                         </button>

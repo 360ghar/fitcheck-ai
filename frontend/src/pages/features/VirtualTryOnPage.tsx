@@ -22,150 +22,150 @@ import {
   Wand2,
 } from 'lucide-react'
 
+const breadcrumbs = [
+  { name: 'Home', url: 'https://fitcheckaiapp.com/' },
+  { name: 'Features', url: 'https://fitcheckaiapp.com/features' },
+  { name: 'Virtual Try-On', url: 'https://fitcheckaiapp.com/features/virtual-try-on' },
+]
+
+// HowTo schema for virtual try-on tutorial
+const howToSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'How to Use Virtual Try-On to See Outfits on Yourself',
+  description: 'Learn how to visualize any outfit on your body using AI-powered virtual try-on technology before getting dressed or buying new clothes.',
+  totalTime: 'PT5M',
+  estimatedCost: {
+    '@type': 'MonetaryAmount',
+    currency: 'USD',
+    value: '0',
+  },
+  supply: [
+    { '@type': 'HowToSupply', name: 'Reference photos of yourself' },
+    { '@type': 'HowToSupply', name: 'Clothing items to try on' },
+  ],
+  tool: [
+    { '@type': 'HowToTool', name: 'FitCheck AI app' },
+  ],
+  step: [
+    {
+      '@type': 'HowToStep',
+      position: 1,
+      name: 'Upload Your Photos',
+      text: 'Upload 1-4 clear photos of yourself. Use good lighting and show your full body or upper body clearly.',
+      url: 'https://fitcheckaiapp.com/features/virtual-try-on#step-1',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 2,
+      name: 'Select Clothing Items',
+      text: 'Choose items from your digital wardrobe or upload new pieces you want to try on virtually.',
+      url: 'https://fitcheckaiapp.com/features/virtual-try-on#step-2',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 3,
+      name: 'AI Generates Visualization',
+      text: 'Our AI analyzes your body shape, skin tone, and features, then generates realistic images of you wearing the selected outfit.',
+      url: 'https://fitcheckaiapp.com/features/virtual-try-on#step-3',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 4,
+      name: 'Review and Decide',
+      text: 'See how the outfit looks on your actual body. Save favorites, mix and match, or decide what to purchase with confidence.',
+      url: 'https://fitcheckaiapp.com/features/virtual-try-on#step-4',
+    },
+  ],
+}
+
+const features = [
+  {
+    icon: User,
+    title: 'Identity Preservation',
+    description: 'Advanced AI maintains your face, hair, and unique features while changing only your clothing.',
+  },
+  {
+    icon: Layers,
+    title: 'Realistic Fabric Draping',
+    description: 'See how fabrics actually drape and fold on your specific body shape with physics-accurate rendering.',
+  },
+  {
+    icon: Palette,
+    title: 'Accurate Color Representation',
+    description: 'True-to-life color rendering shows exactly how garments will look in different lighting conditions.',
+  },
+  {
+    icon: Eye,
+    title: 'Multiple Angles',
+    description: 'Generate front, side, and back views to see outfits from every perspective before deciding.',
+  },
+  {
+    icon: Zap,
+    title: 'Instant Results',
+    description: 'Get virtual try-on images in seconds. No waiting for slow rendering or complex setup.',
+  },
+  {
+    icon: Sparkles,
+    title: 'Style Mixing',
+    description: 'Combine tops, bottoms, and accessories from your wardrobe to create complete looks virtually.',
+  },
+]
+
+const benefits = [
+  'Reduce return rates by up to 40% when shopping online',
+  'Save time trying on multiple physical outfits',
+  'Visualize new purchases with clothes you already own',
+  'Plan outfits for special events with confidence',
+  'Discover new combinations from your existing wardrobe',
+  'Share virtual looks with friends for instant feedback',
+]
+
+const useCases = [
+  {
+    title: 'Online Shopping',
+    description: 'See how items will look on you before buying. Reduce returns and shop with confidence.',
+    icon: ShoppingBag,
+  },
+  {
+    title: 'Daily Outfit Planning',
+    description: 'Plan your look for the day without changing clothes multiple times.',
+    icon: Clock,
+  },
+  {
+    title: 'Special Events',
+    description: 'Perfect your outfit for weddings, interviews, dates, and important meetings.',
+    icon: Sparkles,
+  },
+  {
+    title: 'Wardrobe Optimization',
+    description: 'Identify which pieces work together and spot gaps in your wardrobe.',
+    icon: Heart,
+  },
+]
+
+const relatedFeatures = [
+  {
+    title: 'AI Wardrobe Extraction',
+    description: 'Digitize your closet so you can try on anything you own virtually.',
+    link: '/features/ai-wardrobe-extraction',
+    icon: Camera,
+  },
+  {
+    title: 'Outfit Recommendations',
+    description: 'Get AI-suggested outfits tailored to your style and occasion.',
+    link: '/features/outfit-recommendations',
+    icon: Wand2,
+  },
+  {
+    title: 'AI Photoshoot Generator',
+    description: 'Create professional photos of yourself in various outfits.',
+    link: '/features/ai-photoshoot-generator',
+    icon: Sparkles,
+  },
+]
+
 export default function VirtualTryOnPage() {
-  const breadcrumbs = [
-    { name: 'Home', url: 'https://fitcheckaiapp.com/' },
-    { name: 'Features', url: 'https://fitcheckaiapp.com/features' },
-    { name: 'Virtual Try-On', url: 'https://fitcheckaiapp.com/features/virtual-try-on' },
-  ]
-
-  // HowTo schema for virtual try-on tutorial
-  const howToSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'HowTo',
-    name: 'How to Use Virtual Try-On to See Outfits on Yourself',
-    description: 'Learn how to visualize any outfit on your body using AI-powered virtual try-on technology before getting dressed or buying new clothes.',
-    totalTime: 'PT5M',
-    estimatedCost: {
-      '@type': 'MonetaryAmount',
-      currency: 'USD',
-      value: '0',
-    },
-    supply: [
-      { '@type': 'HowToSupply', name: 'Reference photos of yourself' },
-      { '@type': 'HowToSupply', name: 'Clothing items to try on' },
-    ],
-    tool: [
-      { '@type': 'HowToTool', name: 'FitCheck AI app' },
-    ],
-    step: [
-      {
-        '@type': 'HowToStep',
-        position: 1,
-        name: 'Upload Your Photos',
-        text: 'Upload 1-4 clear photos of yourself. Use good lighting and show your full body or upper body clearly.',
-        url: 'https://fitcheckaiapp.com/features/virtual-try-on#step-1',
-      },
-      {
-        '@type': 'HowToStep',
-        position: 2,
-        name: 'Select Clothing Items',
-        text: 'Choose items from your digital wardrobe or upload new pieces you want to try on virtually.',
-        url: 'https://fitcheckaiapp.com/features/virtual-try-on#step-2',
-      },
-      {
-        '@type': 'HowToStep',
-        position: 3,
-        name: 'AI Generates Visualization',
-        text: 'Our AI analyzes your body shape, skin tone, and features, then generates realistic images of you wearing the selected outfit.',
-        url: 'https://fitcheckaiapp.com/features/virtual-try-on#step-3',
-      },
-      {
-        '@type': 'HowToStep',
-        position: 4,
-        name: 'Review and Decide',
-        text: 'See how the outfit looks on your actual body. Save favorites, mix and match, or decide what to purchase with confidence.',
-        url: 'https://fitcheckaiapp.com/features/virtual-try-on#step-4',
-      },
-    ],
-  }
-
-  const features = [
-    {
-      icon: User,
-      title: 'Identity Preservation',
-      description: 'Advanced AI maintains your face, hair, and unique features while changing only your clothing.',
-    },
-    {
-      icon: Layers,
-      title: 'Realistic Fabric Draping',
-      description: 'See how fabrics actually drape and fold on your specific body shape with physics-accurate rendering.',
-    },
-    {
-      icon: Palette,
-      title: 'Accurate Color Representation',
-      description: 'True-to-life color rendering shows exactly how garments will look in different lighting conditions.',
-    },
-    {
-      icon: Eye,
-      title: 'Multiple Angles',
-      description: 'Generate front, side, and back views to see outfits from every perspective before deciding.',
-    },
-    {
-      icon: Zap,
-      title: 'Instant Results',
-      description: 'Get virtual try-on images in seconds. No waiting for slow rendering or complex setup.',
-    },
-    {
-      icon: Sparkles,
-      title: 'Style Mixing',
-      description: 'Combine tops, bottoms, and accessories from your wardrobe to create complete looks virtually.',
-    },
-  ]
-
-  const benefits = [
-    'Reduce return rates by up to 40% when shopping online',
-    'Save time trying on multiple physical outfits',
-    'Visualize new purchases with clothes you already own',
-    'Plan outfits for special events with confidence',
-    'Discover new combinations from your existing wardrobe',
-    'Share virtual looks with friends for instant feedback',
-  ]
-
-  const useCases = [
-    {
-      title: 'Online Shopping',
-      description: 'See how items will look on you before buying. Reduce returns and shop with confidence.',
-      icon: ShoppingBag,
-    },
-    {
-      title: 'Daily Outfit Planning',
-      description: 'Plan your look for the day without changing clothes multiple times.',
-      icon: Clock,
-    },
-    {
-      title: 'Special Events',
-      description: 'Perfect your outfit for weddings, interviews, dates, and important meetings.',
-      icon: Sparkles,
-    },
-    {
-      title: 'Wardrobe Optimization',
-      description: 'Identify which pieces work together and spot gaps in your wardrobe.',
-      icon: Heart,
-    },
-  ]
-
-  const relatedFeatures = [
-    {
-      title: 'AI Wardrobe Extraction',
-      description: 'Digitize your closet so you can try on anything you own virtually.',
-      link: '/features/ai-wardrobe-extraction',
-      icon: Camera,
-    },
-    {
-      title: 'Outfit Recommendations',
-      description: 'Get AI-suggested outfits tailored to your style and occasion.',
-      link: '/features/outfit-recommendations',
-      icon: Wand2,
-    },
-    {
-      title: 'AI Photoshoot Generator',
-      description: 'Create professional photos of yourself in various outfits.',
-      link: '/features/ai-photoshoot-generator',
-      icon: Sparkles,
-    },
-  ]
-
   return (
     <>
       <SEO
@@ -397,8 +397,8 @@ export default function VirtualTryOnPage() {
                   </p>
 
                   <div className="space-y-4">
-                    {benefits.map((benefit, index) => (
-                      <div key={index} className="flex items-start gap-4">
+                    {benefits.map((benefit) => (
+                      <div key={benefit} className="flex items-start gap-4">
                         <div className="w-6 h-6 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                           <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
                         </div>

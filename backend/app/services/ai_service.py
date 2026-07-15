@@ -3,7 +3,7 @@ AI service for FitCheck AI.
 
 This service provides AI-powered features for the application.
 Following the server-side architecture:
-- Item extraction: Server-side via AI Provider Service (Gemini/OpenAI/Custom)
+- Item extraction: Server-side via AI Provider Service (OpenAI/Custom)
 - Outfit generation: Server-side via AI Provider Service image generation
 - Embeddings & matching: Server-side via Gemini Embeddings + Pinecone
 

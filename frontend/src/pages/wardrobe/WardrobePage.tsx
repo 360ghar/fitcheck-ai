@@ -15,7 +15,7 @@
  * @see https://docs.fitcheck.ai/features/wardrobe
  */
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useWardrobeStore } from '../../stores/wardrobeStore'
 import {
@@ -74,7 +74,7 @@ export default function WardrobePage() {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [selectedItemDetail, setSelectedItemDetail] = useState<Item | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
-  const [favoritingIds, setFavoritingIds] = useState<Set<string>>(new Set())
+  const favoritingIdsRef = useRef<Set<string>>(new Set())
   const [itemPendingDelete, setItemPendingDelete] = useState<Item | null>(null)
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -193,8 +193,8 @@ export default function WardrobePage() {
   }
 
   const handleToggleFavorite = async (itemId: string) => {
-    if (favoritingIds.has(itemId)) return
-    setFavoritingIds((prev) => new Set(prev).add(itemId))
+    if (favoritingIdsRef.current.has(itemId)) return
+    favoritingIdsRef.current.add(itemId)
     try {
       // Single store path → single API call (avoids double-toggle race)
       const updated = await toggleItemFavorite(itemId)
@@ -212,11 +212,7 @@ export default function WardrobePage() {
         variant: 'destructive',
       })
     } finally {
-      setFavoritingIds((prev) => {
-        const next = new Set(prev)
-        next.delete(itemId)
-        return next
-      })
+      favoritingIdsRef.current.delete(itemId)
     }
   }
 

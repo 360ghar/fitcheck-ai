@@ -282,7 +282,7 @@ class AISettingsService:
                 return ProviderConfig(
                     api_url=user_config["api_url"],
                     api_key=api_key,
-                    model=user_config.get("model", "gemini-3-flash-preview"),
+                    model=user_config.get("model", settings.AI_CUSTOM_CHAT_MODEL),
                     vision_model=user_config.get("vision_model"),
                     image_gen_model=user_config.get("image_gen_model"),
                 )
@@ -318,11 +318,11 @@ class AISettingsService:
         user_settings = await AISettingsService.get_user_settings(user_id, db)
 
         if provider is None:
-            provider_str = user_settings.get("default_provider", "gemini")
+            provider_str = user_settings.get("default_provider", "custom")
             try:
                 provider = AIProvider(provider_str)
             except ValueError:
-                provider = AIProvider.GEMINI
+                provider = AIProvider.CUSTOM
 
         config = await AISettingsService.get_effective_provider_config(user_id, provider, db)
         return AIProviderService(config)

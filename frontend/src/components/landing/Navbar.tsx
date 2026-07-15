@@ -16,6 +16,8 @@ const navLinks = [
   { name: 'About', href: '/about' },
 ]
 
+const isHashLink = (href: string) => href.startsWith('/#')
+
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -46,8 +48,6 @@ export default function Navbar() {
     // SPA routes: close mobile menu; let React Router handle navigation via Link
     setIsMobileMenuOpen(false)
   }
-
-  const isHashLink = (href: string) => href.startsWith('/#')
 
   return (
     <nav

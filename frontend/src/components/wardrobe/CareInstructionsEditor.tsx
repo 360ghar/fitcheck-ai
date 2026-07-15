@@ -257,8 +257,8 @@ export function MaterialGuideCard({ material, className }: MaterialGuideCardProp
         <h4 className="font-medium">{guide.material} Care Guide</h4>
       </div>
       <ul className="space-y-1">
-        {guide.tips.map((tip, i) => (
-          <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+        {guide.tips.map((tip) => (
+          <li key={tip} className="text-sm text-muted-foreground flex items-start gap-2">
             <span className="text-primary">•</span>
             {tip}
           </li>
@@ -319,6 +319,8 @@ function CareInstructionsForm({
         <button
           type="button"
           onClick={() => onChange({ ...instructions, dryClean: !instructions.dryClean })}
+          aria-label="Recommend dry cleaning"
+          aria-pressed={instructions.dryClean}
           className={cn(
             'w-12 h-6 rounded-full transition-colors relative',
             instructions.dryClean ? 'bg-primary' : 'bg-muted'

@@ -85,6 +85,7 @@ export function BottomNav() {
         {/* Center FAB */}
         <div className="flex flex-col items-center justify-center px-2">
           <button
+            type="button"
             onClick={() => navigate(fabAction.action)}
             className={cn(
               // Size and shape

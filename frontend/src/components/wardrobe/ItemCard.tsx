@@ -128,6 +128,15 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
             className
           )}
           onClick={onClick}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              onClick?.()
+            }
+          }}
         >
           {/* Image */}
           <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0">
@@ -196,6 +205,15 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
           className
         )}
         onClick={onClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onClick?.()
+          }
+        }}
       >
         {/* Full-bleed Image */}
         {imageSrc ? (
@@ -228,6 +246,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
         {/* Selection Checkbox */}
         {showSelect && (
           <button
+            type="button"
             className={cn(
               'absolute top-2.5 left-2.5 z-10',
               'w-6 h-6 rounded-md',
@@ -251,6 +270,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
         {/* Favorite Button */}
         {showFavorite && (
           <button
+            type="button"
             className={cn(
               'absolute top-2.5 right-2.5 z-10',
               'w-9 h-9 rounded-full',
