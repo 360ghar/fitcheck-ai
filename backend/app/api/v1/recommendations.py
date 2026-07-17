@@ -294,11 +294,37 @@ def _score_match(source: Dict[str, Any], candidate: Dict[str, Any]) -> Tuple[flo
     return min(1.0, score), reasons
 
 
+def _normalize_item_images_local(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Map Supabase `item_images` join to public `images` field (same contract as items API).
+
+    Inlined here to avoid importing the heavy items router module at load time.
+    """
+    if not isinstance(item, dict):
+        return item
+    images = item.pop("item_images", None)
+    # Empty list from a join with no rows should fall back to any pre-set images
+    if not images:
+        images = item.get("images")
+    item["images"] = images or []
+    return item
+
+
 def _get_primary_image_url(item: Dict[str, Any]) -> Optional[str]:
-    """Extract primary image URL from item's images."""
-    images = item.get("item_images") or []
+    """Extract primary image URL from item's images (pre- or post-normalize)."""
+    images = item.get("item_images") or item.get("images") or []
     primary = next((i for i in images if i.get("is_primary")), images[0] if images else None)
     return (primary or {}).get("thumbnail_url") or (primary or {}).get("image_url")
+
+
+def _prepare_item_for_response(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize item_images → images and set convenience image_url for clients."""
+    if not isinstance(item, dict):
+        return item
+    normalized = _normalize_item_images_local(dict(item))
+    image_url = _get_primary_image_url(normalized)
+    if image_url:
+        normalized["image_url"] = image_url
+    return normalized
 
 
 def _build_complete_look_response(item: Dict[str, Any], position: int) -> Dict[str, Any]:
@@ -375,20 +401,20 @@ async def match_items(
     source_ids = list(dict.fromkeys(request.item_ids or ([request.item_id] if request.item_id else [])))
     sources_res = (
         db.table("items")
-        .select("*")
+        .select("*, item_images(*)")
         .eq("user_id", user_id)
         .eq("is_deleted", False)
         .in_("id", source_ids)
         .execute()
     )
-    sources = sources_res.data or []
+    sources = [_prepare_item_for_response(i) for i in (sources_res.data or [])]
     if not sources:
         raise ItemNotFoundError()
 
     # Candidate pool: same wardrobe excluding sources
     candidates_q = (
         db.table("items")
-        .select("*")
+        .select("*, item_images(*)")
         .eq("user_id", user_id)
         .eq("is_deleted", False)
         .not_.in_("id", source_ids)
@@ -398,7 +424,7 @@ async def match_items(
     # Exclude laundry/repair/donate by default (docs)
     candidates_q = candidates_q.not_.in_("condition", ["laundry", "repair", "donate"])
     candidates_res = candidates_q.limit(500).execute()
-    candidates = candidates_res.data or []
+    candidates = [_prepare_item_for_response(i) for i in (candidates_res.data or [])]
 
     matches: List[Dict[str, Any]] = []
     for source in sources:
@@ -468,13 +494,13 @@ async def complete_look(
 
     seed_res = (
         db.table("items")
-        .select("*")
+        .select("*, item_images(*)")
         .eq("user_id", user_id)
         .eq("is_deleted", False)
         .in_("id", seed_ids)
         .execute()
     )
-    seeds = seed_res.data or []
+    seeds = [_prepare_item_for_response(i) for i in (seed_res.data or [])]
     if not seeds:
         raise ItemNotFoundError()
 
@@ -518,25 +544,33 @@ async def personalized(
     db: Client = Depends(get_db),
 ):
     """Return simple personalized recommendations (favorites + least worn)."""
-    items_fav = (
-        db.table("items")
-        .select("*")
-        .eq("user_id", user_id)
-        .eq("is_deleted", False)
-        .eq("is_favorite", True)
-        .limit(limit)
-        .execute()
-    ).data or []
+    items_fav = [
+        _prepare_item_for_response(i)
+        for i in (
+            db.table("items")
+            .select("*, item_images(*)")
+            .eq("user_id", user_id)
+            .eq("is_deleted", False)
+            .eq("is_favorite", True)
+            .limit(limit)
+            .execute()
+        ).data
+        or []
+    ]
 
-    items_least = (
-        db.table("items")
-        .select("*")
-        .eq("user_id", user_id)
-        .eq("is_deleted", False)
-        .order("usage_times_worn", desc=False)
-        .limit(limit)
-        .execute()
-    ).data or []
+    items_least = [
+        _prepare_item_for_response(i)
+        for i in (
+            db.table("items")
+            .select("*, item_images(*)")
+            .eq("user_id", user_id)
+            .eq("is_deleted", False)
+            .order("usage_times_worn", desc=False)
+            .limit(limit)
+            .execute()
+        ).data
+        or []
+    ]
 
     logger.debug(
         "Personalized recommendations retrieved",
@@ -769,7 +803,7 @@ async def astrology_recommendations(
             .limit(600)
             .execute()
         )
-        items = items_res.data or []
+        items = [_prepare_item_for_response(i) for i in (items_res.data or [])]
     except Exception:
         # Keep astrology colors usable even if related tables/columns are incomplete.
         items = []

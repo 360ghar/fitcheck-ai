@@ -1,7 +1,7 @@
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter/services.dart';
 import '../../../core/config/env_config.dart';
 import '../../../core/utils/error_handler.dart';
 import '../repositories/subscription_repository.dart';
@@ -19,7 +19,9 @@ class SubscriptionController extends GetxController {
   final RxList<PlanDetailsModel> plans = <PlanDetailsModel>[].obs;
   final RxBool isLoading = false.obs;
   final RxBool isCheckingOut = false.obs;
+  final RxBool isLoadingReferral = false.obs;
   final RxString error = ''.obs;
+  final RxString referralError = ''.obs;
 
   // Computed properties
   bool get isPro => subscription.value?.planType != PlanType.free;
@@ -102,13 +104,18 @@ class SubscriptionController extends GetxController {
     }
   }
 
-  /// Fetch referral code
+  /// Fetch referral code (API always creates one if missing)
   Future<void> fetchReferralCode() async {
+    isLoadingReferral.value = true;
+    referralError.value = '';
     try {
       referralCode.value = await _repository.getReferralCode();
-    } catch (e) {
-      // Referral code might not exist yet - not reported, this is expected
-      // for new users and isn't a real error.
+    } catch (e, stackTrace) {
+      referralError.value = e.toString().replaceAll('Exception: ', '');
+      // Auth race (401 before token ready) is common on cold start — surface for retry
+      ErrorHandler.reportError(e, referralError.value, stackTrace: stackTrace);
+    } finally {
+      isLoadingReferral.value = false;
     }
   }
 
@@ -169,19 +176,56 @@ class SubscriptionController extends GetxController {
 
   /// Copy referral link to clipboard
   Future<void> copyReferralLink() async {
+    if (referralCode.value == null) {
+      await fetchReferralCode();
+    }
     final code = referralCode.value;
-    if (code == null) return;
+    if (code == null) {
+      Get.snackbar(
+        'Error',
+        referralError.value.isNotEmpty
+            ? referralError.value
+            : 'Could not load your referral link. Try again.',
+      );
+      return;
+    }
     await Clipboard.setData(ClipboardData(text: code.shareUrl));
     Get.snackbar('Copied', 'Referral link copied to clipboard');
   }
 
-  /// Share referral link
-  Future<void> shareReferralLink() async {
+  /// Share referral link via the platform share sheet.
+  /// [sharePositionOrigin] is required on iPad for the popover.
+  Future<void> shareReferralLink({Rect? sharePositionOrigin}) async {
+    if (referralCode.value == null) {
+      await fetchReferralCode();
+    }
     final code = referralCode.value;
-    if (code == null) return;
-    await Share.share(
-      'Join FitCheck AI and get 1 month of Pro free! ${code.shareUrl}',
-      subject: 'Try FitCheck AI',
-    );
+    if (code == null) {
+      Get.snackbar(
+        'Error',
+        referralError.value.isNotEmpty
+            ? referralError.value
+            : 'Could not load your referral link. Try again.',
+      );
+      return;
+    }
+    try {
+      await Share.share(
+        'Join FitCheck AI and get 1 month of Pro free! ${code.shareUrl}',
+        subject: 'Try FitCheck AI',
+        sharePositionOrigin: sharePositionOrigin,
+      );
+    } catch (e) {
+      // Fall back to clipboard so the user still gets a working path
+      try {
+        await Clipboard.setData(ClipboardData(text: code.shareUrl));
+        Get.snackbar(
+          'Link copied',
+          'Share sheet failed — link copied to clipboard instead.',
+        );
+      } catch (_) {
+        Get.snackbar('Share failed', 'Please copy the link instead.');
+      }
+    }
   }
 }

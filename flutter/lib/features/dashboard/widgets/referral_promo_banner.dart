@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../subscription/views/widgets/referral_share_card.dart';
 
 /// Promotional banner for referral program, displayed on dashboard
 class ReferralPromoBanner extends StatelessWidget {
   final bool isUrgent;
   final VoidCallback? onDismiss;
   final VoidCallback onCopyLink;
-  final VoidCallback onShare;
+  final ReferralShareCallback onShare;
 
   const ReferralPromoBanner({
     super.key,
@@ -15,6 +16,12 @@ class ReferralPromoBanner extends StatelessWidget {
     required this.onCopyLink,
     required this.onShare,
   });
+
+  Rect? _originFrom(BuildContext context) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -119,11 +126,17 @@ class ReferralPromoBanner extends StatelessWidget {
                     ),
                     const SizedBox(width: AppConstants.spacing8),
                     Expanded(
-                      child: _ActionButton(
-                        icon: Icons.share,
-                        label: 'Share',
-                        onTap: onShare,
-                        isPrimary: true,
+                      child: Builder(
+                        builder: (buttonContext) {
+                          return _ActionButton(
+                            icon: Icons.share,
+                            label: 'Share',
+                            onTap: () => onShare(
+                              sharePositionOrigin: _originFrom(buttonContext),
+                            ),
+                            isPrimary: true,
+                          );
+                        },
                       ),
                     ),
                   ],

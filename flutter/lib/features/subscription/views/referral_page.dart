@@ -19,9 +19,52 @@ class ReferralPage extends GetView<SubscriptionController> {
       body: Obx(() {
         final code = controller.referralCode.value;
         final stats = controller.referralStats.value;
+        final isLoading = controller.isLoadingReferral.value;
+        final error = controller.referralError.value;
+
+        if (code == null && isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
         if (code == null) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.link_off,
+                    size: 48,
+                    color: theme.colorScheme.onSurface.withAlpha(128),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Could not load your referral link',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (error.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      error,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withAlpha(153),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: controller.fetchReferralCode,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
 
         return ListView(
@@ -33,6 +76,7 @@ class ReferralPage extends GetView<SubscriptionController> {
               shareUrl: code.shareUrl,
               timesUsed: code.timesUsed,
               onCopy: controller.copyReferralLink,
+              // Card measures Share button for iPad sharePositionOrigin
               onShare: controller.shareReferralLink,
             ),
             const SizedBox(height: 24),

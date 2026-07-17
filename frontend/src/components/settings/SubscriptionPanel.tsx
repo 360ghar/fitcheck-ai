@@ -49,6 +49,7 @@ import type { PlanType } from "@/types";
 
 export function SubscriptionPanel() {
   const [copied, setCopied] = useState(false);
+  const [isLoadingReferral, setIsLoadingReferral] = useState(false);
   const { toast } = useToast();
 
   const {
@@ -458,6 +459,35 @@ export function SubscriptionPanel() {
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
+          {!referralCode && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Could not load your referral link. Check your connection and try again.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  setIsLoadingReferral(true)
+                  try {
+                    await fetchReferralCode()
+                  } finally {
+                    setIsLoadingReferral(false)
+                  }
+                }}
+                disabled={isLoadingReferral}
+              >
+                {isLoadingReferral ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Loading…
+                  </>
+                ) : (
+                  'Retry'
+                )}
+              </Button>
+            </div>
+          )}
           {referralCode && (
             <div className="space-y-4">
               {/* Referral Link */}

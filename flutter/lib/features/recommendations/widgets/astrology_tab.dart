@@ -572,15 +572,22 @@ class AstrologyTab extends StatelessWidget {
   }
 
   String? _extractItemImage(Map<String, dynamic> item) {
-    final images = item['item_images'];
-    if (images is List && images.isNotEmpty) {
-      final first = images.first;
-      if (first is Map<String, dynamic>) {
-        return first['thumbnail_url']?.toString() ??
-            first['image_url']?.toString();
+    for (final key in ['images', 'item_images']) {
+      final images = item[key];
+      if (images is List && images.isNotEmpty) {
+        final first = images.first;
+        if (first is Map) {
+          final map = Map<String, dynamic>.from(first);
+          final url = map['thumbnail_url']?.toString() ??
+              map['image_url']?.toString() ??
+              map['url']?.toString();
+          if (url != null && url.isNotEmpty) return url;
+        }
       }
     }
-    return item['image_url']?.toString();
+    final flat = item['image_url']?.toString();
+    if (flat != null && flat.isNotEmpty) return flat;
+    return null;
   }
 
   Color _parseHexColor(String value) {

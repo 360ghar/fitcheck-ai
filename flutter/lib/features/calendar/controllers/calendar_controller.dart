@@ -288,10 +288,10 @@ class CalendarController extends GetxController {
   Future<void> linkOutfit(String eventId, String outfitId) async {
     isLinkingOutfitMap[eventId] = true;
     try {
-      final updatedEvent = await _repository.linkOutfit(eventId, outfitId);
+      final linkedOutfitId = await _repository.linkOutfit(eventId, outfitId);
       final index = events.indexWhere((e) => e.id == eventId);
       if (index != -1) {
-        events[index] = updatedEvent;
+        events[index] = events[index].copyWith(outfitId: linkedOutfitId);
         _groupEventsByDate();
       }
       Get.back();
@@ -316,10 +316,13 @@ class CalendarController extends GetxController {
   Future<void> removeOutfit(String eventId) async {
     isRemovingOutfitMap[eventId] = true;
     try {
-      final updatedEvent = await _repository.removeOutfit(eventId);
+      await _repository.removeOutfit(eventId);
       final index = events.indexWhere((e) => e.id == eventId);
       if (index != -1) {
-        events[index] = updatedEvent;
+        events[index] = events[index].copyWith(
+          clearOutfitId: true,
+          clearOutfitImageUrl: true,
+        );
         _groupEventsByDate();
       }
       Get.snackbar(

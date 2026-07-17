@@ -108,18 +108,20 @@ async def connect_calendar(
         )
 
     try:
-        # Upsert-like behavior: one connection per provider per user
+        # Upsert-like behavior: one connection per provider per user.
+        # Use maybe_single() so a first-time connect (0 rows) does not raise PGRST116.
         existing = (
             db.table("calendar_connections")
             .select("id")
             .eq("user_id", user_id)
             .eq("provider", provider)
-            .single()
+            .maybe_single()
             .execute()
         )
 
         now = datetime.utcnow().isoformat()
-        if existing.data:
+        existing_row = existing.data if existing is not None else None
+        if existing_row:
             update = {
                 "email": user_email,
                 "auth_code": request.auth_code,
@@ -130,7 +132,7 @@ async def connect_calendar(
             result = (
                 db.table("calendar_connections")
                 .update(update)
-                .eq("id", existing.data["id"])
+                .eq("id", existing_row["id"])
                 .execute()
             )
             row = (result.data or [None])[0]
@@ -138,7 +140,7 @@ async def connect_calendar(
                 "Calendar connection updated",
                 user_id=user_id,
                 provider=provider,
-                connection_id=existing.data["id"]
+                connection_id=existing_row["id"]
             )
         else:
             connection_id = str(uuid.uuid4())

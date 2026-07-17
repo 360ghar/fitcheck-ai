@@ -326,6 +326,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
       shareUrl: code.shareUrl,
       timesUsed: code.timesUsed,
       onCopy: controller.copyReferralLink,
+      // Tear-off passes sharePositionOrigin from the Share button (iPad popover).
       onShare: controller.shareReferralLink,
     );
   }

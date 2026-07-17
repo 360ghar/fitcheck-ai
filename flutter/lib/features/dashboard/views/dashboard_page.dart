@@ -81,7 +81,7 @@ class _DashboardPageState extends State<DashboardPage> {
                               isUrgent: subController.isNearLimit,
                               onDismiss: () => dashboardController.dismissReferralBanner(),
                               onCopyLink: () => subController.copyReferralLink(),
-                              onShare: () => subController.shareReferralLink(),
+                              onShare: subController.shareReferralLink,
                             ),
                             const SizedBox(height: AppConstants.spacing16),
                           ],

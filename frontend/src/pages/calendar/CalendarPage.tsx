@@ -47,7 +47,16 @@ export default function CalendarPage() {
 
   const [events, setEvents] = useState<CalendarViewEvent[]>([])
   const [isLoadingEvents, setIsLoadingEvents] = useState(false)
+  /** Month key successfully loaded — prevents repeat fetches for the same month. */
   const activeMonthKeyRef = useRef<string>('')
+  /** In-flight guard (refs avoid re-creating loadEventsForMonth while loading). */
+  const loadingMonthRef = useRef(false)
+  /**
+   * Month that last failed to load. Blocks effect re-entry loops when the parent
+   * re-renders (toast) and CalendarView re-fires onMonthChange. Cleared when the
+   * user navigates to a different month so they can retry by switching back.
+   */
+  const failedMonthKeyRef = useRef<string>('')
 
   const [isConnecting, setIsConnecting] = useState(false)
   const [isCalendarConnected, setIsCalendarConnected] = useState(() => {
@@ -137,9 +146,18 @@ export default function CalendarPage() {
   const loadEventsForMonth = useCallback(
     async (month: Date) => {
       const monthKey = `${month.getFullYear()}-${month.getMonth()}`
+      // Already loaded this month successfully
       if (monthKey === activeMonthKeyRef.current) return
-      activeMonthKeyRef.current = monthKey
+      // Avoid toast-triggered re-entry loops after a failed load of the same month
+      if (monthKey === failedMonthKeyRef.current) return
+      if (loadingMonthRef.current) return
 
+      // Navigating to a new month clears the previous failure lock
+      if (failedMonthKeyRef.current && failedMonthKeyRef.current !== monthKey) {
+        failedMonthKeyRef.current = ''
+      }
+
+      loadingMonthRef.current = true
       setIsLoadingEvents(true)
       try {
         // Load outfits alongside events (best-effort)
@@ -164,13 +182,17 @@ export default function CalendarPage() {
             is_all_day: false,
           }))
         )
+        activeMonthKeyRef.current = monthKey
+        failedMonthKeyRef.current = ''
       } catch (err) {
+        failedMonthKeyRef.current = monthKey
         toast({
           title: 'Failed to load events',
           description: err instanceof Error ? err.message : 'An error occurred',
           variant: 'destructive',
         })
       } finally {
+        loadingMonthRef.current = false
         setIsLoadingEvents(false)
       }
     },
@@ -442,7 +464,7 @@ export default function CalendarPage() {
             onEventClick={(event) => setSelectedEvent(event)}
             onAssignOutfit={handleAssignOutfit}
             onCreateEvent={(date) => openCreate(date)}
-            onMonthChange={(month) => loadEventsForMonth(month)}
+            onMonthChange={loadEventsForMonth}
             onGetWeather={getWeatherForDay}
           />
         </CardContent>

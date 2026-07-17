@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react'
 import { Gift, Copy, Share2, X, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useToast } from '@/components/ui/use-toast'
 import { useSubscriptionStore } from '@/stores/subscriptionStore'
 
 interface ReferralBannerProps {
@@ -34,38 +35,98 @@ export function useReferralBannerDismissal() {
 
 export function ReferralBanner({ variant = 'default', onDismiss }: ReferralBannerProps) {
   const [copied, setCopied] = useState(false)
-  const [canShare, setCanShare] = useState(false)
+  const [isSharing, setIsSharing] = useState(false)
+  const { toast } = useToast()
   const referralCode = useSubscriptionStore((state) => state.referralCode)
   const copyReferralLink = useSubscriptionStore((state) => state.copyReferralLink)
   const fetchReferralCode = useSubscriptionStore((state) => state.fetchReferralCode)
 
   useEffect(() => {
-    // Check if Web Share API is available
-    setCanShare(!!navigator.share)
     // Fetch referral code if not already loaded
     if (!referralCode) {
       fetchReferralCode()
     }
   }, [referralCode, fetchReferralCode])
 
+  const ensureShareUrl = async (): Promise<string | null> => {
+    if (referralCode?.share_url) return referralCode.share_url
+    await fetchReferralCode()
+    return useSubscriptionStore.getState().referralCode?.share_url ?? null
+  }
+
   const handleCopy = async () => {
     const success = await copyReferralLink()
     if (success) {
       setCopied(true)
+      toast({
+        title: 'Link copied!',
+        description: 'Share this link with friends to earn free Pro months.',
+      })
       setTimeout(() => setCopied(false), 2000)
+    } else {
+      toast({
+        title: 'Failed to copy',
+        description: 'Could not load or copy your referral link. Try again.',
+        variant: 'destructive',
+      })
     }
   }
 
   const handleShare = async () => {
-    if (!referralCode?.share_url) return
+    if (isSharing) return
+    setIsSharing(true)
     try {
-      await navigator.share({
+      const shareUrl = await ensureShareUrl()
+      if (!shareUrl) {
+        toast({
+          title: 'Share unavailable',
+          description: 'Could not load your referral link. Try again.',
+          variant: 'destructive',
+        })
+        return
+      }
+
+      const shareData = {
         title: 'Join FitCheck AI',
         text: 'Sign up with my link and we both get 1 month of Pro free!',
-        url: referralCode.share_url,
-      })
-    } catch {
-      // User cancelled or share failed - silently ignore
+        url: shareUrl,
+      }
+
+      if (typeof navigator.share === 'function') {
+        try {
+          // Prefer canShare when available
+          if (typeof navigator.canShare === 'function' && !navigator.canShare(shareData)) {
+            throw new Error('Share data not supported')
+          }
+          await navigator.share(shareData)
+          return
+        } catch (err) {
+          // User cancelled share sheet — not an error
+          if (err instanceof DOMException && err.name === 'AbortError') {
+            return
+          }
+          // Fall through to clipboard
+        }
+      }
+
+      // Clipboard fallback (desktop or share failure)
+      try {
+        await navigator.clipboard.writeText(shareUrl)
+        setCopied(true)
+        toast({
+          title: 'Link copied!',
+          description: 'Share sheet unavailable — link copied to clipboard instead.',
+        })
+        setTimeout(() => setCopied(false), 2000)
+      } catch {
+        toast({
+          title: 'Share failed',
+          description: 'Could not share or copy your link. Please try Copy Link.',
+          variant: 'destructive',
+        })
+      }
+    } finally {
+      setIsSharing(false)
     }
   }
 
@@ -129,21 +190,22 @@ export function ReferralBanner({ variant = 'default', onDismiss }: ReferralBanne
             )}
           </button>
 
-          {canShare && (
-            <button
-              type="button"
-              onClick={handleShare}
-              className={cn(
-                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg',
-                'text-xs font-medium',
-                'bg-white/20 hover:bg-white/30 backdrop-blur-sm',
-                'transition-colors duration-200'
-              )}
-            >
-              <Share2 className="h-3.5 w-3.5" />
-              Share
-            </button>
-          )}
+          {/* Always show Share: uses navigator.share when available, else clipboard fallback */}
+          <button
+            type="button"
+            onClick={handleShare}
+            disabled={isSharing}
+            className={cn(
+              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg',
+              'text-xs font-medium',
+              'bg-white/20 hover:bg-white/30 backdrop-blur-sm',
+              'transition-colors duration-200',
+              isSharing && 'opacity-70 cursor-wait'
+            )}
+          >
+            <Share2 className="h-3.5 w-3.5" />
+            {isSharing ? 'Sharing…' : 'Share'}
+          </button>
 
           {/* Dismiss button - hidden when urgent */}
           {!isUrgent && onDismiss && (

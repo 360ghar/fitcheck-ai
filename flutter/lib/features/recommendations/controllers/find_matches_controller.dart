@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import '../../../core/services/notification_service.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../repositories/recommendations_repository.dart';
+import '../utils/item_json.dart';
 
 /// Controller for Find Matches tab
 /// Manages item matching functionality
@@ -115,8 +116,10 @@ class FindMatchesController extends GetxController {
       final itemsRaw = look['items'];
       final items = itemsRaw is List
           ? itemsRaw
-              .whereType<Map<String, dynamic>>()
-              .map(ItemModel.fromJson)
+              .whereType<Map>()
+              .map((e) => itemModelFromRecommendationJson(
+                    Map<String, dynamic>.from(e),
+                  ))
               .toList()
           : <ItemModel>[];
       return {
@@ -130,14 +133,33 @@ class FindMatchesController extends GetxController {
   }
 
   String? _extractImageUrl(Map<String, dynamic> item) {
-    final images = item['item_images'];
-    if (images is List && images.isNotEmpty) {
-      final first = images.first;
-      if (first is Map<String, dynamic>) {
-        return first['thumbnail_url']?.toString() ??
-            first['image_url']?.toString();
+    // Prefer nested images (post-normalize `images` or raw `item_images`)
+    for (final key in ['images', 'item_images']) {
+      final images = item[key];
+      if (images is List && images.isNotEmpty) {
+        // Prefer primary when present
+        Map<String, dynamic>? primary;
+        for (final entry in images) {
+          if (entry is Map && entry['is_primary'] == true) {
+            primary = Map<String, dynamic>.from(entry);
+            break;
+          }
+        }
+        final first = primary ??
+            (images.first is Map
+                ? Map<String, dynamic>.from(images.first as Map)
+                : null);
+        if (first != null) {
+          final url = first['thumbnail_url']?.toString() ??
+              first['image_url']?.toString() ??
+              first['url']?.toString();
+          if (url != null && url.isNotEmpty) return url;
+        }
       }
     }
+    // Flat convenience field from recommendations API
+    final flat = item['image_url']?.toString();
+    if (flat != null && flat.isNotEmpty) return flat;
     return null;
   }
 

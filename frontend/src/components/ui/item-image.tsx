@@ -35,20 +35,46 @@ const ICON_SIZES = {
 }
 
 /**
- * Get the best available image URL for an item
+ * Get the best available image URL for an item.
+ * Accepts wardrobe-normalized `images[]`, raw Supabase `item_images[]`, or flat `image_url`.
  */
 function getImageUrl(item: Item, preferThumbnail: boolean = true): string | null {
-  if (!item.images || item.images.length === 0) {
-    return null
+  const raw = item as Item & {
+    item_images?: Array<{
+      image_url?: string
+      thumbnail_url?: string
+      is_primary?: boolean
+    }>
   }
 
-  const primaryImage = item.images.find(img => img.is_primary) || item.images[0]
+  const images =
+    (raw.images && raw.images.length > 0
+      ? raw.images
+      : raw.item_images && raw.item_images.length > 0
+        ? raw.item_images
+        : null) as
+      | Array<{ image_url?: string; thumbnail_url?: string; is_primary?: boolean }>
+      | null
 
-  if (preferThumbnail && primaryImage.thumbnail_url) {
-    return primaryImage.thumbnail_url
+  if (images && images.length > 0) {
+    const primaryImage = images.find((img) => img.is_primary) || images[0]
+    if (preferThumbnail && primaryImage.thumbnail_url) {
+      return primaryImage.thumbnail_url
+    }
+    if (primaryImage.image_url) {
+      return primaryImage.image_url
+    }
+    if (primaryImage.thumbnail_url) {
+      return primaryImage.thumbnail_url
+    }
   }
 
-  return primaryImage.image_url || null
+  // Flat convenience fields used by some recommendation payloads
+  if (raw.image_url) {
+    return raw.image_url
+  }
+
+  return null
 }
 
 /**

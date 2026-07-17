@@ -4,6 +4,7 @@ import '../../../domain/enums/category.dart';
 import '../../../domain/enums/style.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../repositories/recommendations_repository.dart';
+import '../utils/item_json.dart';
 
 /// Controller for Complete Look tab
 /// Manages complete outfit look generation
@@ -105,8 +106,10 @@ class CompleteLookController extends GetxController {
       final itemsRaw = look['items'];
       final items = itemsRaw is List
           ? itemsRaw
-              .whereType<Map<String, dynamic>>()
-              .map(ItemModel.fromJson)
+              .whereType<Map>()
+              .map((e) => itemModelFromRecommendationJson(
+                    Map<String, dynamic>.from(e),
+                  ))
               .toList()
           : <ItemModel>[];
       return {

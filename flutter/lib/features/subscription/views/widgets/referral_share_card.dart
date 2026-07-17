@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
+/// Callback matching [SubscriptionController.shareReferralLink] so iPad gets a popover origin.
+typedef ReferralShareCallback = Future<void> Function({Rect? sharePositionOrigin});
+
 /// Card for sharing referral code
 class ReferralShareCard extends StatelessWidget {
   final String code;
   final String shareUrl;
   final int timesUsed;
   final VoidCallback onCopy;
-  final VoidCallback onShare;
+  final ReferralShareCallback onShare;
 
   const ReferralShareCard({
     super.key,
@@ -17,10 +20,14 @@ class ReferralShareCard extends StatelessWidget {
     required this.onShare,
   });
 
+  Rect? _originFrom(BuildContext context) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -124,15 +131,21 @@ class ReferralShareCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: onShare,
-                      icon: const Icon(Icons.share),
-                      label: const Text('Share'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFF6366F1),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
+                    child: Builder(
+                      builder: (buttonContext) {
+                        return ElevatedButton.icon(
+                          onPressed: () => onShare(
+                            sharePositionOrigin: _originFrom(buttonContext),
+                          ),
+                          icon: const Icon(Icons.share),
+                          label: const Text('Share'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xFF6366F1),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],

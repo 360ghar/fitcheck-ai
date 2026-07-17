@@ -2,7 +2,7 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'calendar_connection_model.g.dart';
 
-enum CalendarProvider { google, outlook, apple }
+enum CalendarProvider { google, outlook, apple, local }
 
 @JsonSerializable()
 class CalendarConnectionModel {

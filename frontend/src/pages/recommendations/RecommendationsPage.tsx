@@ -55,18 +55,60 @@ function localDateISO(): string {
 }
 
 /**
- * Enrich an item with images from the wardrobe store
- * The recommendations API returns items without images for performance,
- * so we look up the full item data from the local store
+ * Normalize recommendation/API item shapes so ItemImage always sees `images[]`.
+ * Handles: images, item_images (Supabase join), flat image_url, and wardrobe store merge.
  */
 const enrichItemWithImages = (item: Item, wardrobeItems: Item[]): Item => {
-  // If item already has images, return as-is
-  if (item.images && item.images.length > 0) {
-    return item
+  const raw = item as Item & {
+    item_images?: Array<{
+      id?: string
+      image_url?: string
+      thumbnail_url?: string
+      is_primary?: boolean
+      width?: number
+      height?: number
+      created_at?: string
+    }>
   }
 
-  // Look up the full item from wardrobe store
-  const fullItem = wardrobeItems.find(w => w.id === item.id)
+  if (Array.isArray(raw.images) && raw.images.length > 0) {
+    return raw
+  }
+
+  if (Array.isArray(raw.item_images) && raw.item_images.length > 0) {
+    return {
+      ...raw,
+      images: raw.item_images.map((img, index) => ({
+        id: img.id || `${raw.id}-img-${index}`,
+        item_id: raw.id,
+        image_url: img.image_url || '',
+        thumbnail_url: img.thumbnail_url,
+        is_primary: Boolean(img.is_primary),
+        width: img.width,
+        height: img.height,
+        created_at: img.created_at || new Date().toISOString(),
+      })),
+    }
+  }
+
+  if (raw.image_url) {
+    return {
+      ...raw,
+      images: [
+        {
+          id: `${raw.id}-primary`,
+          item_id: raw.id,
+          image_url: raw.image_url,
+          thumbnail_url: raw.image_url,
+          is_primary: true,
+          created_at: new Date().toISOString(),
+        },
+      ],
+    }
+  }
+
+  // Fallback: wardrobe store (may be partial due to pagination)
+  const fullItem = wardrobeItems.find((w) => w.id === item.id)
   if (fullItem?.images && fullItem.images.length > 0) {
     return { ...item, images: fullItem.images }
   }

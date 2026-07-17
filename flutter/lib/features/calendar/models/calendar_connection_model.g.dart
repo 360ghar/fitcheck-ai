@@ -40,4 +40,5 @@ const _$CalendarProviderEnumMap = {
   CalendarProvider.google: 'google',
   CalendarProvider.outlook: 'outlook',
   CalendarProvider.apple: 'apple',
+  CalendarProvider.local: 'local',
 };
