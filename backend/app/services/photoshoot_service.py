@@ -984,6 +984,9 @@ class PhotoshootStreamingService:
             # Generate images in batches with streaming
             await self._generate_images_streaming(job, prompts)
 
+            # Reference photos are no longer needed after generation
+            await PhotoshootJobService.release_reference_photos(job.job_id)
+
             # Check cancellation
             if job.is_cancelled():
                 return
@@ -1012,6 +1015,9 @@ class PhotoshootStreamingService:
                 "usage": usage_dict,
                 "timestamp": datetime.utcnow().isoformat(),
             })
+            # Keep generated images for GET status / poll fallback; drop
+            # the SSE replay buffer which duplicates base64 payloads.
+            await PhotoshootJobService.clear_event_history(job.job_id)
 
         except RateLimitError as e:
             from app.services.photoshoot_job_service import PhotoshootJobService
@@ -1021,6 +1027,8 @@ class PhotoshootStreamingService:
                 "error": str(e),
                 "timestamp": datetime.utcnow().isoformat(),
             })
+            await PhotoshootJobService.release_reference_photos(job.job_id)
+            await PhotoshootJobService.clear_event_history(job.job_id)
         except Exception as e:
             from app.services.photoshoot_job_service import PhotoshootJobService
             logger.exception(f"Photoshoot pipeline failed: {e}")
@@ -1030,6 +1038,8 @@ class PhotoshootStreamingService:
                 "error": str(e),
                 "timestamp": datetime.utcnow().isoformat(),
             })
+            await PhotoshootJobService.release_reference_photos(job.job_id)
+            await PhotoshootJobService.clear_event_history(job.job_id)
 
     async def _generate_images_streaming(
         self,

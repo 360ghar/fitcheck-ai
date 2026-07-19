@@ -55,4 +55,7 @@ EXPOSE 8000
 # from X-Forwarded-For itself (taking the trusted-hop value, not a
 # client-supplied one), instead of the app hand-parsing (and trusting) the
 # header from any connecting peer.
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
+# --limit-concurrency: shed load before the single process OOMs under
+# image/AI bursts (in-memory batch/photoshoot jobs hold large base64).
+# --timeout-keep-alive: free idle connections faster on Railway's edge.
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*' --limit-concurrency 50 --timeout-keep-alive 5"]

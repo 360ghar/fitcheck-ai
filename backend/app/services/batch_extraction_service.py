@@ -60,6 +60,10 @@ class BatchExtractionService:
             if not job.is_cancelled():
                 await BatchJobService.update_status(job.job_id, BatchJobStatus.COMPLETED)
                 await self._broadcast_job_complete(job)
+                # Keep generated_image_base64 on items until job TTL so
+                # GET status / Flutter poll fallback still works. Free the
+                # SSE replay buffer which duplicates those payloads.
+                await BatchJobService.clear_event_history(job.job_id)
 
         except Exception as e:
             logger.error(
@@ -72,6 +76,8 @@ class BatchExtractionService:
                 "error": str(e),
                 "timestamp": datetime.utcnow().isoformat(),
             })
+            await BatchJobService.release_image_payloads(job.job_id)
+            await BatchJobService.clear_event_history(job.job_id)
 
     async def _run_extraction_phase(self, job: BatchJob) -> None:
         """
@@ -124,6 +130,11 @@ class BatchExtractionService:
         # Cache extraction results for single-image jobs (24-hour TTL)
         if job.total_images == 1 and job.detected_items:
             await self._cache_extraction_results(job)
+
+        # Source base64 is only needed for extraction (and the single-image
+        # cache key above). Drop it immediately so concurrent jobs do not
+        # pin tens of MB of RAM until the job TTL expires.
+        await BatchJobService.release_image_payloads(job.job_id)
 
     async def _extract_single_image(
         self,

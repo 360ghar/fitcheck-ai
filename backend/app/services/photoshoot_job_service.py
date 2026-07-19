@@ -2,7 +2,7 @@
 Photoshoot Job Service.
 
 Manages in-memory photoshoot generation jobs for SSE streaming.
-Jobs are stored in memory and auto-expire after 1 hour.
+Jobs are stored in process memory and auto-expire quickly to limit OOM risk.
 """
 
 import asyncio
@@ -11,10 +11,17 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set
 from uuid import uuid4
 
+from app.core.exceptions import RateLimitError
 from app.core.logging_config import get_context_logger
 from app.models.photoshoot import PhotoshootJobStatus
+from app.utils.process_metrics import estimate_base64_mb, log_memory
 
 logger = get_context_logger(__name__)
+
+MAX_CONCURRENT_PHOTOSHOOT_JOBS = 2
+_ACTIVE_JOB_TTL = timedelta(minutes=30)
+_FINISHED_JOB_TTL = timedelta(minutes=15)
+_CLEANUP_INTERVAL_S = 60
 
 
 @dataclass
@@ -73,7 +80,16 @@ class PhotoshootJobService:
     _jobs: Dict[str, PhotoshootJob] = {}
     _lock: asyncio.Lock = asyncio.Lock()
     _cleanup_task: Optional[asyncio.Task] = None
-    _job_ttl: timedelta = timedelta(hours=1)
+    _job_ttl: timedelta = _ACTIVE_JOB_TTL
+
+    _ACTIVE_STATUSES = {
+        PhotoshootJobStatus.PENDING,
+        PhotoshootJobStatus.PROCESSING,
+    }
+
+    @classmethod
+    def count_active_jobs(cls) -> int:
+        return sum(1 for j in cls._jobs.values() if j.status in cls._ACTIVE_STATUSES)
 
     @classmethod
     async def create_job(
@@ -86,10 +102,29 @@ class PhotoshootJobService:
         aspect_ratio: str = "1:1",
         custom_prompt: Optional[str] = None,
     ) -> PhotoshootJob:
-        """Create a new photoshoot job."""
+        """Create a new photoshoot job.
+
+        Raises:
+            RateLimitError: If process-wide concurrent photoshoot cap is hit.
+        """
+        # Cap check first so busy servers fail fast without holding work.
+        async with cls._lock:
+            active = sum(
+                1 for j in cls._jobs.values() if j.status in cls._ACTIVE_STATUSES
+            )
+            if active >= MAX_CONCURRENT_PHOTOSHOOT_JOBS:
+                raise RateLimitError(
+                    message=(
+                        f"Server is busy processing {active} photoshoot jobs. "
+                        "Please retry in a minute."
+                    ),
+                    retry_after=60,
+                )
+
         job_id = str(uuid4())
         session_id = f"ps_{uuid4().hex[:12]}"
         total_batches = max(1, (num_images + batch_size - 1) // batch_size)
+        payload_mb = estimate_base64_mb(photos)
 
         job = PhotoshootJob(
             job_id=job_id,
@@ -107,10 +142,34 @@ class PhotoshootJobService:
         )
 
         async with cls._lock:
+            # Re-check under lock; another request may have taken the slot.
+            active = sum(
+                1 for j in cls._jobs.values() if j.status in cls._ACTIVE_STATUSES
+            )
+            if active >= MAX_CONCURRENT_PHOTOSHOOT_JOBS:
+                raise RateLimitError(
+                    message=(
+                        f"Server is busy processing {active} photoshoot jobs. "
+                        "Please retry in a minute."
+                    ),
+                    retry_after=60,
+                )
             cls._jobs[job_id] = job
 
         # Start cleanup task if not running
         cls._ensure_cleanup_task()
+
+        log_memory(
+            "photoshoot_job_created",
+            force=True,
+            extra={
+                "job_id": job_id,
+                "num_images": num_images,
+                "payload_mb": payload_mb,
+                "active_photoshoot_jobs": active + 1,
+                "total_photoshoot_jobs": len(cls._jobs),
+            },
+        )
 
         logger.info(
             "Created photoshoot job",
@@ -118,10 +177,43 @@ class PhotoshootJobService:
                 "job_id": job_id,
                 "user_id": user_id,
                 "num_images": num_images,
+                "payload_mb": payload_mb,
             },
         )
 
         return job
+
+    @classmethod
+    async def release_reference_photos(cls, job_id: str) -> None:
+        """Drop reference photo base64 once generation no longer needs them."""
+        async with cls._lock:
+            job = cls._jobs.get(job_id)
+            if not job:
+                return
+            job.photos = []
+        log_memory(
+            "photoshoot_refs_released",
+            force=True,
+            extra={"job_id": job_id},
+        )
+
+    @classmethod
+    async def clear_event_history(cls, job_id: str) -> None:
+        """Drop SSE event history after the pipeline ends.
+
+        History duplicates base64 image events. Final images remain on the
+        job for GET status / Flutter poll fallback until job TTL cleanup.
+        """
+        async with cls._lock:
+            job = cls._jobs.get(job_id)
+            if not job:
+                return
+            job.event_history.clear()
+        log_memory(
+            "photoshoot_event_history_cleared",
+            force=True,
+            extra={"job_id": job_id},
+        )
 
     @classmethod
     async def get_job(cls, job_id: str, user_id: str) -> Optional[PhotoshootJob]:
@@ -325,7 +417,7 @@ class PhotoshootJobService:
         """Periodically cleanup expired jobs."""
         while True:
             try:
-                await asyncio.sleep(300)  # Check every 5 minutes
+                await asyncio.sleep(_CLEANUP_INTERVAL_S)
                 await cls._cleanup_expired_jobs()
             except asyncio.CancelledError:
                 break
@@ -334,17 +426,39 @@ class PhotoshootJobService:
 
     @classmethod
     async def _cleanup_expired_jobs(cls) -> None:
-        """Remove jobs older than TTL."""
+        """Remove jobs past active/finished TTLs and free base64 early."""
         now = datetime.utcnow()
         expired_ids = []
+        finished = {
+            PhotoshootJobStatus.COMPLETE,
+            PhotoshootJobStatus.FAILED,
+            PhotoshootJobStatus.CANCELLED,
+        }
 
         async with cls._lock:
-            for job_id, job in cls._jobs.items():
-                if now - job.created_at > cls._job_ttl:
+            for job_id, job in list(cls._jobs.items()):
+                age = now - job.created_at
+                if job.status in finished:
+                    job.photos = []
+                    if job.event_history:
+                        job.event_history.clear()
+                    # Keep generated image_base64 until eviction so poll
+                    # fallback still returns images during the finished TTL.
+                    if age > _FINISHED_JOB_TTL:
+                        for image in job.generated_images:
+                            if isinstance(image, dict):
+                                image.pop("image_base64", None)
+                        expired_ids.append(job_id)
+                elif age > _ACTIVE_JOB_TTL:
                     expired_ids.append(job_id)
 
             for job_id in expired_ids:
                 del cls._jobs[job_id]
 
         if expired_ids:
+            log_memory(
+                "photoshoot_jobs_cleaned",
+                force=True,
+                extra={"cleaned": len(expired_ids), "remaining": len(cls._jobs)},
+            )
             logger.info(f"Cleaned up {len(expired_ids)} expired photoshoot jobs")

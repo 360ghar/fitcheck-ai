@@ -267,17 +267,19 @@ class PrettyFormatter(logging.Formatter):
 
 def setup_session_logging() -> str:
     """Configure logging for this server session.
-    
-    Returns:
-        Path to the log file for this session.
-    """
-    # Create logs directory relative to backend root
-    log_dir = Path(__file__).parent.parent.parent / settings.LOG_DIR
-    log_dir.mkdir(exist_ok=True)
 
-    # Generate timestamped filename
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = log_dir / f"session_{timestamp}.log"
+    Production (Railway / non-DEBUG): stdout only with JSON lines so the
+    platform log drain captures everything. Local DEBUG: also write a
+    session file under LOG_DIR for easier grepping.
+
+    Returns:
+        Path to the log file for this session, or empty string when file
+        logging is disabled.
+    """
+    import os
+
+    # Railway sets RAILWAY_ENVIRONMENT; also treat non-DEBUG as production.
+    is_production = bool(os.environ.get("RAILWAY_ENVIRONMENT")) or not settings.DEBUG
 
     # Determine log level
     log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
@@ -291,20 +293,30 @@ def setup_session_logging() -> str:
     from app.core.middleware import CorrelationIdLogFilter
     correlation_filter = CorrelationIdLogFilter()
 
-    # File handler with JSON format for production
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setLevel(log_level)
-    file_handler.setFormatter(JsonFormatter())
-    file_handler.addFilter(correlation_filter)
-    root_logger.addHandler(file_handler)
+    log_file_path = ""
 
-    # Console handler with pretty format for development
+    # File handler only in local/dev — container disk is ephemeral and
+    # Railway already captures stdout.
+    if not is_production:
+        log_dir = Path(__file__).parent.parent.parent / settings.LOG_DIR
+        log_dir.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        log_file = log_dir / f"session_{timestamp}.log"
+        log_file_path = str(log_file)
+
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(log_level)
+        file_handler.setFormatter(JsonFormatter())
+        file_handler.addFilter(correlation_filter)
+        root_logger.addHandler(file_handler)
+
+    # Console: JSON in production (parseable), pretty in development
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
-
-    # Always use pretty format for console (readable), JSON for file logs (parseable)
-    console_handler.setFormatter(PrettyFormatter())
-    
+    if is_production:
+        console_handler.setFormatter(JsonFormatter())
+    else:
+        console_handler.setFormatter(PrettyFormatter())
     console_handler.addFilter(correlation_filter)
     root_logger.addHandler(console_handler)
 
@@ -315,7 +327,7 @@ def setup_session_logging() -> str:
     logging.getLogger("hpack").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
-    return str(log_file)
+    return log_file_path
 
 
 def get_logger(name: str) -> logging.Logger:

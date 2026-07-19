@@ -138,9 +138,9 @@ _SCHEMA_STATUS_TTL = timedelta(minutes=5)
 def _get_cached_schema_status() -> tuple[bool, list[str]]:
     """Schema readiness, refreshed at most every _SCHEMA_STATUS_TTL.
 
-    /health is polled repeatedly by the hosting platform; re-running ~30-40
-    sequential table/column existence queries on every single hit blocked the
-    event loop for no benefit once the schema was known to be stable.
+    Used by GET /ready and startup seeding. /health is pure liveness and does
+    not call this. Cache avoids re-running ~30-40 sequential table/column
+    existence queries on every readiness poll.
     """
     now = datetime.utcnow()
     cached_at = _SCHEMA_STATUS_CACHE["checked_at"]
@@ -168,6 +168,35 @@ def _get_cached_schema_status() -> tuple[bool, list[str]]:
     return len(missing) == 0, missing
 
 
+async def _seed_schema_status_in_thread() -> None:
+    """Run the expensive schema check off the event loop, then seed the cache.
+
+    Startup must not block the loop for ~30-40 sequential sync Supabase calls;
+    Railway health probes hit /health as soon as the process binds the port.
+    """
+    import asyncio
+
+    def _check():
+        db = SupabaseDB.get_service_client()
+        return _schema_missing(db)
+
+    try:
+        missing = await asyncio.to_thread(_check)
+        _SCHEMA_STATUS_CACHE["missing"] = missing
+        _SCHEMA_STATUS_CACHE["checked_at"] = datetime.utcnow()
+        log = logging.getLogger(__name__)
+        if missing:
+            log.warning(
+                "Supabase schema not initialized/complete. Run "
+                "`backend/db/supabase/migrations/001_full_schema.sql` in Supabase SQL Editor."
+            )
+            log.warning(
+                f"Missing: {', '.join(missing[:8])}{'…' if len(missing) > 8 else ''}"
+            )
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Supabase schema check failed: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
@@ -177,33 +206,33 @@ async def lifespan(app: FastAPI):
 
     # Startup
     logger.info(f"{settings.PROJECT_NAME} starting up...")
-    logger.info(f"Session log file: {log_file}")
+    if log_file:
+        logger.info(f"Session log file: {log_file}")
     logger.info(f"API v1 endpoint: {settings.API_V1_STR}")
     logger.info(f"Debug mode: {settings.DEBUG}")
 
-    # Best-effort schema readiness check to help local setup. Also seeds
-    # _SCHEMA_STATUS_CACHE so the first /health hit doesn't repeat this.
-    try:
-        db = SupabaseDB.get_service_client()
-        missing = _schema_missing(db)
-        _SCHEMA_STATUS_CACHE["missing"] = missing
-        _SCHEMA_STATUS_CACHE["checked_at"] = datetime.utcnow()
-        if missing:
-            logger.warning(
-                "Supabase schema not initialized/complete. Run `backend/db/supabase/migrations/001_full_schema.sql` in Supabase SQL Editor."
-            )
-            logger.warning(f"Missing: {', '.join(missing[:8])}{'…' if len(missing) > 8 else ''}")
-    except Exception as e:
-        logger.warning(f"Supabase schema check failed: {e}")
+    # Best-effort schema readiness check (off the event loop) so /ready is
+    # accurate without stalling Railway's deploy health probe on /health.
+    await _seed_schema_status_in_thread()
 
-    # Best-effort Pinecone index initialization
+    # Best-effort Pinecone index initialization (sync SDK; keep off the loop)
     if settings.PINECONE_API_KEY:
         try:
+            import asyncio
             from app.services.vector_service import get_vector_service
-            vector_service = get_vector_service()
-            vector_service.create_index()
+
+            def _init_pinecone():
+                get_vector_service().create_index()
+
+            await asyncio.to_thread(_init_pinecone)
         except Exception as e:
             logger.warning(f"Pinecone index initialization failed: {e}")
+
+    try:
+        from app.utils.process_metrics import log_memory
+        log_memory("startup", force=True)
+    except Exception:
+        pass
 
     yield
     # Shutdown
@@ -326,27 +355,48 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for monitoring.
+    """Liveness probe for the hosting platform (Railway).
 
-    Schema readiness is cached (see _get_cached_schema_status) rather than
-    re-checked on every hit, since this is polled repeatedly by the hosting
-    platform and each check was up to ~30-40 sequential DB queries.
+    Must stay cheap and free of DB/network I/O. Platform probes poll this
+    path; any blocking work here can delay restarts or mark the deploy
+    unhealthy while the process is still fine. Schema/DB readiness lives
+    on GET /ready instead.
     """
+    from app.utils.process_metrics import get_rss_mb
+
+    return {
+        "status": "healthy",
+        "service": settings.PROJECT_NAME,
+        "version": settings.VERSION,
+        "commit": settings.RAILWAY_GIT_COMMIT_SHA,
+        "rss_mb": get_rss_mb(),
+    }
+
+
+@app.get("/ready")
+async def readiness_check():
+    """Readiness: schema cache status (no live multi-table scan on every hit).
+
+    Uses the 5-minute schema cache so operators can see migration state
+    without hammering Supabase. Cache misses run in a worker thread so the
+    event loop is not blocked. Not used by Railway restarts (/health is).
+    """
+    import asyncio
+
     try:
-        schema_ready, missing = _get_cached_schema_status()
+        schema_ready, missing = await asyncio.to_thread(_get_cached_schema_status)
     except Exception:
         missing = []
         schema_ready = False
 
     response = {
-        "status": "healthy",
+        "status": "ready" if schema_ready else "not_ready",
         "service": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "commit": settings.RAILWAY_GIT_COMMIT_SHA,
         "schema_ready": schema_ready,
     }
 
-    # Only expose missing tables in DEBUG mode (not in production)
     if settings.DEBUG and missing:
         response["missing_tables"] = missing
 

@@ -1,8 +1,9 @@
 """
-Regression test for /health's schema-status caching.
+Regression test for schema-status caching used by GET /ready.
 
 Previously _schema_missing() (~30-40 sequential blocking DB queries) ran on
-every single /health hit, which the hosting platform polls repeatedly.
+every single /health hit. /health is now pure liveness; the cache still
+matters for /ready and startup seeding.
 """
 from unittest.mock import Mock, patch
 

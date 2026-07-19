@@ -98,6 +98,29 @@ If Config as Code is left as `railway.json`, Railway looks at the **repo root** 
 
 Required env vars on the service (no defaults): `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_SECRET`.
 
+### Health probes
+
+| Path | Role | Notes |
+|------|------|--------|
+| `GET /health` | **Liveness** (Railway healthcheck) | Process up only. No DB. Includes `rss_mb` + `commit`. |
+| `GET /ready` | Readiness / operators | Cached schema status. Not used for restarts. |
+
+### Diagnosing restarts (OOM / crash loop)
+
+1. Railway → service → **Metrics**: memory sawtooth to the plan limit right before restarts → OOM.
+2. Railway → **Deployments / events**: exit code `137` is almost always OOM-kill.
+3. Railway → **Logs** around the last lines before death: look for `process_memory` / `batch_job_created` / `photoshoot_job_created` with large `payload_mb`.
+4. Confirm plan RAM (512MB / 1GB / …). Raise memory **only after** concurrency/base64 caps are deployed; otherwise the next spike still OOMs.
+
+Stabilizers in this codebase:
+
+- Max **2** concurrent batch jobs and **2** concurrent photoshoot jobs process-wide (429 when full).
+- Batch image base64 capped at ~10MB; source reference base64 released after extraction/generation.
+- Generated images kept for GET status / poll fallback until finished job TTL (~15m); SSE event history cleared on complete (it duplicated base64).
+- Job TTLs ~15–30m; extraction cache capped at 200 entries.
+- Uvicorn `--limit-concurrency 50 --timeout-keep-alive 5`.
+- Production logs go to stdout only (no session files under `/app/logs`).
+
 ## Development Notes
 
 - Keep endpoint handlers thin; move domain logic into `app/services/`.

@@ -2,7 +2,8 @@
 Batch Job Service.
 
 Manages in-memory batch processing jobs for multi-image AI extraction.
-Jobs are stored in memory and auto-expire after 1 hour.
+Jobs are stored in process memory and auto-expire quickly to limit OOM risk
+on single-worker Railway deploys (base64 images are large).
 """
 
 import asyncio
@@ -12,9 +13,19 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 from uuid import uuid4
 
+from app.core.exceptions import RateLimitError
 from app.core.logging_config import get_context_logger
+from app.utils.process_metrics import estimate_base64_mb, log_memory
 
 logger = get_context_logger(__name__)
+
+# Process-wide caps: multiple concurrent batches with large base64 payloads
+# are the top OOM driver for this service.
+MAX_CONCURRENT_BATCH_JOBS = 2
+# Keep completed/failed jobs briefly for SSE late-join; running jobs use active TTL.
+_ACTIVE_JOB_TTL = timedelta(minutes=30)
+_FINISHED_JOB_TTL = timedelta(minutes=15)
+_CLEANUP_INTERVAL_S = 60
 
 
 class BatchJobStatus(str, Enum):
@@ -133,7 +144,17 @@ class BatchJobService:
     _jobs: Dict[str, BatchJob] = {}
     _lock: asyncio.Lock = asyncio.Lock()
     _cleanup_task: Optional[asyncio.Task] = None
-    _job_ttl: timedelta = timedelta(hours=1)
+    _job_ttl: timedelta = _ACTIVE_JOB_TTL
+
+    _ACTIVE_STATUSES = {
+        BatchJobStatus.PENDING,
+        BatchJobStatus.EXTRACTING,
+        BatchJobStatus.GENERATING,
+    }
+
+    @classmethod
+    def count_active_jobs(cls) -> int:
+        return sum(1 for j in cls._jobs.values() if j.status in cls._ACTIVE_STATUSES)
 
     @classmethod
     async def create_job(
@@ -143,15 +164,37 @@ class BatchJobService:
         auto_generate: bool = True,
         generation_batch_size: int = 5,
     ) -> BatchJob:
-        """Create a new batch job."""
+        """Create a new batch job.
+
+        Raises:
+            RateLimitError: If process-wide concurrent batch job cap is hit.
+        """
+        # Cap check first so we do not build large base64 structures when
+        # the process is already at the concurrent-job budget.
+        async with cls._lock:
+            active = sum(
+                1 for j in cls._jobs.values() if j.status in cls._ACTIVE_STATUSES
+            )
+            if active >= MAX_CONCURRENT_BATCH_JOBS:
+                raise RateLimitError(
+                    message=(
+                        f"Server is busy processing {active} batch jobs. "
+                        "Please retry in a minute."
+                    ),
+                    retry_after=60,
+                )
+
         job_id = str(uuid4())
 
         # Convert images to BatchImageData
         image_dict = {}
+        payload_sizes: List[str] = []
         for img in images:
+            b64 = img["image_base64"]
+            payload_sizes.append(b64)
             image_data = BatchImageData(
                 image_id=img["image_id"],
-                image_base64=img["image_base64"],
+                image_base64=b64,
                 filename=img.get("filename"),
             )
             image_dict[img["image_id"]] = image_data
@@ -166,11 +209,37 @@ class BatchJobService:
             images=image_dict,
         )
 
+        payload_mb = estimate_base64_mb(payload_sizes)
+
         async with cls._lock:
+            # Re-check under lock; another request may have taken the slot.
+            active = sum(
+                1 for j in cls._jobs.values() if j.status in cls._ACTIVE_STATUSES
+            )
+            if active >= MAX_CONCURRENT_BATCH_JOBS:
+                raise RateLimitError(
+                    message=(
+                        f"Server is busy processing {active} batch jobs. "
+                        "Please retry in a minute."
+                    ),
+                    retry_after=60,
+                )
             cls._jobs[job_id] = job
 
         # Start cleanup task if not running
         cls._ensure_cleanup_task()
+
+        log_memory(
+            "batch_job_created",
+            force=True,
+            extra={
+                "job_id": job_id,
+                "image_count": len(images),
+                "payload_mb": payload_mb,
+                "active_batch_jobs": active + 1,
+                "total_batch_jobs": len(cls._jobs),
+            },
+        )
 
         logger.info(
             "Created batch job",
@@ -178,10 +247,41 @@ class BatchJobService:
                 "job_id": job_id,
                 "user_id": user_id,
                 "image_count": len(images),
+                "payload_mb": payload_mb,
             },
         )
 
         return job
+
+    @classmethod
+    async def release_image_payloads(cls, job_id: str) -> None:
+        """Drop source image base64 after extraction no longer needs it."""
+        async with cls._lock:
+            job = cls._jobs.get(job_id)
+            if not job:
+                return
+            for image in job.images.values():
+                image.image_base64 = ""
+        log_memory("batch_source_images_released", force=True, extra={"job_id": job_id})
+
+    @classmethod
+    async def clear_event_history(cls, job_id: str) -> None:
+        """Drop SSE event history after the pipeline ends.
+
+        Live subscribers already received events. History is only for late
+        joins, but it duplicates full base64 payloads (often the largest
+        share of job RAM). Final state remains available via get_job_status.
+        """
+        async with cls._lock:
+            job = cls._jobs.get(job_id)
+            if not job:
+                return
+            job.event_history.clear()
+        log_memory(
+            "batch_event_history_cleared",
+            force=True,
+            extra={"job_id": job_id},
+        )
 
     @classmethod
     async def get_job(cls, job_id: str, user_id: str) -> Optional[BatchJob]:
@@ -471,7 +571,7 @@ class BatchJobService:
         """Periodically cleanup expired jobs."""
         while True:
             try:
-                await asyncio.sleep(300)  # Check every 5 minutes
+                await asyncio.sleep(_CLEANUP_INTERVAL_S)
                 await cls._cleanup_expired_jobs()
             except asyncio.CancelledError:
                 break
@@ -480,13 +580,31 @@ class BatchJobService:
 
     @classmethod
     async def _cleanup_expired_jobs(cls) -> None:
-        """Remove jobs older than TTL."""
+        """Remove jobs past active/finished TTLs and free base64 from finished ones."""
         now = datetime.utcnow()
         expired_ids = []
+        finished_statuses = {
+            BatchJobStatus.COMPLETED,
+            BatchJobStatus.CANCELLED,
+            BatchJobStatus.FAILED,
+        }
 
         async with cls._lock:
-            for job_id, job in cls._jobs.items():
-                if now - job.created_at > cls._job_ttl:
+            for job_id, job in list(cls._jobs.items()):
+                age = now - job.created_at
+                if job.status in finished_statuses:
+                    # Free payloads early even before full job eviction.
+                    # Status poll clients may still need generated base64
+                    # for a few minutes; drop history first (duplicate data),
+                    # then drop generated after finished TTL when deleting.
+                    for image in job.images.values():
+                        image.image_base64 = ""
+                    job.event_history.clear()
+                    if age > _FINISHED_JOB_TTL:
+                        for item in job.detected_items:
+                            item.generated_image_base64 = None
+                        expired_ids.append(job_id)
+                elif age > _ACTIVE_JOB_TTL:
                     expired_ids.append(job_id)
 
             for job_id in expired_ids:
@@ -494,3 +612,8 @@ class BatchJobService:
 
         if expired_ids:
             logger.info(f"Cleaned up {len(expired_ids)} expired batch jobs")
+            log_memory(
+                "batch_jobs_cleaned",
+                force=True,
+                extra={"cleaned": len(expired_ids), "remaining": len(cls._jobs)},
+            )

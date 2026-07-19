@@ -32,10 +32,18 @@ router = APIRouter()
 # =============================================================================
 
 
+# Match photoshoot max (~10MB encoded) so one batch of 50 cannot OOM the process.
+_MAX_BATCH_IMAGE_B64 = 10 * 1024 * 1024
+
+
 class BatchImageInput(BaseModel):
     """Single image for batch processing."""
     image_id: str = Field(..., description="Client-generated unique ID for tracking")
-    image_base64: str = Field(..., description="Base64-encoded image data")
+    image_base64: str = Field(
+        ...,
+        max_length=_MAX_BATCH_IMAGE_B64,
+        description="Base64-encoded image data (max ~10MB encoded)",
+    )
     filename: Optional[str] = Field(None, description="Original filename")
 
 
@@ -61,7 +69,11 @@ class BatchExtractionRequest(BaseModel):
 
 class SingleExtractionRequest(BaseModel):
     """Request to start single-item extraction."""
-    image: str = Field(..., description="Base64-encoded image")
+    image: str = Field(
+        ...,
+        max_length=_MAX_BATCH_IMAGE_B64,
+        description="Base64-encoded image (max ~10MB encoded)",
+    )
     auto_generate: bool = Field(
         True,
         description="Auto-generate product images",

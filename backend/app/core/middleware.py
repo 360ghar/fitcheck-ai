@@ -139,7 +139,14 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """
     
     # Paths to skip logging (health checks, etc.)
-    SKIP_PATHS = {"/health", "/", "/api/v1/docs", "/api/v1/redoc", "/api/v1/openapi.json"}
+    SKIP_PATHS = {
+        "/health",
+        "/ready",
+        "/",
+        "/api/v1/docs",
+        "/api/v1/redoc",
+        "/api/v1/openapi.json",
+    }
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Skip logging for certain paths

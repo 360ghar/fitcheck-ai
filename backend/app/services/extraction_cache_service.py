@@ -23,6 +23,9 @@ class ExtractionCacheService:
 
     # Cache TTL: 24 hours
     CACHE_TTL_HOURS = 24
+    # Hard cap so the process-local dict cannot grow without bound under
+    # heavy wardrobe import traffic (each result may hold large item lists).
+    MAX_ENTRIES = 200
 
     @staticmethod
     async def _hash_image(image_base64: str) -> str:
@@ -127,6 +130,16 @@ class ExtractionCacheService:
                 "cached_at": datetime.utcnow().isoformat(),
             }
 
+            # Evict oldest entries when over the hard cap (simple LRU-by-age).
+            if len(_cache) > cls.MAX_ENTRIES:
+                ordered = sorted(
+                    _cache.items(),
+                    key=lambda kv: kv[1].get("cached_at", ""),
+                )
+                overflow = len(_cache) - cls.MAX_ENTRIES
+                for key, _ in ordered[:overflow]:
+                    _cache.pop(key, None)
+
             logger.info(
                 "Cache set",
                 extra={
@@ -134,6 +147,7 @@ class ExtractionCacheService:
                     "user_id": user_id,
                     "item_count": len(result.get("items", [])),
                     "expiry": expiry.isoformat(),
+                    "cache_size": len(_cache),
                 },
             )
 
