@@ -112,6 +112,14 @@ Required env vars on the service (no defaults): `SUPABASE_URL`, `SUPABASE_PUBLIS
 3. Railway → **Logs** around the last lines before death: look for `process_memory` / `batch_job_created` / `photoshoot_job_created` with large `payload_mb`.
 4. Confirm plan RAM (512MB / 1GB / …). Raise memory **only after** concurrency/base64 caps are deployed; otherwise the next spike still OOMs.
 
+**`Stopping Container` is not an app crash.** That line is Railway sending SIGTERM (new deploy, replica replace, scale-down, or sleep). Look for:
+
+- `FitCheck AI shutting down (commit=…)` + `process_memory … reason=shutdown` → clean platform stop
+- Sudden death with no shutdown line + memory at the plan limit → OOM
+- Python traceback → application bug
+
+Startup is intentionally non-blocking: the process accepts `/health` before schema/Pinecone finish. Logs will show `Accepting traffic; background init scheduled`, then later `Background startup finished` / `Schema readiness check complete`.
+
 Stabilizers in this codebase:
 
 - Max **2** concurrent batch jobs and **2** concurrent photoshoot jobs process-wide (429 when full).

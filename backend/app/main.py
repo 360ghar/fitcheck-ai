@@ -171,8 +171,8 @@ def _get_cached_schema_status() -> tuple[bool, list[str]]:
 async def _seed_schema_status_in_thread() -> None:
     """Run the expensive schema check off the event loop, then seed the cache.
 
-    Startup must not block the loop for ~30-40 sequential sync Supabase calls;
-    Railway health probes hit /health as soon as the process binds the port.
+    Must never be awaited on the critical path before uvicorn accepts
+    connections: Railway health probes /health as soon as the port binds.
     """
     import asyncio
 
@@ -193,40 +193,73 @@ async def _seed_schema_status_in_thread() -> None:
             log.warning(
                 f"Missing: {', '.join(missing[:8])}{'…' if len(missing) > 8 else ''}"
             )
+        else:
+            log.info("Schema readiness check complete (ready)")
     except Exception as e:
         logging.getLogger(__name__).warning(f"Supabase schema check failed: {e}")
 
 
+async def _init_pinecone_in_thread() -> None:
+    """Best-effort Pinecone index init off the event loop."""
+    import asyncio
+
+    if not settings.PINECONE_API_KEY:
+        return
+    try:
+        from app.services.vector_service import get_vector_service
+
+        def _init():
+            get_vector_service().create_index()
+
+        await asyncio.to_thread(_init)
+        logging.getLogger(__name__).info("Pinecone index init complete")
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Pinecone index initialization failed: {e}")
+
+
+async def _background_startup(logger: logging.Logger) -> None:
+    """Schema + Pinecone after the server is already accepting traffic."""
+    import asyncio
+
+    await asyncio.gather(
+        _seed_schema_status_in_thread(),
+        _init_pinecone_in_thread(),
+        return_exceptions=True,
+    )
+    try:
+        from app.utils.process_metrics import log_memory
+        log_memory("background_startup_complete", force=True)
+    except Exception:
+        pass
+    logger.info(
+        "Background startup finished",
+        extra={"commit": settings.RAILWAY_GIT_COMMIT_SHA},
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager."""
+    """Application lifespan manager.
+
+    Yield as soon as logging is configured so uvicorn binds the port and
+    /health answers immediately. Schema and Pinecone run as a background
+    task so a slow Supabase/Pinecone call cannot delay deploy healthchecks.
+    """
+    import asyncio
+
     # Initialize session logging first
     log_file = setup_session_logging()
     logger = logging.getLogger(__name__)
 
-    # Startup
-    logger.info(f"{settings.PROJECT_NAME} starting up...")
+    # Fast path only — no network I/O before yield
+    logger.info(
+        f"{settings.PROJECT_NAME} starting up "
+        f"(commit={settings.RAILWAY_GIT_COMMIT_SHA})"
+    )
     if log_file:
         logger.info(f"Session log file: {log_file}")
     logger.info(f"API v1 endpoint: {settings.API_V1_STR}")
     logger.info(f"Debug mode: {settings.DEBUG}")
-
-    # Best-effort schema readiness check (off the event loop) so /ready is
-    # accurate without stalling Railway's deploy health probe on /health.
-    await _seed_schema_status_in_thread()
-
-    # Best-effort Pinecone index initialization (sync SDK; keep off the loop)
-    if settings.PINECONE_API_KEY:
-        try:
-            import asyncio
-            from app.services.vector_service import get_vector_service
-
-            def _init_pinecone():
-                get_vector_service().create_index()
-
-            await asyncio.to_thread(_init_pinecone)
-        except Exception as e:
-            logger.warning(f"Pinecone index initialization failed: {e}")
 
     try:
         from app.utils.process_metrics import log_memory
@@ -234,9 +267,32 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
 
+    # Schedule heavy init without blocking the accept path
+    bg_task = asyncio.create_task(
+        _background_startup(logger),
+        name="background_startup",
+    )
+
+    logger.info("Accepting traffic; background init scheduled")
     yield
-    # Shutdown
-    logger.info(f"{settings.PROJECT_NAME} shutting down...")
+
+    # Shutdown (Railway "Stopping Container" / SIGTERM reaches here)
+    logger.info(
+        f"{settings.PROJECT_NAME} shutting down "
+        f"(commit={settings.RAILWAY_GIT_COMMIT_SHA})"
+    )
+    try:
+        from app.utils.process_metrics import log_memory
+        log_memory("shutdown", force=True)
+    except Exception:
+        pass
+
+    if not bg_task.done():
+        bg_task.cancel()
+        try:
+            await bg_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
