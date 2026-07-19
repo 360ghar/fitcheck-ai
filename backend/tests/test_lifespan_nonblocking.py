@@ -58,3 +58,20 @@ async def test_lifespan_cancels_background_task_on_shutdown():
 
     # After exiting the context, background work should have been cancelled
     assert cancel_seen.is_set()
+
+
+@pytest.mark.asyncio
+async def test_lifespan_retrieves_background_task_exception():
+    """Failed background init must not leave an unretrieved task exception."""
+
+    async def boom(logger):
+        raise RuntimeError("bg failed")
+
+    with patch.object(
+        main_module,
+        "_background_startup",
+        side_effect=boom,
+    ):
+        # Must not emit "Task exception was never retrieved"
+        async with main_module.lifespan(main_module.app):
+            await asyncio.sleep(0.05)

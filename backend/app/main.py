@@ -218,23 +218,41 @@ async def _init_pinecone_in_thread() -> None:
 
 
 async def _background_startup(logger: logging.Logger) -> None:
-    """Schema + Pinecone after the server is already accepting traffic."""
+    """Schema + Pinecone after the server is already accepting traffic.
+
+    Never raises: failures are logged so the create_task caller does not
+    leave a "Task exception was never retrieved" on the event loop.
+    """
     import asyncio
 
-    await asyncio.gather(
-        _seed_schema_status_in_thread(),
-        _init_pinecone_in_thread(),
-        return_exceptions=True,
-    )
     try:
-        from app.utils.process_metrics import log_memory
-        log_memory("background_startup_complete", force=True)
+        results = await asyncio.gather(
+            _seed_schema_status_in_thread(),
+            _init_pinecone_in_thread(),
+            return_exceptions=True,
+        )
+        for result in results:
+            if isinstance(result, Exception):
+                # gather(return_exceptions=True) surfaces step failures if a
+                # helper ever stops swallowing them; helpers log themselves today.
+                logger.warning(
+                    "Background startup step failed: %s: %s",
+                    type(result).__name__,
+                    result,
+                )
+        try:
+            from app.utils.process_metrics import log_memory
+            log_memory("background_startup_complete", force=True)
+        except Exception:
+            pass
+        logger.info(
+            "Background startup finished",
+            extra={"commit": settings.RAILWAY_GIT_COMMIT_SHA},
+        )
+    except asyncio.CancelledError:
+        raise
     except Exception:
-        pass
-    logger.info(
-        "Background startup finished",
-        extra={"commit": settings.RAILWAY_GIT_COMMIT_SHA},
-    )
+        logger.exception("Background startup crashed")
 
 
 @asynccontextmanager
@@ -287,12 +305,16 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
 
+    # Always retrieve the task result so a failed background init cannot
+    # leave "Task exception was never retrieved" on the loop at process exit.
     if not bg_task.done():
         bg_task.cancel()
-        try:
-            await bg_task
-        except asyncio.CancelledError:
-            pass
+    try:
+        await bg_task
+    except asyncio.CancelledError:
+        pass
+    except Exception:
+        logger.exception("Background startup task ended with error")
 
 
 app = FastAPI(
