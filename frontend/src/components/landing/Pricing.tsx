@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { AnimatedSection } from './AnimatedSection'
 import { Check } from 'lucide-react'
@@ -21,12 +19,11 @@ const tiers = [
   {
     name: 'Pro',
     price: { monthly: 20, yearly: 200 },
-    description: 'For the fashion-forward',
+    description: 'For higher limits and deeper tools',
     features: proPlanFeatureBullets(),
     cta: 'Upgrade to Pro',
     highlighted: true,
-    badge: 'Best Value',
-    savings: 40,
+    badge: 'Best value',
   },
 ]
 
@@ -54,10 +51,12 @@ function PricingCard({
   const displayPrice = isYearly ? price.yearly : price.monthly
 
   return (
-    <Card
+    <div
       className={cn(
-        'relative overflow-hidden h-full',
-        highlighted && 'border-2 border-indigo-600 shadow-xl shadow-indigo-500/10'
+        'relative flex h-full flex-col overflow-hidden rounded-2xl border p-6 md:p-8',
+        highlighted
+          ? 'border-indigo-600 bg-white dark:bg-stone-950'
+          : 'border-stone-200/90 bg-white dark:border-stone-800 dark:bg-stone-950'
       )}
     >
       {badge && (
@@ -66,44 +65,45 @@ function PricingCard({
         </div>
       )}
 
-      <CardHeader>
-        <CardTitle className="text-2xl">{name}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
+      <div className="mb-6">
+        <h3 className="text-2xl font-semibold text-stone-900 dark:text-stone-50">{name}</h3>
+        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{description}</p>
+      </div>
 
-      <CardContent className="space-y-6">
-        <div>
-          <span className="text-5xl font-bold text-stone-900 dark:text-stone-50">
-            ${displayPrice.toFixed(displayPrice % 1 === 0 ? 0 : 2)}
+      <div className="mb-6">
+        <span className="landing-display text-5xl font-semibold text-stone-900 dark:text-stone-50">
+          ${displayPrice.toFixed(displayPrice % 1 === 0 ? 0 : 2)}
+        </span>
+        {displayPrice > 0 && (
+          <span className="text-stone-500 dark:text-stone-400">
+            /{isYearly ? 'year' : 'month'}
           </span>
-          {displayPrice > 0 && (
-            <span className="text-stone-500 dark:text-stone-400">/{isYearly ? 'year' : 'month'}</span>
-          )}
-        </div>
+        )}
+      </div>
 
-        <ul className="space-y-3">
-          {features.map((feature) => (
-            <li key={feature} className="flex items-start gap-3">
-              <Check className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-              <span className="text-stone-600 dark:text-stone-300">{feature}</span>
-            </li>
-          ))}
-        </ul>
+      <ul className="mb-8 flex-1 space-y-3">
+        {features.map((feature) => (
+          <li key={feature} className="flex items-start gap-3">
+            <Check className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+            <span className="text-stone-600 dark:text-stone-300 text-[15px]">{feature}</span>
+          </li>
+        ))}
+      </ul>
 
-        <Button
-          className={cn(
-            'w-full',
-            highlighted &&
-              'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700'
-          )}
-          variant={highlighted ? 'default' : 'outline'}
-          size="lg"
-          asChild
-        >
-          <Link to="/auth/register">{cta}</Link>
-        </Button>
-      </CardContent>
-    </Card>
+      <Button
+        className={cn(
+          'w-full h-12 text-base font-medium shadow-none',
+          highlighted
+            ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+            : 'border-stone-300 dark:border-stone-700'
+        )}
+        variant={highlighted ? 'default' : 'outline'}
+        size="lg"
+        asChild
+      >
+        <Link to="/auth/register">{cta}</Link>
+      </Button>
+    </div>
   )
 }
 
@@ -111,30 +111,24 @@ export default function Pricing() {
   const [isYearly, setIsYearly] = useState(false)
 
   return (
-    <section id="pricing" className="py-24 bg-white dark:bg-gray-950">
+    <section id="pricing" className="py-20 md:py-28 bg-stone-50 dark:bg-stone-900/40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <AnimatedSection>
-          <div className="text-center mb-16">
-            <Badge className="mb-4 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border-0">
-              Pricing
-            </Badge>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
-              Simple,{' '}
-              <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                transparent
-              </span>{' '}
-              pricing
+          <div className="max-w-2xl mb-12 md:mb-14">
+            <h2 className="landing-display text-3xl sm:text-4xl md:text-[2.75rem] font-semibold text-stone-900 dark:text-stone-50 leading-tight">
+              Simple, transparent pricing
             </h2>
-            <p className="text-lg md:text-xl text-gray-600 dark:text-gray-300 mb-8">
-              Start free, upgrade when you need more
+            <p className="mt-4 text-base md:text-lg text-stone-600 dark:text-stone-400">
+              Start free. Upgrade when you need higher limits for extractions, try-on, and photoshoots.
             </p>
 
-            {/* Toggle */}
-            <div className="flex items-center justify-center gap-4">
+            <div className="mt-8 flex items-center gap-4">
               <span
                 className={cn(
-                  'font-medium transition-colors',
-                  !isYearly ? 'text-gray-900 dark:text-white' : 'text-gray-500'
+                  'font-medium transition-colors text-sm',
+                  !isYearly
+                    ? 'text-stone-900 dark:text-stone-50'
+                    : 'text-stone-500 dark:text-stone-400'
                 )}
               >
                 Monthly
@@ -142,30 +136,38 @@ export default function Pricing() {
               <Switch checked={isYearly} onCheckedChange={setIsYearly} />
               <span
                 className={cn(
-                  'font-medium transition-colors flex items-center gap-2',
-                  isYearly ? 'text-gray-900 dark:text-white' : 'text-gray-500'
+                  'font-medium transition-colors text-sm flex items-center gap-2',
+                  isYearly
+                    ? 'text-stone-900 dark:text-stone-50'
+                    : 'text-stone-500 dark:text-stone-400'
                 )}
               >
                 Yearly
-                <Badge className="bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300 border-0">
+                <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">
                   Save $40
-                </Badge>
+                </span>
               </span>
             </div>
           </div>
         </AnimatedSection>
 
-        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+        <div className="grid md:grid-cols-2 gap-5 md:gap-6 max-w-4xl">
           {tiers.map((tier, index) => (
-            <AnimatedSection key={tier.name} delay={index * 150}>
+            <AnimatedSection key={tier.name} delay={index * 80}>
               <PricingCard {...tier} isYearly={isYearly} />
             </AnimatedSection>
           ))}
         </div>
 
-        <AnimatedSection delay={400}>
-          <p className="text-center text-gray-500 dark:text-gray-400 mt-8">
-            No credit card required. Cancel anytime.
+        <AnimatedSection delay={200}>
+          <p className="mt-8 text-sm text-stone-500 dark:text-stone-400">
+            No credit card required. Cancel anytime.{' '}
+            <a
+              href="#faq"
+              className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+            >
+              See free vs Pro details
+            </a>
           </p>
         </AnimatedSection>
       </div>

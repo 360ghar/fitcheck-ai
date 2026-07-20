@@ -34,6 +34,8 @@ interface ExtractedItemsGridProps {
   regeneratingItemId?: string | null
   /** Optional label for the empty state back button */
   backLabel?: string
+  /** Studio photos still generating in the background */
+  isGenerationRunning?: boolean
 }
 
 export function ExtractedItemsGrid({
@@ -47,6 +49,7 @@ export function ExtractedItemsGrid({
   isSaving,
   regeneratingItemId,
   backLabel,
+  isGenerationRunning = false,
 }: ExtractedItemsGridProps) {
   const activeItems = items.filter((item) => item.status !== 'deleted')
   const includedItems = activeItems.filter((item) => item.includeInWardrobe !== false)
@@ -55,6 +58,7 @@ export function ExtractedItemsGrid({
   const successCount = includedItems.filter(
     (item) => item.status === 'generated' && item.confidence >= 0.7
   ).length
+  const polishingCount = includedItems.filter((item) => item.status === 'generating').length
   // Saveable = included and has SOME image (studio photo, or the uploaded
   // photo as a fallback while generation is still running).
   const saveableCount = activeItems.filter(
@@ -110,11 +114,16 @@ export function ExtractedItemsGrid({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
           <h3 className="text-lg font-semibold text-foreground">Review Extracted Items</h3>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Badge variant="secondary" className="bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
               <Check className="h-3 w-3 mr-1" />
-              {successCount} ready
+              {successCount} studio ready
             </Badge>
+            {polishingCount > 0 && (
+              <Badge variant="secondary">
+                {polishingCount} polishing
+              </Badge>
+            )}
             {lowConfidenceCount > 0 && (
               <Badge variant="secondary" className="bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-3 w-3 mr-1" />
@@ -129,7 +138,8 @@ export function ExtractedItemsGrid({
           </div>
         </div>
         <p className="text-sm text-muted-foreground">
-          {activeItems.length} item{activeItems.length !== 1 ? 's' : ''} detected, {saveableCount} selected to save
+          {activeItems.length} item{activeItems.length !== 1 ? 's' : ''} detected
+          {saveableCount > 0 ? ` · ${saveableCount} ready to save` : ''}
         </p>
       </div>
 
@@ -300,11 +310,17 @@ export function ExtractedItemsGrid({
           Back
         </Button>
 
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           {failedCount > 0 && (
             <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center">
               <AlertTriangle className="h-4 w-4 mr-1" />
-              {failedCount} item(s) will be skipped
+              {failedCount} studio photo{failedCount !== 1 ? 's' : ''} failed — originals
+              will be saved if available
+            </p>
+          )}
+          {isGenerationRunning && saveableCount > 0 && (
+            <p className="text-xs text-muted-foreground max-w-[16rem]">
+              Saves with studio photos when ready, otherwise your original photos.
             </p>
           )}
           <Button
@@ -313,11 +329,13 @@ export function ExtractedItemsGrid({
             className="gap-2"
           >
             {isSaving ? (
-              <>Saving...</>
+              <>Saving…</>
             ) : (
               <>
                 <Save className="h-4 w-4" />
-                Save All ({saveableCount})
+                {isGenerationRunning
+                  ? `Save ready items (${saveableCount})`
+                  : `Save ${saveableCount} item${saveableCount !== 1 ? 's' : ''}`}
               </>
             )}
           </Button>

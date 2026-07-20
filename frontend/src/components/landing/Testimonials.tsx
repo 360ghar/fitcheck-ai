@@ -1,4 +1,5 @@
 import { AnimatedSection } from './AnimatedSection'
+import { PLAN_LIMITS } from '@/lib/plan-limits'
 
 const outcomes = [
   {
@@ -26,6 +27,8 @@ export default function Testimonials() {
             </h2>
             <p className="mt-4 text-base md:text-lg text-stone-600 dark:text-stone-400">
               Less scrolling for inspiration. More usable combinations from the clothes already in your room.
+              Free includes {PLAN_LIMITS.free.monthlyExtractions} extractions and{' '}
+              {PLAN_LIMITS.free.monthlyGenerations} outfit visualizations each month — upgrade when you need more.
             </p>
           </div>
         </AnimatedSection>

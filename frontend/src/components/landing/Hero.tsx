@@ -24,7 +24,11 @@ export default function Hero() {
             </h1>
 
             <p className="mt-5 text-base sm:text-lg text-stone-600 dark:text-stone-400 max-w-md leading-relaxed">
-              Photograph your clothes. Get AI outfit ideas, virtual try-on, and photoshoots — from the wardrobe you already own.
+              FitCheck AI turns photos of your clothes into a digital wardrobe, then helps you pick weather-aware outfits, try looks on, and generate photoshoot-style images from what you already own. Start free on the web.
+            </p>
+
+            <p className="mt-3 text-sm text-stone-500 dark:text-stone-500 max-w-md">
+              Web + Android live · iOS waitlist
             </p>
 
             <div className="mt-8 flex flex-col sm:flex-row gap-3">

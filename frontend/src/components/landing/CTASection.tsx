@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { AnimatedSection } from './AnimatedSection'
 import { ArrowRight, CheckCircle2, Loader2 } from 'lucide-react'
 import { joinWaitlist } from '@/api/waitlist'
+import { PLATFORM_AVAILABILITY } from '@/lib/plan-limits'
 
 export default function CTASection() {
   const [email, setEmail] = useState('')
@@ -53,20 +54,40 @@ export default function CTASection() {
                   Create an account in the browser, or install Android from Google Play. Leave your email for iOS and product updates.
                 </p>
                 <div className="mt-8">
-                  <Button
-                    size="lg"
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white h-12 px-6 shadow-none"
-                    asChild
-                  >
-                    <Link to="/auth/register">
-                      Start free on web
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Link>
-                  </Button>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Button
+                      size="lg"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white h-12 px-6 shadow-none"
+                      asChild
+                    >
+                      <Link to="/auth/register">
+                        Start free on web
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Link>
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="h-12 px-6 border-stone-600 text-stone-100 hover:bg-stone-800 hover:text-white shadow-none"
+                      asChild
+                    >
+                      <a
+                        href={PLATFORM_AVAILABILITY.androidStoreUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Get Android app
+                      </a>
+                    </Button>
+                  </div>
                   <p className="mt-3 text-sm text-stone-500">
                     Already have an account?{' '}
                     <Link to="/auth/login" className="text-stone-300 underline-offset-4 hover:underline">
                       Log in
+                    </Link>
+                    {' · '}
+                    <Link to="/features" className="text-stone-300 underline-offset-4 hover:underline">
+                      See features
                     </Link>
                   </p>
                 </div>

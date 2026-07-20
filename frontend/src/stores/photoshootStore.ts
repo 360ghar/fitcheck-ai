@@ -12,6 +12,7 @@ import {
   GeneratedImage,
 } from '@/api/photoshoot';
 import { getApiError } from '@/api/client';
+import { useJobUiStore } from '@/stores/jobUiStore';
 
 // Types
 export type PhotoshootStep = 'upload' | 'configure' | 'generating' | 'results';
@@ -34,8 +35,12 @@ interface PhotoshootState {
 
   // Generation state
   isGenerating: boolean;
-  progress: number;
+  /** Honest stage label (not a fake percent) */
   statusMessage: string;
+  /** Optional real progress 0–100; null means indeterminate */
+  progress: number | null;
+  /** Object URLs for source previews during generation */
+  photoPreviewUrls: string[];
 
   // Results state
   sessionId: string;
@@ -70,8 +75,9 @@ const initialState = {
   usage: null,
   isLoadingUsage: false,
   isGenerating: false,
-  progress: 0,
+  progress: null,
   statusMessage: '',
+  photoPreviewUrls: [] as string[],
   sessionId: '',
   generatedImages: [],
   failedIndices: [],
@@ -151,17 +157,27 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
       return null;
     }
 
+    // Build previews for the wait surface (revoke any prior ones)
+    get().photoPreviewUrls.forEach((url) => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // ignore
+      }
+    });
+    const photoPreviewUrls = photos.map((file) => URL.createObjectURL(file));
+
     set({
       isGenerating: true,
       error: null,
-      progress: 0,
-      statusMessage: 'Preparing your photos...',
+      progress: null,
+      statusMessage: 'Preparing your photos…',
+      photoPreviewUrls,
       currentStep: 'generating',
     });
 
     try {
-      // Convert photos to base64
-      set({ statusMessage: 'Processing photos...', progress: 10 });
+      set({ statusMessage: 'Encoding photos…', progress: null });
 
       const photosBase64 = await Promise.all(
         photos.map(async (file) => {
@@ -179,31 +195,22 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
         })
       );
 
-      set({ statusMessage: `Generating ${numImages} images...`, progress: 20 });
+      set({
+        statusMessage: `Generating ${numImages} image${numImages === 1 ? '' : 's'}…`,
+        progress: null,
+      });
 
-      // Simulate progress updates during generation
-      const progressInterval = setInterval(() => {
-        const currentProgress = get().progress;
-        if (currentProgress < 90) {
-          set({ progress: Math.min(90, currentProgress + 10) });
-        }
-      }, 3000);
-
-      // Generate
-      let result;
-      try {
-        result = await generatePhotoshoot({
+      // Single long request — no fake percent. Keep stage label only.
+      const result = await generatePhotoshoot({
         photos: photosBase64,
         use_case: useCase,
         custom_prompt: useCase === 'custom' ? customPrompt : undefined,
-          num_images: numImages,
-        });
-      } finally {
-        clearInterval(progressInterval);
-      }
+        num_images: numImages,
+      });
 
       set({
         progress: 100,
+        statusMessage: 'Done',
         sessionId: result.session_id,
         generatedImages: result.images,
         failedIndices: (result.image_failures ?? []).map((f) => f.index),
@@ -212,6 +219,9 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
         currentStep: 'results',
         isGenerating: false,
       });
+
+      // Clear pill even if the generating step unmounted (user left the page).
+      useJobUiStore.getState().clearJob('photoshoot');
 
       if (result.usage) {
         set({ usage: result.usage });
@@ -223,8 +233,12 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
       set({
         error: apiError.message,
         isGenerating: false,
-        currentStep: 'configure',
+        progress: null,
+        statusMessage: 'Generation failed',
+        // Stay on generating surface so user can retry without losing photos
+        currentStep: 'generating',
       });
+      useJobUiStore.getState().clearJob('photoshoot');
       return null;
     }
   },
@@ -292,9 +306,17 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
   },
 
   reset: () => {
+    get().photoPreviewUrls.forEach((url) => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // ignore
+      }
+    });
     set({
       ...initialState,
       usage: get().usage, // Preserve usage info
+      photoPreviewUrls: [],
     });
     // Fire and forget - don't block reset on usage fetch
     void get().fetchUsage();

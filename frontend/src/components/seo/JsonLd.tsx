@@ -16,15 +16,10 @@ const ORGANIZATION_SCHEMA = {
   url: SEO_CONFIG.siteUrl,
   logo: `${SEO_CONFIG.siteUrl}/og-default.jpg`,
   description: SEO_CONFIG.positioning,
-  sameAs: [
-    'https://twitter.com/fitcheckai',
-    'https://instagram.com/fitcheckai',
-    'https://linkedin.com/company/fitcheckai',
-  ],
   contactPoint: {
     '@type': 'ContactPoint',
     contactType: 'Customer Support',
-    email: 'support@fitcheckaiapp.com',
+    email: 'info@fitcheckaiapp.com',
     availableLanguage: ['English'],
   },
 }
@@ -168,6 +163,47 @@ export function buildFaqSchema(faqs: Array<{ question: string; answer: string }>
         '@type': 'Answer',
         text: faq.answer,
       },
+    })),
+  }
+}
+
+export function buildHowToSchema({
+  name,
+  description,
+  steps,
+}: {
+  name: string
+  description: string
+  steps: Array<{ name: string; text: string; url?: string }>
+}) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'HowTo',
+    name,
+    description,
+    step: steps.map((step, index) => ({
+      '@type': 'HowToStep',
+      position: index + 1,
+      name: step.name,
+      text: step.text,
+      ...(step.url ? { url: step.url } : {}),
+    })),
+  }
+}
+
+export function buildFeatureItemListSchema(
+  items: Array<{ name: string; url: string; description?: string }>
+) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: 'FitCheck AI core features',
+    itemListElement: items.map((item, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: item.name,
+      url: item.url,
+      ...(item.description ? { description: item.description } : {}),
     })),
   }
 }

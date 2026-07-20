@@ -1,29 +1,39 @@
+import { Link } from 'react-router-dom'
 import { AnimatedSection } from './AnimatedSection'
 
 const steps = [
   {
+    id: 'step-photograph',
     verb: 'Photograph',
     title: 'Snap what you own',
     description:
       'Shoot singles or full hangs. FitCheck reads the image and files each piece for you.',
+    href: '/features/ai-wardrobe-extraction',
+    linkLabel: 'How extraction works',
   },
   {
+    id: 'step-catalog',
     verb: 'Catalog',
     title: 'Your closet, searchable',
     description:
       'Colors, categories, and styles land automatically so you stop hunting for that one shirt.',
+    href: '/features/wardrobe-analytics',
+    linkLabel: 'Wardrobe analytics',
   },
   {
+    id: 'step-wear',
     verb: 'Wear',
     title: 'Outfits that fit the day',
     description:
       'Get recommendations, try looks on, and plan the week without decision fatigue.',
+    href: '/features/outfit-recommendations',
+    linkLabel: 'Daily outfit ideas',
   },
 ]
 
 export default function HowItWorks() {
   return (
-    <section id="how-it-works" className="py-20 md:py-28 bg-white dark:bg-stone-950">
+    <section id="how-it-works" className="py-20 md:py-28 bg-stone-50 dark:bg-stone-900/40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <AnimatedSection>
           <div className="max-w-2xl mb-12 md:mb-16">
@@ -40,6 +50,7 @@ export default function HowItWorks() {
           {steps.map((step, index) => (
             <AnimatedSection key={step.verb} delay={index * 80} className="h-full">
               <div
+                id={step.id}
                 className={
                   index < steps.length - 1
                     ? 'h-full border-b md:border-b-0 md:border-r border-stone-200 dark:border-stone-800 p-7 md:p-9'
@@ -55,6 +66,12 @@ export default function HowItWorks() {
                 <p className="mt-3 text-sm md:text-[15px] text-stone-600 dark:text-stone-400 leading-relaxed">
                   {step.description}
                 </p>
+                <Link
+                  to={step.href}
+                  className="mt-4 inline-block text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+                >
+                  {step.linkLabel}
+                </Link>
               </div>
             </AnimatedSection>
           ))}
@@ -69,8 +86,16 @@ export default function HowItWorks() {
               loading="lazy"
             />
             <div className="absolute inset-0 bg-stone-950/20" />
-            <div className="absolute bottom-4 left-4 md:bottom-6 md:left-6 rounded-lg bg-white/95 dark:bg-stone-950/90 px-4 py-2.5 text-sm font-medium text-stone-900 dark:text-stone-50 border border-stone-200/60 dark:border-stone-800">
-              From catalog to wear in one flow
+            <div className="absolute bottom-4 left-4 md:bottom-6 md:left-6 flex flex-wrap items-center gap-3">
+              <div className="rounded-lg bg-white/95 dark:bg-stone-950/90 px-4 py-2.5 text-sm font-medium text-stone-900 dark:text-stone-50 border border-stone-200/60 dark:border-stone-800">
+                From catalog to wear in one flow
+              </div>
+              <a
+                href="#demo"
+                className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+              >
+                Try extraction free
+              </a>
             </div>
           </div>
         </AnimatedSection>

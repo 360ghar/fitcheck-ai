@@ -92,10 +92,11 @@ export function ExtractedItemCard({
   const isLowConfidence = item.confidence < 0.7
   const hasFailed = item.status === 'failed'
   const isGenerating = item.status === 'generating'
+  const isStudioReady = item.status === 'generated' && !!item.generatedImageUrl
   const hasDuplicates = duplicates.length > 0
   const isIncluded = item.includeInWardrobe !== false
   const occasionTags = item.occasion_tags || []
-  // Studio photo first; fall back to the uploaded photo while it generates.
+  // Studio photo first; fall back to crop / uploaded photo while it polishes.
   const imageSrc = item.generatedImageUrl || item.sourcePreviewUrl
 
   // Check for duplicates when item has name and category
@@ -202,12 +203,21 @@ export function ExtractedItemCard({
             </div>
           )}
 
-          {/* Studio photo is still rendering - show the source photo underneath
-              with a small indicator (decoupled generation). */}
+          {/* Studio photo still rendering — source/crop stays visible underneath */}
           {isGenerating && !item.generatedImageUrl && (
             <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-[11px] font-medium text-white">
               <Loader2 className="h-3 w-3 animate-spin" />
-              Generating photo…
+              Polishing photo…
+            </div>
+          )}
+          {isStudioReady && (
+            <div className="absolute bottom-2 left-2 rounded-md bg-black/55 px-2 py-1 text-[11px] font-medium text-white">
+              Ready
+            </div>
+          )}
+          {!isGenerating && !isStudioReady && !hasFailed && item.sourcePreviewUrl && (
+            <div className="absolute bottom-2 left-2 rounded-md bg-black/55 px-2 py-1 text-[11px] font-medium text-white">
+              Detected
             </div>
           )}
 

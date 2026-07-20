@@ -13,6 +13,7 @@ import {
   fileToBase64,
 } from '@/api/batch';
 import { compressImageFile } from '@/lib/image-compress';
+import { cropImageFromBoundingBox } from '@/lib/crop-from-bounding-box';
 import { normalizeUseCases } from '@/lib/use-cases';
 import type {
   BatchExtractionState,
@@ -39,12 +40,36 @@ const initialState: BatchExtractionState = {
   generationProgress: 0,
   currentBatch: 0,
   totalBatches: 0,
+  isGenerationRunning: false,
+  generationEtaSeconds: null,
   imagesCompleted: 0,
   imagesFailed: 0,
   itemsGenerated: 0,
   itemsFailed: 0,
+  generationTotalItems: 0,
   error: null,
 };
+
+/**
+ * Estimate remaining generation time from rolling average.
+ * Uses batch concurrency so parallel work is accounted for.
+ */
+function estimateGenerationEtaSeconds(
+  completedCount: number,
+  failedCount: number,
+  totalItems: number,
+  startedAtMs: number | null,
+  nowMs: number
+): number | null {
+  if (!startedAtMs || totalItems <= 0 || completedCount <= 0) return null;
+  const remaining = Math.max(0, totalItems - completedCount - failedCount);
+  if (remaining === 0) return 0;
+  const elapsed = Math.max(1, nowMs - startedAtMs);
+  // Wall-clock throughput already includes concurrency (items finished / elapsed).
+  // Do not multiply by wave count again — that underestimates remaining time.
+  const msPerItemWallClock = elapsed / completedCount;
+  return Math.max(1, Math.ceil((remaining * msPerItemWallClock) / 1000));
+}
 
 /**
  * Resolve UI step after items arrive or a job ends.
@@ -340,6 +365,71 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
   const jobIdRef = useRef<string | null>(null);
   // Guards reconcile polling against running twice.
   const reconcilingRef = useRef(false);
+  // Generation ETA: wall clock when generation_started fired.
+  const generationStartedAtRef = useRef<number | null>(null);
+  // Mirror of images for SSE handlers (setState updaters are not sync in React 18).
+  const imagesRef = useRef(state.images);
+  imagesRef.current = state.images;
+
+  /**
+   * Attach per-item crops from bounding boxes so review shows the right garment
+   * before studio photos arrive. Non-blocking: full source is used first, crops
+   * upgrade in place.
+   */
+  const upgradeItemCrops = useCallback(
+    async (imageId: string, items: DetectedItem[], sourcePreviewUrl: string) => {
+      if (!sourcePreviewUrl || items.length === 0) return;
+
+      const cropped = await Promise.all(
+        items.map(async (item) => {
+          if (!item.boundingBox) {
+            return { tempId: item.tempId, sourcePreviewUrl };
+          }
+          try {
+            const cropUrl = await cropImageFromBoundingBox(
+              sourcePreviewUrl,
+              item.boundingBox,
+              { paddingFraction: 0.12 }
+            );
+            return { tempId: item.tempId, sourcePreviewUrl: cropUrl };
+          } catch {
+            return { tempId: item.tempId, sourcePreviewUrl };
+          }
+        })
+      );
+
+      setState((prev) => {
+        const cropById = new Map(cropped.map((c) => [c.tempId, c.sourcePreviewUrl]));
+        return {
+          ...prev,
+          allDetectedItems: prev.allDetectedItems.map((item) => {
+            const crop = cropById.get(item.tempId);
+            if (!crop || item.generatedImageUrl) return item;
+            // Don't overwrite a crop we already applied.
+            if (item.sourcePreviewUrl && item.sourcePreviewUrl !== sourcePreviewUrl) {
+              return item;
+            }
+            return { ...item, sourcePreviewUrl: crop };
+          }),
+          images: prev.images.map((img) => {
+            if (img.imageId !== imageId || !img.detectedItems) return img;
+            return {
+              ...img,
+              detectedItems: img.detectedItems.map((item) => {
+                const crop = cropById.get(item.tempId);
+                if (!crop) return item;
+                if (item.sourcePreviewUrl && item.sourcePreviewUrl !== sourcePreviewUrl) {
+                  return item;
+                }
+                return { ...item, sourcePreviewUrl: crop };
+              }),
+            };
+          }),
+        };
+      });
+    },
+    []
+  );
 
   /**
    * Handle SSE events
@@ -367,16 +457,24 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
             convertToDetectedItem(item, data.image_id)
           );
 
+          // Resolve preview outside setState — React 18 does not run updaters
+          // synchronously, so reading inside the updater then using it after
+          // would leave sourcePreviewUrl undefined and skip bbox crops.
+          const sourcePreviewUrl = imagesRef.current.find(
+            (img) => img.imageId === data.image_id
+          )?.previewUrl;
+
           setState((prev) => {
             // Attach the uploaded photo's preview so review can show each item
             // before its studio photo is generated (decoupling).
-            const sourcePreviewUrl = prev.images.find(
-              (img) => img.imageId === data.image_id
-            )?.previewUrl;
-            const newItems = baseItems.map((item) => ({ ...item, sourcePreviewUrl }));
+            const newItems = baseItems.map((item) => ({
+              ...item,
+              sourcePreviewUrl,
+            }));
             // Upsert by tempId so SSE reconnect event-history replay does not
             // duplicate items (mid-generation save would otherwise persist them).
             const allDetectedItems = upsertDetectedItems(prev.allDetectedItems, newItems);
+            const hasItems = allDetectedItems.length > 0;
             return {
               ...prev,
               images: prev.images.map((img) =>
@@ -387,8 +485,15 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
               allDetectedItems,
               imagesCompleted: data.completed_count,
               extractionProgress: (data.completed_count / data.total_images) * 100,
+              // Review as soon as any items exist — do not wait for all images
+              // or for studio generation.
+              step: resolveStepWithItems(prev.step, hasItems, 'in_flight'),
             };
           });
+
+          if (sourcePreviewUrl && baseItems.length > 0) {
+            void upgradeItemCrops(data.image_id, baseItems, sourcePreviewUrl);
+          }
           break;
         }
 
@@ -420,7 +525,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
               step: resolveStepWithItems(prev.step, hasItems, 'terminal'),
               error:
                 !hasItems && prev.step !== 'saving'
-                  ? 'No items detected in your photos. Try clearer images.'
+                  ? 'No items found. Try a clearer, well-lit photo.'
                   : prev.error,
             };
           });
@@ -429,25 +534,35 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
         case 'generation_started': {
           const data = event.data as GenerationStartedData;
           totalItemsRef.current = data.total_items;
+          generationStartedAtRef.current = Date.now();
 
-          setState((prev) => ({
-            ...prev,
-            // Don't yank the user out of review or saving (decoupling + replay):
-            // generation runs in the background once results are showing.
-            step:
-              prev.step === 'review' || prev.step === 'saving'
-                ? prev.step
-                : 'generating',
-            totalBatches: data.total_batches,
-            currentBatch: 1,
-            // Mark items as generating, preserving deletes and any item that
-            // already has a generated image.
-            allDetectedItems: prev.allDetectedItems.map((item) =>
-              item.status === 'deleted' || item.status === 'generated'
-                ? item
-                : { ...item, status: 'generating' as const }
-            ),
-          }));
+          setState((prev) => {
+            const hasItems = prev.allDetectedItems.length > 0;
+            // Prefer review whenever items exist. Only use the full generating
+            // screen when there is nothing to review yet (rare race).
+            let nextStep = prev.step;
+            if (prev.step !== 'review' && prev.step !== 'saving') {
+              nextStep = hasItems ? 'review' : 'generating';
+            }
+            return {
+              ...prev,
+              step: nextStep,
+              totalBatches: data.total_batches,
+              currentBatch: 1,
+              isGenerationRunning: true,
+              generationEtaSeconds: null,
+              generationTotalItems: data.total_items,
+              // Mark items as generating, preserving terminal statuses
+              // (deleted / generated / failed) so SSE replay does not revive them.
+              allDetectedItems: prev.allDetectedItems.map((item) =>
+                item.status === 'deleted' ||
+                item.status === 'generated' ||
+                item.status === 'failed'
+                  ? item
+                  : { ...item, status: 'generating' as const }
+              ),
+            };
+          });
           break;
         }
 
@@ -456,6 +571,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           setState((prev) => ({
             ...prev,
             currentBatch: data.batch_number,
+            isGenerationRunning: true,
           }));
           break;
         }
@@ -463,41 +579,87 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
         case 'item_generation_complete': {
           const data = event.data as ItemGenerationCompleteData;
           totalItemsRef.current = data.total_items;
+          const now = Date.now();
+          const eta = estimateGenerationEtaSeconds(
+            data.completed_count,
+            0,
+            data.total_items,
+            generationStartedAtRef.current,
+            now
+          );
 
-          setState((prev) => ({
-            ...prev,
-            allDetectedItems: prev.allDetectedItems.map((item) =>
-              item.tempId === data.temp_id && item.status !== 'deleted'
-                ? {
-                    ...item,
-                    status: 'generated' as const,
-                    generatedImageUrl: `data:image/png;base64,${data.generated_image_base64}`,
-                  }
-                : item
-            ),
-            itemsGenerated: data.completed_count,
-            generationProgress: (data.completed_count / data.total_items) * 100,
-          }));
+          setState((prev) => {
+            const itemsFailed = prev.itemsFailed;
+            const refinedEta = estimateGenerationEtaSeconds(
+              data.completed_count,
+              itemsFailed,
+              data.total_items,
+              generationStartedAtRef.current,
+              now
+            );
+            const done =
+              data.completed_count + itemsFailed >= data.total_items && data.total_items > 0;
+            return {
+              ...prev,
+              allDetectedItems: prev.allDetectedItems.map((item) =>
+                item.tempId === data.temp_id && item.status !== 'deleted'
+                  ? {
+                      ...item,
+                      status: 'generated' as const,
+                      generatedImageUrl: `data:image/png;base64,${data.generated_image_base64}`,
+                    }
+                  : item
+              ),
+              itemsGenerated: data.completed_count,
+              generationProgress: (data.completed_count / data.total_items) * 100,
+              generationTotalItems: data.total_items,
+              generationEtaSeconds: done ? 0 : refinedEta ?? eta,
+              isGenerationRunning: !done,
+              // Stay on review if items exist (replay / race safety).
+              step:
+                prev.step === 'saving'
+                  ? 'saving'
+                  : prev.allDetectedItems.length > 0 || data.completed_count > 0
+                    ? 'review'
+                    : prev.step,
+            };
+          });
           break;
         }
 
         case 'item_generation_failed': {
           const data = event.data as ItemGenerationFailedData;
-          setState((prev) => ({
-            ...prev,
-            allDetectedItems: prev.allDetectedItems.map((item) =>
-              item.tempId === data.temp_id
-                ? {
-                    ...item,
-                    status: 'failed' as const,
-                    generationError: data.error,
-                  }
-                : item
-            ),
-            itemsFailed: data.failed_count,
-            generationProgress:
-              ((data.completed_count + data.failed_count) / data.total_items) * 100,
-          }));
+          const now = Date.now();
+
+          setState((prev) => {
+            const completed = data.completed_count ?? prev.itemsGenerated;
+            const failed = data.failed_count;
+            const total = data.total_items ?? prev.generationTotalItems;
+            const done = total > 0 && completed + failed >= total;
+            const eta = estimateGenerationEtaSeconds(
+              completed,
+              failed,
+              total,
+              generationStartedAtRef.current,
+              now
+            );
+            return {
+              ...prev,
+              allDetectedItems: prev.allDetectedItems.map((item) =>
+                item.tempId === data.temp_id && item.status !== 'deleted'
+                  ? {
+                      ...item,
+                      status: 'failed' as const,
+                      generationError: data.error,
+                    }
+                  : item
+              ),
+              itemsFailed: failed,
+              generationProgress: total > 0 ? ((completed + failed) / total) * 100 : prev.generationProgress,
+              generationEtaSeconds: done ? 0 : eta,
+              isGenerationRunning: !done,
+            };
+          });
           break;
         }
 
@@ -505,6 +667,8 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           setState((prev) => ({
             ...prev,
             generationProgress: 100,
+            isGenerationRunning: false,
+            generationEtaSeconds: 0,
           }));
           break;
 
@@ -538,6 +702,8 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
               ...prev,
               step: resolveStepWithItems(prev.step, merged.length > 0, 'terminal'),
               generationProgress: 100,
+              isGenerationRunning: false,
+              generationEtaSeconds: 0,
               allDetectedItems: merged,
               images: prev.images.map((image) => ({
                 ...image,
@@ -561,15 +727,19 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
               prev.allDetectedItems.length > 0,
               'terminal'
             ),
+            isGenerationRunning: false,
             error: data.error || 'Job failed',
           }));
           break;
         }
 
         case 'job_cancelled':
+          generationStartedAtRef.current = null;
           setState((prev) => ({
             ...prev,
             step: 'select',
+            isGenerationRunning: false,
+            generationEtaSeconds: null,
             error: 'Job was cancelled',
           }));
           break;
@@ -579,7 +749,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           break;
       }
     },
-    []
+    [upgradeItemCrops]
   );
 
   /**
@@ -616,6 +786,8 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
               allDetectedItems: merged,
               step: resolveStepWithItems(prev.step, hasItems, 'terminal'),
               generationProgress: 100,
+              isGenerationRunning: false,
+              generationEtaSeconds: 0,
               error: null,
             };
           }
@@ -624,6 +796,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
               ...prev,
               allDetectedItems: merged,
               step: resolveStepWithItems(prev.step, hasItems, 'terminal'),
+              isGenerationRunning: false,
               error: status.error || 'Job failed',
             };
           }
@@ -634,6 +807,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
             ...prev,
             allDetectedItems: merged,
             step: resolveStepWithItems(prev.step, hasItems, 'in_flight'),
+            isGenerationRunning: status.status === 'generating',
             error: hasItems ? null : prev.error,
           };
         });
@@ -648,6 +822,8 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
             return {
               ...prev,
               step: resolveStepWithItems(prev.step, hasItems, 'terminal'),
+              isGenerationRunning: false,
+              generationEtaSeconds: hasItems ? 0 : null,
               error: hasItems ? null : 'Connection was lost. Try again.',
             };
           });
@@ -666,6 +842,8 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           return {
             ...prev,
             step: resolveStepWithItems(prev.step, hasItems, 'terminal'),
+            isGenerationRunning: false,
+            generationEtaSeconds: hasItems ? 0 : null,
             error: hasItems ? prev.error : 'Connection lost while processing.',
           };
         });
@@ -749,10 +927,21 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
     if (state.images.length === 0) return;
 
     reconcilingRef.current = false;
+    generationStartedAtRef.current = null;
     setState((prev) => ({
       ...prev,
       step: 'uploading',
       uploadProgress: 0,
+      extractionProgress: 0,
+      generationProgress: 0,
+      isGenerationRunning: false,
+      generationEtaSeconds: null,
+      generationTotalItems: 0,
+      itemsGenerated: 0,
+      itemsFailed: 0,
+      imagesCompleted: 0,
+      imagesFailed: 0,
+      allDetectedItems: [],
       error: null,
     }));
 
@@ -811,6 +1000,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
 
     jobIdRef.current = null;
     reconcilingRef.current = false;
+    generationStartedAtRef.current = null;
     setState(initialState);
   }, [state.jobId, state.images, disconnect]);
 
@@ -826,6 +1016,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
 
     jobIdRef.current = null;
     reconcilingRef.current = false;
+    generationStartedAtRef.current = null;
     setState(initialState);
   }, [state.jobId, state.images, disconnect]);
 

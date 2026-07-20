@@ -9,6 +9,8 @@ export {
   HowToJsonLd,
   FaqJsonLd,
   buildFaqSchema,
+  buildHowToSchema,
+  buildFeatureItemListSchema,
 } from './JsonLd'
 export { SeoPageLayout } from './SeoPageLayout'
 export type { SeoPageContent } from './SeoPageLayout'

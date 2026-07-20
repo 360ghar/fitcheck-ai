@@ -15,6 +15,7 @@ import {
   useSidebar,
 } from '@/components/sidebar'
 import { BottomNav } from '@/components/navigation/BottomNav'
+import { JobPill } from '@/components/jobs'
 
 function AppLayoutContent() {
   const { isCollapsed } = useSidebar()
@@ -51,6 +52,9 @@ function AppLayoutContent() {
           © {new Date().getFullYear()} FitCheck AI. All rights reserved.
         </footer>
       </main>
+
+      {/* Background AI job status (wardrobe upload, generate look, etc.) */}
+      <JobPill />
 
       {/* Bottom navigation for mobile */}
       <SidebarMobile />

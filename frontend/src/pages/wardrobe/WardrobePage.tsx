@@ -47,7 +47,8 @@ import {
   deleteItem as apiDeleteItem,
   updateItem as apiUpdateItem,
 } from '@/api/items'
-import type { Item } from '@/types'
+import type { BatchJobUiStatus, Item } from '@/types'
+import { useJobUiStore } from '@/stores/jobUiStore'
 
 export default function WardrobePage() {
   const { id } = useParams()
@@ -72,6 +73,9 @@ export default function WardrobePage() {
 
   // Local state
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const setJob = useJobUiStore((s) => s.setJob)
+  const clearJob = useJobUiStore((s) => s.clearJob)
+  const lastBatchStatusRef = useRef<BatchJobUiStatus | null>(null)
   const [selectedItemDetail, setSelectedItemDetail] = useState<Item | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const favoritingIdsRef = useRef<Set<string>>(new Set())
@@ -97,9 +101,46 @@ export default function WardrobePage() {
 
   const { toast } = useToast()
 
+  const publishedBatchJobIdRef = useRef<string | null>(null)
+
+  const publishBatchJob = useCallback(
+    (status: BatchJobUiStatus | null, dialogOpen: boolean) => {
+      lastBatchStatusRef.current = status
+      if (!status) {
+        if (publishedBatchJobIdRef.current) {
+          clearJob(publishedBatchJobIdRef.current)
+          publishedBatchJobIdRef.current = null
+        }
+        return
+      }
+      const jobId = status.jobId || 'batch-upload'
+      // AppLayout JobPill is global — hide while this dialog owns the UI.
+      if (dialogOpen) {
+        clearJob(jobId)
+        // Keep published id so we can restore when dialog closes
+        publishedBatchJobIdRef.current = jobId
+        return
+      }
+      publishedBatchJobIdRef.current = jobId
+      setJob({
+        id: jobId,
+        label: status.label,
+        isActive: status.isProcessing || status.isGenerationRunning,
+        etaSeconds: status.generationEtaSeconds,
+        href: '/wardrobe?action=add',
+        onOpen: () => setIsUploadModalOpen(true),
+      })
+    },
+    [clearJob, setJob]
+  )
+
   // ============================================================================
   // EFFECTS
   // ============================================================================
+
+  useEffect(() => {
+    publishBatchJob(lastBatchStatusRef.current, isUploadModalOpen)
+  }, [isUploadModalOpen, publishBatchJob])
 
   useEffect(() => {
     const action = searchParams.get('action')
@@ -343,6 +384,11 @@ export default function WardrobePage() {
       })
     }
 
+    if (publishedBatchJobIdRef.current) {
+      clearJob(publishedBatchJobIdRef.current)
+      publishedBatchJobIdRef.current = null
+    }
+    lastBatchStatusRef.current = null
     setIsUploadModalOpen(false)
   }
 
@@ -449,11 +495,15 @@ export default function WardrobePage() {
       ) : filteredItems.length === 0 ? (
         <div className="text-center py-12 bg-card rounded-lg shadow">
           <Shirt className="mx-auto h-12 w-12 md:h-16 md:w-16 text-muted-foreground" />
-          <h3 className="mt-4 text-lg font-medium text-foreground">No items found</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <h3 className="mt-4 text-lg font-medium text-foreground">
+            {filters.search || filters.category !== 'all' || filters.condition !== 'all' || filters.occasion || filters.isFavorite
+              ? 'No items match'
+              : 'Your wardrobe is empty'}
+          </h3>
+          <p className="mt-2 text-sm text-muted-foreground max-w-sm mx-auto">
             {filters.search || filters.category !== 'all' || filters.condition !== 'all' || filters.occasion || filters.isFavorite
               ? 'Try adjusting your filters or search query'
-              : 'Add your first item to get started'}
+              : 'Upload photos — AI finds each item so you can build outfits the same day.'}
           </p>
           {filters.search || filters.category !== 'all' || filters.condition !== 'all' || filters.occasion || filters.isFavorite ? (
             <Button className="mt-6" variant="outline" onClick={handleResetFilters}>
@@ -462,7 +512,7 @@ export default function WardrobePage() {
           ) : (
             <Button className="mt-6" onClick={() => setIsUploadModalOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Add First Item
+              Upload photos
             </Button>
           )}
         </div>
@@ -505,6 +555,7 @@ export default function WardrobePage() {
         onClose={() => setIsUploadModalOpen(false)}
         onUploadComplete={handleUploadComplete}
         onRequestOpen={() => setIsUploadModalOpen(true)}
+        onJobStatusChange={(status) => publishBatchJob(status, isUploadModalOpen)}
       />
 
       <ItemDetailModal

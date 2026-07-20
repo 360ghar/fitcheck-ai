@@ -227,7 +227,7 @@ export function TryOnDemo() {
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
                 onClick={() => setShowLoginModal(true)}
               >
-                Get Unlimited Access
+                Save & continue free
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </div>
@@ -249,7 +249,7 @@ export function TryOnDemo() {
       <LoginPromptModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
-        feature="get unlimited try-ons"
+        feature="save try-ons and keep building outfits free"
       />
     </GlassCard>
   )

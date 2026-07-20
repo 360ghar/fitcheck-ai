@@ -5,10 +5,13 @@ import { Shirt, Mail, Phone } from 'lucide-react'
 const footerLinks = {
   Product: [
     { name: 'All features', href: '/features' },
+    { name: 'Try demo', href: '/#demo' },
+    { name: 'Pricing', href: '/#pricing' },
     { name: 'AI Wardrobe Extraction', href: '/features/ai-wardrobe-extraction' },
     { name: 'Virtual Try-On', href: '/features/virtual-try-on' },
     { name: 'AI Photoshoot', href: '/features/ai-photoshoot-generator' },
     { name: 'Outfit Recommendations', href: '/features/outfit-recommendations' },
+    { name: 'Wardrobe Analytics', href: '/features/wardrobe-analytics' },
     { name: 'FAQ', href: '/faq' },
     {
       name: 'Android app',
@@ -19,13 +22,17 @@ const footerLinks = {
     { name: 'Blog', href: '/blog' },
     { name: 'What to wear today', href: '/guides/what-to-wear-today' },
     { name: 'Digitize your wardrobe', href: '/guides/how-to-digitize-your-wardrobe' },
+    { name: 'Cost per wear', href: '/guides/cost-per-wear-calculator-explained' },
     { name: 'Best virtual closet apps', href: '/best/virtual-closet-apps' },
+    { name: 'FitCheck vs Acloset', href: '/compare/fitcheck-vs-acloset' },
     { name: 'Acloset alternatives', href: '/alternatives/acloset-alternatives' },
   ],
   Company: [
     { name: 'About', href: '/about' },
     { name: 'For professionals', href: '/for/busy-professionals' },
+    { name: 'For creators', href: '/for/content-creators' },
     { name: 'Festive & wedding', href: '/for/festive-and-wedding-outfits' },
+    { name: 'Support', href: '/support' },
     { name: 'Contact', href: 'mailto:info@fitcheckaiapp.com' },
   ],
   Legal: [
@@ -96,12 +103,22 @@ export default function Footer() {
               <ul className="space-y-2.5 text-sm">
                 {links.map((link) => (
                   <li key={link.name}>
-                    {link.href.startsWith('/') ? (
+                    {link.href.startsWith('/#') ? (
+                      <a href={link.href} className="hover:text-stone-100 transition-colors">
+                        {link.name}
+                      </a>
+                    ) : link.href.startsWith('/') ? (
                       <Link to={link.href} className="hover:text-stone-100 transition-colors">
                         {link.name}
                       </Link>
                     ) : (
-                      <a href={link.href} className="hover:text-stone-100 transition-colors">
+                      <a
+                        href={link.href}
+                        className="hover:text-stone-100 transition-colors"
+                        {...(link.href.startsWith('http')
+                          ? { target: '_blank', rel: 'noopener noreferrer' }
+                          : {})}
+                      >
                         {link.name}
                       </a>
                     )}

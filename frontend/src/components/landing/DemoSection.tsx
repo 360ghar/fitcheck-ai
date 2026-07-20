@@ -17,7 +17,7 @@ export default function DemoSection() {
               Try it without signing up
             </h2>
             <p className="mt-4 text-base md:text-lg text-stone-600 dark:text-stone-400 leading-relaxed">
-              Run extraction, try-on, and photoshoot demos on real photos. Limits apply; create a free account to keep your work.
+              Run extraction, try-on, and photoshoot demos on real photos. About 3 extraction, 2 try-on, and 1 photoshoot demo per day per IP. Create a free account to save results and keep building your wardrobe.
             </p>
           </div>
         </AnimatedSection>

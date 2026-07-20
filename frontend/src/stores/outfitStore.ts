@@ -259,8 +259,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         hasMore: response.has_next,
         page: newPage,
         isLoading: false,
-        // Clear sticky failed/pending auto-generation badges on full refresh
-        ...(refresh || newPage === 1 ? { generatingOutfits: new Map() } : {}),
+        // Keep generatingOutfits across refresh so mid-flight auto-gen badges
+        // and job pills are not wiped while AI is still running.
       });
 
       // Apply filters and sort after outfits are set
@@ -627,13 +627,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 
       set({
         generationId: response.generation_id,
-        generationStatus:
-          response.status === 'pending' ||
-          response.status === 'processing' ||
-          response.status === 'completed' ||
-          response.status === 'failed'
-            ? response.status
-            : 'processing',
+        // Client still does the heavy AI call next — treat as processing
+        generationStatus: 'processing',
       });
 
       // Do not poll generation status in parallel: this path generates and
@@ -664,6 +659,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       }
 
       // Generate outfit using backend AI service with retry
+      set({ generationStatus: 'processing' });
       const aiResult = await withRetry(
         () =>
           generateOutfit(promptItems, {
@@ -737,9 +733,21 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         generationStatus: 'completed',
         isGenerating: false,
       });
+      try {
+        const { useJobUiStore } = await import('@/stores/jobUiStore');
+        useJobUiStore.getState().clearJob('outfit-generate');
+      } catch {
+        // ignore
+      }
     } catch (error) {
       const apiError = getApiError(error);
       set({ error: apiError, isGenerating: false, generationStatus: 'failed' });
+      try {
+        const { useJobUiStore } = await import('@/stores/jobUiStore');
+        useJobUiStore.getState().clearJob('outfit-generate');
+      } catch {
+        // ignore
+      }
     }
   },
 
@@ -802,6 +810,22 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         const newMap = new Map(state.generatingOutfits);
         newMap.set(outfitId, { status: 'processing' });
         set({ generatingOutfits: newMap });
+
+        // Surface pill even if OutfitsPage effect has not run yet
+        try {
+          const outfit = state.outfits.find((o) => o.id === outfitId);
+          const { useJobUiStore } = await import('@/stores/jobUiStore');
+          useJobUiStore.getState().setJob({
+            id: 'outfit-generate',
+            label: outfit?.name
+              ? `Generating look · ${outfit.name}`
+              : 'Generating outfit look…',
+            isActive: true,
+            href: '/outfits',
+          });
+        } catch {
+          // ignore
+        }
 
         // Get outfit data
         let outfit = state.outfits.find((o) => o.id === outfitId);
@@ -888,6 +912,14 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
           generatingOutfits: finalMap,
         });
 
+        // Clear pill if OutfitsPage is not mounted (user left after create).
+        try {
+          const { useJobUiStore } = await import('@/stores/jobUiStore');
+          useJobUiStore.getState().clearJob('outfit-generate');
+        } catch {
+          // ignore
+        }
+
       } catch (error) {
         console.error('Auto generation failed for outfit', outfitId, error);
         // Mark as failed in the map
@@ -898,6 +930,12 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
           error: error instanceof Error ? error.message : 'Generation failed',
         });
         set({ generatingOutfits: failedMap });
+        try {
+          const { useJobUiStore } = await import('@/stores/jobUiStore');
+          useJobUiStore.getState().clearJob('outfit-generate');
+        } catch {
+          // ignore
+        }
       }
     })();
   },

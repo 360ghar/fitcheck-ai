@@ -21,7 +21,7 @@ const SITE = 'https://fitcheckaiapp.com'
 const OG = `${SITE}/og-default.jpg`
 
 const ROUTES = [
-  { path: '/', title: 'AI Virtual Closet & Outfit Planner | FitCheck AI', description: 'Photograph your clothes. Get AI outfit ideas, virtual try-on, and photoshoots from your real wardrobe. Free digital closet — use what you already own.' },
+  { path: '/', title: 'AI Virtual Closet & Outfit Planner | FitCheck AI', description: 'AI virtual closet app: photograph clothes, get weather-aware outfit ideas, virtual try-on, and AI photoshoots. Free digital wardrobe on web and Android.' },
   { path: '/features', title: 'Features | AI Wardrobe, Try-On & Outfit Planner | FitCheck AI', description: 'Explore AI wardrobe extraction, virtual try-on, outfit recommendations, photoshoot generator, and wardrobe analytics.' },
   { path: '/features/ai-wardrobe-extraction', title: 'AI Wardrobe Extraction | Digitize Your Closet in Minutes', description: 'Upload photos of your clothes. AI detects items, colors, and categories so you build a digital wardrobe without manual tagging.' },
   { path: '/features/virtual-try-on', title: 'AI Virtual Try-On | See Outfits on You Before You Wear Them', description: 'Visualize any outfit from your wardrobe on your body with AI virtual try-on. Mix pieces, save looks, shop with confidence.' },
@@ -31,6 +31,7 @@ const ROUTES = [
   { path: '/about', title: 'About FitCheck AI | AI Wardrobe & Style App', description: 'FitCheck AI helps you digitize your closet, plan outfits, and look better with less decision fatigue. Learn our mission and product story.' },
   { path: '/faq', title: 'FAQ | FitCheck AI Virtual Closet & Outfit Planner', description: 'Answers about AI wardrobe extraction, virtual try-on, photoshoots, pricing, privacy, and how FitCheck AI organizes your clothes.' },
   { path: '/blog', title: 'Style & Wardrobe Blog | FitCheck AI', description: 'Guides on digital closets, AI outfit planning, virtual try-on, cost-per-wear, and getting more from clothes you own.' },
+  { path: '/support', title: 'Support | FitCheck AI', description: 'Contact FitCheck AI support, report content or abuse, and find privacy and account help.' },
   { path: '/privacy', title: 'Privacy Policy | FitCheck AI', description: 'How FitCheck AI collects, stores, and protects your wardrobe photos and account data.' },
   { path: '/terms', title: 'Terms of Service | FitCheck AI', description: 'Terms governing use of the FitCheck AI web app, mobile apps, and related services.' },
   { path: '/best/virtual-closet-apps', title: 'Best Virtual Closet Apps in 2026 | FitCheck AI', description: 'Compare the best virtual closet and digital wardrobe apps. See which AI outfit planners help you wear more of what you own.' },

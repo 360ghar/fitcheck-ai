@@ -109,7 +109,7 @@ export function BatchImageSelector({
             or click to browse
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            Supports PNG, JPG, WEBP up to 10MB each
+            Supports PNG, JPG, WEBP up to 10MB each. We find items first, then polish studio photos in the background.
           </p>
           {hasImages && (
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">

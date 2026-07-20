@@ -388,8 +388,8 @@ export default function RecommendationsPage() {
                 <EmptyState
                   icon={Shirt}
                   title="Add clothes first"
-                  description="Digitize a few wardrobe items to get daily outfit ideas."
-                  actionLabel="Go to wardrobe"
+                  description="Upload a few photos — AI catalogs each item, then we can suggest what to wear."
+                  actionLabel="Upload photos"
                   onAction={() => { window.location.href = '/wardrobe?action=add' }}
                 />
               ) : (

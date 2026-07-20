@@ -32,7 +32,7 @@ import { SocialImportUrlPane } from './SocialImportUrlPane';
 import { SocialImportAuthPrompt } from './SocialImportAuthPrompt';
 import { SocialImportQueueReview } from './SocialImportQueueReview';
 import { SocialImportProgress } from './SocialImportProgress';
-import type { DetectedItem, ItemCreate } from '@/types';
+import type { BatchJobUiStatus, DetectedItem, ItemCreate } from '@/types';
 
 const BATCH_WIZARD_STEPS = [
   { id: 'select', label: 'Select' },
@@ -68,6 +68,86 @@ interface BatchExtractionFlowProps {
   onRequestOpen?: () => void;
   /** Whether the dialog is open */
   isOpen?: boolean;
+  /** Fired when background job status changes (for job pill outside the dialog) */
+  onJobStatusChange?: (status: BatchJobUiStatus | null) => void;
+}
+
+function formatEta(seconds: number | null): string | null {
+  if (seconds == null) return null;
+  if (seconds <= 0) return null;
+  if (seconds < 10) return 'Almost done';
+  if (seconds < 60) return `About ${seconds}s left`;
+  const mins = Math.ceil(seconds / 60);
+  return mins === 1 ? 'About 1 min left' : `About ${mins} min left`;
+}
+
+function buildJobUiStatus(params: {
+  jobId: string | null;
+  step: string;
+  isProcessing: boolean;
+  isGenerationRunning: boolean;
+  imagesCompleted: number;
+  imagesTotal: number;
+  itemsGenerated: number;
+  itemsFailed: number;
+  generationTotalItems: number;
+  generationEtaSeconds: number | null;
+  itemCount: number;
+  extractionProgress: number;
+}): BatchJobUiStatus {
+  const {
+    jobId,
+    step,
+    isProcessing,
+    isGenerationRunning,
+    imagesCompleted,
+    imagesTotal,
+    itemsGenerated,
+    itemsFailed,
+    generationTotalItems,
+    generationEtaSeconds,
+    itemCount,
+    extractionProgress,
+  } = params;
+
+  // Early review promote can set step=review while images are still extracting.
+  const stillExtracting =
+    extractionProgress < 100 && imagesTotal > 0 && imagesCompleted < imagesTotal;
+
+  let label = 'Working…';
+  if (step === 'uploading') {
+    label = 'Uploading photos…';
+  } else if (step === 'extracting' || (step === 'review' && stillExtracting && !isGenerationRunning)) {
+    label =
+      imagesTotal > 0
+        ? `Analyzing ${imagesCompleted}/${imagesTotal}`
+        : 'Analyzing photos…';
+  } else if (step === 'generating' || (isGenerationRunning && step === 'review')) {
+    const total = generationTotalItems || itemCount;
+    label =
+      total > 0
+        ? `Studio photos ${itemsGenerated}/${total}`
+        : 'Polishing studio photos…';
+  } else if (step === 'review') {
+    label = itemCount > 0 ? `Ready · Review ${itemCount} items` : 'Ready · Review';
+  } else if (step === 'saving') {
+    label = 'Saving to wardrobe…';
+  }
+
+  return {
+    jobId,
+    step: step as BatchJobUiStatus['step'],
+    isProcessing,
+    isGenerationRunning,
+    imagesCompleted,
+    imagesTotal,
+    itemsGenerated,
+    itemsFailed,
+    itemsTotal: generationTotalItems || itemCount,
+    generationEtaSeconds,
+    itemCount,
+    label,
+  };
 }
 
 // ============================================================================
@@ -108,6 +188,7 @@ export function BatchExtractionFlow({
   onClose,
   onRequestOpen,
   isOpen = true,
+  onJobStatusChange,
 }: BatchExtractionFlowProps) {
   // Use the batch extraction hook
   const {
@@ -126,6 +207,10 @@ export function BatchExtractionFlow({
 
   const { toast } = useToast();
   const backgroundedRef = useRef(false);
+  const notifiedReadyRef = useRef(false);
+  // Track step transitions so we only auto-reopen when first entering review,
+  // not when the user deliberately closes an already-open review dialog.
+  const prevStepRef = useRef(state.step);
   const socialImport = useSocialImportQueue();
   const socialImportEnabled = import.meta.env.VITE_ENABLE_SOCIAL_IMPORT === 'true';
   const [inputMode, setInputMode] = useState<'upload' | 'social'>('upload');
@@ -134,14 +219,43 @@ export function BatchExtractionFlow({
   const [savingProgress, setSavingProgress] = useState(0);
   const [regeneratingItemId, setRegeneratingItemId] = useState<string | null>(null);
   const [isSavePending, setIsSavePending] = useState(false);
-  const isBatchProcessing = ['uploading', 'extracting', 'generating', 'saving'].includes(state.step);
+
+  // Extraction may still be running after early promote to review.
+  const isStillExtracting =
+    state.jobId != null &&
+    state.step === 'review' &&
+    state.extractionProgress < 100 &&
+    state.images.length > 0 &&
+    state.imagesCompleted + state.imagesFailed < state.images.length;
+
+  // Unsaved review results must soft-close (preserve state + job pill).
+  const hasReviewItems =
+    state.step === 'review' &&
+    state.allDetectedItems.some((i) => i.status !== 'deleted');
+
+  // Processing includes: classic process steps, gen during review, early review
+  // while more images extract, and unsaved review (so close never hard-resets).
+  const isBatchProcessing =
+    ['uploading', 'extracting', 'generating', 'saving'].includes(state.step) ||
+    state.isGenerationRunning ||
+    isStillExtracting ||
+    hasReviewItems;
   const isSocialProcessing =
     !!socialImport.state.jobId &&
     !['completed', 'cancelled', 'failed'].includes(socialImport.state.status || '');
   const isProcessing = isBatchProcessing || isSocialProcessing;
+  const isActivelyWorking =
+    ['uploading', 'extracting', 'generating', 'saving'].includes(state.step) ||
+    state.isGenerationRunning ||
+    isStillExtracting ||
+    isSocialProcessing;
   const shouldReopenForSocialAction =
     !!socialImport.state.job &&
     (socialImport.state.authRequired || !!socialImport.state.job.awaiting_review_photo);
+
+  // Show full generating screen only when there is nothing to review yet.
+  const showBlockingGeneration =
+    state.step === 'generating' && state.allDetectedItems.length === 0;
 
   useEffect(() => {
     if (isOpen) {
@@ -150,11 +264,100 @@ export function BatchExtractionFlow({
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen && (state.step === 'review' || shouldReopenForSocialAction) && backgroundedRef.current) {
+    const enteredReview =
+      state.step === 'review' && prevStepRef.current !== 'review';
+    prevStepRef.current = state.step;
+
+    // Auto-reopen only when review first becomes available (or social needs action),
+    // not every time the user soft-closes while already on review.
+    if (
+      !isOpen &&
+      backgroundedRef.current &&
+      (shouldReopenForSocialAction || enteredReview)
+    ) {
       backgroundedRef.current = false;
       onRequestOpen?.();
     }
   }, [isOpen, onRequestOpen, shouldReopenForSocialAction, state.step]);
+
+  // Publish compact status for the wardrobe job pill.
+  useEffect(() => {
+    if (!onJobStatusChange) return;
+
+    // Idle / reset
+    if (state.step === 'select' && !state.jobId) {
+      onJobStatusChange(null);
+      return;
+    }
+
+    // Only surface pill-worthy states (in progress, or review ready to open)
+    const shouldShow =
+      isBatchProcessing ||
+      state.step === 'review' ||
+      state.step === 'saving' ||
+      state.step === 'extracting' ||
+      state.step === 'uploading' ||
+      state.step === 'generating';
+
+    if (!shouldShow) {
+      onJobStatusChange(null);
+      return;
+    }
+
+    onJobStatusChange(
+      buildJobUiStatus({
+        jobId: state.jobId,
+        step: state.step,
+        isProcessing: isActivelyWorking,
+        isGenerationRunning: state.isGenerationRunning,
+        imagesCompleted: state.imagesCompleted,
+        imagesTotal: state.images.length,
+        itemsGenerated: state.itemsGenerated,
+        itemsFailed: state.itemsFailed,
+        generationTotalItems: state.generationTotalItems,
+        generationEtaSeconds: state.generationEtaSeconds,
+        itemCount: state.allDetectedItems.filter((i) => i.status !== 'deleted').length,
+        extractionProgress: state.extractionProgress,
+      })
+    );
+  }, [
+    isActivelyWorking,
+    onJobStatusChange,
+    state.allDetectedItems,
+    state.extractionProgress,
+    state.generationEtaSeconds,
+    state.generationTotalItems,
+    state.images.length,
+    state.imagesCompleted,
+    state.isGenerationRunning,
+    state.itemsFailed,
+    state.itemsGenerated,
+    state.jobId,
+    state.step,
+  ]);
+
+  // Browser notification when review becomes ready while tab/dialog is hidden.
+  useEffect(() => {
+    if (state.step !== 'review' || state.allDetectedItems.length === 0) {
+      if (state.step === 'select') notifiedReadyRef.current = false;
+      return;
+    }
+    if (notifiedReadyRef.current) return;
+    if (isOpen && document.visibilityState === 'visible') return;
+
+    notifiedReadyRef.current = true;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+      return;
+    }
+    try {
+      new Notification('FitCheck AI', {
+        body: 'Your items are ready to review.',
+        tag: state.jobId || 'batch-extraction',
+      });
+    } catch {
+      // Ignore notification failures
+    }
+  }, [isOpen, state.allDetectedItems.length, state.jobId, state.step]);
 
   // ============================================================================
   // EVENT HANDLERS
@@ -180,25 +383,59 @@ export function BatchExtractionFlow({
   }, [reset]);
 
   const handleClose = useCallback(() => {
-    if (isProcessing) {
+    // Soft-close preserves in-flight jobs AND unsaved review (early review
+    // promote means step can be `review` while extraction/gen still runs).
+    if (isProcessing || hasReviewItems || state.step === 'saving') {
       backgroundedRef.current = true;
       onClose?.();
-      toast({
-        title: 'Processing in background',
-        description: 'We will reopen this when your items are ready.',
-        action: onRequestOpen ? (
-          <ToastAction altText="View progress" onClick={() => onRequestOpen()}>
-            View
-          </ToastAction>
-        ) : undefined,
-      });
+      // Soft-ask for notifications once (non-blocking).
+      if (
+        isActivelyWorking &&
+        typeof Notification !== 'undefined' &&
+        Notification.permission === 'default'
+      ) {
+        void Notification.requestPermission().catch(() => undefined);
+      }
+      if (isActivelyWorking) {
+        toast({
+          title: 'Still working',
+          description: 'Open anytime from the progress pill at the bottom.',
+          action: onRequestOpen ? (
+            <ToastAction altText="View progress" onClick={() => onRequestOpen()}>
+              View
+            </ToastAction>
+          ) : undefined,
+        });
+      } else if (hasReviewItems) {
+        toast({
+          title: 'Review saved in progress',
+          description: 'Open anytime from the progress pill to finish saving.',
+          action: onRequestOpen ? (
+            <ToastAction altText="View progress" onClick={() => onRequestOpen()}>
+              View
+            </ToastAction>
+          ) : undefined,
+        });
+      }
       return;
     }
 
     reset();
     void socialImport.reset();
+    onJobStatusChange?.(null);
     onClose?.();
-  }, [isProcessing, onClose, onRequestOpen, reset, socialImport, toast]);
+  }, [
+    hasReviewItems,
+    isActivelyWorking,
+    isProcessing,
+    onClose,
+    onJobStatusChange,
+    onRequestOpen,
+    reset,
+    socialImport,
+    state.step,
+    toast,
+  ]);
 
   // ============================================================================
   // REGENERATE ITEM
@@ -375,8 +612,17 @@ export function BatchExtractionFlow({
     // Cleanup and notify
     setIsSavePending(false);
     reset();
+    onJobStatusChange?.(null);
     onUploadComplete?.(results);
-  }, [state.allDetectedItems, proceedToSaving, reset, onUploadComplete, isSavePending]);
+  }, [
+    state.allDetectedItems,
+    state.images,
+    proceedToSaving,
+    reset,
+    onUploadComplete,
+    onJobStatusChange,
+    isSavePending,
+  ]);
 
   // ============================================================================
   // RENDER HELPERS
@@ -406,17 +652,19 @@ export function BatchExtractionFlow({
       case 'select':
         return inputMode === 'social'
           ? 'Import wardrobe candidates from an Instagram/Facebook profile URL with queued review.'
-          : 'Upload up to 50 clothing photos and our AI will extract all visible items.';
+          : 'We find items first, then polish studio photos in the background (often 15–40s each).';
       case 'uploading':
-        return 'Preparing your images for processing...';
+        return 'Preparing your images for processing…';
       case 'extracting':
-        return 'AI is detecting clothing items in your photos...';
+        return 'Detecting clothing in your photos…';
       case 'generating':
-        return 'Creating clean product images for each detected item...';
+        return 'Creating clean wardrobe photos you can mix and match…';
       case 'review':
-        return 'Review and edit extracted items before saving to your wardrobe.';
+        return state.isGenerationRunning
+          ? 'Edit details now. Studio photos appear as they are ready.'
+          : 'Review and edit extracted items before saving to your wardrobe.';
       case 'saving':
-        return 'Saving items to your wardrobe...';
+        return 'Saving items to your wardrobe…';
       default:
         return '';
     }
@@ -429,6 +677,10 @@ export function BatchExtractionFlow({
   const failedCount = state.allDetectedItems.filter((i) => i.status === 'failed').length;
   const deletedCount = state.allDetectedItems.filter((i) => i.status === 'deleted').length;
   const activeItems = state.allDetectedItems.filter((i) => i.status !== 'deleted');
+  const generationEtaLabel = formatEta(state.generationEtaSeconds);
+  const studioReadyCount = generatedCount;
+  const studioTotal = state.generationTotalItems || activeItems.length;
+  const polishingCount = activeItems.filter((i) => i.status === 'generating').length;
   const wizardStepId = useMemo(() => mapBatchStepToWizard(state.step), [state.step]);
 
   // ============================================================================
@@ -608,8 +860,8 @@ export function BatchExtractionFlow({
             />
           )}
 
-          {/* Step 4: Generating */}
-          {state.step === 'generating' && (
+          {/* Step 4: Generating — only when there are no items to review yet */}
+          {showBlockingGeneration && (
             <BatchGenerationProgress
               items={state.allDetectedItems}
               progress={state.generationProgress}
@@ -624,51 +876,80 @@ export function BatchExtractionFlow({
             />
           )}
 
-          {/* Step 5: Review */}
+          {/* Step 5: Review (default once items exist, even while gen runs) */}
           {state.step === 'review' && (
             <div className="space-y-4">
+              {/* Live studio-photo progress while user reviews */}
+              {state.isGenerationRunning && studioTotal > 0 && (
+                <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
+                      <span>
+                        Studio photos {studioReadyCount} of {studioTotal} ready
+                        {polishingCount > 0 ? ` · ${polishingCount} polishing` : ''}
+                      </span>
+                    </div>
+                    <span className="text-sm text-muted-foreground">
+                      {generationEtaLabel || 'Estimating time…'}
+                    </span>
+                  </div>
+                  <Progress
+                    value={
+                      studioTotal > 0
+                        ? ((studioReadyCount + failedCount) / studioTotal) * 100
+                        : state.generationProgress
+                    }
+                    className="h-1.5"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    You can save now. Studio photos keep filling in; originals are used until then.
+                  </p>
+                </div>
+              )}
+
               {/* Summary banner */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-muted/30 rounded-lg">
                 <div className="flex flex-wrap items-center gap-4">
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <p className="text-2xl font-bold text-foreground">
                       {state.images.length}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Images</p>
+                    <p className="text-xs text-muted-foreground">Images</p>
                   </div>
-                  <div className="hidden sm:block h-8 w-px bg-gray-200 dark:bg-gray-700" />
+                  <div className="hidden sm:block h-8 w-px bg-border" />
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-                      {state.allDetectedItems.length}
+                    <p className="text-2xl font-bold text-foreground">
+                      {activeItems.length}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Items Found</p>
+                    <p className="text-xs text-muted-foreground">Items Found</p>
                   </div>
-                  <div className="hidden sm:block h-8 w-px bg-gray-200 dark:bg-gray-700" />
+                  <div className="hidden sm:block h-8 w-px bg-border" />
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    <p className="text-2xl font-bold text-foreground">
                       {generatedCount}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Ready</p>
+                    <p className="text-xs text-muted-foreground">Studio ready</p>
                   </div>
                   {failedCount > 0 && (
                     <>
-                      <div className="hidden sm:block h-8 w-px bg-gray-200 dark:bg-gray-700" />
+                      <div className="hidden sm:block h-8 w-px bg-border" />
                       <div className="text-center">
-                        <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+                        <p className="text-2xl font-bold text-destructive">
                           {failedCount}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Failed</p>
+                        <p className="text-xs text-muted-foreground">Failed</p>
                       </div>
                     </>
                   )}
                   {deletedCount > 0 && (
                     <>
-                      <div className="hidden sm:block h-8 w-px bg-gray-200 dark:bg-gray-700" />
+                      <div className="hidden sm:block h-8 w-px bg-border" />
                       <div className="text-center">
-                        <p className="text-2xl font-bold text-gray-400">
+                        <p className="text-2xl font-bold text-muted-foreground">
                           {deletedCount}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Removed</p>
+                        <p className="text-xs text-muted-foreground">Removed</p>
                       </div>
                     </>
                   )}
@@ -678,10 +959,10 @@ export function BatchExtractionFlow({
               {/* Original photos with bounding boxes */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                  <h3 className="text-sm font-semibold text-foreground">
                     Original Photos
                   </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-muted-foreground">
                     Tap any photo to zoom
                   </p>
                 </div>
@@ -700,6 +981,7 @@ export function BatchExtractionFlow({
                 isSaving={isSavePending}
                 regeneratingItemId={regeneratingItemId}
                 backLabel="Upload Different Images"
+                isGenerationRunning={state.isGenerationRunning}
               />
             </div>
           )}
@@ -721,7 +1003,7 @@ export function BatchExtractionFlow({
               </div>
               <Progress value={savingProgress} className="w-64 h-2" />
               <p className="text-xs text-gray-400 dark:text-gray-500">
-                Uploading {generatedCount} items
+                Uploading items to your wardrobe…
               </p>
             </div>
           )}

@@ -3,10 +3,12 @@
  * View and manage created outfits
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useOutfitStore } from '../../stores/outfitStore'
 import { useWardrobeStore } from '../../stores/wardrobeStore'
+import { useJobUiStore } from '../../stores/jobUiStore'
+import { GeneratingSurface } from '@/components/jobs'
 import {
   Layers,
   Plus,
@@ -37,7 +39,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -170,8 +171,76 @@ export default function OutfitsPage() {
     }
   }
 
-  const generationProgress =
-    generationStatus === 'pending' ? 25 : generationStatus === 'processing' ? 65 : generationStatus === 'completed' ? 100 : 0
+  const setJob = useJobUiStore((s) => s.setJob)
+  const clearJob = useJobUiStore((s) => s.clearJob)
+
+  const generationStageLabel =
+    generationStatus === 'pending'
+      ? 'Preparing…'
+      : generationStatus === 'processing'
+        ? 'Generating look…'
+        : generationStatus === 'failed'
+          ? 'Generation failed'
+          : generationStatus === 'completed'
+            ? 'Look ready'
+            : 'Working…'
+
+  // Remember dialog-gen outfit even after soft-close (selectedOutfit becomes null).
+  const dialogGenOutfitIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (isGenerating && selectedOutfit?.id) {
+      dialogGenOutfitIdRef.current = selectedOutfit.id
+    }
+    if (!isGenerating && generationStatus !== 'pending' && generationStatus !== 'processing') {
+      dialogGenOutfitIdRef.current = null
+    }
+  }, [isGenerating, selectedOutfit?.id, generationStatus])
+
+  // Dialog generate (isGenerating) OR fire-and-forget after create (generatingOutfits map)
+  const mapGeneratingEntry = Array.from(generatingOutfits.entries()).find(
+    ([, v]) => v.status === 'pending' || v.status === 'processing'
+  )
+  const generatingOutfitId =
+    (isGenerating
+      ? selectedOutfit?.id || dialogGenOutfitIdRef.current || undefined
+      : undefined) || mapGeneratingEntry?.[0]
+  const isOutfitGenActive = isGenerating || Boolean(mapGeneratingEntry)
+
+  // Background pill while generate look runs (including when dialog closed)
+  useEffect(() => {
+    if (!isOutfitGenActive) {
+      clearJob('outfit-generate')
+      return
+    }
+    const outfitId =
+      generatingOutfitId || selectedOutfit?.id || dialogGenOutfitIdRef.current || undefined
+    const name =
+      selectedOutfit?.name ||
+      (outfitId ? filteredOutfits.find((o) => o.id === outfitId)?.name : undefined)
+    setJob({
+      id: 'outfit-generate',
+      label: name ? `Generating look · ${name}` : 'Generating outfit look…',
+      isActive: true,
+      href: '/outfits',
+      onOpen: () => {
+        if (outfitId) {
+          const outfit =
+            filteredOutfits.find((o) => o.id === outfitId) ||
+            useOutfitStore.getState().outfits.find((o) => o.id === outfitId) ||
+            selectedOutfit
+          if (outfit) setSelectedOutfit(outfit)
+        }
+      },
+    })
+  }, [
+    isOutfitGenActive,
+    generatingOutfitId,
+    selectedOutfit,
+    filteredOutfits,
+    setJob,
+    clearJob,
+    setSelectedOutfit,
+  ])
 
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
@@ -265,13 +334,23 @@ export default function OutfitsPage() {
           description={
             searchQuery || favoritesOnly
               ? 'Try a different search or clear filters'
-              : 'Create your first outfit by combining items from your wardrobe'
+              : wardrobeItems.length === 0
+                ? 'Add clothes first — AI extracts items from your photos, then you can build outfits.'
+                : 'Combine items from your wardrobe into a look you can wear.'
           }
-          actionLabel={searchQuery || favoritesOnly ? 'Clear filters' : 'Create first outfit'}
+          actionLabel={
+            searchQuery || favoritesOnly
+              ? 'Clear filters'
+              : wardrobeItems.length === 0
+                ? 'Upload photos'
+                : 'Create first outfit'
+          }
           onAction={() => {
             if (searchQuery || favoritesOnly) {
               setSearchQuery('')
               setFavoritesOnly(false)
+            } else if (wardrobeItems.length === 0) {
+              navigate('/wardrobe?action=add')
             } else {
               startCreating()
             }
@@ -316,8 +395,11 @@ export default function OutfitsPage() {
         onOpenChange={(open) => {
           if (!open) {
             setSelectedOutfit(null)
-            resetGeneration()
             setIsShareOpen(false)
+            // Keep generation running in the background (job pill)
+            if (!isGenerating) {
+              resetGeneration()
+            }
           }
         }}
       >
@@ -398,16 +480,22 @@ export default function OutfitsPage() {
               </div>
 
               {isGenerating && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1.5">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Generating AI look…
-                    </span>
-                    <span className="capitalize">{generationStatus}</span>
-                  </div>
-                  <Progress value={generationProgress} className="h-2" />
-                </div>
+                <GeneratingSurface
+                  stage={generationStageLabel}
+                  detail="Often under a minute. You can close this and reopen from the progress pill."
+                  isActive
+                  previewUrls={
+                    compositionItems
+                      .map((item) => item.images?.[0]?.thumbnail_url || item.images?.[0]?.image_url)
+                      .filter(Boolean) as string[]
+                  }
+                  previewLabel="Items in this outfit"
+                />
+              )}
+              {generationStatus === 'failed' && !isGenerating && (
+                <p className="text-sm text-destructive">
+                  Generation failed. Tap Generate look to try again.
+                </p>
               )}
             </div>
           )}
@@ -417,13 +505,16 @@ export default function OutfitsPage() {
               <Button
                 variant="outline"
                 onClick={() => {
+                  // Soft-close: keep generation running; pill stays until done
                   setSelectedOutfit(null)
-                  resetGeneration()
                   setIsShareOpen(false)
+                  if (!isGenerating) {
+                    resetGeneration()
+                  }
                 }}
                 className="flex-1 md:flex-none"
               >
-                Close
+                {isGenerating ? 'Continue in background' : 'Close'}
               </Button>
               {selectedOutfit && (
                 <Button
@@ -439,7 +530,7 @@ export default function OutfitsPage() {
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4 mr-2" />
-                      Generate look
+                      {generationStatus === 'failed' ? 'Retry look' : 'Generate look'}
                     </>
                   )}
                 </Button>

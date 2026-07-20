@@ -1,13 +1,15 @@
 /**
  * Dashboard Page
- * Overview of user's wardrobe, outfits, and recommendations
+ * Overview of user's wardrobe, outfits, and recommendations.
+ * Empty / partial accounts get an activation checklist first.
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWardrobeStore } from '../stores/wardrobeStore'
 import { useOutfitStore } from '../stores/outfitStore'
-import { useUserDisplayName } from '../stores/authStore'
+import { useUserAvatar, useUserDisplayName, useCurrentUser } from '../stores/authStore'
 import { useIsNearLimit } from '../stores/subscriptionStore'
+import { useJobUiStore } from '../stores/jobUiStore'
 import {
   Shirt,
   Layers,
@@ -23,10 +25,18 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { ReferralBanner, useReferralBannerDismissal } from '@/components/dashboard/ReferralBanner'
+import { ActivationChecklist } from '@/components/dashboard/ActivationChecklist'
 import { ItemUpload, type ItemUploadResult } from '@/components/wardrobe/ItemUpload'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import {
+  activationDismissKey,
+  shouldShowActivation,
+  tryOnUsedKey,
+  type ActivationInput,
+} from '@/lib/activation'
+import type { BatchJobUiStatus } from '@/types'
 
-// Mobile-first discovery for AI tools buried in the hamburger on small screens
 const aiTools = [
   {
     name: 'Photoshoot',
@@ -56,6 +66,8 @@ const aiTools = [
 
 export default function DashboardPage() {
   const userDisplayName = useUserDisplayName()
+  const user = useCurrentUser()
+  const userAvatar = useUserAvatar()
   const items = useWardrobeStore((state) => state.items)
   const outfits = useOutfitStore((state) => state.outfits)
   const fetchItems = useWardrobeStore((state) => state.fetchItems)
@@ -64,34 +76,127 @@ export default function DashboardPage() {
   const isLoadingOutfits = useOutfitStore((state) => state.isLoading)
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const setJob = useJobUiStore((s) => s.setJob)
+  const clearJob = useJobUiStore((s) => s.clearJob)
+  const lastBatchStatusRef = useRef<BatchJobUiStatus | null>(null)
   const navigate = useNavigate()
 
-  // Referral banner state
   const { isDismissed: isBannerDismissed, dismiss: dismissBanner } = useReferralBannerDismissal()
   const nearLimit = useIsNearLimit()
   const isNearLimit = nearLimit.extractions || nearLimit.generations
-  // Show banner if: not dismissed OR near limit (urgent overrides dismissal)
   const shouldShowReferralBanner = !isBannerDismissed || isNearLimit
+
+  const [activationDismissed, setActivationDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(activationDismissKey(user?.id)) === '1'
+    } catch {
+      return false
+    }
+  })
+
+  useEffect(() => {
+    try {
+      setActivationDismissed(localStorage.getItem(activationDismissKey(user?.id)) === '1')
+    } catch {
+      setActivationDismissed(false)
+    }
+  }, [user?.id])
 
   useEffect(() => {
     fetchItems(true)
     fetchOutfits(true)
   }, [fetchItems, fetchOutfits])
 
-  // Handle upload completion
-  const handleUploadComplete = (results: ItemUploadResult[]) => {
-    setIsUploadModalOpen(false)
-    fetchItems(true) // Refresh items
-    if (results.some((r) => r.success)) {
-      navigate('/wardrobe')
-    }
-  }
-
-  // Calculate statistics
   const totalItems = items.length
   const totalOutfits = outfits.length
   const favoriteItems = items.filter((i) => i.is_favorite).length
   const totalWears = items.reduce((sum, item) => sum + item.usage_times_worn, 0)
+
+  const tryOnUsed = useMemo(() => {
+    try {
+      return localStorage.getItem(tryOnUsedKey(user?.id)) === '1'
+    } catch {
+      return false
+    }
+  }, [user?.id, userAvatar, totalItems, totalOutfits])
+
+  const activationInput: ActivationInput = useMemo(
+    () => ({
+      itemCount: totalItems,
+      outfitCount: totalOutfits,
+      hasAvatar: Boolean(userAvatar),
+      tryOnUsed,
+    }),
+    [totalItems, totalOutfits, userAvatar, tryOnUsed]
+  )
+
+  const isLoadingHome = isLoadingItems || isLoadingOutfits
+  // Avoid flashing activation chrome for returning users while stores rehydrate.
+  const dataReady = !isLoadingHome || totalItems > 0 || totalOutfits > 0
+  const showActivation =
+    dataReady && shouldShowActivation(activationInput, activationDismissed)
+  const isEmpty = dataReady && totalItems === 0 && totalOutfits === 0
+
+  const publishedBatchJobIdRef = useRef<string | null>(null)
+
+  const publishBatchJob = useCallback(
+    (status: BatchJobUiStatus | null, dialogOpen: boolean) => {
+      lastBatchStatusRef.current = status
+      if (!status) {
+        if (publishedBatchJobIdRef.current) {
+          clearJob(publishedBatchJobIdRef.current)
+          publishedBatchJobIdRef.current = null
+        }
+        return
+      }
+      const jobId = status.jobId || 'batch-upload'
+      if (dialogOpen) {
+        clearJob(jobId)
+        publishedBatchJobIdRef.current = jobId
+        return
+      }
+      publishedBatchJobIdRef.current = jobId
+      setJob({
+        id: jobId,
+        label: status.label,
+        isActive: status.isProcessing || status.isGenerationRunning,
+        etaSeconds: status.generationEtaSeconds,
+        href: '/dashboard',
+        onOpen: () => setIsUploadModalOpen(true),
+      })
+    },
+    [clearJob, setJob]
+  )
+
+  useEffect(() => {
+    publishBatchJob(lastBatchStatusRef.current, isUploadModalOpen)
+  }, [isUploadModalOpen, publishBatchJob])
+
+  const handleUploadComplete = (results: ItemUploadResult[]) => {
+    if (publishedBatchJobIdRef.current) {
+      clearJob(publishedBatchJobIdRef.current)
+      publishedBatchJobIdRef.current = null
+    }
+    lastBatchStatusRef.current = null
+    setIsUploadModalOpen(false)
+    fetchItems(true)
+    if (results.some((r) => r.success)) {
+      // Stay on dashboard while activating so the checklist updates;
+      // once they already have outfits, wardrobe is a better home for new items.
+      if (totalOutfits > 0) {
+        navigate('/wardrobe')
+      }
+    }
+  }
+
+  const handleDismissActivation = () => {
+    try {
+      localStorage.setItem(activationDismissKey(user?.id), '1')
+    } catch {
+      // ignore
+    }
+    setActivationDismissed(true)
+  }
 
   const stats = [
     {
@@ -127,24 +232,21 @@ export default function DashboardPage() {
   const quickActions = [
     {
       name: 'Add Item',
-      description: 'Add a new item to your wardrobe',
+      description: 'Upload photos — AI catalogs each piece',
       icon: Shirt,
       onClick: () => setIsUploadModalOpen(true),
-      gradient: 'bg-gradient-to-br from-indigo-500 to-purple-600',
     },
     {
       name: 'Create Outfit',
-      description: 'Combine items into a new outfit',
+      description: 'Combine items into a wearable look',
       icon: Layers,
       link: '/outfits?action=create',
-      gradient: 'bg-gradient-to-br from-purple-500 to-pink-600',
     },
     {
-      name: 'Get Recommendations',
-      description: 'AI-powered outfit suggestions',
+      name: 'What to wear',
+      description: 'AI outfit ideas from your wardrobe',
       icon: Sparkles,
       link: '/recommendations',
-      gradient: 'bg-gradient-to-br from-pink-500 to-rose-600',
     },
   ]
 
@@ -153,14 +255,21 @@ export default function DashboardPage() {
       {/* Welcome header */}
       <div className="mb-4 md:mb-8">
         <h1 className="text-xl md:text-3xl font-bold text-foreground">
-          Welcome back, {userDisplayName}!
+          {isEmpty ? `Welcome, ${userDisplayName}` : `Welcome back, ${userDisplayName}`}
         </h1>
         <p className="mt-1 md:mt-2 text-xs md:text-base text-muted-foreground">
-          Here's what's happening with your wardrobe today.
+          {isEmpty
+            ? 'Start with a few clothing photos. AI finds each item so you can build outfits today.'
+            : "Here's what's happening with your wardrobe today."}
         </p>
+        {isEmpty && (
+          <Button className="mt-4" onClick={() => setIsUploadModalOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add your first photos
+          </Button>
+        )}
       </div>
 
-      {/* Referral Banner */}
       {shouldShowReferralBanner && (
         <div className="mb-4 md:mb-6">
           <ReferralBanner
@@ -170,22 +279,59 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Stats cards - responsive grid */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4 lg:gap-5 mb-6 md:mb-8">
-        {stats.map((stat) => (
-          <StatCard
-            key={stat.name}
-            name={stat.name}
-            value={stat.value}
-            icon={stat.icon}
-            gradient={stat.gradient}
-            link={stat.link}
-            isLoading={isLoadingItems || isLoadingOutfits}
+      {/* Activation — primary surface for new / partial accounts */}
+      {showActivation && (
+        <div className="mb-6 md:mb-8">
+          <ActivationChecklist
+            input={activationInput}
+            onAddItems={() => setIsUploadModalOpen(true)}
+            onCreateOutfit={() => navigate('/outfits?action=create')}
+            onAddAvatar={() => navigate('/profile?tab=account')}
+            onTryOn={() => navigate('/try-on')}
+            onDismiss={handleDismissActivation}
           />
-        ))}
-      </div>
+        </div>
+      )}
 
-      {/* AI tools — discoverable on mobile (not only in sidebar sheet) */}
+      {/* How it works — empty accounts only */}
+      {isEmpty && (
+        <div className="mb-6 md:mb-8 rounded-xl border border-border bg-muted/20 px-4 py-4 md:px-6">
+          <h2 className="text-sm font-semibold text-foreground mb-3">How it works</h2>
+          <ol className="space-y-2 text-sm text-muted-foreground">
+            <li>
+              <span className="font-medium text-foreground">1. Upload</span> — closet shots or
+              outfit photos
+            </li>
+            <li>
+              <span className="font-medium text-foreground">2. Extract</span> — AI catalogs each
+              item (studio photos polish in the background)
+            </li>
+            <li>
+              <span className="font-medium text-foreground">3. Outfit</span> — mix pieces and
+              generate looks
+            </li>
+          </ol>
+        </div>
+      )}
+
+      {/* Stats — de-emphasize when empty */}
+      {!isEmpty && (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4 lg:gap-5 mb-6 md:mb-8">
+          {stats.map((stat) => (
+            <StatCard
+              key={stat.name}
+              name={stat.name}
+              value={stat.value}
+              icon={stat.icon}
+              gradient={stat.gradient}
+              link={stat.link}
+              isLoading={isLoadingItems || isLoadingOutfits}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* AI tools */}
       <div className="mb-6 md:mb-8">
         <div className="flex items-center justify-between mb-3 md:mb-4 px-1">
           <h2 className="text-base md:text-lg font-semibold text-foreground">AI tools</h2>
@@ -201,9 +347,7 @@ export default function DashboardPage() {
                 'touch-target'
               )}
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <tool.icon className="h-4 w-4 md:h-5 md:w-5" />
-              </div>
+              <tool.icon className="h-5 w-5 text-foreground" />
               <div>
                 <p className="text-sm font-semibold text-foreground">{tool.name}</p>
                 <p className="text-xs text-muted-foreground line-clamp-1">{tool.description}</p>
@@ -213,42 +357,39 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Quick actions - responsive grid */}
+      {/* Quick actions — tonal cards, not purple gradient slabs */}
       <div className="mb-6 md:mb-8">
         <div className="flex items-center justify-between mb-3 md:mb-4 px-1">
-          <h2 className="text-base md:text-lg font-semibold text-foreground">Quick Actions</h2>
+          <h2 className="text-base md:text-lg font-semibold text-foreground">Quick actions</h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
           {quickActions.map((action) => {
             const commonClassName = cn(
-              'group relative rounded-xl p-4 md:p-5 text-white overflow-hidden text-left w-full',
-              'transition-all duration-300',
-              'hover:shadow-elevated hover:-translate-y-0.5',
-              'touch-target',
-              action.gradient
+              'group relative rounded-xl border border-border bg-card p-4 md:p-5 text-left w-full',
+              'transition-colors hover:bg-accent/40 hover:border-primary/20',
+              'touch-target'
             )
 
             const content = (
-              <>
-                {/* Background glow effect on hover */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white/10" />
-
-                <div className="relative flex items-start gap-3 md:gap-4">
-                  <div className="p-2 md:p-2.5 rounded-lg bg-white/20 backdrop-blur-sm shrink-0">
-                    <action.icon className="h-5 w-5 md:h-6 md:w-6" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm md:text-base font-semibold">{action.name}</h3>
-                    <p className="mt-0.5 text-xs md:text-sm text-white/80 line-clamp-2">{action.description}</p>
-                  </div>
-                  <ArrowRight className={cn(
-                    'h-5 w-5 shrink-0 opacity-50',
+              <div className="relative flex items-start gap-3 md:gap-4">
+                <action.icon className="h-5 w-5 md:h-6 md:w-6 text-foreground shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm md:text-base font-semibold text-foreground">
+                    {action.name}
+                  </h3>
+                  <p className="mt-0.5 text-xs md:text-sm text-muted-foreground line-clamp-2">
+                    {action.description}
+                  </p>
+                </div>
+                <ArrowRight
+                  className={cn(
+                    'h-5 w-5 shrink-0 text-muted-foreground opacity-50',
                     'transition-all duration-200',
                     'group-hover:opacity-100 group-hover:translate-x-0.5'
-                  )} />
-                </div>
-              </>
+                  )}
+                />
+              </div>
             )
 
             if (action.onClick) {
@@ -265,11 +406,7 @@ export default function DashboardPage() {
             }
 
             return (
-              <Link
-                key={action.name}
-                to={action.link!}
-                className={commonClassName}
-              >
+              <Link key={action.name} to={action.link!} className={commonClassName}>
                 {content}
               </Link>
             )
@@ -277,46 +414,25 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Recent activity */}
-      <div className="bg-card shadow-sm rounded-xl overflow-hidden">
-        <div className="px-4 py-4 md:py-5 md:px-6 border-b border-border">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base md:text-lg font-semibold text-foreground">Recent items</h3>
-            <div className="p-2 rounded-lg bg-muted">
-              <Calendar className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
+      {/* Recent activity — only when there is something to show */}
+      {totalItems > 0 && (
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="px-4 py-4 md:py-5 md:px-6 border-b border-border">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base md:text-lg font-semibold text-foreground">Recent items</h3>
+              {totalItems > 0 && totalOutfits === 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/outfits?action=create')}
+                >
+                  Create outfit
+                </Button>
+              )}
             </div>
           </div>
-        </div>
-        <div className="px-4 py-4 md:p-6">
-          {totalItems === 0 && totalOutfits === 0 ? (
-            <div className="text-center py-8 md:py-12">
-              <div className="mx-auto w-16 h-16 md:w-20 md:h-20 rounded-full bg-muted flex items-center justify-center mb-4">
-                <Shirt className="h-8 w-8 md:h-10 md:w-10 text-muted-foreground" />
-              </div>
-              <h3 className="text-sm md:text-base font-medium text-foreground">No items yet</h3>
-              <p className="mt-1 text-sm text-muted-foreground max-w-xs mx-auto">
-                Get started by adding items to your wardrobe.
-              </p>
-              <div className="mt-5 md:mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsUploadModalOpen(true)}
-                  className={cn(
-                    'inline-flex items-center px-4 py-2.5 rounded-lg',
-                    'text-sm font-medium text-white',
-                    'bg-gradient-to-r from-indigo-500 to-purple-600',
-                    'hover:shadow-elevated transition-all duration-200',
-                    'touch-target'
-                  )}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add First Item
-                </button>
-              </div>
-            </div>
-          ) : (
+          <div className="px-4 py-4 md:p-6">
             <div className="space-y-2 md:space-y-3">
-              {/* Recent items */}
               {items.slice(0, 3).map((item) => (
                 <Link
                   key={item.id}
@@ -340,7 +456,9 @@ export default function DashboardPage() {
                   )}
                   <div className="ml-3 md:ml-4 flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
-                    <p className="text-xs md:text-sm text-muted-foreground capitalize">{item.category}</p>
+                    <p className="text-xs md:text-sm text-muted-foreground capitalize">
+                      {item.category}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground shrink-0">
@@ -351,16 +469,16 @@ export default function DashboardPage() {
                 </Link>
               ))}
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Upload Modal */}
       <ItemUpload
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         onUploadComplete={handleUploadComplete}
         onRequestOpen={() => setIsUploadModalOpen(true)}
+        onJobStatusChange={(status) => publishBatchJob(status, isUploadModalOpen)}
       />
     </div>
   )

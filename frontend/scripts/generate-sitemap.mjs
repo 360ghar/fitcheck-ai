@@ -23,6 +23,7 @@ const STATIC_ROUTES = [
   { path: '/about', priority: '0.7', changefreq: 'monthly' },
   { path: '/faq', priority: '0.8', changefreq: 'monthly' },
   { path: '/blog', priority: '0.8', changefreq: 'weekly' },
+  { path: '/support', priority: '0.5', changefreq: 'monthly' },
   { path: '/privacy', priority: '0.4', changefreq: 'yearly' },
   { path: '/terms', priority: '0.4', changefreq: 'yearly' },
   { path: '/best/virtual-closet-apps', priority: '0.9', changefreq: 'monthly' },

@@ -5,7 +5,7 @@ export const SEO_CONFIG = {
   siteUrl: 'https://fitcheckaiapp.com',
   defaultTitle: 'AI Virtual Closet & Outfit Planner | FitCheck AI',
   defaultDescription:
-    'Photograph your clothes. Get AI outfit ideas, virtual try-on, and photoshoots from your real wardrobe. Free digital closet — use what you already own.',
+    'AI virtual closet app: photograph clothes, get weather-aware outfit ideas, virtual try-on, and AI photoshoots. Free digital wardrobe on web and Android.',
   defaultOgImage: 'https://fitcheckaiapp.com/og-default.jpg',
   locale: 'en_US',
   themeColor: '#4f46e5',
@@ -18,7 +18,7 @@ export const PAGE_SEO = {
   landing: {
     title: 'AI Virtual Closet & Outfit Planner | FitCheck AI',
     description:
-      'Photograph your clothes. Get AI outfit ideas, virtual try-on, and photoshoots from your real wardrobe. Free digital closet — use what you already own.',
+      'AI virtual closet app: photograph clothes, get weather-aware outfit ideas, virtual try-on, and AI photoshoots. Free digital wardrobe on web and Android.',
     path: '/',
   },
   about: {
@@ -146,9 +146,9 @@ export const STATIC_PUBLIC_ROUTES: Array<{
   { path: '/about', title: PAGE_SEO.about.title, description: PAGE_SEO.about.description, priority: 0.7, changefreq: 'monthly' },
   { path: '/faq', title: PAGE_SEO.faq.title, description: PAGE_SEO.faq.description, priority: 0.8, changefreq: 'monthly' },
   { path: '/blog', title: PAGE_SEO.blog.title, description: PAGE_SEO.blog.description, priority: 0.8, changefreq: 'weekly' },
+  { path: '/support', title: PAGE_SEO.support.title, description: PAGE_SEO.support.description, priority: 0.5, changefreq: 'monthly' },
   { path: '/privacy', title: PAGE_SEO.privacy.title, description: PAGE_SEO.privacy.description, priority: 0.4, changefreq: 'yearly' },
   { path: '/terms', title: PAGE_SEO.terms.title, description: PAGE_SEO.terms.description, priority: 0.4, changefreq: 'yearly' },
-  { path: '/support', title: PAGE_SEO.support.title, description: PAGE_SEO.support.description, priority: 0.5, changefreq: 'monthly' },
   // Intent pages
   { path: '/best/virtual-closet-apps', title: 'Best Virtual Closet Apps in 2026 | FitCheck AI', description: 'Compare the best virtual closet and digital wardrobe apps. See which AI outfit planners help you wear more of what you own.', priority: 0.9, changefreq: 'monthly' },
   { path: '/best/ai-outfit-planners', title: 'Best AI Outfit Planners in 2026 | FitCheck AI', description: 'A practical comparison of AI outfit planners and stylists — free options, try-on, wardrobe digitization, and daily recommendations.', priority: 0.9, changefreq: 'monthly' },

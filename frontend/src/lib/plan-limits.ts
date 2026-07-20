@@ -34,6 +34,7 @@ export function freePlanFeatureBullets(): string[] {
   return [
     `${f.monthlyExtractions} item extractions/month`,
     `${f.monthlyGenerations} outfit visualizations/month`,
+    `${f.dailyPhotoshootImages} AI photoshoot images/day`,
     'Basic wardrobe management',
     'Weather-based suggestions',
     'Web + Android app',
@@ -46,9 +47,10 @@ export function proPlanFeatureBullets(): string[] {
   return [
     `${p.monthlyExtractions} item extractions/month`,
     `${p.monthlyGenerations.toLocaleString()} outfit visualizations/month`,
+    `${p.dailyPhotoshootImages} AI photoshoot images/day`,
     'Virtual try-on visualization',
     'Advanced wardrobe analytics',
-    'Calendar integration',
+    'Calendar planning',
     'Priority support',
     'AI style recommendations',
     'Early access to new features',
@@ -58,7 +60,8 @@ export function proPlanFeatureBullets(): string[] {
 /** FAQ-style free vs pro summary */
 export function freeVsProSummary(): string {
   const f = PLAN_LIMITS.free
-  return `Free includes ${f.monthlyExtractions} item extractions and ${f.monthlyGenerations} AI generations per month. Pro unlocks higher limits, virtual try-on, advanced analytics, calendar planning, and priority support.`
+  const p = PLAN_LIMITS.pro
+  return `Free includes ${f.monthlyExtractions} item extractions, ${f.monthlyGenerations} AI outfit visualizations, and ${f.dailyPhotoshootImages} photoshoot images per day. Pro raises those limits to ${p.monthlyExtractions} extractions, ${p.monthlyGenerations.toLocaleString()} visualizations, and ${p.dailyPhotoshootImages} photoshoot images daily, plus higher-capacity try-on, analytics, calendar planning, and priority support.`
 }
 
 export function platformsSummary(): string {

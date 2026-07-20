@@ -6,10 +6,15 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Download, Upload, RefreshCw, Loader2, Sparkles, X } from 'lucide-react';
-import { useUserAvatar } from '@/stores/authStore';
+import { Download, Upload, RefreshCw, Loader2, Sparkles, X, Camera } from 'lucide-react';
+import { useAuthStore, useCurrentUser, useUserAvatar } from '@/stores/authStore';
+import { useJobUiStore } from '@/stores/jobUiStore';
 import { generateTryOn, TryOnOptions, TryOnResult } from '@/api/ai';
-import { AvatarRequiredPrompt } from '@/components/try-on';
+import { uploadAvatar } from '@/api/users';
+import { tryOnUsedKey } from '@/lib/activation';
+
+/** Module-level so remount does not clear the pill while a request is in flight. */
+let tryOnRequestInFlight = false;
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -24,6 +29,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { ZoomableImage } from '@/components/ui/zoomable-image';
 import { WizardSteps } from '@/components/ui/wizard-steps';
+import { GeneratingSurface } from '@/components/jobs';
 import { cn } from '@/lib/utils';
 
 type TryOnStep = 'upload' | 'options' | 'generating' | 'result';
@@ -61,7 +67,11 @@ const STEPS = [
 
 export default function TryOnPage() {
   const userAvatar = useUserAvatar();
+  const setUser = useAuthStore((s) => s.setUser);
+  const user = useCurrentUser();
   const { toast } = useToast();
+  const setJob = useJobUiStore((s) => s.setJob);
+  const clearJob = useJobUiStore((s) => s.clearJob);
 
   const [step, setStep] = useState<TryOnStep>('upload');
   const clothingFileRef = useRef<File | null>(null);
@@ -74,6 +84,8 @@ export default function TryOnPage() {
   const [result, setResult] = useState<TryOnResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const previewUrlRef = useRef<string | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const revokePreviewUrl = useCallback(() => {
     if (previewUrlRef.current) {
@@ -87,6 +99,24 @@ export default function TryOnPage() {
       revokePreviewUrl();
     };
   }, [revokePreviewUrl]);
+
+  useEffect(() => {
+    // Prefer module flag over local state so remount mid-request does not clear the pill.
+    if (isGenerating || tryOnRequestInFlight) {
+      setJob({
+        id: 'try-on',
+        label: 'Generating try-on…',
+        isActive: true,
+        href: '/try-on',
+      });
+      if (tryOnRequestInFlight && !isGenerating) {
+        setIsGenerating(true);
+        setStep('generating');
+      }
+    } else {
+      clearJob('try-on');
+    }
+  }, [isGenerating, setJob, clearJob]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -110,17 +140,46 @@ export default function TryOnPage() {
     maxSize: 10 * 1024 * 1024, // 10MB
   });
 
-  // Check for avatar - show prompt if missing (after hooks for Rules of Hooks)
-  if (!userAvatar) {
-    return <AvatarRequiredPrompt />;
-  }
+  const handleAvatarUpload = async (file: File) => {
+    setIsUploadingAvatar(true);
+    try {
+      const { avatar_url } = await uploadAvatar(file);
+      if (user) {
+        setUser({ ...user, avatar_url });
+      }
+      toast({ title: 'Photo added', description: 'You can generate a try-on now.' });
+    } catch (err) {
+      toast({
+        title: 'Upload failed',
+        description: err instanceof Error ? err.message : 'Could not upload photo',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
 
   const handleGenerate = async () => {
     if (!clothingFileRef.current) return;
+    if (!userAvatar) {
+      toast({
+        title: 'Photo of you required',
+        description: 'Add a clear photo of yourself first.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsGenerating(true);
+    tryOnRequestInFlight = true;
     setStep('generating');
     setError(null);
+    setJob({
+      id: 'try-on',
+      label: 'Generating try-on…',
+      isActive: true,
+      href: '/try-on',
+    });
 
     try {
       const options: TryOnOptions = {
@@ -133,6 +192,11 @@ export default function TryOnPage() {
       const tryOnResult = await generateTryOn(clothingFileRef.current, options);
       setResult(tryOnResult);
       setStep('result');
+      try {
+        localStorage.setItem(tryOnUsedKey(user?.id), '1');
+      } catch {
+        // ignore
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate try-on image';
       setError(errorMessage);
@@ -143,7 +207,10 @@ export default function TryOnPage() {
       });
       setStep('options');
     } finally {
+      tryOnRequestInFlight = false;
       setIsGenerating(false);
+      // Always clear — user may have left the page mid-request.
+      clearJob('try-on');
     }
   };
 
@@ -168,8 +235,9 @@ export default function TryOnPage() {
 
   const handleRegenerate = () => {
     setResult(null);
-    handleGenerate();
+    void handleGenerate();
   };
+
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-4 md:py-8">
@@ -180,7 +248,51 @@ export default function TryOnPage() {
         </p>
       </div>
 
-      {/* Step Indicator */}
+      {/* Inline avatar gate — stay on page instead of hard redirect to profile */}
+      {!userAvatar && (
+        <Card className="mb-4 md:mb-6 border-border">
+          <CardHeader className="px-4 py-3 md:px-6 md:py-4">
+            <CardTitle className="text-base md:text-lg flex items-center gap-2">
+              <Camera className="h-5 w-5" />
+              Add a photo of you
+            </CardTitle>
+            <CardDescription>
+              A clear full-body or waist-up photo is required for try-on. Good lighting, face and
+              torso visible.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 md:px-6 md:pb-6 flex flex-wrap gap-2">
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleAvatarUpload(file);
+                e.target.value = '';
+              }}
+            />
+            <Button
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={isUploadingAvatar}
+            >
+              {isUploadingAvatar ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Uploading…
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload photo
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <WizardSteps
         steps={[...STEPS]}
         currentStepId={step}
@@ -194,7 +306,6 @@ export default function TryOnPage() {
         }}
       />
 
-      {/* Upload Step */}
       {step === 'upload' && (
         <Card>
           <CardHeader className="px-4 py-3 md:px-6 md:py-4">
@@ -226,10 +337,8 @@ export default function TryOnPage() {
         </Card>
       )}
 
-      {/* Options Step */}
       {step === 'options' && clothingPreview && (
         <div className="grid gap-4 md:gap-6 md:grid-cols-2">
-          {/* Preview */}
           <Card>
             <CardHeader className="px-4 py-3 md:px-6 md:py-4">
               <CardTitle className="flex items-center justify-between text-base md:text-lg">
@@ -240,16 +349,25 @@ export default function TryOnPage() {
                 </Button>
               </CardTitle>
             </CardHeader>
-            <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
+            <CardContent className="px-4 pb-4 md:px-6 md:pb-6 space-y-3">
               <ZoomableImage
                 src={clothingPreview}
                 alt="Clothing preview"
                 className="w-full h-48 md:h-64 object-contain rounded-lg bg-muted"
               />
+              {userAvatar && (
+                <div className="flex items-center gap-3">
+                  <img
+                    src={userAvatar}
+                    alt="You"
+                    className="h-12 w-12 rounded-full object-cover border border-border"
+                  />
+                  <p className="text-xs text-muted-foreground">Using this photo of you</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Options */}
           <Card>
             <CardHeader className="px-4 py-3 md:px-6 md:py-4">
               <CardTitle className="text-base md:text-lg">Generation Options</CardTitle>
@@ -325,8 +443,8 @@ export default function TryOnPage() {
 
               <Button
                 className="w-full mt-4"
-                onClick={handleGenerate}
-                disabled={isGenerating}
+                onClick={() => void handleGenerate()}
+                disabled={isGenerating || !userAvatar}
               >
                 <Sparkles className="h-4 w-4 mr-2" />
                 Generate Try-On
@@ -336,24 +454,16 @@ export default function TryOnPage() {
         </div>
       )}
 
-      {/* Generating Step */}
       {step === 'generating' && (
-        <Card>
-          <CardContent className="py-12 md:py-16">
-            <div className="flex flex-col items-center justify-center">
-              <Loader2 className="h-10 w-10 md:h-12 md:w-12 text-primary animate-spin" />
-              <p className="mt-4 text-base md:text-lg font-medium text-foreground">
-                Generating your try-on image...
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground text-center">
-                This may take a minute. We're combining your profile picture with the clothing.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <GeneratingSurface
+          stage="Generating your try-on…"
+          detail="Often under a minute. Combining your photo with the clothing."
+          isActive
+          previewUrls={[clothingPreview, userAvatar].filter(Boolean) as string[]}
+          previewLabel="Clothing + your photo"
+        />
       )}
 
-      {/* Result Step */}
       {step === 'result' && result && (
         <div className="space-y-4 md:space-y-6">
           <Card>

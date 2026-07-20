@@ -865,6 +865,16 @@ export interface BatchExtractionState {
   currentBatch: number;
   /** Total number of batches */
   totalBatches: number;
+  /**
+   * True while studio product images are still being generated
+   * (may be true while step is already `review`).
+   */
+  isGenerationRunning: boolean;
+  /**
+   * Estimated seconds remaining for studio photos.
+   * Null until at least one item completes (avg is unreliable before that).
+   */
+  generationEtaSeconds: number | null;
 
   // Stats
   /** Number of images that completed extraction */
@@ -875,9 +885,29 @@ export interface BatchExtractionState {
   itemsGenerated: number;
   /** Number of items that failed generation */
   itemsFailed: number;
+  /** Total items expected for generation (from SSE) */
+  generationTotalItems: number;
 
   /** Error message if any */
   error: string | null;
+}
+
+/**
+ * Compact status for background job pill / parent surfaces
+ */
+export interface BatchJobUiStatus {
+  jobId: string | null;
+  step: BatchExtractionState['step'];
+  isProcessing: boolean;
+  isGenerationRunning: boolean;
+  imagesCompleted: number;
+  imagesTotal: number;
+  itemsGenerated: number;
+  itemsFailed: number;
+  itemsTotal: number;
+  generationEtaSeconds: number | null;
+  itemCount: number;
+  label: string;
 }
 
 // ============================================================================

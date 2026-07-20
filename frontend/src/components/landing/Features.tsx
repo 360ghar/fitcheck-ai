@@ -16,7 +16,8 @@ const primaryFeatures = [
   {
     icon: Camera,
     title: 'Item extraction',
-    description: 'Upload a photo. FitCheck tags each piece with color, category, and style.',
+    description:
+      'Upload a photo. FitCheck tags each piece with color, category, and style — including multi-item hangs and flat lays.',
     href: '/features/ai-wardrobe-extraction',
     span: 'md:col-span-4 md:row-span-2',
     image: '/landing/flatlay.jpg',
@@ -39,7 +40,7 @@ const primaryFeatures = [
   {
     icon: ImageIcon,
     title: 'AI photoshoot',
-    description: 'Studio-style looks from a single phone photo.',
+    description: 'Studio-style looks from a single phone photo — LinkedIn, dating, and social.',
     href: '/features/ai-photoshoot-generator',
     span: 'md:col-span-3',
   },
@@ -53,8 +54,8 @@ const primaryFeatures = [
 ]
 
 const secondary = [
-  { icon: CloudSun, title: 'Weather-aware picks' },
-  { icon: Calendar, title: 'Calendar planning' },
+  { icon: CloudSun, title: 'Weather-aware picks', href: '/features/outfit-recommendations' },
+  { icon: Calendar, title: 'Calendar planning', href: '/features' },
 ]
 
 export default function Features() {
@@ -67,7 +68,7 @@ export default function Features() {
               Tools that actually get you dressed
             </h2>
             <p className="mt-4 text-base md:text-lg text-stone-600 dark:text-stone-400">
-              Five features that matter every morning. Everything else stays out of the way.
+              Five features that matter every morning. Digitize, try on, get dressed, shoot, and track what you own.
             </p>
           </div>
         </AnimatedSection>
@@ -138,12 +139,24 @@ export default function Features() {
         <AnimatedSection delay={200}>
           <ul className="mt-8 flex flex-wrap gap-x-8 gap-y-3 text-sm text-stone-600 dark:text-stone-400">
             {secondary.map((item) => (
-              <li key={item.title} className="inline-flex items-center gap-2">
-                <item.icon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                {item.title}
+              <li key={item.title}>
+                <Link
+                  to={item.href}
+                  className="inline-flex items-center gap-2 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                >
+                  <item.icon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                  {item.title}
+                </Link>
               </li>
             ))}
-            <li className="text-stone-500">Plus streaks, sharing, and packing helpers in the app.</li>
+            <li>
+              <a
+                href="#also-in-app"
+                className="text-stone-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+              >
+                Plus packing, streaks, sharing, import, and more in the app
+              </a>
+            </li>
           </ul>
         </AnimatedSection>
       </div>
