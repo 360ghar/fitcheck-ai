@@ -511,6 +511,8 @@ export interface DetectedItem {
   tempId: string;
   /** Source image ID for batch workflows */
   sourceImageId?: string;
+  /** Object-URL preview of the uploaded photo this item came from */
+  sourcePreviewUrl?: string;
   /** Person identifier in source image */
   personId?: string;
   /** Human-readable person label */
@@ -853,6 +855,8 @@ export interface BatchExtractionState {
   allDetectedItems: DetectedItem[];
 
   // Progress tracking
+  /** Upload progress for the initial POST (0-100) */
+  uploadProgress: number;
   /** Extraction progress (0-100) */
   extractionProgress: number;
   /** Generation progress (0-100) */

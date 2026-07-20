@@ -384,6 +384,22 @@ class ItemRepository {
     }
   }
 
+  /// Get the raw status of a single-extract job. Single jobs reuse the batch
+  /// pipeline, so they share the batch `/status` endpoint. Returns the raw
+  /// payload so the caller parses `items` with the same
+  /// DetectedItemDataWithImage.fromJson used for job_complete. Used as a
+  /// polling fallback when the SSE stream dies (proxy drop, OOM, redeploy).
+  Future<Map<String, dynamic>> getSingleJobStatus(String jobId) async {
+    try {
+      final response = await _apiClient.get(
+        ApiConstants.aiBatchExtractStatus(jobId),
+      );
+      return (response.data as Map).cast<String, dynamic>();
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    }
+  }
+
   /// Generate a product image for a detected clothing item
   /// This creates an isolated product-style image of just the clothing item
   /// without the person/background, suitable for catalog display

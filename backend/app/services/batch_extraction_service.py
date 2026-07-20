@@ -21,6 +21,7 @@ from app.services.batch_job_service import (
     BatchJobStatus,
     DetectedItemData,
 )
+from app.utils.image_processing import downscale_base64_image
 from app.utils.retry import with_retry
 
 logger = logging.getLogger(__name__)
@@ -151,6 +152,13 @@ class BatchExtractionService:
         async with EXTRACTION_SEMAPHORE:
             if job.is_cancelled():
                 return []
+
+            # ponytail: shrink the photo before the vision call. Off the event
+            # loop because PIL decode is CPU-bound and would stall heartbeats.
+            # Cache keys use the original payload (route looks up before this).
+            image_base64 = await asyncio.to_thread(
+                downscale_base64_image, image_base64
+            )
 
             try:
                 # Extract with retry

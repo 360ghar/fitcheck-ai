@@ -259,13 +259,28 @@ export function BatchExtractionFlow({
 
   const saveAllItems = useCallback(async () => {
     if (isSavePending) return;
-    // Get items that are ready to save (generated and not deleted)
-    const itemsToSave = state.allDetectedItems.filter(
-      (item) =>
-        item.status === 'generated' &&
-        item.generatedImageUrl &&
-        item.includeInWardrobe !== false
-    );
+
+    // The uploaded photo for an item (fallback while its studio photo renders).
+    const sourceFileFor = (item: DetectedItem) =>
+      state.images.find((img) => img.imageId === item.sourceImageId)?.file;
+
+    // Saveable = not deleted, included, and has SOME image (studio photo or the
+    // uploaded source). This is what makes saving mid-generation safe instead
+    // of silently dropping every item that hasn't generated yet.
+    // Dedupe by tempId as belt-and-suspenders against SSE replay duplicates.
+    const seenTempIds = new Set<string>();
+    const itemsToSave = state.allDetectedItems.filter((item) => {
+      if (
+        item.status === 'deleted' ||
+        item.includeInWardrobe === false ||
+        !(item.generatedImageUrl || sourceFileFor(item))
+      ) {
+        return false;
+      }
+      if (seenTempIds.has(item.tempId)) return false;
+      seenTempIds.add(item.tempId);
+      return true;
+    });
 
     if (itemsToSave.length === 0) {
       reset();
@@ -284,8 +299,14 @@ export function BatchExtractionFlow({
     const parallelResults = await parallelWithRetry(
       itemsToSave,
       async (item) => {
-        // Convert generated image to File
-        const imageFile = dataURLtoFile(item.generatedImageUrl!, `${item.tempId}.png`);
+        // Studio photo if ready, otherwise the uploaded source photo.
+        const imageFile = item.generatedImageUrl
+          ? dataURLtoFile(item.generatedImageUrl, `${item.tempId}.png`)
+          : sourceFileFor(item);
+
+        if (!imageFile) {
+          throw new Error('No image available for item');
+        }
 
         // Upload image to Supabase
         const formData = new FormData();
@@ -565,10 +586,12 @@ export function BatchExtractionFlow({
                   Preparing {state.images.length} images...
                 </p>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Converting images for AI processing
+                  {state.uploadProgress > 0
+                    ? `Uploading… ${Math.round(state.uploadProgress)}%`
+                    : 'Compressing images for AI processing'}
                 </p>
               </div>
-              <Progress value={30} className="w-64 h-2" />
+              <Progress value={state.uploadProgress} className="w-64 h-2" />
             </div>
           )}
 

@@ -99,13 +99,24 @@ export async function startBatchExtraction(
   options?: {
     autoGenerate?: boolean;
     generationBatchSize?: number;
+    onUploadProgress?: (percent: number) => void;
   }
 ): Promise<BatchJobResponse> {
-  const response = await apiClient.post<BatchJobResponse>('/api/v1/ai/batch-extract', {
-    images,
-    auto_generate: options?.autoGenerate ?? true,
-    generation_batch_size: options?.generationBatchSize ?? 5,
-  });
+  const response = await apiClient.post<BatchJobResponse>(
+    '/api/v1/ai/batch-extract',
+    {
+      images,
+      auto_generate: options?.autoGenerate ?? true,
+      generation_batch_size: options?.generationBatchSize ?? 5,
+    },
+    options?.onUploadProgress
+      ? {
+          onUploadProgress: (e) => {
+            if (e.total) options.onUploadProgress!((e.loaded / e.total) * 100);
+          },
+        }
+      : undefined
+  );
   return response.data;
 }
 
@@ -165,18 +176,24 @@ export function createBatchSSEConnection(jobId: string): EventSource {
  * @param jobId - The job ID to connect to
  * @param onMessage - Callback for each SSE message
  * @param onError - Callback for errors
+ * @param onClose - Callback when the stream ends; `sawTerminal` is true if a
+ *   terminal event (job_complete/failed/cancelled) was received. Lets the
+ *   caller detect a silent stream death (ended with no terminal event).
  * @returns Abort function to close the connection
  */
 export function createAuthenticatedSSEConnection(
   jobId: string,
   onMessage: (event: { type: string; data: unknown }) => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
+  onClose?: (sawTerminal: boolean) => void
 ): () => void {
   const controller = new AbortController();
   const token = getAccessToken();
   const url = `${API_BASE_URL}/api/v1/ai/batch-extract/${jobId}/events`;
+  const TERMINAL_EVENTS = new Set(['job_complete', 'job_failed', 'job_cancelled']);
 
   const connect = async () => {
+    let sawTerminal = false;
     try {
       const response = await fetch(url, {
         headers: {
@@ -205,6 +222,7 @@ export function createAuthenticatedSSEConnection(
 
         const payload = dataLines.join('\n');
         const eventType = currentEvent || 'message';
+        if (TERMINAL_EVENTS.has(eventType)) sawTerminal = true;
 
         if (payload) {
           try {
@@ -249,6 +267,10 @@ export function createAuthenticatedSSEConnection(
       }
 
       dispatchEvent();
+
+      // Stream ended on its own. Tell the caller whether a terminal event was
+      // seen so it can reconcile (poll /status) when the end was silent.
+      if (!controller.signal.aborted) onClose?.(sawTerminal);
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
         onError?.(error as Error);

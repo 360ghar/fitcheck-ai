@@ -55,8 +55,12 @@ export function ExtractedItemsGrid({
   const successCount = includedItems.filter(
     (item) => item.status === 'generated' && item.confidence >= 0.7
   ).length
+  // Saveable = included and has SOME image (studio photo, or the uploaded
+  // photo as a fallback while generation is still running).
   const saveableCount = activeItems.filter(
-    (item) => item.status === 'generated' && item.includeInWardrobe !== false
+    (item) =>
+      item.includeInWardrobe !== false &&
+      (item.generatedImageUrl || item.sourcePreviewUrl)
   ).length
 
   const personGroups = Object.values(

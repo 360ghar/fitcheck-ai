@@ -48,6 +48,15 @@ class ItemAddController extends GetxController {
   final Map<String, DetectedItemData> _extractedItemsByTempId =
       <String, DetectedItemData>{};
 
+  // Decoupling + recovery state.
+  // True once extraction results have been shown (review) ahead of generation.
+  bool _decoupledToReview = false;
+  // Guards reconcile polling against running twice.
+  bool _reconciling = false;
+  int _reconcileFailures = 0;
+  // Fires when the SSE stream goes silent (no event, incl. heartbeats, 45s).
+  Timer? _watchdog;
+
   int get includedGeneratedCount =>
       generatedItems.where((item) => item.includeInWardrobe).length;
 
@@ -69,6 +78,10 @@ class ItemAddController extends GetxController {
     currentGeneratingIndex.value = 0;
     currentGeneratingItemName.value = '';
     _extractedItemsByTempId.clear();
+    _decoupledToReview = false;
+    _reconciling = false;
+    _reconcileFailures = 0;
+    _watchdog?.cancel();
 
     try {
       // Start async extraction job
@@ -100,10 +113,21 @@ class ItemAddController extends GetxController {
             _handleSSEEvent,
             onError: _handleSSEError,
             onDone: () {
+              // Stream closed. If we never reached a terminal state, the
+              // connection dropped mid-job - reconcile by polling /status
+              // instead of leaving the spinner (or mid-generation review)
+              // stranded forever. Gate on job incompleteness, not the
+              // spinner: isProcessing is cleared when review is shown.
               debugPrint('SSE stream closed');
+              if (_shouldReconcileOnStreamLoss) {
+                _reconcileViaPolling();
+              }
             },
             cancelOnError: false,
           );
+
+      // Arm the silence watchdog (reset on every event in _handleSSEEvent).
+      _armWatchdog();
     } catch (e) {
       isProcessing.value = false;
       _handleExtractionError(e);
@@ -114,6 +138,8 @@ class ItemAddController extends GetxController {
   void _handleSSEEvent(SSEEvent event) {
     debugPrint('SSE Event: ${event.type}');
     final data = event.data ?? <String, dynamic>{};
+    // Any traffic (incl. heartbeats) proves the stream is alive.
+    _armWatchdog();
 
     switch (event.type) {
       case 'connected':
@@ -151,12 +177,26 @@ class ItemAddController extends GetxController {
         _handleExtractionError(Exception(data['error'] ?? 'Extraction failed'));
         break;
 
+      case 'all_extractions_complete':
+        // Extraction is done - show results NOW, decoupled from the slow
+        // generation phase. Studio photos stream in via item_generation_complete
+        // and swap into the cards in place.
+        _seedReviewFromExtraction();
+        break;
+
       case 'generation_started':
-        currentPhase.value = 'generating';
-        phaseProgress.value = 65;
+        // Only show the full-screen generation spinner if we did NOT already
+        // decouple to review - otherwise the widget's branch order
+        // (isGeneratingImages > generatedItems) would yank the user back to the
+        // spinner. When decoupled, per-item progress still flows through
+        // itemGenerationStatus + _upsertGeneratedItem into the visible grid.
+        if (!_decoupledToReview) {
+          currentPhase.value = 'generating';
+          phaseProgress.value = 65;
+          isGeneratingImages.value = true;
+        }
         estimatedTimeRemaining.value = 25;
         currentGenerationStatus.value = 'Generating product images...';
-        isGeneratingImages.value = true;
         break;
 
       case 'item_generation_complete':
@@ -209,7 +249,23 @@ class ItemAddController extends GetxController {
       case 'job_complete':
         final parsedItems = _parseFinalItems(data);
         if (parsedItems.isNotEmpty) {
-          generatedItems.assignAll(parsedItems);
+          // Merge over the items shown during review so any include/exclude
+          // toggles (and edited names) survive the terminal event - don't
+          // clobber them with a wholesale replace.
+          final existingByTempId = {
+            for (final existing in generatedItems) existing.tempId: existing,
+          };
+          final merged = parsedItems
+              .map((parsed) {
+                final existing = existingByTempId[parsed.tempId];
+                if (existing == null) return parsed;
+                return parsed.copyWith(
+                  includeInWardrobe: existing.includeInWardrobe,
+                  name: existing.name ?? parsed.name,
+                );
+              })
+              .toList();
+          generatedItems.assignAll(merged);
           itemGenerationStatus.clear();
           for (final item in parsedItems) {
             final hasGeneratedImage =
@@ -351,20 +407,173 @@ class ItemAddController extends GetxController {
     }
   }
 
-  /// Handle SSE stream errors
+  /// Handle SSE stream errors.
+  /// Rather than stranding the user on a spinner or a hard error, reconcile
+  /// against the authoritative /status endpoint - it recovers with whatever
+  /// items already arrived, or surfaces an error if the job is truly lost.
   void _handleSSEError(dynamic error) {
     debugPrint('SSE Error: $error');
-    isProcessing.value = false;
-    isGeneratingImages.value = false;
+    if (currentPhase.value == 'complete') return;
+    _reconcileViaPolling();
+  }
 
-    Get.snackbar(
-      'Connection Error',
-      'Lost connection to server. Please try again.',
-      snackPosition: SnackPosition.TOP,
-      backgroundColor: Colors.red,
+  /// Show extraction results immediately (decoupled from generation).
+  void _seedReviewFromExtraction() {
+    if (_extractedItemsByTempId.isEmpty || _decoupledToReview) return;
+    _decoupledToReview = true;
+
+    generatedItems.assignAll(
+      _extractedItemsByTempId.values
+          .map(
+            (item) => DetectedItemDataWithImage(
+              tempId: item.tempId,
+              category: item.category,
+              subCategory: item.subCategory,
+              colors: item.colors,
+              material: item.material,
+              pattern: item.pattern,
+              brand: item.brand,
+              confidence: item.confidence,
+              detailedDescription: item.detailedDescription,
+              personId: item.personId,
+              personLabel: item.personLabel,
+              isCurrentUserPerson: item.isCurrentUserPerson,
+              includeInWardrobe: item.includeInWardrobe,
+              status: 'detected',
+              name: item.subCategory ?? item.category,
+            ),
+          )
+          .toList(),
     );
 
+    currentPhase.value = 'review';
+    phaseProgress.value = 100;
+    estimatedTimeRemaining.value = 0;
+    isProcessing.value = false;
+    currentGenerationStatus.value = 'Items detected! Creating studio photos...';
+  }
+
+  /// True while a job is still in flight and we are not already reconciling.
+  /// Used for SSE silence / stream-close recovery. Deliberately independent of
+  /// [isProcessing]: that flag is pure spinner UI and is cleared as soon as
+  /// review is seeded, while studio generation may still be streaming.
+  bool get _shouldReconcileOnStreamLoss =>
+      _currentJobId != null &&
+      currentPhase.value != 'complete' &&
+      !_reconciling;
+
+  /// Arm (or re-arm) the silence watchdog. The backend heartbeats every ~30s,
+  /// so 45s with no event means a dead or hung connection: reconcile.
+  void _armWatchdog() {
+    _watchdog?.cancel();
+    _watchdog = Timer(const Duration(seconds: 45), () {
+      if (_shouldReconcileOnStreamLoss) {
+        _reconcileViaPolling();
+      }
+    });
+  }
+
+  /// Poll /status to reconcile the UI when the SSE stream dies, hangs, or the
+  /// job is lost (OOM/redeploy). Bounded by a deadline and a failure counter.
+  Future<void> _reconcileViaPolling() async {
+    final jobId = _currentJobId;
+    if (jobId == null || _reconciling) return;
+    _reconciling = true;
+    _reconcileFailures = 0;
+    _watchdog?.cancel();
+
+    final deadline = DateTime.now().add(const Duration(minutes: 2));
+
+    while (_reconciling) {
+      try {
+        final status = await _itemRepository.getSingleJobStatus(jobId);
+        _reconcileFailures = 0;
+
+        // Merge server items over what's on screen (keeps user toggles), using
+        // the same parser as job_complete.
+        final existingByTempId = {
+          for (final existing in generatedItems) existing.tempId: existing,
+        };
+        final rawItems = status['items'];
+        if (rawItems is List) {
+          for (final raw in rawItems.whereType<Map<String, dynamic>>()) {
+            final parsed = DetectedItemDataWithImage.fromJson(raw);
+            final existing = existingByTempId[parsed.tempId];
+            final merged = existing == null
+                ? parsed
+                : parsed.copyWith(
+                    includeInWardrobe: existing.includeInWardrobe,
+                    name: existing.name ?? parsed.name,
+                  );
+            _upsertGeneratedItem(merged);
+          }
+        }
+
+        final statusStr = status['status']?.toString() ?? '';
+        switch (statusStr) {
+          case 'completed':
+            _finishReconcile(success: true);
+            return;
+          case 'failed':
+          case 'cancelled':
+            _finishReconcile(
+              success: generatedItems.isNotEmpty,
+              errorMessage: status['error']?.toString() ?? 'Extraction failed',
+            );
+            return;
+          default:
+            // Still running: keep whatever we have on screen and poll again.
+            if (generatedItems.isNotEmpty && !_decoupledToReview) {
+              _decoupledToReview = true;
+              currentPhase.value = 'review';
+              isProcessing.value = false;
+            }
+        }
+      } catch (e) {
+        _reconcileFailures++;
+        debugPrint('Reconcile poll error ($_reconcileFailures): $e');
+        // Job likely gone (OOM/redeploy -> 404) or network flaky. If we have
+        // items, recover with them; a few failures in a row also forces a
+        // decision so we never poll forever.
+        if (generatedItems.isNotEmpty || _reconcileFailures >= 3) {
+          _finishReconcile(
+            success: generatedItems.isNotEmpty,
+            errorMessage:
+                generatedItems.isEmpty ? 'Connection was lost. Try again.' : null,
+          );
+          return;
+        }
+      }
+
+      if (DateTime.now().isAfter(deadline)) {
+        _finishReconcile(
+          success: generatedItems.isNotEmpty,
+          errorMessage: generatedItems.isEmpty
+              ? 'Connection lost while processing.'
+              : null,
+        );
+        return;
+      }
+
+      await Future.delayed(const Duration(seconds: 3));
+    }
+  }
+
+  /// Terminal handling for reconcile polling.
+  void _finishReconcile({required bool success, String? errorMessage}) {
+    _reconciling = false;
+    isProcessing.value = false;
+    isGeneratingImages.value = false;
+    _watchdog?.cancel();
     _cleanupSSE();
+
+    if (success) {
+      currentPhase.value = 'complete';
+      phaseProgress.value = 100;
+      estimatedTimeRemaining.value = 0;
+    } else {
+      _handleExtractionError(Exception(errorMessage ?? 'Extraction failed'));
+    }
   }
 
   /// Handle extraction errors with categorization (Phase 1)
@@ -475,6 +684,8 @@ class ItemAddController extends GetxController {
 
   /// Cleanup SSE subscription
   void _cleanupSSE() {
+    _watchdog?.cancel();
+    _watchdog = null;
     _sseSubscription?.cancel();
     _sseSubscription = null;
     _currentJobId = null;
@@ -623,11 +834,6 @@ class ItemAddController extends GetxController {
       int savedCount = 0;
       for (final itemWithImage in itemsToSave) {
         try {
-          // Skip items that don't have a generated image
-          if (itemWithImage.generatedImageUrl == null) {
-            continue;
-          }
-
           // Map DetectedItemDataWithImage to CreateItemRequest
           final request = CreateItemRequest(
             name:
@@ -645,23 +851,32 @@ class ItemAddController extends GetxController {
                 : UseCases.normalizeList(selectedUseCases),
           );
 
-          // Create item first (without image - we'll upload the generated one separately)
-          final created = await _itemRepository.createItem(request);
+          final ItemModel finalItem;
+          if (itemWithImage.generatedImageUrl != null) {
+            // Studio photo ready: create the item, then upload the generated
+            // image (convert the data URL back to base64 for upload).
+            final created = await _itemRepository.createItem(request);
+            final dataUrlRegex = RegExp(
+              r'^data:image/\w+;base64,',
+              caseSensitive: false,
+            );
+            final base64Data = itemWithImage.generatedImageUrl!.replaceFirst(
+              dataUrlRegex,
+              '',
+            );
+            await _itemRepository.uploadImageFromBase64(created.id, base64Data);
+            finalItem = await _itemRepository.getItem(created.id);
+          } else if (selectedImage.value != null) {
+            // Studio photo not ready yet (decoupled save) - save with the
+            // original uploaded photo instead of skipping the item.
+            finalItem = await _itemRepository.createItemWithImage(
+              image: selectedImage.value!,
+              request: request,
+            );
+          } else {
+            continue; // No image available at all - nothing to save.
+          }
 
-          // Upload the generated product image
-          // Convert data URL back to base64 for upload (handle different image formats)
-          final dataUrlRegex = RegExp(
-            r'^data:image/\w+;base64,',
-            caseSensitive: false,
-          );
-          final base64Data = itemWithImage.generatedImageUrl!.replaceFirst(
-            dataUrlRegex,
-            '',
-          );
-          await _itemRepository.uploadImageFromBase64(created.id, base64Data);
-
-          // Fetch the complete item with images
-          final finalItem = await _itemRepository.getItem(created.id);
           createdItems.add(finalItem);
           savedCount++;
         } catch (e) {
@@ -775,6 +990,9 @@ class ItemAddController extends GetxController {
     currentGeneratingItemName.value = '';
     itemGenerationStatus.clear();
     _extractedItemsByTempId.clear();
+    _decoupledToReview = false;
+    _reconciling = false;
+    _reconcileFailures = 0;
   }
 
   @override

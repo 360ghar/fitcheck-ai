@@ -17,6 +17,7 @@ import {
   Copy,
   Plus,
   X,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -90,9 +91,12 @@ export function ExtractedItemCard({
 
   const isLowConfidence = item.confidence < 0.7
   const hasFailed = item.status === 'failed'
+  const isGenerating = item.status === 'generating'
   const hasDuplicates = duplicates.length > 0
   const isIncluded = item.includeInWardrobe !== false
   const occasionTags = item.occasion_tags || []
+  // Studio photo first; fall back to the uploaded photo while it generates.
+  const imageSrc = item.generatedImageUrl || item.sourcePreviewUrl
 
   // Check for duplicates when item has name and category
   useEffect(() => {
@@ -179,9 +183,9 @@ export function ExtractedItemCard({
       <CardContent className="p-0">
         {/* Image Section */}
         <div className="relative aspect-square bg-gray-100 dark:bg-gray-700">
-          {item.generatedImageUrl ? (
+          {imageSrc ? (
             <img
-              src={item.generatedImageUrl}
+              src={imageSrc}
               alt={item.sub_category || item.category}
               className="w-full h-full object-cover"
             />
@@ -195,6 +199,15 @@ export function ExtractedItemCard({
                   <span className="text-xs">No image</span>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Studio photo is still rendering - show the source photo underneath
+              with a small indicator (decoupled generation). */}
+          {isGenerating && !item.generatedImageUrl && (
+            <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-[11px] font-medium text-white">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Generating photo…
             </div>
           )}
 

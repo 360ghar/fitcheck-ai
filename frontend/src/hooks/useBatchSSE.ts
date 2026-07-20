@@ -17,6 +17,11 @@ interface UseBatchSSEOptions {
   onError?: (error: Error) => void;
   /** Callback when reconnecting */
   onReconnect?: () => void;
+  /**
+   * Callback when the stream ends without a terminal event (silent death or
+   * idle timeout). The caller should reconcile via the /status endpoint.
+   */
+  onStreamEnded?: () => void;
   /** Whether to auto-connect when jobId is set */
   autoConnect?: boolean;
 }
@@ -40,6 +45,7 @@ export function useBatchSSE({
   onEvent,
   onError,
   onReconnect,
+  onStreamEnded,
   autoConnect = true,
 }: UseBatchSSEOptions): UseBatchSSEReturn {
   const [isConnected, setIsConnected] = useState(false);
@@ -49,17 +55,21 @@ export function useBatchSSE({
   const reconnectAttempts = useRef(0);
   const maxReconnects = 3;
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const watchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastEventAtRef = useRef(0);
 
   // Store callbacks in refs to avoid reconnecting on every callback change
   const onEventRef = useRef(onEvent);
   const onErrorRef = useRef(onError);
   const onReconnectRef = useRef(onReconnect);
+  const onStreamEndedRef = useRef(onStreamEnded);
 
   useEffect(() => {
     onEventRef.current = onEvent;
     onErrorRef.current = onError;
     onReconnectRef.current = onReconnect;
-  }, [onEvent, onError, onReconnect]);
+    onStreamEndedRef.current = onStreamEnded;
+  }, [onEvent, onError, onReconnect, onStreamEnded]);
 
   const connect = useCallback(() => {
     if (!jobId) return;
@@ -76,13 +86,52 @@ export function useBatchSSE({
       disconnectRef.current = null;
     }
 
+    // Reset the idle watchdog
+    if (watchdogRef.current) {
+      clearInterval(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+
     setError(null);
+    lastEventAtRef.current = Date.now();
+
+    const stopWatchdog = () => {
+      if (watchdogRef.current) {
+        clearInterval(watchdogRef.current);
+        watchdogRef.current = null;
+      }
+    };
+
+    // Shared path for any connection drop - a real error OR a silent stream
+    // end with no terminal event. Try reconnecting (the backend replays the
+    // terminal event if the job already finished); if reconnects are
+    // exhausted, hand off to the caller to reconcile by polling /status.
+    const handleDrop = (err: Error | null) => {
+      setIsConnected(false);
+      stopWatchdog();
+
+      if (reconnectAttempts.current < maxReconnects) {
+        reconnectAttempts.current++;
+        const delay = 1000 * reconnectAttempts.current;
+
+        reconnectTimeoutRef.current = setTimeout(() => {
+          onReconnectRef.current?.();
+          connect();
+        }, delay);
+      } else if (err) {
+        setError(err);
+        onErrorRef.current?.(err);
+      } else {
+        onStreamEndedRef.current?.();
+      }
+    };
 
     const disconnect = createAuthenticatedSSEConnection(
       jobId,
       (event) => {
         setIsConnected(true);
         reconnectAttempts.current = 0;
+        lastEventAtRef.current = Date.now();
         onEventRef.current({
           type: event.type as BatchSSEEventType,
           data: event.data,
@@ -96,33 +145,42 @@ export function useBatchSSE({
         ) {
           // Don't reconnect after terminal events
           setIsConnected(false);
+          stopWatchdog();
         }
       },
-      (err) => {
-        setIsConnected(false);
-
-        if (reconnectAttempts.current < maxReconnects) {
-          reconnectAttempts.current++;
-          const delay = 1000 * reconnectAttempts.current;
-
-          reconnectTimeoutRef.current = setTimeout(() => {
-            onReconnectRef.current?.();
-            connect();
-          }, delay);
-        } else {
-          setError(err);
-          onErrorRef.current?.(err);
-        }
+      (err) => handleDrop(err),
+      (sawTerminal) => {
+        if (!sawTerminal) handleDrop(null);
       }
     );
 
     disconnectRef.current = disconnect;
+
+    // Idle watchdog: the backend heartbeats every 30s, so 45s of silence means
+    // a dead or hung connection. Abort the stream and use the same drop path
+    // as a silent end so reconnect budget is shared (backend can replay the
+    // terminal event). Abort does not fire onClose (signal.aborted), so this
+    // will not double-call handleDrop.
+    watchdogRef.current = setInterval(() => {
+      if (Date.now() - lastEventAtRef.current > 45_000) {
+        if (disconnectRef.current) {
+          disconnectRef.current();
+          disconnectRef.current = null;
+        }
+        handleDrop(null);
+      }
+    }, 15_000);
   }, [jobId]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
+    }
+
+    if (watchdogRef.current) {
+      clearInterval(watchdogRef.current);
+      watchdogRef.current = null;
     }
 
     if (disconnectRef.current) {

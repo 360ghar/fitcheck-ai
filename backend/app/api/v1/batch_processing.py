@@ -446,7 +446,9 @@ async def start_single_extraction(
             user_id=user_id,
             images=[image_data],
             auto_generate=request.auto_generate,
-            generation_batch_size=1,  # Process items sequentially for single image
+            # ponytail: generate a single photo's ~3 items concurrently, not one-at-a-time.
+            # GENERATION_SEMAPHORE(5) still caps process-wide concurrency.
+            generation_batch_size=5,
         )
 
         # Start processing in background

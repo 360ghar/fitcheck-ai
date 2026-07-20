@@ -1222,6 +1222,72 @@ class _GeneratedItemCard extends StatelessWidget {
     final tokens = AppUiTokens.of(context);
     final isIncluded = item.includeInWardrobe;
 
+    // Studio photo still rendering (decoupled generation): a calm placeholder,
+    // NOT the red failed card. Real failures (generationError / status failed)
+    // keep the red card below.
+    final generationFailed =
+        item.generationError != null || item.status == 'failed';
+
+    if (item.generatedImageUrl == null && !generationFailed) {
+      return Container(
+        decoration: BoxDecoration(
+          color: tokens.cardColor,
+          borderRadius: BorderRadius.circular(AppConstants.radius16),
+          border: Border.all(color: tokens.cardBorderColor),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (onToggleInclude != null)
+              Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                    top: AppConstants.spacing8,
+                    right: AppConstants.spacing8,
+                  ),
+                  child: GestureDetector(
+                    onTap: onToggleInclude,
+                    child: Icon(
+                      isIncluded
+                          ? Icons.check_box_rounded
+                          : Icons.check_box_outline_blank_rounded,
+                      color: isIncluded ? tokens.brandColor : tokens.textMuted,
+                    ),
+                  ),
+                ),
+              ),
+            SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  tokens.brandColor.withOpacity(0.7),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppConstants.spacing8),
+            Text(
+              item.name ?? item.subCategory ?? item.category,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppConstants.spacing4),
+            Text(
+              'Creating studio photo…',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: tokens.textMuted,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (item.generatedImageUrl == null) {
       // Failed generation
       return Container(

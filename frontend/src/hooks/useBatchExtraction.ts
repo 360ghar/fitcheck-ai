@@ -9,8 +9,10 @@ import { useBatchSSE } from './useBatchSSE';
 import {
   startBatchExtraction,
   cancelBatchJob,
+  getBatchJobStatus,
   fileToBase64,
 } from '@/api/batch';
+import { compressImageFile } from '@/lib/image-compress';
 import { normalizeUseCases } from '@/lib/use-cases';
 import type {
   BatchExtractionState,
@@ -32,6 +34,7 @@ const initialState: BatchExtractionState = {
   images: [],
   jobId: null,
   allDetectedItems: [],
+  uploadProgress: 0,
   extractionProgress: 0,
   generationProgress: 0,
   currentBatch: 0,
@@ -42,6 +45,29 @@ const initialState: BatchExtractionState = {
   itemsFailed: 0,
   error: null,
 };
+
+/**
+ * Resolve UI step after items arrive or a job ends.
+ * - Never interrupt `saving`.
+ * - Never demote `review` while the job is still in flight.
+ * - Promote in-flight steps (`uploading`/`extracting`/`generating`) to `review`
+ *   when items exist.
+ * - On terminal empty results, fall back to `select`.
+ */
+function resolveStepWithItems(
+  prevStep: BatchExtractionState['step'],
+  hasItems: boolean,
+  mode: 'in_flight' | 'terminal'
+): BatchExtractionState['step'] {
+  if (prevStep === 'saving') return 'saving';
+  if (hasItems) return 'review';
+  if (mode === 'in_flight') {
+    // Still running with zero items: keep the current processing step.
+    return prevStep;
+  }
+  // Terminal, no items: leave processing UI.
+  return 'select';
+}
 
 /**
  * Generate a unique ID for an image
@@ -71,7 +97,9 @@ function generateItemName(item: {
 }
 
 /**
- * Convert API item to frontend DetectedItem format
+ * Convert API item to frontend DetectedItem format.
+ * When the job is still generating and the item has no studio photo/error yet,
+ * emit `generating` so review cards keep the in-progress badge.
  */
 function convertToDetectedItem(
   apiItem: {
@@ -95,8 +123,16 @@ function convertToDetectedItem(
     generation_error?: string;
     occasion_tags?: string[];
   },
-  imageId?: string
+  imageId?: string,
+  jobStatus?: string
 ): DetectedItem {
+  const hasImage = Boolean(apiItem.generated_image_base64 || apiItem.generated_image_url);
+  const hasError = Boolean(apiItem.generation_error);
+  const stillGenerating =
+    !hasImage &&
+    !hasError &&
+    (jobStatus === 'generating' || jobStatus === 'pending' || jobStatus === 'extracting');
+
   return {
     tempId: apiItem.temp_id,
     sourceImageId: imageId,
@@ -114,11 +150,7 @@ function convertToDetectedItem(
     confidence: apiItem.confidence,
     boundingBox: apiItem.bounding_box,
     detailedDescription: apiItem.detailed_description || '',
-    status: apiItem.generated_image_base64 || apiItem.generated_image_url
-      ? 'generated'
-      : apiItem.generation_error
-        ? 'failed'
-        : 'detected',
+    status: hasImage ? 'generated' : hasError ? 'failed' : stillGenerating ? 'generating' : 'detected',
     generatedImageUrl: apiItem.generated_image_url ||
       (apiItem.generated_image_base64
         ? `data:image/png;base64,${apiItem.generated_image_base64}`
@@ -131,6 +163,145 @@ function convertToDetectedItem(
     }),
     occasion_tags: normalizeUseCases(apiItem.occasion_tags),
   };
+}
+
+/**
+ * Overlay a server row onto a local row, preserving user edits and local-only
+ * fields (deletes, name, toggles, source preview, in-flight generating).
+ */
+function overlayServerItem(local: DetectedItem, server: DetectedItem): DetectedItem {
+  const preserveGenerating =
+    local.status === 'generating' &&
+    !server.generatedImageUrl &&
+    !server.generationError;
+
+  return {
+    ...server,
+    name: local.name ?? server.name,
+    includeInWardrobe: local.includeInWardrobe ?? server.includeInWardrobe,
+    tags: local.tags ?? server.tags,
+    occasion_tags: local.occasion_tags ?? server.occasion_tags,
+    sourcePreviewUrl: local.sourcePreviewUrl ?? server.sourcePreviewUrl,
+    sourceImageId: local.sourceImageId ?? server.sourceImageId,
+    generatedImageUrl: server.generatedImageUrl ?? local.generatedImageUrl,
+    // A user-deleted item stays deleted so save skips it.
+    // Keep local "generating" when the status API has no image yet.
+    status:
+      local.status === 'deleted'
+        ? 'deleted'
+        : preserveGenerating
+          ? 'generating'
+          : server.status,
+  };
+}
+
+/**
+ * Merge authoritative server items over the locally-tracked items, preserving
+ * any edits the user made during review (name, wardrobe toggle, tags, deletes)
+ * and a client-side image when the server hasn't produced one yet. Keyed by
+ * tempId so it's safe to call repeatedly (job_complete, reconcile polling).
+ *
+ * Union semantics: never replace the full list with an empty server payload
+ * (transient glitch / partial response). Overlay matches and append server-only
+ * rows so local items are not wiped.
+ */
+function mergeServerItems(
+  existing: DetectedItem[],
+  serverItems: DetectedItem[]
+): DetectedItem[] {
+  if (serverItems.length === 0) return existing;
+
+  const serverById = new Map(serverItems.map((item) => [item.tempId, item]));
+  const seen = new Set<string>();
+  const result: DetectedItem[] = [];
+
+  for (const local of existing) {
+    const server = serverById.get(local.tempId);
+    if (server) {
+      result.push(overlayServerItem(local, server));
+      seen.add(local.tempId);
+    } else {
+      result.push(local);
+    }
+  }
+
+  for (const server of serverItems) {
+    if (!seen.has(server.tempId)) {
+      result.push(server);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Upsert newly extracted items into the existing list by tempId.
+ * Makes SSE event-history replay on reconnect idempotent.
+ */
+function upsertDetectedItems(
+  existing: DetectedItem[],
+  incoming: DetectedItem[]
+): DetectedItem[] {
+  if (incoming.length === 0) return existing;
+
+  const byId = new Map(existing.map((item) => [item.tempId, item]));
+  const order = existing.map((item) => item.tempId);
+  const newIds: string[] = [];
+
+  for (const item of incoming) {
+    const prev = byId.get(item.tempId);
+    if (prev) {
+      // Prefer fresher extraction fields; keep user deletes, edits, and any
+      // post-extraction progress (generating/generated/failed) from local state
+      // so a replayed extraction event cannot roll status backward.
+      const keepLocalStatus =
+        prev.status === 'deleted' ||
+        prev.status === 'generating' ||
+        prev.status === 'generated' ||
+        prev.status === 'failed';
+      byId.set(item.tempId, {
+        ...item,
+        name: prev.name ?? item.name,
+        includeInWardrobe: prev.includeInWardrobe ?? item.includeInWardrobe,
+        tags: prev.tags ?? item.tags,
+        occasion_tags: prev.occasion_tags ?? item.occasion_tags,
+        sourcePreviewUrl: item.sourcePreviewUrl ?? prev.sourcePreviewUrl,
+        generatedImageUrl: prev.generatedImageUrl ?? item.generatedImageUrl,
+        status: keepLocalStatus ? prev.status : item.status,
+        generationError: prev.generationError ?? item.generationError,
+      });
+    } else {
+      byId.set(item.tempId, item);
+      newIds.push(item.tempId);
+    }
+  }
+
+  return [...order, ...newIds]
+    .map((id) => byId.get(id))
+    .filter((item): item is DetectedItem => item != null);
+}
+
+/**
+ * Map items with a fixed concurrency pool (avoids decoding 50 bitmaps at once).
+ */
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  const results = new Array<R>(items.length);
+  let next = 0;
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index], index);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
 }
 
 export interface UseBatchExtractionReturn {
@@ -165,6 +336,10 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
   const [state, setState] = useState<BatchExtractionState>(initialState);
   const totalImagesRef = useRef(0);
   const totalItemsRef = useRef(0);
+  // Latest job id (state.jobId is stale inside the [] deps SSE callbacks).
+  const jobIdRef = useRef<string | null>(null);
+  // Guards reconcile polling against running twice.
+  const reconcilingRef = useRef(false);
 
   /**
    * Handle SSE events
@@ -188,21 +363,32 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           totalImagesRef.current = data.total_images;
 
           // Convert API items to frontend format
-          const newItems: DetectedItem[] = data.items.map((item) =>
+          const baseItems: DetectedItem[] = data.items.map((item) =>
             convertToDetectedItem(item, data.image_id)
           );
 
-          setState((prev) => ({
-            ...prev,
-            images: prev.images.map((img) =>
-              img.imageId === data.image_id
-                ? { ...img, status: 'completed' as const, detectedItems: newItems }
-                : img
-            ),
-            allDetectedItems: [...prev.allDetectedItems, ...newItems],
-            imagesCompleted: data.completed_count,
-            extractionProgress: (data.completed_count / data.total_images) * 100,
-          }));
+          setState((prev) => {
+            // Attach the uploaded photo's preview so review can show each item
+            // before its studio photo is generated (decoupling).
+            const sourcePreviewUrl = prev.images.find(
+              (img) => img.imageId === data.image_id
+            )?.previewUrl;
+            const newItems = baseItems.map((item) => ({ ...item, sourcePreviewUrl }));
+            // Upsert by tempId so SSE reconnect event-history replay does not
+            // duplicate items (mid-generation save would otherwise persist them).
+            const allDetectedItems = upsertDetectedItems(prev.allDetectedItems, newItems);
+            return {
+              ...prev,
+              images: prev.images.map((img) =>
+                img.imageId === data.image_id
+                  ? { ...img, status: 'completed' as const, detectedItems: newItems }
+                  : img
+              ),
+              allDetectedItems,
+              imagesCompleted: data.completed_count,
+              extractionProgress: (data.completed_count / data.total_images) * 100,
+            };
+          });
           break;
         }
 
@@ -223,10 +409,21 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
         }
 
         case 'all_extractions_complete':
-          setState((prev) => ({
-            ...prev,
-            extractionProgress: 100,
-          }));
+          // Extraction is done - show results NOW. Studio photos keep streaming
+          // in via item_generation_complete; we no longer hold the UI hostage
+          // for the (slow) generation phase.
+          setState((prev) => {
+            const hasItems = prev.allDetectedItems.length > 0;
+            return {
+              ...prev,
+              extractionProgress: 100,
+              step: resolveStepWithItems(prev.step, hasItems, 'terminal'),
+              error:
+                !hasItems && prev.step !== 'saving'
+                  ? 'No items detected in your photos. Try clearer images.'
+                  : prev.error,
+            };
+          });
           break;
 
         case 'generation_started': {
@@ -235,14 +432,21 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
 
           setState((prev) => ({
             ...prev,
-            step: 'generating',
+            // Don't yank the user out of review or saving (decoupling + replay):
+            // generation runs in the background once results are showing.
+            step:
+              prev.step === 'review' || prev.step === 'saving'
+                ? prev.step
+                : 'generating',
             totalBatches: data.total_batches,
             currentBatch: 1,
-            // Mark all items as generating
-            allDetectedItems: prev.allDetectedItems.map((item) => ({
-              ...item,
-              status: 'generating' as const,
-            })),
+            // Mark items as generating, preserving deletes and any item that
+            // already has a generated image.
+            allDetectedItems: prev.allDetectedItems.map((item) =>
+              item.status === 'deleted' || item.status === 'generated'
+                ? item
+                : { ...item, status: 'generating' as const }
+            ),
           }));
           break;
         }
@@ -263,7 +467,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           setState((prev) => ({
             ...prev,
             allDetectedItems: prev.allDetectedItems.map((item) =>
-              item.tempId === data.temp_id
+              item.tempId === data.temp_id && item.status !== 'deleted'
                 ? {
                     ...item,
                     status: 'generated' as const,
@@ -307,42 +511,56 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
         case 'job_complete': {
           const data = event.data as JobCompleteData;
 
-          // Merge final items from server
+          // Final items from server
           const finalItems: DetectedItem[] = data.items.map((item) =>
             convertToDetectedItem(item, item.image_id)
           );
 
-          const itemsByImage = finalItems.reduce<Record<string, DetectedItem[]>>(
-            (acc, item) => {
-              if (item.sourceImageId) {
-                if (!acc[item.sourceImageId]) {
-                  acc[item.sourceImageId] = [];
-                }
-                acc[item.sourceImageId].push(item);
-              }
-              return acc;
-            },
-            {}
-          );
+          setState((prev) => {
+            // Merge over local items so edits/toggles/deletes made during the
+            // (now-decoupled) review survive the terminal event.
+            const merged = mergeServerItems(prev.allDetectedItems, finalItems);
 
-          setState((prev) => ({
-            ...prev,
-            step: 'review',
-            generationProgress: 100,
-            allDetectedItems: finalItems,
-            images: prev.images.map((image) => ({
-              ...image,
-              status: image.status === 'failed' ? 'failed' : 'completed',
-              detectedItems: itemsByImage[image.imageId] || image.detectedItems || [],
-            })),
-          }));
+            const itemsByImage = merged.reduce<Record<string, DetectedItem[]>>(
+              (acc, item) => {
+                if (item.sourceImageId) {
+                  if (!acc[item.sourceImageId]) {
+                    acc[item.sourceImageId] = [];
+                  }
+                  acc[item.sourceImageId].push(item);
+                }
+                return acc;
+              },
+              {}
+            );
+
+            return {
+              ...prev,
+              step: resolveStepWithItems(prev.step, merged.length > 0, 'terminal'),
+              generationProgress: 100,
+              allDetectedItems: merged,
+              images: prev.images.map((image) => ({
+                ...image,
+                status: image.status === 'failed' ? 'failed' : 'completed',
+                detectedItems: itemsByImage[image.imageId] || image.detectedItems || [],
+              })),
+            };
+          });
           break;
         }
 
         case 'job_failed': {
           const data = event.data as { error?: string };
+          // Leave the loading screen: show whatever was extracted, or return to
+          // select with the error. Never strand the user on a spinner. Never
+          // interrupt an in-progress save.
           setState((prev) => ({
             ...prev,
+            step: resolveStepWithItems(
+              prev.step,
+              prev.allDetectedItems.length > 0,
+              'terminal'
+            ),
             error: data.error || 'Job failed',
           }));
           break;
@@ -364,14 +582,116 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
     []
   );
 
-  const handleSSEError = useCallback((error: Error) => {
-    setState((prev) => ({ ...prev, error: error.message }));
+  /**
+   * Reconcile the UI against the authoritative job status by polling /status.
+   * This is the recovery path when the SSE stream dies silently, errors out
+   * after retries, goes idle, or when the job was lost entirely (process
+   * OOM/redeploy -> the status endpoint 404s). Bounded by a 2-minute deadline.
+   */
+  const reconcileJobStatus = useCallback(async () => {
+    const jobId = jobIdRef.current;
+    if (!jobId || reconcilingRef.current) return;
+    reconcilingRef.current = true;
+
+    const deadline = Date.now() + 120_000;
+    const TERMINAL = new Set(['completed', 'failed', 'cancelled']);
+
+    const poll = async () => {
+      if (!reconcilingRef.current) return;
+      let terminal = false;
+
+      try {
+        const status = await getBatchJobStatus(jobId);
+        const serverItems = (status.items || []).map((item) =>
+          convertToDetectedItem(item, item.image_id, status.status)
+        );
+        terminal = TERMINAL.has(status.status);
+
+        setState((prev) => {
+          const merged = mergeServerItems(prev.allDetectedItems, serverItems);
+          const hasItems = merged.length > 0;
+          if (status.status === 'completed') {
+            return {
+              ...prev,
+              allDetectedItems: merged,
+              step: resolveStepWithItems(prev.step, hasItems, 'terminal'),
+              generationProgress: 100,
+              error: null,
+            };
+          }
+          if (status.status === 'failed' || status.status === 'cancelled') {
+            return {
+              ...prev,
+              allDetectedItems: merged,
+              step: resolveStepWithItems(prev.step, hasItems, 'terminal'),
+              error: status.error || 'Job failed',
+            };
+          }
+          // Still running: backfill items and promote to review as soon as
+          // anything exists (mirrors Flutter). Don't strand on extracting.
+          // Never interrupt saving.
+          return {
+            ...prev,
+            allDetectedItems: merged,
+            step: resolveStepWithItems(prev.step, hasItems, 'in_flight'),
+            error: hasItems ? null : prev.error,
+          };
+        });
+      } catch (err) {
+        const is404 =
+          (err as { response?: { status?: number } })?.response?.status === 404;
+        if (is404) {
+          // Job gone (OOM/redeploy): recover with whatever already arrived.
+          terminal = true;
+          setState((prev) => {
+            const hasItems = prev.allDetectedItems.length > 0;
+            return {
+              ...prev,
+              step: resolveStepWithItems(prev.step, hasItems, 'terminal'),
+              error: hasItems ? null : 'Connection was lost. Try again.',
+            };
+          });
+        }
+        // Other errors are transient: keep polling until the deadline.
+      }
+
+      if (terminal) {
+        reconcilingRef.current = false;
+        return;
+      }
+      if (Date.now() > deadline) {
+        reconcilingRef.current = false;
+        setState((prev) => {
+          const hasItems = prev.allDetectedItems.length > 0;
+          return {
+            ...prev,
+            step: resolveStepWithItems(prev.step, hasItems, 'terminal'),
+            error: hasItems ? prev.error : 'Connection lost while processing.',
+          };
+        });
+        return;
+      }
+      setTimeout(poll, 5_000);
+    };
+
+    poll();
   }, []);
+
+  // By the time onError fires, useBatchSSE has exhausted its reconnects.
+  const handleSSEError = useCallback(() => {
+    void reconcileJobStatus();
+  }, [reconcileJobStatus]);
+
+  // The stream ended without a terminal event (silent death / idle timeout).
+  const handleStreamEnded = useCallback(() => {
+    void reconcileJobStatus();
+  }, [reconcileJobStatus]);
 
   const { isConnected, disconnect } = useBatchSSE({
     jobId: state.jobId,
     onEvent: handleSSEEvent,
     onError: handleSSEError,
+    onStreamEnded: handleStreamEnded,
     autoConnect: true,
   });
 
@@ -428,28 +748,33 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
   const startExtraction = useCallback(async () => {
     if (state.images.length === 0) return;
 
+    reconcilingRef.current = false;
     setState((prev) => ({
       ...prev,
       step: 'uploading',
+      uploadProgress: 0,
       error: null,
     }));
 
     try {
-      // Convert all images to base64
-      const imagesWithBase64 = await Promise.all(
-        state.images.map(async (img) => ({
-          image_id: img.imageId,
-          image_base64: await fileToBase64(img.file),
-          filename: img.file.name,
-        }))
-      );
+      // Compress then base64 each photo. Compression shrinks the POST ~10x;
+      // the original File stays in state.images for the save fallback.
+      // Limit concurrency so mobile browsers don't decode 50 bitmaps at once.
+      const imagesWithBase64 = await mapPool(state.images, 3, async (img) => ({
+        image_id: img.imageId,
+        image_base64: await fileToBase64(await compressImageFile(img.file)),
+        filename: img.file.name,
+      }));
 
       // Start the batch job
       const job = await startBatchExtraction(imagesWithBase64, {
         autoGenerate: true,
         generationBatchSize: 5,
+        onUploadProgress: (percent) =>
+          setState((prev) => ({ ...prev, uploadProgress: percent })),
       });
 
+      jobIdRef.current = job.job_id;
       setState((prev) => ({
         ...prev,
         jobId: job.job_id,
@@ -484,6 +809,8 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
     // Cleanup preview URLs
     state.images.forEach((img) => URL.revokeObjectURL(img.previewUrl));
 
+    jobIdRef.current = null;
+    reconcilingRef.current = false;
     setState(initialState);
   }, [state.jobId, state.images, disconnect]);
 
@@ -497,6 +824,8 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
 
     state.images.forEach((img) => URL.revokeObjectURL(img.previewUrl));
 
+    jobIdRef.current = null;
+    reconcilingRef.current = false;
     setState(initialState);
   }, [state.jobId, state.images, disconnect]);
 
