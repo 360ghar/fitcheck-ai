@@ -2,8 +2,154 @@ import json
 
 import pytest
 
-from app.agents.item_extraction_agent import ItemExtractionAgent
+from app.agents.item_extraction_agent import (
+    ItemExtractionAgent,
+    _normalize_bounding_box,
+)
 from app.services.ai_provider_service import AIResponse
+
+
+# =============================================================================
+# Bounding box normalization
+# =============================================================================
+
+
+def test_normalize_bounding_box_xywh_percent():
+    assert _normalize_bounding_box({"x": 10, "y": 20, "width": 30, "height": 40}) == {
+        "x": 10.0,
+        "y": 20.0,
+        "width": 30.0,
+        "height": 40.0,
+    }
+
+
+def test_normalize_bounding_box_dict_values_below_1_are_not_scaled():
+    """Dict boxes are percent verbatim per the prompt/schema contract.
+
+    Values ≤ 1 used to be treated as 0–1 fractions and multiplied by 100,
+    which blew up legitimate sub-1% percent boxes (tiny accessories) into
+    near-full-frame crops. They are now left alone; the 1% floor rejects
+    them. The 0–1 guess survives only for non-schema list input.
+    """
+    assert _normalize_bounding_box(
+        {"x": 0.1, "y": 0.2, "width": 0.3, "height": 0.4}
+    ) is None
+    assert _normalize_bounding_box([0.1, 0.2, 0.4, 0.6]) == {
+        "x": 10.0,
+        "y": 20.0,
+        "width": 30.0,
+        "height": 40.0,
+    }
+
+
+def test_normalize_bounding_box_percent_overflow_is_clamped_not_shrunk():
+    """A percent box slightly over 100 is clamped into the frame, not
+    misread as 0–1000 scale and shrunk to a corner sliver."""
+    assert _normalize_bounding_box({"x": 5, "y": 10, "width": 90, "height": 102}) == {
+        "x": 5.0,
+        "y": 10.0,
+        "width": 90.0,
+        "height": 90.0,
+    }
+
+
+def test_normalize_bounding_box_xyxy():
+    assert _normalize_bounding_box({"x1": 10, "y1": 20, "x2": 40, "y2": 60}) == {
+        "x": 10.0,
+        "y": 20.0,
+        "width": 30.0,
+        "height": 40.0,
+    }
+
+
+def test_normalize_bounding_box_0_1000_scale():
+    # Gemini-style 0–1000 coordinates
+    assert _normalize_bounding_box({"x1": 100, "y1": 200, "x2": 400, "y2": 600}) == {
+        "x": 10.0,
+        "y": 20.0,
+        "width": 30.0,
+        "height": 40.0,
+    }
+
+
+def test_normalize_bounding_box_list_xyxy():
+    assert _normalize_bounding_box([10, 20, 40, 60]) == {
+        "x": 10.0,
+        "y": 20.0,
+        "width": 30.0,
+        "height": 40.0,
+    }
+
+
+def test_normalize_bounding_box_clamps_overflow():
+    box = _normalize_bounding_box({"x": 90, "y": 90, "width": 50, "height": 50})
+    assert box is not None
+    assert box["x"] == 90.0
+    assert box["y"] == 90.0
+    assert box["width"] == 10.0
+    assert box["height"] == 10.0
+
+
+def test_normalize_bounding_box_rejects_tiny_or_empty():
+    assert _normalize_bounding_box({"x": 10, "y": 10, "width": 0.5, "height": 20}) is None
+    assert _normalize_bounding_box(None) is None
+    assert _normalize_bounding_box({}) is None
+
+
+def test_normalize_bounding_box_small_percent_not_treated_as_fraction():
+    """width/height slightly above 1 must stay percent, not ×100."""
+    assert _normalize_bounding_box(
+        {"x": 0.5, "y": 0.5, "width": 1.2, "height": 1.5}
+    ) == {
+        "x": 0.5,
+        "y": 0.5,
+        "width": 1.2,
+        "height": 1.5,
+    }
+
+
+@pytest.mark.asyncio
+async def test_extract_multiple_items_keeps_percent_boxes():
+    payload = {
+        "items": [
+            {
+                "category": "tops",
+                "sub_category": "tee",
+                "colors": ["red"],
+                "material": "cotton",
+                "pattern": "solid",
+                "brand": None,
+                "confidence": 0.9,
+                "boundingBox": {"x": 10, "y": 10, "width": 40, "height": 30},
+                "detailedDescription": "Red tee",
+                "person_id": "p1",
+                "person_label": "A",
+                "is_current_user_person": False,
+            }
+        ],
+        "people": [
+            {
+                "person_id": "p1",
+                "person_label": "A",
+                "is_current_user_person": False,
+                "confidence": 0.9,
+            }
+        ],
+        "overall_confidence": 0.9,
+        "image_description": "One person",
+        "item_count": 1,
+        "profile_match_found": False,
+    }
+
+    agent = ItemExtractionAgent(FakeAIService(json.dumps(payload)))
+    result = await agent.extract_multiple_items(image_base64="img")
+
+    assert result["items"][0]["bounding_box"] == {
+        "x": 10.0,
+        "y": 10.0,
+        "width": 40.0,
+        "height": 30.0,
+    }
 
 
 class FakeAIService:

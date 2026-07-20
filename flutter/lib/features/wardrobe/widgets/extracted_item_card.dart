@@ -308,22 +308,27 @@ class ExtractedItemCard extends StatelessWidget {
       boundingBoxes.add({...item.boundingBox!, 'label': item.name});
     }
 
-    return BoundingBoxOverlay(
-      boundingBoxes: boundingBoxes,
-      showLabels: false,
-      child: Image.file(
-        File(sourceImagePath),
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            color: tokens.cardColor,
-            child: Icon(
-              Icons.image_outlined,
-              color: tokens.textMuted,
-              size: 32,
-            ),
-          );
-        },
+    // contain + imageFilePath so percent boxes map to the letterboxed image.
+    return ColoredBox(
+      color: tokens.cardColor,
+      child: BoundingBoxOverlay(
+        boundingBoxes: boundingBoxes,
+        showLabels: false,
+        imageFilePath: sourceImagePath,
+        child: Image.file(
+          File(sourceImagePath),
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              color: tokens.cardColor,
+              child: Icon(
+                Icons.image_outlined,
+                color: tokens.textMuted,
+                size: 32,
+              ),
+            );
+          },
+        ),
       ),
     );
   }

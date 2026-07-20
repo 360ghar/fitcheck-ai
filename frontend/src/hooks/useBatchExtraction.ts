@@ -7,10 +7,9 @@
 import { useState, useCallback, useRef } from 'react';
 import { useBatchSSE } from './useBatchSSE';
 import {
-  startBatchExtraction,
+  startBatchExtractionMultipart,
   cancelBatchJob,
   getBatchJobStatus,
-  fileToBase64,
 } from '@/api/batch';
 import { compressImageFile } from '@/lib/image-compress';
 import { cropImageFromBoundingBox } from '@/lib/crop-from-bounding-box';
@@ -467,9 +466,14 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           setState((prev) => {
             // Attach the uploaded photo's preview so review can show each item
             // before its studio photo is generated (decoupling).
+            // Under overlap, gen may already be running — mark new items generating.
             const newItems = baseItems.map((item) => ({
               ...item,
               sourcePreviewUrl,
+              status:
+                prev.isGenerationRunning && item.status === 'detected'
+                  ? ('generating' as const)
+                  : item.status,
             }));
             // Upsert by tempId so SSE reconnect event-history replay does not
             // duplicate items (mid-generation save would otherwise persist them).
@@ -597,8 +601,9 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
               generationStartedAtRef.current,
               now
             );
-            const done =
-              data.completed_count + itemsFailed >= data.total_items && data.total_items > 0;
+            // Do NOT clear isGenerationRunning when completed >= total_items:
+            // under overlap, total_items grows as more images extract. Only
+            // all_generations_complete / job_complete is authoritative.
             return {
               ...prev,
               allDetectedItems: prev.allDetectedItems.map((item) =>
@@ -611,10 +616,18 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
                   : item
               ),
               itemsGenerated: data.completed_count,
-              generationProgress: (data.completed_count / data.total_items) * 100,
-              generationTotalItems: data.total_items,
-              generationEtaSeconds: done ? 0 : refinedEta ?? eta,
-              isGenerationRunning: !done,
+              // total_items may grow as more images finish extract (overlap).
+              generationProgress: Math.min(
+                100,
+                (data.completed_count / Math.max(data.total_items, 1)) * 100
+              ),
+              generationTotalItems: Math.max(
+                data.total_items,
+                prev.generationTotalItems,
+                data.completed_count
+              ),
+              generationEtaSeconds: refinedEta ?? eta,
+              isGenerationRunning: true,
               // Stay on review if items exist (replay / race safety).
               step:
                 prev.step === 'saving'
@@ -635,7 +648,6 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
             const completed = data.completed_count ?? prev.itemsGenerated;
             const failed = data.failed_count;
             const total = data.total_items ?? prev.generationTotalItems;
-            const done = total > 0 && completed + failed >= total;
             const eta = estimateGenerationEtaSeconds(
               completed,
               failed,
@@ -655,9 +667,14 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
                   : item
               ),
               itemsFailed: failed,
-              generationProgress: total > 0 ? ((completed + failed) / total) * 100 : prev.generationProgress,
-              generationEtaSeconds: done ? 0 : eta,
-              isGenerationRunning: !done,
+              generationProgress:
+                total > 0
+                  ? Math.min(100, ((completed + failed) / total) * 100)
+                  : prev.generationProgress,
+              generationTotalItems: Math.max(total, prev.generationTotalItems),
+              generationEtaSeconds: eta,
+              // Stay running until all_generations_complete (totals can grow).
+              isGenerationRunning: true,
             };
           });
           break;
@@ -946,17 +963,14 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
     }));
 
     try {
-      // Compress then base64 each photo. Compression shrinks the POST ~10x;
-      // the original File stays in state.images for the save fallback.
-      // Limit concurrency so mobile browsers don't decode 50 bitmaps at once.
-      const imagesWithBase64 = await mapPool(state.images, 3, async (img) => ({
-        image_id: img.imageId,
-        image_base64: await fileToBase64(await compressImageFile(img.file)),
-        filename: img.file.name,
+      // Compress for upload size; original File stays in state for save fallback.
+      // Multipart sends binary (no base64 bloat). Pool decode for mobile safety.
+      const compressed = await mapPool(state.images, 3, async (img) => ({
+        imageId: img.imageId,
+        file: await compressImageFile(img.file),
       }));
 
-      // Start the batch job
-      const job = await startBatchExtraction(imagesWithBase64, {
+      const job = await startBatchExtractionMultipart(compressed, {
         autoGenerate: true,
         generationBatchSize: 5,
         onUploadProgress: (percent) =>

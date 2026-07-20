@@ -5,6 +5,7 @@
  */
 
 import { ZoomableImage } from '@/components/ui/zoomable-image';
+import { normalizeBoundingBoxPercent } from '@/lib/crop-from-bounding-box';
 import type { BatchImageInput, DetectedItem } from '@/types';
 
 const BOX_COLORS = [
@@ -38,11 +39,15 @@ export function BatchOriginalsReview({ images }: BatchOriginalsReviewProps) {
             key={image.imageId}
             className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-white dark:bg-gray-900"
           >
-            <div className="relative aspect-square">
+            {/*
+              Image drives the box height (no object-cover / fixed square crop)
+              so percent boxes on the SVG map 1:1 to painted pixels.
+            */}
+            <div className="relative bg-gray-100 dark:bg-gray-800">
               <ZoomableImage
                 src={image.previewUrl}
                 alt={image.file.name}
-                className="w-full h-full object-cover"
+                className="block w-full h-auto"
               />
 
               {/* Bounding box overlays */}
@@ -52,8 +57,9 @@ export function BatchOriginalsReview({ images }: BatchOriginalsReviewProps) {
                 preserveAspectRatio="none"
               >
                 {items.map((item, index) => {
-                  if (!item.boundingBox) return null;
-                  const { x, y, width, height } = item.boundingBox;
+                  const box = normalizeBoundingBoxPercent(item.boundingBox);
+                  if (!box) return null;
+                  const { x, y, width, height } = box;
                   const color = BOX_COLORS[index % BOX_COLORS.length];
 
                   return (

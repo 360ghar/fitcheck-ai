@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ZoomableImage } from '@/components/ui/zoomable-image'
+import { normalizeBoundingBoxPercent } from '@/lib/crop-from-bounding-box'
 import { ExtractedItemCard } from './ExtractedItemCard'
 import type { DetectedItem } from '@/types'
 
@@ -203,7 +204,7 @@ export function ExtractedItemsGrid({
                   <ZoomableImage
                     src={originalImageUrl}
                     alt="Original"
-                    className="w-full rounded-lg"
+                    className="block w-full h-auto rounded-lg"
                   />
                   {/* Bounding box overlays */}
                   <svg
@@ -212,8 +213,9 @@ export function ExtractedItemsGrid({
                     preserveAspectRatio="none"
                   >
                     {activeItems.map((item, index) => {
-                      if (!item.boundingBox) return null
-                      const { x, y, width, height } = item.boundingBox
+                      const box = normalizeBoundingBoxPercent(item.boundingBox)
+                      if (!box) return null
+                      const { x, y, width, height } = box
                       const colors = [
                         '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
                         '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16',

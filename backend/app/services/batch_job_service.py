@@ -38,6 +38,16 @@ class BatchJobStatus(str, Enum):
     FAILED = "failed"
 
 
+# Terminal statuses are final: a late status write from a pipeline phase that
+# is still unwinding (e.g. a consumer flipping to GENERATING after the user
+# cancelled) must not overwrite them.
+_TERMINAL_STATUSES = frozenset({
+    BatchJobStatus.COMPLETED,
+    BatchJobStatus.CANCELLED,
+    BatchJobStatus.FAILED,
+})
+
+
 @dataclass
 class BatchImageData:
     """Data for a single image in a batch job."""
@@ -318,15 +328,21 @@ class BatchJobService:
 
     @classmethod
     async def update_status(cls, job_id: str, status: BatchJobStatus) -> None:
-        """Update job status."""
+        """Update job status. Terminal statuses are final and never overwritten."""
         async with cls._lock:
             job = cls._jobs.get(job_id)
-            if job:
-                job.status = status
+            if not job:
+                return
+            if job.status in _TERMINAL_STATUSES and status not in _TERMINAL_STATUSES:
+                return
+            job.status = status
 
     @classmethod
-    async def add_detected_items(cls, job_id: str, image_id: str, items: List[Dict[str, Any]]) -> None:
-        """Add detected items from an image."""
+    async def add_detected_items(
+        cls, job_id: str, image_id: str, items: List[Dict[str, Any]]
+    ) -> List[DetectedItemData]:
+        """Add detected items from an image. Returns the created item rows."""
+        added: List[DetectedItemData] = []
         async with cls._lock:
             job = cls._jobs.get(job_id)
             if job:
@@ -350,7 +366,9 @@ class BatchJobService:
                         status="detected",
                     )
                     job.detected_items.append(item_data)
+                    added.append(item_data)
                 job.extraction_completed.add(image_id)
+        return added
 
     @classmethod
     async def mark_extraction_failed(cls, job_id: str, image_id: str, error: str) -> None:

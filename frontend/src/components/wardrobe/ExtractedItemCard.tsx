@@ -6,7 +6,7 @@
  * Includes duplicate detection to warn users about similar items.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Trash2,
   RefreshCw,
@@ -43,7 +43,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { checkDuplicates, type DuplicateItem } from '@/api/items'
+import { checkDuplicatesQueued, type DuplicateItem } from '@/api/items'
 import { DEFAULT_USE_CASES, formatUseCaseLabel, normalizeUseCase, normalizeUseCases } from '@/lib/use-cases'
 import type { DetectedItem, Category } from '@/types'
 
@@ -87,7 +87,11 @@ export function ExtractedItemCard({
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const [duplicates, setDuplicates] = useState<DuplicateItem[]>([])
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false)
-  const [hasCheckedDuplicates, setHasCheckedDuplicates] = useState(false)
+  // One-shot guard keyed on the check inputs (content, not object identity):
+  // set at ENQUEUE time so SSE-driven status/identity churn cannot re-enqueue
+  // the same check, while a real user edit (name/category/colors/brand)
+  // changes the signature and legitimately re-checks.
+  const checkedSignatureRef = useRef<string | null>(null)
 
   const isLowConfidence = item.confidence < 0.7
   const hasFailed = item.status === 'failed'
@@ -101,27 +105,34 @@ export function ExtractedItemCard({
 
   // Check for duplicates when item has name and category
   useEffect(() => {
-    const checkForDuplicates = async () => {
-      if (!item.name || !item.category || hasCheckedDuplicates || item.status === 'deleted') {
-        return
-      }
+    if (!item.name || !item.category || item.status === 'deleted') return
+    const name = item.name
+    const category = item.category
 
-      setIsCheckingDuplicates(true)
+    const signature = [name, category, item.brand ?? '', item.colors.join(',')]
+      .join('|')
+    if (checkedSignatureRef.current === signature) return
+    checkedSignatureRef.current = signature
+
+    const controller = new AbortController()
+    setIsCheckingDuplicates(true)
+
+    const checkForDuplicates = async () => {
       try {
-        const result = await checkDuplicates({
-          name: item.name,
-          category: item.category,
+        const result = await checkDuplicatesQueued({
+          name,
+          category,
           colors: item.colors,
           brand: item.brand,
           sub_category: item.sub_category,
           material: item.material,
-        }, { threshold: 0.7, limit: 3 })
+        }, { threshold: 0.7, limit: 3, signal: controller.signal })
 
         setDuplicates(result.duplicates)
-        setHasCheckedDuplicates(true)
       } catch (error) {
-        console.error('Duplicate check failed:', error)
-        setHasCheckedDuplicates(true)
+        if (!controller.signal.aborted) {
+          console.error('Duplicate check failed:', error)
+        }
       } finally {
         setIsCheckingDuplicates(false)
       }
@@ -129,8 +140,11 @@ export function ExtractedItemCard({
 
     // Debounce the check to avoid too many API calls
     const timeoutId = setTimeout(checkForDuplicates, 500)
-    return () => clearTimeout(timeoutId)
-  }, [item.name, item.category, item.colors, item.brand, hasCheckedDuplicates, item.status])
+    return () => {
+      clearTimeout(timeoutId)
+      controller.abort()
+    }
+  }, [item.tempId, item.name, item.category, item.colors, item.brand, item.sub_category, item.material, item.status])
 
   const toggleColor = (color: string) => {
     const colors = item.colors.includes(color)

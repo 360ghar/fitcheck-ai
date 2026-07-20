@@ -938,6 +938,10 @@ class BatchExtractionController extends GetxController {
 
       case 'generation_started':
         jobStatus.value = BatchJobStatus.generating;
+        // Under the overlapped pipeline this is the count detected SO FAR —
+        // later images may still be extracting. Item events backfill the
+        // growing total (see _handleItemGenerationComplete/Failed); without
+        // that, progress can read e.g. '15/4 items generated'.
         totalItems.value =
             (event.data?['total_items'] as num?)?.toInt() ??
             extractedItems.length;
@@ -955,21 +959,12 @@ class BatchExtractionController extends GetxController {
         }
         break;
 
-      case 'batch_generation_started':
-        currentBatch.value =
-            (event.data?['batch_number'] as num?)?.toInt() ?? 0;
-        break;
-
       case 'item_generation_complete':
         _handleItemGenerationComplete(event.data);
         break;
 
       case 'item_generation_failed':
         _handleItemGenerationFailed(event.data);
-        break;
-
-      case 'batch_generation_complete':
-        // Current batch done
         break;
 
       case 'all_generations_complete':
@@ -1060,6 +1055,15 @@ class BatchExtractionController extends GetxController {
         (data['failed_count'] as num?)?.toInt() ?? (failedCount.value + 1);
   }
 
+  /// Per-item events carry the growing true total (extraction may finish
+  /// after generation starts) — backfill so the denominator keeps up.
+  void _backfillTotalItems(Map<String, dynamic> data) {
+    final total = (data['total_items'] as num?)?.toInt();
+    if (total != null && total > totalItems.value) {
+      totalItems.value = total;
+    }
+  }
+
   void _handleItemGenerationComplete(Map<String, dynamic>? data) {
     if (data == null) return;
 
@@ -1081,11 +1085,13 @@ class BatchExtractionController extends GetxController {
     generatedCount.value =
         (data['completed_count'] as num?)?.toInt() ??
         (generatedCount.value + 1);
+    _backfillTotalItems(data);
   }
 
   void _handleItemGenerationFailed(Map<String, dynamic>? data) {
     if (data == null) return;
 
+    _backfillTotalItems(data);
     final itemId = data['temp_id'] as String?;
     final errorMsg = data['error'] as String?;
 

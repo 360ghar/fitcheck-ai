@@ -3,6 +3,7 @@ Vector service for managing Pinecone vector database.
 Handles item embeddings and similarity search.
 """
 
+import asyncio
 from typing import Optional, List, Dict, Any, Tuple
 
 from pinecone import Pinecone, ServerlessSpec
@@ -55,7 +56,8 @@ class VectorService:
             True if successful
         """
         try:
-            self.index.upsert(
+            await asyncio.to_thread(
+                self.index.upsert,
                 vectors=[(
                     item_id,
                     embedding,
@@ -90,7 +92,7 @@ class VectorService:
                 for item_id, embedding, metadata in items
             ]
 
-            self.index.upsert(vectors=vectors)
+            await asyncio.to_thread(self.index.upsert, vectors=vectors)
             logger.info(f"Batch upserted {len(items)} items")
             return len(items)
 
@@ -108,7 +110,7 @@ class VectorService:
             True if successful
         """
         try:
-            self.index.delete(ids=[item_id])
+            await asyncio.to_thread(self.index.delete, ids=[item_id])
             logger.debug(f"Deleted embedding for item {item_id}")
             return True
 
@@ -129,7 +131,7 @@ class VectorService:
             return 0
 
         try:
-            self.index.delete(ids=item_ids)
+            await asyncio.to_thread(self.index.delete, ids=item_ids)
             logger.info(f"Deleted {len(item_ids)} embeddings")
             return len(item_ids)
 
@@ -148,7 +150,8 @@ class VectorService:
         """
         try:
             # Query for all items with this user_id
-            results = self.index.query(
+            results = await asyncio.to_thread(
+                self.index.query,
                 vector=[0.0] * settings.PINECONE_DIMENSION,
                 filter={"user_id": {"$eq": user_id}},
                 top_k=10000,
@@ -208,8 +211,9 @@ class VectorService:
             if colors:
                 filter_dict["colors"] = {"$in": colors}
 
-            # Query Pinecone
-            results = self.index.query(
+            # Query Pinecone (sync SDK → run in thread to avoid blocking the event loop)
+            results = await asyncio.to_thread(
+                self.index.query,
                 vector=embedding,
                 filter=filter_dict if filter_dict else None,
                 top_k=top_k * 2,  # Get more to filter and score
@@ -257,7 +261,7 @@ class VectorService:
         """
         try:
             # Get embeddings for source items
-            source_items = self.index.fetch(ids=item_ids)
+            source_items = await asyncio.to_thread(self.index.fetch, ids=item_ids)
 
             results = {}
 
@@ -277,7 +281,8 @@ class VectorService:
                     filter_dict["category"] = {"$nin": excluded}
 
                 # Query
-                matches = self.index.query(
+                matches = await asyncio.to_thread(
+                    self.index.query,
                     vector=embedding,
                     filter=filter_dict,
                     top_k=top_k,
@@ -335,7 +340,8 @@ class VectorService:
             if brand:
                 filter_dict["brand"] = {"$eq": brand}
 
-            results = self.index.query(
+            results = await asyncio.to_thread(
+                self.index.query,
                 vector=dummy_vector,
                 filter=filter_dict,
                 top_k=limit,

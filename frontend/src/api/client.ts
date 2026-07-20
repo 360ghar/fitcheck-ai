@@ -95,6 +95,8 @@ function clearAuthStorage(): void {
   localStorage.removeItem(USER_STORAGE_KEY);
 }
 
+let hasForcedLogout = false;
+
 function forceLogout(): void {
   if (hasForcedLogout) return;
   hasForcedLogout = true;
@@ -116,12 +118,105 @@ export function getAccessToken(): string | null {
 }
 
 // ============================================================================
-// REQUEST INTERCEPTOR - Add auth token
+// TOKEN EXPIRY CHECK + SINGLE-FLIGHT REFRESH
+// ============================================================================
+
+/** Decode the JWT exp claim; true if expired or expiring within 30s. */
+function isTokenExpired(jwt: string): boolean {
+  try {
+    // JWT payloads are base64url-encoded; atob only accepts base64, so
+    // translate -_ and pad. Without this, any payload containing '-' or '_'
+    // (very common) threw, the catch returned false, and proactive refresh
+    // silently never fired for that token.
+    const b64 = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64.padEnd(b64.length + ((4 - (b64.length % 4)) % 4), '=');
+    const payload = JSON.parse(atob(padded));
+    return typeof payload.exp === 'number' && payload.exp * 1000 < Date.now() + 30_000;
+  } catch {
+    return false; // can't decode → let the server decide
+  }
+}
+
+/** Single-flight refresh: concurrent callers share one in-flight request. */
+let refreshPromise: Promise<void> | null = null;
+
+async function ensureFreshToken(): Promise<void> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const tokens = getTokens();
+      if (!tokens?.refresh_token) {
+        throw new Error('No refresh token available');
+      }
+
+      const response = await axios.post<{
+        data?: { access_token: string; refresh_token: string };
+        access_token?: string;
+        refresh_token?: string;
+      }>(
+        `${API_BASE_URL}/api/v1/auth/refresh`,
+        { refresh_token: tokens.refresh_token },
+        // ponytail: explicit timeout — the global axios instance has none and
+        // this call sits on the hot request path (proactive refresh). A hung
+        // /auth/refresh must fail fast, not freeze every API call app-wide.
+        { timeout: 15_000 }
+      );
+
+      const refreshed = response.data?.data || response.data;
+      if (!refreshed?.access_token || !refreshed?.refresh_token) {
+        throw new Error('Token refresh failed');
+      }
+
+      const newTokens: AuthTokens = {
+        access_token: refreshed.access_token,
+        refresh_token: refreshed.refresh_token,
+      };
+
+      setTokens(newTokens);
+
+      // Keep Zustand persist in sync so rehydrate does not restore stale tokens
+      try {
+        const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as {
+            state?: { tokens?: AuthTokens; isAuthenticated?: boolean };
+          };
+          if (parsed?.state) {
+            parsed.state.tokens = newTokens;
+            parsed.state.isAuthenticated = true;
+            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(parsed));
+          }
+        }
+      } catch {
+        // Non-fatal: request-path tokens are already updated via setTokens
+      }
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
+// ============================================================================
+// REQUEST INTERCEPTOR - Add auth token (proactive refresh if expired)
 // ============================================================================
 
 apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = getAccessToken();
+  async (config: InternalAxiosRequestConfig) => {
+    let token = getAccessToken();
+
+    // Proactively refresh if the token is expired and this isn't an auth endpoint
+    if (token && isTokenExpired(token) && !isAuthEndpoint(config.url)) {
+      try {
+        await ensureFreshToken();
+        token = getAccessToken();
+      } catch {
+        // Refresh failed; attach the stale token and let the 401 handler deal with it
+      }
+    }
+
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -135,24 +230,6 @@ apiClient.interceptors.request.use(
 // ============================================================================
 // RESPONSE INTERCEPTOR - Handle 401 and token refresh
 // ============================================================================
-
-let isRefreshing = false;
-let hasForcedLogout = false;
-let failedQueue: Array<{
-  resolve: (value?: unknown) => void;
-  reject: (reason?: unknown) => void;
-}> = [];
-
-const processQueue = (error: Error | null = null) => {
-  failedQueue.forEach(({ resolve, reject }) => {
-    if (error) {
-      reject(error);
-    } else {
-      resolve();
-    }
-  });
-  failedQueue = [];
-};
 
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
@@ -169,84 +246,26 @@ apiClient.interceptors.response.use(
       isAuthEndpoint(originalRequest.url);
 
     if (error.response?.status === 401 && !skipAuthHandling) {
-      if (originalRequest._retry) {
+      if (originalRequest._retry || hasForcedLogout) {
         forceLogout();
         return Promise.reject(error);
       }
 
-      if (hasForcedLogout) {
-        return Promise.reject(error);
-      }
-
-      if (isRefreshing) {
-        // Queue the request while refreshing
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then(() => apiClient(originalRequest))
-          .catch((err) => Promise.reject(err));
-      }
-
       originalRequest._retry = true;
-      isRefreshing = true;
 
       try {
-        const tokens = getTokens();
-        if (!tokens?.refresh_token) {
-          throw new Error('No refresh token available');
-        }
+        await ensureFreshToken();
 
-        // Refresh the token
-        const response = await axios.post<{
-          data?: { access_token: string; refresh_token: string };
-          access_token?: string;
-          refresh_token?: string;
-        }>(`${API_BASE_URL}/api/v1/auth/refresh`, { refresh_token: tokens.refresh_token });
-
-        const refreshed = response.data?.data || response.data;
-        if (!refreshed?.access_token || !refreshed?.refresh_token) {
-          throw new Error('Token refresh failed');
-        }
-
-        const newTokens: AuthTokens = {
-          access_token: refreshed.access_token,
-          refresh_token: refreshed.refresh_token,
-        };
-
-        setTokens(newTokens);
-
-        // Keep Zustand persist in sync so rehydrate does not restore stale tokens
-        try {
-          const raw = localStorage.getItem(AUTH_STORAGE_KEY);
-          if (raw) {
-            const parsed = JSON.parse(raw) as {
-              state?: { tokens?: AuthTokens; isAuthenticated?: boolean };
-            };
-            if (parsed?.state) {
-              parsed.state.tokens = newTokens;
-              parsed.state.isAuthenticated = true;
-              localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(parsed));
-            }
-          }
-        } catch {
-          // Non-fatal: request-path tokens are already updated via setTokens
-        }
-
-        processQueue(null);
-
-        // Retry original request with new token
-        if (originalRequest.headers) {
-          originalRequest.headers.Authorization = `Bearer ${newTokens.access_token}`;
+        // Retry original request with fresh token
+        const freshToken = getAccessToken();
+        if (freshToken && originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${freshToken}`;
         }
 
         return apiClient(originalRequest);
       } catch (refreshError) {
-        processQueue(refreshError as Error);
         forceLogout();
-
         return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
       }
     }
 

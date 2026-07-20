@@ -16,18 +16,6 @@ const API_BASE_URL =
 // TYPES
 // =============================================================================
 
-export interface BatchImageInputRequest {
-  image_id: string;
-  image_base64: string;
-  filename?: string;
-}
-
-export interface StartBatchExtractionRequest {
-  images: BatchImageInputRequest[];
-  auto_generate?: boolean;
-  generation_batch_size?: number;
-}
-
 export interface BatchJobStatusResponse {
   job_id: string;
   status: string;
@@ -71,51 +59,45 @@ export interface BatchJobStatusResponse {
 // =============================================================================
 
 /**
- * Convert a File to base64 string
- */
-export async function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Remove the data URL prefix (e.g., "data:image/png;base64,")
-      const base64 = result.split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-/**
- * Start a batch extraction job.
+ * Start a batch extraction job via multipart file upload (preferred for web).
  *
- * @param images - Array of images with their IDs and base64 data
- * @param options - Optional configuration for generation
- * @returns Job response with ID and SSE URL
+ * Sends compressed binary files (not base64 JSON). Same SSE contract as JSON start.
  */
-export async function startBatchExtraction(
-  images: BatchImageInputRequest[],
+export async function startBatchExtractionMultipart(
+  images: { imageId: string; file: File }[],
   options?: {
     autoGenerate?: boolean;
     generationBatchSize?: number;
     onUploadProgress?: (percent: number) => void;
   }
 ): Promise<BatchJobResponse> {
+  const form = new FormData();
+  const imageIds: string[] = [];
+  for (const img of images) {
+    form.append('files', img.file, img.file.name || `${img.imageId}.jpg`);
+    imageIds.push(img.imageId);
+  }
+  form.append('image_ids', JSON.stringify(imageIds));
+  form.append('auto_generate', String(options?.autoGenerate ?? true));
+  form.append(
+    'generation_batch_size',
+    String(options?.generationBatchSize ?? 5)
+  );
+
   const response = await apiClient.post<BatchJobResponse>(
-    '/api/v1/ai/batch-extract',
+    '/api/v1/ai/batch-extract-multipart',
+    form,
     {
-      images,
-      auto_generate: options?.autoGenerate ?? true,
-      generation_batch_size: options?.generationBatchSize ?? 5,
-    },
-    options?.onUploadProgress
-      ? {
-          onUploadProgress: (e) => {
-            if (e.total) options.onUploadProgress!((e.loaded / e.total) * 100);
-          },
-        }
-      : undefined
+      // Match items upload: multipart (axios/browser sets boundary).
+      headers: { 'Content-Type': 'multipart/form-data' },
+      ...(options?.onUploadProgress
+        ? {
+            onUploadProgress: (e: { loaded: number; total?: number }) => {
+              if (e.total) options.onUploadProgress!((e.loaded / e.total) * 100);
+            },
+          }
+        : {}),
+    }
   );
   return response.data;
 }

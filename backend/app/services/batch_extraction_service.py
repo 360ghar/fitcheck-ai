@@ -2,14 +2,15 @@
 Batch Extraction Service.
 
 Orchestrates the batch extraction and generation pipeline.
-Handles parallel extraction of multiple images and batched generation.
+Extraction runs in parallel across images; product-image generation starts as
+soon as each image's items are detected (overlapped with remaining extracts).
 """
 
 import asyncio
 import base64
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 import httpx
 
@@ -30,6 +31,8 @@ logger = logging.getLogger(__name__)
 EXTRACTION_SEMAPHORE = asyncio.Semaphore(10)  # Max 10 concurrent extractions
 GENERATION_SEMAPHORE = asyncio.Semaphore(5)   # Max 5 concurrent generations
 
+OnItemsReady = Optional[Callable[[List[DetectedItemData]], Awaitable[None]]]
+
 
 class BatchExtractionService:
     """Orchestrates the batch extraction and generation pipeline."""
@@ -40,24 +43,60 @@ class BatchExtractionService:
 
     async def run_pipeline(self, job: BatchJob) -> None:
         """
-        Run the complete batch processing pipeline.
+        Run extract + optional generate with overlap.
 
-        Phase 1: Extract items from ALL images in parallel
-        Phase 2: Generate product images in batches of N (if auto_generate=True)
+        Extraction runs for all images in parallel. As soon as items from any
+        image are ready, they are enqueued for product-image generation so gen
+        does not wait for every extract to finish.
         """
-        try:
-            # Phase 1: Extraction
-            await self._run_extraction_phase(job)
+        gen_queue: Optional[asyncio.Queue] = None
+        consumer_task: Optional[asyncio.Task] = None
 
-            # Check cancellation
-            if job.is_cancelled():
+        async def stop_consumer(*, cancel: bool) -> None:
+            """Sentinel the queue and await the consumer; cancel aborts in-flight gens."""
+            if gen_queue is not None:
+                try:
+                    await gen_queue.put(None)
+                except Exception:
+                    pass
+            if consumer_task is None:
                 return
+            if cancel and not consumer_task.done():
+                consumer_task.cancel()
+            try:
+                await consumer_task
+            except (asyncio.CancelledError, Exception):
+                pass
 
-            # Phase 2: Generation (if enabled and items were detected)
-            if job.auto_generate and job.detected_items:
-                await self._run_generation_phase(job)
+        try:
+            if job.auto_generate:
+                gen_queue = asyncio.Queue()
+                consumer_task = asyncio.create_task(
+                    self._generation_consumer(job, gen_queue)
+                )
 
-            # Mark complete
+            async def on_items_ready(items: List[DetectedItemData]) -> None:
+                if gen_queue is not None and items:
+                    await gen_queue.put(items)
+
+            await self._run_extraction_phase(
+                job, consumer_task=consumer_task, on_items_ready=on_items_ready
+            )
+
+            # Extraction is fully done: only now advance the status to
+            # GENERATING (polling clients assume EXTRACTING always precedes it).
+            if (
+                consumer_task is not None
+                and job.total_items > 0
+                and not job.is_cancelled()
+            ):
+                await BatchJobService.update_status(
+                    job.job_id, BatchJobStatus.GENERATING
+                )
+
+            # Drain generation to completion (the consumer exits early on cancel).
+            await stop_consumer(cancel=False)
+
             if not job.is_cancelled():
                 await BatchJobService.update_status(job.job_id, BatchJobStatus.COMPLETED)
                 await self._broadcast_job_complete(job)
@@ -66,42 +105,60 @@ class BatchExtractionService:
                 # SSE replay buffer which duplicates those payloads.
                 await BatchJobService.clear_event_history(job.job_id)
 
+        except asyncio.CancelledError:
+            # Shutdown / task cancellation: stop the consumer (which cancels its
+            # in-flight generation tasks and awaits them) before unwinding.
+            await stop_consumer(cancel=True)
+            raise
         except Exception as e:
             logger.error(
                 "Batch pipeline failed",
                 extra={"job_id": job.job_id, "error": str(e)},
             )
-            await BatchJobService.set_error(job.job_id, str(e))
+            await stop_consumer(cancel=True)
+            error_msg = str(e)
+            # If the consumer itself crashed, retrieve and surface its root
+            # cause too (also avoids asyncio's "exception never retrieved").
+            if (
+                consumer_task is not None
+                and consumer_task.done()
+                and not consumer_task.cancelled()
+            ):
+                consumer_exc = consumer_task.exception()
+                if consumer_exc is not None and consumer_exc is not e:
+                    error_msg = f"{e} (generation consumer also failed: {consumer_exc})"
+            await BatchJobService.set_error(job.job_id, error_msg)
             await BatchJobService.broadcast_event(job.job_id, "job_failed", {
                 "job_id": job.job_id,
-                "error": str(e),
+                "error": error_msg,
                 "timestamp": datetime.utcnow().isoformat(),
             })
             await BatchJobService.release_image_payloads(job.job_id)
             await BatchJobService.clear_event_history(job.job_id)
 
-    async def _run_extraction_phase(self, job: BatchJob) -> None:
+    async def _run_extraction_phase(
+        self,
+        job: BatchJob,
+        consumer_task: Optional[asyncio.Task] = None,
+        on_items_ready: OnItemsReady = None,
+    ) -> None:
         """
-        Phase 1: Extract items from ALL images in parallel.
+        Extract items from ALL images in parallel.
 
-        Uses asyncio.gather for parallel processing.
-        Each image is processed independently.
-        Failures don't stop other images.
+        When on_items_ready is set, invokes it with newly detected items so
+        generation can start immediately (overlap).
         """
         await BatchJobService.update_status(job.job_id, BatchJobStatus.EXTRACTING)
 
-        # Broadcast start
         await BatchJobService.broadcast_event(job.job_id, "extraction_started", {
             "job_id": job.job_id,
             "total_images": job.total_images,
             "timestamp": datetime.utcnow().isoformat(),
         })
 
-        # Get extraction agent
         agent = await get_item_extraction_agent(user_id=self.user_id, db=self.db)
         user_profile_image_base64 = await self._fetch_user_avatar_base64()
 
-        # Create tasks for all images
         tasks = []
         for image_id, image_data in job.images.items():
             task = asyncio.create_task(
@@ -111,14 +168,14 @@ class BatchExtractionService:
                     image_data.image_base64,
                     agent,
                     user_profile_image_base64=user_profile_image_base64,
+                    consumer_task=consumer_task,
+                    on_items_ready=on_items_ready,
                 )
             )
             tasks.append(task)
 
-        # Execute all tasks in parallel
         await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Broadcast extraction complete
         await BatchJobService.broadcast_event(job.job_id, "all_extractions_complete", {
             "job_id": job.job_id,
             "total_images": job.total_images,
@@ -127,6 +184,16 @@ class BatchExtractionService:
             "total_items_detected": job.total_items,
             "timestamp": datetime.utcnow().isoformat(),
         })
+
+        # If the generation consumer already died, surface its real error now
+        # instead of reporting a failed job with no useful cause.
+        if (
+            consumer_task is not None
+            and consumer_task.done()
+            and not consumer_task.cancelled()
+            and consumer_task.exception() is not None
+        ):
+            raise consumer_task.exception()
 
         # Cache extraction results for single-image jobs (24-hour TTL)
         if job.total_images == 1 and job.detected_items:
@@ -144,10 +211,16 @@ class BatchExtractionService:
         image_base64: str,
         agent,
         user_profile_image_base64: Optional[str] = None,
+        consumer_task: Optional[asyncio.Task] = None,
+        on_items_ready: OnItemsReady = None,
     ) -> List[Dict[str, Any]]:
         """Extract items from a single image with semaphore and retry."""
         if job.is_cancelled():
             return []
+        if consumer_task is not None and consumer_task.done():
+            # The generation consumer is already dead — stop here instead of
+            # burning VLM quota on images whose items can never be generated.
+            raise RuntimeError("Generation consumer failed; aborting extraction")
 
         async with EXTRACTION_SEMAPHORE:
             if job.is_cancelled():
@@ -161,7 +234,6 @@ class BatchExtractionService:
             )
 
             try:
-                # Extract with retry
                 result = await with_retry(
                     lambda: agent.extract_multiple_items(
                         image_base64=image_base64,
@@ -178,10 +250,8 @@ class BatchExtractionService:
 
                 items = result.get("items", [])
 
-                # Add items to job
-                await BatchJobService.add_detected_items(job.job_id, image_id, items)
+                added = await BatchJobService.add_detected_items(job.job_id, image_id, items)
 
-                # Broadcast success
                 await BatchJobService.broadcast_event(job.job_id, "image_extraction_complete", {
                     "job_id": job.job_id,
                     "image_id": image_id,
@@ -192,6 +262,16 @@ class BatchExtractionService:
                     "timestamp": datetime.utcnow().isoformat(),
                 })
 
+                # Overlap: enqueue for generation immediately
+                if on_items_ready and added and not job.is_cancelled():
+                    try:
+                        await on_items_ready(added)
+                    except Exception as enqueue_err:
+                        logger.warning(
+                            "Failed to enqueue items for generation",
+                            extra={"job_id": job.job_id, "error": str(enqueue_err)},
+                        )
+
                 return items
 
             except Exception as e:
@@ -201,10 +281,8 @@ class BatchExtractionService:
                     extra={"job_id": job.job_id, "error": error_msg},
                 )
 
-                # Mark as failed
                 await BatchJobService.mark_extraction_failed(job.job_id, image_id, error_msg)
 
-                # Broadcast failure
                 await BatchJobService.broadcast_event(job.job_id, "image_extraction_failed", {
                     "job_id": job.job_id,
                     "image_id": image_id,
@@ -239,7 +317,6 @@ class BatchExtractionService:
             if not avatar_url:
                 return None
 
-            # Aggressive 5-second timeout - if avatar fetch is slow, skip it
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(5.0),
                 limits=httpx.Limits(max_connections=10),
@@ -261,90 +338,106 @@ class BatchExtractionService:
             )
             return None
 
-    async def _run_generation_phase(self, job: BatchJob) -> None:
-        """
-        Phase 2: Generate product images in batches.
-
-        Groups items into batches of `generation_batch_size`.
-        Processes each batch in parallel.
-        Waits for batch to complete before starting next.
-        """
-        await BatchJobService.update_status(job.job_id, BatchJobStatus.GENERATING)
-
-        items = job.detected_items
-        batch_size = job.generation_batch_size
-        total_batches = (len(items) + batch_size - 1) // batch_size
-
-        # Broadcast start
-        await BatchJobService.broadcast_event(job.job_id, "generation_started", {
-            "job_id": job.job_id,
-            "total_items": len(items),
-            "batch_size": batch_size,
-            "total_batches": total_batches,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
-
-        # Get generation agent
-        agent = await get_image_generation_agent(user_id=self.user_id, db=self.db)
-
-        # Process items in batches
-        for batch_num in range(total_batches):
-            if job.is_cancelled():
-                return
-
-            start_idx = batch_num * batch_size
-            end_idx = min(start_idx + batch_size, len(items))
-            batch_items = items[start_idx:end_idx]
-
-            # Broadcast batch start
-            await BatchJobService.broadcast_event(job.job_id, "batch_generation_started", {
-                "job_id": job.job_id,
-                "batch_number": batch_num + 1,
-                "total_batches": total_batches,
-                "items_in_batch": len(batch_items),
-                "item_ids": [item.temp_id for item in batch_items],
-                "start_index": start_idx,
-                "end_index": end_idx,
-                "timestamp": datetime.utcnow().isoformat(),
-            })
-
-            # Process batch in parallel
-            await self._generate_item_batch(job, batch_items, agent)
-
-            # Broadcast batch complete
-            await BatchJobService.broadcast_event(job.job_id, "batch_generation_complete", {
-                "job_id": job.job_id,
-                "batch_number": batch_num + 1,
-                "total_batches": total_batches,
-                "completed_in_batch": len([i for i in batch_items if i.status == "generated"]),
-                "failed_in_batch": len([i for i in batch_items if i.status == "failed"]),
-                "timestamp": datetime.utcnow().isoformat(),
-            })
-
-        # Broadcast all generations complete
-        await BatchJobService.broadcast_event(job.job_id, "all_generations_complete", {
-            "job_id": job.job_id,
-            "total_items": len(items),
-            "successful": len(job.generation_completed),
-            "failed": len(job.generation_failed),
-            "timestamp": datetime.utcnow().isoformat(),
-        })
-
-    async def _generate_item_batch(
+    async def _generation_consumer(
         self,
         job: BatchJob,
-        items: List[DetectedItemData],
-        agent,
+        gen_queue: asyncio.Queue,
     ) -> None:
-        """Generate product images for a batch of items in parallel."""
-        tasks = []
-        for item in items:
-            task = asyncio.create_task(
-                self._generate_single_item(job, item, agent)
-            )
-            tasks.append(task)
+        """
+        Consume detected-item batches and generate product images continuously.
 
-        await asyncio.gather(*tasks, return_exceptions=True)
+        Uses GENERATION_SEMAPHORE for concurrency (same cap as former batch size).
+        Items are processed as they arrive rather than waiting for all extracts.
+        """
+        agent = None
+        generation_started = False
+        in_flight: set[asyncio.Task] = set()
+        concurrent_cap = max(1, min(5, job.generation_batch_size or 5))
+        # Local semaphore so generation_batch_size can tighten below global 5
+        local_sem = asyncio.Semaphore(concurrent_cap)
+
+        async def run_one(item: DetectedItemData) -> None:
+            async with local_sem:
+                await self._generate_single_item(job, item, agent)
+
+        try:
+            while True:
+                if job.is_cancelled():
+                    # Drop remaining queue without generating; still wait in-flight below.
+                    break
+
+                batch = await gen_queue.get()
+                if batch is None:
+                    # Drain complete — wait for in-flight gens
+                    break
+
+                if job.is_cancelled():
+                    # Discard this batch; keep draining until sentinel from producer.
+                    continue
+
+                if agent is None:
+                    agent = await get_image_generation_agent(
+                        user_id=self.user_id, db=self.db
+                    )
+
+                if not generation_started:
+                    generation_started = True
+                    # Status advances to GENERATING in run_pipeline once the
+                    # extraction phase finishes. total_items is items detected
+                    # SO FAR (extraction may still be running); per-item events
+                    # carry the growing total — clients must backfill from them.
+                    await BatchJobService.broadcast_event(
+                        job.job_id,
+                        "generation_started",
+                        {
+                            "job_id": job.job_id,
+                            "total_items": job.total_items,
+                            "batch_size": concurrent_cap,
+                            # Continuous pool (not discrete waves). Clients may
+                            # ignore total_batches when 0.
+                            "total_batches": 0,
+                            "timestamp": datetime.utcnow().isoformat(),
+                        },
+                    )
+
+                for item in batch:
+                    if job.is_cancelled():
+                        break
+                    task = asyncio.create_task(run_one(item))
+                    in_flight.add(task)
+                    task.add_done_callback(in_flight.discard)
+
+            # Wait for all in-flight generations
+            if in_flight:
+                await asyncio.gather(*in_flight, return_exceptions=True)
+
+            if not job.is_cancelled() and generation_started:
+                await BatchJobService.broadcast_event(
+                    job.job_id,
+                    "all_generations_complete",
+                    {
+                        "job_id": job.job_id,
+                        "total_items": job.total_items,
+                        "successful": len(job.generation_completed),
+                        "failed": len(job.generation_failed),
+                        "timestamp": datetime.utcnow().isoformat(),
+                    },
+                )
+
+        except asyncio.CancelledError:
+            for t in list(in_flight):
+                t.cancel()
+            if in_flight:
+                # Await the cancelled tasks so they actually stop (and don't
+                # emit stray events onto a torn-down job) before we unwind.
+                await asyncio.gather(*in_flight, return_exceptions=True)
+            raise
+        except Exception as e:
+            logger.error(
+                "Generation consumer failed",
+                extra={"job_id": job.job_id, "error": str(e)},
+            )
+            raise
 
     async def _generate_single_item(
         self,
@@ -352,7 +445,7 @@ class BatchExtractionService:
         item: DetectedItemData,
         agent,
     ) -> Optional[str]:
-        """Generate product image for a single item with semaphore and retry."""
+        """Generate product image for a single item with global semaphore and retry."""
         if job.is_cancelled():
             return None
 
@@ -361,7 +454,6 @@ class BatchExtractionService:
                 return None
 
             try:
-                # Build description
                 description_parts = []
                 if item.colors:
                     description_parts.append(item.colors[0])
@@ -370,9 +462,12 @@ class BatchExtractionService:
                 elif item.category:
                     description_parts.append(item.category)
 
-                item_description = item.detailed_description or " ".join(description_parts) or item.category
+                item_description = (
+                    item.detailed_description
+                    or " ".join(description_parts)
+                    or item.category
+                )
 
-                # Generate with retry
                 result = await with_retry(
                     lambda: agent.generate_product_image(
                         item_description=item_description,
@@ -395,14 +490,12 @@ class BatchExtractionService:
 
                 image_base64 = result.image_base64
 
-                # Update item
                 await BatchJobService.update_item_generation(
                     job.job_id,
                     item.temp_id,
                     generated_image_base64=image_base64,
                 )
 
-                # Broadcast success
                 await BatchJobService.broadcast_event(job.job_id, "item_generation_complete", {
                     "job_id": job.job_id,
                     "temp_id": item.temp_id,
@@ -422,14 +515,12 @@ class BatchExtractionService:
                     extra={"job_id": job.job_id, "error": error_msg},
                 )
 
-                # Mark as failed
                 await BatchJobService.update_item_generation(
                     job.job_id,
                     item.temp_id,
                     error=error_msg,
                 )
 
-                # Broadcast failure
                 await BatchJobService.broadcast_event(job.job_id, "item_generation_failed", {
                     "job_id": job.job_id,
                     "temp_id": item.temp_id,
@@ -452,14 +543,14 @@ class BatchExtractionService:
         try:
             from app.services.extraction_cache_service import ExtractionCacheService
 
-            # Get the single image from the job
             if not job.images:
                 return
 
             image_data = list(job.images.values())[0]
             image_base64 = image_data.image_base64
+            if not image_base64:
+                return
 
-            # Prepare result to cache
             result = {
                 "items": [item.to_dict() for item in job.detected_items],
                 "timestamp": datetime.utcnow().isoformat(),
@@ -481,7 +572,6 @@ class BatchExtractionService:
             )
 
         except Exception as e:
-            # Non-critical - log and continue
             logger.warning(
                 "Failed to cache extraction results",
                 extra={"job_id": job.job_id, "error": str(e)},

@@ -3,6 +3,7 @@
  */
 
 import { apiClient, getApiError } from './client';
+import { createPromiseQueue } from '@/utils/promiseQueue';
 import type {
   ApiEnvelope,
   Item,
@@ -317,7 +318,7 @@ export interface DuplicateCheckRequest {
  */
 export async function checkDuplicates(
   request: DuplicateCheckRequest,
-  options?: { threshold?: number; limit?: number }
+  options?: { threshold?: number; limit?: number; signal?: AbortSignal }
 ): Promise<DuplicateCheckResponse> {
   try {
     const params = new URLSearchParams();
@@ -335,12 +336,34 @@ export async function checkDuplicates(
         sub_category: request.sub_category || null,
         material: request.material || null,
         tags: request.tags || [],
-      }
+      },
+      { signal: options?.signal }
     );
     return response.data.data;
   } catch (error) {
     throw getApiError(error);
   }
+}
+
+// ponytail: max 3 concurrent — keeps proxy from resetting long-queued streams
+const duplicateCheckQueue = createPromiseQueue(3);
+
+/**
+ * Concurrency-limited duplicate check. Use this from per-card effects
+ * to avoid N simultaneous POSTs after a batch extraction.
+ */
+export function checkDuplicatesQueued(
+  request: DuplicateCheckRequest,
+  options?: { threshold?: number; limit?: number; signal?: AbortSignal }
+): Promise<DuplicateCheckResponse> {
+  return duplicateCheckQueue(() => {
+    // ponytail: the queue cannot dequeue on cancel, so skip work that went
+    // stale while it waited (card unmounted / item deleted).
+    if (options?.signal?.aborted) {
+      return Promise.reject(new DOMException('Aborted', 'AbortError'));
+    }
+    return checkDuplicates(request, options);
+  });
 }
 
 /**

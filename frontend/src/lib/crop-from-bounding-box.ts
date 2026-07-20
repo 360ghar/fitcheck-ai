@@ -25,6 +25,52 @@ function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n))
 }
 
+/**
+ * Normalize a bounding box to {x,y,width,height} percentages 0–100.
+ * Clamps into the image frame and rescales legacy 0–1000 rows.
+ * Returns null if the box is unusable.
+ */
+export function normalizeBoundingBoxPercent(
+  box: Partial<BoundingBoxPercent> | null | undefined
+): BoundingBoxPercent | null {
+  if (!box) return null
+
+  let x = Number(box.x)
+  let y = Number(box.y)
+  let w = Number(box.width)
+  let h = Number(box.height)
+
+  if (![x, y, w, h].every((n) => Number.isFinite(n))) return null
+
+  // The API contract is percent 0–100 (the backend normalizer owns the
+  // conversion). The only foreign scale worth fixing up client-side is
+  // legacy rows stored as 0–1000 (Gemini style). Values slightly above 100
+  // are percent overflow and the clamp below pulls them back in-frame —
+  // they must NOT be shrunk. And never multiply sub-1 values by 100: a
+  // legitimate sub-1% box (a tiny accessory) became a near-full-frame crop.
+  const maxV = Math.max(Math.abs(x), Math.abs(y), Math.abs(w), Math.abs(h))
+  if (maxV > 150) {
+    x *= 0.1
+    y *= 0.1
+    w *= 0.1
+    h *= 0.1
+  }
+
+  x = clamp(x, 0, 100)
+  y = clamp(y, 0, 100)
+  w = clamp(w, 0, 100 - x)
+  h = clamp(h, 0, 100 - y)
+
+  if (w < 1 || h < 1) return null
+
+  return {
+    x: Math.round(x * 100) / 100,
+    y: Math.round(y * 100) / 100,
+    width: Math.round(w * 100) / 100,
+    height: Math.round(h * 100) / 100,
+  }
+}
+
 function loadImage(source: string | Blob | File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -67,17 +113,11 @@ export async function cropImageFromBoundingBox(
       throw new Error('Image has no dimensions')
     }
 
-    // Normalize box (API may send 0–1 or 0–100)
-    let x = box.x
-    let y = box.y
-    let w = box.width
-    let h = box.height
-    if (x <= 1 && y <= 1 && w <= 1 && h <= 1) {
-      x *= 100
-      y *= 100
-      w *= 100
-      h *= 100
+    const normalized = normalizeBoundingBoxPercent(box)
+    if (!normalized) {
+      throw new Error('Invalid bounding box')
     }
+    const { x, y, width: w, height: h } = normalized
 
     const padX = w * paddingFraction
     const padY = h * paddingFraction

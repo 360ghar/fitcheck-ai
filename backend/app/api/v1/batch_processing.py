@@ -2,19 +2,28 @@
 Batch Processing API routes.
 
 Provides endpoints for multi-image batch extraction with SSE progress updates.
+Supports JSON (base64) for Flutter and multipart/form-data for web.
 """
 
 import asyncio
+import base64
 import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 from supabase import Client
 
-from app.core.exceptions import RateLimitError
+from app.core.exceptions import (
+    FileTooLargeError,
+    FitCheckException,
+    InvalidInputError,
+    RateLimitError,
+    UnsupportedMediaTypeError,
+)
 from app.core.logging_config import get_context_logger
 from app.core.security import get_current_user_id
 from app.db.connection import get_db
@@ -34,6 +43,40 @@ router = APIRouter()
 
 # Match photoshoot max (~10MB encoded) so one batch of 50 cannot OOM the process.
 _MAX_BATCH_IMAGE_B64 = 10 * 1024 * 1024
+# Raw multipart file cap. base64 encoding inflates ~4/3, so 7MB raw ≈ 9.3MB
+# encoded — under the 10MB budget the JSON path enforces per image. Worst-case
+# batch: 50 x 7MB raw ≈ 467MB base64, comparable to the JSON path's 500MB.
+_MAX_BATCH_IMAGE_BYTES = 7 * 1024 * 1024
+_MAX_BATCH_IMAGES = 50
+# Chunk size for capped multipart reads (reject before buffering past the cap).
+_READ_CHUNK_BYTES = 1024 * 1024
+
+# Strong references to in-flight pipeline tasks. The event loop only keeps weak
+# references, so a discarded create_task() result can be GC'd mid-run and the
+# job silently stalls. Same pattern as SocialImportPipelineService._tasks.
+_pipeline_tasks: "set[asyncio.Task]" = set()
+
+
+def _spawn_pipeline(service: BatchExtractionService, job) -> None:
+    """Kick off a pipeline task while holding a strong reference to it."""
+    task = asyncio.create_task(service.run_pipeline(job))
+    _pipeline_tasks.add(task)
+    task.add_done_callback(_pipeline_tasks.discard)
+
+
+async def _read_upload_capped(upload: UploadFile, max_bytes: int) -> bytes:
+    """Read an upload in chunks, rejecting once max_bytes is crossed."""
+    chunks: List[bytes] = []
+    total = 0
+    while True:
+        chunk = await upload.read(_READ_CHUNK_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise FileTooLargeError(max_size_mb=_MAX_BATCH_IMAGE_BYTES // (1024 * 1024))
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 class BatchImageInput(BaseModel):
@@ -48,11 +91,11 @@ class BatchImageInput(BaseModel):
 
 
 class BatchExtractionRequest(BaseModel):
-    """Request to start batch extraction."""
+    """Request to start batch extraction (JSON / Flutter)."""
     images: List[BatchImageInput] = Field(
         ...,
         min_length=1,
-        max_length=50,
+        max_length=_MAX_BATCH_IMAGES,
         description="List of images to process (max 50)",
     )
     auto_generate: bool = Field(
@@ -63,7 +106,7 @@ class BatchExtractionRequest(BaseModel):
         5,
         ge=1,
         le=5,
-        description="Number of items to generate in parallel per batch (max 5)",
+        description="Max concurrent product-image generations (max 5)",
     )
 
 
@@ -108,6 +151,103 @@ class BatchJobStatusResponse(BaseModel):
 
 
 # =============================================================================
+# SHARED START HELPER
+# =============================================================================
+
+
+async def _check_batch_rate_limits(
+    *,
+    user_id: str,
+    db: Client,
+    total_images: int,
+    auto_generate: bool,
+) -> None:
+    """Raise RateLimitError if this batch would exceed the user's daily limits."""
+    extraction_check = await AISettingsService.check_rate_limit(
+        user_id=user_id,
+        operation_type="extraction",
+        db=db,
+        count=total_images,
+    )
+    if not extraction_check["allowed"]:
+        raise RateLimitError(
+            f"Daily extraction limit ({extraction_check['limit']}) would be exceeded. "
+            f"You have {extraction_check['remaining']} remaining."
+        )
+
+    if auto_generate:
+        estimated_generations = total_images * 3
+        generation_check = await AISettingsService.check_rate_limit(
+            user_id=user_id,
+            operation_type="generation",
+            db=db,
+            count=estimated_generations,
+        )
+        if not generation_check["allowed"]:
+            raise RateLimitError(
+                f"Daily generation limit ({generation_check['limit']}) may be exceeded. "
+                f"You have {generation_check['remaining']} remaining. "
+                f"Consider disabling auto_generate."
+            )
+
+
+async def _start_batch_job(
+    *,
+    user_id: str,
+    db: Client,
+    images_data: List[Dict[str, Any]],
+    auto_generate: bool,
+    generation_batch_size: int,
+) -> BatchJobResponse:
+    """Rate-limit, create job, kick off pipeline, return 202 payload."""
+    total_images = len(images_data)
+    if total_images < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one image is required",
+        )
+    if total_images > _MAX_BATCH_IMAGES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Maximum {_MAX_BATCH_IMAGES} images per batch",
+        )
+
+    await _check_batch_rate_limits(
+        user_id=user_id,
+        db=db,
+        total_images=total_images,
+        auto_generate=auto_generate,
+    )
+
+    job = await BatchJobService.create_job(
+        user_id=user_id,
+        images=images_data,
+        auto_generate=auto_generate,
+        generation_batch_size=generation_batch_size,
+    )
+
+    service = BatchExtractionService(user_id=user_id, db=db)
+    _spawn_pipeline(service, job)
+
+    logger.info(
+        "Started batch extraction",
+        extra={
+            "job_id": job.job_id,
+            "user_id": user_id,
+            "image_count": total_images,
+        },
+    )
+
+    return BatchJobResponse(
+        job_id=job.job_id,
+        status=job.status.value,
+        total_images=total_images,
+        sse_url=f"/api/v1/ai/batch-extract/{job.job_id}/events",
+        message=f"Batch extraction started for {total_images} images",
+    )
+
+
+# =============================================================================
 # ENDPOINTS
 # =============================================================================
 
@@ -123,84 +263,148 @@ async def start_batch_extraction(
     db: Client = Depends(get_db),
 ):
     """
-    Start a batch extraction job.
+    Start a batch extraction job (JSON body with base64 images).
 
-    Uploads multiple images for AI extraction and optional product image generation.
-    Returns a job_id and SSE URL for real-time progress updates.
-
-    The processing happens in two phases:
-    1. Extraction: All images processed in parallel
-    2. Generation: Items processed in batches of N (default 5)
+    Prefer multipart ``POST /batch-extract-multipart`` from web clients for
+    smaller uploads. Extraction runs in parallel; product-image generation
+    starts as soon as each image's items are detected (overlapped).
     """
     try:
-        total_images = len(request.images)
-
-        # Check extraction rate limit
-        extraction_check = await AISettingsService.check_rate_limit(
-            user_id=user_id,
-            operation_type="extraction",
-            db=db,
-            count=total_images,
-        )
-        if not extraction_check["allowed"]:
-            raise RateLimitError(
-                f"Daily extraction limit ({extraction_check['limit']}) would be exceeded. "
-                f"You have {extraction_check['remaining']} remaining."
-            )
-
-        # Estimate generation operations (assume ~3 items per image on average)
-        if request.auto_generate:
-            estimated_generations = total_images * 3
-            generation_check = await AISettingsService.check_rate_limit(
-                user_id=user_id,
-                operation_type="generation",
-                db=db,
-                count=estimated_generations,
-            )
-            if not generation_check["allowed"]:
-                raise RateLimitError(
-                    f"Daily generation limit ({generation_check['limit']}) may be exceeded. "
-                    f"You have {generation_check['remaining']} remaining. "
-                    f"Consider disabling auto_generate."
-                )
-
-        # Create job
         images_data = [img.model_dump() for img in request.images]
-        job = await BatchJobService.create_job(
+        return await _start_batch_job(
             user_id=user_id,
-            images=images_data,
+            db=db,
+            images_data=images_data,
             auto_generate=request.auto_generate,
             generation_batch_size=request.generation_batch_size,
         )
-
-        # Start processing in background
-        service = BatchExtractionService(user_id=user_id, db=db)
-        asyncio.create_task(service.run_pipeline(job))
-
-        logger.info(
-            "Started batch extraction",
-            extra={
-                "job_id": job.job_id,
-                "user_id": user_id,
-                "image_count": total_images,
-            },
-        )
-
-        return BatchJobResponse(
-            job_id=job.job_id,
-            status=job.status.value,
-            total_images=total_images,
-            sse_url=f"/api/v1/ai/batch-extract/{job.job_id}/events",
-            message=f"Batch extraction started for {total_images} images",
-        )
-
-    except RateLimitError:
+    except FitCheckException:
+        raise
+    except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to start batch extraction", extra={"error": str(e)})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to start batch extraction: {str(e)}",
+            detail="Failed to start batch extraction",
+        )
+
+
+@router.post(
+    "/batch-extract-multipart",
+    response_model=BatchJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_batch_extraction_multipart(
+    files: List[UploadFile] = File(..., description="Image files (1–50)"),
+    image_ids: Optional[str] = Form(
+        None,
+        description="Optional JSON array of client image IDs, parallel to files",
+    ),
+    auto_generate: bool = Form(True),
+    generation_batch_size: int = Form(5, ge=1, le=5),
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """
+    Start batch extraction via multipart file upload (preferred for web).
+
+    Smaller on the wire than base64 JSON. Same SSE progress contract as
+    ``POST /batch-extract``.
+    """
+    try:
+        if not files:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="At least one file is required",
+            )
+        if len(files) > _MAX_BATCH_IMAGES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Maximum {_MAX_BATCH_IMAGES} images per batch",
+            )
+
+        ids: List[str] = []
+        if image_ids:
+            try:
+                parsed = json.loads(image_ids)
+            except json.JSONDecodeError:
+                # Comma-separated fallback for non-JSON clients
+                ids = [s.strip() for s in image_ids.split(",") if s.strip()]
+            else:
+                if not isinstance(parsed, list):
+                    raise InvalidInputError(
+                        field="image_ids",
+                        message="image_ids must be a JSON array of strings",
+                    )
+                ids = [str(x) for x in parsed]
+            if len(ids) != len(files):
+                raise InvalidInputError(
+                    field="image_ids",
+                    message=(
+                        f"image_ids length ({len(ids)}) must match "
+                        f"file count ({len(files)})"
+                    ),
+                )
+            if len(set(ids)) != len(ids):
+                raise InvalidInputError(
+                    field="image_ids",
+                    message="image_ids must be unique per file",
+                )
+
+        # Reject rate-limited / over-quota requests BEFORE buffering payloads.
+        await _check_batch_rate_limits(
+            user_id=user_id,
+            db=db,
+            total_images=len(files),
+            auto_generate=auto_generate,
+        )
+
+        images_data: List[Dict[str, Any]] = []
+        for index, upload in enumerate(files):
+            content_type = (upload.content_type or "").lower()
+            if not content_type.startswith("image/"):
+                raise UnsupportedMediaTypeError(
+                    message=(
+                        f"Unsupported content type at index {index}: "
+                        f"{content_type or '(missing)'}"
+                    )
+                )
+            content = await _read_upload_capped(upload, _MAX_BATCH_IMAGE_BYTES)
+            if not content:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Empty file at index {index}",
+                )
+
+            image_id = ids[index] if ids else f"img-{uuid4().hex[:12]}"
+            images_data.append(
+                {
+                    "image_id": image_id,
+                    "image_base64": base64.b64encode(content).decode("utf-8"),
+                    "filename": upload.filename,
+                }
+            )
+
+        return await _start_batch_job(
+            user_id=user_id,
+            db=db,
+            images_data=images_data,
+            auto_generate=auto_generate,
+            generation_batch_size=generation_batch_size,
+        )
+    except FitCheckException:
+        raise
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to start multipart batch extraction",
+            extra={"error": str(e)},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to start batch extraction",
         )
 
 
@@ -221,11 +425,11 @@ async def batch_job_events(
     - image_extraction_complete: Single image processed
     - image_extraction_failed: Single image failed
     - all_extractions_complete: All images processed
-    - generation_started: Generation phase begins
-    - batch_generation_started: New batch starting
-    - item_generation_complete: Single item image generated
+    - generation_started: First generation batch started (overlaps extraction;
+      total_items is only a partial count until all_extractions_complete)
+    - item_generation_complete: Single item image generated (total_items grows
+      as later images finish extracting)
     - item_generation_failed: Single item generation failed
-    - batch_generation_complete: Batch complete
     - all_generations_complete: All items generated
     - job_complete: Full pipeline complete
     - job_failed: Pipeline failed
@@ -300,7 +504,14 @@ async def batch_job_events(
         finally:
             await BatchJobService.remove_subscriber(job_id, queue)
 
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(
+        event_generator(),
+        headers={
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache, no-transform",
+        },
+        ping=15,  # SSE comment keep-alive; keeps HTTP/2 streams alive through proxies
+    )
 
 
 @router.post(
@@ -455,7 +666,7 @@ async def start_single_extraction(
         from app.services.batch_extraction_service import BatchExtractionService
 
         service = BatchExtractionService(user_id=user_id, db=db)
-        asyncio.create_task(service.run_pipeline(job))
+        _spawn_pipeline(service, job)
 
         logger.info(
             "Started single-item extraction",
@@ -472,9 +683,11 @@ async def start_single_extraction(
 
     except RateLimitError:
         raise
+    except FitCheckException:
+        raise
     except Exception as e:
         logger.error("Failed to start single extraction", extra={"error": str(e)})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to start extraction: {str(e)}",
+            detail="Failed to start extraction",
         )

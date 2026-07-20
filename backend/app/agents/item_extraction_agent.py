@@ -168,11 +168,28 @@ For each detected item:
 5. pattern
 6. brand (null if unknown)
 7. confidence (0.0 to 1.0)
-8. boundingBox (x,y,width,height percentages from 0 to 100)
+8. boundingBox — see BOUNDING BOX RULES below
 9. detailedDescription (detailed product-quality description)
 10. person_id
 11. person_label
 12. is_current_user_person
+
+BOUNDING BOX RULES (critical — boxes are used for crops and overlays):
+- Format: object with x, y, width, height.
+- Units: percentages of the FULL image (0 to 100). Not pixels. Not 0–1 fractions.
+- Origin: top-left of the image. x increases right, y increases down.
+- x,y = top-left corner of a TIGHT box around THAT garment only.
+- width/height = box size as percent of image width/height.
+- Keep the box tight: include the full garment with ~2–5% padding; do not include
+  other people, unrelated clothing, or large empty background.
+- Category guidance (approximate location):
+  - tops/outerwear → torso / upper body
+  - bottoms → waist to ankles
+  - shoes → near the feet
+  - accessories → only the accessory itself
+- One box per item. If you cannot locate the item, set boundingBox to null.
+- Never use a near full-image box (e.g. width/height ~100) unless the item truly fills the frame.
+- Example: a shirt on the left half might be {{"x": 18, "y": 12, "width": 42, "height": 48}}.
 
 Also return people[] summary with:
 - person_id
@@ -283,6 +300,96 @@ def _clean_text(value: Any) -> Optional[str]:
         return None
     s = str(value).strip()
     return s or None
+
+
+def _normalize_bounding_box(raw: Any) -> Optional[Dict[str, float]]:
+    """Normalize model bounding boxes to {x, y, width, height} percentages 0–100.
+
+    Accepts common VLM variants:
+    - xywh dict: {x, y, width, height}
+    - xyxy dict: {x1, y1, x2, y2} or {left, top, right, bottom}
+    - list/tuple of 4 numbers treated as xyxy (x1, y1, x2, y2)
+
+    The prompt and response schema mandate percent 0–100, so dict boxes are
+    taken verbatim; only unambiguous foreign scales are rescaled.
+    """
+    if raw is None:
+        return None
+
+    x1: Optional[float] = None
+    y1: Optional[float] = None
+    x2: Optional[float] = None
+    y2: Optional[float] = None
+    is_xywh = False
+    is_dict = isinstance(raw, dict)
+
+    if is_dict:
+        if all(k in raw for k in ("x", "y", "width", "height")):
+            x1 = _to_float(raw.get("x"), 0.0)
+            y1 = _to_float(raw.get("y"), 0.0)
+            x2 = _to_float(raw.get("width"), 0.0)
+            y2 = _to_float(raw.get("height"), 0.0)
+            is_xywh = True
+        elif all(k in raw for k in ("x1", "y1", "x2", "y2")):
+            x1 = _to_float(raw.get("x1"), 0.0)
+            y1 = _to_float(raw.get("y1"), 0.0)
+            x2 = _to_float(raw.get("x2"), 0.0)
+            y2 = _to_float(raw.get("y2"), 0.0)
+        elif all(k in raw for k in ("left", "top", "right", "bottom")):
+            x1 = _to_float(raw.get("left"), 0.0)
+            y1 = _to_float(raw.get("top"), 0.0)
+            x2 = _to_float(raw.get("right"), 0.0)
+            y2 = _to_float(raw.get("bottom"), 0.0)
+        else:
+            return None
+    elif isinstance(raw, (list, tuple)) and len(raw) == 4:
+        x1, y1, x2, y2 = (_to_float(v, 0.0) for v in raw)
+    else:
+        return None
+
+    # Scale normalization:
+    # - max_v > 150 → unambiguously not percent: 0–1000 style (legacy/Gemini
+    #   rows) → ×0.1. The 150 threshold (not 100) so a percent box that
+    #   slightly overflows the frame (e.g. height=102, which the clamp below
+    #   exists to fix) is clamped in-frame instead of being shrunk 10×.
+    # - max_v <= 1 → 0–1 fractions, guessed ONLY for non-schema list input.
+    #   Never for dict boxes: the contract says percent, and ×100 blew up
+    #   legitimate sub-1% percent boxes (tiny accessories) into
+    #   near-full-frame crops. Sub-1% dict boxes instead fall afoul of the
+    #   1% floor below and yield no box — better than a wrong giant crop.
+    vals = [x1, y1, x2, y2]
+    max_v = max(abs(v) for v in vals)
+    if max_v > 150.0:
+        x1, y1, x2, y2 = x1 * 0.1, y1 * 0.1, x2 * 0.1, y2 * 0.1
+    elif max_v <= 1.0 and not is_dict:
+        x1, y1, x2, y2 = x1 * 100.0, y1 * 100.0, x2 * 100.0, y2 * 100.0
+
+    if is_xywh:
+        x, y, w, h = x1, y1, x2, y2
+    else:
+        # xyxy → xywh
+        x = min(x1, x2)
+        y = min(y1, y2)
+        w = abs(x2 - x1)
+        h = abs(y2 - y1)
+
+    if w <= 0 or h <= 0:
+        return None
+
+    x = max(0.0, min(100.0, x))
+    y = max(0.0, min(100.0, y))
+    w = max(0.0, min(100.0 - x, w))
+    h = max(0.0, min(100.0 - y, h))
+
+    if w < 1.0 or h < 1.0:
+        return None
+
+    return {
+        "x": round(x, 2),
+        "y": round(y, 2),
+        "width": round(w, 2),
+        "height": round(h, 2),
+    }
 
 
 # =============================================================================
@@ -438,15 +545,9 @@ class ItemExtractionAgent:
             if not isinstance(item, dict):
                 continue
 
-            bounding_box = None
-            raw_bb = item.get("boundingBox") or item.get("bounding_box")
-            if isinstance(raw_bb, dict):
-                bounding_box = {
-                    "x": _to_float(raw_bb.get("x"), 0.0),
-                    "y": _to_float(raw_bb.get("y"), 0.0),
-                    "width": _to_float(raw_bb.get("width"), 100.0),
-                    "height": _to_float(raw_bb.get("height"), 100.0),
-                }
+            bounding_box = _normalize_bounding_box(
+                item.get("boundingBox") or item.get("bounding_box")
+            )
 
             colors_raw = item.get("colors", [])
             colors = (
