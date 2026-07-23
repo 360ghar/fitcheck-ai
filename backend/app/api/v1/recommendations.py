@@ -37,7 +37,7 @@ router = APIRouter()
 
 
 # ============================================================================
-# REQUEST MODELS (aligned to docs/2-technical/api-spec.md)
+# REQUEST MODELS (aligned to docs/references/api-spec.md)
 # ============================================================================
 
 
@@ -87,10 +87,11 @@ def handle_route_errors(
 ):
     """Decorator to standardize endpoint error handling.
 
-    Catches exceptions, logs them, and raises DatabaseError.
-    Allows specific exceptions to be re-raised without wrapping.
+    Catches unexpected exceptions, logs them, and raises DatabaseError.
+    Re-raises FitCheckException subclasses (domain errors) so status codes
+    stay correct. Callers can narrow re_raise if needed.
     """
-    re_raise_exceptions = re_raise or (ItemNotFoundError, ValidationError)
+    re_raise_exceptions = re_raise or (FitCheckException,)
 
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
@@ -112,6 +113,7 @@ def handle_route_errors(
                     f"{operation} error",
                     user_id=user_id,
                     error=str(e),
+                    error_type=type(e).__name__,
                     **extra_log
                 )
                 raise DatabaseError(message=error_message, operation=operation)
@@ -339,13 +341,67 @@ def _build_complete_look_response(item: Dict[str, Any], position: int) -> Dict[s
     }
 
 
+# Rough targets for a balanced wardrobe (used by gaps + shopping)
+_WARDROBE_IDEALS = {
+    "tops": (8, 20),
+    "bottoms": (5, 12),
+    "shoes": (3, 10),
+    "outerwear": (2, 8),
+    "accessories": (3, 20),
+}
+
+
 def _count_by_category(items: List[Dict[str, Any]]) -> Dict[str, int]:
     """Count items by category."""
     counts: Dict[str, int] = {}
     for item in items:
-        cat = (item.get("category") or "other").lower()
+        raw = item.get("category") if isinstance(item, dict) else None
+        cat = str(raw).strip().lower() if raw is not None and str(raw).strip() else "other"
         counts[cat] = counts.get(cat, 0) + 1
     return counts
+
+
+def _analyze_wardrobe_gaps(items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Build wardrobe gap analysis from item rows (id/category).
+
+    Empty wardrobe is valid: every ideal category is underrepresented.
+    """
+    counts = _count_by_category(items)
+
+    breakdown = []
+    missing = []
+    for cat, (ideal_min, ideal_max) in _WARDROBE_IDEALS.items():
+        count = counts.get(cat, 0)
+        under = count < ideal_min
+        breakdown.append(
+            {
+                "category": cat,
+                "count": count,
+                "ideal_min": ideal_min,
+                "ideal_max": ideal_max,
+                "is_underrepresented": under,
+            }
+        )
+        if under:
+            missing.append(
+                {
+                    "category": cat,
+                    "description": f"Add more versatile {cat} to increase outfit options.",
+                    "priority": "high" if cat in {"tops", "bottoms", "shoes"} else "medium",
+                    "would_complete": 10,
+                    "estimated_cpw": 5.0,
+                }
+            )
+
+    completeness = 100 - min(80, len(missing) * 12)
+    if not items:
+        completeness = 0
+
+    return {
+        "category_breakdown": breakdown,
+        "missing_essentials": missing,
+        "wardrobe_completeness_score": completeness,
+    }
 
 
 def _build_similar_item_response(match: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
@@ -1017,15 +1073,6 @@ async def style_analysis(
 # WARDROBE GAPS + SHOPPING + CAPSULE (MVP heuristics)
 # ============================================================================
 
-# Rough targets for a balanced wardrobe
-_WARDROBE_IDEALS = {
-    "tops": (8, 20),
-    "bottoms": (5, 12),
-    "shoes": (3, 10),
-    "outerwear": (2, 8),
-    "accessories": (3, 20),
-}
-
 
 @router.get("/wardrobe-gaps", response_model=Dict[str, Any])
 @handle_route_errors(
@@ -1037,52 +1084,16 @@ async def wardrobe_gaps(
     db: Client = Depends(get_db),
 ):
     items = db.table("items").select("id,category").eq("user_id", user_id).eq("is_deleted", False).execute().data or []
-    if not items:
-        raise ItemNotFoundError(message="No items to analyze")
-
-    counts = _count_by_category(items)
-
-    breakdown = []
-    missing = []
-    for cat, (ideal_min, ideal_max) in _WARDROBE_IDEALS.items():
-        count = counts.get(cat, 0)
-        under = count < ideal_min
-        breakdown.append(
-            {
-                "category": cat,
-                "count": count,
-                "ideal_min": ideal_min,
-                "ideal_max": ideal_max,
-                "is_underrepresented": under,
-            }
-        )
-        if under:
-            missing.append(
-                {
-                    "category": cat,
-                    "description": f"Add more versatile {cat} to increase outfit options.",
-                    "priority": "high" if cat in {"tops", "bottoms", "shoes"} else "medium",
-                    "would_complete": 10,
-                    "estimated_cpw": 5.0,
-                }
-            )
-
-    completeness = 100 - min(80, len(missing) * 12)
+    analysis = _analyze_wardrobe_gaps(items)
 
     logger.debug(
         "Wardrobe gaps analyzed",
         user_id=user_id,
         item_count=len(items),
-        missing_categories=len(missing)
+        missing_categories=len(analysis.get("missing_essentials") or []),
     )
     return {
-        "data": {
-            "analysis": {
-                "category_breakdown": breakdown,
-                "missing_essentials": missing,
-                "wardrobe_completeness_score": completeness,
-            }
-        },
+        "data": {"analysis": analysis},
         "message": "OK",
     }
 
@@ -1100,8 +1111,9 @@ async def shopping_recommendations(
     db: Client = Depends(get_db),
 ):
     """Return actionable shopping recommendations based on wardrobe gaps."""
-    gaps = await wardrobe_gaps(user_id=user_id, db=db)
-    missing = ((gaps.get("data") or {}).get("analysis") or {}).get("missing_essentials") or []
+    items = db.table("items").select("id,category").eq("user_id", user_id).eq("is_deleted", False).execute().data or []
+    analysis = _analyze_wardrobe_gaps(items)
+    missing = analysis.get("missing_essentials") or []
     if category:
         missing = [m for m in missing if m.get("category") == category]
     logger.debug(

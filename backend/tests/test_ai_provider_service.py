@@ -309,6 +309,44 @@ class _AlwaysTransportErrorClient:
         raise httpx.ReadError("connection reset")
 
 
+class _LocalProtocolThenOkClient:
+    """Fails once with LocalProtocolError (HTTP framing / ENHANCE_YOUR_CALM class), then succeeds."""
+
+    def __init__(self):
+        self.call_count = 0
+
+    async def post(self, url, json=None, headers=None):
+        self.call_count += 1
+        if self.call_count == 1:
+            raise httpx.LocalProtocolError(11)
+        return _FakeResponse({"data": [{"b64_json": "ZmFrZQ=="}]})
+
+
+@pytest.mark.asyncio
+async def test_generate_image_via_images_api_retries_local_protocol_error():
+    """Regression: LocalProtocolError was not in _TRANSIENT_TRANSPORT_ERRORS, so
+    concurrent photoshoot image gen failed hard without retry (prod logs:
+    'AI image request failed: LocalProtocolError: 11')."""
+    service = AIProviderService(_make_config())
+    fake_client = _LocalProtocolThenOkClient()
+    close_mock = AsyncMock()
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
+         patch.object(service, "close", close_mock), \
+         patch("asyncio.sleep", AsyncMock()):
+        result = await service._generate_image_via_images_api("a cat", model="image-model")
+
+    assert fake_client.call_count == 2
+    assert result.images == ["ZmFrZQ=="]
+    close_mock.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_local_protocol_error_is_classified_transient():
+    assert AIProviderService._is_transient_transport_error(httpx.LocalProtocolError(11))
+    assert AIProviderService._is_transient_transport_error(httpx.RemoteProtocolError("goaway"))
+
+
 @pytest.mark.asyncio
 async def test_generate_image_via_images_api_raises_retryable_after_exhausting_transport_retries():
     from app.core.exceptions import AIServiceError

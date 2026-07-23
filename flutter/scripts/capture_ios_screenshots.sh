@@ -17,9 +17,9 @@
 # THIS IS A SCAFFOLD. It does not build or launch the Flutter app for you.
 # Run it AFTER you have the app building, with the app already running on the
 # target simulator (e.g. via `flutter run -d "iPhone 16 Pro Max"`), signed in
-# with the seeded demo account (see docs/app-store-listing.md section 5).
+# with the seeded demo account (see docs/store/app-store-listing.md section 5).
 #
-# See docs/app-store-screenshots.md for the prioritized list of screens to grab.
+# See docs/store/app-store-screenshots.md for the prioritized list of screens to grab.
 #
 # USAGE
 #   chmod +x flutter/scripts/capture_ios_screenshots.sh
@@ -138,8 +138,8 @@ NEXT STEPS (manual):
        flutter run -d "$name" \\
          --dart-define=API_BASE_URL=https://api.fitcheckaiapp.com \\
          --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
-  2) Sign in with the seeded demo account (docs/app-store-listing.md section 5).
-  3) Navigate to each target screen IN ORDER (see docs/app-store-screenshots.md section 3):
+  2) Sign in with the seeded demo account (docs/store/app-store-listing.md section 5).
+  3) Navigate to each target screen IN ORDER (see docs/store/app-store-screenshots.md section 3):
         1 Wardrobe   2 AI extraction   3 Virtual try-on   4 AI photoshoot
         5 Recommendations   6 Calendar/planner   7 Analytics/stats
         8 Outfit detail   9 Dashboard   10 Gamification
@@ -190,7 +190,7 @@ Env overrides:
 
 Run AFTER the app builds. This script boots the simulator and captures the
 CURRENT screen on ENTER — you drive the app to each screen yourself.
-See docs/app-store-screenshots.md for dimensions, screen list, and workflow.
+See docs/store/app-store-screenshots.md for dimensions, screen list, and workflow.
 EOF
     ;;
 esac

@@ -19,7 +19,7 @@ Optional:
     SKIP_EXISTING_ITEMS=1   # if items already exist, only report counts
 
 After success, paste REVIEW_EMAIL / REVIEW_PASSWORD into App Store Connect
-Review Notes (see docs/app-store-listing.md §4).
+Review Notes (see docs/store/app-store-listing.md §4).
 """
 
 from __future__ import annotations

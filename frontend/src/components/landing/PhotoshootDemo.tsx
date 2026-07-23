@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { GlassCard } from './GlassCard';
 import { LoginPromptModal } from './LoginPromptModal';
 import { demoPhotoshoot, DemoPhotoshootResult, DemoApiError } from '@/api/demo';
+import { ensureSessionRecording, trackEvent } from '@/lib/analytics';
 
 type DemoState = 'idle' | 'processing' | 'results' | 'error';
 
@@ -92,11 +93,27 @@ export function PhotoshootDemo() {
 
     setState('processing');
     setError(null);
+    ensureSessionRecording();
+    trackEvent('photoshoot_session_started', {
+      use_case: 'aesthetic',
+      num_images: 2,
+      photo_count: 1,
+      source: 'web_demo',
+    });
 
     try {
       const response = await demoPhotoshoot(photo);
       setResult(response);
       setState('results');
+      trackEvent('photoshoot_session_completed', {
+        session_id: response.session_id,
+        use_case: 'aesthetic',
+        num_images: 2,
+        generated_count: response.generated_count ?? response.images?.length ?? 0,
+        failed_count: response.failed_count ?? 0,
+        partial_success: Boolean(response.partial_success),
+        source: 'web_demo',
+      });
     } catch (err) {
       const errorMessage = isDemoApiError(err)
         ? err.isRateLimit
@@ -105,6 +122,13 @@ export function PhotoshootDemo() {
         : 'Failed to generate images';
       setError(errorMessage);
       setState('error');
+      trackEvent('photoshoot_session_failed', {
+        use_case: 'aesthetic',
+        num_images: 2,
+        error_message: errorMessage,
+        is_rate_limit: isDemoApiError(err) ? Boolean(err.isRateLimit) : false,
+        source: 'web_demo',
+      });
     }
   };
 

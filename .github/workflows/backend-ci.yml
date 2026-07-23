@@ -38,6 +38,10 @@ jobs:
       - name: Ruff lint
         run: ruff check .
 
+      - name: Architecture layer check
+        working-directory: ${{ github.workspace }}
+        run: python scripts/check_architecture.py
+
       - name: Pytest
         env:
           # So `from app...` imports resolve when pytest collects tests/

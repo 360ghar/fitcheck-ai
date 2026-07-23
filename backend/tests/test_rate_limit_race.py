@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.core.rate_limit import rate_limited_operation
+from app.services.rate_limit import rate_limited_operation
 from app.models.subscription import PlanType, UsageCheckResult
 
 
@@ -29,9 +29,9 @@ async def test_usage_is_incremented_before_operation_runs():
         call_order.append("increment")
 
     with patch(
-        "app.core.rate_limit.SubscriptionService.check_limit", side_effect=fake_check_limit
+        "app.services.rate_limit.SubscriptionService.check_limit", side_effect=fake_check_limit
     ), patch(
-        "app.core.rate_limit.SubscriptionService.increment_usage", side_effect=fake_increment_usage
+        "app.services.rate_limit.SubscriptionService.increment_usage", side_effect=fake_increment_usage
     ):
         async with rate_limited_operation(user_id="user-1", operation_type="generation", db=object()):
             # Simulates the protected operation (e.g. an AI provider call).

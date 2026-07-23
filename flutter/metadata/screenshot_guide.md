@@ -35,7 +35,7 @@
 
 ## Using the Screenshot Capture Script
 
-The repo includes a helper script at `scripts/capture_ios_screenshots.sh`.
+The repo includes a helper script at `flutter/scripts/capture_ios_screenshots.sh`.
 
 ### Prerequisites
 - macOS with Xcode and command-line tools installed

@@ -198,6 +198,10 @@ class AIProviderService:
                 pool=self.config.pool_timeout,
             )
 
+            # HTTP/1.1 by default: concurrent multi-MB base64 image bodies over
+            # HTTP/2 routinely hit LocalProtocolError (e.g. ENHANCE_YOUR_CALM /
+            # stream reset) against Agnes-style gateways. Multiplexing is not
+            # worth the protocol flakiness for this workload.
             self._client = httpx.AsyncClient(
                 timeout=timeout,
                 limits=limits,
@@ -205,7 +209,7 @@ class AIProviderService:
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {self.config.api_key}",
                 },
-                http2=True,  # Enable HTTP/2 for multiplexing
+                http2=False,
             )
         return self._client
 
@@ -281,10 +285,16 @@ class AIProviderService:
         httpx.ReadError,
         httpx.ConnectError,
         httpx.RemoteProtocolError,
+        httpx.LocalProtocolError,
         httpx.WriteError,
         httpx.PoolTimeout,
         httpx.ConnectTimeout,
         httpx.ReadTimeout,
+    )
+
+    _PROTOCOL_TRANSPORT_ERRORS = (
+        httpx.RemoteProtocolError,
+        httpx.LocalProtocolError,
     )
 
     @classmethod
@@ -500,11 +510,11 @@ class AIProviderService:
                         max_retries=max_retries,
                         delay_seconds=round(delay, 2),
                         error=self._format_exception_message(transport_error),
+                        error_type=type(transport_error).__name__,
                     )
-                    if isinstance(transport_error, httpx.RemoteProtocolError):
-                        # ponytail: pooled HTTP/2 connection was killed by the peer;
-                        # retrying on the same client just fails again. Rebuild it,
-                        # mirroring subscription_service.py's fix for the same error class.
+                    if isinstance(transport_error, self._PROTOCOL_TRANSPORT_ERRORS):
+                        # Pooled connection is poisoned (peer GOAWAY / local framing
+                        # error). Retrying on the same client fails again - rebuild.
                         await self.close()
                         client = await self._get_client()
                     attempt += 1
@@ -580,7 +590,11 @@ class AIProviderService:
                 raise AIServiceError(f"AI transport request failed after retries: {error_message}")
 
             error_message = self._format_exception_message(e)
-            logger.error("Chat request error", error=error_message)
+            logger.error(
+                "Chat request error",
+                error=error_message,
+                error_type=type(e).__name__,
+            )
             raise AIServiceError(f"AI request failed: {error_message}")
 
     def _parse_chat_response(
@@ -828,11 +842,19 @@ class AIProviderService:
         logger.info("AI image generation request started", provider_host=urlparse(url).netloc, model=model)
 
         async def _post_image_request() -> httpx.Response:
-            response = await client.post(
-                url,
-                json=payload,
-                headers={"Authorization": f"Bearer {image_key}"},
-            )
+            nonlocal client
+            try:
+                response = await client.post(
+                    url,
+                    json=payload,
+                    headers={"Authorization": f"Bearer {image_key}"},
+                )
+            except self._PROTOCOL_TRANSPORT_ERRORS:
+                # Poisoned pooled connection - drop it so the next retry gets a
+                # fresh client (same pattern as chat() transport recovery).
+                await self.close()
+                client = await self._get_client()
+                raise
             if response.status_code == 503:
                 # ponytail: Agnes's free-tier gateway 503s with transient
                 # "queue full"/"memory overloaded" errors fairly often (observed

@@ -10,7 +10,7 @@ import json
 import re
 import uuid
 from datetime import datetime, date, timedelta
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from supabase import Client
 
@@ -402,66 +402,83 @@ RULES:
 
         subject_hint = ""  # Will be extracted from response if available
 
+        def _user_text(strict_json: bool) -> str:
+            base = (
+                f"Use case guidance:\n{guidance}\n\n"
+                f"Analyze this person and generate {num_prompts} scene plans as JSON. "
+                "Be factual about identity; only invent diversity in setting/outfit/pose/lighting."
+                if reference_photo
+                else (
+                    f"{guidance}\n\nGenerate {num_prompts} scene plans as JSON. "
+                    "Without a reference photo, use a neutral adult subject_lock and keep it consistent."
+                )
+            )
+            if strict_json:
+                return (
+                    base
+                    + "\n\nReturn ONLY a JSON object matching the schema. "
+                    "No markdown fences, no prose before or after the JSON."
+                )
+            return base
+
+        def _build_user_content(strict_json: bool):
+            if not reference_photo:
+                return _user_text(strict_json)
+            from app.utils.image_processing import downscale_base64_image
+
+            photo = reference_photo
+            if "," in photo and photo.strip().lower().startswith("data:"):
+                photo = photo.split(",", 1)[1]
+            photo = downscale_base64_image(photo)
+            ref_url = f"data:image/jpeg;base64,{photo}" if not photo.startswith("data:") else photo
+            return [
+                {"type": "image_url", "image_url": {"url": ref_url}},
+                {"type": "text", "text": _user_text(strict_json)},
+            ]
+
         try:
             ai_service = await get_ai_service()
+            response_data: Any = None
             try:
-                # Build the message content - multimodal if we have a reference photo
-                if reference_photo:
-                    # Normalize the photo (strip data URL prefix if present)
-                    photo = reference_photo
-                    if "," in photo and photo.strip().lower().startswith("data:"):
-                        photo = photo.split(",", 1)[1]
-
-                    # Create multimodal content with image + text
-                    ref_url = f"data:image/jpeg;base64,{photo}" if not photo.startswith("data:") else photo
-                    user_content = [
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": ref_url}
-                        },
-                        {
-                            "type": "text",
-                            "text": (
-                                f"Use case guidance:\n{guidance}\n\n"
-                                f"Analyze this person and generate {num_prompts} scene plans as JSON. "
-                                "Be factual about identity; only invent diversity in setting/outfit/pose/lighting."
-                            ),
-                        }
-                    ]
-
+                last_parse_error: Optional[Exception] = None
+                # Attempt 0: normal. Attempt 1: stricter "JSON only" nudge after parse failure.
+                for attempt in range(2):
+                    strict = attempt == 1
                     response = await ai_service.chat(
                         messages=[
                             ChatMessage(role="system", content=system_prompt),
-                            ChatMessage(role="user", content=user_content),
+                            ChatMessage(role="user", content=_build_user_content(strict)),
                         ],
-                        # Low temperature: identity extraction must not invent features
                         temperature=0.3,
+                        response_format={"type": "json_object"},
                     )
+                    content = (response.text or "").strip()
+                    if not content:
+                        last_parse_error = AIServiceError("Prompt generation returned empty response")
+                        if attempt == 0:
+                            logger.warning("Prompt generation empty; retrying with strict JSON instruction")
+                            continue
+                        raise last_parse_error
+                    try:
+                        json_str = PhotoshootService._extract_json_object(content)
+                        response_data = json.loads(json_str)
+                        break
+                    except (AIServiceError, json.JSONDecodeError) as parse_err:
+                        last_parse_error = parse_err
+                        if attempt == 0:
+                            logger.warning(
+                                "Prompt generation JSON parse failed; retrying once",
+                                error=str(parse_err),
+                            )
+                            continue
+                        raise
                 else:
-                    # No reference photo - use text-only prompt with fallback
-                    response = await ai_service.chat(
-                        messages=[
-                            ChatMessage(role="system", content=system_prompt),
-                            ChatMessage(
-                                role="user",
-                                content=(
-                                    f"{guidance}\n\nGenerate {num_prompts} scene plans as JSON. "
-                                    "Without a reference photo, use a neutral adult subject_lock and keep it consistent."
-                                ),
-                            ),
-                        ],
-                        temperature=0.3,
-                    )
+                    raise last_parse_error or AIServiceError("Prompt generation failed")
             finally:
                 await ai_service.close()
 
-            content = response.text or ""
-            if not content:
-                raise AIServiceError("Prompt generation returned empty response")
-
-            # Extract JSON object from response
-            json_str = PhotoshootService._extract_json_object(content)
-            response_data = json.loads(json_str)
+            if response_data is None:
+                raise AIServiceError("Prompt generation returned no parseable JSON")
 
             # Handle both old array format and new object format
             if isinstance(response_data, list):
@@ -538,16 +555,15 @@ RULES:
             logger.warning(
                 f"Prompt generation incomplete, using fallback prompts (want={num_prompts}, got={len(prompts)})"
             )
-            fallback = PhotoshootService._fallback_prompts(
+            return PhotoshootService._fallback_prompts(
                 use_case=use_case,
                 num_prompts=num_prompts,
                 custom_prompt=custom_prompt,
                 subject_hint=subject_hint,
             )
-            return fallback
 
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse prompts JSON: {e}")
+            logger.warning(f"Failed to parse prompts JSON after retry; using fallback: {e}")
             return PhotoshootService._fallback_prompts(
                 use_case=use_case,
                 num_prompts=num_prompts,
@@ -555,7 +571,7 @@ RULES:
                 subject_hint=subject_hint,
             )
         except Exception as e:
-            logger.error(f"Error generating prompts: {e}")
+            logger.warning(f"Error generating prompts; using fallback: {e}")
             return PhotoshootService._fallback_prompts(
                 use_case=use_case,
                 num_prompts=num_prompts,
@@ -745,14 +761,18 @@ RULES:
         from app.services.ai_provider_service import ChatMessage, get_ai_service
         from app.services.ai_settings_service import AISettingsService
 
-        # Normalize reference photos (strip data URL prefix if present)
+        # Normalize + downscale reference photos (cut multi-MB base64 payloads that
+        # drive LocalProtocolError and OOM under concurrent generation).
+        from app.utils.image_processing import downscale_base64_image
+
         normalized_refs = []
         for photo in reference_photos:
             if photo and "," in photo and photo.strip().lower().startswith("data:"):
-                normalized_refs.append(photo.split(",", 1)[1])
+                raw = photo.split(",", 1)[1]
             else:
-                normalized_refs.append(photo.strip() if photo else "")
-        normalized_refs = [p for p in normalized_refs if p]
+                raw = photo.strip() if photo else ""
+            if raw:
+                normalized_refs.append(downscale_base64_image(raw))
 
         if not normalized_refs:
             raise ServiceError("At least one reference photo is required")
@@ -1054,14 +1074,17 @@ class PhotoshootStreamingService:
         ai_service = await AISettingsService.get_ai_service_for_user(self.user_id, self.db)
 
         try:
-            # Normalize reference photos
+            # Normalize + downscale reference photos (see generate_images)
+            from app.utils.image_processing import downscale_base64_image
+
             normalized_refs = []
             for photo in job.photos:
                 if photo and "," in photo and photo.strip().lower().startswith("data:"):
-                    normalized_refs.append(photo.split(",", 1)[1])
+                    raw = photo.split(",", 1)[1]
                 else:
-                    normalized_refs.append(photo.strip() if photo else "")
-            normalized_refs = [p for p in normalized_refs if p]
+                    raw = photo.strip() if photo else ""
+                if raw:
+                    normalized_refs.append(downscale_base64_image(raw))
 
             # Process in batches
             batch_size = job.batch_size

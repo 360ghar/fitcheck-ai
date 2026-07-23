@@ -27,6 +27,7 @@ import {
   getShoppingRecommendations,
   getWeatherRecommendations,
 } from '@/api/recommendations'
+import { ensureSessionRecording, trackEvent } from '@/lib/analytics'
 import type { AstrologyRecommendationMode, CompleteLookSuggestion, MatchResult, Item } from '@/types'
 
 type TabType = 'today' | 'match' | 'complete' | 'weather' | 'astrology' | 'shopping'
@@ -315,6 +316,13 @@ export default function RecommendationsPage() {
 
   const runShopping = async () => {
     setIsLoadingShopping(true)
+    ensureSessionRecording()
+    trackEvent('shopping_recommendations_requested', {
+      category: shoppingCategory.trim() || 'all',
+      style: shoppingStyle.trim() || 'all',
+      has_budget: Boolean(shoppingBudget.trim()),
+      source: 'web_app',
+    })
     try {
       const budget = shoppingBudget.trim() ? Number(shoppingBudget.trim()) : undefined
       const data = await getShoppingRecommendations({
@@ -323,10 +331,20 @@ export default function RecommendationsPage() {
         budget: Number.isFinite(budget) ? budget : undefined,
       })
       setShopping(data)
+      trackEvent('shopping_recommendations_loaded', {
+        recommendation_count: data.length,
+        category: shoppingCategory.trim() || 'all',
+        source: 'web_app',
+      })
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'An error occurred'
+      trackEvent('shopping_recommendations_failed', {
+        error_message: message,
+        source: 'web_app',
+      })
       toast({
         title: 'Failed to load shopping recommendations',
-        description: err instanceof Error ? err.message : 'An error occurred',
+        description: message,
         variant: 'destructive',
       })
     } finally {

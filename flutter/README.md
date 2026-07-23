@@ -20,6 +20,10 @@ Flutter mobile app for FitCheck AI.
 - Subscription and referral UX
 - Profile/settings/legal/feedback screens
 
+## Batch extraction API note
+
+Mobile starts jobs with **JSON base64** (`POST /api/v1/ai/batch-extract`). The web app prefers **multipart** (`POST /api/v1/ai/batch-extract-multipart`). Both share the same SSE progress and overlapped extract→generate pipeline on the backend.
+
 ## Setup
 
 ```bash

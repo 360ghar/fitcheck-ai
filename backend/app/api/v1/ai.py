@@ -16,7 +16,7 @@ from supabase import Client
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError, FitCheckException, RateLimitError
-from app.core.rate_limit import rate_limited_operation
+from app.services.rate_limit import rate_limited_operation
 from app.core.security import get_current_user_id
 from app.db.connection import get_db
 from app.utils.retry import with_retry

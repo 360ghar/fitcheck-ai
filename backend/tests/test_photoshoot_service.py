@@ -13,6 +13,33 @@ from app.core.exceptions import AIServiceError
 from app.models.subscription import PlanType
 
 
+class TestPromptJsonExtraction:
+    def test_extract_json_object_from_prose(self):
+        text = 'Sure! Here you go:\n{"subject_lock": "adult", "prompts": []}\nThanks'
+        out = PhotoshootService._extract_json_object(text)
+        assert out.startswith("{")
+        assert "subject_lock" in out
+
+    def test_extract_json_from_fence(self):
+        text = '```json\n{"prompts": [{"index": 0}]}\n```'
+        out = PhotoshootService._extract_json_object(text)
+        assert '"prompts"' in out
+
+    def test_extract_json_missing_raises(self):
+        with pytest.raises(AIServiceError, match="did not contain JSON"):
+            PhotoshootService._extract_json_object("no structured data here")
+
+    def test_fallback_prompts_count(self):
+        prompts = PhotoshootService._fallback_prompts(
+            use_case=PhotoshootUseCase.LINKEDIN,
+            num_prompts=4,
+            custom_prompt=None,
+            subject_hint="Same adult person as reference.",
+        )
+        assert len(prompts) == 4
+        assert all(p.full_prompt for p in prompts)
+
+
 @pytest.fixture
 def mock_db():
     """Create a mock database client."""

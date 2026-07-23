@@ -34,6 +34,8 @@ const posthogOptions = {
   capture_pageview: true,
   capture_pageleave: true,
   autocapture: true,
+  // Persist identity + session across reloads so product sessions stay linked.
+  persistence: 'localStorage+cookie' as const,
   session_recording: {
     maskAllInputs: false,
     maskInputFn: (text: string, element?: HTMLElement) => {

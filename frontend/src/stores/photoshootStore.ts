@@ -12,6 +12,7 @@ import {
   GeneratedImage,
 } from '@/api/photoshoot';
 import { getApiError } from '@/api/client';
+import { ensureSessionRecording, setPersonProperties, trackEvent } from '@/lib/analytics';
 import { useJobUiStore } from '@/stores/jobUiStore';
 
 // Types
@@ -176,6 +177,14 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
       currentStep: 'generating',
     });
 
+    ensureSessionRecording();
+    trackEvent('photoshoot_session_started', {
+      use_case: useCase,
+      num_images: numImages,
+      photo_count: photos.length,
+      source: 'web_app',
+    });
+
     try {
       set({ statusMessage: 'Encoding photos…', progress: null });
 
@@ -208,16 +217,34 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
         num_images: numImages,
       });
 
+      const failedCount = result.failed_count ?? (result.image_failures?.length ?? 0);
+      const partialSuccess = Boolean(result.partial_success);
+
       set({
         progress: 100,
         statusMessage: 'Done',
         sessionId: result.session_id,
         generatedImages: result.images,
         failedIndices: (result.image_failures ?? []).map((f) => f.index),
-        failedCount: result.failed_count ?? (result.image_failures?.length ?? 0),
-        partialSuccess: Boolean(result.partial_success),
+        failedCount,
+        partialSuccess,
         currentStep: 'results',
         isGenerating: false,
+      });
+
+      trackEvent('photoshoot_session_completed', {
+        session_id: result.session_id,
+        use_case: useCase,
+        num_images: numImages,
+        generated_count: result.images?.length ?? 0,
+        failed_count: failedCount,
+        partial_success: partialSuccess,
+        source: 'web_app',
+      });
+      setPersonProperties({
+        last_photoshoot_session_id: result.session_id,
+        last_photoshoot_at: new Date().toISOString(),
+        last_photoshoot_use_case: useCase,
       });
 
       // Clear pill even if the generating step unmounted (user left the page).
@@ -237,6 +264,12 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
         statusMessage: 'Generation failed',
         // Stay on generating surface so user can retry without losing photos
         currentStep: 'generating',
+      });
+      trackEvent('photoshoot_session_failed', {
+        use_case: useCase,
+        num_images: numImages,
+        error_message: apiError.message,
+        source: 'web_app',
       });
       useJobUiStore.getState().clearJob('photoshoot');
       return null;

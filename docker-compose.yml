@@ -1,11 +1,11 @@
 # FitCheck AI - Docker Compose Configuration (Development with Hot Reload)
 #
-# NOT the standard local dev workflow - AGENTS.md's Non-Negotiable Project
-# Instructions state "Never run the project using Docker for local
-# development" (the team uses a hosted Supabase instance + native
-# uvicorn/flutter run instead). This file is kept for container-based
-# workflows only (e.g. CI parity checks); if you're setting up local dev,
-# follow AGENTS.md instead of `docker-compose up --build`.
+# NOT the standard local dev workflow - AGENTS.md's Non-negotiables state
+# "Never run the project using Docker for local development" (the team uses
+# a hosted Supabase instance + native uvicorn/flutter run instead). This
+# file is kept for container-based workflows only (e.g. CI parity checks);
+# if you're setting up local dev, follow AGENTS.md instead of
+# `docker-compose up --build`.
 
 services:
   # ============================================================================

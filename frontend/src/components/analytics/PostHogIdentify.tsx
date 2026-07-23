@@ -1,11 +1,13 @@
 /**
  * PostHog user identification component
  * Automatically identifies/resets users based on authentication state
+ * and keeps session recording active across auth transitions.
  */
 
 import { useEffect } from 'react'
 import { usePostHog } from 'posthog-js/react'
 import { useAuthStore } from '@/stores/authStore'
+import { ensureSessionRecording } from '@/lib/analytics'
 
 export function PostHogIdentify() {
   const posthog = usePostHog()
@@ -16,6 +18,9 @@ export function PostHogIdentify() {
   useEffect(() => {
     // Wait for auth store to hydrate before making decisions
     if (!hasHydrated || !posthog) return
+
+    // Always record the browser session (anonymous + authenticated).
+    ensureSessionRecording()
 
     if (isAuthenticated && user) {
       // Identify the user with PostHog
@@ -36,8 +41,9 @@ export function PostHogIdentify() {
         $avatar: user.avatar_url,
       })
     } else {
-      // Reset PostHog when user logs out
+      // Reset PostHog when user logs out (starts a new anonymous session)
       posthog.reset()
+      ensureSessionRecording()
     }
   }, [posthog, user, isAuthenticated, hasHydrated])
 

@@ -1,0 +1,28 @@
+name: Docs & Architecture Harness
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  harness:
+    name: Docs structure + architecture
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check docs structure
+        run: python scripts/check_docs_structure.py
+
+      - name: Check architecture layers
+        run: python scripts/check_architecture.py

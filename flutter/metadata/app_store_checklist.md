@@ -1,6 +1,6 @@
 # App Store Submission Checklist — FitCheck AI
 
-> Source of truth for paste-ready ASC fields: `docs/app-store-listing.md`.
+> Source of truth for paste-ready ASC fields: `docs/store/app-store-listing.md`.
 > This checklist tracks status for launch on branch `ios-app-store-launch`.
 
 ## App Information
@@ -60,7 +60,7 @@
 ### Metadata drafts
 
 - [x] Description / subtitle / keywords / promo / release notes synced under `flutter/metadata/`
-- [x] Full ASC answers in `docs/app-store-listing.md`
+- [x] Full ASC answers in `docs/store/app-store-listing.md`
 
 ---
 
@@ -69,7 +69,7 @@
 ### App Store Connect setup
 
 - [ ] App record created with Bundle ID `com.fitcheck.fitcheckAi`
-- [ ] App name, subtitle, description pasted from `docs/app-store-listing.md` / `flutter/metadata/`
+- [ ] App name, subtitle, description pasted from `docs/store/app-store-listing.md` / `flutter/metadata/`
 - [ ] Keywords (max 100 chars, no spaces after commas)
 - [ ] Promotional text
 - [ ] What's New / release notes
@@ -77,7 +77,7 @@
 - [ ] App Privacy questionnaire (no tracking — see listing doc §2)
 - [ ] Age rating (UGC Yes, GenAI Yes — expect ~13+)
 - [ ] App icon 1024×1024 uploaded (`flutter/assets/icons/app_icon.png`)
-- [ ] Screenshots for iPhone 6.9" and iPad 13" (see `docs/app-store-screenshots.md`)
+- [ ] Screenshots for iPhone 6.9" and iPad 13" (see `docs/store/app-store-screenshots.md`)
 - [ ] Pricing: Free
 - [ ] App Review contact + demo account credentials
 

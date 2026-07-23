@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import '../../../core/services/analytics_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../repositories/recommendations_repository.dart';
 
@@ -24,6 +25,16 @@ class ShoppingRecommendationsController extends GetxController {
     error.value = '';
     recommendations.clear();
 
+    AnalyticsService.instance.track(
+      'shopping_recommendations_requested',
+      properties: {
+        'category': category.value,
+        'style': style.value,
+        'max_budget': maxBudget.value,
+        'source': 'flutter_app',
+      },
+    );
+
     try {
       final result = await _repository.getShoppingRecommendations(
         category: category.value == 'all' ? null : category.value,
@@ -33,8 +44,23 @@ class ShoppingRecommendationsController extends GetxController {
 
       recommendations.value =
           result.whereType<Map<String, dynamic>>().toList();
+      AnalyticsService.instance.track(
+        'shopping_recommendations_loaded',
+        properties: {
+          'recommendation_count': recommendations.length,
+          'category': category.value,
+          'source': 'flutter_app',
+        },
+      );
     } catch (e) {
       error.value = e.toString().replaceAll('Exception: ', '');
+      AnalyticsService.instance.track(
+        'shopping_recommendations_failed',
+        properties: {
+          'error_message': error.value,
+          'source': 'flutter_app',
+        },
+      );
       NotificationService.instance.showError(error.value);
     } finally {
       isLoading.value = false;

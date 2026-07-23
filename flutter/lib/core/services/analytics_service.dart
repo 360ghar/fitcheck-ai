@@ -25,7 +25,12 @@ class AnalyticsService {
 
     final config = PostHogConfig(apiKey)
       ..host = host
-      ..debug = kDebugMode;
+      ..debug = kDebugMode
+      // Session replay: also requires "Record user sessions" in PostHog project settings.
+      ..sessionReplay = true;
+    // Keep UI readable in replays; mask only if product policy tightens later.
+    config.sessionReplayConfig.maskAllTexts = false;
+    config.sessionReplayConfig.maskAllImages = false;
     await Posthog().setup(config);
     _enabled = true;
 

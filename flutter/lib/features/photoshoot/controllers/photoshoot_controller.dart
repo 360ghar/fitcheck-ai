@@ -12,6 +12,7 @@ import 'package:gal/gal.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/config/env_config.dart';
 import '../../../core/services/ai_consent_service.dart';
+import '../../../core/services/analytics_service.dart';
 import '../../../core/services/sse_service.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/permission_helper.dart';
@@ -283,6 +284,16 @@ class PhotoshootController extends GetxController {
     failedCount.value = 0;
     partialSuccess.value = false;
 
+    AnalyticsService.instance.track(
+      'photoshoot_session_started',
+      properties: {
+        'use_case': selectedUseCase.value.name,
+        'num_images': numImages.value,
+        'photo_count': selectedPhotos.length,
+        'source': 'flutter_app',
+      },
+    );
+
     try {
       // Convert photos to base64
       generationStatus.value = 'Processing photos...';
@@ -315,6 +326,15 @@ class PhotoshootController extends GetxController {
     } catch (e, stackTrace) {
       error.value = e.toString().replaceAll('Exception: ', '');
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
+      AnalyticsService.instance.track(
+        'photoshoot_session_failed',
+        properties: {
+          'use_case': selectedUseCase.value.name,
+          'num_images': numImages.value,
+          'error_message': error.value,
+          'source': 'flutter_app',
+        },
+      );
 
       if (error.value.contains('limit') || error.value.contains('exceeded')) {
         _showReferralPrompt();
@@ -403,6 +423,17 @@ class PhotoshootController extends GetxController {
 
       case 'job_failed':
         error.value = event.data?['error'] ?? 'Generation failed';
+        AnalyticsService.instance.track(
+          'photoshoot_session_failed',
+          properties: {
+            'session_id': sessionId.value.isNotEmpty ? sessionId.value : jobId.value,
+            'job_id': jobId.value,
+            'use_case': selectedUseCase.value.name,
+            'num_images': numImages.value,
+            'error_message': error.value,
+            'source': 'flutter_app',
+          },
+        );
         Get.snackbar('Generation Failed', error.value);
         currentStep.value = PhotoshootStep.configure;
         isGenerating.value = false;
@@ -450,6 +481,20 @@ class PhotoshootController extends GetxController {
     currentStep.value = PhotoshootStep.results;
     isGenerating.value = false;
     _sseSubscription?.cancel();
+
+    AnalyticsService.instance.track(
+      'photoshoot_session_completed',
+      properties: {
+        'session_id': sessionId.value,
+        'job_id': jobId.value,
+        'use_case': selectedUseCase.value.name,
+        'num_images': numImages.value,
+        'generated_count': generatedImages.length,
+        'failed_count': failedCount.value,
+        'partial_success': partialSuccess.value,
+        'source': 'flutter_app',
+      },
+    );
 
     Get.snackbar(
       partialSuccess.value ? 'Partially Complete' : 'Success',

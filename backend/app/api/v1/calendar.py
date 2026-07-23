@@ -1,7 +1,7 @@
 """
 Calendar API routes.
 
-Implements the endpoints described in docs/2-technical/api-spec.md:
+Implements the endpoints described in docs/references/api-spec.md:
 - POST /api/v1/calendar/connect
 - GET /api/v1/calendar/events
 - POST /api/v1/calendar/events/{id}/outfit

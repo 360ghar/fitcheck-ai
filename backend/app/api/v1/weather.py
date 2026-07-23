@@ -1,7 +1,7 @@
 """
 Weather API routes.
 
-Implements the endpoints described in docs/2-technical/api-spec.md:
+Implements the endpoints described in docs/references/api-spec.md:
 - GET /api/v1/weather
 - GET /api/v1/weather/forecast
 
