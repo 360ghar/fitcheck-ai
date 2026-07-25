@@ -189,7 +189,6 @@ def _fetch_outfit(
 # ============================================================================
 
 
-@router.post("/create", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 @router.post("", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 async def create_outfit(
     request: OutfitCreate,

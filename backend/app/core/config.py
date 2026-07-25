@@ -82,7 +82,6 @@ class Settings(BaseSettings):
     # Pinecone
     PINECONE_API_KEY: Optional[str] = None
     PINECONE_INDEX_NAME: str = "fitcheck-items"
-    PINECONE_ENVIRONMENT: Optional[str] = None
     PINECONE_DIMENSION: int = 768  # Gemini embeddings dimension
 
     # ==========================================================================
@@ -184,27 +183,15 @@ class Settings(BaseSettings):
     # Frontend URL (for redirects)
     FRONTEND_URL: str = "http://localhost:3000"
 
-    # File Upload
-    MAX_UPLOAD_SIZE_MB: int = 10
-    ALLOWED_IMAGE_TYPES: List[str] = ["image/jpeg", "image/png", "image/webp"]
-
-    # Pagination
-    ITEMS_PER_PAGE: int = 20
-    OUTFITS_PER_PAGE: int = 20
-
-    # AI Generation
-    MAX_OUTFIT_ITEMS: int = 10
-    MAX_GENERATION_VARIATIONS: int = 3
+    # Upload size/type limits live in storage_service.py (MAX_FILE_SIZE,
+    # ALLOWED_IMAGE_EXTENSIONS); page sizes are per-route Query() defaults; and
+    # outbound AI timeouts are ProviderConfig field defaults in
+    # ai_provider_service.py. Do not re-add settings mirrors of those here -
+    # nothing reads them, so an operator who sets them is silently ignored.
 
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = "logs"
-
-    # Timeout Configuration (seconds)
-    AI_CONNECT_TIMEOUT: float = 5.0      # Connection establishment
-    AI_READ_TIMEOUT: float = 120.0       # Reading response
-    AI_WRITE_TIMEOUT: float = 30.0       # Sending request
-    AI_POOL_TIMEOUT: float = 10.0        # Pool acquisition
 
     class Config:
         # Load env keys regardless of whether process is started from repo root

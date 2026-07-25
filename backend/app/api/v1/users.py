@@ -384,7 +384,6 @@ _PREFERENCES_DEFAULTS = {
 
 
 @router.get("/preferences", response_model=Dict[str, Any])
-@router.get("/me/preferences", response_model=Dict[str, Any])  # backwards compatibility
 async def get_user_preferences(
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
@@ -403,7 +402,6 @@ async def get_user_preferences(
 
 
 @router.put("/preferences", response_model=Dict[str, Any])
-@router.put("/me/preferences", response_model=Dict[str, Any])  # backwards compatibility
 async def update_user_preferences(
     update_data: UserPreferencesUpdate,
     user_id: str = Depends(get_current_user_id),
@@ -445,7 +443,6 @@ _SETTINGS_DEFAULTS = {
 
 
 @router.get("/settings", response_model=Dict[str, Any])
-@router.get("/me/settings", response_model=Dict[str, Any])  # backwards compatibility
 async def get_user_settings(
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
@@ -463,7 +460,6 @@ async def get_user_settings(
 
 
 @router.put("/settings", response_model=Dict[str, Any])
-@router.put("/me/settings", response_model=Dict[str, Any])  # backwards compatibility
 async def update_user_settings(
     update_data: UserSettingsUpdate,
     user_id: str = Depends(get_current_user_id),
@@ -628,7 +624,6 @@ async def delete_body_profile(
 
 
 @router.get("/body-profile", response_model=Dict[str, Any])
-@router.get("/me/body-profile", response_model=Dict[str, Any])  # backwards compatibility
 async def get_body_profile(
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
@@ -657,7 +652,6 @@ async def get_body_profile(
 
 
 @router.put("/body-profile", response_model=Dict[str, Any])
-@router.put("/me/body-profile", response_model=Dict[str, Any])  # backwards compatibility
 async def upsert_body_profile(
     update_data: BodyProfileUpdate,
     user_id: str = Depends(get_current_user_id),

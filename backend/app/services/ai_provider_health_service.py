@@ -186,24 +186,6 @@ class AIProviderHealthService:
         else:
             self._health_cache.clear()
 
-    def get_cache_stats(self) -> Dict[str, int]:
-        """
-        Get cache statistics for monitoring.
-
-        Returns:
-            Dict with cache_size and circuit_breaker_count
-        """
-        circuit_breaker_count = sum(
-            1
-            for status in self._health_cache.values()
-            if status.consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD
-        )
-
-        return {
-            "cache_size": len(self._health_cache),
-            "circuit_breaker_count": circuit_breaker_count,
-        }
-
 
 # Global singleton
 _health_service = AIProviderHealthService()

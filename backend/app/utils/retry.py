@@ -9,7 +9,6 @@ import asyncio
 import random
 import logging
 from typing import TypeVar, Callable, Awaitable, Optional, Tuple, Type
-from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -23,31 +22,6 @@ def is_retryable_error(exc: Exception) -> bool:
     so permanent failures (401/400) fail fast while 429/503 still back off.
     """
     return bool(getattr(exc, "retryable", False))
-
-
-@dataclass
-class RetryConfig:
-    """Configuration for retry behavior."""
-
-    max_retries: int = 3
-    """Maximum number of retry attempts."""
-
-    initial_delay: float = 1.0
-    """Initial delay in seconds before first retry."""
-
-    max_delay: float = 30.0
-    """Maximum delay between retries in seconds."""
-
-    backoff_factor: float = 2.0
-    """Exponential backoff multiplier."""
-
-    jitter: bool = True
-    """Add random jitter to prevent thundering herd."""
-
-    retryable_exceptions: Tuple[Type[Exception], ...] = field(
-        default_factory=lambda: (Exception,)
-    )
-    """Exception types that should trigger a retry."""
 
 
 def _calculate_delay(
@@ -137,37 +111,3 @@ async def with_retry(
     if last_exception:
         raise last_exception
     raise RuntimeError("Unexpected state in retry logic")
-
-
-def retry_decorator(
-    max_retries: int = 3,
-    initial_delay: float = 1.0,
-    max_delay: float = 30.0,
-    backoff_factor: float = 2.0,
-    jitter: bool = True,
-    retryable_exceptions: Tuple[Type[Exception], ...] = (Exception,),
-):
-    """
-    Decorator version of with_retry for async functions.
-
-    Usage:
-        @retry_decorator(max_retries=3)
-        async def my_function():
-            ...
-    """
-
-    def decorator(fn: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
-        async def wrapper(*args, **kwargs) -> T:
-            return await with_retry(
-                lambda: fn(*args, **kwargs),
-                max_retries=max_retries,
-                initial_delay=initial_delay,
-                max_delay=max_delay,
-                backoff_factor=backoff_factor,
-                jitter=jitter,
-                retryable_exceptions=retryable_exceptions,
-            )
-
-        return wrapper
-
-    return decorator

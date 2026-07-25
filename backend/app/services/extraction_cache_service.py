@@ -21,10 +21,13 @@ _cache: Dict[str, Dict[str, Any]] = {}
 class ExtractionCacheService:
     """Service for caching extraction results by image hash."""
 
-    # Cache TTL: 24 hours
+    # Cache TTL: 24 hours. Enforced lazily on read only (get_cached_result drops
+    # an entry it finds expired); nothing sweeps the dict on a timer.
     CACHE_TTL_HOURS = 24
     # Hard cap so the process-local dict cannot grow without bound under
     # heavy wardrobe import traffic (each result may hold large item lists).
+    # This overflow eviction in set_cached_result is the real bound on cache
+    # size - an entry that is never read again is only ever freed by this cap.
     MAX_ENTRIES = 200
 
     @staticmethod
@@ -153,96 +156,3 @@ class ExtractionCacheService:
 
         except Exception as e:
             logger.error("Cache set failed", extra={"error": str(e)})
-
-    @classmethod
-    async def clear_cache(cls, user_id: Optional[str] = None) -> int:
-        """
-        Clear cache entries.
-
-        Args:
-            user_id: If provided, only clear entries for this user.
-                    If None, clear all entries.
-
-        Returns:
-            Number of entries cleared
-        """
-        try:
-            if user_id:
-                # Clear entries for specific user
-                keys_to_delete = [k for k in _cache.keys() if k.startswith(f"{user_id}:")]
-                for key in keys_to_delete:
-                    del _cache[key]
-                count = len(keys_to_delete)
-                logger.info("User cache cleared", extra={"user_id": user_id, "count": count})
-            else:
-                # Clear all entries
-                count = len(_cache)
-                _cache.clear()
-                logger.info("All cache cleared", extra={"count": count})
-
-            return count
-
-        except Exception as e:
-            logger.error("Cache clear failed", extra={"error": str(e)})
-            return 0
-
-    @classmethod
-    async def cleanup_expired(cls) -> int:
-        """
-        Remove expired entries from cache.
-
-        Returns:
-            Number of entries removed
-        """
-        try:
-            now = datetime.utcnow()
-            expired_keys = []
-
-            for key, value in _cache.items():
-                expiry = datetime.fromisoformat(value["expiry"])
-                if now > expiry:
-                    expired_keys.append(key)
-
-            for key in expired_keys:
-                del _cache[key]
-
-            if expired_keys:
-                logger.info("Expired cache entries removed", extra={"count": len(expired_keys)})
-
-            return len(expired_keys)
-
-        except Exception as e:
-            logger.error("Cache cleanup failed", extra={"error": str(e)})
-            return 0
-
-    @classmethod
-    def get_cache_stats(cls) -> Dict[str, Any]:
-        """
-        Get cache statistics.
-
-        Returns:
-            Dict with cache stats (total_entries, oldest_entry, etc.)
-        """
-        try:
-            if not _cache:
-                return {
-                    "total_entries": 0,
-                    "oldest_entry": None,
-                    "newest_entry": None,
-                }
-
-            cached_times = [
-                datetime.fromisoformat(v["cached_at"]) for v in _cache.values()
-            ]
-            oldest = min(cached_times)
-            newest = max(cached_times)
-
-            return {
-                "total_entries": len(_cache),
-                "oldest_entry": oldest.isoformat(),
-                "newest_entry": newest.isoformat(),
-            }
-
-        except Exception as e:
-            logger.error("Cache stats failed", extra={"error": str(e)})
-            return {"error": str(e)}
