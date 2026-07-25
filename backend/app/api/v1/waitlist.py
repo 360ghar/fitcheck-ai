@@ -6,7 +6,7 @@ Public endpoint for mobile app waitlist signups.
 
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, EmailStr, Field
 from supabase import Client
 from postgrest.exceptions import APIError as PostgrestAPIError
@@ -15,6 +15,7 @@ from app.core.exceptions import (
     DatabaseError,
     ValidationError,
 )
+from app.core.ip_rate_limit import auth_rate_limited_operation
 from app.core.logging_config import get_context_logger
 from app.db.connection import get_db
 
@@ -67,13 +68,24 @@ class EmailAlreadyOnWaitlistError(ValidationError):
 @router.post("/join", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 async def join_waitlist(
     request: WaitlistJoinRequest,
+    http_request: Request,
     db: Client = Depends(get_db),
 ):
     """
     Join the mobile app waitlist.
 
-    Public endpoint - no authentication required.
+    Public endpoint - no authentication required, so it is IP rate limited.
     """
+    # Outside the try: RateLimitError must not be swallowed by the catch-all
+    # below and re-reported as a DatabaseError.
+    async with auth_rate_limited_operation(http_request, "waitlist signup"):
+        return await _insert_waitlist_entry(request, db)
+
+
+async def _insert_waitlist_entry(
+    request: WaitlistJoinRequest,
+    db: Client,
+) -> Dict[str, Any]:
     try:
         # Insert waitlist entry
         insert_data = {

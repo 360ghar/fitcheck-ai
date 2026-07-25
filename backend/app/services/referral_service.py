@@ -3,7 +3,7 @@ Referral service for managing referral codes and redemptions.
 """
 import re
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from supabase import Client
 
@@ -164,24 +164,33 @@ class ReferralService:
             ).eq("referrer_user_id", user_id).execute()
 
             if redemptions.data:
-                for redemption in redemptions.data:
-                    referred_user = (
+                # One batched lookup instead of a query per redemption
+                # (same pattern as gamification.py's leaderboard profiles).
+                referred_ids = [
+                    r["referred_user_id"] for r in redemptions.data if r.get("referred_user_id")
+                ]
+                referred_users: Dict[str, Dict[str, Any]] = {}
+                if referred_ids:
+                    users_result = (
                         db.table("users")
-                        .select("email, full_name")
-                        .eq("id", redemption["referred_user_id"])
-                        .maybe_single()
+                        .select("id, email, full_name")
+                        .in_("id", referred_ids)
                         .execute()
                     )
-                    email = (
-                        referred_user.data.get("email")
-                        if referred_user and referred_user.data and referred_user.data.get("email")
-                        else "unknown"
-                    )
+                    referred_users = {
+                        str(u["id"]): u
+                        for u in (users_result.data or [])
+                        if u and u.get("id")
+                    }
+
+                for redemption in redemptions.data:
+                    referred_user = referred_users.get(str(redemption.get("referred_user_id")))
+                    email = (referred_user or {}).get("email") or "unknown"
 
                     credit_applied = redemption.get("referrer_credit_applied", False)
                     referrals.append({
                         "email": email,
-                        "full_name": referred_user.data.get("full_name") if referred_user and referred_user.data else None,
+                        "full_name": (referred_user or {}).get("full_name"),
                         "redeemed_at": redemption["redeemed_at"],
                         "credit_applied": credit_applied,
                     })

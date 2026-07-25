@@ -37,10 +37,27 @@ from app.models.photoshoot import (
 )
 from app.services.photoshoot_service import PhotoshootService, PhotoshootStreamingService
 from app.services.photoshoot_job_service import PhotoshootJobService
+from app.utils.sse_queue import SSE_QUEUE_MAXSIZE, STREAM_OVERFLOW
 
 logger = get_context_logger(__name__)
 
 router = APIRouter()
+
+# Strong references to in-flight pipeline tasks. The event loop only keeps weak
+# references, so a discarded create_task() result can be GC'd mid-run: the job
+# then sits in PROCESSING until the 30-minute TTL evicts it, /status starts
+# 404ing, and the user's daily quota was already spent. Same pattern as
+# batch_processing._pipeline_tasks and SocialImportPipelineService._tasks.
+_pipeline_tasks: "set[asyncio.Task]" = set()
+
+_TERMINAL_SSE_EVENTS = ("job_complete", "job_failed", "job_cancelled", STREAM_OVERFLOW)
+
+
+def _spawn_pipeline(service: PhotoshootStreamingService, job) -> None:
+    """Kick off a pipeline task while holding a strong reference to it."""
+    task = asyncio.create_task(service.run_pipeline(job))
+    _pipeline_tasks.add(task)
+    task.add_done_callback(_pipeline_tasks.discard)
 
 
 # =============================================================================
@@ -201,7 +218,7 @@ async def generate_photoshoot(
 
     # Start processing in background
     service = PhotoshootStreamingService(user_id=user_id, db=db)
-    asyncio.create_task(service.run_pipeline(job))
+    _spawn_pipeline(service, job)
 
     logger.info("Started photoshoot job", extra={
         "job_id": job.job_id,
@@ -272,7 +289,7 @@ async def photoshoot_job_events(
         raise HTTPException(status_code=404, detail="Job not found")
 
     async def event_generator():
-        queue: asyncio.Queue = asyncio.Queue()
+        queue: asyncio.Queue = asyncio.Queue(maxsize=SSE_QUEUE_MAXSIZE)
 
         # Add subscriber and get replay index to avoid duplicate events
         success, replay_up_to = await PhotoshootJobService.add_subscriber(job_id, queue)
@@ -322,7 +339,7 @@ async def photoshoot_job_events(
                 }
 
                 # If we replayed a terminal event, we're done
-                if event["type"] in ("job_complete", "job_failed", "job_cancelled"):
+                if event["type"] in _TERMINAL_SSE_EVENTS:
                     return
 
             # Stream live events from queue
@@ -335,7 +352,7 @@ async def photoshoot_job_events(
                     }
 
                     # Check for terminal events
-                    if event["type"] in ("job_complete", "job_failed", "job_cancelled"):
+                    if event["type"] in _TERMINAL_SSE_EVENTS:
                         break
 
                 except asyncio.TimeoutError:
@@ -367,7 +384,15 @@ async def photoshoot_job_events(
         finally:
             await PhotoshootJobService.remove_subscriber(job_id, queue)
 
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(
+        event_generator(),
+        headers={
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache, no-transform",
+        },
+        ping=15,  # SSE comment keep-alive; the app-level heartbeat is every 30s,
+                  # longer than many proxy idle timeouts.
+    )
 
 
 @router.post("/{job_id}/cancel", response_model=Dict[str, str])

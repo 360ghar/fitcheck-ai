@@ -229,6 +229,26 @@ def _get_user_birth_profile(db: Client, user_id: str) -> Tuple[Dict[str, Any], b
     profile: Dict[str, Any] = {}
     users_profile_columns_missing = False
 
+    # Happy path: one round-trip for all three columns. The per-column loop
+    # below only exists to tolerate partially-migrated schemas, where a
+    # combined select fails wholesale if any single column is absent.
+    try:
+        row = (
+            db.table("users")
+            .select("birth_date, birth_time, birth_place")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        )
+        if row.data:
+            return (
+                {c: row.data.get(c) for c in ("birth_date", "birth_time", "birth_place") if c in row.data},
+                False,
+            )
+    except Exception as e:
+        if _extract_missing_users_column(e) is None:
+            raise
+
     for column in ("birth_date", "birth_time", "birth_place"):
         try:
             row = (

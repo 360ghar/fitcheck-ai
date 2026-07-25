@@ -38,11 +38,19 @@ DEMO_RATE_LIMITS = {
     "photoshoot": 1,  # 1 demo photoshoot per day per IP (2 images per generation)
 }
 
-# Rate limit configuration for auth endpoints (stricter, shorter window)
+# Rate limit configuration for unauthenticated write endpoints (stricter,
+# shorter window than the demo limits). Named for auth because that was the
+# first caller; it now covers every anonymous public write. Keys are used
+# verbatim in the user-facing "Too many {key} attempts" message, so they must
+# read as a noun phrase.
 AUTH_RATE_LIMITS = {
     "login": 10,  # 10 login attempts per hour per IP
     "register": 5,  # 5 registration attempts per hour per IP
     "password_reset": 5,  # 5 password reset requests per hour per IP
+    # Anonymous public writes (no auth, straight to Postgres)
+    "waitlist signup": 5,  # 5 signups per hour per IP
+    "feedback submission": 10,  # 10 tickets per hour per IP (each up to 5 uploads)
+    "shared outfit feedback": 20,  # 20 ratings per hour per IP (shared NAT-friendly)
 }
 
 AUTH_RATE_LIMIT_WINDOW = timedelta(hours=1)

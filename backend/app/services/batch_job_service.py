@@ -16,6 +16,7 @@ from uuid import uuid4
 from app.core.exceptions import RateLimitError
 from app.core.logging_config import get_context_logger
 from app.utils.process_metrics import estimate_base64_mb, log_memory
+from app.utils.sse_queue import fanout
 
 logger = get_context_logger(__name__)
 
@@ -505,12 +506,19 @@ class BatchJobService:
                 extra={"job_id": job_id, "queue_sizes": queue_sizes}
             )
 
-        # Send to all subscribers - wait if queue is full (backpressure)
-        for queue in subscribers:
-            try:
-                await queue.put(event)
-            except Exception as e:
-                logger.warning(f"Failed to send event to subscriber: {e}")
+        # Never block the pipeline on a slow reader: see app/utils/sse_queue.
+        dropped = fanout(event, subscribers)
+        if dropped:
+            async with cls._lock:
+                job = cls._jobs.get(job_id)
+                if job:
+                    for queue in dropped:
+                        if queue in job.subscribers:
+                            job.subscribers.remove(queue)
+            logger.warning(
+                "Dropped slow SSE subscriber(s)",
+                extra={"job_id": job_id, "dropped": len(dropped)},
+            )
 
         # Log completion
         if subscribers:
@@ -531,9 +539,13 @@ class BatchJobService:
             # Replay event history to new subscriber
             event_history = list(job.event_history)
 
-        # Replay outside the lock, bounded by queue capacity to avoid blocking attach.
-        if queue.maxsize > 0 and len(event_history) > queue.maxsize:
-            event_history = event_history[-queue.maxsize:]
+        # Replay outside the lock, bounded by queue capacity to avoid blocking
+        # attach. Leave half the queue free: filling it to the brim would make
+        # the very next broadcast overflow and drop a subscriber that has not
+        # even read its first event yet.
+        replay_budget = queue.maxsize // 2 if queue.maxsize > 0 else 0
+        if replay_budget and len(event_history) > replay_budget:
+            event_history = event_history[-replay_budget:]
 
         for historical_event in event_history:
             try:

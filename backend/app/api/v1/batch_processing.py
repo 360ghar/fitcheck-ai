@@ -30,6 +30,7 @@ from app.db.connection import get_db
 from app.services.ai_settings_service import AISettingsService
 from app.services.batch_job_service import BatchJobService, BatchJobStatus
 from app.services.batch_extraction_service import BatchExtractionService
+from app.utils.sse_queue import SSE_QUEUE_MAXSIZE, STREAM_OVERFLOW
 
 logger = get_context_logger(__name__)
 
@@ -55,6 +56,8 @@ _READ_CHUNK_BYTES = 1024 * 1024
 # references, so a discarded create_task() result can be GC'd mid-run and the
 # job silently stalls. Same pattern as SocialImportPipelineService._tasks.
 _pipeline_tasks: "set[asyncio.Task]" = set()
+
+_TERMINAL_SSE_EVENTS = ("job_complete", "job_failed", "job_cancelled", STREAM_OVERFLOW)
 
 
 def _spawn_pipeline(service: BatchExtractionService, job) -> None:
@@ -440,7 +443,7 @@ async def batch_job_events(
         raise HTTPException(status_code=404, detail="Job not found")
 
     async def event_generator():
-        queue: asyncio.Queue = asyncio.Queue(maxsize=100)
+        queue: asyncio.Queue = asyncio.Queue(maxsize=SSE_QUEUE_MAXSIZE)
 
         # Add subscriber
         if not await BatchJobService.add_subscriber(job_id, queue):
@@ -487,7 +490,7 @@ async def batch_job_events(
                     }
 
                     # Check for terminal events
-                    if event["type"] in ("job_complete", "job_failed", "job_cancelled"):
+                    if event["type"] in _TERMINAL_SSE_EVENTS:
                         break
 
                 except asyncio.TimeoutError:

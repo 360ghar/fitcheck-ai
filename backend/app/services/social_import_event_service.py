@@ -8,6 +8,7 @@ import asyncio
 from typing import Any, Dict, List, Optional
 
 from app.services.social_import_job_store import SocialImportJobStore
+from app.utils.sse_queue import fanout
 
 
 class SocialImportEventService:
@@ -60,11 +61,19 @@ class SocialImportEventService:
         async with cls._lock:
             queues = list(cls._subscribers.get(job_id, []))
 
-        for queue in queues:
-            try:
-                await queue.put(event)
-            except Exception:
-                continue
+        # Same non-blocking fan-out policy as the in-memory stores. Replay here
+        # stays Postgres-backed (Last-Event-ID), so a dropped subscriber loses
+        # nothing: it reconnects and replays from its last id.
+        dropped = fanout(event, queues)
+        if dropped:
+            async with cls._lock:
+                live = cls._subscribers.get(job_id)
+                if live is not None:
+                    for queue in dropped:
+                        if queue in live:
+                            live.remove(queue)
+                    if not live:
+                        cls._subscribers.pop(job_id, None)
 
         return event
 

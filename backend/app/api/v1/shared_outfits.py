@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field
 from supabase import Client
 
@@ -18,6 +18,7 @@ from app.core.exceptions import (
     PermissionDeniedError,
     SharedOutfitNotFoundError,
 )
+from app.core.ip_rate_limit import auth_rate_limited_operation
 from app.core.logging_config import get_context_logger
 from app.core.security import get_optional_user_id
 from app.db.connection import get_db
@@ -61,9 +62,22 @@ def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
 async def submit_feedback(
     share_id: UUID,
     request: ShareFeedbackRequest,
+    http_request: Request,
     user_id: Optional[str] = Depends(get_optional_user_id),
     db: Client = Depends(get_db),
 ):
+    # Outside the try: RateLimitError must not be swallowed by the catch-all
+    # below and re-reported as a DatabaseError.
+    async with auth_rate_limited_operation(http_request, "shared outfit feedback"):
+        return await _insert_share_feedback(share_id, request, user_id, db)
+
+
+async def _insert_share_feedback(
+    share_id: UUID,
+    request: ShareFeedbackRequest,
+    user_id: Optional[str],
+    db: Client,
+) -> Dict[str, Any]:
     try:
         share_id_str = str(share_id)
         share = (

@@ -29,6 +29,7 @@ from app.core.exceptions import (
     SharedOutfitNotFoundError,
 )
 from app.core.security import get_current_user_id
+from app.core.uploads import read_upload_capped
 from app.core.config import settings
 from app.db.connection import get_db
 from app.models.common import DataResponse
@@ -42,7 +43,7 @@ from app.models.outfit import (
     OutfitCollectionCreate,
     OutfitCollectionUpdate,
 )
-from app.services.storage_service import StorageService
+from app.services.storage_service import MAX_FILE_SIZE, StorageService
 
 logger = get_context_logger(__name__)
 
@@ -1193,7 +1194,7 @@ async def upload_outfit_image(
         if not file.content_type or not file.content_type.startswith("image/"):
             raise UnsupportedMediaTypeError()
 
-        file_bytes = await file.read()
+        file_bytes = await read_upload_capped(file, MAX_FILE_SIZE)
         upload = await StorageService.upload_outfit_image(
             db=db,
             user_id=user_id,

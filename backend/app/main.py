@@ -78,15 +78,40 @@ REQUIRED_COLUMN_ALTERNATIVES = {
 }
 
 
+# PostgREST/Postgres codes that genuinely mean "this table or column is not
+# in the schema". Anything else (permissions, connectivity, timeouts) is an
+# infrastructure failure wearing a schema failure's clothes.
+_SCHEMA_ABSENT_CODES = {"PGRST205", "42703"}
+
+
 def _column_exists(db, table: str, column: str) -> bool:
+    """Report whether a column is present, logging *why* when it is not.
+
+    Both failure paths still return False - readiness stays fail-closed - but
+    a permissions or connectivity failure used to be reported to /ready as
+    "column missing", which sends whoever is on call after the wrong problem.
+    """
+    log = logging.getLogger(__name__)
     try:
         db.table(table).select(column).limit(1).execute()
         return True
     except PostgrestAPIError as e:
-        if getattr(e, "code", None) in {"PGRST205", "42703"}:
-            return False
+        if getattr(e, "code", None) in _SCHEMA_ABSENT_CODES:
+            log.info("Schema check: %s.%s is absent from the schema", table, column)
+        else:
+            log.warning(
+                "Schema check for %s.%s failed for a non-schema reason "
+                "(code=%s): %s. Reporting as missing, but the cause is not a "
+                "missing column.",
+                table, column, getattr(e, "code", None), e,
+            )
         return False
-    except Exception:
+    except Exception as e:
+        log.warning(
+            "Schema check for %s.%s failed before reaching PostgREST: %s. "
+            "Reporting as missing, but the cause is not a missing column.",
+            table, column, e,
+        )
         return False
 
 
@@ -97,15 +122,27 @@ def _schema_missing(db) -> list[str]:
         required_tables.extend(SOCIAL_IMPORT_TABLES)
 
     # Required tables
+    log = logging.getLogger(__name__)
     for table in required_tables:
         try:
             db.table(table).select("*").limit(1).execute()
         except PostgrestAPIError as e:
-            if getattr(e, "code", None) == "PGRST205":
-                missing.append(table)
+            if getattr(e, "code", None) in _SCHEMA_ABSENT_CODES:
+                log.info("Schema check: table %s is absent from the schema", table)
             else:
-                missing.append(table)
-        except Exception:
+                log.warning(
+                    "Schema check for table %s failed for a non-schema reason "
+                    "(code=%s): %s. Reporting as missing, but the cause is not "
+                    "a missing table.",
+                    table, getattr(e, "code", None), e,
+                )
+            missing.append(table)
+        except Exception as e:
+            log.warning(
+                "Schema check for table %s failed before reaching PostgREST: "
+                "%s. Reporting as missing, but the cause is not a missing table.",
+                table, e,
+            )
             missing.append(table)
 
     # Required columns (guarding against partial migrations)

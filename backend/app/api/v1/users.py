@@ -29,6 +29,7 @@ from app.core.exceptions import (
 )
 from app.core.logging_config import get_context_logger
 from app.core.security import get_current_user_id
+from app.core.uploads import read_upload_capped
 from app.db.connection import get_db
 from app.models.user import (
     BodyProfile,
@@ -41,7 +42,7 @@ from app.models.user import (
     UserSettingsUpdate,
     UserUpdate,
 )
-from app.services.storage_service import StorageService
+from app.services.storage_service import MAX_FILE_SIZE, StorageService
 from app.services.weather_service import get_weather_service
 
 logger = get_context_logger(__name__)
@@ -351,7 +352,7 @@ async def upload_avatar(
         if not file.content_type or not file.content_type.startswith("image/"):
             raise UnsupportedMediaTypeError(message="Avatar must be an image file")
 
-        file_bytes = await file.read()
+        file_bytes = await read_upload_capped(file, MAX_FILE_SIZE)
         avatar_url = await StorageService.upload_avatar(
             db=db, user_id=user_id, filename=file.filename or "avatar.png", file_data=file_bytes
         )

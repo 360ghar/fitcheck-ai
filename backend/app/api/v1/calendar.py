@@ -298,10 +298,18 @@ def _parse_date_only(value: str, field_name: str) -> str:
 async def get_calendar_events(
     start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    limit: int = Query(500, ge=1, le=1000, description="Max events to return"),
+    offset: int = Query(0, ge=0),
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
 ):
-    """Get calendar events in a date range."""
+    """Get calendar events in a date range.
+
+    Both dates are optional, so without a bound this returned the user's
+    entire event history in one response. Default limit is deliberately
+    generous (500): existing clients send neither limit nor offset and expect
+    a whole month/year of events back.
+    """
     try:
         query = db.table("calendar_events").select("*").eq("user_id", user_id)
 
@@ -310,9 +318,14 @@ async def get_calendar_events(
         if end_date:
             query = query.lte("start_time", f"{_parse_date_only(end_date, 'end_date')}T23:59:59")
 
-        result = query.order("start_time", desc=False).execute()
+        # Fetch one past the limit so has_more is known without a second
+        # count query (items.py pays for count="exact" because it renders
+        # page numbers; the calendar only needs "is there more").
+        result = query.order("start_time", desc=False).range(offset, offset + limit).execute()
+        rows = list(result.data or [])
+        has_more = len(rows) > limit
         events: List[CalendarEventData] = []
-        for row in result.data or []:
+        for row in rows[:limit]:
             events.append(
                 CalendarEventData(
                     id=row["id"],
@@ -333,7 +346,15 @@ async def get_calendar_events(
             end_date=end_date,
             count=len(events)
         )
-        return {"data": {"events": [e.model_dump() for e in events]}, "message": "OK"}
+        return {
+            "data": {
+                "events": [e.model_dump() for e in events],
+                "limit": limit,
+                "offset": offset,
+                "has_more": has_more,
+            },
+            "message": "OK",
+        }
 
     except ValidationError:
         raise

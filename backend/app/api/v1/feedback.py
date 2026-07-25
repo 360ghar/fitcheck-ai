@@ -4,12 +4,15 @@ Feedback API endpoints for submitting bug reports, feature requests, and feedbac
 import json
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from supabase import Client
 
 from app.api.v1.deps import get_current_user, get_db
 from app.core.exceptions import ValidationError
+from app.core.ip_rate_limit import auth_rate_limited_operation
 from app.core.logging_config import get_context_logger
+from app.core.security import get_optional_user_id
+from app.core.uploads import read_upload_capped
 from app.models.feedback import (
     TicketCategory,
     DeviceInfo,
@@ -22,27 +25,9 @@ logger = get_context_logger(__name__)
 
 router = APIRouter()
 
-
-# =============================================================================
-# Helper for optional authentication
-# =============================================================================
-
-
-async def get_optional_user(
-    db: Client = Depends(get_db),
-    authorization: Optional[str] = Header(None),
-) -> Optional[dict]:
-    """Get user if authenticated, otherwise return None."""
-    if not authorization or not authorization.startswith("Bearer "):
-        return None
-    try:
-        token = authorization.split(" ", 1)[1]
-        from app.core.security import decode_token
-        token_data = decode_token(token)
-        user = db.table("users").select("*").eq("id", token_data.sub).single().execute()
-        return user.data if user.data else None
-    except Exception:
-        return None
+# Per-attachment cap. Enforced during the read (see read_upload_capped) so an
+# oversized upload is rejected before its bytes are buffered in memory.
+MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
 
 
 # =============================================================================
@@ -52,6 +37,7 @@ async def get_optional_user(
 
 @router.post("", response_model=Dict[str, Any])
 async def submit_feedback(
+    http_request: Request,
     category: TicketCategory = Form(...),
     subject: str = Form(..., min_length=3, max_length=200),
     description: str = Form(..., min_length=10, max_length=5000),
@@ -60,17 +46,43 @@ async def submit_feedback(
     app_version: Optional[str] = Form(None),
     app_platform: Optional[str] = Form(None),
     attachments: List[UploadFile] = File(default=[]),
-    user: Optional[dict] = Depends(get_optional_user),
+    user_id: Optional[str] = Depends(get_optional_user_id),
     db: Client = Depends(get_db),
 ):
     """
     Submit feedback, bug report, or feature request.
 
-    Accepts both authenticated and anonymous submissions.
-    Supports up to 5 screenshot attachments (max 5MB each).
+    Accepts both authenticated and anonymous submissions, so it is IP rate
+    limited. Supports up to 5 screenshot attachments (max 5MB each).
     """
-    user_id = user.get("id") if user else None
+    async with auth_rate_limited_operation(http_request, "feedback submission"):
+        return await _create_feedback_ticket(
+            category=category,
+            subject=subject,
+            description=description,
+            contact_email=contact_email,
+            device_info=device_info,
+            app_version=app_version,
+            app_platform=app_platform,
+            attachments=attachments,
+            user_id=user_id,
+            db=db,
+        )
 
+
+async def _create_feedback_ticket(
+    *,
+    category: TicketCategory,
+    subject: str,
+    description: str,
+    contact_email: Optional[str],
+    device_info: Optional[str],
+    app_version: Optional[str],
+    app_platform: Optional[str],
+    attachments: List[UploadFile],
+    user_id: Optional[str],
+    db: Client,
+) -> Dict[str, Any]:
     # Validate attachments
     if len(attachments) > 5:
         raise ValidationError("Maximum 5 attachments allowed")
@@ -79,12 +91,8 @@ async def submit_feedback(
     attachment_urls: List[str] = []
     for attachment in attachments:
         if attachment.filename:
-            # Read file data
-            file_data = await attachment.read()
-
-            # Validate file size (5MB max)
-            if len(file_data) > 5 * 1024 * 1024:
-                raise ValidationError(f"Attachment {attachment.filename} exceeds 5MB limit")
+            # Rejects before buffering past the cap, unlike read()-then-check.
+            file_data = await read_upload_capped(attachment, MAX_ATTACHMENT_BYTES)
 
             # Upload to storage
             try:

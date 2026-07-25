@@ -15,6 +15,7 @@ from app.core.exceptions import RateLimitError
 from app.core.logging_config import get_context_logger
 from app.models.photoshoot import PhotoshootJobStatus
 from app.utils.process_metrics import estimate_base64_mb, log_memory
+from app.utils.sse_queue import fanout
 
 logger = get_context_logger(__name__)
 
@@ -334,11 +335,20 @@ class PhotoshootJobService:
 
             subscribers = list(job.subscribers)
 
-        for queue in subscribers:
-            try:
-                await queue.put(event)
-            except Exception as e:
-                logger.warning(f"Failed to send event to subscriber: {e}")
+        # Same policy as BatchJobService: never block the pipeline, never let a
+        # stalled client grow the queue (these events carry base64 images).
+        dropped = fanout(event, subscribers)
+        if dropped:
+            async with cls._lock:
+                job = cls._jobs.get(job_id)
+                if job:
+                    for queue in dropped:
+                        if queue in job.subscribers:
+                            job.subscribers.remove(queue)
+            logger.warning(
+                "Dropped slow SSE subscriber(s)",
+                extra={"job_id": job_id, "dropped": len(dropped)},
+            )
 
     @classmethod
     async def add_subscriber(cls, job_id: str, queue: asyncio.Queue) -> tuple[bool, int]:

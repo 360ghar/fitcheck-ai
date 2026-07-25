@@ -26,6 +26,7 @@ from app.core.exceptions import (
     RateLimitError,
 )
 from app.core.security import get_current_user_id
+from app.core.uploads import MAX_UPLOAD_FILES, read_upload_capped
 from app.db.connection import get_db
 from app.models.item import (
     ItemCreate,
@@ -36,7 +37,7 @@ from app.models.item import (
 )
 from app.services.ai_service import AIService
 from app.services.ai_settings_service import AISettingsService
-from app.services.storage_service import StorageService
+from app.services.storage_service import MAX_FILE_SIZE, StorageService
 from app.services.vector_service import get_vector_service
 from app.utils.parallel import parallel_with_retry
 
@@ -88,6 +89,11 @@ async def upload_item_images(
     db: Client = Depends(get_db),
 ):
     """Upload one or more images to Supabase Storage for later item creation."""
+    # Outside the try: the catch-all below would turn this into a 500. Without
+    # a count cap, N unbounded files are read concurrently and all held at once.
+    if len(files) > MAX_UPLOAD_FILES:
+        raise ValidationError(f"Maximum {MAX_UPLOAD_FILES} files per upload")
+
     try:
         # Validate all files first
         for file in files:
@@ -96,7 +102,16 @@ async def upload_item_images(
 
         # Define upload function for each file
         async def upload_single_file(file: UploadFile, index: int) -> Dict[str, Any]:
-            file_bytes = await file.read()
+            # parallel_with_retry re-invokes this on failure, but the upload
+            # stream is not rewound between attempts. Without this seek, a
+            # rejected oversized file is re-read from wherever the previous
+            # attempt stopped, so the last retry sees a small tail, passes the
+            # cap, and stores a truncated image.
+            await file.seek(0)
+            # Capped read: reject oversized bodies before buffering them, not
+            # after (StorageService._validate_image checks the same cap, but
+            # only once the whole file is already resident).
+            file_bytes = await read_upload_capped(file, MAX_FILE_SIZE)
             res = await StorageService.upload_item_image(
                 db=db,
                 user_id=user_id,
@@ -616,7 +631,7 @@ async def upload_item_image(
         if not file.content_type or not file.content_type.startswith("image/"):
             raise UnsupportedMediaTypeError(allowed_types=["image/jpeg", "image/png", "image/webp"])
 
-        file_bytes = await file.read()
+        file_bytes = await read_upload_capped(file, MAX_FILE_SIZE)
         upload = await StorageService.upload_item_image(
             db=db,
             user_id=user_id,

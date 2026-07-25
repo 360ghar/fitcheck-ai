@@ -38,10 +38,20 @@ from app.services.social_import_job_store import SocialImportJobStore
 from app.services.social_import_pipeline_service import SocialImportPipelineService
 from app.services.social_oauth_service import SocialOAuthService
 from app.services.social_url_service import SocialURLService
+from app.utils.sse_queue import SSE_QUEUE_MAXSIZE, STREAM_OVERFLOW
 
 router = APIRouter()
 
 logger = get_context_logger(__name__)
+
+# Note the ``_completed`` spelling here: this stream's terminal names differ
+# from batch/photoshoot's ``job_complete``. Kept as-is to avoid a client break.
+_TERMINAL_SSE_EVENTS = {
+    "job_completed",
+    "job_failed",
+    "job_cancelled",
+    STREAM_OVERFLOW,
+}
 
 
 def _service(user_id: str, db: Client) -> SocialImportPipelineService:
@@ -280,7 +290,7 @@ async def social_import_events(
         raise SocialImportJobNotFoundError(job_id)
 
     async def event_generator():
-        queue: asyncio.Queue = asyncio.Queue()
+        queue: asyncio.Queue = asyncio.Queue(maxsize=SSE_QUEUE_MAXSIZE)
         await SocialImportEventService.add_subscriber(job_id, queue)
 
         try:
@@ -306,23 +316,24 @@ async def social_import_events(
                     "id": str(event.get("id")),
                     "data": json.dumps(event["data"]),
                 }
-                if event["type"] in {"job_completed", "job_failed", "job_cancelled"}:
+                if event["type"] in _TERMINAL_SSE_EVENTS:
                     return
 
             while True:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=30)
                     max_replayed_id = event.get("id") or max_replayed_id
-                    yield {
+                    payload = {
                         "event": event["type"],
-                        "id": str(event.get("id")),
                         "data": json.dumps(event["data"]),
                     }
-                    if event["type"] in {
-                        "job_completed",
-                        "job_failed",
-                        "job_cancelled",
-                    }:
+                    # Only locally-generated events (e.g. stream_overflow) lack
+                    # a DB id; emitting "None" would poison the client's
+                    # Last-Event-ID and 422 the int query param on reconnect.
+                    if event.get("id") is not None:
+                        payload["id"] = str(event["id"])
+                    yield payload
+                    if event["type"] in _TERMINAL_SSE_EVENTS:
                         break
                 except asyncio.TimeoutError:
                     status_payload = await _service(user_id, db).get_status(job_id)
@@ -353,7 +364,15 @@ async def social_import_events(
         finally:
             await SocialImportEventService.remove_subscriber(job_id, queue)
 
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(
+        event_generator(),
+        headers={
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache, no-transform",
+        },
+        ping=15,  # SSE comment keep-alive; the app-level heartbeat (which also
+                  # carries last_event_id/status) stays at 30s.
+    )
 
 
 @router.post("/social-import/jobs/{job_id}/auth/oauth/connect", response_model=Dict[str, Any])
