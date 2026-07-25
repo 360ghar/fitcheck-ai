@@ -296,37 +296,6 @@ export async function extractItems(imageFile: File): Promise<ExtractItemsResult>
   return response.data.data;
 }
 
-/**
- * Extract multiple items from a base64 image.
- */
-export async function extractItemsFromBase64(imageBase64: string): Promise<ExtractItemsResult> {
-  const response = await apiClient.post<{ data: ExtractItemsResult }>('/api/v1/ai/extract-items', {
-    image: imageBase64,
-  });
-
-  return response.data.data;
-}
-
-/**
- * Extract a single item from an image.
- */
-export async function extractSingleItem(
-  imageFile: File,
-  categoryHint?: string
-): Promise<ExtractSingleItemResult> {
-  const imageBase64 = await fileToBase64(imageFile);
-
-  const response = await apiClient.post<{ data: ExtractSingleItemResult }>(
-    '/api/v1/ai/extract-single-item',
-    {
-      image: imageBase64,
-      category_hint: categoryHint,
-    }
-  );
-
-  return response.data.data;
-}
-
 // =============================================================================
 // IMAGE GENERATION
 // =============================================================================
@@ -359,7 +328,7 @@ export async function generateOutfit(
 /**
  * Available pose presets for multi-pose generation.
  */
-export const POSE_PRESETS = {
+const POSE_PRESETS = {
   front: { pose: 'standing front', view_angle: 'full body front view' },
   side: { pose: 'standing side profile', view_angle: 'full body side view' },
   back: { pose: 'standing back view', view_angle: 'full body back view' },
@@ -477,39 +446,6 @@ export async function generateTryOn(
   return response.data.data;
 }
 
-/**
- * Generate a try-on visualization from a base64 image.
- *
- * @throws ApiError with code "AVATAR_REQUIRED" if user has no profile picture
- */
-export async function generateTryOnFromBase64(
-  clothingBase64: string,
-  options: TryOnOptions = {}
-): Promise<TryOnResult> {
-  const response = await apiClient.post<{ data: TryOnResult }>(
-    '/api/v1/ai/try-on',
-    {
-      clothing_image: clothingBase64,
-      clothing_description: options.clothing_description,
-      style: options.style ?? 'casual',
-      background: options.background ?? 'studio white',
-      pose: options.pose ?? 'standing front',
-      lighting: options.lighting ?? 'professional studio lighting',
-      save_to_storage: options.save_to_storage ?? false,
-    }
-  );
-
-  return response.data.data;
-}
-
-/**
- * Get available AI models by provider.
- */
-export async function getAvailableModels(): Promise<AvailableModels> {
-  const response = await apiClient.get<{ data: AvailableModels }>('/api/v1/ai/models');
-  return response.data.data;
-}
-
 // =============================================================================
 // AI SETTINGS
 // =============================================================================
@@ -546,26 +482,6 @@ export async function testProviderConfig(
     api_key: apiKey,
     model,
   });
-  return response.data.data;
-}
-
-/**
- * Get AI usage statistics.
- */
-export async function getUsageStats(): Promise<UsageStats> {
-  const response = await apiClient.get<{ data: UsageStats }>('/api/v1/ai/settings/usage');
-  return response.data.data;
-}
-
-/**
- * Check rate limit for a specific operation.
- */
-export async function checkRateLimit(
-  operationType: 'extraction' | 'generation' | 'embedding'
-): Promise<RateLimitCheck> {
-  const response = await apiClient.get<{ data: RateLimitCheck }>(
-    `/api/v1/ai/settings/rate-limit/${operationType}`
-  );
   return response.data.data;
 }
 
@@ -617,23 +533,6 @@ export async function searchSimilarItems(
   const response = await apiClient.post<{ data: SimilaritySearchResult }>(
     '/api/v1/ai/embeddings/search',
     request
-  );
-  return response.data.data;
-}
-
-/**
- * Test an embedding model configuration.
- */
-export async function testEmbeddingModel(
-  provider: string,
-  model: string
-): Promise<TestProviderResult> {
-  const response = await apiClient.post<{ data: TestProviderResult }>(
-    '/api/v1/ai/embeddings/test',
-    {
-      provider,
-      model,
-    }
   );
   return response.data.data;
 }

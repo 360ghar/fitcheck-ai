@@ -52,17 +52,8 @@ export function getActivationSteps(input: ActivationInput): ActivationStep[] {
 }
 
 /** Core activation is items + at least one outfit. */
-export function isCoreActivationComplete(input: ActivationInput): boolean {
+function isCoreActivationComplete(input: ActivationInput): boolean {
   return input.itemCount >= 1 && input.outfitCount >= 1
-}
-
-/** All guided steps including optional avatar / try-on. */
-export function isFullActivationComplete(input: ActivationInput): boolean {
-  return (
-    isCoreActivationComplete(input) &&
-    input.hasAvatar &&
-    Boolean(input.tryOnUsed)
-  )
 }
 
 /**

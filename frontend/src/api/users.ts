@@ -8,7 +8,6 @@ import type {
   User,
   UserPreferences,
   UserSettings,
-  BodyProfile,
 } from '../types';
 
 export interface UpdateCurrentUserResult {
@@ -140,37 +139,6 @@ export async function updateUserSettings(data: {
 }
 
 /**
- * Get body profile
- */
-export async function getBodyProfile(): Promise<BodyProfile> {
-  try {
-    const response = await apiClient.get<ApiEnvelope<BodyProfile>>('/api/v1/users/body-profile');
-    return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
- * Create or update body profile
- */
-export async function updateBodyProfile(data: {
-  name: string;
-  height_cm: number;
-  weight_kg: number;
-  body_shape: string;
-  skin_tone: string;
-  is_default?: boolean;
-}): Promise<BodyProfile> {
-  try {
-    const response = await apiClient.put<ApiEnvelope<BodyProfile>>('/api/v1/users/body-profile', data);
-    return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
  * Upload avatar image
  */
 export async function uploadAvatar(file: File): Promise<{ avatar_url: string }> {
@@ -187,74 +155,6 @@ export async function uploadAvatar(file: File): Promise<{ avatar_url: string }> 
         },
       }
     );
-    return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
- * Get user dashboard data
- */
-export async function getDashboardData(): Promise<{
-  user: User;
-  statistics: {
-    total_items: number;
-    total_outfits: number;
-    items_added_this_month: number;
-    outfits_created_this_month: number;
-    most_worn_item: { name: string; times_worn: number } | null;
-    favorite_items_count: number;
-    favorite_outfits_count: number;
-  };
-  recent_activity: Array<{
-    type: 'item_created' | 'outfit_created' | 'item_worn' | 'outfit_worn';
-    description: string;
-    timestamp: string;
-  }>;
-  suggestions: {
-    weather_based: {
-      temperature: number;
-      recommendation: string;
-    } | null;
-    outfit_of_the_day: {
-      id: string;
-      name: string;
-      image_url?: string;
-    } | null;
-  };
-}> {
-  try {
-    const response = await apiClient.get<
-      ApiEnvelope<{
-        user: User;
-        statistics: {
-          total_items: number;
-          total_outfits: number;
-          items_added_this_month: number;
-          outfits_created_this_month: number;
-          most_worn_item: { name: string; times_worn: number } | null;
-          favorite_items_count: number;
-          favorite_outfits_count: number;
-        };
-        recent_activity: Array<{
-          type: 'item_created' | 'outfit_created' | 'item_worn' | 'outfit_worn';
-          description: string;
-          timestamp: string;
-        }>;
-        suggestions: {
-          weather_based: {
-            temperature: number;
-            recommendation: string;
-          } | null;
-          outfit_of_the_day: {
-            id: string;
-            name: string;
-            image_url?: string;
-          } | null;
-        };
-      }>
-    >('/api/v1/users/dashboard');
     return response.data.data;
   } catch (error) {
     throw getApiError(error);

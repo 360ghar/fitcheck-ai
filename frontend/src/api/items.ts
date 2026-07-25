@@ -11,7 +11,6 @@ import type {
   ItemFormData,
   ItemFilters,
   PaginatedItemsResponse,
-  ItemImage,
 } from '../types';
 
 // ============================================================================
@@ -144,48 +143,6 @@ export async function toggleItemFavorite(id: string): Promise<{ id: string; is_f
 }
 
 /**
- * Upload an image for an existing item
- */
-export async function uploadItemImage(
-  itemId: string,
-  file: File,
-  isPrimary: boolean = false
-): Promise<ItemImage> {
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('is_primary', String(isPrimary));
-
-    const response = await apiClient.post<ApiEnvelope<ItemImage>>(
-      `/api/v1/items/${itemId}/images`,
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      }
-    );
-    return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
- * Delete an item image
- */
-export async function deleteItemImage(itemId: string, imageId: string): Promise<{ deleted: boolean }> {
-  try {
-    const response = await apiClient.delete<ApiEnvelope<{ deleted: boolean }>>(
-      `/api/v1/items/${itemId}/images/${imageId}`
-    );
-    return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
  * Mark item as worn
  */
 export async function markItemAsWorn(id: string): Promise<{ id: string; usage_times_worn: number }> {
@@ -209,64 +166,6 @@ export async function batchDeleteItems(itemIds: string[]): Promise<{ message: st
       { item_ids: itemIds }
     );
     return { message: response.data.message || 'OK', deleted_count: response.data.data.deleted_count };
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
- * Get item statistics
- */
-export async function getItemStats(): Promise<{
-  total_items: number;
-  items_by_category: Record<string, number>;
-  items_by_color: Record<string, number>;
-  items_by_condition: Record<string, number>;
-  total_value: number;
-  most_worn_items: Array<{ id: string; name: string; times_worn: number }>;
-  least_worn_items: Array<{ id: string; name: string; times_worn: number }>;
-}> {
-  try {
-    const response = await apiClient.get<
-      ApiEnvelope<{
-        total_items: number;
-        items_by_category: Record<string, number>;
-        items_by_color: Record<string, number>;
-        items_by_condition: Record<string, number>;
-        total_value: number;
-        most_worn_items: Array<{ id: string; name: string; times_worn: number }>;
-        least_worn_items: Array<{ id: string; name: string; times_worn: number }>;
-      }>
-    >('/api/v1/items/stats');
-    return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
- * Get items by category
- */
-export async function getItemsByCategory(category: string): Promise<Item[]> {
-  try {
-    const response = await apiClient.get<ApiEnvelope<{ items: Item[] }>>(
-      `/api/v1/items/by-category/${category}`
-    );
-    return response.data.data.items;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
- * Search items by query
- */
-export async function searchItems(query: string, limit: number = 10): Promise<Item[]> {
-  try {
-    const response = await apiClient.get<ApiEnvelope<{ items: Item[] }>>(
-      `/api/v1/items/search?q=${encodeURIComponent(query)}&limit=${limit}`
-    );
-    return response.data.data.items;
   } catch (error) {
     throw getApiError(error);
   }
@@ -316,7 +215,7 @@ export interface DuplicateCheckRequest {
 /**
  * Check for potential duplicate items before adding a new item
  */
-export async function checkDuplicates(
+async function checkDuplicates(
   request: DuplicateCheckRequest,
   options?: { threshold?: number; limit?: number; signal?: AbortSignal }
 ): Promise<DuplicateCheckResponse> {

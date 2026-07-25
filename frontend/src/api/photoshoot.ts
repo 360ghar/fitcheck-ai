@@ -57,18 +57,6 @@ interface ApiEnvelope<T> {
 // API Functions
 
 /**
- * Get available photoshoot use cases
- */
-export async function getUseCases(): Promise<UseCaseInfo[]> {
-  try {
-    const response = await apiClient.get<ApiEnvelope<{ use_cases: UseCaseInfo[] }>>('/api/v1/photoshoot/use-cases');
-    return response.data.data.use_cases;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
  * Get current user's photoshoot usage for today
  */
 export async function getPhotoshootUsage(): Promise<PhotoshootUsage> {

@@ -7,7 +7,6 @@ import type {
   ApiEnvelope,
   Outfit,
   OutfitCreate,
-  OutfitFormData,
   OutfitFilters,
   PaginatedOutfitsResponse,
   GenerationRequest,
@@ -61,18 +60,6 @@ export async function getOutfits(filters?: OutfitFilters): Promise<PaginatedOutf
 export async function getOutfit(id: string): Promise<Outfit> {
   try {
     const response = await apiClient.get<ApiEnvelope<Outfit>>(`/api/v1/outfits/${id}`);
-    return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
- * Update an existing outfit
- */
-export async function updateOutfit(id: string, data: Partial<OutfitFormData>): Promise<Outfit> {
-  try {
-    const response = await apiClient.put<ApiEnvelope<Outfit>>(`/api/v1/outfits/${id}`, data);
     return response.data.data;
   } catch (error) {
     throw getApiError(error);
@@ -205,37 +192,6 @@ export async function getAvailableItems(): Promise<Array<{
 }
 
 /**
- * Add an item to an existing outfit
- */
-export async function addItemToOutfit(
-  outfitId: string,
-  itemId: string,
-  position?: string
-): Promise<Outfit> {
-  try {
-    const response = await apiClient.post<ApiEnvelope<Outfit>>(`/api/v1/outfits/${outfitId}/items`, {
-      item_id: itemId,
-      position,
-    });
-    return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
- * Remove an item from an outfit
- */
-export async function removeItemFromOutfit(outfitId: string, itemId: string): Promise<Outfit> {
-  try {
-    const response = await apiClient.delete<ApiEnvelope<Outfit>>(`/api/v1/outfits/${outfitId}/items/${itemId}`);
-    return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
  * Upload an image for an existing outfit
  */
 export async function uploadOutfitImage(
@@ -334,46 +290,6 @@ export async function getPublicOutfit(outfitId: string): Promise<PublicOutfit> {
 }
 
 /**
- * Delete an outfit image
- */
-export async function deleteOutfitImage(outfitId: string, imageId: string): Promise<{ deleted: boolean }> {
-  try {
-    const response = await apiClient.delete<ApiEnvelope<{ deleted: boolean }>>(
-      `/api/v1/outfits/${outfitId}/images/${imageId}`
-    );
-    return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
- * Get outfit statistics
- */
-export async function getOutfitStats(): Promise<{
-  total_outfits: number;
-  outfits_by_style: Record<string, number>;
-  outfits_by_season: Record<string, number>;
-  most_worn_outfits: Array<{ id: string; name: string; times_worn: number }>;
-  recent_outfits: Array<{ id: string; name: string; created_at: string }>;
-}> {
-  try {
-    const response = await apiClient.get<
-      ApiEnvelope<{
-        total_outfits: number;
-        outfits_by_style: Record<string, number>;
-        outfits_by_season: Record<string, number>;
-        most_worn_outfits: Array<{ id: string; name: string; times_worn: number }>;
-        recent_outfits: Array<{ id: string; name: string; created_at: string }>;
-      }>
-    >('/api/v1/outfits/stats');
-    return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
  * Batch delete multiple outfits
  */
 export async function batchDeleteOutfits(outfitIds: string[]): Promise<{ message: string; deleted_count: number }> {
@@ -383,32 +299,6 @@ export async function batchDeleteOutfits(outfitIds: string[]): Promise<{ message
       { outfit_ids: outfitIds }
     );
     return { message: response.data.message || 'OK', deleted_count: response.data.data.deleted_count };
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
- * Get recently worn outfits
- */
-export async function getRecentlyWornOutfits(limit: number = 5): Promise<Outfit[]> {
-  try {
-    const response = await apiClient.get<ApiEnvelope<{ outfits: Outfit[] }>>(
-      `/api/v1/outfits/recently-worn?limit=${limit}`
-    );
-    return response.data.data.outfits;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
- * Get favorite outfits
- */
-export async function getFavoriteOutfits(): Promise<Outfit[]> {
-  try {
-    const response = await apiClient.get<ApiEnvelope<{ outfits: Outfit[] }>>('/api/v1/outfits/favorites');
-    return response.data.data.outfits;
   } catch (error) {
     throw getApiError(error);
   }

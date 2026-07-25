@@ -10,8 +10,6 @@ import type {
   MatchResult,
   CompleteLookSuggestion,
   WeatherRecommendation,
-  SimilarItemResult,
-  SuggestedItem,
   AstrologyRecommendation,
   AstrologyRecommendationMode,
 } from '../types';
@@ -138,67 +136,6 @@ export async function getAstrologyRecommendations(options?: {
 }
 
 /**
- * Find similar items to a given item
- */
-export async function findSimilarItems(
-  itemId: string,
-  options?: {
-    category?: string;
-    limit?: number;
-  }
-): Promise<SimilarItemResult[]> {
-  try {
-    const params = new URLSearchParams();
-    params.append('item_id', itemId);
-    if (options?.category) params.append('category', options.category);
-    if (options?.limit) params.append('limit', String(options.limit));
-
-    const response = await apiClient.get<ApiEnvelope<SimilarItemResult[]>>(
-      `/api/v1/recommendations/similar?${params.toString()}`
-    );
-    return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
- * Get style analysis for an item
- */
-export async function getItemStyleAnalysis(itemId: string): Promise<{
-  style: string;
-  confidence: number;
-  alternative_styles: Array<{ style: string; confidence: number }>;
-  color_palette: string[];
-  suggested_occasions: string[];
-  suggested_companions: Array<{
-    item_id: string;
-    item_name: string;
-    category: string;
-    confidence: number;
-  }>;
-}> {
-  try {
-    const response = await apiClient.get<ApiEnvelope<{
-      style: string;
-      confidence: number;
-      alternative_styles: Array<{ style: string; confidence: number }>;
-      color_palette: string[];
-      suggested_occasions: string[];
-      suggested_companions: Array<{
-        item_id: string;
-        item_name: string;
-        category: string;
-        confidence: number;
-      }>;
-    }>>(`/api/v1/recommendations/style/${itemId}`);
-    return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
  * Get shopping recommendations based on wardrobe
  */
 export async function getShoppingRecommendations(options?: {
@@ -228,71 +165,6 @@ export async function getShoppingRecommendations(options?: {
       }>
     >>(`/api/v1/recommendations/shopping?${params.toString()}`);
     return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
- * Get capsule wardrobe recommendations
- */
-export async function getCapsuleWardrobe(options?: {
-  season?: string;
-  style?: string;
-  item_count?: number;
-}): Promise<{
-  name: string;
-  description: string;
-  items: SuggestedItem[];
-  outfits: Array<{
-    name: string;
-    items: SuggestedItem[];
-  }>;
-  statistics: {
-    total_outfits_possible: number;
-    cost_per_wear_estimate: number;
-    versatility_score: number;
-  };
-}> {
-  try {
-    const params = new URLSearchParams();
-    if (options?.season) params.append('season', options.season);
-    if (options?.style) params.append('style', options.style);
-    if (options?.item_count) params.append('item_count', String(options.item_count));
-
-    const response = await apiClient.get<ApiEnvelope<{
-      name: string;
-      description: string;
-      items: SuggestedItem[];
-      outfits: Array<{
-        name: string;
-        items: SuggestedItem[];
-      }>;
-      statistics: {
-        total_outfits_possible: number;
-        cost_per_wear_estimate: number;
-        versatility_score: number;
-      };
-    }>>(`/api/v1/recommendations/capsule?${params.toString()}`);
-    return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
- * Rate a recommendation to improve future suggestions
- */
-export async function rateRecommendation(
-  recommendationId: string,
-  rating: 'thumbs_up' | 'thumbs_down' | 'neutral'
-): Promise<{ message: string }> {
-  try {
-    const response = await apiClient.post<ApiEnvelope<{ saved?: boolean; logged?: boolean }>>(
-      `/api/v1/recommendations/${recommendationId}/rate`,
-      { rating }
-    );
-    return { message: response.data.message || 'OK' };
   } catch (error) {
     throw getApiError(error);
   }

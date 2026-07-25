@@ -10,7 +10,6 @@ import type {
   ReferralCode,
   ReferralStats,
   ValidateReferralResponse,
-  RedeemReferralResponse,
   CheckoutSession,
   PortalSession,
   PlansResponse,
@@ -140,21 +139,6 @@ export async function validateReferralCode(code: string): Promise<ValidateReferr
   try {
     const response = await apiClient.post<ApiEnvelope<ValidateReferralResponse>>('/api/v1/referral/validate', {
       code,
-    })
-    return response.data.data
-  } catch (error) {
-    throw getApiError(error)
-  }
-}
-
-/**
- * Redeem a referral code
- * Applies credits to both the current user and the referrer
- */
-export async function redeemReferral(referralCode: string): Promise<RedeemReferralResponse> {
-  try {
-    const response = await apiClient.post<ApiEnvelope<RedeemReferralResponse>>('/api/v1/referral/redeem', {
-      referral_code: referralCode,
     })
     return response.data.data
   } catch (error) {

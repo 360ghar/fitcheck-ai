@@ -1,7 +1,7 @@
 export type Theme = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';
 
-export const THEME_STORAGE_KEY = 'fitcheck-theme';
+const THEME_STORAGE_KEY = 'fitcheck-theme';
 
 export const THEMES: { value: Theme; label: string }[] = [
   { value: 'light', label: 'Light' },

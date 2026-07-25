@@ -125,32 +125,6 @@ export async function getBatchJobStatus(jobId: string): Promise<BatchJobStatusRe
 }
 
 /**
- * Create an EventSource connection to the batch job SSE endpoint.
- *
- * Note: EventSource doesn't support custom headers, so we pass the token
- * as a query parameter. The backend accepts both Authorization header
- * and token query param for SSE endpoints.
- *
- * @param jobId - The job ID to connect to
- * @returns EventSource instance
- */
-export function createBatchSSEConnection(jobId: string): EventSource {
-  // Note: token not used directly since EventSource doesn't support custom headers
-  // The authenticated version uses fetch-based approach instead
-  const url = `${API_BASE_URL}/api/v1/ai/batch-extract/${jobId}/events`;
-
-  // Note: Standard EventSource doesn't support custom headers.
-  // For authenticated SSE, we'd need to use a polyfill or fetch-based approach.
-  // For now, we'll rely on the browser's cookie-based auth if available,
-  // or the backend should support token in query param.
-  const eventSource = new EventSource(url, {
-    withCredentials: true,
-  });
-
-  return eventSource;
-}
-
-/**
  * Create an authenticated SSE connection using fetch.
  *
  * This is a more flexible approach that supports Authorization headers.

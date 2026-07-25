@@ -125,24 +125,6 @@ export function isAuthenticated(): boolean {
 }
 
 /**
- * Get initial auth state from storage
- */
-export function getInitialAuthState(): { tokens: AuthTokens | null; user: User | null } {
-  const tokens = getTokens();
-
-  // Parse user from storage if available
-  let user: User | null = null;
-  try {
-    const storedUser = localStorage.getItem('fitcheck_user');
-    user = storedUser ? JSON.parse(storedUser) : null;
-  } catch {
-    user = null;
-  }
-
-  return { tokens, user };
-}
-
-/**
  * Store user data in localStorage
  */
 export function storeUser(user: User): void {

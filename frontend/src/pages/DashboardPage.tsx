@@ -26,7 +26,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { ReferralBanner, useReferralBannerDismissal } from '@/components/dashboard/ReferralBanner'
 import { ActivationChecklist } from '@/components/dashboard/ActivationChecklist'
-import { ItemUpload, type ItemUploadResult } from '@/components/wardrobe/ItemUpload'
+import { BatchExtractionFlow, type ItemUploadResult } from '@/components/wardrobe/BatchExtractionFlow'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
@@ -473,7 +473,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <ItemUpload
+      <BatchExtractionFlow
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         onUploadComplete={handleUploadComplete}

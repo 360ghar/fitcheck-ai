@@ -1,1 +1,0 @@
-export { AvatarRequiredPrompt } from './AvatarRequiredPrompt';

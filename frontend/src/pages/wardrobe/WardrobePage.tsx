@@ -38,7 +38,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FilterPanel, type ItemFilters, type SortOptions } from '@/components/wardrobe/FilterPanel'
-import { ItemUpload } from '@/components/wardrobe/ItemUpload'
+import { BatchExtractionFlow } from '@/components/wardrobe/BatchExtractionFlow'
 import { ItemDetailModal } from '@/components/wardrobe/ItemDetailModal'
 import { ItemCard } from '@/components/wardrobe/ItemCard'
 import { useToast } from '@/components/ui/use-toast'
@@ -550,7 +550,7 @@ export default function WardrobePage() {
       {/* Mobile primary add action is the BottomNav center FAB — avoid dual FABs */}
 
       {/* Modals */}
-      <ItemUpload
+      <BatchExtractionFlow
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         onUploadComplete={handleUploadComplete}

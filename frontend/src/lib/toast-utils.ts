@@ -12,7 +12,7 @@ import { isApiError, getApiError } from '@/api/client';
 /**
  * Get a user-friendly error title based on HTTP status code
  */
-export function getErrorTitle(status?: number): string {
+function getErrorTitle(status?: number): string {
     if (!status) return 'Error';
 
     if (status >= 500) {
@@ -109,30 +109,6 @@ export function showNetworkError(message?: string) {
 }
 
 /**
- * Show validation errors toast for form validation failures
- */
-export function showValidationErrors(errors: Array<{ field: string; message: string }>) {
-    if (!errors || errors.length === 0) {
-        return showError('Please check your input and try again.', 'Validation Error');
-    }
-
-    console.error('[Validation Errors]', errors);
-
-    // Format errors as a readable list
-    const formattedErrors = errors
-        .map(err => `${err.field}: ${err.message}`)
-        .join('\n');
-
-    return toast({
-        title: 'Validation Error',
-        description: errors.length === 1
-            ? `${errors[0].field}: ${errors[0].message}`
-            : `Please fix the following:\n${formattedErrors}`,
-        variant: 'destructive',
-    });
-}
-
-/**
  * Show a warning toast notification
  */
 export function showWarning(message: string, title?: string) {
@@ -141,31 +117,5 @@ export function showWarning(message: string, title?: string) {
         description: message,
         variant: 'default',
         className: 'bg-yellow-50 border-yellow-200 text-yellow-900',
-    });
-}
-
-/**
- * Show an info toast notification
- */
-export function showInfo(message: string, title?: string) {
-    return toast({
-        title: title || 'Info',
-        description: message,
-        variant: 'default',
-        className: 'bg-blue-50 border-blue-200 text-blue-900',
-    });
-}
-
-/**
- * Show a loading toast (useful for long operations)
- */
-export function showLoading(message: string, title?: string) {
-    return toast({
-        title: title || 'Loading',
-        description: message,
-        variant: 'default',
-        className: 'bg-gray-50 border-gray-200 text-gray-900',
-        // This toast won't auto-dismiss - caller should dismiss it manually
-        duration: Infinity,
     });
 }
