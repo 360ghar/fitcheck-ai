@@ -9,6 +9,7 @@ class EnvConfig {
   EnvConfig._();
 
   static const String _apiBaseUrlEnv = String.fromEnvironment('API_BASE_URL');
+  static const String _frontendUrlEnv = String.fromEnvironment('FRONTEND_URL');
   static const String _supabaseUrlEnv = String.fromEnvironment('SUPABASE_URL');
   static const String _supabaseAnonKeyEnv = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
@@ -41,6 +42,12 @@ class EnvConfig {
     return _apiBaseUrlEnv.isNotEmpty
         ? _apiBaseUrlEnv
         : (_fileValues['API_BASE_URL'] ?? '');
+  }
+
+  static String get frontendUrl {
+    return _frontendUrlEnv.isNotEmpty
+        ? _frontendUrlEnv
+        : (_fileValues['FRONTEND_URL'] ?? '');
   }
 
   static String get supabaseUrl {

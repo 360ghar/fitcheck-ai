@@ -32,6 +32,18 @@ class ApiConstants {
     return envUrl.isNotEmpty ? envUrl : 'http://localhost:8000';
   }
 
+  /// Web frontend base URL (for password-reset email links, etc.)
+  static String get webBaseUrl {
+    final envUrl = EnvConfig.frontendUrl;
+    if (envUrl.isNotEmpty) {
+      return envUrl;
+    }
+    if (kDebugMode) {
+      return 'http://localhost:3000';
+    }
+    return 'https://fitcheckaiapp.com';
+  }
+
   // API Version
   static const String apiVersion = '/api/v1';
 

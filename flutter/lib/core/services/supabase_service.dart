@@ -256,7 +256,7 @@ class SupabaseService extends GetxService {
   Future<void> resetPassword(String email) async {
     await _client.auth.resetPasswordForEmail(
       email,
-      redirectTo: '${ApiConstants.baseUrl}/auth/reset-password',
+      redirectTo: '${ApiConstants.webBaseUrl}/auth/reset-password',
     );
   }
 
