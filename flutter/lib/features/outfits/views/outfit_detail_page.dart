@@ -311,7 +311,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                 left: AppConstants.spacing8,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: tokens.cardColor.withOpacity(0.9),
+                    color: tokens.cardColor.withValues(alpha: 0.9),
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
@@ -343,8 +343,8 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
           color: tokens.isDarkMode
-              ? Colors.black.withOpacity(0.3)
-              : Colors.grey.withOpacity(0.1),
+              ? Colors.black.withValues(alpha: 0.3)
+              : Colors.grey.withValues(alpha: 0.1),
           child: hasImages
               ? Stack(
                   children: [
@@ -362,8 +362,8 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                           imageUrl: imageUrls[index],
                           fit: BoxFit.contain,
                           backgroundColor: tokens.isDarkMode
-                              ? Colors.black.withOpacity(0.3)
-                              : Colors.grey.withOpacity(0.1),
+                              ? Colors.black.withValues(alpha: 0.3)
+                              : Colors.grey.withValues(alpha: 0.1),
                           enableZoom: true,
                           galleryUrls: imageUrls,
                           initialGalleryIndex: index,
@@ -388,7 +388,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                                 shape: BoxShape.circle,
                                 color: index == _currentImageIndex
                                     ? tokens.brandColor
-                                    : tokens.textMuted.withOpacity(0.5),
+                                    : tokens.textMuted.withValues(alpha: 0.5),
                               ),
                             ),
                           ),
@@ -445,7 +445,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                   onTap: () => Get.toNamed(Routes.wardrobeItemDetail.replaceFirst(':id', item.id)),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: tokens.cardColor.withOpacity(0.5),
+                      color: tokens.cardColor.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(AppConstants.radius8),
                       border: Border.all(color: tokens.cardBorderColor),
                     ),
@@ -469,7 +469,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
               // Fallback placeholder for items without data
               return Container(
                 decoration: BoxDecoration(
-                  color: tokens.cardColor.withOpacity(0.5),
+                  color: tokens.cardColor.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(AppConstants.radius8),
                   border: Border.all(color: tokens.cardBorderColor),
                 ),
@@ -813,7 +813,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
         color: tokens.cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -848,9 +848,9 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
         vertical: AppConstants.spacing6,
       ),
       decoration: BoxDecoration(
-        color: tokens.brandColor.withOpacity(0.1),
+        color: tokens.brandColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppConstants.radius16),
-        border: Border.all(color: tokens.brandColor.withOpacity(0.3)),
+        border: Border.all(color: tokens.brandColor.withValues(alpha: 0.3)),
       ),
       child: Text(
         label,

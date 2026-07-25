@@ -44,7 +44,7 @@ class QuickActionsSection extends StatelessWidget {
                     gradient: LinearGradient(
                       colors: [
                         tokens.brandColor,
-                        tokens.brandColor.withOpacity(0.7),
+                        tokens.brandColor.withValues(alpha: 0.7),
                       ],
                     ),
                     onTap: () => Get.toNamed(Routes.wardrobeAdd),
@@ -89,7 +89,7 @@ class QuickActionsSection extends StatelessWidget {
                     gradient: LinearGradient(
                       colors: [
                         const Color(0xFF0F172A),
-                        tokens.cardColor.withOpacity(0.8),
+                        tokens.cardColor.withValues(alpha: 0.8),
                       ],
                     ),
                     onTap: () => Get.toNamed(Routes.calendar),
@@ -128,10 +128,10 @@ class _ActionCard extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: gradient,
           borderRadius: BorderRadius.circular(AppConstants.radius16),
-          border: Border.all(color: Colors.white.withOpacity(0.12)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: Colors.black.withValues(alpha: 0.15),
               blurRadius: 16,
               offset: const Offset(0, 10),
             ),

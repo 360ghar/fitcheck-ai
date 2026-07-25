@@ -105,7 +105,7 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [tokens.brandColor.withOpacity(0.1), tokens.cardColor],
+            colors: [tokens.brandColor.withValues(alpha: 0.1), tokens.cardColor],
           ),
         ),
         child: SafeArea(
@@ -249,7 +249,7 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
                 left: AppConstants.spacing8,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: tokens.cardColor.withOpacity(0.9),
+                    color: tokens.cardColor.withValues(alpha: 0.9),
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
@@ -268,7 +268,7 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
                   children: [
                     Container(
                       decoration: BoxDecoration(
-                        color: tokens.cardColor.withOpacity(0.9),
+                        color: tokens.cardColor.withValues(alpha: 0.9),
                         shape: BoxShape.circle,
                       ),
                       child: IconButton(
@@ -280,7 +280,7 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
                     const SizedBox(width: AppConstants.spacing8),
                     Container(
                       decoration: BoxDecoration(
-                        color: tokens.cardColor.withOpacity(0.9),
+                        color: tokens.cardColor.withValues(alpha: 0.9),
                         shape: BoxShape.circle,
                       ),
                       child: IconButton(

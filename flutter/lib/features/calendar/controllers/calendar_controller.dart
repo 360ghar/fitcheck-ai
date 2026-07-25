@@ -46,10 +46,10 @@ class CalendarController extends GetxController {
   bool get hasError => error.value.isNotEmpty;
   List<CalendarEventModel> get selectedDateEvents {
     final key = DateTime(selectedDate.value.year, selectedDate.value.month, selectedDate.value.day);
-    return eventsByDate.value[key] ?? [];
+    return eventsByDate[key] ?? [];
   }
 
-  bool get hasConnectedCalendar => connections.value.any((c) => c.isConnected);
+  bool get hasConnectedCalendar => connections.any((c) => c.isConnected);
 
   @override
   void onInit() {

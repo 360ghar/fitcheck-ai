@@ -77,7 +77,7 @@ class AppImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
-    final bgColor = backgroundColor ?? tokens.cardColor.withOpacity(0.3);
+    final bgColor = backgroundColor ?? tokens.cardColor.withValues(alpha: 0.3);
 
     Widget imageWidget;
 
@@ -144,13 +144,13 @@ class AppImage extends StatelessWidget {
 
   Widget _buildPlaceholder(BuildContext context, AppUiTokens tokens) {
     return Shimmer.fromColors(
-      baseColor: tokens.cardColor.withOpacity(0.4),
-      highlightColor: tokens.cardColor.withOpacity(0.7),
+      baseColor: tokens.cardColor.withValues(alpha: 0.4),
+      highlightColor: tokens.cardColor.withValues(alpha: 0.7),
       period: const Duration(milliseconds: 1200),
       child: Container(
         width: width,
         height: height,
-        color: tokens.cardColor.withOpacity(0.3),
+        color: tokens.cardColor.withValues(alpha: 0.3),
       ),
     );
   }
@@ -159,7 +159,7 @@ class AppImage extends StatelessWidget {
     return Container(
       width: width,
       height: height,
-      color: tokens.cardColor.withOpacity(0.3),
+      color: tokens.cardColor.withValues(alpha: 0.3),
       child: Center(
         child: Icon(
           errorIcon,

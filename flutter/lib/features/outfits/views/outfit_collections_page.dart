@@ -221,9 +221,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
 
   Widget _buildCollectionCard(Map<String, dynamic> collection) {
     final tokens = AppUiTokens.of(context);
-    final id = collection['id']?.toString() ?? '';
     final name = collection['name'] as String? ?? 'Untitled';
-    final description = collection['description'] as String?;
     final isFavorite = collection['is_favorite'] as bool? ?? false;
     final outfitIds = collection['outfit_ids'] as List? ?? [];
     final outfitCount = outfitIds.length;
@@ -254,8 +252,8 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      tokens.brandColor.withOpacity(0.1),
-                      tokens.brandColor.withOpacity(0.05),
+                      tokens.brandColor.withValues(alpha: 0.1),
+                      tokens.brandColor.withValues(alpha: 0.05),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(AppConstants.radius16),
@@ -264,7 +262,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
                   child: Icon(
                     Icons.folder,
                     size: 48,
-                    color: tokens.brandColor.withOpacity(0.5),
+                    color: tokens.brandColor.withValues(alpha: 0.5),
                   ),
                 ),
               ),
@@ -278,7 +276,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
                 child: Container(
                   padding: const EdgeInsets.all(AppConstants.spacing4),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.secondary.withOpacity(0.9),
+                    color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.9),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -302,7 +300,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.transparent,
-                      Colors.black.withOpacity(0.7),
+                      Colors.black.withValues(alpha: 0.7),
                     ],
                   ),
                   borderRadius: const BorderRadius.only(

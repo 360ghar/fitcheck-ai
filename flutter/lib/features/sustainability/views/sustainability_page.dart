@@ -241,7 +241,7 @@ class SustainabilityPage extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: Colors.green.shade400.withOpacity(0.2),
+                  color: Colors.green.shade400.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, color: Colors.green.shade400, size: 20),
@@ -274,7 +274,7 @@ class SustainabilityPage extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppConstants.radius8),
             child: LinearProgressIndicator(
               value: progress,
-              backgroundColor: tokens.cardColor.withOpacity(0.3),
+              backgroundColor: tokens.cardColor.withValues(alpha: 0.3),
               valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
               minHeight: 6,
             ),

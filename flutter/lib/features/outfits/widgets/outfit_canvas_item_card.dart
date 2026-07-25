@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
@@ -36,7 +35,7 @@ class OutfitCanvasItemCard extends StatelessWidget {
       child: Container(
         width: 100,
         decoration: BoxDecoration(
-          color: tokens.cardColor.withOpacity(isVisible ? 1 : 0.6),
+          color: tokens.cardColor.withValues(alpha: isVisible ? 1 : 0.6),
           borderRadius: BorderRadius.circular(AppConstants.radius12),
           border: Border.all(
             color: tokens.brandColor,
@@ -44,7 +43,7 @@ class OutfitCanvasItemCard extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -68,7 +67,7 @@ class OutfitCanvasItemCard extends StatelessWidget {
                         errorIcon: _getCategoryIcon(outfitItem.item.category),
                       )
                     : Container(
-                        color: tokens.cardColor.withOpacity(0.5),
+                        color: tokens.cardColor.withValues(alpha: 0.5),
                         child: Icon(
                           _getCategoryIcon(outfitItem.item.category),
                           color: tokens.textMuted,
@@ -87,7 +86,7 @@ class OutfitCanvasItemCard extends StatelessWidget {
                   vertical: 2,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.7),
+                  color: Colors.black.withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(AppConstants.radius8),
                 ),
                 child: Text(

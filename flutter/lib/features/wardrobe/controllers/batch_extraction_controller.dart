@@ -181,8 +181,8 @@ class BatchExtractionController extends GetxController {
       RegExp(r'^https?://fb\.com/[^/]+/?$', caseSensitive: false),
     ];
 
-    bool isInstagram = instagramPatterns[0].hasMatch(url);
-    bool isFacebook =
+    final bool isInstagram = instagramPatterns[0].hasMatch(url);
+    final bool isFacebook =
         facebookPatterns[0].hasMatch(url) || facebookPatterns[1].hasMatch(url);
 
     // Check if it's a post URL (not supported)

@@ -1,5 +1,8 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+// ignore_for_file: invalid_annotation_target
+// `@JsonKey` on freezed constructor params is the idiomatic, supported usage
+// (freezed FAQ); the analyzer emits a false-positive warning for it.
 part 'subscription_model.freezed.dart';
 part 'subscription_model.g.dart';
 

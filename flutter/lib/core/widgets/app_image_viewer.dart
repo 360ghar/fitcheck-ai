@@ -39,7 +39,7 @@ class AppImageViewer extends StatefulWidget {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Image Viewer',
-      barrierColor: Colors.black.withOpacity(0.9),
+      barrierColor: Colors.black.withValues(alpha: 0.9),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) {
         return AppImageViewer(
@@ -248,7 +248,7 @@ class _AppImageViewerState extends State<AppImageViewer> {
   Widget _buildCloseButton() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.5),
+        color: Colors.black.withValues(alpha: 0.5),
         shape: BoxShape.circle,
       ),
       child: IconButton(
@@ -273,7 +273,7 @@ class _AppImageViewerState extends State<AppImageViewer> {
             shape: BoxShape.circle,
             color: index == _currentIndex
                 ? Colors.white
-                : Colors.white.withOpacity(0.4),
+                : Colors.white.withValues(alpha: 0.4),
           ),
         ),
       ),

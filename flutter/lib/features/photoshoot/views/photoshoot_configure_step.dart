@@ -180,7 +180,7 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
             width: isSelected ? 2 : 1,
           ),
           color: isSelected
-              ? tokens.brandColor.withOpacity(0.1)
+              ? tokens.brandColor.withValues(alpha: 0.1)
               : tokens.cardColor,
         ),
         padding: const EdgeInsets.all(AppConstants.spacing8),
@@ -336,7 +336,7 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
                     width: isSelected ? 2 : 1,
                   ),
                   color: isSelected
-                      ? tokens.brandColor.withOpacity(0.1)
+                      ? tokens.brandColor.withValues(alpha: 0.1)
                       : tokens.cardColor,
                 ),
                 child: Column(
@@ -396,7 +396,7 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
         ),
         borderRadius: BorderRadius.circular(4),
         color: isSelected
-            ? tokens.brandColor.withOpacity(0.2)
+            ? tokens.brandColor.withValues(alpha: 0.2)
             : tokens.cardColor,
       ),
     );

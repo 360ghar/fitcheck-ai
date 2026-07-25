@@ -30,7 +30,7 @@ class WeatherBasedTab extends StatelessWidget {
                       labelText: 'Your Location',
                       hintText: 'Enter city name',
                       filled: true,
-                      fillColor: tokens.cardColor.withOpacity(0.5),
+                      fillColor: tokens.cardColor.withValues(alpha: 0.5),
                       prefixIcon: const Icon(Icons.location_on),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(AppConstants.radius12),
@@ -65,7 +65,7 @@ class WeatherBasedTab extends StatelessWidget {
                 margin: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
                 padding: const EdgeInsets.all(AppConstants.spacing16),
                 decoration: BoxDecoration(
-                  color: tokens.cardColor.withOpacity(0.6),
+                  color: tokens.cardColor.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(AppConstants.radius12),
                   border: Border.all(color: tokens.cardBorderColor),
                 ),
@@ -94,8 +94,8 @@ class WeatherBasedTab extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    tokens.brandColor.withOpacity(0.1),
-                    tokens.brandColor.withOpacity(0.05),
+                    tokens.brandColor.withValues(alpha: 0.1),
+                    tokens.brandColor.withValues(alpha: 0.05),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(AppConstants.radius12),
@@ -148,7 +148,7 @@ class WeatherBasedTab extends StatelessWidget {
                 children: controller.preferredCategories.map((cat) {
                   return Chip(
                     label: Text(cat.split(' ').map((s) => s[0].toUpperCase() + s.substring(1)).join(' ')),
-                    backgroundColor: tokens.brandColor.withOpacity(0.1),
+                    backgroundColor: tokens.brandColor.withValues(alpha: 0.1),
                   );
                 }).toList(),
               ),
@@ -271,10 +271,10 @@ class WeatherBasedTab extends StatelessWidget {
                   ? Image.network(
                   item.itemImages!.first.url,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined),
+                  errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined),
                 )
                   : Container(
-                      color: tokens.cardColor.withOpacity(0.5),
+                      color: tokens.cardColor.withValues(alpha: 0.5),
                       child: Icon(
                         Icons.image,
                         color: tokens.textMuted,

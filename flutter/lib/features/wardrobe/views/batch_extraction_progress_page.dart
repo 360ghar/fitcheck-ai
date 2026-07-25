@@ -5,7 +5,6 @@ import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/batch_extraction_controller.dart';
-import '../models/batch_extraction_models.dart';
 import '../widgets/extraction_progress_card.dart';
 
 /// Page showing batch extraction and generation progress
@@ -144,14 +143,14 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
     IconData? icon;
 
     if (isComplete) {
-      bgColor = Colors.green.withOpacity(0.1);
+      bgColor = Colors.green.withValues(alpha: 0.1);
       textColor = Colors.green;
       icon = Icons.check;
     } else if (isActive) {
-      bgColor = tokens.brandColor.withOpacity(0.1);
+      bgColor = tokens.brandColor.withValues(alpha: 0.1);
       textColor = tokens.brandColor;
     } else {
-      bgColor = tokens.textMuted.withOpacity(0.1);
+      bgColor = tokens.textMuted.withValues(alpha: 0.1);
       textColor = tokens.textMuted;
     }
 
@@ -216,7 +215,7 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
         borderRadius: BorderRadius.circular(4),
         child: LinearProgressIndicator(
           value: progress,
-          backgroundColor: tokens.textMuted.withOpacity(0.2),
+          backgroundColor: tokens.textMuted.withValues(alpha: 0.2),
           valueColor: AlwaysStoppedAnimation<Color>(tokens.brandColor),
           minHeight: 8,
         ),
@@ -288,7 +287,7 @@ class BatchExtractionProgressPage extends GetView<BatchExtractionController> {
               Container(
                 padding: const EdgeInsets.all(AppConstants.spacing12),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
+                  color: Colors.red.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(AppConstants.radius8),
                 ),
                 child: Row(

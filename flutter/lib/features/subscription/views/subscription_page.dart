@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/subscription_controller.dart';
-import '../models/subscription_model.dart';
 import 'widgets/plan_card.dart';
 import 'widgets/usage_progress.dart';
 import 'widgets/referral_share_card.dart';

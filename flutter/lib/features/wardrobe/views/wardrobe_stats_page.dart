@@ -157,7 +157,7 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
   }
 
   Widget _buildStatsContent() {
-    final statistics = stats.value;
+    final Map<String, dynamic> statistics = stats;
     final itemsByCategory = statistics['items_by_category'] as Map<String, dynamic>? ?? {};
     final totalValue = (statistics['total_value'] as num?)?.toDouble() ?? 0.0;
     final mostWorn = statistics['most_worn_items'] as List? ?? [];
@@ -220,7 +220,7 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
                   vertical: AppConstants.spacing6,
                 ),
                 decoration: BoxDecoration(
-                  color: tokens.brandColor.withOpacity(0.1),
+                  color: tokens.brandColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(AppConstants.radius16),
                 ),
                 child: Text(
@@ -300,7 +300,7 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
           Container(
             padding: const EdgeInsets.all(AppConstants.spacing12),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
+              color: Colors.green.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(AppConstants.radius12),
             ),
             child: Icon(
@@ -358,7 +358,7 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
             final count = itemsByCategory[category.displayName] as int? ?? 0;
             if (count == 0) return const SizedBox.shrink();
             return _buildCategoryBar(category, count, totalItems, tokens);
-          }).toList(),
+          }),
         ],
       ),
     );
@@ -479,7 +479,7 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
                 ],
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );

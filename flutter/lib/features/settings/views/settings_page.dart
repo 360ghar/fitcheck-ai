@@ -327,21 +327,23 @@ class _SettingsPageState extends State<SettingsPage> {
     Get.dialog(
       AlertDialog(
         title: const Text('Select Theme'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: AppThemeMode.values.map((mode) {
-            return RadioListTile<AppThemeMode>(
-              title: Text(_getThemeModeLabel(mode)),
-              value: mode,
-              groupValue: prefs.themeMode ?? AppThemeMode.system,
-              onChanged: (value) {
-                if (value != null) {
-                  controller.updateThemeMode(value);
-                  Get.back();
-                }
-              },
-            );
-          }).toList(),
+        content: RadioGroup<AppThemeMode>(
+          groupValue: prefs.themeMode ?? AppThemeMode.system,
+          onChanged: (value) {
+            if (value != null) {
+              controller.updateThemeMode(value);
+              Get.back();
+            }
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: AppThemeMode.values.map((mode) {
+              return RadioListTile<AppThemeMode>(
+                title: Text(_getThemeModeLabel(mode)),
+                value: mode,
+              );
+            }).toList(),
+          ),
         ),
       ),
     );

@@ -187,8 +187,8 @@ class _OutfitsContentState extends State<OutfitsContent> {
                         imageUrl: imageUrls.first,
                         fit: BoxFit.contain,
                         backgroundColor: tokens.isDarkMode
-                            ? Colors.black.withOpacity(0.3)
-                            : Colors.grey.withOpacity(0.1),
+                            ? Colors.black.withValues(alpha: 0.3)
+                            : Colors.grey.withValues(alpha: 0.1),
                         enableZoom: false,
                         galleryUrls: imageUrls,
                       )
@@ -204,11 +204,11 @@ class _OutfitsContentState extends State<OutfitsContent> {
                 child: Container(
                   padding: const EdgeInsets.all(AppConstants.spacing4),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.secondary.withOpacity(0.9),
+                    color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.9),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
+                        color: Colors.black.withValues(alpha: 0.2),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       ),
@@ -233,7 +233,7 @@ class _OutfitsContentState extends State<OutfitsContent> {
                     vertical: AppConstants.spacing4,
                   ),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceVariant,
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(AppConstants.radius8),
                   ),
                   child: Text(
@@ -260,7 +260,7 @@ class _OutfitsContentState extends State<OutfitsContent> {
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.transparent,
-                      Colors.black.withOpacity(0.8),
+                      Colors.black.withValues(alpha: 0.8),
                     ],
                   ),
                   borderRadius: const BorderRadius.only(
@@ -304,7 +304,7 @@ class _OutfitsContentState extends State<OutfitsContent> {
     final tokens = AppUiTokens.of(context);
 
     return Container(
-      color: tokens.cardColor.withOpacity(0.6),
+      color: tokens.cardColor.withValues(alpha: 0.6),
       child: const Center(
         child: Icon(Icons.image, size: 48, color: Colors.white54),
       ),

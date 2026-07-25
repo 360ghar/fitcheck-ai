@@ -152,7 +152,7 @@ class _DashboardContentState extends State<DashboardContent> {
               final avatarUrl = user?.avatarUrl;
               return CircleAvatar(
                 radius: 22,
-                backgroundColor: tokens.brandColor.withOpacity(0.15),
+                backgroundColor: tokens.brandColor.withValues(alpha: 0.15),
                 child: avatarUrl != null && avatarUrl.isNotEmpty
                     ? ClipOval(
                         child: Image.network(
@@ -160,7 +160,7 @@ class _DashboardContentState extends State<DashboardContent> {
                           width: 44,
                           height: 44,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Text(
+                          errorBuilder: (_, _, _) => Text(
                             initial,
                             style: TextStyle(
                               color: tokens.brandColor,

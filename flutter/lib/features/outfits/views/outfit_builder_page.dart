@@ -125,7 +125,7 @@ class OutfitBuilderPage extends StatelessWidget {
               labelText: 'Outfit Name *',
               hintText: 'My Casual Outfit',
               filled: true,
-              fillColor: tokens.cardColor.withOpacity(0.5),
+              fillColor: tokens.cardColor.withValues(alpha: 0.5),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppConstants.radius12),
                 borderSide: BorderSide.none,
@@ -144,11 +144,11 @@ class OutfitBuilderPage extends StatelessWidget {
             children: [
               Expanded(
                 child: Obx(() => DropdownButtonFormField<Style>(
-                      value: controller.selectedStyle.value,
+                      initialValue: controller.selectedStyle.value,
                       decoration: InputDecoration(
                         labelText: 'Style',
                         filled: true,
-                        fillColor: tokens.cardColor.withOpacity(0.5),
+                        fillColor: tokens.cardColor.withValues(alpha: 0.5),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppConstants.radius12),
                           borderSide: BorderSide.none,
@@ -172,11 +172,11 @@ class OutfitBuilderPage extends StatelessWidget {
               const SizedBox(width: AppConstants.spacing12),
               Expanded(
                 child: Obx(() => DropdownButtonFormField<Season>(
-                      value: controller.selectedSeason.value,
+                      initialValue: controller.selectedSeason.value,
                       decoration: InputDecoration(
                         labelText: 'Season',
                         filled: true,
-                        fillColor: tokens.cardColor.withOpacity(0.5),
+                        fillColor: tokens.cardColor.withValues(alpha: 0.5),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppConstants.radius12),
                           borderSide: BorderSide.none,
@@ -223,7 +223,7 @@ class OutfitBuilderPage extends StatelessWidget {
                     vertical: AppConstants.spacing4,
                   ),
                   decoration: BoxDecoration(
-                    color: tokens.brandColor.withOpacity(0.1),
+                    color: tokens.brandColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(AppConstants.radius16),
                   ),
                   child: Text(
@@ -249,7 +249,7 @@ class OutfitBuilderPage extends StatelessWidget {
         vertical: AppConstants.spacing12,
       ),
       decoration: BoxDecoration(
-        color: tokens.cardColor.withOpacity(0.3),
+        color: tokens.cardColor.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(AppConstants.radius12),
         border: Border.all(
           color: tokens.cardBorderColor,
@@ -370,7 +370,7 @@ class OutfitBuilderPage extends StatelessWidget {
               decoration: InputDecoration(
                 hintText: 'Search items...',
                 filled: true,
-                fillColor: tokens.cardColor.withOpacity(0.5),
+                fillColor: tokens.cardColor.withValues(alpha: 0.5),
                 prefixIcon: const Icon(Icons.search, size: 20),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppConstants.radius12),
@@ -389,10 +389,10 @@ class OutfitBuilderPage extends StatelessWidget {
           // Category filter
           Expanded(
             child: Obx(() => DropdownButtonFormField<String>(
-                  value: controller.categoryFilter.value,
+                  initialValue: controller.categoryFilter.value,
                   decoration: InputDecoration(
                     filled: true,
-                    fillColor: tokens.cardColor.withOpacity(0.5),
+                    fillColor: tokens.cardColor.withValues(alpha: 0.5),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(AppConstants.radius12),
                       borderSide: BorderSide.none,
@@ -483,7 +483,7 @@ class OutfitBuilderPage extends StatelessWidget {
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: tokens.brandColor.withOpacity(0.2),
+                      color: tokens.brandColor.withValues(alpha: 0.2),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -508,7 +508,7 @@ class OutfitBuilderPage extends StatelessWidget {
                               errorIcon: _getCategoryIcon(item.category),
                             )
                           : Container(
-                              color: tokens.cardColor.withOpacity(0.5),
+                              color: tokens.cardColor.withValues(alpha: 0.5),
                               child: Icon(
                                 _getCategoryIcon(item.category),
                                 color: tokens.textMuted,
@@ -586,7 +586,7 @@ class OutfitBuilderPage extends StatelessWidget {
                 vertical: AppConstants.spacing8,
               ),
               decoration: BoxDecoration(
-                color: tokens.brandColor.withOpacity(0.1),
+                color: tokens.brandColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(AppConstants.radius8),
               ),
               child: Text(

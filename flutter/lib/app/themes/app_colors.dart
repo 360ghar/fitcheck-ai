@@ -68,8 +68,8 @@ class AppColors {
   );
 
   // Glassmorphism
-  static Color glassLight(Color color) => color.withOpacity(0.1);
-  static Color glassDark(Color color) => color.withOpacity(0.2);
-  static Color glassBorderLight(Color color) => color.withOpacity(0.2);
-  static Color glassBorderDark(Color color) => color.withOpacity(0.3);
+  static Color glassLight(Color color) => color.withValues(alpha: 0.1);
+  static Color glassDark(Color color) => color.withValues(alpha: 0.2);
+  static Color glassBorderLight(Color color) => color.withValues(alpha: 0.2);
+  static Color glassBorderDark(Color color) => color.withValues(alpha: 0.3);
 }

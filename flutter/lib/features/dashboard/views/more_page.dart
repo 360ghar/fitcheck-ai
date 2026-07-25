@@ -52,7 +52,7 @@ class MorePage extends StatelessWidget {
           child: ListView.separated(
             padding: const EdgeInsets.all(AppConstants.spacing16),
             itemCount: destinations.length + 1,
-            separatorBuilder: (_, __) => const SizedBox(height: AppConstants.spacing12),
+            separatorBuilder: (_, _) => const SizedBox(height: AppConstants.spacing12),
             itemBuilder: (context, index) {
               if (index == 0) {
                 return Padding(
@@ -79,7 +79,7 @@ class MorePage extends StatelessWidget {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: tokens.brandColor.withOpacity(0.12),
+                      color: tokens.brandColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(AppConstants.radius12),
                     ),
                     child: Icon(destination.icon, color: tokens.brandColor),

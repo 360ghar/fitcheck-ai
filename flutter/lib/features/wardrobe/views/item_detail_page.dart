@@ -216,7 +216,7 @@ class ItemDetailPage extends StatelessWidget {
                                   return Chip(
                                     label: Text(tag),
                                     backgroundColor: tokens.brandColor
-                                        .withOpacity(0.1),
+                                        .withValues(alpha: 0.1),
                                     labelStyle: TextStyle(
                                       color: tokens.brandColor,
                                     ),
@@ -246,7 +246,7 @@ class ItemDetailPage extends StatelessWidget {
                 left: AppConstants.spacing8,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: tokens.cardColor.withOpacity(0.9),
+                    color: tokens.cardColor.withValues(alpha: 0.9),
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
@@ -284,15 +284,15 @@ class ItemDetailPage extends StatelessWidget {
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
           color: tokens.isDarkMode
-              ? Colors.black.withOpacity(0.3)
-              : Colors.grey.withOpacity(0.1),
+              ? Colors.black.withValues(alpha: 0.3)
+              : Colors.grey.withValues(alpha: 0.1),
           child: hasImages
               ? AppImage(
                   imageUrl: imageUrls.first,
                   fit: BoxFit.contain,
                   backgroundColor: tokens.isDarkMode
-                      ? Colors.black.withOpacity(0.3)
-                      : Colors.grey.withOpacity(0.1),
+                      ? Colors.black.withValues(alpha: 0.3)
+                      : Colors.grey.withValues(alpha: 0.1),
                   enableZoom: true,
                   galleryUrls: imageUrls,
                   errorIcon: _getCategoryIcon(item.category),
@@ -519,7 +519,7 @@ class ItemDetailPage extends StatelessWidget {
         color: tokens.cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -576,9 +576,9 @@ class ItemDetailPage extends StatelessWidget {
         vertical: AppConstants.spacing6,
       ),
       decoration: BoxDecoration(
-        color: tokens.brandColor.withOpacity(0.1),
+        color: tokens.brandColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppConstants.radius16),
-        border: Border.all(color: tokens.brandColor.withOpacity(0.3)),
+        border: Border.all(color: tokens.brandColor.withValues(alpha: 0.3)),
       ),
       child: Text(
         label,
@@ -597,10 +597,12 @@ class ItemDetailPage extends StatelessWidget {
     if (difference.inDays == 0) return 'Today';
     if (difference.inDays == 1) return 'Yesterday';
     if (difference.inDays < 7) return '${difference.inDays} days ago';
-    if (difference.inDays < 30)
+    if (difference.inDays < 30) {
       return '${(difference.inDays / 7).floor()} weeks ago';
-    if (difference.inDays < 365)
+    }
+    if (difference.inDays < 365) {
       return '${(difference.inDays / 30).floor()} months ago';
+    }
     return '${(difference.inDays / 365).floor()} years ago';
   }
 

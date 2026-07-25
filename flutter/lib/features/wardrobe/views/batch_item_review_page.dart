@@ -108,7 +108,7 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
                     label: Text(UseCases.displayLabel(useCase)),
                     selected: isSelected,
                     onSelected: (_) => controller.toggleUseCase(useCase),
-                    selectedColor: tokens.brandColor.withOpacity(0.2),
+                    selectedColor: tokens.brandColor.withValues(alpha: 0.2),
                     checkmarkColor: tokens.brandColor,
                   );
                 }).toList(),
@@ -498,6 +498,7 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
 
     try {
       final savedItems = await controller.saveSelectedItems();
+      if (!context.mounted) return;
       Navigator.pop(context); // Close loading dialog
 
       if (savedItems.isNotEmpty) {
@@ -522,6 +523,7 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
         );
       }
     } catch (e) {
+      if (!context.mounted) return;
       Navigator.pop(context); // Close loading dialog
       Get.snackbar(
         'Error',

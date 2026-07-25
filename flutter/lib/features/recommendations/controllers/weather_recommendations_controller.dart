@@ -96,7 +96,7 @@ class WeatherRecommendationsController extends GetxController {
     final condition = weatherData.value!['condition'] ?? 'Unknown';
 
     if (temp != null) {
-      return '$condition, ${temp}°';
+      return '$condition, $temp°';
     }
     return condition.toString();
   }

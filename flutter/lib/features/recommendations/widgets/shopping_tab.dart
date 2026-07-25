@@ -27,7 +27,7 @@ class ShoppingTab extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Obx(() => DropdownButtonFormField<String>(
-                          value: controller.shoppingCategory.value == 'all'
+                          initialValue: controller.shoppingCategory.value == 'all'
                               ? null
                               : controller.shoppingCategory.value,
                           decoration: InputDecoration(
@@ -53,7 +53,7 @@ class ShoppingTab extends StatelessWidget {
                   const SizedBox(width: AppConstants.spacing12),
                   Expanded(
                     child: Obx(() => DropdownButtonFormField<String>(
-                          value: controller.shoppingStyle.value == 'all'
+                          initialValue: controller.shoppingStyle.value == 'all'
                               ? null
                               : controller.shoppingStyle.value,
                           decoration: InputDecoration(
@@ -284,7 +284,7 @@ class ShoppingTab extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(AppConstants.radius8),
               child: Container(
-                color: tokens.cardColor.withOpacity(0.3),
+                color: tokens.cardColor.withValues(alpha: 0.3),
                 child: Icon(
                   Icons.shopping_bag,
                   color: tokens.textMuted,

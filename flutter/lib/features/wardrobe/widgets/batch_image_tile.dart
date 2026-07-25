@@ -70,7 +70,7 @@ class BatchImageTile extends StatelessWidget {
                     width: 24,
                     height: 24,
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
+                      color: Colors.black.withValues(alpha: 0.6),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -196,12 +196,12 @@ class BatchImageTile extends StatelessWidget {
       case BatchImageStatus.uploading:
       case BatchImageStatus.extracting:
       case BatchImageStatus.generating:
-        return Colors.black.withOpacity(0.5);
+        return Colors.black.withValues(alpha: 0.5);
       case BatchImageStatus.extracted:
       case BatchImageStatus.generated:
-        return Colors.green.withOpacity(0.6);
+        return Colors.green.withValues(alpha: 0.6);
       case BatchImageStatus.failed:
-        return Colors.red.withOpacity(0.6);
+        return Colors.red.withValues(alpha: 0.6);
     }
   }
 }

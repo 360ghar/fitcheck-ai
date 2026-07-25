@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../models/user_preferences_model.dart';
 import '../repositories/settings_repository.dart';
@@ -207,7 +206,7 @@ class SettingsController extends GetxController {
   Future<void> exportData() async {
     isExportingData.value = true;
     try {
-      final exportUrl = await _repository.requestDataExport();
+      await _repository.requestDataExport();
       Get.snackbar(
         'Export Started',
         'Your data export is being prepared. You will receive an email when it\'s ready.',

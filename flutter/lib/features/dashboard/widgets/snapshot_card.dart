@@ -169,7 +169,7 @@ class _MetricTile extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppConstants.radius16),
           border: Border.all(color: tokens.cardBorderColor),
-          color: tokens.cardColor.withOpacity(0.75),
+          color: tokens.cardColor.withValues(alpha: 0.75),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -180,7 +180,7 @@ class _MetricTile extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(AppConstants.spacing8),
                   decoration: BoxDecoration(
-                    color: accent.withOpacity(0.15),
+                    color: accent.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(AppConstants.radius12),
                   ),
                   child: Icon(icon, color: accent, size: 20),
@@ -243,7 +243,7 @@ class _StatPill extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppConstants.radius24),
-          color: tokens.cardColor.withOpacity(0.6),
+          color: tokens.cardColor.withValues(alpha: 0.6),
           border: Border.all(color: tokens.cardBorderColor),
         ),
         child: Row(

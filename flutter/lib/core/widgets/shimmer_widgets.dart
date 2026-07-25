@@ -18,14 +18,14 @@ class ShimmerBox extends StatelessWidget {
     final tokens = AppUiTokens.of(context);
 
     return Shimmer.fromColors(
-      baseColor: tokens.cardColor.withOpacity(0.4),
-      highlightColor: tokens.cardColor.withOpacity(0.7),
+      baseColor: tokens.cardColor.withValues(alpha: 0.4),
+      highlightColor: tokens.cardColor.withValues(alpha: 0.7),
       period: const Duration(milliseconds: 1200),
       child: Container(
         width: width,
         height: height,
         decoration: BoxDecoration(
-          color: tokens.cardColor.withOpacity(0.6),
+          color: tokens.cardColor.withValues(alpha: 0.6),
           borderRadius: BorderRadius.circular(
             borderRadius ?? AppConstants.radius8,
           ),
@@ -46,12 +46,12 @@ class ShimmerGridItem extends StatelessWidget {
     final tokens = AppUiTokens.of(context);
 
     return Shimmer.fromColors(
-      baseColor: tokens.cardColor.withOpacity(0.4),
-      highlightColor: tokens.cardColor.withOpacity(0.7),
+      baseColor: tokens.cardColor.withValues(alpha: 0.4),
+      highlightColor: tokens.cardColor.withValues(alpha: 0.7),
       period: const Duration(milliseconds: 1200),
       child: Container(
         decoration: BoxDecoration(
-          color: tokens.cardColor.withOpacity(0.6),
+          color: tokens.cardColor.withValues(alpha: 0.6),
           borderRadius: BorderRadius.circular(AppConstants.radius16),
           border: Border.all(color: tokens.cardBorderColor),
         ),
@@ -78,8 +78,8 @@ class ShimmerListTile extends StatelessWidget {
     final tokens = AppUiTokens.of(context);
 
     return Shimmer.fromColors(
-      baseColor: tokens.cardColor.withOpacity(0.4),
-      highlightColor: tokens.cardColor.withOpacity(0.7),
+      baseColor: tokens.cardColor.withValues(alpha: 0.4),
+      highlightColor: tokens.cardColor.withValues(alpha: 0.7),
       period: const Duration(milliseconds: 1200),
       child: Padding(
         padding: const EdgeInsets.symmetric(
@@ -93,7 +93,7 @@ class ShimmerListTile extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: tokens.cardColor.withOpacity(0.6),
+                  color: tokens.cardColor.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(AppConstants.radius12),
                 ),
               ),
@@ -107,7 +107,7 @@ class ShimmerListTile extends StatelessWidget {
                     width: double.infinity,
                     height: 16,
                     decoration: BoxDecoration(
-                      color: tokens.cardColor.withOpacity(0.6),
+                      color: tokens.cardColor.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(AppConstants.radius8),
                     ),
                   ),
@@ -117,7 +117,7 @@ class ShimmerListTile extends StatelessWidget {
                       width: 120,
                       height: 12,
                       decoration: BoxDecoration(
-                        color: tokens.cardColor.withOpacity(0.6),
+                        color: tokens.cardColor.withValues(alpha: 0.6),
                         borderRadius: BorderRadius.circular(
                           AppConstants.radius8,
                         ),
@@ -133,7 +133,7 @@ class ShimmerListTile extends StatelessWidget {
                 width: 24,
                 height: 24,
                 decoration: BoxDecoration(
-                  color: tokens.cardColor.withOpacity(0.6),
+                  color: tokens.cardColor.withValues(alpha: 0.6),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -156,13 +156,13 @@ class ShimmerCard extends StatelessWidget {
     final tokens = AppUiTokens.of(context);
 
     return Shimmer.fromColors(
-      baseColor: tokens.cardColor.withOpacity(0.4),
-      highlightColor: tokens.cardColor.withOpacity(0.7),
+      baseColor: tokens.cardColor.withValues(alpha: 0.4),
+      highlightColor: tokens.cardColor.withValues(alpha: 0.7),
       period: const Duration(milliseconds: 1200),
       child: Container(
         height: height,
         decoration: BoxDecoration(
-          color: tokens.cardColor.withOpacity(0.6),
+          color: tokens.cardColor.withValues(alpha: 0.6),
           borderRadius: BorderRadius.circular(AppConstants.radius16),
           border: Border.all(color: tokens.cardBorderColor),
         ),
@@ -309,8 +309,8 @@ class ShimmerProfileHeader extends StatelessWidget {
     final tokens = AppUiTokens.of(context);
 
     return Shimmer.fromColors(
-      baseColor: tokens.cardColor.withOpacity(0.4),
-      highlightColor: tokens.cardColor.withOpacity(0.7),
+      baseColor: tokens.cardColor.withValues(alpha: 0.4),
+      highlightColor: tokens.cardColor.withValues(alpha: 0.7),
       period: const Duration(milliseconds: 1200),
       child: Padding(
         padding: const EdgeInsets.all(AppConstants.spacing16),
@@ -320,7 +320,7 @@ class ShimmerProfileHeader extends StatelessWidget {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: tokens.cardColor.withOpacity(0.6),
+                color: tokens.cardColor.withValues(alpha: 0.6),
                 shape: BoxShape.circle,
               ),
             ),
@@ -333,7 +333,7 @@ class ShimmerProfileHeader extends StatelessWidget {
                     width: 150,
                     height: 20,
                     decoration: BoxDecoration(
-                      color: tokens.cardColor.withOpacity(0.6),
+                      color: tokens.cardColor.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(AppConstants.radius8),
                     ),
                   ),
@@ -342,7 +342,7 @@ class ShimmerProfileHeader extends StatelessWidget {
                     width: 100,
                     height: 14,
                     decoration: BoxDecoration(
-                      color: tokens.cardColor.withOpacity(0.6),
+                      color: tokens.cardColor.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(AppConstants.radius8),
                     ),
                   ),
@@ -367,8 +367,8 @@ class ShimmerStatsRow extends StatelessWidget {
     final tokens = AppUiTokens.of(context);
 
     return Shimmer.fromColors(
-      baseColor: tokens.cardColor.withOpacity(0.4),
-      highlightColor: tokens.cardColor.withOpacity(0.7),
+      baseColor: tokens.cardColor.withValues(alpha: 0.4),
+      highlightColor: tokens.cardColor.withValues(alpha: 0.7),
       period: const Duration(milliseconds: 1200),
       child: Row(
         children: List.generate(
@@ -382,7 +382,7 @@ class ShimmerStatsRow extends StatelessWidget {
               child: Container(
                 height: 80,
                 decoration: BoxDecoration(
-                  color: tokens.cardColor.withOpacity(0.6),
+                  color: tokens.cardColor.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(AppConstants.radius12),
                   border: Border.all(color: tokens.cardBorderColor),
                 ),
@@ -404,8 +404,8 @@ class ShimmerDetailPage extends StatelessWidget {
     final tokens = AppUiTokens.of(context);
 
     return Shimmer.fromColors(
-      baseColor: tokens.cardColor.withOpacity(0.4),
-      highlightColor: tokens.cardColor.withOpacity(0.7),
+      baseColor: tokens.cardColor.withValues(alpha: 0.4),
+      highlightColor: tokens.cardColor.withValues(alpha: 0.7),
       period: const Duration(milliseconds: 1200),
       child: SingleChildScrollView(
         child: Column(
@@ -415,7 +415,7 @@ class ShimmerDetailPage extends StatelessWidget {
             Container(
               width: double.infinity,
               height: 300,
-              color: tokens.cardColor.withOpacity(0.6),
+              color: tokens.cardColor.withValues(alpha: 0.6),
             ),
             Padding(
               padding: const EdgeInsets.all(AppConstants.spacing16),
@@ -427,7 +427,7 @@ class ShimmerDetailPage extends StatelessWidget {
                     width: 200,
                     height: 24,
                     decoration: BoxDecoration(
-                      color: tokens.cardColor.withOpacity(0.6),
+                      color: tokens.cardColor.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(AppConstants.radius8),
                     ),
                   ),
@@ -437,7 +437,7 @@ class ShimmerDetailPage extends StatelessWidget {
                     width: 150,
                     height: 16,
                     decoration: BoxDecoration(
-                      color: tokens.cardColor.withOpacity(0.6),
+                      color: tokens.cardColor.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(AppConstants.radius8),
                     ),
                   ),
@@ -447,7 +447,7 @@ class ShimmerDetailPage extends StatelessWidget {
                     width: double.infinity,
                     height: 100,
                     decoration: BoxDecoration(
-                      color: tokens.cardColor.withOpacity(0.6),
+                      color: tokens.cardColor.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(
                         AppConstants.radius12,
                       ),
@@ -458,7 +458,7 @@ class ShimmerDetailPage extends StatelessWidget {
                     width: double.infinity,
                     height: 100,
                     decoration: BoxDecoration(
-                      color: tokens.cardColor.withOpacity(0.6),
+                      color: tokens.cardColor.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(
                         AppConstants.radius12,
                       ),

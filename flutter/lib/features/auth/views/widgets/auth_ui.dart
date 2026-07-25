@@ -34,33 +34,33 @@ class AuthUiTokens {
   factory AuthUiTokens.of(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDarkMode ? Colors.white : Colors.black;
-    final secondaryTextColor = textColor.withOpacity(isDarkMode ? 0.78 : 0.68);
+    final secondaryTextColor = textColor.withValues(alpha: isDarkMode ? 0.78 : 0.68);
     final brandColor = Theme.of(context).colorScheme.primary;
     final overlayGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: isDarkMode
           ? [
-              Colors.black.withOpacity(0.35),
-              Colors.black.withOpacity(0.65),
-              Colors.black.withOpacity(0.9),
+              Colors.black.withValues(alpha: 0.35),
+              Colors.black.withValues(alpha: 0.65),
+              Colors.black.withValues(alpha: 0.9),
             ]
           : [
-              Colors.white.withOpacity(0.25),
-              Colors.white.withOpacity(0.55),
-              Colors.white.withOpacity(0.75),
+              Colors.white.withValues(alpha: 0.25),
+              Colors.white.withValues(alpha: 0.55),
+              Colors.white.withValues(alpha: 0.75),
             ],
     );
     final cardColor = isDarkMode
-        ? Colors.black.withOpacity(0.48)
-        : Colors.white.withOpacity(0.85);
-    final cardBorderColor = textColor.withOpacity(isDarkMode ? 0.18 : 0.12);
+        ? Colors.black.withValues(alpha: 0.48)
+        : Colors.white.withValues(alpha: 0.85);
+    final cardBorderColor = textColor.withValues(alpha: isDarkMode ? 0.18 : 0.12);
     final fieldFillColor = isDarkMode
-        ? Colors.white.withOpacity(0.08)
-        : Colors.black.withOpacity(0.05);
-    final fieldBorderColor = textColor.withOpacity(isDarkMode ? 0.25 : 0.2);
-    final fieldHintColor = textColor.withOpacity(isDarkMode ? 0.55 : 0.5);
-    final fieldIconColor = textColor.withOpacity(isDarkMode ? 0.7 : 0.6);
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.05);
+    final fieldBorderColor = textColor.withValues(alpha: isDarkMode ? 0.25 : 0.2);
+    final fieldHintColor = textColor.withValues(alpha: isDarkMode ? 0.55 : 0.5);
+    final fieldIconColor = textColor.withValues(alpha: isDarkMode ? 0.7 : 0.6);
 
     return AuthUiTokens._(
       isDarkMode: isDarkMode,
@@ -219,7 +219,7 @@ class AuthGlassCard extends StatelessWidget {
         border: Border.all(color: tokens.cardBorderColor),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(tokens.isDarkMode ? 0.35 : 0.18),
+            color: Colors.black.withValues(alpha: tokens.isDarkMode ? 0.35 : 0.18),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
@@ -304,7 +304,7 @@ class AuthFooterText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final linkStyle = TextStyle(
-      color: textColor.withOpacity(0.65),
+      color: textColor.withValues(alpha: 0.65),
       fontSize: 12,
       letterSpacing: 1.2,
       fontWeight: FontWeight.w500,
@@ -321,7 +321,7 @@ class AuthFooterText extends StatelessWidget {
             style: TextButton.styleFrom(
               minimumSize: const Size(48, 44),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-              foregroundColor: textColor.withOpacity(0.65),
+              foregroundColor: textColor.withValues(alpha: 0.65),
               textStyle: linkStyle,
             ),
             child: const Text('PRIVACY POLICY'),
@@ -336,7 +336,7 @@ class AuthFooterText extends StatelessWidget {
             style: TextButton.styleFrom(
               minimumSize: const Size(48, 44),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-              foregroundColor: textColor.withOpacity(0.65),
+              foregroundColor: textColor.withValues(alpha: 0.65),
               textStyle: linkStyle,
             ),
             child: const Text('TERMS OF SERVICE'),
@@ -363,7 +363,7 @@ class AuthFormStyles {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      labelStyle: TextStyle(color: tokens.textColor.withOpacity(0.7)),
+      labelStyle: TextStyle(color: tokens.textColor.withValues(alpha: 0.7)),
       hintStyle: TextStyle(color: tokens.fieldHintColor),
       filled: true,
       fillColor: tokens.fieldFillColor,

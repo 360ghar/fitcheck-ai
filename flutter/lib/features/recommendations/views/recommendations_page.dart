@@ -159,7 +159,7 @@ class SelectedItemsChips extends StatelessWidget {
                       : null,
                 ),
                 onDeleted: () => onRemove(item),
-                backgroundColor: tokens.brandColor.withOpacity(0.1),
+                backgroundColor: tokens.brandColor.withValues(alpha: 0.1),
               ),
             );
           },
@@ -212,7 +212,7 @@ class RecommendationCard extends StatelessWidget {
                         errorIcon: _getCategoryIcon(category),
                       )
                     : Container(
-                        color: tokens.cardColor.withOpacity(0.5),
+                        color: tokens.cardColor.withValues(alpha: 0.5),
                         child: Icon(
                           _getCategoryIcon(category),
                           color: tokens.textMuted,
@@ -231,7 +231,7 @@ class RecommendationCard extends StatelessWidget {
                   vertical: AppConstants.spacing4,
                 ),
                 decoration: BoxDecoration(
-                  color: tokens.brandColor.withOpacity(0.1),
+                  color: tokens.brandColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(AppConstants.radius8),
                 ),
                 child: Text(

@@ -309,7 +309,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
                   // Category
                   Obx(
                     () => DropdownButtonFormField<Category>(
-                      value: selectedCategory.value,
+                      initialValue: selectedCategory.value,
                       decoration: const InputDecoration(
                         labelText: 'Category *',
                         border: OutlineInputBorder(),
@@ -331,7 +331,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
                   // Condition
                   Obx(
                     () => DropdownButtonFormField<domain.Condition>(
-                      value: selectedCondition.value,
+                      initialValue: selectedCondition.value,
                       decoration: const InputDecoration(
                         labelText: 'Condition *',
                         border: OutlineInputBorder(),
@@ -514,7 +514,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
               scrollDirection: Axis.horizontal,
               children: [
                 // Existing images
-                ...?_item!.itemImages!.map((image) {
+                ..._item!.itemImages!.map((image) {
                   final isDeleting = imagesToDelete.contains(image.id);
                   return Padding(
                     padding: const EdgeInsets.only(
@@ -534,7 +534,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
                               fit: BoxFit.contain,
                               enableZoom: false,
                               backgroundColor: isDeleting
-                                  ? Colors.black.withOpacity(0.5)
+                                  ? Colors.black.withValues(alpha: 0.5)
                                   : null,
                             ),
                           ),
@@ -682,7 +682,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
                 }
                 selectedColors.refresh();
               },
-              selectedColor: tokens.brandColor.withOpacity(0.2),
+              selectedColor: tokens.brandColor.withValues(alpha: 0.2),
               checkmarkColor: tokens.brandColor,
             );
           }).toList(),
@@ -720,7 +720,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
                   }
                   selectedUseCases.refresh();
                 },
-                selectedColor: tokens.brandColor.withOpacity(0.2),
+                selectedColor: tokens.brandColor.withValues(alpha: 0.2),
                 checkmarkColor: tokens.brandColor,
               );
             }).toList(),

@@ -116,8 +116,8 @@ class ExtractedItemCard extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: item.isCurrentUserPerson
-                          ? Colors.green.withOpacity(0.12)
-                          : tokens.brandColor.withOpacity(0.1),
+                          ? Colors.green.withValues(alpha: 0.12)
+                          : tokens.brandColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -144,7 +144,7 @@ class ExtractedItemCard extends StatelessWidget {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: tokens.brandColor.withOpacity(0.1),
+                    color: tokens.brandColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -247,7 +247,7 @@ class ExtractedItemCard extends StatelessWidget {
                     width: 24,
                     height: 24,
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
+                      color: Colors.black.withValues(alpha: 0.6),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -269,7 +269,7 @@ class ExtractedItemCard extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
+                      color: Colors.black.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: const Icon(
@@ -284,7 +284,7 @@ class ExtractedItemCard extends StatelessWidget {
             // Status overlay for generating
             if (item.status == BatchItemStatus.generating)
               Container(
-                color: Colors.black.withOpacity(0.5),
+                color: Colors.black.withValues(alpha: 0.5),
                 child: const Center(
                   child: SizedBox(
                     width: 24,

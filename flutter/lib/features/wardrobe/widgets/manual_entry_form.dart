@@ -429,7 +429,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
                       vertical: AppConstants.spacing4,
                     ),
                     decoration: BoxDecoration(
-                      color: tokens.cardColor.withOpacity(0.8),
+                      color: tokens.cardColor.withValues(alpha: 0.8),
                       borderRadius: BorderRadius.circular(
                         AppConstants.radius12,
                       ),
@@ -492,7 +492,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
                               width: 24,
                               height: 24,
                               decoration: BoxDecoration(
-                                color: tokens.cardColor.withOpacity(0.8),
+                                color: tokens.cardColor.withValues(alpha: 0.8),
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
@@ -533,7 +533,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
         height: 200,
         decoration: BoxDecoration(
           border: Border.all(
-            color: tokens.brandColor.withOpacity(0.5),
+            color: tokens.brandColor.withValues(alpha: 0.5),
             width: 2,
             style: BorderStyle.solid,
           ),
@@ -571,7 +571,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
 
   Widget _buildCategoryDropdown(AppUiTokens tokens) {
     return DropdownButtonFormField<Category>(
-      value: selectedCategory.value,
+      initialValue: selectedCategory.value,
       decoration: const InputDecoration(
         labelText: 'Category *',
         border: OutlineInputBorder(),
@@ -590,7 +590,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
 
   Widget _buildConditionDropdown(AppUiTokens tokens) {
     return DropdownButtonFormField<domain.Condition>(
-      value: selectedCondition.value,
+      initialValue: selectedCondition.value,
       decoration: const InputDecoration(
         labelText: 'Condition *',
         border: OutlineInputBorder(),
@@ -635,7 +635,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
                 }
                 selectedColors.refresh();
               },
-              selectedColor: tokens.brandColor.withOpacity(0.2),
+              selectedColor: tokens.brandColor.withValues(alpha: 0.2),
               checkmarkColor: tokens.brandColor,
             );
           }).toList(),
@@ -672,7 +672,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
                 }
                 selectedUseCases.refresh();
               },
-              selectedColor: tokens.brandColor.withOpacity(0.2),
+              selectedColor: tokens.brandColor.withValues(alpha: 0.2),
               checkmarkColor: tokens.brandColor,
             );
           }).toList(),

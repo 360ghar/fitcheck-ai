@@ -32,7 +32,7 @@ class ShareOutfitDialog extends StatelessWidget {
           ),
           const SizedBox(height: AppConstants.spacing16),
           Text(
-            'Share "${outfitName}" with others',
+            'Share "$outfitName" with others',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: tokens.textMuted,
                 ),
@@ -45,7 +45,7 @@ class ShareOutfitDialog extends StatelessWidget {
               labelText: 'Public Link',
               hintText: 'Generating...',
               filled: true,
-              fillColor: tokens.cardColor.withOpacity(0.5),
+              fillColor: tokens.cardColor.withValues(alpha: 0.5),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppConstants.radius12),
                 borderSide: BorderSide.none,

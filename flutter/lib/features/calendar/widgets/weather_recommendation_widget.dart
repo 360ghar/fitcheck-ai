@@ -111,7 +111,6 @@ class _ConnectButton extends StatelessWidget {
   final VoidCallback onTap;
 
   const _ConnectButton({
-    super.key,
     required this.icon,
     required this.label,
     required this.onTap,

@@ -56,7 +56,7 @@ class _PhotoshootGeneratingStepState extends State<PhotoshootGeneratingStep>
                 width: 120,
                 height: 120,
                 decoration: BoxDecoration(
-                  color: tokens.brandColor.withOpacity(0.1),
+                  color: tokens.brandColor.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(

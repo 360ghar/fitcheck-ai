@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../../core/constants/app_constants.dart';
-import '../../../core/widgets/app_ui.dart';
-import '../../wardrobe/controllers/wardrobe_controller.dart';
 
 /// Export dialog for wardrobe data
 class ExportDialog extends StatelessWidget {
@@ -10,8 +7,6 @@ class ExportDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppUiTokens.of(context);
-
     return AlertDialog(
       title: const Text('Export Wardrobe'),
       content: Column(

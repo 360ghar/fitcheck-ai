@@ -41,9 +41,9 @@ class AppUiTokens {
   factory AppUiTokens.of(BuildContext context) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-    final textPrimary = theme.colorScheme.onBackground;
+    final textPrimary = theme.colorScheme.onSurface;
     final textSecondary = theme.colorScheme.onSurfaceVariant;
-    final textMuted = textSecondary.withOpacity(isDarkMode ? 0.7 : 0.65);
+    final textMuted = textSecondary.withValues(alpha: isDarkMode ? 0.7 : 0.65);
     final brandColor = theme.colorScheme.primary;
 
     final backgroundGradient = LinearGradient(
@@ -63,15 +63,15 @@ class AppUiTokens {
     );
 
     final cardColor = isDarkMode
-        ? const Color(0xFF111827).withOpacity(0.72)
-        : Colors.white.withOpacity(0.9);
-    final cardBorderColor = textPrimary.withOpacity(isDarkMode ? 0.12 : 0.08);
-    final cardShadowColor = Colors.black.withOpacity(isDarkMode ? 0.35 : 0.12);
+        ? const Color(0xFF111827).withValues(alpha: 0.72)
+        : Colors.white.withValues(alpha: 0.9);
+    final cardBorderColor = textPrimary.withValues(alpha: isDarkMode ? 0.12 : 0.08);
+    final cardShadowColor = Colors.black.withValues(alpha: isDarkMode ? 0.35 : 0.12);
 
     final navBackground = isDarkMode
-        ? const Color(0xFF0B0F1D).withOpacity(0.9)
-        : Colors.white.withOpacity(0.95);
-    final navBorder = textPrimary.withOpacity(isDarkMode ? 0.18 : 0.1);
+        ? const Color(0xFF0B0F1D).withValues(alpha: 0.9)
+        : Colors.white.withValues(alpha: 0.95);
+    final navBorder = textPrimary.withValues(alpha: isDarkMode ? 0.18 : 0.1);
 
     return AppUiTokens._(
       isDarkMode: isDarkMode,

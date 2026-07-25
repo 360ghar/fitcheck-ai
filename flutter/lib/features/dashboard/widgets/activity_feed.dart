@@ -70,7 +70,7 @@ class _ActivityRow extends StatelessWidget {
             height: 36,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: tokens.brandColor.withOpacity(0.12),
+              color: tokens.brandColor.withValues(alpha: 0.12),
             ),
             child: Icon(icon, size: 18, color: tokens.brandColor),
           ),

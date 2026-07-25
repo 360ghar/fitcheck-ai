@@ -4,7 +4,6 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../../../domain/enums/category.dart';
 import '../../../domain/enums/style.dart';
 import '../../../domain/enums/season.dart';
 import '../controllers/outfit_list_controller.dart';
@@ -301,7 +300,7 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
                     children: [
                       Expanded(
                         child: Obx(() => DropdownButtonFormField<Style>(
-                              value: selectedStyle.value,
+                              initialValue: selectedStyle.value,
                               decoration: const InputDecoration(
                                 labelText: 'Style',
                                 border: OutlineInputBorder(),
@@ -320,7 +319,7 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
                       const SizedBox(width: AppConstants.spacing12),
                       Expanded(
                         child: Obx(() => DropdownButtonFormField<Season>(
-                              value: selectedSeason.value,
+                              initialValue: selectedSeason.value,
                               decoration: const InputDecoration(
                                 labelText: 'Season',
                                 border: OutlineInputBorder(),
@@ -343,7 +342,7 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
 
                   // Occasion
                   Obx(() => DropdownButtonFormField<String>(
-                        value: selectedOccasion.value.isEmpty ? null : selectedOccasion.value,
+                        initialValue: selectedOccasion.value.isEmpty ? null : selectedOccasion.value,
                         decoration: const InputDecoration(
                           labelText: 'Occasion',
                           border: OutlineInputBorder(),
@@ -451,7 +450,7 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
               scrollDirection: Axis.horizontal,
               children: [
                 // Existing images
-                ...?_outfit!.outfitImages!.map((image) {
+                ..._outfit!.outfitImages!.map((image) {
                   final isDeleting = imagesToDelete.contains(image.id);
                   return Padding(
                     padding: const EdgeInsets.only(right: AppConstants.spacing8),
@@ -467,7 +466,7 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
                               fit: BoxFit.contain,
                               enableZoom: false,
                               backgroundColor: isDeleting
-                                  ? Colors.black.withOpacity(0.5)
+                                  ? Colors.black.withValues(alpha: 0.5)
                                   : null,
                             ),
                           ),

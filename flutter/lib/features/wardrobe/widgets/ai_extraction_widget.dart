@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:shimmer/shimmer.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/constants/use_cases.dart';
@@ -131,7 +130,7 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
           else if (controller.generatedItems.isNotEmpty)
             _buildGeneratedItemsResults(tokens, controller)
           else if (widget.extractionResult?.items != null &&
-              widget.extractionResult!.items!.isNotEmpty)
+              widget.extractionResult!.items.isNotEmpty)
             _buildExtractionResults(tokens)
           else
             _buildNoResults(tokens),
@@ -155,7 +154,7 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Colors.green.withOpacity(0.3),
+                      color: Colors.green.withValues(alpha: 0.3),
                       width: 4,
                     ),
                   ),
@@ -165,7 +164,7 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                         child: Icon(
                           Icons.save,
                           size: 32,
-                          color: Colors.green.withOpacity(0.7),
+                          color: Colors.green.withValues(alpha: 0.7),
                         ),
                       ),
                       Positioned.fill(
@@ -219,7 +218,7 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Colors.purple.withOpacity(0.3),
+                      color: Colors.purple.withValues(alpha: 0.3),
                       width: 4,
                     ),
                   ),
@@ -229,7 +228,7 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                         child: Icon(
                           Icons.auto_awesome,
                           size: 32,
-                          color: Colors.purple.withOpacity(0.7),
+                          color: Colors.purple.withValues(alpha: 0.7),
                         ),
                       ),
                       Positioned.fill(
@@ -350,7 +349,7 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                         height: 120,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.green.withOpacity(0.1),
+                          color: Colors.green.withValues(alpha: 0.1),
                           border: Border.all(
                             color: Colors.green,
                             width: 4,
@@ -380,7 +379,7 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                     value: progress,
                     strokeWidth: 8,
                     color: tokens.brandColor,
-                    backgroundColor: tokens.brandColor.withOpacity(0.1),
+                    backgroundColor: tokens.brandColor.withValues(alpha: 0.1),
                   ),
                 ),
                 Container(
@@ -388,7 +387,7 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                   height: 90,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: tokens.brandColor.withOpacity(0.1),
+                    color: tokens.brandColor.withValues(alpha: 0.1),
                   ),
                   child: Icon(
                     phaseIcon,
@@ -443,7 +442,7 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                 color: tokens.cardColor,
                 borderRadius: BorderRadius.circular(AppConstants.radius8),
                 border: Border.all(
-                  color: tokens.brandColor.withOpacity(0.2),
+                  color: tokens.brandColor.withValues(alpha: 0.2),
                 ),
               ),
               child: Row(
@@ -504,7 +503,7 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
           color: tokens.cardColor,
           borderRadius: BorderRadius.circular(AppConstants.radius12),
           border: Border.all(
-            color: tokens.brandColor.withOpacity(0.2),
+            color: tokens.brandColor.withValues(alpha: 0.2),
           ),
         ),
         child: Column(
@@ -560,10 +559,10 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
+                    color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(AppConstants.radius8),
                     border: Border.all(
-                      color: statusColor.withOpacity(0.3),
+                      color: statusColor.withValues(alpha: 0.3),
                       width: status == 'generating' ? 2 : 1,
                     ),
                   ),
@@ -591,9 +590,9 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
         Container(
           padding: const EdgeInsets.all(AppConstants.spacing16),
           decoration: BoxDecoration(
-            color: Colors.green.withOpacity(0.1),
+            color: Colors.green.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(AppConstants.radius12),
-            border: Border.all(color: Colors.green.withOpacity(0.3)),
+            border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
@@ -649,7 +648,7 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
         Container(
           padding: const EdgeInsets.all(AppConstants.spacing12),
           decoration: BoxDecoration(
-            color: tokens.brandColor.withOpacity(0.1),
+            color: tokens.brandColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(AppConstants.radius12),
           ),
           child: Row(
@@ -761,9 +760,9 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
         Container(
           padding: const EdgeInsets.all(AppConstants.spacing16),
           decoration: BoxDecoration(
-            color: Colors.purple.withOpacity(0.1),
+            color: Colors.purple.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(AppConstants.radius12),
-            border: Border.all(color: Colors.purple.withOpacity(0.3)),
+            border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
@@ -1048,7 +1047,7 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                   label: Text(UseCases.displayLabel(useCase)),
                   selected: isSelected,
                   onSelected: (_) => controller.toggleUseCase(useCase),
-                  selectedColor: tokens.brandColor.withOpacity(0.2),
+                  selectedColor: tokens.brandColor.withValues(alpha: 0.2),
                   checkmarkColor: tokens.brandColor,
                 );
               }).toList(),
@@ -1190,7 +1189,7 @@ class DetectedItemDataCard extends StatelessWidget {
         vertical: AppConstants.spacing4,
       ),
       decoration: BoxDecoration(
-        color: tokens.brandColor.withOpacity(0.1),
+        color: tokens.brandColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppConstants.radius8),
       ),
       child: Text(
@@ -1211,7 +1210,6 @@ class _GeneratedItemCard extends StatelessWidget {
   final VoidCallback? onToggleInclude;
 
   const _GeneratedItemCard({
-    super.key,
     required this.item,
     required this.index,
     this.onToggleInclude,
@@ -1263,7 +1261,7 @@ class _GeneratedItemCard extends StatelessWidget {
               child: CircularProgressIndicator(
                 strokeWidth: 2.5,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  tokens.brandColor.withOpacity(0.7),
+                  tokens.brandColor.withValues(alpha: 0.7),
                 ),
               ),
             ),
@@ -1296,7 +1294,7 @@ class _GeneratedItemCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppConstants.radius16),
           border: Border.all(
             color: isIncluded
-                ? Colors.red.withOpacity(0.3)
+                ? Colors.red.withValues(alpha: 0.3)
                 : tokens.cardBorderColor,
           ),
         ),
@@ -1352,7 +1350,7 @@ class _GeneratedItemCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppConstants.radius16),
         border: Border.all(
           color: isIncluded
-              ? Colors.purple.withOpacity(0.3)
+              ? Colors.purple.withValues(alpha: 0.3)
               : tokens.cardBorderColor,
         ),
       ),
@@ -1375,7 +1373,7 @@ class _GeneratedItemCard extends StatelessWidget {
                     colors: [
                       Colors.transparent,
                       Colors.transparent,
-                      Colors.black.withOpacity(0.7),
+                      Colors.black.withValues(alpha: 0.7),
                     ],
                   ),
                 ),
@@ -1454,8 +1452,8 @@ class _GeneratedItemCard extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: item.isCurrentUserPerson
-                        ? Colors.green.withOpacity(0.85)
-                        : Colors.black.withOpacity(0.6),
+                        ? Colors.green.withValues(alpha: 0.85)
+                        : Colors.black.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -1480,7 +1478,7 @@ class _GeneratedItemCard extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
+                      color: Colors.black.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Icon(

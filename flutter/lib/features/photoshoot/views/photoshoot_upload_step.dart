@@ -110,10 +110,10 @@ class PhotoshootUploadStep extends GetView<PhotoshootController> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppConstants.radius16),
           border: Border.all(
-            color: tokens.textMuted.withOpacity(0.3),
+            color: tokens.textMuted.withValues(alpha: 0.3),
             width: 2,
           ),
-          color: tokens.cardColor.withOpacity(0.5),
+          color: tokens.cardColor.withValues(alpha: 0.5),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -135,7 +135,7 @@ class PhotoshootUploadStep extends GetView<PhotoshootController> {
             Text(
               'Tap to select from gallery',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: tokens.textMuted.withOpacity(0.7),
+                    color: tokens.textMuted.withValues(alpha: 0.7),
                   ),
             ),
           ],
@@ -166,7 +166,7 @@ class PhotoshootUploadStep extends GetView<PhotoshootController> {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: photos.length + (canAddMore ? 1 : 0),
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
             itemBuilder: (context, index) {
               if (index < photos.length) {
                 return _buildThumbnail(context, tokens, photos[index], index);

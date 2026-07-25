@@ -171,8 +171,8 @@ class _OutfitsPageState extends State<OutfitsPage> {
                         enableZoom: false,
                         galleryUrls: outfit.outfitImages!.map<String>((img) => img.url as String).toList(),
                         backgroundColor: tokens.isDarkMode
-                            ? Colors.black.withOpacity(0.3)
-                            : Colors.grey.withOpacity(0.1),
+                            ? Colors.black.withValues(alpha: 0.3)
+                            : Colors.grey.withValues(alpha: 0.1),
                       )
                     : _buildPlaceholder(),
               ),
@@ -186,7 +186,7 @@ class _OutfitsPageState extends State<OutfitsPage> {
                 child: Container(
                   padding: const EdgeInsets.all(AppConstants.spacing4),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.secondary.withOpacity(0.9),
+                    color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.9),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -208,7 +208,7 @@ class _OutfitsPageState extends State<OutfitsPage> {
                     vertical: AppConstants.spacing4,
                   ),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceVariant,
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(AppConstants.radius8),
                   ),
                   child: Text(
@@ -235,7 +235,7 @@ class _OutfitsPageState extends State<OutfitsPage> {
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.transparent,
-                      Colors.black.withOpacity(0.8),
+                      Colors.black.withValues(alpha: 0.8),
                     ],
                   ),
                   borderRadius: const BorderRadius.only(
@@ -278,7 +278,7 @@ class _OutfitsPageState extends State<OutfitsPage> {
     final tokens = AppUiTokens.of(context);
 
     return Container(
-      color: tokens.cardColor.withOpacity(0.6),
+      color: tokens.cardColor.withValues(alpha: 0.6),
       child: const Center(
         child: Icon(Icons.image, size: 48, color: Colors.white54),
       ),
@@ -299,7 +299,7 @@ class _OutfitsPageState extends State<OutfitsPage> {
         (context, index) {
           return Container(
             decoration: BoxDecoration(
-              color: tokens.cardColor.withOpacity(0.6),
+              color: tokens.cardColor.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(AppConstants.radius16),
               border: Border.all(color: tokens.cardBorderColor),
             ),
@@ -517,120 +517,6 @@ class _OutfitsPageState extends State<OutfitsPage> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  void _showCreateOutfitDialog() {
-    final tokens = AppUiTokens.of(context);
-
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Create Outfit'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Choose how you want to create your outfit',
-              style: TextStyle(
-                color: tokens.textSecondary,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: AppConstants.spacing16),
-            _buildCreationOption(
-              icon: Icons.auto_awesome,
-              title: 'AI Suggestion',
-              description: 'Let AI suggest outfits based on your wardrobe',
-              onTap: () {
-                Get.back();
-                Get.toNamed('/outfits/build?mode=ai');
-              },
-              tokens: tokens,
-            ),
-            const SizedBox(height: AppConstants.spacing12),
-            _buildCreationOption(
-              icon: Icons.build,
-              title: 'Manual Builder',
-              description: 'Create your own outfit manually',
-              onTap: () {
-                Get.back();
-                Get.toNamed('/outfits/build');
-              },
-              tokens: tokens,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCreationOption({
-    required IconData icon,
-    required String title,
-    required String description,
-    required VoidCallback onTap,
-    required AppUiTokens tokens,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppConstants.radius12),
-      child: Container(
-        padding: const EdgeInsets.all(AppConstants.spacing12),
-        decoration: BoxDecoration(
-          color: tokens.cardColor,
-          borderRadius: BorderRadius.circular(AppConstants.radius12),
-          border: Border.all(color: tokens.cardBorderColor),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(AppConstants.spacing8),
-              decoration: BoxDecoration(
-                color: tokens.brandColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(AppConstants.radius8),
-              ),
-              child: Icon(
-                icon,
-                color: tokens.brandColor,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: AppConstants.spacing12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    description,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: tokens.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: tokens.textMuted,
-            ),
-          ],
         ),
       ),
     );

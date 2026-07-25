@@ -199,8 +199,8 @@ class _WardrobeContentState extends State<WardrobeContent> {
                         ),
                         decoration: BoxDecoration(
                           color: allSelected
-                              ? Colors.white.withOpacity(0.2)
-                              : tokens.textMuted.withOpacity(0.2),
+                              ? Colors.white.withValues(alpha: 0.2)
+                              : tokens.textMuted.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
@@ -265,8 +265,8 @@ class _WardrobeContentState extends State<WardrobeContent> {
                           ),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? Colors.white.withOpacity(0.2)
-                                : tokens.textMuted.withOpacity(0.2),
+                                ? Colors.white.withValues(alpha: 0.2)
+                                : tokens.textMuted.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -406,8 +406,8 @@ class _WardrobeContentState extends State<WardrobeContent> {
                       imageUrl: imageUrls.first,
                       fit: BoxFit.cover,
                       backgroundColor: tokens.isDarkMode
-                          ? Colors.black.withOpacity(0.3)
-                          : Colors.grey.withOpacity(0.1),
+                          ? Colors.black.withValues(alpha: 0.3)
+                          : Colors.grey.withValues(alpha: 0.1),
                       enableZoom: controller.selectedIds.isEmpty,
                       galleryUrls: imageUrls,
                       memCacheWidth: 200,
@@ -479,7 +479,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                     decoration: BoxDecoration(
                       color: Theme.of(
                         context,
-                      ).colorScheme.secondary.withOpacity(0.9),
+                      ).colorScheme.secondary.withValues(alpha: 0.9),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -545,8 +545,8 @@ class _WardrobeContentState extends State<WardrobeContent> {
                       imageUrl: imageUrls.first,
                       fit: BoxFit.contain,
                       backgroundColor: tokens.isDarkMode
-                          ? Colors.black.withOpacity(0.3)
-                          : Colors.grey.withOpacity(0.1),
+                          ? Colors.black.withValues(alpha: 0.3)
+                          : Colors.grey.withValues(alpha: 0.1),
                       enableZoom: controller.selectedIds.isEmpty,
                       galleryUrls: imageUrls,
                       memCacheWidth: 400,
@@ -567,7 +567,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                 vertical: AppConstants.spacing4,
               ),
               decoration: BoxDecoration(
-                color: tokens.cardColor.withOpacity(0.9),
+                color: tokens.cardColor.withValues(alpha: 0.9),
                 borderRadius: BorderRadius.circular(AppConstants.radius8),
                 border: Border.all(color: tokens.cardBorderColor),
               ),
@@ -603,11 +603,11 @@ class _WardrobeContentState extends State<WardrobeContent> {
                 decoration: BoxDecoration(
                   color: Theme.of(
                     context,
-                  ).colorScheme.secondary.withOpacity(0.9),
+                  ).colorScheme.secondary.withValues(alpha: 0.9),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: Colors.black.withValues(alpha: 0.2),
                       blurRadius: 4,
                       offset: const Offset(0, 2),
                     ),
@@ -635,7 +635,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: Colors.black.withValues(alpha: 0.2),
                       blurRadius: 4,
                       offset: const Offset(0, 2),
                     ),
@@ -659,7 +659,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)],
                 ),
                 borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(AppConstants.radius16),
@@ -687,7 +687,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
     final tokens = AppUiTokens.of(context);
 
     return Container(
-      color: tokens.cardColor.withOpacity(0.6),
+      color: tokens.cardColor.withValues(alpha: 0.6),
       child: Center(
         child: Icon(
           _getCategoryIcon(category),
@@ -715,7 +715,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                   width: 100,
                   height: 100,
                   decoration: BoxDecoration(
-                    color: tokens.brandColor.withOpacity(0.1),
+                    color: tokens.brandColor.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(

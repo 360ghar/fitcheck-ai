@@ -16,7 +16,7 @@ void showFullScreenFileImage(BuildContext context, File imageFile) {
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Image Viewer',
-    barrierColor: Colors.black.withOpacity(0.9),
+    barrierColor: Colors.black.withValues(alpha: 0.9),
     transitionDuration: const Duration(milliseconds: 200),
     pageBuilder: (context, animation, secondaryAnimation) {
       return _FullScreenFileImageViewer(imageFile: imageFile);
@@ -42,7 +42,7 @@ void showFullScreenNetworkImage(BuildContext context, String imageUrl) {
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Image Viewer',
-    barrierColor: Colors.black.withOpacity(0.9),
+    barrierColor: Colors.black.withValues(alpha: 0.9),
     transitionDuration: const Duration(milliseconds: 200),
     pageBuilder: (context, animation, secondaryAnimation) {
       return _FullScreenNetworkImageViewer(imageUrl: imageUrl);
@@ -68,7 +68,7 @@ void showFullScreenImageFromBase64(BuildContext context, String base64Image) {
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Image Viewer',
-    barrierColor: Colors.black.withOpacity(0.9),
+    barrierColor: Colors.black.withValues(alpha: 0.9),
     transitionDuration: const Duration(milliseconds: 200),
     pageBuilder: (context, animation, secondaryAnimation) {
       return _FullScreenBase64ImageViewer(base64Image: base64Image);
@@ -243,7 +243,7 @@ class TryOnContent extends StatelessWidget {
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: tokens.brandColor.withOpacity(0.1),
+                    color: tokens.brandColor.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: hasAvatar
@@ -252,7 +252,7 @@ class TryOnContent extends StatelessWidget {
                               ? Image.network(
                                   avatarPath,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Icon(
+                                  errorBuilder: (_, _, _) => Icon(
                                     Icons.person,
                                     size: 40,
                                     color: tokens.brandColor,
@@ -261,7 +261,7 @@ class TryOnContent extends StatelessWidget {
                               : Image.file(
                                   File(avatarPath),
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Icon(
+                                  errorBuilder: (_, _, _) => Icon(
                                     Icons.person,
                                     size: 40,
                                     color: tokens.brandColor,
@@ -415,8 +415,8 @@ class TryOnContent extends StatelessWidget {
                             iconSize: 32,
                             color: tokens.textPrimary,
                             style: IconButton.styleFrom(
-                              backgroundColor: tokens.cardColor.withOpacity(
-                                0.7,
+                              backgroundColor: tokens.cardColor.withValues(
+                                alpha: 0.7,
                               ),
                             ),
                             onPressed: controller.previousImage,
@@ -434,8 +434,8 @@ class TryOnContent extends StatelessWidget {
                             iconSize: 32,
                             color: tokens.textPrimary,
                             style: IconButton.styleFrom(
-                              backgroundColor: tokens.cardColor.withOpacity(
-                                0.7,
+                              backgroundColor: tokens.cardColor.withValues(
+                                alpha: 0.7,
                               ),
                             ),
                             onPressed: controller.nextImage,
@@ -454,7 +454,7 @@ class TryOnContent extends StatelessWidget {
                               vertical: AppConstants.spacing4,
                             ),
                             decoration: BoxDecoration(
-                              color: tokens.cardColor.withOpacity(0.8),
+                              color: tokens.cardColor.withValues(alpha: 0.8),
                               borderRadius: BorderRadius.circular(
                                 AppConstants.radius12,
                               ),
@@ -657,7 +657,7 @@ class TryOnContent extends StatelessWidget {
           // Style dropdown
           Obx(
             () => DropdownButtonFormField<String>(
-              value: controller.selectedStyle.value,
+              initialValue: controller.selectedStyle.value,
               decoration: InputDecoration(
                 labelText: 'Style',
                 border: OutlineInputBorder(
@@ -686,7 +686,7 @@ class TryOnContent extends StatelessWidget {
           // Background dropdown
           Obx(
             () => DropdownButtonFormField<String>(
-              value: controller.selectedBackground.value,
+              initialValue: controller.selectedBackground.value,
               decoration: InputDecoration(
                 labelText: 'Background',
                 border: OutlineInputBorder(
@@ -715,7 +715,7 @@ class TryOnContent extends StatelessWidget {
           // Pose dropdown
           Obx(
             () => DropdownButtonFormField<String>(
-              value: controller.selectedPose.value,
+              initialValue: controller.selectedPose.value,
               decoration: InputDecoration(
                 labelText: 'Pose',
                 border: OutlineInputBorder(
@@ -807,7 +807,7 @@ class TryOnContent extends StatelessWidget {
                 child: Image.network(
                   controller.generatedImageUrl.value,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const Center(
+                  errorBuilder: (_, _, _) => const Center(
                     child: Icon(Icons.broken_image_outlined, size: 48),
                   ),
                 ),
@@ -909,7 +909,7 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: tokens.textMuted.withOpacity(0.3),
+              color: tokens.textMuted.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -1304,7 +1304,7 @@ class _FullScreenFileImageViewer extends StatelessWidget {
               right: AppConstants.spacing16,
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(
@@ -1370,7 +1370,7 @@ class _FullScreenNetworkImageViewer extends StatelessWidget {
               right: AppConstants.spacing16,
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(
@@ -1420,7 +1420,7 @@ class _FullScreenBase64ImageViewer extends StatelessWidget {
               right: AppConstants.spacing16,
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(

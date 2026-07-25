@@ -157,7 +157,7 @@ class _DashboardPageState extends State<DashboardPage> {
               final user = authController.user.value;
               return CircleAvatar(
                 radius: 22,
-                backgroundColor: tokens.brandColor.withOpacity(0.15),
+                backgroundColor: tokens.brandColor.withValues(alpha: 0.15),
                 backgroundImage:
                     user?.avatarUrl != null ? NetworkImage(user!.avatarUrl!) : null,
                 child: user?.avatarUrl == null

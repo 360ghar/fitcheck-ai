@@ -165,7 +165,7 @@ class _SplashPageState extends State<SplashPage>
           height: 48,
           margin: const EdgeInsets.only(left: 4),
           decoration: BoxDecoration(
-            color: color.withOpacity(opacity),
+            color: color.withValues(alpha: opacity),
             borderRadius: BorderRadius.circular(2),
           ),
         );
@@ -222,7 +222,7 @@ class _AnimatedLetter extends StatelessWidget {
                   height: 1.0,
                   shadows: [
                     Shadow(
-                      color: letterColor.withOpacity(0.3),
+                      color: letterColor.withValues(alpha: 0.3),
                       blurRadius: 16,
                       offset: const Offset(0, 4),
                     ),

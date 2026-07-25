@@ -61,9 +61,9 @@ class AppTheme {
         elevation: 0,
         backgroundColor: AppColors.surfaceLight,
         indicatorColor: AppColors.primaryContainer,
-        labelTextStyle: MaterialStateProperty.all(AppTextStyles.labelMedium),
-        iconTheme: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        labelTextStyle: WidgetStateProperty.all(AppTextStyles.labelMedium),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return const IconThemeData(color: AppColors.primary);
           }
           return const IconThemeData(color: AppColors.onSurfaceVariantLight);
@@ -236,9 +236,9 @@ class AppTheme {
         elevation: 0,
         backgroundColor: AppColors.surfaceDark,
         indicatorColor: AppColors.surfaceVariantDark,
-        labelTextStyle: MaterialStateProperty.all(AppTextStyles.labelMedium),
-        iconTheme: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        labelTextStyle: WidgetStateProperty.all(AppTextStyles.labelMedium),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return const IconThemeData(color: AppColors.primary);
           }
           return const IconThemeData(color: AppColors.onSurfaceVariantDark);

@@ -138,20 +138,27 @@ class _ReportContentSheetState extends State<ReportContentSheet> {
                   ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
                 ),
                 const SizedBox(height: AppConstants.spacing16),
-                ..._reasons.map(
-                  (reason) => RadioListTile<String>(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: Text(reason),
-                    value: reason,
-                    groupValue: _selectedReason,
-                    onChanged: _isSubmitting
-                        ? null
-                        : (value) {
-                            if (value != null) {
-                              setState(() => _selectedReason = value);
-                            }
-                          },
+                RadioGroup<String>(
+                  groupValue: _selectedReason,
+                  onChanged: _isSubmitting
+                      ? (_) {}
+                      : (value) {
+                          if (value != null) {
+                            setState(() => _selectedReason = value);
+                          }
+                        },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: _reasons
+                        .map(
+                          (reason) => RadioListTile<String>(
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            title: Text(reason),
+                            value: reason,
+                          ),
+                        )
+                        .toList(),
                   ),
                 ),
                 const SizedBox(height: AppConstants.spacing12),

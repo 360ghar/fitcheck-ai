@@ -6,7 +6,6 @@ import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../domain/enums/category.dart';
-import '../../../domain/enums/condition.dart';
 import '../controllers/wardrobe_controller.dart';
 
 /// Wardrobe page with items grid/list view
@@ -222,9 +221,7 @@ class _WardrobePageState extends State<WardrobePage> {
     );
   }
 
-  Widget _buildSwipeBackground(BuildContext context, {bool isDelete = true, bool isFavorite = false}) {
-    final tokens = AppUiTokens.of(context);
-
+  Widget _buildSwipeBackground(BuildContext context, {bool isDelete = true}) {
     return Container(
       alignment: isDelete ? Alignment.centerRight : Alignment.centerLeft,
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing20),
@@ -280,8 +277,8 @@ class _WardrobePageState extends State<WardrobePage> {
                       imageUrl: imageUrls.first,
                       fit: BoxFit.cover,
                       backgroundColor: tokens.isDarkMode
-                          ? Colors.black.withOpacity(0.3)
-                          : Colors.grey.withOpacity(0.1),
+                          ? Colors.black.withValues(alpha: 0.3)
+                          : Colors.grey.withValues(alpha: 0.1),
                       enableZoom: controller.selectedIds.isEmpty,
                       galleryUrls: imageUrls,
                       memCacheWidth: 200,
@@ -354,7 +351,7 @@ class _WardrobePageState extends State<WardrobePage> {
                   Container(
                     padding: const EdgeInsets.all(AppConstants.spacing4),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondary.withOpacity(0.9),
+                      color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.9),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -418,8 +415,8 @@ class _WardrobePageState extends State<WardrobePage> {
                       enableZoom: true,
                       galleryUrls: item.itemImages!.map<String>((img) => img.url as String).toList(),
                       backgroundColor: tokens.isDarkMode
-                          ? Colors.black.withOpacity(0.3)
-                          : Colors.grey.withOpacity(0.1),
+                          ? Colors.black.withValues(alpha: 0.3)
+                          : Colors.grey.withValues(alpha: 0.1),
                       errorIcon: _getCategoryIcon(item.category),
                     )
                   : _buildPlaceholder(item.category),
@@ -434,7 +431,7 @@ class _WardrobePageState extends State<WardrobePage> {
               child: Container(
                 padding: const EdgeInsets.all(AppConstants.spacing4),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.secondary.withOpacity(0.9),
+                  color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.9),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -477,7 +474,7 @@ class _WardrobePageState extends State<WardrobePage> {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    Colors.black.withOpacity(0.7),
+                    Colors.black.withValues(alpha: 0.7),
                   ],
                 ),
                 borderRadius: const BorderRadius.only(
@@ -506,7 +503,7 @@ class _WardrobePageState extends State<WardrobePage> {
     final tokens = AppUiTokens.of(context);
 
     return Container(
-      color: tokens.cardColor.withOpacity(0.6),
+      color: tokens.cardColor.withValues(alpha: 0.6),
       child: Center(
         child: Icon(
           _getCategoryIcon(category),
@@ -530,12 +527,12 @@ class _WardrobePageState extends State<WardrobePage> {
       delegate: SliverChildBuilderDelegate(
         (context, index) {
           return Shimmer.fromColors(
-            baseColor: tokens.cardColor.withOpacity(0.4),
-            highlightColor: tokens.cardColor.withOpacity(0.7),
+            baseColor: tokens.cardColor.withValues(alpha: 0.4),
+            highlightColor: tokens.cardColor.withValues(alpha: 0.7),
             period: const Duration(milliseconds: 1200),
             child: Container(
               decoration: BoxDecoration(
-                color: tokens.cardColor.withOpacity(0.6),
+                color: tokens.cardColor.withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(AppConstants.radius16),
                 border: Border.all(color: tokens.cardBorderColor),
               ),

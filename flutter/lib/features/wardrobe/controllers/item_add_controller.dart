@@ -691,51 +691,6 @@ class ItemAddController extends GetxController {
     _currentJobId = null;
   }
 
-  /// Generate product images for all detected items
-  /// This creates isolated catalog-style images of each clothing item
-  Future<void> _generateProductImages(List<DetectedItemData> items) async {
-    if (items.isEmpty) return;
-
-    isGeneratingImages.value = true;
-    generatedItems.clear();
-    generationProgress.value = 0;
-    currentGenerationStatus.value = 'Generating product images...';
-
-    try {
-      final results = await _itemRepository.generateProductImagesForItems(
-        items,
-      );
-      generatedItems.value = results;
-      generationProgress.value = 1.0;
-      currentGenerationStatus.value = 'Complete!';
-
-      // Count successful vs failed generations
-      final successful = results
-          .where((r) => r.generatedImageUrl != null)
-          .length;
-      final failed = results.where((r) => r.generationError != null).length;
-
-      if (failed > 0) {
-        Get.snackbar(
-          'Generation Complete',
-          '$successful of ${items.length} images generated. $failed failed.',
-          snackPosition: SnackPosition.TOP,
-          duration: const Duration(seconds: 3),
-        );
-      }
-    } catch (e) {
-      currentGenerationStatus.value = 'Generation failed';
-      Get.snackbar(
-        'Generation Failed',
-        'Could not generate product images. You can still save items with the original image.',
-        snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.orange,
-      );
-    } finally {
-      isGeneratingImages.value = false;
-    }
-  }
-
   /// Save extracted items to wardrobe
   /// Uses generated product images if available, otherwise uses original image
   Future<void> saveExtractedItems(List<DetectedItemData> items) async {

@@ -137,7 +137,7 @@ class _LoginPageState extends State<LoginPage> {
                           child: TextButton(
                             onPressed: () => Get.toNamed(Routes.forgotPassword),
                             style: TextButton.styleFrom(
-                              foregroundColor: tokens.textColor.withOpacity(0.85),
+                              foregroundColor: tokens.textColor.withValues(alpha: 0.85),
                             ),
                             child: const Text('Forgot Password?'),
                           ),
@@ -358,7 +358,7 @@ class _LoginPageState extends State<LoginPage> {
   Widget _buildDivider(AuthUiTokens tokens) {
     return Row(
       children: [
-        Expanded(child: Divider(color: tokens.textColor.withOpacity(0.2))),
+        Expanded(child: Divider(color: tokens.textColor.withValues(alpha: 0.2))),
         Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppConstants.spacing16,
@@ -366,14 +366,14 @@ class _LoginPageState extends State<LoginPage> {
           child: Text(
             'OR',
             style: TextStyle(
-              color: tokens.textColor.withOpacity(0.6),
+              color: tokens.textColor.withValues(alpha: 0.6),
               fontSize: 12,
               fontWeight: FontWeight.w600,
               letterSpacing: 1,
             ),
           ),
         ),
-        Expanded(child: Divider(color: tokens.textColor.withOpacity(0.2))),
+        Expanded(child: Divider(color: tokens.textColor.withValues(alpha: 0.2))),
       ],
     );
   }
@@ -407,7 +407,7 @@ class _LoginPageState extends State<LoginPage> {
       label: Text(isLoading ? 'Signing in...' : 'Continue with Google'),
       style: OutlinedButton.styleFrom(
         foregroundColor: tokens.textColor,
-        side: BorderSide(color: tokens.textColor.withOpacity(0.4)),
+        side: BorderSide(color: tokens.textColor.withValues(alpha: 0.4)),
         padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radius16),

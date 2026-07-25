@@ -99,7 +99,7 @@ class AuthEntryPage extends StatelessWidget {
           onPressed: () => Get.toNamed(Routes.login),
           style: OutlinedButton.styleFrom(
             foregroundColor: tokens.textColor,
-            side: BorderSide(color: tokens.textColor.withOpacity(0.65)),
+            side: BorderSide(color: tokens.textColor.withValues(alpha: 0.65)),
             padding: buttonPadding,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppConstants.radius16),

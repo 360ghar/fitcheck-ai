@@ -19,14 +19,10 @@ abstract class AppException implements Exception {
 /// Network related exceptions
 class NetworkException extends AppException {
   const NetworkException({
-    required String message,
-    int? statusCode,
-    String? errorCode,
-  }) : super(
-          message: message,
-          statusCode: statusCode,
-          errorCode: errorCode,
-        );
+    required super.message,
+    super.statusCode,
+    super.errorCode,
+  });
 
   factory NetworkException.noConnection() {
     return const NetworkException(
@@ -56,14 +52,10 @@ class NetworkException extends AppException {
 /// Authentication related exceptions
 class AuthException extends AppException {
   const AuthException({
-    required String message,
-    int? statusCode,
-    String? errorCode,
-  }) : super(
-          message: message,
-          statusCode: statusCode,
-          errorCode: errorCode,
-        );
+    required super.message,
+    super.statusCode,
+    super.errorCode,
+  });
 
   factory AuthException.unauthorized() {
     return const AuthException(
@@ -102,11 +94,10 @@ class ValidationException extends AppException {
   final Map<String, String>? fieldErrors;
 
   const ValidationException({
-    required String message,
+    required super.message,
     this.fieldErrors,
     String? errorCode,
   }) : super(
-          message: message,
           statusCode: 422,
           errorCode: errorCode ?? 'VALIDATION_ERROR',
         );
@@ -124,10 +115,9 @@ class ValidationException extends AppException {
 /// Resource not found exception
 class NotFoundException extends AppException {
   const NotFoundException({
-    required String message,
+    required super.message,
     String? errorCode,
   }) : super(
-          message: message,
           statusCode: 404,
           errorCode: errorCode ?? 'NOT_FOUND',
         );
@@ -159,11 +149,10 @@ class RateLimitException extends AppException {
   final int? retryAfterSeconds;
 
   const RateLimitException({
-    required String message,
+    required super.message,
     this.retryAfterSeconds,
     String? errorCode,
   }) : super(
-          message: message,
           statusCode: 429,
           errorCode: errorCode ?? 'RATE_LIMIT_EXCEEDED',
         );
@@ -181,14 +170,10 @@ class RateLimitException extends AppException {
 /// Server/API exceptions
 class ServerException extends AppException {
   const ServerException({
-    required String message,
-    required int statusCode,
-    String? errorCode,
-  }) : super(
-          message: message,
-          statusCode: statusCode,
-          errorCode: errorCode,
-        );
+    required super.message,
+    required int super.statusCode,
+    super.errorCode,
+  });
 
   factory ServerException.internalError() {
     return const ServerException(
@@ -218,10 +203,9 @@ class ServerException extends AppException {
 /// File upload exceptions
 class FileUploadException extends AppException {
   const FileUploadException({
-    required String message,
+    required super.message,
     String? errorCode,
   }) : super(
-          message: message,
           errorCode: errorCode ?? 'FILE_UPLOAD_ERROR',
         );
 
@@ -250,10 +234,9 @@ class FileUploadException extends AppException {
 /// Cache exceptions
 class CacheException extends AppException {
   const CacheException({
-    required String message,
+    required super.message,
     String? errorCode,
   }) : super(
-          message: message,
           errorCode: errorCode ?? 'CACHE_ERROR',
         );
 

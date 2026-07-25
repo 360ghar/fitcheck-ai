@@ -212,7 +212,7 @@ class GamificationPage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AppConstants.radius8),
                 child: LinearProgressIndicator(
                   value: progress,
-                  backgroundColor: tokens.cardColor.withOpacity(0.3),
+                  backgroundColor: tokens.cardColor.withValues(alpha: 0.3),
                   valueColor: AlwaysStoppedAnimation<Color>(tokens.brandColor),
                   minHeight: 8,
                 ),
@@ -298,7 +298,7 @@ class GamificationPage extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isUnlocked ? tokens.brandColor.withOpacity(0.1) : tokens.cardColor.withOpacity(0.5),
+        color: isUnlocked ? tokens.brandColor.withValues(alpha: 0.1) : tokens.cardColor.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(AppConstants.radius12),
         border: Border.all(
           color: isUnlocked ? tokens.brandColor : tokens.cardBorderColor,
@@ -401,7 +401,7 @@ class GamificationPage extends StatelessWidget {
         width: 32,
         height: 32,
         decoration: BoxDecoration(
-          color: rankColor.withOpacity(0.2),
+          color: rankColor.withValues(alpha: 0.2),
           shape: BoxShape.circle,
         ),
         child: Center(
@@ -426,7 +426,7 @@ class GamificationPage extends StatelessWidget {
                       width: 32,
                       height: 32,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Text(
+                      errorBuilder: (_, _, _) => Text(
                         entry.username[0].toUpperCase(),
                         style: const TextStyle(
                           color: Colors.white,
@@ -458,7 +458,7 @@ class GamificationPage extends StatelessWidget {
           vertical: AppConstants.spacing6,
         ),
         decoration: BoxDecoration(
-          color: tokens.brandColor.withOpacity(0.1),
+          color: tokens.brandColor.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(AppConstants.radius16),
         ),
         child: Text(

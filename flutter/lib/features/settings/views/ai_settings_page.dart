@@ -84,7 +84,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           DropdownButtonFormField<String>(
-            value: controller.selectedProvider.value,
+            initialValue: controller.selectedProvider.value,
             decoration: const InputDecoration(
               labelText: 'Default Provider',
               border: OutlineInputBorder(),

@@ -34,7 +34,7 @@ class CompleteLookTab extends StatelessWidget {
             children: [
               Expanded(
                 child: Obx(() => DropdownButtonFormField<Style>(
-                      value: controller.completeLookStyle.value,
+                      initialValue: controller.completeLookStyle.value,
                       decoration: InputDecoration(
                         labelText: 'Style',
                         border: OutlineInputBorder(
@@ -217,7 +217,7 @@ class CompleteLookTab extends StatelessWidget {
                       vertical: AppConstants.spacing4,
                     ),
                     decoration: BoxDecoration(
-                      color: tokens.brandColor.withOpacity(0.12),
+                      color: tokens.brandColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(AppConstants.radius12),
                     ),
                     child: Text(
@@ -269,10 +269,10 @@ class CompleteLookTab extends StatelessWidget {
                     width: 120,
                     height: 120,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorBuilder: (_, _, _) => Container(
                       width: 120,
                       height: 120,
-                      color: tokens.cardColor.withOpacity(0.5),
+                      color: tokens.cardColor.withValues(alpha: 0.5),
                       child: Icon(
                         _getCategoryIcon(item.category),
                         color: tokens.textMuted,
@@ -282,7 +282,7 @@ class CompleteLookTab extends StatelessWidget {
                 : Container(
                     width: 120,
                     height: 120,
-                    color: tokens.cardColor.withOpacity(0.5),
+                    color: tokens.cardColor.withValues(alpha: 0.5),
                     child: Icon(
                       _getCategoryIcon(item.category),
                       color: tokens.textMuted,

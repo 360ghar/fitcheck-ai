@@ -1,10 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:dio/dio.dart' hide FormData, MultipartFile;
 import 'package:dio/dio.dart' as dio show FormData, MultipartFile;
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';

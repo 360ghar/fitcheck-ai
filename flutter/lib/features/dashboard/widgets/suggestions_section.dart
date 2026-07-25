@@ -64,7 +64,7 @@ class _WeatherSuggestion extends StatelessWidget {
       padding: const EdgeInsets.all(AppConstants.spacing12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppConstants.radius16),
-        color: tokens.cardColor.withOpacity(0.65),
+        color: tokens.cardColor.withValues(alpha: 0.65),
         border: Border.all(color: tokens.cardBorderColor),
       ),
       child: Row(
@@ -73,7 +73,7 @@ class _WeatherSuggestion extends StatelessWidget {
             padding: const EdgeInsets.all(AppConstants.spacing8),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: tokens.brandColor.withOpacity(0.15),
+              color: tokens.brandColor.withValues(alpha: 0.15),
             ),
             child: Icon(Icons.wb_sunny_rounded, color: tokens.brandColor),
           ),
@@ -118,7 +118,7 @@ class _OutfitSuggestion extends StatelessWidget {
       padding: const EdgeInsets.all(AppConstants.spacing12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppConstants.radius16),
-        color: tokens.cardColor.withOpacity(0.65),
+        color: tokens.cardColor.withValues(alpha: 0.65),
         border: Border.all(color: tokens.cardBorderColor),
       ),
       child: Row(
@@ -128,7 +128,7 @@ class _OutfitSuggestion extends StatelessWidget {
             child: Container(
               width: 64,
               height: 64,
-              color: tokens.cardBorderColor.withOpacity(0.2),
+              color: tokens.cardBorderColor.withValues(alpha: 0.2),
               child: outfit.imageUrl == null
                   ? Icon(Icons.image, color: tokens.textMuted)
                   : AppImage(

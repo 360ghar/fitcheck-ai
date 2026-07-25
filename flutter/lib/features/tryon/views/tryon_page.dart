@@ -157,13 +157,13 @@ class TryOnPage extends StatelessWidget {
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: tokens.brandColor.withOpacity(0.1),
+                    color: tokens.brandColor.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: hasAvatar
                       ? ClipOval(
                           child: isRemote
-                              ? Image.network(avatarPath, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person))
+                              ? Image.network(avatarPath, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.person))
                               : Image.file(
                                   File(avatarPath),
                                   fit: BoxFit.cover,
@@ -340,7 +340,7 @@ class TryOnPage extends StatelessWidget {
 
           // Style dropdown
           Obx(() => DropdownButtonFormField<String>(
-                value: controller.selectedStyle.value,
+                initialValue: controller.selectedStyle.value,
                 decoration: InputDecoration(
                   labelText: 'Style',
                   border: OutlineInputBorder(
@@ -362,7 +362,7 @@ class TryOnPage extends StatelessWidget {
 
           // Background dropdown
           Obx(() => DropdownButtonFormField<String>(
-                value: controller.selectedBackground.value,
+                initialValue: controller.selectedBackground.value,
                 decoration: InputDecoration(
                   labelText: 'Background',
                   border: OutlineInputBorder(
@@ -384,7 +384,7 @@ class TryOnPage extends StatelessWidget {
 
           // Pose dropdown
           Obx(() => DropdownButtonFormField<String>(
-                value: controller.selectedPose.value,
+                initialValue: controller.selectedPose.value,
                 decoration: InputDecoration(
                   labelText: 'Pose',
                   border: OutlineInputBorder(
@@ -456,7 +456,7 @@ class TryOnPage extends StatelessWidget {
           child: Image.network(
             controller.generatedImageUrl.value,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const Center(
+            errorBuilder: (_, _, _) => const Center(
               child: Icon(Icons.broken_image_outlined, size: 48),
             ),
           ),

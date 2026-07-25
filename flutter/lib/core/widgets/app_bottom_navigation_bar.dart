@@ -87,7 +87,7 @@ class AppBottomNavigationBar extends StatelessWidget {
             border: Border.all(color: tokens.navBorder),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(tokens.isDarkMode ? 0.4 : 0.12),
+                color: Colors.black.withValues(alpha: tokens.isDarkMode ? 0.4 : 0.12),
                 blurRadius: 22,
                 offset: const Offset(0, 10),
               ),
@@ -114,7 +114,7 @@ class AppBottomNavigationBar extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? tokens.brandColor.withOpacity(0.18)
+                          ? tokens.brandColor.withValues(alpha: 0.18)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(AppConstants.radius16),
                     ),

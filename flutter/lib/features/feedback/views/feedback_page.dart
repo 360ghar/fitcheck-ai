@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
@@ -108,7 +107,7 @@ class FeedbackPage extends GetView<FeedbackController> {
                       ),
                       const SizedBox(height: AppConstants.spacing8),
                       Obx(() => DropdownButtonFormField<TicketCategory>(
-                            value: controller.category.value,
+                            initialValue: controller.category.value,
                             decoration: InputDecoration(
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),

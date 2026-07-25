@@ -1,6 +1,9 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import '../../../domain/enums/category.dart';
 
+// ignore_for_file: invalid_annotation_target
+// `@JsonKey` on freezed constructor params is the idiomatic, supported usage
+// (freezed FAQ); the analyzer emits a false-positive warning for it.
 part 'batch_extraction_models.freezed.dart';
 part 'batch_extraction_models.g.dart';
 

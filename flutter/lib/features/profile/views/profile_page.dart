@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
@@ -116,7 +116,7 @@ class ProfilePage extends StatelessWidget {
                     gradient: LinearGradient(
                       colors: [
                         tokens.brandColor,
-                        tokens.brandColor.withOpacity(0.6),
+                        tokens.brandColor.withValues(alpha: 0.6),
                       ],
                     ),
                     shape: BoxShape.circle,
@@ -297,7 +297,7 @@ class ProfilePage extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppConstants.spacing12),
       decoration: BoxDecoration(
-        color: tokens.cardColor.withOpacity(0.7),
+        color: tokens.cardColor.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(AppConstants.radius16),
         border: Border.all(color: tokens.cardBorderColor),
       ),
@@ -306,7 +306,7 @@ class ProfilePage extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(AppConstants.spacing8),
             decoration: BoxDecoration(
-              color: accent.withOpacity(0.15),
+              color: accent.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(AppConstants.radius12),
             ),
             child: Icon(icon, color: accent, size: 18),

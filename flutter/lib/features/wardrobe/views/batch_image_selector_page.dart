@@ -998,7 +998,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
               width: double.infinity,
               height: 200,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
+              errorBuilder: (_, _, _) => Container(
                 width: double.infinity,
                 height: 200,
                 color: Colors.black12,
@@ -1143,7 +1143,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
               width: 60,
               height: 60,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
+              errorBuilder: (_, _, _) => Container(
                 width: 60,
                 height: 60,
                 color: Colors.black12,
@@ -1199,9 +1199,9 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
     return Container(
       padding: const EdgeInsets.all(AppConstants.spacing12),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.1),
+        color: Colors.red.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppConstants.radius12),
-        border: Border.all(color: Colors.red.withOpacity(0.35)),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.35)),
       ),
       child: Row(
         children: [
@@ -1352,7 +1352,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
                 hintStyle: TextStyle(
                   fontSize: 28,
                   letterSpacing: 12,
-                  color: tokens.textMuted.withOpacity(0.5),
+                  color: tokens.textMuted.withValues(alpha: 0.5),
                 ),
                 border: const OutlineInputBorder(),
                 contentPadding: const EdgeInsets.symmetric(
@@ -1377,7 +1377,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
           ),
           ValueListenableBuilder<TextEditingValue>(
             valueListenable: otp,
-            builder: (_, value, __) {
+            builder: (_, value, _) {
               final isValid = value.text.trim().length == 6;
               return TextButton(
                 onPressed: isValid
@@ -1431,7 +1431,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
                 width: 72,
                 height: 72,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   width: 72,
                   height: 72,
                   color: Colors.black12,
@@ -1585,7 +1585,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: tokens.brandColor.withOpacity(0.1),
+                color: tokens.brandColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -1653,9 +1653,9 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
           vertical: AppConstants.spacing16,
         ),
         decoration: BoxDecoration(
-          color: tokens.brandColor.withOpacity(0.1),
+          color: tokens.brandColor.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(AppConstants.radius12),
-          border: Border.all(color: tokens.brandColor.withOpacity(0.3)),
+          border: Border.all(color: tokens.brandColor.withValues(alpha: 0.3)),
         ),
         child: Column(
           children: [
@@ -1757,7 +1757,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: tokens.textMuted.withOpacity(0.3),
+                color: tokens.textMuted.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),

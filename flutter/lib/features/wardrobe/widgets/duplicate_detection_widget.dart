@@ -31,9 +31,9 @@ class DuplicateDetectionWidget extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(AppConstants.spacing16),
           decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.1),
+            color: Colors.orange.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(AppConstants.radius12),
-            border: Border.all(color: Colors.orange.withOpacity(0.3)),
+            border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
@@ -75,7 +75,7 @@ class DuplicateDetectionWidget extends StatelessWidget {
                 width: 60,
                 height: 60,
                 decoration: BoxDecoration(
-                  color: tokens.brandColor.withOpacity(0.1),
+                  color: tokens.brandColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(AppConstants.radius8),
                 ),
                 child: Icon(
@@ -115,7 +115,7 @@ class DuplicateDetectionWidget extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: Divider(color: tokens.textMuted.withOpacity(0.3)),
+              child: Divider(color: tokens.textMuted.withValues(alpha: 0.3)),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing8),
@@ -127,7 +127,7 @@ class DuplicateDetectionWidget extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: Divider(color: tokens.textMuted.withOpacity(0.3)),
+              child: Divider(color: tokens.textMuted.withValues(alpha: 0.3)),
             ),
           ],
         ),
@@ -214,7 +214,7 @@ class _DuplicateItemCard extends StatelessWidget {
                       errorIcon: _getCategoryIcon(item.category),
                     )
                   : Container(
-                      color: tokens.cardColor.withOpacity(0.5),
+                      color: tokens.cardColor.withValues(alpha: 0.5),
                       child: Icon(
                         _getCategoryIcon(item.category),
                         color: tokens.textMuted,
@@ -248,7 +248,7 @@ class _DuplicateItemCard extends StatelessWidget {
                         vertical: AppConstants.spacing4,
                       ),
                       decoration: BoxDecoration(
-                        color: tokens.brandColor.withOpacity(0.1),
+                        color: tokens.brandColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(AppConstants.radius8),
                       ),
                       child: Text(
