@@ -26,12 +26,6 @@ class ApiConstants {
     return 'https://api.fitcheckaiapp.com';
   }
 
-  /// Get base URL for development (defaults to localhost if not set)
-  static String get developmentBaseUrl {
-    final envUrl = EnvConfig.apiBaseUrl;
-    return envUrl.isNotEmpty ? envUrl : 'http://localhost:8000';
-  }
-
   /// Web frontend base URL (for password-reset email links, etc.)
   static String get webBaseUrl {
     final envUrl = EnvConfig.frontendUrl;

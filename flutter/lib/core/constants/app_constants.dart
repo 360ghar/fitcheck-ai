@@ -4,7 +4,6 @@ class AppConstants {
 
   // App Info
   static const String appName = 'FitCheck AI';
-  static const String appVersion = '1.0.0';
 
   // Support / Legal
   static const String supportEmail = 'support@fitcheckaiapp.com';
@@ -29,7 +28,6 @@ class AppConstants {
   static const Duration animationDurationShort = Duration(milliseconds: 200);
   static const Duration animationDurationMedium = Duration(milliseconds: 300);
   static const Duration animationDurationLong = Duration(milliseconds: 500);
-  static const Duration splashDuration = Duration(seconds: 3);
 
   // Spacing
   static const double spacing4 = 4.0;

@@ -205,36 +205,6 @@ class ShimmerGridLoader extends StatelessWidget {
   }
 }
 
-/// Sliver list of shimmer items for loading lists
-class ShimmerListLoader extends StatelessWidget {
-  const ShimmerListLoader({
-    super.key,
-    this.itemCount = 5,
-    this.hasLeading = true,
-    this.hasSubtitle = true,
-    this.hasTrailing = false,
-  });
-
-  final int itemCount;
-  final bool hasLeading;
-  final bool hasSubtitle;
-  final bool hasTrailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) => ShimmerListTile(
-          hasLeading: hasLeading,
-          hasSubtitle: hasSubtitle,
-          hasTrailing: hasTrailing,
-        ),
-        childCount: itemCount,
-      ),
-    );
-  }
-}
-
 /// Non-sliver list loader (for use in regular Column/ListView children)
 class ShimmerListLoaderBox extends StatelessWidget {
   const ShimmerListLoaderBox({

@@ -7,8 +7,6 @@ class Routes {
   static const login = '/login';
   static const register = '/register';
   static const forgotPassword = '/forgot-password';
-  static const resetPassword = '/reset-password';
-  static const oauthCallback = '/oauth-callback';
 
   // Main app routes
   static const home = '/home';
