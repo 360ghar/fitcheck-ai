@@ -108,8 +108,8 @@ class Settings(BaseSettings):
     # Chat/vision: /v1/chat/completions | Images: /v1/images/generations
     AI_CUSTOM_API_URL: str = "https://apihub.agnes-ai.com/v1"
     AI_CUSTOM_API_KEY: Optional[str] = None
-    AI_CUSTOM_CHAT_MODEL: str = "agnes-2.0-flash"
-    AI_CUSTOM_VISION_MODEL: str = "agnes-2.0-flash"
+    AI_CUSTOM_CHAT_MODEL: str = "agnes-2.5-flash"
+    AI_CUSTOM_VISION_MODEL: str = "agnes-2.5-flash"
     AI_CUSTOM_IMAGE_MODEL: str = "agnes-image-2.1-flash"
     AI_CUSTOM_IMAGE_FALLBACK_MODEL: str = "agnes-image-2.0-flash"
 

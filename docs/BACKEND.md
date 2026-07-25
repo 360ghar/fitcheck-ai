@@ -87,7 +87,7 @@ Configured in `app/core/config.py` / env:
 
 Typical custom stack:
 
-- Chat/vision: `agnes-2.0-flash` via `/v1/chat/completions`
+- Chat/vision: `agnes-2.5-flash` via `/v1/chat/completions`
 - Images: `agnes-image-2.1-flash` primary → `agnes-image-2.0-flash` fallback via `/v1/images/generations`
 - Transient failures (429/503/timeout/empty images) retry fallback; non-transient raise
 - Embeddings: Google `google.genai` via `AI_GEMINI_API_KEY` (not a selectable chat provider)
