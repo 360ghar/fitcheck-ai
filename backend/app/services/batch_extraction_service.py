@@ -242,7 +242,7 @@ class BatchExtractionService:
                         image_base64=image_base64,
                         user_profile_image_base64=user_profile_image_base64,
                     ),
-                    max_retries=3,
+                    max_retries=1,
                     initial_delay=2.0,
                     backoff_factor=2.0,
                     retryable_exceptions=(AIServiceError,),
@@ -357,8 +357,9 @@ class BatchExtractionService:
         agent = None
         generation_started = False
         in_flight: set[asyncio.Task] = set()
-        concurrent_cap = max(1, min(5, job.generation_batch_size or 5))
-        # Local semaphore so generation_batch_size can tighten below global 5
+        concurrent_cap = max(1, min(3, job.generation_batch_size or 3))
+        # Local semaphore so generation_batch_size can tighten below the global
+        # GENERATION_SEMAPHORE (3); the global cap is the effective ceiling.
         local_sem = asyncio.Semaphore(concurrent_cap)
 
         async def run_one(item: DetectedItemData) -> None:
@@ -484,7 +485,7 @@ class BatchExtractionService:
                         view_angle="front",
                         include_shadows=False,
                     ),
-                    max_retries=3,
+                    max_retries=1,
                     initial_delay=2.0,
                     backoff_factor=2.0,
                     retryable_exceptions=(AIServiceError,),

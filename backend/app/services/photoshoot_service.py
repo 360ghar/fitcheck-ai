@@ -824,7 +824,7 @@ RULES:
                 )
 
             # Process with concurrency control (configurable via settings)
-            concurrency_limit = getattr(settings, 'PHOTOSHOOT_CONCURRENCY_LIMIT', 3)
+            concurrency_limit = settings.PHOTOSHOOT_CONCURRENCY_LIMIT
             semaphore = asyncio.Semaphore(concurrency_limit)
 
             async def generate_with_semaphore(prompt: PhotoshootPrompt) -> Optional[GeneratedImage]:
@@ -1110,7 +1110,7 @@ class PhotoshootStreamingService:
                 })
 
                 # Generate batch images concurrently
-                concurrency_limit = getattr(settings, 'PHOTOSHOOT_CONCURRENCY_LIMIT', 3)
+                concurrency_limit = settings.PHOTOSHOOT_CONCURRENCY_LIMIT
                 semaphore = asyncio.Semaphore(concurrency_limit)
 
                 async def generate_single(prompt: PhotoshootPrompt):

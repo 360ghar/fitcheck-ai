@@ -17,7 +17,7 @@ Sample request format (Agnes chat/vision):
     --header 'Content-Type: application/json' \
     --header 'Authorization: Bearer api-key' \
     --data '{
-        "model": "agnes-2.0-flash",
+        "model": "agnes-2.5-flash",
         "messages": [
           {"role": "user", "content": "Describe this outfit"}
         ]
@@ -302,8 +302,10 @@ class AIProviderService:
     )
 
     # Chat/vision parity with image generation: these HTTP codes are worth
-    # retrying (Agnes free/shared gateways 429/503 under concurrent vision load).
-    _TRANSIENT_HTTP_STATUS_CODES = frozenset({408, 429, 502, 503})
+    # retrying (Agnes free/shared gateways 429/503 under concurrent vision load;
+    # 500/504 are edge timeouts on slow multi-MB vision POSTs, equally transient
+    # - failing them fast surfaces recoverable failures to users).
+    _TRANSIENT_HTTP_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
 
     @classmethod
     def _is_transient_transport_error(cls, exc: Exception) -> bool:
@@ -494,7 +496,10 @@ class AIProviderService:
 
         async def _post_chat(req_payload: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
             nonlocal client
-            max_retries = 2  # 3 total attempts (initial + 2 retries)
+            # ponytail: one internal retry only (Retry-After-aware); the call
+            # site's with_retry adds one more round. More here multiplies into
+            # the outer loop (was 3x3=up to 12 gateway POSTs per stuck call).
+            max_retries = 1  # 2 total attempts (initial + 1 retry)
             attempt = 0
 
             while True:
@@ -602,6 +607,19 @@ class AIProviderService:
                 latency_ms=round((time.monotonic() - started_at) * 1000, 2),
                 choices_count=len(data.get("choices", [])) if isinstance(data, dict) else 0,
             )
+
+            # A strict-JSON response cut off at max_tokens is broken JSON that
+            # would parse to nothing and return silent empty results. Surface it
+            # as a real error instead. Only for response_format callers: plain
+            # chat and the max_tokens=10 health probe legitimately stop early.
+            if response_format and isinstance(data, dict):
+                choices = data.get("choices") or []
+                if choices and isinstance(choices[0], dict) and choices[0].get("finish_reason") == "length":
+                    raise AIServiceError(
+                        f"AI response truncated at max_tokens={payload.get('max_tokens')} "
+                        "(finish_reason=length); structured output is incomplete",
+                        retryable=False,
+                    )
 
             return self._parse_chat_response(data, use_model, active_base_url)
 
@@ -949,7 +967,9 @@ class AIProviderService:
         try:
             response = await with_retry(
                 _post_image_request,
-                max_retries=2,
+                # ponytail: one internal retry; the call site's with_retry adds
+                # one more round (kept low so a 429 storm isn't amplified).
+                max_retries=1,
                 initial_delay=0.5,
                 backoff_factor=1.5,
                 max_delay=5.0,

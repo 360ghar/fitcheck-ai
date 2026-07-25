@@ -239,7 +239,10 @@ SCENE (change only these):
                 )
 
                 if not response.images:
-                    raise AIServiceError("AI generated no images for outfit with avatar")
+                    # 200-with-no-images is usually a transient silent moderation
+                    # refusal - retryable so the caller's retry round gets a chance
+                    # (matches the provider's own no-images classification).
+                    raise AIServiceError("AI generated no images for outfit with avatar", retryable=True)
 
                 return GeneratedImage(
                     image_base64=response.images[0],
@@ -462,7 +465,8 @@ Specs:
             )
 
             if not response.images:
-                raise AIServiceError("AI generated no images")
+                # Transient silent refusal - retryable (see avatar path comment).
+                raise AIServiceError("AI generated no images", retryable=True)
 
             return GeneratedImage(
                 image_base64=response.images[0],
@@ -558,7 +562,8 @@ Output one cohesive image of THIS same person wearing that exact garment."""
             )
 
             if not response.images:
-                raise AIServiceError("AI generated no images for try-on")
+                # Transient silent refusal - retryable (see avatar path comment).
+                raise AIServiceError("AI generated no images for try-on", retryable=True)
 
             return GeneratedImage(
                 image_base64=response.images[0],

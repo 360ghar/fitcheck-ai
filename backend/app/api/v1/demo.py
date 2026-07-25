@@ -64,7 +64,7 @@ async def demo_extract_items(
 
             result = await with_retry(
                 lambda: agent.extract_multiple_items(image_base64=request_body.image),
-                max_retries=2,
+                max_retries=1,
                 initial_delay=1.0,
                 backoff_factor=2.0,
                 retryable_exceptions=(AIServiceError,),
@@ -162,7 +162,7 @@ async def demo_try_on(
                     pose="standing front",
                     lighting="professional studio lighting",
                 ),
-                max_retries=2,
+                max_retries=1,
                 initial_delay=2.0,
                 backoff_factor=2.0,
                 retryable_exceptions=(AIServiceError,),

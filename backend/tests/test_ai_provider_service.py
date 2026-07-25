@@ -333,8 +333,8 @@ async def test_generate_image_via_images_api_429_exhausted_is_retryable():
         with pytest.raises(AIServiceError) as exc_info:
             await service._generate_image_via_images_api("a cat", model="image-model")
 
-    # max_retries=2 → 3 attempts
-    assert fake_client.call_count == 3
+    # max_retries=1 → 2 attempts (one more round happens at the call site)
+    assert fake_client.call_count == 2
     assert exc_info.value.retryable is True
 
 
@@ -399,7 +399,7 @@ async def test_generate_image_via_images_api_raises_retryable_after_exhausting_t
         with pytest.raises(AIServiceError) as exc_info:
             await service._generate_image_via_images_api("a cat", model="image-model")
 
-    assert fake_client.call_count == 3  # max_retries=2 -> 3 total attempts
+    assert fake_client.call_count == 2  # max_retries=1 -> 2 total attempts
     assert exc_info.value.retryable is True
 
 
@@ -610,17 +610,37 @@ async def test_chat_429_exhausted_raises_retryable_with_status_in_message():
     from app.core.exceptions import AIServiceError
 
     service = AIProviderService(_make_config())
-    # max_retries=2 → 3 attempts
-    fake_client = _ChatHttpStatusClient([429, 429, 429])
+    # max_retries=1 → 2 internal attempts (the call site adds one more round)
+    fake_client = _ChatHttpStatusClient([429, 429])
 
     with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
          patch("asyncio.sleep", AsyncMock()):
         with pytest.raises(AIServiceError) as exc_info:
             await service.chat(messages=[ChatMessage(role="user", content="hi")])
 
-    assert fake_client.call_count == 3
+    assert fake_client.call_count == 2
     assert exc_info.value.retryable is True
     assert "429" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_chat_504_gateway_timeout_is_retryable():
+    """Regression: 504 (edge timeout on slow multi-MB vision POSTs) was left
+    out of the transient set, so it failed fast with zero retries and skipped
+    the fallback model, despite being exactly as transient as 502/503."""
+    from app.core.exceptions import AIServiceError
+
+    service = AIProviderService(_make_config())
+    fake_client = _ChatHttpStatusClient([504, 504])
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
+         patch("asyncio.sleep", AsyncMock()):
+        with pytest.raises(AIServiceError) as exc_info:
+            await service.chat(messages=[ChatMessage(role="user", content="hi")])
+
+    assert fake_client.call_count == 2  # retried internally, not failed on first hit
+    assert exc_info.value.retryable is True
+    assert "504" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -655,6 +675,58 @@ async def test_chat_400_fails_fast_non_retryable():
     assert fake_client.call_count == 1
     assert exc_info.value.retryable is False
     assert "400" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_chat_truncated_structured_output_raises_instead_of_silent_empty():
+    """A strict-JSON response cut off at max_tokens (finish_reason=length) is
+    broken JSON; before this guard it parsed to nothing and callers returned
+    silent empty results (e.g. zero extracted items on a dense group photo)."""
+    from app.core.exceptions import AIServiceError
+
+    service = AIProviderService(_make_config())
+    truncated = {
+        "choices": [
+            {
+                "message": {"content": '{"items": [{"name": "sho'},
+                "finish_reason": "length",
+            }
+        ]
+    }
+    fake_client = _ChatHttpStatusClient([truncated])
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
+         patch("asyncio.sleep", AsyncMock()):
+        with pytest.raises(AIServiceError) as exc_info:
+            await service.chat(
+                messages=[ChatMessage(role="user", content="extract")],
+                response_format={"type": "json_object"},
+            )
+
+    assert exc_info.value.retryable is False  # retrying truncates identically
+    assert "truncated" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_chat_finish_reason_length_ignored_without_response_format():
+    """Plain chat (and the max_tokens=10 health probe) may legitimately stop at
+    finish_reason=length - only structured-output callers get the guard."""
+    service = AIProviderService(_make_config())
+    short = {
+        "choices": [
+            {
+                "message": {"content": "pong"},
+                "finish_reason": "length",
+            }
+        ]
+    }
+    fake_client = _ChatHttpStatusClient([short])
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
+         patch("asyncio.sleep", AsyncMock()):
+        result = await service.chat(messages=[ChatMessage(role="user", content="hi")])
+
+    assert result.text == "pong"
 
 
 @pytest.mark.asyncio

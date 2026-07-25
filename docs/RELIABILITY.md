@@ -25,9 +25,10 @@ Last updated: 2026-07-25
 ## AI providers
 
 - Circuit/health behavior in `ai_provider_health_service`.
-- Default chat `max_tokens` is **4096** (not multi-10k). Override per call if a path needs more.
-- Chat and image paths retry transient HTTP statuses: **408, 429, 502, 503** (honor `Retry-After` when present).
-- Permanent 4xx (auth, policy, bad model) set `AIServiceError(retryable=False)` and **fail fast** through outer `with_retry` via `is_retryable_error`.
+- Default chat `max_tokens` is **4096** (not multi-10k). Override per call if a path needs more. Structured-output (`response_format`) calls raise `AIServiceError` on `finish_reason="length"` instead of returning truncated JSON that parses to empty results.
+- Chat and image paths retry transient HTTP statuses: **408, 429, 500, 502, 503, 504** (500/504 = edge timeouts on slow vision POSTs).
+- Retry budget: the provider layer retries a transient failure **once** internally (chat honors `Retry-After`, image path uses fixed backoff), then the call site's `with_retry` adds **one more round** — ~4 gateway attempts total per failing call. Do not raise either layer's `max_retries` without lowering the other; they multiply (previously 3×3 → up to 12 POSTs per stuck call, amplifying 429 storms).
+- Permanent 4xx (auth, policy, bad model) set `AIServiceError(retryable=False)` and **fail fast** through outer `with_retry` via `is_retryable_error`. "200 with no images" is classified retryable (silent moderation refusal — worth one more round / the fallback model).
 - Image generation: primary → fallback model on transient errors; fail fast on policy/auth errors.
 - AI HTTP client uses **HTTP/1.1**; `LocalProtocolError` / `RemoteProtocolError` rebuild the pooled client and retry.
 - Prefer message text that includes `status=` + body snippet so Railway/log UIs that only show `message` still surface the cause.
