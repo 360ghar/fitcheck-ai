@@ -71,6 +71,19 @@ class ErrorHandler {
       message,
       context: {'error_type': error?.runtimeType.toString() ?? 'unknown'},
     );
+    captureToSentry(error, stackTrace: stackTrace);
+  }
+
+  /// The single guarded entry point for Sentry captures.
+  ///
+  /// `SentryFlutter.init` may never run at all (empty `EnvConfig.sentryDsn`)
+  /// or may still be in flight during cold start, and capturing before it
+  /// completes is a no-op at best and can throw at worst. [Sentry.isEnabled]
+  /// is the SDK's own truth for that (it is backed by a `NoOpHub` until init
+  /// installs the real one), so there is no separate flag to keep in sync.
+  /// Never call `Sentry.captureException` directly - route it through here.
+  static void captureToSentry(dynamic error, {StackTrace? stackTrace}) {
+    if (!Sentry.isEnabled) return;
     Sentry.captureException(error, stackTrace: stackTrace);
   }
 

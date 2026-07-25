@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/services/ai_consent_service.dart';
+import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../../core/utils/permission_helper.dart';
 import '../../../domain/constants/use_cases.dart';
@@ -32,14 +33,23 @@ enum BatchInputMode { upload, social }
 /// 3. Review extracted items
 /// 4. Save selected items to wardrobe
 class BatchExtractionController extends GetxController {
-  final BatchExtractionRepository _batchRepo = BatchExtractionRepository();
+  final BatchExtractionRepository _batchRepo;
   final ItemRepository _itemRepo = ItemRepository();
   final SocialImportRepository _socialRepo = SocialImportRepository();
   final ImagePicker _imagePicker = ImagePicker();
   final AppLinks _appLinks = AppLinks();
 
+  /// [batchRepository] is injectable so unit tests can drive the fallback
+  /// polling loop without hitting the real API. Defaults to a live repository.
+  BatchExtractionController({BatchExtractionRepository? batchRepository})
+    : _batchRepo = batchRepository ?? BatchExtractionRepository();
+
   // Constants
   static const int maxImages = 50;
+
+  /// Upper bound on the SSE-fallback polling loops. ~2 minutes at the 2s
+  /// cadence below, matching PhotoshootController's cap.
+  static const int maxPollAttempts = 60;
   static const int generationBatchSize = 5;
   static const String socialOAuthCallbackUri =
       'fitcheck.ai://social-import-callback';
@@ -74,12 +84,19 @@ class BatchExtractionController extends GetxController {
   // Batch SSE subscription
   StreamSubscription? _sseSubscription;
 
-  // Guards the recursive SSE-fallback polling loops (_pollJobStatus,
+  // Guards the SSE-fallback polling loops (pollJobStatus,
   // _pollSocialStatus) so they stop rescheduling once this controller is
   // disposed - they previously had no reference stored anywhere to cancel,
   // so they'd keep polling the network in the background indefinitely after
   // the user navigated away.
   bool _isClosed = false;
+
+  // Single-flight guards for those same loops. Every SSE `onError` callback
+  // used to kick off a brand-new polling chain with its own attempt counter,
+  // which would defeat the attempt cap: N chains x maxPollAttempts is still
+  // effectively unbounded.
+  bool _isPollingJob = false;
+  bool _isPollingSocial = false;
 
   // Social import state
   final RxString socialJobId = ''.obs;
@@ -670,21 +687,43 @@ class BatchExtractionController extends GetxController {
         );
   }
 
+  /// Fallback polling for the social-import job. Same unbounded-recursion /
+  /// silent-catch bug as [pollJobStatus] had, fixed the same way.
   Future<void> _pollSocialStatus(String id) async {
-    if (_isClosed || id.isEmpty || id != socialJobId.value) return;
+    if (_isClosed ||
+        id.isEmpty ||
+        id != socialJobId.value ||
+        _isPollingSocial) {
+      return;
+    }
+    _isPollingSocial = true;
+    Object? lastError;
     try {
-      final job = await _socialRepo.getStatus(id);
-      _applySocialJob(job);
-      if (!job.isTerminal && !socialIsConnected.value) {
-        await Future.delayed(const Duration(seconds: 2));
-        if (!_isClosed && !socialIsConnected.value) {
-          await _pollSocialStatus(id);
+      for (var attempt = 0; attempt < maxPollAttempts; attempt++) {
+        if (_isClosed || id != socialJobId.value) return;
+        try {
+          final job = await _socialRepo.getStatus(id);
+          lastError = null;
+          _applySocialJob(job);
+          if (job.isTerminal || socialIsConnected.value) return;
+        } catch (e) {
+          lastError = e;
+          if (kDebugMode) {
+            print('Social import status poll error (attempt ${attempt + 1}): $e');
+          }
         }
+        await Future.delayed(const Duration(seconds: 2));
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Social import status poll error: $e');
-      }
+
+      if (_isClosed || id != socialJobId.value) return;
+      socialError.value =
+          'Lost connection to the import. Please refresh to check its status.';
+      ErrorHandler.reportError(
+        lastError ?? 'Social import polling timed out',
+        'Social import polling exhausted after $maxPollAttempts attempts',
+      );
+    } finally {
+      _isPollingSocial = false;
     }
   }
 
@@ -902,7 +941,7 @@ class BatchExtractionController extends GetxController {
               print('SSE error: $e');
             }
             // Try to recover by polling status
-            _pollJobStatus(id);
+            pollJobStatus(id);
           },
           onDone: () {
             if (kDebugMode) {
@@ -1127,54 +1166,86 @@ class BatchExtractionController extends GetxController {
     }
   }
 
-  /// Fallback polling for job status
-  Future<void> _pollJobStatus(String id) async {
-    if (_isClosed) return;
+  /// Fallback polling for job status when the SSE stream errors out.
+  ///
+  /// Bounded by [maxPollAttempts]. This used to recurse every 2s with no cap,
+  /// and its `catch` only printed in debug mode: it set no [error], moved no
+  /// [jobStatus] and never rescheduled, so a single transient network failure
+  /// left BatchExtractionProgressPage frozen at its last percentage with no
+  /// error, no retry and no way out. Same shape as the fix already applied to
+  /// PhotoshootController._pollJobStatus.
+  @visibleForTesting
+  Future<void> pollJobStatus(String id) async {
+    if (_isClosed || id.isEmpty || id != jobId.value || _isPollingJob) return;
+    _isPollingJob = true;
+    Object? lastError;
     try {
-      final status = await _batchRepo.getJobStatus(id);
+      for (var attempt = 0; attempt < maxPollAttempts; attempt++) {
+        // Bail if the controller was disposed or the user started a different
+        // job (reset() clears jobId). Otherwise a stale chain would keep
+        // writing progress for a dead job and, worse, hold the single-flight
+        // guard for up to two minutes so the new job never polls at all.
+        if (_isClosed || id != jobId.value) return;
+        try {
+          final status = await _batchRepo.getJobStatus(id);
+          lastError = null;
 
-      // Update state from polled status
-      extractedCount.value = status.extractedCount;
-      generatedCount.value = status.generatedCount;
-      failedCount.value = status.failedCount + status.generationFailedCount;
-      currentBatch.value = status.currentBatch;
-      totalBatches.value = status.totalBatches;
-      totalItems.value = status.detectedItems?.length ?? extractedItems.length;
+          // Update state from polled status
+          extractedCount.value = status.extractedCount;
+          generatedCount.value = status.generatedCount;
+          failedCount.value = status.failedCount + status.generationFailedCount;
+          currentBatch.value = status.currentBatch;
+          totalBatches.value = status.totalBatches;
+          totalItems.value =
+              status.detectedItems?.length ?? extractedItems.length;
 
-      // Update detected items if available
-      if (status.detectedItems != null) {
-        extractedItems.assignAll(status.detectedItems!);
+          // Update detected items if available
+          if (status.detectedItems != null) {
+            extractedItems.assignAll(status.detectedItems!);
+          }
+
+          // Update job status
+          switch (status.status) {
+            case 'pending':
+            case 'extracting':
+              jobStatus.value = BatchJobStatus.extracting;
+              break;
+            case 'generating':
+              jobStatus.value = BatchJobStatus.generating;
+              break;
+            case 'completed':
+              jobStatus.value = BatchJobStatus.complete;
+              return;
+            case 'failed':
+              error.value = status.error ?? 'Extraction failed';
+              jobStatus.value = BatchJobStatus.failed;
+              return;
+            case 'cancelled':
+              jobStatus.value = BatchJobStatus.cancelled;
+              return;
+          }
+        } catch (e) {
+          // Transient failures are retried until the cap below; only the
+          // give-up is reported so a network blip can't spam telemetry.
+          lastError = e;
+          if (kDebugMode) {
+            print('Poll status error (attempt ${attempt + 1}): $e');
+          }
+        }
+        await Future.delayed(const Duration(seconds: 2));
       }
 
-      // Update job status
-      switch (status.status) {
-        case 'pending':
-        case 'extracting':
-          jobStatus.value = BatchJobStatus.extracting;
-          // Continue polling
-          await Future.delayed(const Duration(seconds: 2));
-          if (!_isClosed) _pollJobStatus(id);
-          break;
-        case 'generating':
-          jobStatus.value = BatchJobStatus.generating;
-          await Future.delayed(const Duration(seconds: 2));
-          if (!_isClosed) _pollJobStatus(id);
-          break;
-        case 'completed':
-          jobStatus.value = BatchJobStatus.complete;
-          break;
-        case 'failed':
-          error.value = status.error ?? 'Extraction failed';
-          jobStatus.value = BatchJobStatus.failed;
-          break;
-        case 'cancelled':
-          jobStatus.value = BatchJobStatus.cancelled;
-          break;
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Poll status error: $e');
-      }
+      if (_isClosed || id != jobId.value) return;
+      // Exhausted. Surface it to the user (the progress page renders
+      // `error.value` with Cancel / Try Again actions) and to telemetry.
+      error.value = 'Lost connection while processing. Please try again.';
+      jobStatus.value = BatchJobStatus.failed;
+      ErrorHandler.reportError(
+        lastError ?? 'Batch extraction polling timed out',
+        'Batch extraction polling exhausted after $maxPollAttempts attempts',
+      );
+    } finally {
+      _isPollingJob = false;
     }
   }
 

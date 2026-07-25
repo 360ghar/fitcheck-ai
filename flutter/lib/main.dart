@@ -11,6 +11,7 @@ import 'core/services/analytics_service.dart';
 import 'core/services/supabase_service.dart';
 import 'core/services/theme_service.dart';
 import 'core/services/route_observer.dart';
+import 'core/utils/error_handler.dart';
 import 'app/themes/app_theme.dart';
 import 'app/routes/app_pages.dart';
 import 'app/routes/app_routes.dart';
@@ -46,14 +47,10 @@ void main() async {
   final sentryDsn = EnvConfig.sentryDsn;
   final bool sentryEnabled = sentryDsn.isNotEmpty;
 
-  // Helper to report errors to Sentry only when it has been initialised.
-  // Calling Sentry.captureException before SentryFlutter.init completes is a
-  // no-op at best and can throw at worst, so every capture site is guarded.
-  void reportToSentry(Object error, StackTrace stack) {
-    if (sentryEnabled) {
-      Sentry.captureException(error, stackTrace: stack);
-    }
-  }
+  // Sentry captures go through ErrorHandler.captureToSentry, which guards on
+  // Sentry.isEnabled so a capture before (or entirely without) SentryFlutter
+  // .init is a safe no-op. One implementation, shared with every other capture
+  // site in the app.
 
   // Capture framework errors (widget build, layout, gesture, animation).
   // Without this, FlutterError details are only printed in debug mode and
@@ -63,7 +60,10 @@ void main() async {
       details.exception,
       details.stack,
     );
-    reportToSentry(details.exception, details.stack ?? StackTrace.current);
+    ErrorHandler.captureToSentry(
+      details.exception,
+      stackTrace: details.stack ?? StackTrace.current,
+    );
     // Preserve default behaviour: dump full details in debug, minimal in
     // release, so developer ergonomics don't regress.
     FlutterError.presentError(details);
@@ -72,7 +72,7 @@ void main() async {
   // Capture async / platform-dispatcher errors that escape the widget tree.
   PlatformDispatcher.instance.onError = (error, stack) {
     AnalyticsService.instance.recordError(error, stack);
-    reportToSentry(error, stack);
+    ErrorHandler.captureToSentry(error, stackTrace: stack);
     return true;
   };
 
@@ -94,7 +94,7 @@ void main() async {
           () => runApp(const FitCheckApp()),
           (error, stack) {
             AnalyticsService.instance.recordError(error, stack);
-            reportToSentry(error, stack);
+            ErrorHandler.captureToSentry(error, stackTrace: stack);
           },
         );
       },
