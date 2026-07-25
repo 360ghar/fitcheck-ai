@@ -4,7 +4,7 @@
 
 import { isAxiosError } from 'axios';
 
-import { apiClient, getApiError } from './client';
+import { apiClient, getApiError, skipToast } from './client';
 import type {
   ApiEnvelope,
   MatchResult,
@@ -73,7 +73,11 @@ export async function getCompleteLookSuggestions(
       }>
     >(
       `/api/v1/recommendations/complete-look?${params.toString()}`,
-      { item_ids: itemIds }
+      { item_ids: itemIds },
+      // The only caller degrades to client-side suggestions on failure and
+      // deliberately stays silent when that works — an interceptor toast would
+      // contradict a recovery the user never sees fail.
+      skipToast
     );
 
     // Defensive: ensure we always return an array
@@ -123,7 +127,10 @@ export async function getAstrologyRecommendations(options?: {
     const endpoint = queryString
       ? `/api/v1/recommendations/astrology?${queryString}`
       : '/api/v1/recommendations/astrology';
-    const response = await apiClient.get<ApiEnvelope<AstrologyRecommendation>>(endpoint);
+    // The caller drops responses from superseded requests (fast date/mode
+    // switching) and rewrites the 404 below into actionable copy, so it owns
+    // the toast for this endpoint.
+    const response = await apiClient.get<ApiEnvelope<AstrologyRecommendation>>(endpoint, skipToast);
     return response.data.data;
   } catch (error) {
     if (isAxiosError(error) && error.response?.status === 404) {

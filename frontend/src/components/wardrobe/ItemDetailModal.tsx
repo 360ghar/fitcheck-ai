@@ -130,7 +130,7 @@ export function ItemDetailModal({
       await onEdit(editForm as Item)
       setIsEditing(false)
     } catch {
-      // Parent shows toast; stay in edit mode so user can retry
+      // api/client interceptor toasts; stay in edit mode so user can retry
     } finally {
       setIsSaving(false)
     }

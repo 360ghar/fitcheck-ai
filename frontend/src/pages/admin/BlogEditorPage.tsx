@@ -59,7 +59,7 @@ import {
   generateSlug,
   calculateReadTime,
 } from '@/api/blog';
-import { showSuccess, showError } from '@/lib/toast-utils';
+import { showSuccess } from '@/lib/toast-utils';
 
 // Form validation schema
 const blogPostSchema = z.object({
@@ -197,8 +197,8 @@ export default function BlogEditorPage() {
       queryClient.invalidateQueries({ queryKey: ['blog-posts'] });
       navigate('/admin/blog/posts');
     },
-    onError: (error: Error) => {
-      showError(error.message, 'Failed to create blog post');
+    onError: () => {
+      // api/client interceptor already toasts the failure.
     },
   });
 
@@ -215,8 +215,8 @@ export default function BlogEditorPage() {
       queryClient.invalidateQueries({ queryKey: ['blog-post', slug] });
       navigate('/admin/blog/posts');
     },
-    onError: (error: Error) => {
-      showError(error.message, 'Failed to update blog post');
+    onError: () => {
+      // api/client interceptor already toasts the failure.
     },
   });
 

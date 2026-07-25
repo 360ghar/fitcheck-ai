@@ -10,8 +10,12 @@ import { showApiError, showWarning, showNetworkError } from '@/lib/toast-utils';
 // ============================================================================
 
 declare module 'axios' {
-  export interface InternalAxiosRequestConfig {
+  // `_skipToast` lives on the public config so callers can pass `skipToast`
+  // as a per-request option; InternalAxiosRequestConfig inherits it.
+  export interface AxiosRequestConfig {
     _skipToast?: boolean;
+  }
+  export interface InternalAxiosRequestConfig {
     _retry?: boolean;
     _retryCount?: number;
   }

@@ -246,12 +246,8 @@ export default function WardrobePage() {
       if (selectedItemDetail?.id === itemId) {
         setSelectedItemDetail({ ...selectedItemDetail, is_favorite: updated.is_favorite })
       }
-    } catch (err) {
-      toast({
-        title: 'Error',
-        description: 'Failed to update favorite status',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     } finally {
       favoritingIdsRef.current.delete(itemId)
     }
@@ -266,12 +262,8 @@ export default function WardrobePage() {
       })
       setIsDetailModalOpen(false)
       fetchItems(true)
-    } catch (err) {
-      toast({
-        title: 'Error',
-        description: 'Failed to mark item as worn',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     }
   }
 
@@ -296,11 +288,7 @@ export default function WardrobePage() {
       setItemPendingDelete(null)
       fetchItems(true)
     } catch {
-      toast({
-        title: 'Error',
-        description: 'Failed to delete item',
-        variant: 'destructive',
-      })
+      // api/client interceptor already toasts the failure.
     } finally {
       setIsDeleting(false)
     }
@@ -318,50 +306,39 @@ export default function WardrobePage() {
       })
       setIsBulkDeleteOpen(false)
     } catch {
-      toast({
-        title: 'Error',
-        description: 'Failed to delete selected items',
-        variant: 'destructive',
-      })
+      // api/client interceptor already toasts the failure.
     } finally {
       setIsDeleting(false)
     }
   }
 
+  // Rejects on failure so the detail modal can keep edit mode open.
+  // The api/client interceptor already toasts, so no catch here.
   const handleEditItem = async (updatedItem: Item) => {
-    try {
-      const savedItem = await apiUpdateItem(updatedItem.id, {
-        name: updatedItem.name,
-        category: updatedItem.category,
-        sub_category: updatedItem.sub_category,
-        brand: updatedItem.brand,
-        colors: updatedItem.colors,
-        occasion_tags: updatedItem.occasion_tags,
-        size: updatedItem.size,
-        price: updatedItem.price,
-        purchase_date: updatedItem.purchase_date,
-        purchase_location: updatedItem.purchase_location,
-        tags: updatedItem.tags,
-        notes: updatedItem.notes,
-        condition: updatedItem.condition,
-        is_favorite: updatedItem.is_favorite,
-      })
+    const savedItem = await apiUpdateItem(updatedItem.id, {
+      name: updatedItem.name,
+      category: updatedItem.category,
+      sub_category: updatedItem.sub_category,
+      brand: updatedItem.brand,
+      colors: updatedItem.colors,
+      occasion_tags: updatedItem.occasion_tags,
+      size: updatedItem.size,
+      price: updatedItem.price,
+      purchase_date: updatedItem.purchase_date,
+      purchase_location: updatedItem.purchase_location,
+      tags: updatedItem.tags,
+      notes: updatedItem.notes,
+      condition: updatedItem.condition,
+      is_favorite: updatedItem.is_favorite,
+    })
 
-      toast({
-        title: 'Item updated',
-        description: 'Your changes have been saved',
-      })
-      setSelectedItemDetail(savedItem)
-      // Keep modal open so user can review; edit mode exits via modal on success
-      fetchItems(true)
-    } catch (err) {
-      toast({
-        title: 'Error',
-        description: 'Failed to save item changes',
-        variant: 'destructive',
-      })
-      throw err
-    }
+    toast({
+      title: 'Item updated',
+      description: 'Your changes have been saved',
+    })
+    setSelectedItemDetail(savedItem)
+    // Keep modal open so user can review; edit mode exits via modal on success
+    fetchItems(true)
   }
 
   const handleUploadComplete = (results: any[]) => {

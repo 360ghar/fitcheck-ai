@@ -52,11 +52,6 @@ export default function GamificationPage() {
       setAchievements(null)
       setLeaderboard([])
       setUserRank(null)
-      toast({
-        title: 'Failed to load streaks & rewards',
-        description: message,
-        variant: 'destructive',
-      })
     } finally {
       setIsLoading(false)
     }

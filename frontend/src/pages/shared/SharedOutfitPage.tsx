@@ -23,7 +23,11 @@ export default function SharedOutfitPage() {
 
   useEffect(() => {
     const load = async () => {
-      if (!id) return
+      if (!id) {
+        setIsLoading(false)
+        setError('Missing outfit link')
+        return
+      }
       setIsLoading(true)
       setError(null)
       try {

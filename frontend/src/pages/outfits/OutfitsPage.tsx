@@ -142,12 +142,8 @@ export default function OutfitsPage() {
     try {
       await markOutfitAsWorn(selectedOutfit.id)
       toast({ title: 'Marked as worn' })
-    } catch (err) {
-      toast({
-        title: 'Failed to mark as worn',
-        description: err instanceof Error ? err.message : 'An error occurred',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     } finally {
       setIsManaging(false)
     }
@@ -160,12 +156,8 @@ export default function OutfitsPage() {
       const dup = await duplicateOutfit(selectedOutfit.id)
       setSelectedOutfit(dup)
       toast({ title: 'Outfit duplicated' })
-    } catch (err) {
-      toast({
-        title: 'Failed to duplicate',
-        description: err instanceof Error ? err.message : 'An error occurred',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     } finally {
       setIsManaging(false)
     }
@@ -635,12 +627,8 @@ export default function OutfitsPage() {
                   toast({ title: 'Outfit deleted' })
                   setSelectedOutfit(null)
                   setIsDeleteDialogOpen(false)
-                } catch (err) {
-                  toast({
-                    title: 'Failed to delete outfit',
-                    description: err instanceof Error ? err.message : 'An error occurred',
-                    variant: 'destructive',
-                  })
+                } catch {
+                  // api/client interceptor already toasts the failure.
                 } finally {
                   setIsManaging(false)
                 }

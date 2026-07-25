@@ -194,8 +194,12 @@ export default function ProfilePage() {
     setIsLoadingPreferences(true)
     setIsLoadingSettings(true)
 
+    // A fast user switch must not land the previous user's data.
+    let cancelled = false
+
     getUserPreferences()
       .then((prefs) => {
+        if (cancelled) return
         setPreferences(prefs)
         setFavoriteColors(prefs.favorite_colors || [])
         setPreferredStyles(prefs.preferred_styles || [])
@@ -208,17 +212,26 @@ export default function ProfilePage() {
       .catch((err) => {
         console.warn('Failed to load preferences:', err)
       })
-      .finally(() => setIsLoadingPreferences(false))
+      .finally(() => {
+        if (!cancelled) setIsLoadingPreferences(false)
+      })
 
     getUserSettings()
       .then((s) => {
+        if (cancelled) return
         setSettings(s)
         setLocationValue(s.default_location || '')
       })
       .catch((err) => {
         console.warn('Failed to load settings:', err)
       })
-      .finally(() => setIsLoadingSettings(false))
+      .finally(() => {
+        if (!cancelled) setIsLoadingSettings(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [user?.id])
 
   const handleSaveProfile = async () => {
@@ -250,12 +263,8 @@ export default function ProfilePage() {
       } else {
         toast({ title: 'Profile updated' })
       }
-    } catch (err) {
-      toast({
-        title: 'Failed to update profile',
-        description: err instanceof Error ? err.message : 'An error occurred',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     } finally {
       setIsSavingProfile(false)
     }
@@ -276,12 +285,8 @@ export default function ProfilePage() {
       })
       setPreferences(updated)
       toast({ title: 'Preferences saved' })
-    } catch (err) {
-      toast({
-        title: 'Failed to save preferences',
-        description: err instanceof Error ? err.message : 'An error occurred',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     } finally {
       setIsSavingPreferences(false)
     }
@@ -308,12 +313,8 @@ export default function ProfilePage() {
       setLocationValue(updated.default_location || '')
       setSettingsDirty(false)
       toast({ title: 'Settings saved' })
-    } catch (err) {
-      toast({
-        title: 'Failed to save settings',
-        description: err instanceof Error ? err.message : 'An error occurred',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     } finally {
       setIsSavingSettings(false)
     }
@@ -327,12 +328,8 @@ export default function ProfilePage() {
         title: 'Password reset email sent',
         description: 'Check your inbox for a reset link.',
       })
-    } catch (err) {
-      toast({
-        title: 'Failed to send reset email',
-        description: err instanceof Error ? err.message : 'An error occurred',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     }
   }
 
@@ -342,12 +339,8 @@ export default function ProfilePage() {
       await deleteAccount()
       await logout()
       window.location.href = '/auth/login'
-    } catch (err) {
-      toast({
-        title: 'Failed to delete account',
-        description: err instanceof Error ? err.message : 'An error occurred',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
       setIsDeletingAccount(false)
     }
   }
@@ -363,12 +356,8 @@ export default function ProfilePage() {
       const { avatar_url } = await uploadAvatar(file)
       setUser({ ...user, avatar_url })
       toast({ title: 'Avatar updated' })
-    } catch (err) {
-      toast({
-        title: 'Failed to upload avatar',
-        description: err instanceof Error ? err.message : 'An error occurred',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     } finally {
       setIsUploadingAvatar(false)
     }

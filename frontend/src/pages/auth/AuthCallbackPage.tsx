@@ -3,7 +3,7 @@
  * Handles the redirect after Google OAuth authentication
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { Loader2 } from 'lucide-react';
@@ -12,8 +12,14 @@ export default function AuthCallbackPage() {
   const navigate = useNavigate();
   const handleOAuthCallback = useAuthStore((state) => state.handleOAuthCallback);
   const [error, setError] = useState<string | null>(null);
+  // StrictMode runs effects twice in dev; a second /auth/oauth/sync would run
+  // after `pending_referral_code` has already been consumed, dropping the referral.
+  const hasStartedRef = useRef(false);
 
   useEffect(() => {
+    if (hasStartedRef.current) return;
+    hasStartedRef.current = true;
+
     let redirectTimeout: ReturnType<typeof setTimeout> | undefined;
 
     const processCallback = async () => {

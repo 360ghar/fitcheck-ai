@@ -64,7 +64,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { getAllBlogPosts, deleteBlogPost, getBlogCategories } from '@/api/blog';
-import { showSuccess, showError } from '@/lib/toast-utils';
+import { showSuccess } from '@/lib/toast-utils';
 import type { BlogPostSummary } from '@/types';
 
 function formatDate(dateString: string) {
@@ -114,8 +114,8 @@ export default function BlogListPage() {
       setDeleteDialogOpen(false);
       setPostToDelete(null);
     },
-    onError: (error: Error) => {
-      showError(error.message, 'Failed to delete blog post');
+    onError: () => {
+      // api/client interceptor already toasts the failure.
     },
   });
 

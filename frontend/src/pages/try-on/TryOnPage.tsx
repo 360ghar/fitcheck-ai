@@ -13,8 +13,6 @@ import { generateTryOn, TryOnOptions, TryOnResult } from '@/api/ai';
 import { uploadAvatar } from '@/api/users';
 import { tryOnUsedKey } from '@/lib/activation';
 
-/** Module-level so remount does not clear the pill while a request is in flight. */
-let tryOnRequestInFlight = false;
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -72,6 +70,17 @@ export default function TryOnPage() {
   const { toast } = useToast();
   const setJob = useJobUiStore((s) => s.setJob);
   const clearJob = useJobUiStore((s) => s.clearJob);
+  /**
+   * In-flight lives in the shared job store, not a module-level `let`, so it
+   * survives a remount (the pill must not vanish) AND stays recoverable:
+   * `clearJob('try-on')` — which the Cancel action below calls — resets it from
+   * anywhere, instead of being writable only from inside `handleGenerate`.
+   */
+  const isRequestInFlight = useJobUiStore(
+    (s) => s.job?.id === 'try-on' && s.job.isActive === true
+  );
+  /** Bumped on cancel/restart so a stale response cannot apply to the UI. */
+  const runIdRef = useRef(0);
 
   const [step, setStep] = useState<TryOnStep>('upload');
   const clothingFileRef = useRef<File | null>(null);
@@ -100,23 +109,22 @@ export default function TryOnPage() {
     };
   }, [revokePreviewUrl]);
 
+  // Mirrors the shared in-flight bit into local UI state, both ways.
+  // `handleGenerate` owns setJob/clearJob; this effect never creates a pill.
   useEffect(() => {
-    // Prefer module flag over local state so remount mid-request does not clear the pill.
-    if (isGenerating || tryOnRequestInFlight) {
-      setJob({
-        id: 'try-on',
-        label: 'Generating try-on…',
-        isActive: true,
-        href: '/try-on',
-      });
-      if (tryOnRequestInFlight && !isGenerating) {
-        setIsGenerating(true);
-        setStep('generating');
-      }
-    } else {
-      clearJob('try-on');
+    if (isRequestInFlight && !isGenerating) {
+      // Remounted (or navigated back) mid-request — restore the wait screen.
+      setIsGenerating(true);
+      setStep('generating');
+      return;
     }
-  }, [isGenerating, setJob, clearJob]);
+    if (!isRequestInFlight && isGenerating && step === 'generating') {
+      // The job was retired without this instance resolving it: cancelled, or
+      // the response landed on a previous mount. Unwedge instead of spinning.
+      setIsGenerating(false);
+      setStep('options');
+    }
+  }, [isRequestInFlight, isGenerating, step]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -148,12 +156,8 @@ export default function TryOnPage() {
         setUser({ ...user, avatar_url });
       }
       toast({ title: 'Photo added', description: 'You can generate a try-on now.' });
-    } catch (err) {
-      toast({
-        title: 'Upload failed',
-        description: err instanceof Error ? err.message : 'Could not upload photo',
-        variant: 'destructive',
-      });
+    } catch {
+      // api/client interceptor already toasts the failure.
     } finally {
       setIsUploadingAvatar(false);
     }
@@ -170,8 +174,8 @@ export default function TryOnPage() {
       return;
     }
 
+    const runId = ++runIdRef.current;
     setIsGenerating(true);
-    tryOnRequestInFlight = true;
     setStep('generating');
     setError(null);
     setJob({
@@ -190,6 +194,7 @@ export default function TryOnPage() {
       };
 
       const tryOnResult = await generateTryOn(clothingFileRef.current, options);
+      if (runIdRef.current !== runId) return;
       setResult(tryOnResult);
       setStep('result');
       try {
@@ -198,20 +203,26 @@ export default function TryOnPage() {
         // ignore
       }
     } catch (err) {
+      if (runIdRef.current !== runId) return;
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate try-on image';
       setError(errorMessage);
-      toast({
-        title: 'Generation Failed',
-        description: errorMessage,
-        variant: 'destructive',
-      });
       setStep('options');
     } finally {
-      tryOnRequestInFlight = false;
-      setIsGenerating(false);
-      // Always clear — user may have left the page mid-request.
-      clearJob('try-on');
+      // Cancelled/superseded runs must not retire a newer request's pill.
+      if (runIdRef.current === runId) {
+        // Clear the shared flag before local state so the restore effect above
+        // cannot immediately flip us back into `generating`.
+        clearJob('try-on');
+        setIsGenerating(false);
+      }
     }
+  };
+
+  const handleCancelGenerate = () => {
+    // Abandon the in-flight response (the API call itself keeps running); the
+    // effect above unwinds the local step once the shared flag drops.
+    runIdRef.current += 1;
+    clearJob('try-on');
   };
 
   const handleReset = () => {
@@ -461,6 +472,7 @@ export default function TryOnPage() {
           isActive
           previewUrls={[clothingPreview, userAvatar].filter(Boolean) as string[]}
           previewLabel="Clothing + your photo"
+          onCancel={handleCancelGenerate}
         />
       )}
 

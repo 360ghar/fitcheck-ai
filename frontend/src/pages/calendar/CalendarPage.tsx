@@ -184,13 +184,9 @@ export default function CalendarPage() {
         )
         activeMonthKeyRef.current = monthKey
         failedMonthKeyRef.current = ''
-      } catch (err) {
+      } catch {
+        // api/client interceptor already toasts the failure.
         failedMonthKeyRef.current = monthKey
-        toast({
-          title: 'Failed to load events',
-          description: err instanceof Error ? err.message : 'An error occurred',
-          variant: 'destructive',
-        })
       } finally {
         loadingMonthRef.current = false
         setIsLoadingEvents(false)
@@ -213,12 +209,8 @@ export default function CalendarPage() {
         title: 'Local calendar enabled',
         description: 'Events stay in FitCheck. External calendar sync may come later.',
       })
-    } catch (err) {
-      toast({
-        title: 'Failed to connect calendar',
-        description: err instanceof Error ? err.message : 'An error occurred',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     } finally {
       setIsConnecting(false)
     }
@@ -273,12 +265,8 @@ export default function CalendarPage() {
       ])
       setCreateOpen(false)
       toast({ title: 'Event created' })
-    } catch (err) {
-      toast({
-        title: 'Failed to create event',
-        description: err instanceof Error ? err.message : 'An error occurred',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     } finally {
       setIsCreating(false)
     }
@@ -362,12 +350,8 @@ export default function CalendarPage() {
       setUserLocation(location || null)
       setShowLocationDialog(false)
       toast({ title: 'Location updated', description: 'Weather will now use your new location.' })
-    } catch (err) {
-      toast({
-        title: 'Failed to save location',
-        description: err instanceof Error ? err.message : 'An error occurred',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     }
   }
 
@@ -602,12 +586,8 @@ export default function CalendarPage() {
                     await handleRemoveOutfit(selectedEvent.id)
                     toast({ title: 'Outfit removed' })
                     setSelectedEvent({ ...selectedEvent, outfit_id: undefined, outfit_name: undefined })
-                  } catch (err) {
-                    toast({
-                      title: 'Failed to remove outfit',
-                      description: err instanceof Error ? err.message : 'An error occurred',
-                      variant: 'destructive',
-                    })
+                  } catch {
+                    // api/client interceptor already toasts the failure.
                   }
                 }}
               >
@@ -655,12 +635,8 @@ export default function CalendarPage() {
                       )
                       setAssignOutfitOpen(false)
                       toast({ title: 'Outfit assigned' })
-                    } catch (err) {
-                      toast({
-                        title: 'Failed to assign outfit',
-                        description: err instanceof Error ? err.message : 'An error occurred',
-                        variant: 'destructive',
-                      })
+                    } catch {
+                      // api/client interceptor already toasts the failure.
                     }
                   }}
                 >

@@ -196,12 +196,8 @@ function OutfitAssignDialog({ isOpen, onClose, event, outfits, onAssign }: Outfi
         description: `"${event.title}" now has an outfit planned!`,
       })
       onClose()
-    } catch (err) {
-      toast({
-        title: 'Failed to assign',
-        description: err instanceof Error ? err.message : 'An error occurred',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     } finally {
       setIsAssigning(false)
     }

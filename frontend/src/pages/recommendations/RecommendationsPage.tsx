@@ -152,12 +152,8 @@ export default function RecommendationsPage() {
     try {
       const data = await findMatchingItems(id, { limit: 12 })
       setMatchData(data)
-    } catch (err) {
-      toast({
-        title: 'Failed to find matches',
-        description: err instanceof Error ? err.message : 'An error occurred',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     } finally {
       setIsLoadingMatch(false)
     }
@@ -233,12 +229,8 @@ export default function RecommendationsPage() {
     try {
       const data = await getWeatherRecommendations(weatherLocation.trim() || undefined)
       setWeatherData(data)
-    } catch (err) {
-      toast({
-        title: 'Failed to load weather recommendations',
-        description: err instanceof Error ? err.message : 'An error occurred',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     } finally {
       setIsLoadingWeather(false)
     }
@@ -291,6 +283,8 @@ export default function RecommendationsPage() {
       if (requestId !== astrologyRequestIdRef.current) return
       setAstrologyData(data)
     } catch (err) {
+      // This endpoint opts out of the interceptor toast (see api/recommendations)
+      // so a superseded request cannot toast over the one still loading.
       if (requestId !== astrologyRequestIdRef.current) return
       toast({
         title: 'Failed to load astrology recommendations',
@@ -341,11 +335,6 @@ export default function RecommendationsPage() {
       trackEvent('shopping_recommendations_failed', {
         error_message: message,
         source: 'web_app',
-      })
-      toast({
-        title: 'Failed to load shopping recommendations',
-        description: message,
-        variant: 'destructive',
       })
     } finally {
       setIsLoadingShopping(false)

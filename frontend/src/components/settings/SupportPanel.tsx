@@ -137,12 +137,8 @@ export function SupportPanel() {
       loadTickets()
 
       setTimeout(() => setShowSuccess(false), 5000)
-    } catch (error) {
-      toast({
-        title: 'Failed to submit feedback',
-        description: error instanceof Error ? error.message : 'Please try again',
-        variant: 'destructive',
-      })
+    } catch {
+      // api/client interceptor already toasts the failure.
     } finally {
       setIsSubmitting(false)
     }
