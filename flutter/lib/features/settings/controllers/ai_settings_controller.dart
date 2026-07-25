@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../models/ai_settings_model.dart';
 import '../repositories/ai_settings_repository.dart';
+import '../../../core/utils/frame_safe.dart';
 
 class AiSettingsController extends GetxController {
   final AiSettingsRepository _repository = AiSettingsRepository();
@@ -42,6 +43,7 @@ class AiSettingsController extends GetxController {
   }
 
   Future<void> fetchSettings() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     try {
       isLoading.value = true;
       error.value = '';

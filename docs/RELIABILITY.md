@@ -45,6 +45,14 @@ Last updated: 2026-07-25
 - Empty wardrobe: server short-circuits `POST /items/check-duplicates` without embedding/Pinecone.
 - Clients may save wardrobe items using original photos if studio images are still generating.
 
+## Error tracking
+
+| App | SDK | Status |
+|-----|-----|--------|
+| Backend (FastAPI) | — | **Not integrated.** `sentry-sdk` is not in `requirements.txt`. Structured logging with correlation IDs provides request tracing, but there is no centralized error tracking/alerting. |
+| Frontend (React) | `@sentry/react` | **Integrated 2026-07-25.** Initializes only when `VITE_SENTRY_DSN` is set. `ErrorBoundary.componentDidCatch` reports to Sentry. Add the DSN to the deployment environment to activate. |
+| Flutter (mobile) | `sentry_flutter ^9.0.0` | **Fully integrated.** Initializes from `EnvConfig.sentryDsn`; wraps `runApp` in `SentryFlutter.init` with `runZonedGuarded` for uncaught async errors. |
+
 ## Observability (agent legibility)
 
 - Structured request logging + correlation IDs.

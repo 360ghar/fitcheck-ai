@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../models/calendar_event_model.dart';
 import '../models/calendar_connection_model.dart';
 import '../repositories/calendar_repository.dart';
+import '../../../core/utils/frame_safe.dart';
 
 /// Calendar controller - manages calendar state and operations
 class CalendarController extends GetxController {
@@ -75,6 +76,7 @@ class CalendarController extends GetxController {
 
   /// Fetch calendar connections
   Future<void> fetchConnections() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     try {
       isLoadingConnections.value = true;
       error.value = '';
@@ -88,6 +90,7 @@ class CalendarController extends GetxController {
 
   /// Fetch events for a month range
   Future<void> fetchEventsForMonth(DateTime date) async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     try {
       isLoadingEvents.value = true;
       error.value = '';

@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../repositories/feedback_repository.dart';
 import '../models/feedback_model.dart';
+import '../../../core/utils/frame_safe.dart';
 
 /// Controller for feedback submission
 class FeedbackController extends GetxController {
@@ -178,6 +179,7 @@ class FeedbackController extends GetxController {
 
   /// Fetch user's tickets
   Future<void> fetchTickets() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     isLoadingTickets.value = true;
     try {
       final result = await _repository.getMyTickets();

@@ -5,6 +5,7 @@ import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../../auth/models/user_model.dart';
 import '../../dashboard/controllers/dashboard_controller.dart';
 import '../../settings/controllers/settings_controller.dart';
 import '../../settings/models/user_preferences_model.dart';
@@ -184,7 +185,7 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  Widget _buildAvatarInitials(BuildContext context, dynamic user) {
+  Widget _buildAvatarInitials(BuildContext context, UserModel? user) {
     final initials = user?.fullName
             ?.split(' ')
             .where((e) => e.isNotEmpty)
@@ -192,7 +193,7 @@ class ProfilePage extends StatelessWidget {
             .take(2)
             .join()
             .toUpperCase() ??
-        (user?.email?.isNotEmpty == true
+        (user?.email.isNotEmpty == true
             ? user!.email.substring(0, 1).toUpperCase()
             : null) ??
         'U';

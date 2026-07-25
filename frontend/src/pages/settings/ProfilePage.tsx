@@ -168,7 +168,6 @@ export default function ProfilePage() {
     const next = new URLSearchParams(searchParams)
     next.set('tab', activeTab)
     setSearchParams(next, { replace: true })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]) // Only react to activeTab changes, not searchParams
 
   const tabs = PROFILE_TABS

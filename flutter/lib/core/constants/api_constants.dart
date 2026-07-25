@@ -136,10 +136,16 @@ class ApiConstants {
   static const String verifyEmail = '/verify-email';
 
   // Timeout durations
-  // Increased connection timeout to handle AI operations that take longer to respond
-  static const Duration connectionTimeout = Duration(minutes: 3);
-  static const Duration receiveTimeout = Duration(
-    minutes: 10,
-  ); // For AI operations
-  static const Duration sendTimeout = Duration(minutes: 3);
+  // Base timeouts for standard CRUD/auth endpoints. Anything that generates
+  // with AI or moves a multipart body must go through
+  // [ApiClient.postWithExtendedTimeout], [ApiClient.upload] or
+  // [ApiClient.uploadMultiple], all of which override send/receive with the
+  // ai* values below. A plain `post` to an AI endpoint gets 60s and fails.
+  static const Duration connectionTimeout = Duration(seconds: 30);
+  static const Duration receiveTimeout = Duration(seconds: 60);
+  static const Duration sendTimeout = Duration(seconds: 60);
+
+  // Extended timeouts for AI generation and large file uploads.
+  static const Duration aiReceiveTimeout = Duration(minutes: 10);
+  static const Duration aiSendTimeout = Duration(minutes: 5);
 }

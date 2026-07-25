@@ -7,6 +7,7 @@ import '../../../../domain/enums/style.dart';
 import '../../../../domain/enums/season.dart';
 import '../models/outfit_model.dart';
 import '../repositories/outfit_repository.dart';
+import '../../../core/utils/frame_safe.dart';
 
 /// Outfits controller
 class OutfitsController extends GetxController {
@@ -87,6 +88,7 @@ class OutfitsController extends GetxController {
 
   /// Fetch outfits from server
   Future<void> fetchOutfits({bool refresh = false}) async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     if (refresh) {
       currentPage.value = 1;
       hasMore.value = true;
@@ -529,8 +531,20 @@ class OutfitsController extends GetxController {
 
         return true; // Continue polling
       } catch (e) {
-        isGenerating.value = false;
-        return false;
+        // Transient polling error — retry a few times before giving up so a
+        // single network blip doesn't silently abandon an in-progress job.
+        debugPrint('Generation poll error: $e');
+        if (attempts >= 5) {
+          isGenerating.value = false;
+          error.value = 'Lost connection while generating. Please try again.';
+          Get.snackbar(
+            'Connection Lost',
+            error.value,
+            snackPosition: SnackPosition.TOP,
+          );
+          return false;
+        }
+        return true; // Continue polling after a transient error
       }
     });
   }

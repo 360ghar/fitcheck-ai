@@ -4,7 +4,7 @@ Tests for overlapped extract → generate batch pipeline.
 
 import asyncio
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import List
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 

@@ -150,11 +150,12 @@ function applyFiltersAndSort(
       case 'times_worn':
         comparison = a.usage_times_worn - b.usage_times_worn;
         break;
-      case 'cost_per_wear':
+      case 'cost_per_wear': {
         const aCpw = a.cost_per_wear ?? a.price ?? 0;
         const bCpw = b.cost_per_wear ?? b.price ?? 0;
         comparison = aCpw - bCpw;
         break;
+      }
     }
 
     return sortOrder === 'asc' ? comparison : -comparison;

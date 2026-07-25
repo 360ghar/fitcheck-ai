@@ -500,7 +500,22 @@ async def batch_job_events(
                     }
 
         except asyncio.CancelledError:
+            # Client disconnected; no one left to receive a terminal event.
             pass
+        except Exception:
+            # Guarantee a terminal SSE event so clients never hang on a
+            # silently-closed stream when an unexpected error occurs.
+            logger.exception(
+                "Unexpected error in batch SSE generator",
+                extra={"job_id": job_id},
+            )
+            yield {
+                "event": "job_failed",
+                "data": json.dumps({
+                    "error": "Internal error while streaming batch events",
+                    "timestamp": datetime.utcnow().isoformat(),
+                }),
+            }
         finally:
             await BatchJobService.remove_subscriber(job_id, queue)
 

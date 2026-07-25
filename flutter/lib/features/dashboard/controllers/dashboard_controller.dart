@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/dashboard_models.dart';
 import '../repositories/dashboard_repository.dart';
+import '../../../core/utils/frame_safe.dart';
 
 class DashboardController extends GetxController {
   final DashboardRepository _repository = DashboardRepository();
@@ -46,6 +47,7 @@ class DashboardController extends GetxController {
   }
 
   Future<void> fetchDashboard({bool showLoader = true}) async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     if (showLoader) {
       isLoading.value = true;
     }

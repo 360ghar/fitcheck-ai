@@ -95,7 +95,7 @@ class ApiClient {
   }
 
   /// Make a POST request with extended timeout for AI operations
-  /// AI operations can take longer, so we use a 5-minute connection timeout
+  /// AI operations can take longer, so we use extended timeouts from ApiConstants
   Future<Response<T>> postWithExtendedTimeout<T>(
     String path, {
     dynamic data,
@@ -107,10 +107,8 @@ class ApiClient {
   }) async {
     // Create options with extended timeout for AI operations
     final extendedOptions = Options(
-      sendTimeout: const Duration(minutes: 5),
-      receiveTimeout: const Duration(minutes: 10),
-      // Note: connectTimeout is set via BaseOptions in the Dio instance
-      // We override sendTimeout and receiveTimeout here
+      sendTimeout: ApiConstants.aiSendTimeout,
+      receiveTimeout: ApiConstants.aiReceiveTimeout,
       headers: options?.headers,
       contentType: options?.contentType,
       responseType: options?.responseType,
@@ -206,6 +204,7 @@ class ApiClient {
     return dio.post<T>(
       path,
       data: formData,
+      options: _uploadOptions,
       onSendProgress: onSendProgress,
       cancelToken: cancelToken,
     );
@@ -235,8 +234,16 @@ class ApiClient {
     return dio.post<T>(
       path,
       data: formData,
+      options: _uploadOptions,
       onSendProgress: onSendProgress,
       cancelToken: cancelToken,
     );
   }
+
+  /// Multipart bodies are up to [AppConstants.maxFileSize] and can crawl on a
+  /// mobile link, so uploads never run on the base CRUD timeouts.
+  static Options get _uploadOptions => Options(
+    sendTimeout: ApiConstants.aiSendTimeout,
+    receiveTimeout: ApiConstants.aiReceiveTimeout,
+  );
 }

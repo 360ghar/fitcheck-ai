@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { HelmetProvider } from 'react-helmet-async'
 import { PostHogProvider } from 'posthog-js/react'
+import * as Sentry from '@sentry/react'
 import App from './App'
 import { Toaster } from './components/ui/toaster'
 import { TooltipProvider } from './components/ui/tooltip'
@@ -11,6 +12,41 @@ import ErrorBoundary from './components/errors/ErrorBoundary'
 import { ThemeProvider } from './components/theme/ThemeProvider'
 import '@fontsource-variable/plus-jakarta-sans'
 import './index.css'
+
+// Sentry error tracking — only initializes when a DSN is configured.
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    tracesSampleRate: 0.1,
+    environment: import.meta.env.MODE,
+  })
+}
+
+// ============================================================================
+// GLOBAL ERROR HANDLERS
+// ============================================================================
+// Catch errors that escape React's render tree (async code, timers, event
+// handlers) so they are observable instead of silently swallowed. Reports to
+// Sentry when a DSN is configured; always logs for local debugging.
+
+window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+  console.error('[Unhandled Rejection]', event.reason)
+  if (sentryDsn) {
+    Sentry.captureException(
+      event.reason instanceof Error
+        ? event.reason
+        : new Error(String(event.reason ?? 'Unhandled promise rejection'))
+    )
+  }
+})
+
+window.addEventListener('error', (event: ErrorEvent) => {
+  console.error('[Global Error]', event.error ?? event.message)
+  if (sentryDsn && event.error) {
+    Sentry.captureException(event.error)
+  }
+})
 
 // Create a client for React Query
 const queryClient = new QueryClient({

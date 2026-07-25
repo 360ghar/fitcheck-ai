@@ -348,7 +348,22 @@ async def photoshoot_job_events(
                     }
 
         except asyncio.CancelledError:
+            # Client disconnected; no one left to receive a terminal event.
             pass
+        except Exception:
+            # Guarantee a terminal SSE event so clients never hang on a
+            # silently-closed stream when an unexpected error occurs.
+            logger.exception(
+                "Unexpected error in photoshoot SSE generator",
+                extra={"job_id": job_id},
+            )
+            yield {
+                "event": "job_failed",
+                "data": json.dumps({
+                    "error": "Internal error while streaming photoshoot events",
+                    "timestamp": datetime.utcnow().isoformat(),
+                }),
+            }
         finally:
             await PhotoshootJobService.remove_subscriber(job_id, queue)
 

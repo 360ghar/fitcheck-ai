@@ -43,15 +43,40 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
+  final sentryDsn = EnvConfig.sentryDsn;
+  final bool sentryEnabled = sentryDsn.isNotEmpty;
+
+  // Helper to report errors to Sentry only when it has been initialised.
+  // Calling Sentry.captureException before SentryFlutter.init completes is a
+  // no-op at best and can throw at worst, so every capture site is guarded.
+  void reportToSentry(Object error, StackTrace stack) {
+    if (sentryEnabled) {
+      Sentry.captureException(error, stackTrace: stack);
+    }
+  }
+
+  // Capture framework errors (widget build, layout, gesture, animation).
+  // Without this, FlutterError details are only printed in debug mode and
+  // never reach Sentry/telemetry in release builds.
+  FlutterError.onError = (FlutterErrorDetails details) {
+    AnalyticsService.instance.recordError(
+      details.exception,
+      details.stack,
+    );
+    reportToSentry(details.exception, details.stack ?? StackTrace.current);
+    // Preserve default behaviour: dump full details in debug, minimal in
+    // release, so developer ergonomics don't regress.
+    FlutterError.presentError(details);
+  };
+
+  // Capture async / platform-dispatcher errors that escape the widget tree.
   PlatformDispatcher.instance.onError = (error, stack) {
     AnalyticsService.instance.recordError(error, stack);
-    Sentry.captureException(error, stackTrace: stack);
+    reportToSentry(error, stack);
     return true;
   };
 
-  final sentryDsn = EnvConfig.sentryDsn;
-
-  if (sentryDsn.isNotEmpty) {
+  if (sentryEnabled) {
     // Read the real version+build from the app bundle instead of a hardcoded
     // string, so it can't silently drift out of sync with pubspec.yaml on
     // the next release.
@@ -69,7 +94,7 @@ void main() async {
           () => runApp(const FitCheckApp()),
           (error, stack) {
             AnalyticsService.instance.recordError(error, stack);
-            Sentry.captureException(error, stackTrace: stack);
+            reportToSentry(error, stack);
           },
         );
       },

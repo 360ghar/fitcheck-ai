@@ -12,6 +12,8 @@ import { showApiError, showWarning, showNetworkError } from '@/lib/toast-utils';
 declare module 'axios' {
   export interface InternalAxiosRequestConfig {
     _skipToast?: boolean;
+    _retry?: boolean;
+    _retryCount?: number;
   }
 }
 
@@ -30,12 +32,56 @@ const API_BASE_URL =
   'http://localhost:8000';
 
 // ============================================================================
+// TIMEOUTS + RETRY CONFIG
+// ============================================================================
+
+/**
+ * Default timeout for typical CRUD requests. Kept low so a hung request fails
+ * fast instead of freezing the UI for 10 minutes.
+ */
+const DEFAULT_TIMEOUT_MS = 30_000; // 30 seconds
+
+/**
+ * Longer timeout for AI/batch endpoints that legitimately run for a while
+ * (image extraction, generation, virtual try-on, multipart batch upload).
+ */
+const LONG_RUNNING_TIMEOUT_MS = 600_000; // 10 minutes
+
+/**
+ * URL prefixes that map to long-running AI/batch operations. Requests matching
+ * one of these get the extended timeout automatically so individual call sites
+ * do not each have to remember to pass it.
+ */
+const LONG_RUNNING_PREFIXES = [
+  '/api/v1/ai/extract-items',
+  '/api/v1/ai/extract-single-item',
+  '/api/v1/ai/generate-outfit',
+  '/api/v1/ai/generate-product-image',
+  '/api/v1/ai/try-on',
+  '/api/v1/ai/batch-extract-multipart',
+];
+
+function isLongRunningRequest(url: string | undefined): boolean {
+  if (!url) return false;
+  return LONG_RUNNING_PREFIXES.some((prefix) => url.includes(prefix));
+}
+
+/**
+ * HTTP statuses considered transient and safe to retry automatically.
+ * 408 Request Timeout, 429 Too Many Requests, and 5xx server errors.
+ * Client errors (400, 401, 403, 404, 409, 422) are never retried.
+ */
+const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
+
+const MAX_RETRIES = 2; // 3 total attempts
+
+// ============================================================================
 // AXIOS INSTANCE
 // ============================================================================
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 600000, // 10 minutes
+  timeout: DEFAULT_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -205,6 +251,12 @@ async function ensureFreshToken(): Promise<void> {
 
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
+    // Extend the timeout for long-running AI/batch endpoints unless the caller
+    // already asked for an even longer one.
+    if (isLongRunningRequest(config.url)) {
+      config.timeout = Math.max(config.timeout ?? 0, LONG_RUNNING_TIMEOUT_MS);
+    }
+
     let token = getAccessToken();
 
     // Proactively refresh if the token is expired and this isn't an auth endpoint
@@ -224,6 +276,69 @@ apiClient.interceptors.request.use(
   },
   (error: AxiosError) => {
     return Promise.reject(error);
+  }
+);
+
+// ============================================================================
+// RESPONSE INTERCEPTOR - Automatic retry for transient failures
+// ============================================================================
+
+/** Sleep helper for retry backoff. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Retry transient failures (network errors + 408/429/5xx) with exponential
+ * backoff: 1s, then 2s. Client errors (400/401/403/404/409/422) and auth
+ * endpoints are never retried. Registered before the 401/toast interceptor so
+ * a successful retry is transparent and toasts only fire once retries exhaust.
+ */
+apiClient.interceptors.response.use(
+  (response: AxiosResponse) => response,
+  async (error: AxiosError) => {
+    const config = error.config as InternalAxiosRequestConfig | undefined;
+
+    // No config means we cannot retry (e.g. request setup failed).
+    if (!config) {
+      return Promise.reject(error);
+    }
+
+    // Never double-handle a token-refresh retry.
+    if (config._retry) {
+      return Promise.reject(error);
+    }
+
+    // Never retry auth endpoints — a 401 there means bad credentials.
+    if (isAuthEndpoint(config.url)) {
+      return Promise.reject(error);
+    }
+
+    const status = error.response?.status;
+    const isNetworkError = !error.response && !!error.request;
+    const isRetryable = isNetworkError || (status !== undefined && RETRYABLE_STATUS_CODES.has(status));
+
+    if (!isRetryable) {
+      return Promise.reject(error);
+    }
+
+    const retryCount = config._retryCount ?? 0;
+    if (retryCount >= MAX_RETRIES) {
+      return Promise.reject(error);
+    }
+
+    config._retryCount = retryCount + 1;
+    // Exponential backoff: 1s, 2s.
+    const backoff = 1000 * config._retryCount;
+
+    if (import.meta.env.DEV) {
+      console.warn(
+        `[API Retry] ${config.method?.toUpperCase()} ${config.url} attempt ${config._retryCount}/${MAX_RETRIES} after ${backoff}ms (status=${status ?? 'network'})`
+      );
+    }
+
+    await sleep(backoff);
+    return apiClient(config);
   }
 );
 

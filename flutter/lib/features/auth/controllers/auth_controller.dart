@@ -10,6 +10,7 @@ import '../../../core/utils/error_handler.dart';
 import '../../subscription/repositories/subscription_repository.dart';
 import '../models/user_model.dart';
 import '../repositories/auth_repository.dart';
+import '../../../core/utils/frame_safe.dart';
 
 /// Authentication controller using Supabase
 class AuthController extends GetxController {
@@ -78,6 +79,7 @@ class AuthController extends GetxController {
 
   /// Initialize authentication state
   Future<void> initializeAuth() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     try {
       isInitialized.value = false;
 

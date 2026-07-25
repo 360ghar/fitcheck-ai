@@ -8,6 +8,7 @@ import 'complete_look_controller.dart';
 import 'weather_recommendations_controller.dart';
 import 'shopping_recommendations_controller.dart';
 import 'astrology_recommendations_controller.dart';
+import '../../../core/utils/frame_safe.dart';
 
 /// Recommendations controller - Slim coordinator for tab management
 /// Delegates tab-specific logic to focused controllers
@@ -51,6 +52,7 @@ class RecommendationsController extends GetxController
   }
 
   Future<void> _loadAvailableItems() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     isLoadingItems.value = true;
     itemsError.value = '';
     try {
@@ -106,6 +108,7 @@ class RecommendationsController extends GetxController
 
   /// Refresh current tab
   Future<void> refreshCurrentTab() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     isLoading.value = true;
     try {
       switch (tabController.index) {

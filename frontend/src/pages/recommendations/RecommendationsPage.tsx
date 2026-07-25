@@ -249,7 +249,6 @@ export default function RecommendationsPage() {
     if (activeTab !== 'today' || todayAutoRanRef.current || isLoadingItems) return
     todayAutoRanRef.current = true
     void runWeather()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isLoadingItems])
 
   const weatherSuggestedItems = useMemo(() => {
@@ -299,8 +298,9 @@ export default function RecommendationsPage() {
         variant: 'destructive',
       })
     } finally {
-      if (requestId !== astrologyRequestIdRef.current) return
-      setIsLoadingAstrology(false)
+      if (requestId === astrologyRequestIdRef.current) {
+        setIsLoadingAstrology(false)
+      }
     }
   }
 

@@ -8,13 +8,33 @@ import '../../../domain/enums/season.dart';
 import '../controllers/outfit_builder_controller.dart';
 
 /// Outfit builder page - Create and visualize outfits
-class OutfitBuilderPage extends StatelessWidget {
+class OutfitBuilderPage extends StatefulWidget {
   const OutfitBuilderPage({super.key});
+
+  @override
+  State<OutfitBuilderPage> createState() => _OutfitBuilderPageState();
+}
+
+class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
+  late final OutfitBuilderController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    // Create the controller once here rather than on every build().
+    //
+    // Note this does NOT by itself avoid "markNeedsBuild called during build":
+    // initState runs from Element.inflateWidget -> mount -> _firstBuild while
+    // the *parent* is still the current build target — for a route's top-level
+    // widget that parent is the Builder inside _ModalScopeState, so onInit's Rx
+    // writes are still mid-frame. The deferral lives in the controller instead
+    // (see settleBuildPhase in core/utils/frame_safe.dart).
+    controller = Get.put(OutfitBuilderController());
+  }
 
   @override
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
-    final OutfitBuilderController controller = Get.put(OutfitBuilderController());
 
     return Scaffold(
       appBar: AppBar(

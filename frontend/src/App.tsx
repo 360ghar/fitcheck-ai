@@ -5,6 +5,9 @@ import { memo } from 'react'
 // Analytics
 import { PostHogIdentify } from './components/analytics/PostHogIdentify'
 
+// Error boundaries
+import FeatureErrorBoundary from './components/errors/FeatureErrorBoundary'
+
 // Layouts
 import AppLayout from './components/layout/AppLayout'
 import AuthLayout from './components/layout/AuthLayout'
@@ -216,14 +219,14 @@ function App() {
           }
         >
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/wardrobe" element={<WardrobePage />} />
-          <Route path="/wardrobe/:id" element={<WardrobePage />} />
-          <Route path="/outfits" element={<OutfitsPage />} />
-          <Route path="/outfits/:id" element={<OutfitsPage />} />
-          <Route path="/calendar" element={<CalendarPage />} />
-          <Route path="/recommendations" element={<RecommendationsPage />} />
-          <Route path="/photoshoot" element={<PhotoshootPage />} />
-          <Route path="/try-on" element={<TryOnPage />} />
+          <Route path="/wardrobe" element={<FeatureErrorBoundary featureName="Wardrobe"><WardrobePage /></FeatureErrorBoundary>} />
+          <Route path="/wardrobe/:id" element={<FeatureErrorBoundary featureName="Wardrobe"><WardrobePage /></FeatureErrorBoundary>} />
+          <Route path="/outfits" element={<FeatureErrorBoundary featureName="Outfits"><OutfitsPage /></FeatureErrorBoundary>} />
+          <Route path="/outfits/:id" element={<FeatureErrorBoundary featureName="Outfits"><OutfitsPage /></FeatureErrorBoundary>} />
+          <Route path="/calendar" element={<FeatureErrorBoundary featureName="Calendar"><CalendarPage /></FeatureErrorBoundary>} />
+          <Route path="/recommendations" element={<FeatureErrorBoundary featureName="Recommendations"><RecommendationsPage /></FeatureErrorBoundary>} />
+          <Route path="/photoshoot" element={<FeatureErrorBoundary featureName="Photoshoot"><PhotoshootPage /></FeatureErrorBoundary>} />
+          <Route path="/try-on" element={<FeatureErrorBoundary featureName="Virtual Try-On"><TryOnPage /></FeatureErrorBoundary>} />
           <Route path="/gamification" element={<GamificationPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsRedirect />} />

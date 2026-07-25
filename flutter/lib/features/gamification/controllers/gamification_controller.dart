@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import '../models/gamification_model.dart';
 import '../repositories/gamification_repository.dart';
+import '../../../core/utils/frame_safe.dart';
 
 /// Gamification controller
 /// Handles streaks, achievements, and leaderboard
@@ -22,6 +23,7 @@ class GamificationController extends GetxController {
   }
 
   Future<void> refreshAll() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     isLoading.value = true;
     error.value = '';
     await Future.wait([

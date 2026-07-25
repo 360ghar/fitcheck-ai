@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 import '../../../app/routes/app_routes.dart';
+import '../../../core/utils/frame_safe.dart';
 
 /// Controller for MainShellPage - manages tab navigation
 class MainShellController extends GetxController {
@@ -19,7 +20,12 @@ class MainShellController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    loadedTabs.add(currentIndex.value);
+    // This controller is `permanent` and MainShellPage's three Obx widgets stay
+    // subscribed to loadedTabs for the app's lifetime, so never write it while a
+    // frame is in flight. See [afterBuildPhase].
+    afterBuildPhase(() {
+      if (!isClosed) loadedTabs.add(currentIndex.value);
+    });
   }
 
   /// Change the current tab

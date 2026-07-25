@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import '../../../core/services/notification_service.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../repositories/recommendations_repository.dart';
+import '../../../core/utils/frame_safe.dart';
 
 /// Controller for Weather-Based Recommendations tab
 /// Manages weather data and clothing recommendations
@@ -23,6 +24,11 @@ class WeatherRecommendationsController extends GetxController {
   }
 
   Future<void> _loadUserLocation() async {
+    // This controller is first resolved from inside an Obx (weather_based_tab),
+    // so onInit can run mid-frame. Settle first rather than deferring just the
+    // write, so the returned future still means "location is set" — callers
+    // (and fetchRecommendations' `location.value.isEmpty` guard) depend on that.
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     // Try to get user's saved location from settings
     location.value = 'San Francisco'; // Default
   }

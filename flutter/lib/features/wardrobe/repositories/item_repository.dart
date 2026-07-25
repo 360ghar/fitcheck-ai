@@ -328,7 +328,7 @@ class ItemRepository {
       final bytes = await image.readAsBytes();
       final imageBase64 = base64Encode(bytes);
 
-      final response = await _apiClient.post(
+      final response = await _apiClient.postWithExtendedTimeout(
         ApiConstants.aiExtractItems,
         data: {'image': imageBase64},
       );
@@ -416,7 +416,7 @@ class ItemRepository {
     bool saveToStorage = false,
   }) async {
     try {
-      final response = await _apiClient.post(
+      final response = await _apiClient.postWithExtendedTimeout(
         ApiConstants.aiGenerateProductImage,
         data: {
           'item_description': itemDescription,
@@ -430,11 +430,6 @@ class ItemRepository {
           'include_shadows': includeShadows,
           'save_to_storage': saveToStorage,
         },
-        options: Options(
-          receiveTimeout: const Duration(
-            minutes: 5,
-          ), // AI generation can take time
-        ),
       );
 
       final data = _extractDataMap(response.data);

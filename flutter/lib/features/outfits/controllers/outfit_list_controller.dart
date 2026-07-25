@@ -7,6 +7,7 @@ import '../../../core/services/haptic_service.dart';
 import '../../../core/services/network_service.dart' show RetryHelper, NetworkService;
 import '../models/outfit_model.dart';
 import '../repositories/outfit_repository.dart';
+import '../../../core/utils/frame_safe.dart';
 
 /// Controller for outfit list, filtering, and pagination
 /// Focused responsibility: Managing the outfit list and filters
@@ -97,6 +98,7 @@ class OutfitListController extends GetxController {
 
   /// Fetch outfits from server with filters
   Future<void> fetchOutfits({bool refresh = false}) async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     if (refresh) {
       currentPage.value = 1;
       hasMore.value = true;
@@ -153,6 +155,7 @@ class OutfitListController extends GetxController {
 
   /// Fetch single outfit by ID from API
   Future<OutfitModel?> fetchOutfitById(String outfitId) async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return null;
     // Check cache first
     final cached = outfits.firstWhereOrNull((o) => o.id == outfitId);
     if (cached != null) {
@@ -403,7 +406,8 @@ class OutfitListController extends GetxController {
 
   /// Setup network monitoring
   void _setupNetworkMonitoring() {
-    // Update offline state based on network connectivity
+    // Update offline state based on network connectivity. No frame guard needed
+    // here: connectivity_plus delivers on the event loop, never inside a build.
     _workers.add(ever(_networkService.isConnected, (connected) {
       isOffline.value = !connected;
       if (connected && outfits.isEmpty && !isLoading.value) {
@@ -412,8 +416,12 @@ class OutfitListController extends GetxController {
       }
     }));
 
-    // Initial state
-    isOffline.value = !_networkService.isConnected.value;
+    // Initial state. This one *does* run from onInit, which can be mid-frame,
+    // and isOffline is read by mounted Obx widgets in the shell's outfits tab.
+    // See [afterBuildPhase].
+    afterBuildPhase(() {
+      if (!isClosed) isOffline.value = !_networkService.isConnected.value;
+    });
   }
 
   /// Setup route listener to refresh when returning to this page

@@ -6,6 +6,7 @@ import '../../../core/config/env_config.dart';
 import '../../../core/utils/error_handler.dart';
 import '../repositories/subscription_repository.dart';
 import '../models/subscription_model.dart';
+import '../../../core/utils/frame_safe.dart';
 
 /// Controller for subscription and referral state
 class SubscriptionController extends GetxController {
@@ -69,6 +70,7 @@ class SubscriptionController extends GetxController {
 
   /// Fetch subscription and usage data
   Future<void> fetchSubscription() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     isLoading.value = true;
     error.value = '';
     try {
@@ -85,6 +87,7 @@ class SubscriptionController extends GetxController {
 
   /// Fetch usage only
   Future<void> fetchUsage() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     try {
       usage.value = await _repository.getUsage();
     } catch (e, stackTrace) {
@@ -106,6 +109,7 @@ class SubscriptionController extends GetxController {
 
   /// Fetch referral code (API always creates one if missing)
   Future<void> fetchReferralCode() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     isLoadingReferral.value = true;
     referralError.value = '';
     try {
@@ -121,6 +125,7 @@ class SubscriptionController extends GetxController {
 
   /// Fetch referral stats
   Future<void> fetchReferralStats() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     try {
       referralStats.value = await _repository.getReferralStats();
     } catch (e, stackTrace) {

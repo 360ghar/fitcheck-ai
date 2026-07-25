@@ -62,7 +62,7 @@ class PhotoshootRepository {
     int numImages = 1,
     PhotoshootAspectRatio aspectRatio = PhotoshootAspectRatio.square,
   }) async {
-    final response = await _apiClient.post(
+    final response = await _apiClient.postWithExtendedTimeout(
       '$_baseEndpoint/generate?sync=true',
       data: {
         'photos': photos,

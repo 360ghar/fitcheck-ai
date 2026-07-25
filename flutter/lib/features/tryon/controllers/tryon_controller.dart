@@ -443,7 +443,7 @@ class TryOnController extends GetxController {
       final bytes = await clothingImage.value!.readAsBytes();
       final clothingBase64 = await compute(_encodeBase64, bytes);
 
-      final response = await _apiClient.post(
+      final response = await _apiClient.postWithExtendedTimeout(
         '${ApiConstants.ai}/try-on',
         data: {
           'clothing_image': clothingBase64,

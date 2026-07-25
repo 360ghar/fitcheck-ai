@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../core/services/notification_service.dart';
 import '../controllers/outfit_list_controller.dart';
@@ -884,12 +884,13 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
         final imageUrl = outfit.outfitImages!.first.url;
 
         try {
-          // Download image to temp file using Dio
+          // Download image to temp file using the configured ApiClient so the
+          // request inherits auth interceptors and timeout settings instead of a
+          // bare Dio() with no timeout and no auth token.
           final tempDir = await getTemporaryDirectory();
           final tempFile = File('${tempDir.path}/outfit_share_${outfit.id}.png');
 
-          final dio = Dio();
-          await dio.download(imageUrl, tempFile.path);
+          await ApiClient.instance.dio.download(imageUrl, tempFile.path);
 
           // Close loading dialog
           Get.back();

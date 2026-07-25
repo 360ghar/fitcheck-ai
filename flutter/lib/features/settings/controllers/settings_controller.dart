@@ -3,6 +3,7 @@ import '../models/user_preferences_model.dart';
 import '../repositories/settings_repository.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../../core/services/theme_service.dart';
+import '../../../core/utils/frame_safe.dart';
 
 /// Settings controller - manages settings and preferences state
 class SettingsController extends GetxController {
@@ -32,6 +33,7 @@ class SettingsController extends GetxController {
 
   /// Fetch user preferences
   Future<void> fetchPreferences() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     try {
       isLoading.value = true;
       error.value = '';

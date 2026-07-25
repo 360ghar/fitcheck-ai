@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import '../models/body_profile_model.dart';
 import '../repositories/body_profile_repository.dart';
+import '../../../core/utils/frame_safe.dart';
 
 /// Controller for managing body profiles
 class BodyProfileController extends GetxController {
@@ -20,6 +21,7 @@ class BodyProfileController extends GetxController {
 
   /// Fetch all body profiles
   Future<void> fetchProfiles() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     try {
       isLoading.value = true;
       error.value = '';

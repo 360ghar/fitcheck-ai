@@ -18,6 +18,7 @@ import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/permission_helper.dart';
 import '../models/photoshoot_models.dart';
 import '../repositories/photoshoot_repository.dart';
+import '../../../core/utils/frame_safe.dart';
 
 /// Steps in the photoshoot generation flow
 enum PhotoshootStep { upload, configure, generating, results }
@@ -101,6 +102,7 @@ class PhotoshootController extends GetxController {
 
   /// Fetch current usage stats
   Future<void> fetchUsage() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     isLoadingUsage.value = true;
     try {
       usage.value = await _repository.getUsage();
@@ -506,8 +508,20 @@ class PhotoshootController extends GetxController {
   }
 
   /// Fallback polling if SSE fails
-  Future<void> _pollJobStatus(String id) async {
+  Future<void> _pollJobStatus(String id, {int attempt = 0}) async {
     if (id.isEmpty) return;
+
+    // Bound the polling loop so a permanently unreachable job status endpoint
+    // cannot spin forever (previously this recursion had no max-attempts cap).
+    const maxPollAttempts = 60; // ~2 minutes at 2s cadence
+    if (attempt >= maxPollAttempts) {
+      debugPrint('Polling for job $id gave up after $attempt attempts');
+      error.value = 'Lost connection while generating. Please try again.';
+      Get.snackbar('Connection Lost', error.value);
+      currentStep.value = PhotoshootStep.configure;
+      isGenerating.value = false;
+      return;
+    }
 
     try {
       final status = await _repository.getJobStatus(id);
@@ -526,7 +540,7 @@ class PhotoshootController extends GetxController {
         case 'processing':
           await Future.delayed(const Duration(seconds: 2));
           if (isGenerating.value) {
-            _pollJobStatus(id);
+            _pollJobStatus(id, attempt: attempt + 1);
           }
           break;
         case 'complete':
@@ -550,14 +564,16 @@ class PhotoshootController extends GetxController {
           break;
       }
     } catch (e) {
-      debugPrint('Poll status error: $e');
-      // Not reported to telemetry here: this loop currently retries with no
-      // max-attempts cap (a separate known issue), so reporting every
-      // iteration would spam Sentry/PostHog rather than surface a real
-      // signal. Revisit once that loop has a bounded retry count.
+      debugPrint('Poll status error (attempt ${attempt + 1}): $e');
+      // Transient polling errors are retried until the bounded cap above is
+      // reached. We report only on the final attempt to avoid spamming
+      // telemetry on every transient network blip.
+      if (attempt + 1 >= maxPollAttempts) {
+        ErrorHandler.reportError(e, 'Photoshoot polling exhausted');
+      }
       await Future.delayed(const Duration(seconds: 3));
       if (isGenerating.value) {
-        _pollJobStatus(id);
+        _pollJobStatus(id, attempt: attempt + 1);
       }
     }
   }

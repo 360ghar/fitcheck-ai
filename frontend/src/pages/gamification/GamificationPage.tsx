@@ -64,7 +64,6 @@ export default function GamificationPage() {
 
   useEffect(() => {
     void load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast])
 
   const nextMilestoneDays = streak?.next_milestone?.days

@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import '../../../core/services/notification_service.dart';
 import '../repositories/recommendations_repository.dart';
+import '../../../core/utils/frame_safe.dart';
 
 /// Controller for Astrology recommendations tab
 class AstrologyRecommendationsController extends GetxController {
@@ -15,7 +16,13 @@ class AstrologyRecommendationsController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    targetDate.value = DateTime.now().toIso8601String().split('T').first;
+    // This controller is first resolved from inside an Obx (astrology_tab), so
+    // onInit can run mid-frame. See [afterBuildPhase].
+    afterBuildPhase(() {
+      if (!isClosed) {
+        targetDate.value = DateTime.now().toIso8601String().split('T').first;
+      }
+    });
   }
 
   Future<void> fetchRecommendations() async {

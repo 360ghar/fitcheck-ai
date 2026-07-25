@@ -18,6 +18,7 @@ from supabase import Client
 
 from app.core.config import settings
 from app.core.exceptions import SocialImportJobNotFoundError
+from app.core.logging_config import get_context_logger
 from app.core.security import get_current_user_id
 from app.db.connection import get_db
 from app.models.social_import import (
@@ -39,6 +40,8 @@ from app.services.social_oauth_service import SocialOAuthService
 from app.services.social_url_service import SocialURLService
 
 router = APIRouter()
+
+logger = get_context_logger(__name__)
 
 
 def _service(user_id: str, db: Client) -> SocialImportPipelineService:
@@ -330,6 +333,23 @@ async def social_import_events(
                         "status": status_payload.get("status"),
                     }
                     yield {"event": "heartbeat", "data": json.dumps(heartbeat)}
+        except asyncio.CancelledError:
+            # Client disconnected; no one left to receive a terminal event.
+            pass
+        except Exception:
+            # Guarantee a terminal SSE event so clients never hang on a
+            # silently-closed stream when an unexpected error occurs.
+            logger.exception(
+                "Unexpected error in social import SSE generator",
+                extra={"job_id": job_id},
+            )
+            yield {
+                "event": "job_failed",
+                "data": json.dumps({
+                    "error": "Internal error while streaming import events",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }),
+            }
         finally:
             await SocialImportEventService.remove_subscriber(job_id, queue)
 

@@ -7,6 +7,7 @@ import '../../wardrobe/models/item_model.dart';
 import '../repositories/outfit_repository.dart';
 import '../../wardrobe/repositories/item_repository.dart';
 import '../../wardrobe/controllers/wardrobe_controller.dart';
+import '../../../core/utils/frame_safe.dart';
 
 /// Controller for outfit builder
 /// Manages outfit creation, item selection, and AI generation
@@ -43,16 +44,24 @@ class OutfitBuilderController extends GetxController {
   }
 
   Future<void> _loadAvailableItems() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     // Try to sync with WardrobeController for real-time updates
     if (Get.isRegistered<WardrobeController>()) {
       final wardrobeController = Get.find<WardrobeController>();
 
-      // Use wardrobe's items directly
+      // Use wardrobe's items directly. Safe to write synchronously: the
+      // settleBuildPhase above already put us outside the build phase.
       availableItems.value = wardrobeController.items.toList();
 
-      // Listen for changes to wardrobe items
+      // Listen for changes to wardrobe items. The wardrobe controller is kept
+      // alive by the shell IndexedStack and can emit during a
+      // build/layout/paint phase, so the write is deferred in that case.
+      // See [afterBuildPhase].
       _wardrobeItemsWorker = ever(wardrobeController.items, (items) {
-        availableItems.value = items.toList();
+        final updated = items.toList();
+        afterBuildPhase(() {
+          if (!isClosed) availableItems.value = updated;
+        });
       });
 
       // If wardrobe is empty, load independently as fallback
@@ -66,6 +75,7 @@ class OutfitBuilderController extends GetxController {
   }
 
   Future<void> _loadItemsFromRepository() async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     try {
       isLoading.value = true;
       final response = await _itemRepository.getItems(limit: 100);

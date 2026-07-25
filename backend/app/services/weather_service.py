@@ -111,7 +111,7 @@ class WeatherService:
             if coords:
                 return await self.get_weather_by_coordinates(lat=coords[0], lon=coords[1], units=units)
 
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 params: Dict[str, Any] = {"appid": self.api_key, "units": units}
                 if self._looks_like_zip(location):
                     params["zip"] = location.strip()
@@ -186,7 +186,7 @@ class WeatherService:
             raise WeatherServiceError("Weather API key not configured. Set WEATHER_API_KEY in environment.")
 
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 params = {
                     "lat": lat,
                     "lon": lon,
@@ -281,7 +281,7 @@ class WeatherService:
                 if coords:
                     lat, lon = coords
 
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 params: Dict[str, Any] = {"appid": self.api_key, "units": units}
 
                 if lat is not None and lon is not None:

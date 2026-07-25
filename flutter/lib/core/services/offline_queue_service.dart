@@ -66,6 +66,20 @@ typedef OperationHandler = Future<bool> Function(QueuedOperation operation);
 class OfflineQueueService extends GetxService {
   static OfflineQueueService get instance => Get.find<OfflineQueueService>();
 
+  /// Maximum number of operations allowed in the queue.
+  /// When exceeded, the oldest operations are evicted to prevent unbounded
+  /// growth (e.g. a user stuck offline for days enqueuing repeated actions).
+  static const int maxQueueSize = 100;
+
+  /// Operations older than this are considered expired and dropped during
+  /// processing to avoid replaying stale actions (e.g. toggling a favourite
+  /// that happened days ago).
+  static const Duration operationTtl = Duration(days: 7);
+
+  // Monotonic counter to guarantee unique IDs even when multiple operations
+  // are enqueued within the same millisecond.
+  int _idCounter = 0;
+
   // Queue storage
   final RxList<QueuedOperation> queue = <QueuedOperation>[].obs;
   final RxBool isProcessing = false.obs;
@@ -137,7 +151,7 @@ class OfflineQueueService extends GetxService {
     int maxRetries = 3,
   }) async {
     final operation = QueuedOperation(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: _generateId(),
       type: type,
       payload: payload,
       createdAt: DateTime.now(),
@@ -145,12 +159,34 @@ class OfflineQueueService extends GetxService {
     );
 
     queue.add(operation);
+
+    // Evict the oldest operations if the queue exceeds its maximum size so
+    // memory/disk usage stays bounded while offline.
+    if (queue.length > maxQueueSize) {
+      final overflow = queue.length - maxQueueSize;
+      if (kDebugMode) {
+        debugPrint(
+          'Offline queue exceeded max size ($maxQueueSize); evicting $overflow oldest operation(s)',
+        );
+      }
+      queue.removeRange(0, overflow);
+    }
+
     await _persistQueue();
 
     // Try to process immediately if online
     if (NetworkService.instance.hasConnection) {
       processQueue();
     }
+  }
+
+  /// Generate a unique operation ID.
+  ///
+  /// Combines the current timestamp with a monotonic counter so two operations
+  /// enqueued within the same millisecond cannot collide.
+  String _generateId() {
+    _idCounter = (_idCounter + 1) % 100000;
+    return '${DateTime.now().millisecondsSinceEpoch}-$_idCounter';
   }
 
   /// Process all queued operations
@@ -164,6 +200,17 @@ class OfflineQueueService extends GetxService {
       // Process in order (FIFO)
       while (queue.isNotEmpty && NetworkService.instance.hasConnection) {
         final operation = queue.first;
+
+        // Drop expired operations to avoid replaying stale actions that the
+        // user no longer cares about (e.g. toggles from days ago).
+        if (DateTime.now().difference(operation.createdAt) > operationTtl) {
+          if (kDebugMode) {
+            debugPrint(
+                'Operation ${operation.id} expired after $operationTtl; dropping');
+          }
+          queue.removeAt(0);
+          continue;
+        }
 
         final handler = _handlers[operation.type];
         if (handler == null) {

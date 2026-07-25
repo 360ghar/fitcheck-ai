@@ -1010,7 +1010,7 @@ class AIProviderService:
                     # Fetch with a bare client (no Authorization header) - this is
                     # a provider-hosted asset URL, not the API endpoint, and
                     # shouldn't receive our API key.
-                    async with httpx.AsyncClient() as asset_client:
+                    async with httpx.AsyncClient(timeout=30.0) as asset_client:
                         image_response = await asset_client.get(item["url"])
                         image_response.raise_for_status()
                 except Exception as e:

@@ -8,11 +8,18 @@ import '../repositories/item_repository.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/network_service.dart'
     show RetryHelper, NetworkService;
+import '../../../core/utils/frame_safe.dart';
 
 /// Wardrobe controller
 class WardrobeController extends GetxController {
-  final ItemRepository _itemRepository = ItemRepository();
+  final ItemRepository _itemRepository;
   final NetworkService _networkService = Get.find<NetworkService>();
+
+  /// [itemRepository] is injectable to allow unit tests to exercise the
+  /// controller's error-handling paths without hitting the real API / Supabase
+  /// stack. Defaults to a live [ItemRepository] in production.
+  WardrobeController({ItemRepository? itemRepository})
+    : _itemRepository = itemRepository ?? ItemRepository();
 
   // Workers for cleanup
   final List<Worker> _workers = [];
@@ -118,6 +125,7 @@ class WardrobeController extends GetxController {
 
   /// Fetch items from server with filters
   Future<void> fetchItems({bool refresh = false}) async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     if (refresh) {
       currentPage.value = 1;
       hasMore.value = true;
@@ -496,7 +504,8 @@ class WardrobeController extends GetxController {
 
   /// Setup network monitoring
   void _setupNetworkMonitoring() {
-    // Update offline state based on network connectivity
+    // Update offline state based on network connectivity. No frame guard needed
+    // here: connectivity_plus delivers on the event loop, never inside a build.
     _workers.add(
       ever(_networkService.isConnected, (connected) {
         isOffline.value = !connected;
@@ -507,8 +516,12 @@ class WardrobeController extends GetxController {
       }),
     );
 
-    // Initial state
-    isOffline.value = !_networkService.isConnected.value;
+    // Initial state. This one *does* run from onInit, which can be mid-frame,
+    // and isOffline is read by mounted Obx widgets in the shell's wardrobe tab.
+    // See [afterBuildPhase].
+    afterBuildPhase(() {
+      if (!isClosed) isOffline.value = !_networkService.isConnected.value;
+    });
   }
 
   /// Setup route listener to refresh when returning to this page

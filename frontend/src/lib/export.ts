@@ -840,7 +840,7 @@ export async function exportAndDownload(
       mimeType = 'text/csv'
       break
 
-    case 'pdf':
+    case 'pdf': {
       // For PDF, we generate HTML and open print dialog
       content = await exportToHTML(data, { includeImages: options.includeImages })
       const printWindow = window.open('', '_blank')
@@ -851,6 +851,7 @@ export async function exportAndDownload(
         setTimeout(() => printWindow.print(), 500)
       }
       return
+    }
 
     default:
       throw new Error(`Unsupported format: ${format}`)

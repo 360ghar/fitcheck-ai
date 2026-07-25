@@ -148,7 +148,14 @@ class BatchExtractionController extends GetxController {
       .where((item) => item.isSelected && item.includeInWardrobe)
       .length;
 
+  bool _socialModeInitialized = false;
+
   void initializeSocialMode() {
+    // Idempotent: the selector page schedules this from a post-frame callback
+    // on every build, so guard against re-writing Rx state (which would mark
+    // subscribed Obx widgets dirty and re-trigger the social dialog).
+    if (_socialModeInitialized) return;
+    _socialModeInitialized = true;
     inputMode.value = BatchInputMode.social;
     showSocialDialogTrigger.value = true;
   }
