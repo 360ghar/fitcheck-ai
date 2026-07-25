@@ -16,7 +16,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from '@/components/ui/alert'
-import { checkDuplicates, type DuplicateItem, type DuplicateCheckRequest } from '@/api/items'
+import { checkDuplicatesQueued, type DuplicateItem, type DuplicateCheckRequest } from '@/api/items'
 
 interface DuplicateDetectionProps {
   /** Item data to check for duplicates */
@@ -161,7 +161,7 @@ export function DuplicateDetection({
     setError(null)
 
     try {
-      const result = await checkDuplicates(itemData, { threshold, limit: 5 })
+      const result = await checkDuplicatesQueued(itemData, { threshold, limit: 5 })
       setDuplicates(result.duplicates)
       setHasChecked(true)
     } catch (err) {

@@ -1055,6 +1055,29 @@ async def check_duplicates(
         threshold: The threshold used for matching
     """
     try:
+        # Empty wardrobe: no duplicates possible. Skip embedding + Pinecone
+        # (observed 6–10s per check during first-time batch saves).
+        wardrobe_count_result = (
+            db.table("items")
+            .select("id", count="exact")
+            .eq("user_id", user_id)
+            .eq("is_deleted", False)
+            .limit(1)
+            .execute()
+        )
+        wardrobe_count = getattr(wardrobe_count_result, "count", None)
+        if wardrobe_count is None:
+            wardrobe_count = len(wardrobe_count_result.data or [])
+        if wardrobe_count == 0:
+            return {
+                "data": {
+                    "has_duplicates": False,
+                    "duplicates": [],
+                    "threshold": threshold,
+                },
+                "message": "No duplicates found",
+            }
+
         # If embedding quota is exhausted, fall back to text-based matching
         rate_check = await AISettingsService.check_rate_limit(
             user_id=user_id,

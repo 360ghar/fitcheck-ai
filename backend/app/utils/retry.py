@@ -16,6 +16,15 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+def is_retryable_error(exc: Exception) -> bool:
+    """True when an exception opts into retries via a truthy ``retryable`` flag.
+
+    Used with AIServiceError (and any other exception that sets ``retryable``)
+    so permanent failures (401/400) fail fast while 429/503 still back off.
+    """
+    return bool(getattr(exc, "retryable", False))
+
+
 @dataclass
 class RetryConfig:
     """Configuration for retry behavior."""
@@ -69,6 +78,7 @@ async def with_retry(
     jitter: bool = True,
     retryable_exceptions: Tuple[Type[Exception], ...] = (Exception,),
     on_retry: Optional[Callable[[int, Exception, float], None]] = None,
+    should_retry: Optional[Callable[[Exception], bool]] = None,
 ) -> T:
     """
     Execute an async function with exponential backoff retry logic.
@@ -82,6 +92,9 @@ async def with_retry(
         jitter: Add random jitter to prevent thundering herd
         retryable_exceptions: Tuple of exception types that should trigger retry
         on_retry: Optional callback called before each retry with (attempt, error, delay)
+        should_retry: Optional predicate; if it returns False the exception is
+            re-raised immediately without further retries (e.g. non-retryable
+            AIServiceError after a 401).
 
     Returns:
         The result of the function call
@@ -96,6 +109,9 @@ async def with_retry(
             return await fn()
         except retryable_exceptions as e:
             last_exception = e
+
+            if should_retry is not None and not should_retry(e):
+                raise
 
             if attempt >= max_retries:
                 logger.warning(

@@ -278,23 +278,63 @@ async def test_generate_image_via_images_api_does_not_retry_http_status_error():
     assert exc_info.value.retryable is False
 
 
+class _FlakyThenOk429Client:
+    """Returns a 429 once (real httpx returns Response; raise_for_status is ours), then succeeds."""
+
+    def __init__(self):
+        self.call_count = 0
+
+    async def post(self, url, json=None, headers=None):
+        self.call_count += 1
+        if self.call_count == 1:
+            response = _FakeResponse({"error": {"message": "rate limited"}})
+            response.status_code = 429
+            response.text = '{"error": {"message": "rate limited"}}'
+            response.headers = {"Retry-After": "1"}
+            return response
+        return _FakeResponse({"data": [{"b64_json": "ZmFrZQ=="}]})
+
+
 @pytest.mark.asyncio
-async def test_generate_image_via_images_api_marks_429_as_retryable():
+async def test_generate_image_via_images_api_retries_on_429_then_succeeds():
+    """429 must retry on the same request (parity with chat), not only mark outer retryable."""
+    service = AIProviderService(_make_config())
+    fake_client = _FlakyThenOk429Client()
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
+         patch("asyncio.sleep", AsyncMock()):
+        result = await service._generate_image_via_images_api("a cat", model="image-model")
+
+    assert fake_client.call_count == 2
+    assert result.images == ["ZmFrZQ=="]
+
+
+@pytest.mark.asyncio
+async def test_generate_image_via_images_api_429_exhausted_is_retryable():
     from app.core.exceptions import AIServiceError
 
-    class _RateLimitedClient:
+    class _Always429Client:
+        def __init__(self):
+            self.call_count = 0
+
         async def post(self, url, json=None, headers=None):
-            request = httpx.Request("POST", url)
-            response = httpx.Response(429, request=request, json={"error": {"message": "rate limited"}})
-            raise httpx.HTTPStatusError("Too Many Requests", request=request, response=response)
+            self.call_count += 1
+            response = _FakeResponse({"error": {"message": "rate limited"}})
+            response.status_code = 429
+            response.text = '{"error": {"message": "rate limited"}}'
+            response.headers = {}
+            return response
 
     service = AIProviderService(_make_config())
-    fake_client = _RateLimitedClient()
+    fake_client = _Always429Client()
 
-    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)):
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
+         patch("asyncio.sleep", AsyncMock()):
         with pytest.raises(AIServiceError) as exc_info:
             await service._generate_image_via_images_api("a cat", model="image-model")
 
+    # max_retries=2 → 3 attempts
+    assert fake_client.call_count == 3
     assert exc_info.value.retryable is True
 
 
@@ -473,3 +513,201 @@ async def test_chat_does_not_fall_back_when_explicit_non_default_model_requested
     mock_images_api.assert_awaited_once_with(
         "a cat", model="custom-override-model", reference_images=[]
     )
+
+
+# ---------------------------------------------------------------------------
+# Chat/vision transient HTTP retries (batch extraction path)
+# ---------------------------------------------------------------------------
+
+
+class _ChatHttpStatusClient:
+    """Sequence of chat HTTP outcomes: int status codes raise HTTPStatusError;
+    a dict payload is returned as a successful chat completion."""
+
+    def __init__(self, outcomes):
+        self.outcomes = list(outcomes)
+        self.call_count = 0
+        self.calls = []
+
+    async def post(self, url, json=None, headers=None):
+        self.call_count += 1
+        self.calls.append({"url": url, "json": json, "headers": headers})
+        outcome = self.outcomes.pop(0) if self.outcomes else 500
+        if isinstance(outcome, dict):
+            return _FakeResponse(outcome)
+        request = httpx.Request("POST", url)
+        # AIProviderService calls raise_for_status() on the response object.
+        class _StatusResponse:
+            def __init__(self, status_code, payload, headers, request):
+                self.status_code = status_code
+                self._payload = payload
+                self.headers = headers
+                self.request = request
+                self.text = str(payload)
+
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise httpx.HTTPStatusError(
+                        f"HTTP {self.status_code}",
+                        request=self.request,
+                        response=httpx.Response(
+                            self.status_code,
+                            request=self.request,
+                            json=self._payload,
+                            headers=self.headers,
+                        ),
+                    )
+
+            def json(self):
+                return self._payload
+
+        return _StatusResponse(
+            outcome,
+            {"error": {"message": f"provider error {outcome}"}},
+            {"Retry-After": "0"} if outcome in (429, 503) else {},
+            request,
+        )
+
+
+@pytest.mark.asyncio
+async def test_chat_retries_429_then_succeeds():
+    service = AIProviderService(_make_config())
+    fake_client = _ChatHttpStatusClient(
+        [
+            429,
+            {"choices": [{"message": {"content": "recovered"}}]},
+        ]
+    )
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
+         patch("asyncio.sleep", AsyncMock()):
+        result = await service.chat(messages=[ChatMessage(role="user", content="hi")])
+
+    assert fake_client.call_count == 2
+    assert result.text == "recovered"
+
+
+@pytest.mark.asyncio
+async def test_chat_retries_503_then_succeeds():
+    service = AIProviderService(_make_config())
+    fake_client = _ChatHttpStatusClient(
+        [
+            503,
+            {"choices": [{"message": {"content": "ok after overload"}}]},
+        ]
+    )
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
+         patch("asyncio.sleep", AsyncMock()):
+        result = await service.chat(messages=[ChatMessage(role="user", content="hi")])
+
+    assert fake_client.call_count == 2
+    assert result.text == "ok after overload"
+
+
+@pytest.mark.asyncio
+async def test_chat_429_exhausted_raises_retryable_with_status_in_message():
+    from app.core.exceptions import AIServiceError
+
+    service = AIProviderService(_make_config())
+    # max_retries=2 → 3 attempts
+    fake_client = _ChatHttpStatusClient([429, 429, 429])
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
+         patch("asyncio.sleep", AsyncMock()):
+        with pytest.raises(AIServiceError) as exc_info:
+            await service.chat(messages=[ChatMessage(role="user", content="hi")])
+
+    assert fake_client.call_count == 3
+    assert exc_info.value.retryable is True
+    assert "429" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_chat_401_fails_fast_non_retryable():
+    from app.core.exceptions import AIServiceError
+
+    service = AIProviderService(_make_config())
+    fake_client = _ChatHttpStatusClient([401])
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
+         patch("asyncio.sleep", AsyncMock()):
+        with pytest.raises(AIServiceError) as exc_info:
+            await service.chat(messages=[ChatMessage(role="user", content="hi")])
+
+    assert fake_client.call_count == 1
+    assert exc_info.value.retryable is False
+    assert "401" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_chat_400_fails_fast_non_retryable():
+    from app.core.exceptions import AIServiceError
+
+    service = AIProviderService(_make_config())
+    fake_client = _ChatHttpStatusClient([400])
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
+         patch("asyncio.sleep", AsyncMock()):
+        with pytest.raises(AIServiceError) as exc_info:
+            await service.chat(messages=[ChatMessage(role="user", content="hi")])
+
+    assert fake_client.call_count == 1
+    assert exc_info.value.retryable is False
+    assert "400" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_with_retry_respects_should_retry_predicate():
+    """Batch extraction uses should_retry so 401 does not burn 4 attempts."""
+    from app.core.exceptions import AIServiceError
+    from app.utils.retry import with_retry
+
+    calls = {"n": 0}
+
+    async def boom():
+        calls["n"] += 1
+        raise AIServiceError("AI request failed (401): bad key", retryable=False)
+
+    from app.utils.retry import is_retryable_error
+
+    with pytest.raises(AIServiceError):
+        await with_retry(
+            boom,
+            max_retries=3,
+            initial_delay=0.01,
+            jitter=False,
+            retryable_exceptions=(AIServiceError,),
+            should_retry=is_retryable_error,
+        )
+
+    assert calls["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_with_retry_retries_when_should_retry_true():
+    from app.core.exceptions import AIServiceError
+    from app.utils.retry import with_retry
+
+    calls = {"n": 0}
+
+    async def flaky():
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise AIServiceError("AI request failed (503): overloaded", retryable=True)
+        return "ok"
+
+    from app.utils.retry import is_retryable_error
+
+    with patch("asyncio.sleep", AsyncMock()):
+        result = await with_retry(
+            flaky,
+            max_retries=3,
+            initial_delay=0.01,
+            jitter=False,
+            retryable_exceptions=(AIServiceError,),
+            should_retry=is_retryable_error,
+        )
+
+    assert result == "ok"
+    assert calls["n"] == 3

@@ -16,6 +16,7 @@ import httpx
 
 from app.agents.item_extraction_agent import get_item_extraction_agent
 from app.agents.image_generation_agent import get_image_generation_agent
+from app.core.exceptions import AIServiceError
 from app.services.batch_job_service import (
     BatchJob,
     BatchJobService,
@@ -23,13 +24,15 @@ from app.services.batch_job_service import (
     DetectedItemData,
 )
 from app.utils.image_processing import downscale_base64_image
-from app.utils.retry import with_retry
+from app.utils.retry import is_retryable_error, with_retry
 
 logger = logging.getLogger(__name__)
 
-# Semaphores to limit concurrent AI calls
-EXTRACTION_SEMAPHORE = asyncio.Semaphore(10)  # Max 10 concurrent extractions
-GENERATION_SEMAPHORE = asyncio.Semaphore(5)   # Max 5 concurrent generations
+# Semaphores to limit concurrent AI calls. Keep both low: Agnes-style
+# shared gateways 429/503 under many parallel multi-MB vision/image POSTs.
+# Generation at 3 (not 5) also caps peak base64 buffers on the single Railway worker.
+EXTRACTION_SEMAPHORE = asyncio.Semaphore(3)
+GENERATION_SEMAPHORE = asyncio.Semaphore(3)
 
 OnItemsReady = Optional[Callable[[List[DetectedItemData]], Awaitable[None]]]
 
@@ -242,6 +245,8 @@ class BatchExtractionService:
                     max_retries=3,
                     initial_delay=2.0,
                     backoff_factor=2.0,
+                    retryable_exceptions=(AIServiceError,),
+                    should_retry=is_retryable_error,
                     on_retry=lambda attempt, error, delay: logger.warning(
                         f"Retrying extraction for image {image_id}",
                         extra={"attempt": attempt, "delay": delay, "error": str(error)},
@@ -482,6 +487,8 @@ class BatchExtractionService:
                     max_retries=3,
                     initial_delay=2.0,
                     backoff_factor=2.0,
+                    retryable_exceptions=(AIServiceError,),
+                    should_retry=is_retryable_error,
                     on_retry=lambda attempt, error, delay: logger.warning(
                         f"Retrying generation for item {item.temp_id}",
                         extra={"attempt": attempt, "delay": delay, "error": str(error)},

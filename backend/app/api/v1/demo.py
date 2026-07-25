@@ -14,7 +14,7 @@ from app.core.exceptions import AIServiceError, FitCheckException
 from app.core.ip_rate_limit import get_client_ip, ip_rate_limited_operation
 from app.core.logging_config import get_context_logger
 from app.db.connection import get_db
-from app.utils.retry import with_retry
+from app.utils.retry import is_retryable_error, with_retry
 from app.models.demo import (
     DemoExtractItemsRequest,
     DemoExtractItemsResponse,
@@ -68,6 +68,7 @@ async def demo_extract_items(
                 initial_delay=1.0,
                 backoff_factor=2.0,
                 retryable_exceptions=(AIServiceError,),
+                should_retry=is_retryable_error,
                 on_retry=lambda attempt, error, delay: logger.warning(
                     "Retrying demo extraction",
                     attempt=attempt,
@@ -165,6 +166,7 @@ async def demo_try_on(
                 initial_delay=2.0,
                 backoff_factor=2.0,
                 retryable_exceptions=(AIServiceError,),
+                should_retry=is_retryable_error,
                 on_retry=lambda attempt, error, delay: logger.warning(
                     "Retrying demo try-on",
                     attempt=attempt,

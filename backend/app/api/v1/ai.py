@@ -19,7 +19,7 @@ from app.core.exceptions import AIServiceError, FitCheckException, RateLimitErro
 from app.services.rate_limit import rate_limited_operation
 from app.core.security import get_current_user_id
 from app.db.connection import get_db
-from app.utils.retry import with_retry
+from app.utils.retry import is_retryable_error, with_retry
 from app.models.ai import (
     ExtractItemsRequest,
     ExtractItemsResponse,
@@ -107,6 +107,7 @@ async def extract_items(
                 initial_delay=2.0,
                 backoff_factor=2.0,
                 retryable_exceptions=(AIServiceError,),
+                should_retry=is_retryable_error,
                 on_retry=lambda attempt, error, delay: logger.warning(
                     "Retrying extract_multiple_items",
                     attempt=attempt,
@@ -157,6 +158,7 @@ async def extract_single_item(
                 initial_delay=2.0,
                 backoff_factor=2.0,
                 retryable_exceptions=(AIServiceError,),
+                should_retry=is_retryable_error,
                 on_retry=lambda attempt, error, delay: logger.warning(
                     "Retrying extract_single_item",
                     attempt=attempt,
@@ -269,6 +271,7 @@ async def generate_outfit(
                 initial_delay=2.0,
                 backoff_factor=2.0,
                 retryable_exceptions=(AIServiceError,),
+                should_retry=is_retryable_error,
                 on_retry=lambda attempt, error, delay: logger.warning(
                     "Retrying generate_outfit",
                     attempt=attempt,
@@ -348,6 +351,7 @@ async def generate_product_image(
                 initial_delay=2.0,
                 backoff_factor=2.0,
                 retryable_exceptions=(AIServiceError,),
+                should_retry=is_retryable_error,
                 on_retry=lambda attempt, error, delay: logger.warning(
                     "Retrying generate_product_image",
                     attempt=attempt,
@@ -466,6 +470,7 @@ async def generate_try_on(
                 initial_delay=2.0,
                 backoff_factor=2.0,
                 retryable_exceptions=(AIServiceError,),
+                should_retry=is_retryable_error,
                 on_retry=lambda attempt, error, delay: logger.warning(
                     "Retrying generate_try_on",
                     attempt=attempt,
