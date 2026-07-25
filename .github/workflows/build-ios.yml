@@ -24,13 +24,18 @@ name: Build iOS IPA
 #   POSTHOG_HOST                     - PostHog host (e.g. https://app.posthog.com)
 #   SENTRY_DSN                       - Sentry DSN for crash reporting (optional)
 #
+# Sentry symbolication (optional - enables dSYM upload to Sentry):
+#   SENTRY_AUTH_TOKEN                - Sentry auth token with project:write scope.
+#   SENTRY_ORG                       - Sentry organization slug.
+#   SENTRY_PROJECT                   - Sentry project slug.
+#
 # iOS code signing (NEW - must be created in the Apple Developer account):
 #   APPLE_CERT_P12_BASE64            - Base64 of the Apple Distribution .p12
 #                                      (cert + private key) exported from Keychain.
 #   APPLE_CERT_PASSWORD              - Password protecting the .p12 export.
 #   APPLE_PROVISIONING_PROFILE_BASE64- Base64 of the App Store provisioning
 #                                      profile (.mobileprovision) for the bundle
-#                                      id com.fitcheck.fitcheckAi.
+#                                      id com.fitcheckaiapp.fitcheckai.
 #   KEYCHAIN_PASSWORD                - (OPTIONAL) Password for the temp CI
 #                                      keychain. Defaults to a random value if
 #                                      unset; only needs to be set if you want a
@@ -48,7 +53,7 @@ name: Build iOS IPA
 # MANUAL PREREQUISITES (must be done ONCE before this workflow can fully succeed)
 # ------------------------------------------------------------------------------
 #   1. Enrol in the Apple Developer Program (paid) and create the app record in
-#      App Store Connect with bundle id `com.fitcheck.fitcheckAi`.
+#      App Store Connect with bundle id `com.fitcheckaiapp.fitcheckai`.
 #   2. Create an "Apple Distribution" signing certificate, export it from
 #      Keychain Access as a .p12 (with private key), and base64 it for
 #      APPLE_CERT_P12_BASE64 / APPLE_CERT_PASSWORD.
@@ -87,7 +92,7 @@ env:
   # Keep in lock-step with .github/workflows/build-apk.yml
   FLUTTER_VERSION: '3.41.1'
   # Bundle identifier from flutter/ios/Runner.xcodeproj/project.pbxproj
-  BUNDLE_ID: com.fitcheck.fitcheckAi
+  BUNDLE_ID: com.fitcheckaiapp.fitcheckai
   # Apple Developer Team ID used for manual signing in the export step.
   # Matches flutter/ios/ExportOptions.plist teamID.
   DEVELOPMENT_TEAM: HMWGCVU4SV
@@ -224,7 +229,7 @@ jobs:
               <string>${{ steps.signing.outputs.profile_uuid }}</string>
             </dict>
             <key>uploadSymbols</key>
-            <true/>
+            <false/>
             <key>uploadBitcode</key>
             <false/>
             <key>destination</key>
@@ -277,6 +282,49 @@ jobs:
             echo "Found IPA: ${IPA_PATH} ($(du -h "${IPA_PATH}" | cut -f1))"
           else
             echo "No .ipa produced (expected for the --no-codesign path)."
+          fi
+
+      # ----------------------------------------------------------------------
+      # Upload dSYMs to Sentry for crash symbolication.
+      #
+      # ExportOptions sets uploadSymbols=false: sentry_flutter pulls the static
+      # Sentry SPM xcframework, Xcode embeds a stub Sentry.framework with a
+      # unique UUID that has no matching dSYM, and Apple's uploadSymbols
+      # validation then fails distribute/export. Disabling Apple symbol upload
+      # unblocks App Store export; Sentry still gets real dSYMs via sentry-cli.
+      #
+      # Guarded so it only runs when the Sentry auth secrets exist.
+      # continue-on-error so a symbolication failure never blocks the release.
+      # ----------------------------------------------------------------------
+      - name: Upload dSYMs to Sentry
+        continue-on-error: true
+        if: ${{ secrets.SENTRY_AUTH_TOKEN != '' }}
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          set -euo pipefail
+          # Install sentry-cli if the runner image does not already ship it.
+          if ! command -v sentry-cli >/dev/null 2>&1; then
+            curl -sL https://sentry.io/get-cli/ | bash
+          fi
+
+          ARCHIVE_DSYMS="build/ios/archive/Runner.xcarchive/dSYMs"
+          SPM_ARTIFACTS="build/ios/SourcePackages/artifacts"
+
+          # Upload the archive dSYMs (app + framework dSYMs copied into it).
+          if [ -d "${ARCHIVE_DSYMS}" ]; then
+            echo "Uploading archive dSYMs from ${ARCHIVE_DSYMS}"
+            sentry-cli debug-files upload "${ARCHIVE_DSYMS}"
+          fi
+
+          # Upload the SPM binary xcframework dSYMs (e.g. Sentry.framework.dSYM)
+          # which live outside the archive. sentry-cli matches them by UUID for
+          # server-side symbolication.
+          if [ -d "${SPM_ARTIFACTS}" ]; then
+            echo "Uploading SPM artifact dSYMs from ${SPM_ARTIFACTS}"
+            sentry-cli debug-files upload "${SPM_ARTIFACTS}"
           fi
 
       # ----------------------------------------------------------------------

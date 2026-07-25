@@ -8,7 +8,7 @@
 PRODUCT_NAME = FitCheck AI
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.fitcheck.fitcheckAi
+PRODUCT_BUNDLE_IDENTIFIER = com.fitcheckaiapp.fitcheckai
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.fitcheck. All rights reserved.

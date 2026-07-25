@@ -1,7 +1,7 @@
 # Apple App Store Listing — FitCheck AI (iOS)
 
 **Work stream:** WS6 — App Store listing metadata, App Privacy, age rating, review notes & screenshot plan
-**Bundle identifier:** `com.fitcheck.fitcheckAi`
+**Bundle identifier:** `com.fitcheckaiapp.fitcheckai`
 **Privacy Policy URL:** `https://fitcheckaiapp.com/privacy`
 **Last updated:** 2026-06-03
 
@@ -26,6 +26,14 @@ FitCheck AI: Wardrobe Stylist
 ```
 (29 chars. Aligns with the Play title "FitCheck AI: Wardrobe & Outfits" but trades "& Outfits" for
 "Stylist" to add a high-value, non-duplicated keyword surface.)
+
+> **The `: Wardrobe Stylist` suffix is required for ASC uniqueness, not optional ASO flavor.** A bare
+> "FitCheck AI" (or variants like "FitCheck AI App") collides with an existing app on the App Store and
+> ASC rejects it with "The app name you entered is already being used." Do **not** strip the suffix back
+> to the bare brand. If this exact full string also collides at submit time, try the documented
+> fallbacks (e.g. `FitCheck AI: Closet & Try-On`, `FitCheck AI Studio`) before anything else. The
+> on-device home-screen label `CFBundleDisplayName` is separate and stays `FitCheck AI` (home-screen
+> names have no uniqueness rule).
 
 ### Subtitle — `≤ 30 chars`
 
@@ -385,7 +393,7 @@ submitted. Most are not code and cannot be done by an agent.
 
 ### Apple / App Store Connect
 - [ ] **Apple Developer Program** enrollment active ($99/yr), correct entity type (individual vs org).
-- [ ] **App record created** in ASC with bundle ID `com.fitcheck.fitcheckAi`.
+- [ ] **App record created** in ASC with bundle ID `com.fitcheckaiapp.fitcheckai`.
 - [ ] **Agreements, Tax, and Banking** completed in ASC (required even for a free app — the Paid Apps
       agreement is not needed for free, but the free-apps agreement must be active and contact/tax
       identity confirmed).

@@ -9,7 +9,7 @@
 |---|---|
 | App Name (ASC) | FitCheck AI: Wardrobe Stylist |
 | Display name (device) | FitCheck AI |
-| Bundle ID | `com.fitcheck.fitcheckAi` |
+| Bundle ID | `com.fitcheckaiapp.fitcheckai` |
 | Version | 1.0.3+5 |
 | Primary Language | English (U.S.) |
 | Category | Lifestyle / Photo & Video |
@@ -19,13 +19,20 @@
 | Terms of Service | https://fitcheckaiapp.com/terms |
 | Team ID | `HMWGCVU4SV` |
 
+> **The `: Wardrobe Stylist` suffix on the ASC name is required for App Store uniqueness, not optional.**
+> A bare "FitCheck AI" (or "FitCheck AI App") collides with an existing app — ASC rejects it with
+> "The app name you entered is already being used." Do not strip the suffix. If the full string also
+> collides at submit time, try `FitCheck AI: Closet & Try-On`, then `FitCheck AI Studio`. The device
+> display name (`CFBundleDisplayName = FitCheck AI`) is separate and unchanged — home-screen names have
+> no uniqueness rule. See `docs/store/app-store-listing.md` §1.
+
 ---
 
 ## Code readiness (done in repo)
 
 ### Native / config
 
-- [x] Bundle ID set to `com.fitcheck.fitcheckAi`
+- [x] Bundle ID set to `com.fitcheckaiapp.fitcheckai`
 - [x] Camera / photo library usage descriptions in `Info.plist`
 - [x] `NSPhotoLibraryAddUsageDescription` for saving generated images
 - [x] `ITSAppUsesNonExemptEncryption` = false (standard HTTPS)
@@ -68,7 +75,7 @@
 
 ### App Store Connect setup
 
-- [ ] App record created with Bundle ID `com.fitcheck.fitcheckAi`
+- [ ] App record created with Bundle ID `com.fitcheckaiapp.fitcheckai`
 - [ ] App name, subtitle, description pasted from `docs/store/app-store-listing.md` / `flutter/metadata/`
 - [ ] Keywords (max 100 chars, no spaces after commas)
 - [ ] Promotional text
@@ -91,7 +98,11 @@
 ### Before Submit for Review
 
 - [ ] Deploy frontend so `/privacy`, `/terms`, `/support` show updated copy
+- [ ] `pubspec.yaml` build number (`version: x.y.z+N`) is **strictly greater** than the last upload on App Store Connect (ASC rejected build `7` → repo is at `+8` or higher)
+- [ ] Fresh archive after any version bump (old Organizer archives keep old `CFBundleVersion`)
 - [ ] Signed IPA uploaded (CI workflow_dispatch or `build_ios_release.sh`)
+- [ ] Archive includes UUID-matched framework dSYMs via `ios/generate_missing_dsyms.sh` (fixes Organizer Sentry.framework symbol upload)
+- [ ] Optional: Sentry auth secrets set so CI uploads real dSYMs for crash symbolication
 - [ ] Build selected for the version in ASC
 - [ ] Review notes include working demo account (not placeholders)
 

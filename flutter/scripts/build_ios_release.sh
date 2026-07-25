@@ -46,11 +46,14 @@
 #   Option A — Automatic (uses --export-options-plist with destination=upload):
 #     If Xcode is signed in with an Apple account that has App Manager access,
 #     the build step above may automatically upload the IPA after exporting.
+#     ios/ExportOptions.plist sets uploadSymbols=false on purpose (see Sentry
+#     note below).
 #
 #   Option B — Manual via Xcode:
 #     1. Open Xcode → Organizer (Window > Organizer).
-#     2. Select the build and click "Distribute App".
-#     3. Follow the wizard to upload to App Store Connect.
+#     2. Select a NEW archive built after the pubspec +N bump.
+#     3. Distribute App → upload to App Store Connect.
+#        (Archive build phase generate_missing_dsyms.sh covers Sentry dSYMs.)
 #
 #   Option C — Command line:
 #     xcrun altool --upload-app \
@@ -58,6 +61,19 @@
 #       --file build/ios/ipa/fitcheck_ai.ipa \
 #       --apiKey YOUR_API_KEY \
 #       --apiIssuer YOUR_ISSUER_ID
+#
+# VERSION / BUILD NUMBER
+#   CFBundleVersion comes from pubspec.yaml `version: x.y.z+N` (the +N part).
+#   App Store Connect requires each upload's N to be strictly greater than any
+#   previously uploaded build for this app. Bump +N before every store upload.
+#
+# SENTRY / dSYM NOTE
+#   sentry_flutter uses the static Sentry SPM xcframework. Xcode embeds a stub
+#   Sentry.framework with a unique UUID. The "Generate missing framework dSYMs"
+#   Run Script phase runs dsymutil on archive so Organizer symbol upload has a
+#   UUID-matched dSYM. ExportOptions.plist also sets uploadSymbols=false for
+#   CLI export. Upload real native dSYMs to Sentry with sentry-cli (CI does
+#   this when SENTRY_AUTH_TOKEN / SENTRY_ORG / SENTRY_PROJECT are set).
 #
 # USAGE
 #   chmod +x flutter/scripts/build_ios_release.sh
@@ -223,8 +239,8 @@ NEXT STEPS — Upload to App Store Connect:
 
   Option A — Xcode Organizer:
     1. Open Xcode → Window → Organizer.
-    2. Select this build and click "Distribute App".
-    3. Follow the wizard to upload to App Store Connect.
+    2. Select this NEW archive (not an older one with build ≤7).
+    3. Distribute App → upload to App Store Connect.
 
   Option B — Command line (xcrun altool):
     xcrun altool --upload-app \\
@@ -237,6 +253,9 @@ NEXT STEPS — Upload to App Store Connect:
     - Keep the files in $DEBUG_INFO_DIR/ safe.
       You need them to symbolicate crash reports from TestFlight / App Store.
     - Do NOT commit debug-info files to version control.
+    - ios/ExportOptions.plist has uploadSymbols=false so flutter build ipa
+      does not fail on the Sentry.framework stub dSYM. Upload symbols to
+      Sentry with sentry-cli if you need native crash symbolication.
     - After upload, configure TestFlight testing in App Store Connect before
       submitting for review.
 
