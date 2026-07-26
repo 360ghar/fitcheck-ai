@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/dashboard_models.dart';
 import '../repositories/dashboard_repository.dart';
 import '../../../core/utils/frame_safe.dart';
+import '../../../core/utils/error_handler.dart';
 
 class DashboardController extends GetxController {
   final DashboardRepository _repository = DashboardRepository();
@@ -61,12 +62,8 @@ class DashboardController extends GetxController {
       dashboard.value = results[0] as DashboardData;
       streak.value = results[1] as StreakData;
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
-      Get.snackbar(
-        'Error',
-        error.value,
-        snackPosition: SnackPosition.TOP,
-      );
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(error.value, title: 'Error');
     } finally {
       isLoading.value = false;
     }

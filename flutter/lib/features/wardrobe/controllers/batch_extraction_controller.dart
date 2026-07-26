@@ -431,11 +431,7 @@ class BatchExtractionController extends GetxController {
         throw Exception('Unable to open social login. Please try again.');
       }
 
-      Get.snackbar(
-        'Connect social account',
-        'Complete login in your browser, then return to FitCheck.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      ErrorHandler.showInfo('Complete login in your browser, then return to FitCheck.', title: 'Connect social account');
     } catch (e) {
       socialError.value = 'Failed to connect social account: $e';
     } finally {
@@ -778,21 +774,13 @@ class BatchExtractionController extends GetxController {
               : null,
         );
       }
-      Get.snackbar(
-        'Social connected',
-        callbackMessage,
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      ErrorHandler.showSuccess(callbackMessage, title: 'Social connected');
       return;
     }
 
     socialError.value = callbackMessage;
     await refreshSocialStatus();
-    Get.snackbar(
-      'Social connection failed',
-      callbackMessage,
-      snackPosition: SnackPosition.BOTTOM,
-    );
+    ErrorHandler.showError(callbackMessage, title: 'Social connection failed');
   }
 
   Future<void> _restoreSocialImportState() async {

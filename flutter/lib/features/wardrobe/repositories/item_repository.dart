@@ -9,6 +9,7 @@ import '../../../core/constants/api_constants.dart';
 import '../../../core/exceptions/app_exceptions.dart';
 import '../../../core/services/sse_service.dart';
 import '../models/batch_extraction_models.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Wardrobe item repository
 class ItemRepository {
@@ -505,7 +506,7 @@ class ItemRepository {
             isCurrentUserPerson: item.isCurrentUserPerson,
             includeInWardrobe: item.includeInWardrobe,
             status: 'generation_failed',
-            generationError: e.toString().replaceAll('Exception: ', ''),
+            generationError: ErrorHandler.extractMessage(e),
             name: item.subCategory ?? item.category,
           ),
         );

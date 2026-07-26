@@ -95,7 +95,7 @@ class AuthController extends GetxController {
 
       isInitialized.value = true;
     } catch (e) {
-      error.value = e.toString();
+      error.value = ErrorHandler.extractMessage(e);
       isInitialized.value = true;
     }
   }
@@ -109,7 +109,7 @@ class AuthController extends GetxController {
       _setUserFromSupabase(resolvedUser);
       await _mergeUserFromBackendProfile();
     } catch (e) {
-      error.value = e.toString();
+      error.value = ErrorHandler.extractMessage(e);
     }
   }
 
@@ -187,12 +187,7 @@ class AuthController extends GetxController {
 
         // Navigate first so snackbar isn't dismissed by stack replacement
         Get.offAllNamed(Routes.home);
-        Get.snackbar(
-          'Welcome back!',
-          'Successfully logged in as ${user.value?.fullName ?? user.value?.email}',
-          snackPosition: SnackPosition.TOP,
-          duration: const Duration(seconds: 2),
-        );
+        ErrorHandler.showInfo('Successfully logged in as ${user.value?.fullName ?? user.value?.email}', title: 'Welcome back!');
       } else {
         throw Exception('Login failed. Please try again.');
       }
@@ -205,22 +200,13 @@ class AuthController extends GetxController {
         // Don't show snackbar for this error, we show inline UI instead
       } else {
         ErrorHandler.reportError(e, e.message, stackTrace: stackTrace);
-        Get.snackbar(
-          'Login Failed',
-          e.message,
-          snackPosition: SnackPosition.TOP,
-          duration: const Duration(seconds: 3),
-        );
+        ErrorHandler.showError(e.message, title: 'Login Failed');
       }
       rethrow;
     } catch (e, stackTrace) {
-      error.value = e.toString().replaceAll('Exception: ', '');
+      error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
-      Get.snackbar(
-        'Login Failed',
-        error.value,
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(error.value, title: 'Login Failed');
       rethrow;
     } finally {
       isLoading.value = false;
@@ -260,11 +246,7 @@ class AuthController extends GetxController {
           await _redeemReferralCode(referralCode);
         }
 
-        Get.snackbar(
-          'Welcome to Fit Check!',
-          'Account created successfully',
-          snackPosition: SnackPosition.TOP,
-        );
+        ErrorHandler.showInfo('Account created successfully', title: 'Welcome to Fit Check!');
 
         // Navigate to home
         Get.offAllNamed(Routes.home);
@@ -274,20 +256,12 @@ class AuthController extends GetxController {
     } on AuthException catch (e, stackTrace) {
       error.value = e.message;
       ErrorHandler.reportError(e, e.message, stackTrace: stackTrace);
-      Get.snackbar(
-        'Registration Failed',
-        e.message,
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(e.message, title: 'Registration Failed');
       rethrow;
     } catch (e, stackTrace) {
-      error.value = e.toString().replaceAll('Exception: ', '');
+      error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
-      Get.snackbar(
-        'Registration Failed',
-        error.value,
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(error.value, title: 'Registration Failed');
       rethrow;
     } finally {
       isLoading.value = false;
@@ -309,20 +283,12 @@ class AuthController extends GetxController {
     } on AuthException catch (e, stackTrace) {
       error.value = e.message;
       ErrorHandler.reportError(e, e.message, stackTrace: stackTrace);
-      Get.snackbar(
-        'Google Sign-In Failed',
-        e.message,
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(e.message, title: 'Google Sign-In Failed');
       rethrow;
     } catch (e, stackTrace) {
-      error.value = e.toString().replaceAll('Exception: ', '');
+      error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
-      Get.snackbar(
-        'Google Sign-In Failed',
-        error.value,
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(error.value, title: 'Google Sign-In Failed');
       rethrow;
     } finally {
       isGoogleSigningIn.value = false;
@@ -362,29 +328,17 @@ class AuthController extends GetxController {
       }
       error.value = e.message;
       ErrorHandler.reportError(e, e.message, stackTrace: stackTrace);
-      Get.snackbar(
-        'Apple Sign-In Failed',
-        e.message,
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(e.message, title: 'Apple Sign-In Failed');
       rethrow;
     } on AuthException catch (e, stackTrace) {
       error.value = e.message;
       ErrorHandler.reportError(e, e.message, stackTrace: stackTrace);
-      Get.snackbar(
-        'Apple Sign-In Failed',
-        e.message,
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(e.message, title: 'Apple Sign-In Failed');
       rethrow;
     } catch (e, stackTrace) {
-      error.value = e.toString().replaceAll('Exception: ', '');
+      error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
-      Get.snackbar(
-        'Apple Sign-In Failed',
-        error.value,
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(error.value, title: 'Apple Sign-In Failed');
       rethrow;
     } finally {
       isAppleSigningIn.value = false;
@@ -402,13 +356,9 @@ class AuthController extends GetxController {
 
       Get.offAllNamed(Routes.splash);
 
-      Get.snackbar(
-        'Logged Out',
-        'You have been logged out successfully',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showInfo('You have been logged out successfully', title: 'Logged Out');
     } catch (e) {
-      error.value = e.toString();
+      error.value = ErrorHandler.extractMessage(e);
     } finally {
       isLoggingOut.value = false;
     }
@@ -422,26 +372,14 @@ class AuthController extends GetxController {
 
       await _supabase.resetPassword(email);
 
-      Get.snackbar(
-        'Email Sent',
-        'Check your email for password reset instructions',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showSuccess('Check your email for password reset instructions', title: 'Email Sent');
     } on AuthException catch (e) {
       error.value = e.message;
-      Get.snackbar(
-        'Request Failed',
-        e.message,
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(e.message, title: 'Request Failed');
       rethrow;
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
-      Get.snackbar(
-        'Request Failed',
-        error.value,
-        snackPosition: SnackPosition.TOP,
-      );
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(error.value, title: 'Request Failed');
       rethrow;
     } finally {
       isLoading.value = false;
@@ -456,26 +394,14 @@ class AuthController extends GetxController {
 
       await _supabase.updatePassword(newPassword);
 
-      Get.snackbar(
-        'Password Updated',
-        'Your password has been updated successfully',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showSuccess('Your password has been updated successfully', title: 'Password Updated');
     } on AuthException catch (e) {
       error.value = e.message;
-      Get.snackbar(
-        'Update Failed',
-        e.message,
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(e.message, title: 'Update Failed');
       rethrow;
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
-      Get.snackbar(
-        'Update Failed',
-        error.value,
-        snackPosition: SnackPosition.TOP,
-      );
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(error.value, title: 'Update Failed');
       rethrow;
     } finally {
       isLoading.value = false;
@@ -508,25 +434,13 @@ class AuthController extends GetxController {
 
       await _supabase.resendVerificationEmail(unverifiedEmail.value);
 
-      Get.snackbar(
-        'Email Sent',
-        'Verification email has been sent. Please check your inbox.',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showSuccess('Verification email has been sent. Please check your inbox.', title: 'Email Sent');
     } on AuthException catch (e) {
       error.value = e.message;
-      Get.snackbar(
-        'Failed to Send Email',
-        e.message,
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(e.message, title: 'Failed to Send Email');
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
-      Get.snackbar(
-        'Failed to Send Email',
-        error.value,
-        snackPosition: SnackPosition.TOP,
-      );
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(error.value, title: 'Failed to Send Email');
     } finally {
       isResendingVerification.value = false;
     }
@@ -555,12 +469,7 @@ class AuthController extends GetxController {
   Future<void> _redeemReferralCode(String code) async {
     try {
       await _subscriptionRepo.redeemReferralCode(code);
-      Get.snackbar(
-        'Referral Applied!',
-        'You and your friend both get 1 month of Pro free!',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 4),
-      );
+      ErrorHandler.showInfo('You and your friend both get 1 month of Pro free!', title: 'Referral Applied!');
     } catch (e) {
       // Don't fail registration if referral redemption fails
       debugPrint('Failed to redeem referral code: $e');

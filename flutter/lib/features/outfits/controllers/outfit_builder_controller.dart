@@ -8,6 +8,7 @@ import '../repositories/outfit_repository.dart';
 import '../../wardrobe/repositories/item_repository.dart';
 import '../../wardrobe/controllers/wardrobe_controller.dart';
 import '../../../core/utils/frame_safe.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Controller for outfit builder
 /// Manages outfit creation, item selection, and AI generation
@@ -81,7 +82,7 @@ class OutfitBuilderController extends GetxController {
       final response = await _itemRepository.getItems(limit: 100);
       availableItems.value = response.items;
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
+      error.value = ErrorHandler.extractMessage(e);
     } finally {
       isLoading.value = false;
     }
@@ -199,7 +200,7 @@ class OutfitBuilderController extends GetxController {
   /// Generate AI outfit visualization
   Future<void> generateAIOutfit() async {
     if (selectedItems.isEmpty) {
-      Get.snackbar('Error', 'Please add items first');
+      ErrorHandler.showValidation('Please add items first', title: 'Error');
       return;
     }
 
@@ -228,10 +229,10 @@ class OutfitBuilderController extends GetxController {
       generatedImageUrl.value =
           result.imageUrl ?? 'data:image/png;base64,${result.imageBase64}';
 
-      Get.snackbar('Success', 'Outfit visualization generated');
+      ErrorHandler.showSuccess('Outfit visualization generated', title: 'Success');
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
-      Get.snackbar('Error', error.value);
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(error.value, title: 'Error');
     } finally {
       isGenerating.value = false;
     }
@@ -240,12 +241,12 @@ class OutfitBuilderController extends GetxController {
   /// Save outfit
   Future<void> saveOutfit() async {
     if (name.value.trim().isEmpty) {
-      Get.snackbar('Error', 'Please enter an outfit name');
+      ErrorHandler.showValidation('Please enter an outfit name', title: 'Error');
       return;
     }
 
     if (selectedItems.isEmpty) {
-      Get.snackbar('Error', 'Please add at least one item');
+      ErrorHandler.showValidation('Please add at least one item', title: 'Error');
       return;
     }
 
@@ -285,9 +286,9 @@ class OutfitBuilderController extends GetxController {
       }
 
       Get.back(result: outfit);
-      Get.snackbar('Success', 'Outfit saved successfully');
+      ErrorHandler.showSuccess('Outfit saved successfully', title: 'Success');
     } catch (e) {
-      Get.snackbar('Error', e.toString().replaceAll('Exception: ', ''));
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
       isSaving.value = false;
     }

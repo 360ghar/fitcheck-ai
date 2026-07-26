@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../models/ai_settings_model.dart';
 import '../repositories/ai_settings_repository.dart';
 import '../../../core/utils/frame_safe.dart';
+import '../../../core/utils/error_handler.dart';
 
 class AiSettingsController extends GetxController {
   final AiSettingsRepository _repository = AiSettingsRepository();
@@ -54,7 +55,7 @@ class AiSettingsController extends GetxController {
           : 'custom';
       _loadProviderConfig(selectedProvider.value);
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
+      error.value = ErrorHandler.extractMessage(e);
     } finally {
       isLoading.value = false;
     }
@@ -83,17 +84,17 @@ class AiSettingsController extends GetxController {
     final imageModel = imageModelController.text.trim();
 
     if (provider.isEmpty) {
-      Get.snackbar('Error', 'Please select a provider');
+      ErrorHandler.showValidation('Please select a provider', title: 'Error');
       return;
     }
 
     if (provider == 'custom' && apiUrl.isEmpty) {
-      Get.snackbar('Error', 'API URL is required for custom providers');
+      ErrorHandler.showValidation('API URL is required for custom providers', title: 'Error');
       return;
     }
 
     if (!apiKeySet && apiKey.isEmpty) {
-      Get.snackbar('Error', 'API key is required');
+      ErrorHandler.showValidation('API key is required', title: 'Error');
       return;
     }
 
@@ -116,10 +117,10 @@ class AiSettingsController extends GetxController {
       settings.value = updated;
       apiUrlController.text = apiUrl;
       _loadProviderConfig(provider);
-      Get.snackbar('Saved', 'AI settings updated');
+      ErrorHandler.showSuccess('AI settings updated', title: 'Saved');
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
-      Get.snackbar('Error', error.value);
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(error.value, title: 'Error');
     } finally {
       isSaving.value = false;
     }
@@ -131,10 +132,7 @@ class AiSettingsController extends GetxController {
     final chatModel = chatModelController.text.trim();
 
     if (apiUrl.isEmpty || apiKey.isEmpty || chatModel.isEmpty) {
-      Get.snackbar(
-        'Missing Info',
-        'API URL, key, and chat model are required to test',
-      );
+      ErrorHandler.showInfo('API URL, key, and chat model are required to test', title: 'Missing Info');
       return;
     }
 
@@ -147,15 +145,12 @@ class AiSettingsController extends GetxController {
       );
       apiUrlController.text = apiUrl;
       if (result.success) {
-        Get.snackbar('Success', 'Connection successful');
+        ErrorHandler.showSuccess('Connection successful', title: 'Success');
       } else {
-        Get.snackbar('Test Failed', result.message);
+        ErrorHandler.showError(result.message, title: 'Test Failed');
       }
     } catch (e) {
-      Get.snackbar(
-        'Test Failed',
-        e.toString().replaceAll('Exception: ', ''),
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Test Failed');
     } finally {
       isTesting.value = false;
     }

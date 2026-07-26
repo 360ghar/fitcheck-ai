@@ -5,6 +5,7 @@ import '../../../core/services/notification_service.dart';
 import '../models/outfit_model.dart';
 import '../repositories/outfit_repository.dart';
 import 'outfit_list_controller.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Controller for outfit creation flow
 /// Focused responsibility: Managing outfit creation form and submission
@@ -100,7 +101,7 @@ class OutfitCreationController extends GetxController {
   /// Create outfit
   Future<bool> createOutfit() async {
     if (!hasSelectedItems) {
-      NotificationService.instance.showWarning(
+      ErrorHandler.showWarning(
         'Please select at least one item for your outfit',
         title: 'No Items',
       );
@@ -108,7 +109,7 @@ class OutfitCreationController extends GetxController {
     }
 
     if (!hasName) {
-      NotificationService.instance.showWarning(
+      ErrorHandler.showWarning(
         'Please give your outfit a name',
         title: 'No Name',
       );
@@ -145,8 +146,8 @@ class OutfitCreationController extends GetxController {
 
       return true;
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
-      NotificationService.instance.showError(error.value);
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(error.value);
       return false;
     } finally {
       isCreating.value = false;

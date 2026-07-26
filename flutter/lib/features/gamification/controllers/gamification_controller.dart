@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import '../models/gamification_model.dart';
 import '../repositories/gamification_repository.dart';
 import '../../../core/utils/frame_safe.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Gamification controller
 /// Handles streaks, achievements, and leaderboard
@@ -38,7 +39,7 @@ class GamificationController extends GetxController {
     try {
       streak.value = await _repository.getStreak();
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
+      error.value = ErrorHandler.extractMessage(e);
     }
   }
 
@@ -46,7 +47,7 @@ class GamificationController extends GetxController {
     try {
       achievements.value = await _repository.getAchievements();
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
+      error.value = ErrorHandler.extractMessage(e);
     }
   }
 
@@ -54,7 +55,7 @@ class GamificationController extends GetxController {
     try {
       leaderboard.value = await _repository.getLeaderboard();
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
+      error.value = ErrorHandler.extractMessage(e);
     }
   }
 }

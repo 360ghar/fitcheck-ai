@@ -1,8 +1,8 @@
 import 'package:get/get.dart';
-import '../../../core/services/notification_service.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../repositories/recommendations_repository.dart';
 import '../utils/item_json.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Controller for Find Matches tab
 /// Manages item matching functionality
@@ -59,8 +59,8 @@ class FindMatchesController extends GetxController {
         }
       }
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
-      NotificationService.instance.showError(error.value);
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(error.value);
     } finally {
       isLoading.value = false;
     }

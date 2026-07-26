@@ -4,6 +4,7 @@ import '../repositories/settings_repository.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../../core/services/theme_service.dart';
 import '../../../core/utils/frame_safe.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Settings controller - manages settings and preferences state
 class SettingsController extends GetxController {
@@ -43,7 +44,7 @@ class SettingsController extends GetxController {
       final themeService = Get.find<ThemeService>();
       themeService.syncFromBackend(preferences.value?.themeMode);
     } catch (e) {
-      error.value = e.toString();
+      error.value = ErrorHandler.extractMessage(e);
       // If preferences don't exist yet, use defaults
       if (preferences.value == null) {
         preferences.value = UserPreferencesModel();
@@ -162,19 +163,10 @@ class SettingsController extends GetxController {
       final saved = await _repository.updatePreferences(newPreferences);
       preferences.value = saved;
 
-      Get.snackbar(
-        'Saved',
-        'Your preferences have been updated',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 1),
-      );
+      ErrorHandler.showSuccess('Your preferences have been updated', title: 'Saved');
     } catch (e) {
-      error.value = e.toString();
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
       isSaving.value = false;
     }
@@ -186,18 +178,9 @@ class SettingsController extends GetxController {
     try {
       await _repository.updatePassword(currentPassword, newPassword);
       Get.back();
-      Get.snackbar(
-        'Success',
-        'Password updated successfully',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 1),
-      );
+      ErrorHandler.showSuccess('Password updated successfully', title: 'Success');
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
       rethrow;
     } finally {
       isChangingPassword.value = false;
@@ -209,17 +192,9 @@ class SettingsController extends GetxController {
     isExportingData.value = true;
     try {
       await _repository.requestDataExport();
-      Get.snackbar(
-        'Export Started',
-        'Your data export is being prepared. You will receive an email when it\'s ready.',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showInfo('Your data export is being prepared. You will receive an email when it\'s ready.', title: 'Export Started');
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
       isExportingData.value = false;
     }
@@ -232,11 +207,7 @@ class SettingsController extends GetxController {
       await _repository.deleteAccount();
       await _authController.logout();
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
       rethrow;
     } finally {
       isDeletingAccount.value = false;

@@ -9,6 +9,7 @@ import '../../../core/constants/api_constants.dart';
 import '../../../core/services/ai_consent_service.dart';
 import '../../../core/utils/permission_helper.dart';
 import '../../wardrobe/models/item_model.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Try-On controller
 /// Manages virtual try-on feature
@@ -148,12 +149,7 @@ class TryOnController extends GetxController {
 
       generatedImageUrl.value = ''; // Clear previous result
 
-      Get.snackbar(
-        'Images Added',
-        '${clothingImages.length} clothing image(s) selected',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 2),
-      );
+      ErrorHandler.showSuccess('${clothingImages.length} clothing image(s) selected', title: 'Images Added');
     }
   }
 
@@ -182,12 +178,7 @@ class TryOnController extends GetxController {
       currentImageIndex.value = clothingImages.length - 1;
       generatedImageUrl.value = ''; // Clear previous result
 
-      Get.snackbar(
-        'Photo Added',
-        'Photo added (${clothingImages.length} total)',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 1),
-      );
+      ErrorHandler.showSuccess('Photo added (${clothingImages.length} total)', title: 'Photo Added');
     }
   }
 
@@ -239,18 +230,13 @@ class TryOnController extends GetxController {
     try {
       // Check if already selected
       if (selectedWardrobeItems.any((i) => i.id == item.id)) {
-        Get.snackbar(
-          'Already Selected',
-          '${item.name} is already in your selection',
-          snackPosition: SnackPosition.TOP,
-          duration: const Duration(seconds: 1),
-        );
+        ErrorHandler.showInfo('${item.name} is already in your selection', title: 'Already Selected');
         return;
       }
 
       // Get the primary image or first image from the item
       if (item.itemImages == null || item.itemImages!.isEmpty) {
-        Get.snackbar('No Image', 'This item has no images');
+        ErrorHandler.showValidation('This item has no images', title: 'No Image');
         return;
       }
 
@@ -286,15 +272,10 @@ class TryOnController extends GetxController {
       generatedImageUrl.value = ''; // Clear previous result
 
       // Don't close the dialog - let user select more items
-      Get.snackbar(
-        'Added',
-        '${item.name} added (${selectedWardrobeItems.length} total)',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 1),
-      );
+      ErrorHandler.showSuccess('${item.name} added (${selectedWardrobeItems.length} total)', title: 'Added');
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
-      Get.snackbar('Error', 'Failed to load item image');
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError('Failed to load item image', title: 'Error');
     }
   }
 
@@ -385,19 +366,10 @@ class TryOnController extends GetxController {
         }
         userAvatarUrl.value = avatar;
         isAvatarReady.value = true;
-        Get.snackbar(
-          'Success',
-          'Profile photo updated',
-          snackPosition: SnackPosition.TOP,
-        );
+        ErrorHandler.showSuccess('Profile photo updated', title: 'Success');
       } catch (e) {
-        error.value = e.toString().replaceAll('Exception: ', '');
-        Get.snackbar(
-          'Upload Failed',
-          'Server is taking too long to respond. Please try again later or use a smaller image.',
-          snackPosition: SnackPosition.TOP,
-          duration: const Duration(seconds: 4),
-        );
+        error.value = ErrorHandler.extractMessage(e);
+        ErrorHandler.showError('Server is taking too long to respond. Please try again later or use a smaller image.', title: 'Upload Failed');
       } finally {
         isUploadingAvatar.value = false;
       }
@@ -414,25 +386,17 @@ class TryOnController extends GetxController {
     }
 
     if (clothingImage.value == null) {
-      Get.snackbar('Error', 'Please select a clothing image first');
+      ErrorHandler.showValidation('Please select a clothing image first', title: 'Error');
       return;
     }
 
     if (userAvatarUrl.value.isEmpty) {
-      Get.snackbar(
-        'Avatar Required',
-        'Please upload a photo of yourself first',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showValidation('Please upload a photo of yourself first', title: 'Avatar Required');
       return;
     }
 
     if (!isAvatarReady.value) {
-      Get.snackbar(
-        'Avatar Uploading',
-        'Please wait for your profile photo to finish uploading',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showValidation('Please wait for your profile photo to finish uploading', title: 'Avatar Uploading');
       return;
     }
 
@@ -466,14 +430,10 @@ class TryOnController extends GetxController {
         throw Exception('No image returned from server');
       }
 
-      Get.snackbar(
-        'Success',
-        'Try-on generated successfully',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showSuccess('Try-on generated successfully', title: 'Success');
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
-      Get.snackbar('Error', error.value);
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(error.value, title: 'Error');
     } finally {
       isGenerating.value = false;
     }
@@ -482,7 +442,7 @@ class TryOnController extends GetxController {
   void downloadResult() {
     if (generatedImageUrl.value.isEmpty) return;
     // Would trigger download of the generated image
-    Get.snackbar('Download', 'Image saved to gallery');
+    ErrorHandler.showInfo('Image saved to gallery', title: 'Download');
   }
 
   void reset() {

@@ -6,6 +6,7 @@ import '../../../core/widgets/app_ui.dart';
 import '../../../core/widgets/report_content_sheet.dart';
 import '../../outfits/models/outfit_model.dart';
 import '../../outfits/repositories/outfit_repository.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Local store of share IDs the user chose to hide (Guideline 1.2 — ability
 /// to hide objectionable UGC on-device without a full social block graph).
@@ -88,11 +89,7 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
     setState(() {
       _loadFuture = Future.value(const _SharedLoadResult.hidden());
     });
-    Get.snackbar(
-      'Content hidden',
-      'This outfit will no longer be shown on this device.',
-      snackPosition: SnackPosition.TOP,
-    );
+    ErrorHandler.showInfo('This outfit will no longer be shown on this device.', title: 'Content hidden');
   }
 
   @override

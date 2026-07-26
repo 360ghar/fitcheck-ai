@@ -6,6 +6,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../repositories/profile_repository.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Edit profile page
 class ProfileEditPage extends StatefulWidget {
@@ -90,11 +91,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     if (!_formKey.currentState!.validate()) return;
     if (_birthDateController.text.trim().isEmpty &&
         _birthTimeController.text.trim().isNotEmpty) {
-      Get.snackbar(
-        'Date of Birth Required',
-        'Please select date of birth if birth time is provided.',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showValidation('Please select date of birth if birth time is provided.', title: 'Date of Birth Required');
       return;
     }
 
@@ -142,27 +139,14 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       await authController.refreshUser();
 
       if (skippedBirthFields.isNotEmpty) {
-        Get.snackbar(
-          'Profile Partially Updated',
-          'Birth details couldn’t be saved right now. Please try again later.',
-          snackPosition: SnackPosition.TOP,
-          duration: const Duration(seconds: 5),
-        );
+        ErrorHandler.showSuccess('Birth details couldn’t be saved right now. Please try again later.', title: 'Profile Partially Updated');
         return;
       }
 
       Get.back();
-      Get.snackbar(
-        'Success',
-        'Profile updated successfully',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showSuccess('Profile updated successfully', title: 'Success');
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
       isSaving.value = false;
     }

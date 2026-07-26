@@ -4,6 +4,7 @@ import '../models/calendar_event_model.dart';
 import '../models/calendar_connection_model.dart';
 import '../repositories/calendar_repository.dart';
 import '../../../core/utils/frame_safe.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Calendar controller - manages calendar state and operations
 class CalendarController extends GetxController {
@@ -82,7 +83,7 @@ class CalendarController extends GetxController {
       error.value = '';
       connections.value = await _repository.getConnections();
     } catch (e) {
-      error.value = e.toString();
+      error.value = ErrorHandler.extractMessage(e);
     } finally {
       isLoadingConnections.value = false;
     }
@@ -105,7 +106,7 @@ class CalendarController extends GetxController {
 
       _groupEventsByDate();
     } catch (e) {
-      error.value = e.toString();
+      error.value = ErrorHandler.extractMessage(e);
       // Don't show snackbar on initial load
     } finally {
       isLoadingEvents.value = false;
@@ -142,12 +143,7 @@ class CalendarController extends GetxController {
   /// Connect calendar (OAuth not shipped yet — do not imply a real connection)
   Future<void> connectCalendar(CalendarProvider provider) async {
     // Avoid fake loading; surface a clear unavailable state
-    Get.snackbar(
-      'Not available yet',
-      'Connecting ${provider.name} calendars is not available in this version. You can still create events locally.',
-      snackPosition: SnackPosition.TOP,
-      duration: const Duration(seconds: 3),
-    );
+    ErrorHandler.showInfo('Connecting ${provider.name} calendars is not available in this version. You can still create events locally.', title: 'Not available yet');
   }
 
   /// Disconnect calendar
@@ -156,18 +152,9 @@ class CalendarController extends GetxController {
     try {
       await _repository.disconnectCalendar(connectionId);
       connections.removeWhere((c) => c.id == connectionId);
-      Get.snackbar(
-        'Disconnected',
-        'Calendar disconnected successfully',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 1),
-      );
+      ErrorHandler.showSuccess('Calendar disconnected successfully', title: 'Disconnected');
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Failed to disconnect calendar',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError('Failed to disconnect calendar', title: 'Error');
     } finally {
       isDisconnectingMap.remove(connectionId);
     }
@@ -198,19 +185,10 @@ class CalendarController extends GetxController {
       events.add(newEvent);
       _groupEventsByDate();
 
-      Get.snackbar(
-        'Event Created',
-        'Your event has been added',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 1),
-      );
+      ErrorHandler.showSuccess('Your event has been added', title: 'Event Created');
       Get.back();
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
       isCreatingEvent.value = false;
     }
@@ -245,18 +223,9 @@ class CalendarController extends GetxController {
         _groupEventsByDate();
       }
       Get.back();
-      Get.snackbar(
-        'Updated',
-        'Event updated successfully',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 1),
-      );
+      ErrorHandler.showSuccess('Event updated successfully', title: 'Updated');
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
       isUpdatingEvent.value = false;
     }
@@ -270,18 +239,9 @@ class CalendarController extends GetxController {
       events.removeWhere((e) => e.id == eventId);
       _groupEventsByDate();
       Get.back();
-      Get.snackbar(
-        'Deleted',
-        'Event removed',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 1),
-      );
+      ErrorHandler.showSuccess('Event removed', title: 'Deleted');
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
       isDeletingEventMap.remove(eventId);
     }
@@ -298,18 +258,9 @@ class CalendarController extends GetxController {
         _groupEventsByDate();
       }
       Get.back();
-      Get.snackbar(
-        'Linked',
-        'Outfit linked to event',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 1),
-      );
+      ErrorHandler.showInfo('Outfit linked to event', title: 'Linked');
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
       isLinkingOutfitMap.remove(eventId);
     }
@@ -328,18 +279,9 @@ class CalendarController extends GetxController {
         );
         _groupEventsByDate();
       }
-      Get.snackbar(
-        'Removed',
-        'Outfit removed from event',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 1),
-      );
+      ErrorHandler.showSuccess('Outfit removed from event', title: 'Removed');
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
       isRemovingOutfitMap.remove(eventId);
     }

@@ -4,6 +4,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/body_profile_controller.dart';
 import '../models/body_profile_model.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Body profiles page for managing size and fit preferences
 class BodyProfilesPage extends StatelessWidget {
@@ -394,11 +395,7 @@ class BodyProfilesPage extends StatelessWidget {
                                 final success = await controller.createProfile(request);
                                 if (success) {
                                   Get.back();
-                                  Get.snackbar(
-                                    'Success',
-                                    'Body profile created',
-                                    snackPosition: SnackPosition.TOP,
-                                  );
+                                  ErrorHandler.showSuccess('Body profile created', title: 'Success');
                                 }
                               },
                         style: ElevatedButton.styleFrom(
@@ -577,11 +574,7 @@ class BodyProfilesPage extends StatelessWidget {
                                 final success = await controller.updateProfile(profile.id, request);
                                 if (success) {
                                   Get.back();
-                                  Get.snackbar(
-                                    'Success',
-                                    'Body profile updated',
-                                    snackPosition: SnackPosition.TOP,
-                                  );
+                                  ErrorHandler.showSuccess('Body profile updated', title: 'Success');
                                 }
                               },
                         style: ElevatedButton.styleFrom(
@@ -630,11 +623,7 @@ class BodyProfilesPage extends StatelessWidget {
               Get.back();
               final success = await controller.deleteProfile(profile.id);
               if (success) {
-                Get.snackbar(
-                  'Success',
-                  'Body profile deleted',
-                  snackPosition: SnackPosition.TOP,
-                );
+                ErrorHandler.showSuccess('Body profile deleted', title: 'Success');
               }
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),

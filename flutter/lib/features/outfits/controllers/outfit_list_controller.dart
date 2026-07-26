@@ -8,6 +8,7 @@ import '../../../core/services/network_service.dart' show RetryHelper, NetworkSe
 import '../models/outfit_model.dart';
 import '../repositories/outfit_repository.dart';
 import '../../../core/utils/frame_safe.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Controller for outfit list, filtering, and pagination
 /// Focused responsibility: Managing the outfit list and filters
@@ -145,8 +146,8 @@ class OutfitListController extends GetxController {
       // Server-side filtering - no client-side filtering needed
       filteredOutfits.value = outfits.toList();
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
-      NotificationService.instance.showError(error.value);
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(error.value);
     } finally {
       isLoading.value = false;
       isLoadingMore.value = false;
@@ -179,8 +180,8 @@ class OutfitListController extends GetxController {
 
       return outfit;
     } catch (e) {
-      singleFetchError.value = e.toString().replaceAll('Exception: ', '');
-      NotificationService.instance.showError(singleFetchError.value);
+      singleFetchError.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(singleFetchError.value);
       return null;
     } finally {
       isFetchingSingle.value = false;
@@ -193,8 +194,8 @@ class OutfitListController extends GetxController {
       final outfit = await _repository.getOutfit(outfitId);
       _updateOutfitInLists(outfitId, outfit);
     } catch (e) {
-      NotificationService.instance.showError(
-        e.toString().replaceAll('Exception: ', ''),
+      ErrorHandler.showError(
+        ErrorHandler.extractMessage(e),
       );
     }
   }
@@ -212,8 +213,8 @@ class OutfitListController extends GetxController {
       wearHistoryCache[outfitId] = history;
       return history;
     } catch (e) {
-      NotificationService.instance.showError(
-        e.toString().replaceAll('Exception: ', ''),
+      ErrorHandler.showError(
+        ErrorHandler.extractMessage(e),
       );
       return [];
     } finally {
@@ -263,8 +264,8 @@ class OutfitListController extends GetxController {
         updatedOutfit.isFavorite ? 'Added to Favorites' : 'Removed from Favorites',
       );
     } catch (e) {
-      NotificationService.instance.showError(
-        e.toString().replaceAll('Exception: ', ''),
+      ErrorHandler.showError(
+        ErrorHandler.extractMessage(e),
       );
     } finally {
       isFavoritingMap.remove(outfitId);
@@ -297,8 +298,8 @@ class OutfitListController extends GetxController {
         title: 'Great outfit!',
       );
     } catch (e) {
-      NotificationService.instance.showError(
-        e.toString().replaceAll('Exception: ', ''),
+      ErrorHandler.showError(
+        ErrorHandler.extractMessage(e),
       );
     } finally {
       isMarkingWornMap.remove(outfitId);
@@ -321,8 +322,8 @@ class OutfitListController extends GetxController {
 
       NotificationService.instance.showSuccess('Outfit removed', title: 'Deleted');
     } catch (e) {
-      NotificationService.instance.showError(
-        e.toString().replaceAll('Exception: ', ''),
+      ErrorHandler.showError(
+        ErrorHandler.extractMessage(e),
       );
       rethrow;
     } finally {
@@ -343,8 +344,8 @@ class OutfitListController extends GetxController {
         title: 'Duplicated',
       );
     } catch (e) {
-      NotificationService.instance.showError(
-        e.toString().replaceAll('Exception: ', ''),
+      ErrorHandler.showError(
+        ErrorHandler.extractMessage(e),
       );
     } finally {
       isDuplicatingMap.remove(outfitId);
@@ -362,8 +363,8 @@ class OutfitListController extends GetxController {
         title: 'Updated',
       );
     } catch (e) {
-      NotificationService.instance.showError(
-        e.toString().replaceAll('Exception: ', ''),
+      ErrorHandler.showError(
+        ErrorHandler.extractMessage(e),
       );
     }
   }

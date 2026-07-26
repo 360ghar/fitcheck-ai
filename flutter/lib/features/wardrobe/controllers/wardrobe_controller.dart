@@ -9,6 +9,7 @@ import '../../../core/services/haptic_service.dart';
 import '../../../core/services/network_service.dart'
     show RetryHelper, NetworkService;
 import '../../../core/utils/frame_safe.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Wardrobe controller
 class WardrobeController extends GetxController {
@@ -176,8 +177,8 @@ class WardrobeController extends GetxController {
       // Server-side filtering - no client-side filtering needed
       filteredItems.value = items.toList();
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
-      Get.snackbar('Error', error.value, snackPosition: SnackPosition.TOP);
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(error.value, title: 'Error');
     } finally {
       isLoading.value = false;
       isLoadingMore.value = false;
@@ -319,20 +320,11 @@ class WardrobeController extends GetxController {
         selectedItem.value = updatedItem;
       }
 
-      Get.snackbar(
-        '',
-        updatedItem.isFavorite
+      ErrorHandler.showInfo(updatedItem.isFavorite
             ? 'Added to Favorites'
-            : 'Removed from Favorites',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 1),
-      );
+            : 'Removed from Favorites');
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
       isFavoritingMap.remove(itemId);
     }
@@ -362,18 +354,9 @@ class WardrobeController extends GetxController {
         selectedItem.value = updatedItem;
       }
 
-      Get.snackbar(
-        'Great choice!',
-        'Item marked as worn',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 1),
-      );
+      ErrorHandler.showInfo('Item marked as worn', title: 'Great choice!');
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
       isMarkingWornMap.remove(itemId);
     }
@@ -393,18 +376,9 @@ class WardrobeController extends GetxController {
         selectedItem.value = null;
       }
 
-      Get.snackbar(
-        'Deleted',
-        'Item removed from wardrobe',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 1),
-      );
+      ErrorHandler.showSuccess('Item removed from wardrobe', title: 'Deleted');
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
       rethrow;
     } finally {
       isDeletingMap.remove(itemId);
@@ -424,18 +398,9 @@ class WardrobeController extends GetxController {
       clearSelection();
       applyFilters();
 
-      Get.snackbar(
-        'Deleted',
-        '$count items removed',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 1),
-      );
+      ErrorHandler.showSuccess('$count items removed', title: 'Deleted');
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
       rethrow;
     } finally {
       isBatchDeleting.value = false;

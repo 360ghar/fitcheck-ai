@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import '../models/body_profile_model.dart';
 import '../repositories/body_profile_repository.dart';
 import '../../../core/utils/frame_safe.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Controller for managing body profiles
 class BodyProfileController extends GetxController {
@@ -27,7 +28,7 @@ class BodyProfileController extends GetxController {
       error.value = '';
       profiles.value = await _repository.getBodyProfiles();
     } catch (e) {
-      error.value = e.toString();
+      error.value = ErrorHandler.extractMessage(e);
     } finally {
       isLoading.value = false;
     }
@@ -50,8 +51,8 @@ class BodyProfileController extends GetxController {
 
       return true;
     } catch (e) {
-      error.value = e.toString();
-      Get.snackbar('Error', e.toString().replaceAll('Exception: ', ''));
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
       return false;
     } finally {
       isSaving.value = false;
@@ -79,8 +80,8 @@ class BodyProfileController extends GetxController {
 
       return true;
     } catch (e) {
-      error.value = e.toString();
-      Get.snackbar('Error', e.toString().replaceAll('Exception: ', ''));
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
       return false;
     } finally {
       isSaving.value = false;
@@ -94,8 +95,8 @@ class BodyProfileController extends GetxController {
       profiles.removeWhere((p) => p.id == id);
       return true;
     } catch (e) {
-      error.value = e.toString();
-      Get.snackbar('Error', e.toString().replaceAll('Exception: ', ''));
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
       return false;
     }
   }

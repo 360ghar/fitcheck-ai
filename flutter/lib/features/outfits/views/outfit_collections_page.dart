@@ -5,6 +5,7 @@ import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/outfit_list_controller.dart';
 import '../repositories/outfit_repository.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Outfit collections page
 /// Allows users to organize their outfits into collections
@@ -37,7 +38,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
       final result = await _outfitRepository.getCollections();
       collections.value = result;
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
+      error.value = ErrorHandler.extractMessage(e);
     } finally {
       isLoading.value = false;
     }
@@ -384,11 +385,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
           ElevatedButton(
             onPressed: () async {
               if (nameController.text.trim().isEmpty) {
-                Get.snackbar(
-                  'Error',
-                  'Please enter a collection name',
-                  snackPosition: SnackPosition.TOP,
-                );
+                ErrorHandler.showValidation('Please enter a collection name', title: 'Error');
                 return;
               }
 
@@ -399,18 +396,10 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
                   [],
                   description: descriptionController.text.trim(),
                 );
-                Get.snackbar(
-                  'Success',
-                  'Collection created',
-                  snackPosition: SnackPosition.TOP,
-                );
+                ErrorHandler.showSuccess('Collection created', title: 'Success');
                 _loadCollections();
               } catch (e) {
-                Get.snackbar(
-                  'Error',
-                  e.toString().replaceAll('Exception: ', ''),
-                  snackPosition: SnackPosition.TOP,
-                );
+                ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
               }
             },
             child: const Text('Create'),
@@ -636,11 +625,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
           ElevatedButton(
             onPressed: () async {
               if (nameController.text.trim().isEmpty) {
-                Get.snackbar(
-                  'Error',
-                  'Please enter a collection name',
-                  snackPosition: SnackPosition.TOP,
-                );
+                ErrorHandler.showValidation('Please enter a collection name', title: 'Error');
                 return;
               }
 
@@ -673,18 +658,10 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
         outfitIds.cast<String>(),
         description: description,
       );
-      Get.snackbar(
-        'Success',
-        'Collection updated',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showSuccess('Collection updated', title: 'Success');
       _loadCollections();
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     }
   }
 
@@ -695,18 +672,10 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
 
     try {
       await _outfitRepository.deleteCollection(collectionId);
-      Get.snackbar(
-        'Deleted',
-        '"$name" has been deleted',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showSuccess('"$name" has been deleted', title: 'Deleted');
       _loadCollections();
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     }
   }
 }

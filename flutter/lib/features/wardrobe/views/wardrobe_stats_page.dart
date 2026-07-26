@@ -6,6 +6,7 @@ import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../controllers/wardrobe_controller.dart';
 import '../repositories/item_repository.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Wardrobe statistics dashboard page
 /// Shows insights about the user's wardrobe including totals, categories, value, etc.
@@ -37,7 +38,7 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
       final statistics = await _itemRepository.getStatistics();
       stats.value = statistics;
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
+      error.value = ErrorHandler.extractMessage(e);
     } finally {
       isLoading.value = false;
     }

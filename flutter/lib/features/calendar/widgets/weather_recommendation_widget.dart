@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Calendar connection widget for Google/Apple calendar OAuth
 class CalendarConnectionWidget extends StatelessWidget {
@@ -97,11 +97,7 @@ class CalendarConnectionWidget extends StatelessWidget {
   }
 
   void _showAppleComingSoon() {
-    Get.snackbar(
-      'Coming Soon',
-      'Apple Calendar integration will be available soon',
-      snackPosition: SnackPosition.TOP,
-    );
+    ErrorHandler.showInfo('Apple Calendar integration will be available soon', title: 'Coming Soon');
   }
 }
 

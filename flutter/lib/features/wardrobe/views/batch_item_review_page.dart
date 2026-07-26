@@ -6,6 +6,7 @@ import '../../../core/widgets/app_ui.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../controllers/batch_extraction_controller.dart';
 import '../widgets/extracted_item_card.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Page for reviewing and saving extracted items
 class BatchItemReviewPage extends GetView<BatchExtractionController> {
@@ -503,35 +504,17 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
 
       if (savedItems.isNotEmpty) {
         // Show success and go back to wardrobe
-        Get.snackbar(
-          'Success',
-          '${savedItems.length} items added to your wardrobe',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
-        );
+        ErrorHandler.showSuccess('${savedItems.length} items added to your wardrobe', title: 'Success');
 
         controller.reset();
         Get.until((route) => route.isFirst);
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to save items. Please try again.',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+        ErrorHandler.showError('Failed to save items. Please try again.', title: 'Error');
       }
     } catch (e) {
       if (!context.mounted) return;
       Navigator.pop(context); // Close loading dialog
-      Get.snackbar(
-        'Error',
-        'Failed to save items: $e',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      ErrorHandler.showError('Failed to save items: $e', title: 'Error');
     }
   }
 

@@ -36,23 +36,10 @@ class NotificationService extends GetxService {
     ));
   }
 
-  /// Show an error notification
-  void showError(String message, {String title = 'Error'}) {
-    _show(AppNotification(
-      title: title,
-      message: message,
-      type: NotificationType.error,
-    ));
-  }
-
-  /// Show a warning notification
-  void showWarning(String message, {String title = 'Warning'}) {
-    _show(AppNotification(
-      title: title,
-      message: message,
-      type: NotificationType.warning,
-    ));
-  }
+  // NOTE: there is deliberately no showError/showWarning here. Failures must
+  // go through ErrorHandler.showError, which is the only path that also
+  // reports to Sentry/PostHog. When both existed, the 20 call sites on this
+  // class lost every error to telemetry silently.
 
   /// Show an info notification
   void showInfo(String message, {String title = 'Info'}) {
@@ -74,7 +61,17 @@ class NotificationService extends GetxService {
 
   void _show(AppNotification notification) {
     lastNotification.value = notification;
+    present(notification);
+  }
 
+  /// The single place the app builds a snackbar.
+  ///
+  /// Static so callers that must not depend on the service being registered
+  /// (notably [ErrorHandler], which runs on cold-start paths before
+  /// InitialBinding) can present without a `Get.find`. Nothing else in the app
+  /// should call `Get.snackbar` directly -- see the guard in
+  /// test/core/utils/snackbar_policy_test.dart.
+  static void present(AppNotification notification) {
     final colors = _getColors(notification.type);
     Get.snackbar(
       notification.title,
@@ -92,7 +89,7 @@ class NotificationService extends GetxService {
     );
   }
 
-  _NotificationColors _getColors(NotificationType type) {
+  static _NotificationColors _getColors(NotificationType type) {
     switch (type) {
       case NotificationType.success:
         return _NotificationColors(

@@ -4,6 +4,7 @@ import '../constants/app_constants.dart';
 import 'app_ui.dart';
 import '../../features/feedback/models/feedback_model.dart';
 import '../../features/feedback/repositories/feedback_repository.dart';
+import '../utils/error_handler.dart';
 
 /// Reusable bottom sheet that lets a user report objectionable user-generated
 /// content (Apple Guideline 1.2). Reports are filed through the existing
@@ -70,20 +71,12 @@ class _ReportContentSheetState extends State<ReportContentSheet> {
       if (Get.isBottomSheetOpen ?? false) {
         Get.back();
       }
-      Get.snackbar(
-        'Report Submitted',
-        'Thank you. Our team will review this content.',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showInfo('Thank you. Our team will review this content.', title: 'Report Submitted');
     } catch (e) {
       if (mounted) {
         setState(() => _isSubmitting = false);
       }
-      Get.snackbar(
-        'Error',
-        'Failed to submit report. Please try again.',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError('Failed to submit report. Please try again.', title: 'Error');
     }
   }
 

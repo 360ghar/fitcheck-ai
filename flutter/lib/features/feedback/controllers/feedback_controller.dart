@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../repositories/feedback_repository.dart';
 import '../models/feedback_model.dart';
 import '../../../core/utils/frame_safe.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Controller for feedback submission
 class FeedbackController extends GetxController {
@@ -55,11 +56,7 @@ class FeedbackController extends GetxController {
   /// Pick image from gallery
   Future<void> pickImage() async {
     if (attachments.length >= 5) {
-      Get.snackbar(
-        'Limit Reached',
-        'Maximum 5 attachments allowed',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showValidation('Maximum 5 attachments allowed', title: 'Limit Reached');
       return;
     }
 
@@ -75,11 +72,7 @@ class FeedbackController extends GetxController {
       final size = await file.length();
 
       if (size > 5 * 1024 * 1024) {
-        Get.snackbar(
-          'File Too Large',
-          'Image must be under 5MB',
-          snackPosition: SnackPosition.TOP,
-        );
+        ErrorHandler.showValidation('Image must be under 5MB', title: 'File Too Large');
         return;
       }
 
@@ -90,11 +83,7 @@ class FeedbackController extends GetxController {
   /// Take photo with camera
   Future<void> takePhoto() async {
     if (attachments.length >= 5) {
-      Get.snackbar(
-        'Limit Reached',
-        'Maximum 5 attachments allowed',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showValidation('Maximum 5 attachments allowed', title: 'Limit Reached');
       return;
     }
 
@@ -110,11 +99,7 @@ class FeedbackController extends GetxController {
       final size = await file.length();
 
       if (size > 5 * 1024 * 1024) {
-        Get.snackbar(
-          'File Too Large',
-          'Image must be under 5MB',
-          snackPosition: SnackPosition.TOP,
-        );
+        ErrorHandler.showValidation('Image must be under 5MB', title: 'File Too Large');
         return;
       }
 
@@ -160,18 +145,10 @@ class FeedbackController extends GetxController {
       // Reload tickets
       fetchTickets();
 
-      Get.snackbar(
-        'Thank You!',
-        'Your feedback has been submitted successfully.',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showInfo('Your feedback has been submitted successfully.', title: 'Thank You!');
     } catch (e) {
-      error.value = e.toString();
-      Get.snackbar(
-        'Error',
-        'Failed to submit feedback. Please try again.',
-        snackPosition: SnackPosition.TOP,
-      );
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError('Failed to submit feedback. Please try again.', title: 'Error');
     } finally {
       isSubmitting.value = false;
     }

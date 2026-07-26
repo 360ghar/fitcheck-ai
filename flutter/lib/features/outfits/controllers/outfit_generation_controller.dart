@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/services/notification_service.dart';
 import '../repositories/outfit_repository.dart';
 import 'outfit_list_controller.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Controller for AI outfit visualization generation
 /// Focused responsibility: Managing AI generation and polling
@@ -37,7 +38,7 @@ class OutfitGenerationController extends GetxController {
     String? bodyProfileId,
   }) async {
     if (itemIds.isEmpty) {
-      NotificationService.instance.showWarning(
+      ErrorHandler.showWarning(
         'No items selected for visualization',
         title: 'Cannot Generate',
       );
@@ -62,7 +63,7 @@ class OutfitGenerationController extends GetxController {
 
       if (result.status == 'failed') {
         isGenerating.value = false;
-        NotificationService.instance.showError(
+        ErrorHandler.showError(
           result.error ?? 'An error occurred',
           title: 'Generation Failed',
         );
@@ -86,9 +87,9 @@ class OutfitGenerationController extends GetxController {
       // Poll for status (for tracked generations)
       await _pollGenerationStatus(result.id);
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
+      error.value = ErrorHandler.extractMessage(e);
       isGenerating.value = false;
-      NotificationService.instance.showError(
+      ErrorHandler.showError(
         error.value,
         title: 'Generation Failed',
       );
@@ -131,7 +132,7 @@ class OutfitGenerationController extends GetxController {
         if (status.status == 'failed') {
           isGenerating.value = false;
           _isPolling = false;
-          NotificationService.instance.showError(
+          ErrorHandler.showError(
             status.error ?? 'An error occurred',
             title: 'Generation Failed',
           );
@@ -148,7 +149,7 @@ class OutfitGenerationController extends GetxController {
     if (_isPolling) {
       isGenerating.value = false;
       _isPolling = false;
-      NotificationService.instance.showWarning(
+      ErrorHandler.showWarning(
         'Generation is taking longer than expected',
         title: 'Timeout',
       );
@@ -177,12 +178,7 @@ class OutfitGenerationController extends GetxController {
             TextButton(
               onPressed: () async {
                 await Clipboard.setData(ClipboardData(text: shareUrl));
-                Get.snackbar(
-                  'Copied',
-                  'Share link copied to clipboard',
-                  snackPosition: SnackPosition.TOP,
-                  duration: const Duration(seconds: 2),
-                );
+                ErrorHandler.showSuccess('Share link copied to clipboard', title: 'Copied');
               },
               child: const Text('Copy'),
             ),
@@ -203,8 +199,8 @@ class OutfitGenerationController extends GetxController {
         ),
       );
     } catch (e) {
-      NotificationService.instance.showError(
-        e.toString().replaceAll('Exception: ', ''),
+      ErrorHandler.showError(
+        ErrorHandler.extractMessage(e),
       );
     }
   }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../../core/services/notification_service.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../../wardrobe/repositories/item_repository.dart';
 import 'find_matches_controller.dart';
@@ -9,6 +8,7 @@ import 'weather_recommendations_controller.dart';
 import 'shopping_recommendations_controller.dart';
 import 'astrology_recommendations_controller.dart';
 import '../../../core/utils/frame_safe.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Recommendations controller - Slim coordinator for tab management
 /// Delegates tab-specific logic to focused controllers
@@ -59,7 +59,7 @@ class RecommendationsController extends GetxController
       final response = await _itemRepository.getItems(limit: 100);
       availableItems.value = response.items;
     } catch (e) {
-      itemsError.value = e.toString().replaceAll('Exception: ', '');
+      itemsError.value = ErrorHandler.extractMessage(e);
     } finally {
       isLoadingItems.value = false;
     }
@@ -71,7 +71,7 @@ class RecommendationsController extends GetxController
       selectedItems.removeWhere((i) => i.id == item.id);
     } else {
       if (selectedItems.length >= 3) {
-        NotificationService.instance.showWarning(
+        ErrorHandler.showWarning(
           'You can select up to 3 items for matching',
           title: 'Maximum Reached',
         );

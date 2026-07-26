@@ -1,7 +1,7 @@
 import 'package:get/get.dart';
 import '../../../core/services/analytics_service.dart';
-import '../../../core/services/notification_service.dart';
 import '../repositories/recommendations_repository.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Controller for Shopping Recommendations tab
 /// Manages shopping suggestions based on wardrobe gaps
@@ -53,7 +53,7 @@ class ShoppingRecommendationsController extends GetxController {
         },
       );
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
+      error.value = ErrorHandler.extractMessage(e);
       AnalyticsService.instance.track(
         'shopping_recommendations_failed',
         properties: {
@@ -61,7 +61,7 @@ class ShoppingRecommendationsController extends GetxController {
           'source': 'flutter_app',
         },
       );
-      NotificationService.instance.showError(error.value);
+      ErrorHandler.showError(error.value);
     } finally {
       isLoading.value = false;
     }

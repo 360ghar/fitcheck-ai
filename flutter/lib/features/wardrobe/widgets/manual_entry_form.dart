@@ -9,6 +9,7 @@ import '../../../domain/enums/category.dart';
 import '../../../domain/enums/condition.dart' as domain;
 import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Manual entry form for adding items
 /// Can be used with or without an image
@@ -74,11 +75,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
           (additionalImages.isNotEmpty ? additionalImages.first : null);
 
       if (imageToUse == null) {
-        Get.snackbar(
-          'Image Required',
-          'Please add a photo of the item',
-          snackPosition: SnackPosition.TOP,
-        );
+        ErrorHandler.showValidation('Please add a photo of the item', title: 'Image Required');
         isSaving.value = false;
         return;
       }
@@ -137,18 +134,9 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
 
       Get.back(); // Close form
       Get.back(); // Close item add page
-      Get.snackbar(
-        'Success',
-        '"${created.name}" added to your wardrobe',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 2),
-      );
+      ErrorHandler.showSuccess('"${created.name}" added to your wardrobe', title: 'Success');
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
       isSaving.value = false;
     }
@@ -173,12 +161,7 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
     }
 
     if (addedCount > 0 && mounted) {
-      Get.snackbar(
-        'Images Added',
-        '$addedCount additional image(s) added',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 2),
-      );
+      ErrorHandler.showSuccess('$addedCount additional image(s) added', title: 'Images Added');
     }
   }
 

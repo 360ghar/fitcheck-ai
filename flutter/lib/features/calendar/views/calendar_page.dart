@@ -7,6 +7,7 @@ import '../../outfits/controllers/outfit_list_controller.dart';
 import '../controllers/calendar_controller.dart';
 import '../models/calendar_event_model.dart';
 import '../models/calendar_connection_model.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Calendar page - full implementation with event management
 class CalendarPage extends StatefulWidget {
@@ -594,11 +595,11 @@ class _CalendarPageState extends State<CalendarPage> {
               Obx(() => ElevatedButton(
                 onPressed: controller.isCreatingEvent.value ? null : () {
                   if (titleController.text.isEmpty) {
-                    Get.snackbar('Error', 'Please enter a title');
+                    ErrorHandler.showValidation('Please enter a title', title: 'Error');
                     return;
                   }
                   if (!isAllDay && !endTime.isAfter(startTime)) {
-                    Get.snackbar('Error', 'End time must be after start time');
+                    ErrorHandler.showValidation('End time must be after start time', title: 'Error');
                     return;
                   }
                   controller.createEvent(
@@ -732,11 +733,11 @@ class _CalendarPageState extends State<CalendarPage> {
               Obx(() => ElevatedButton(
                 onPressed: controller.isUpdatingEvent.value ? null : () {
                   if (titleController.text.isEmpty) {
-                    Get.snackbar('Error', 'Please enter a title');
+                    ErrorHandler.showValidation('Please enter a title', title: 'Error');
                     return;
                   }
                   if (!isAllDay && !endTime.isAfter(startTime)) {
-                    Get.snackbar('Error', 'End time must be after start time');
+                    ErrorHandler.showValidation('End time must be after start time', title: 'Error');
                     return;
                   }
                   controller.updateEvent(
@@ -864,11 +865,7 @@ class _CalendarPageState extends State<CalendarPage> {
     }
 
     if (outfitController == null) {
-      Get.snackbar(
-        'Outfits unavailable',
-        'Open the Outfits tab once, then try linking again.',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showInfo('Open the Outfits tab once, then try linking again.', title: 'Outfits unavailable');
       return;
     }
 
@@ -879,11 +876,7 @@ class _CalendarPageState extends State<CalendarPage> {
     if (!mounted) return;
 
     if (outfitController.outfits.isEmpty) {
-      Get.snackbar(
-        'No outfits',
-        'Create an outfit first, then link it to this event.',
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showInfo('Create an outfit first, then link it to this event.', title: 'No outfits');
       return;
     }
 

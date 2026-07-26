@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
-import '../../../core/services/notification_service.dart';
 import '../repositories/recommendations_repository.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Controller for Astrology recommendations tab
 class AstrologyRecommendationsController extends GetxController {
@@ -34,8 +34,8 @@ class AstrologyRecommendationsController extends GetxController {
       );
       data.value = result;
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
-      NotificationService.instance.showError(error.value);
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(error.value);
     } finally {
       isLoading.value = false;
     }

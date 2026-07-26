@@ -1,6 +1,5 @@
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
-import '../../../core/services/notification_service.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../settings/repositories/settings_repository.dart';
 import '../../wardrobe/models/item_model.dart';
@@ -132,8 +131,8 @@ class WeatherRecommendationsController extends GetxController {
             .toList();
       }
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
-      NotificationService.instance.showError(error.value);
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(error.value);
     } finally {
       isLoading.value = false;
     }

@@ -133,7 +133,7 @@ class PhotoshootController extends GetxController {
         // Calculate how many more photos we can add
         final spotsAvailable = maxPhotos - selectedPhotos.length;
         if (spotsAvailable <= 0) {
-          Get.snackbar('Limit Reached', 'Maximum $maxPhotos photos allowed');
+          ErrorHandler.showValidation('Maximum $maxPhotos photos allowed', title: 'Limit Reached');
           return;
         }
 
@@ -153,7 +153,7 @@ class PhotoshootController extends GetxController {
   /// Pick a single photo from camera
   Future<void> pickFromCamera() async {
     if (selectedPhotos.length >= maxPhotos) {
-      Get.snackbar('Limit Reached', 'Maximum $maxPhotos photos allowed');
+      ErrorHandler.showValidation('Maximum $maxPhotos photos allowed', title: 'Limit Reached');
       return;
     }
 
@@ -211,7 +211,7 @@ class PhotoshootController extends GetxController {
     switch (currentStep.value) {
       case PhotoshootStep.upload:
         if (selectedPhotos.isEmpty) {
-          Get.snackbar('No Photos', 'Please add at least one photo');
+          ErrorHandler.showValidation('Please add at least one photo', title: 'No Photos');
           return;
         }
         currentStep.value = PhotoshootStep.configure;
@@ -220,10 +220,7 @@ class PhotoshootController extends GetxController {
         if (!canGenerate) {
           if (selectedUseCase.value == PhotoshootUseCase.custom &&
               customPrompt.value.isEmpty) {
-            Get.snackbar(
-              'Custom Prompt Required',
-              'Please enter a custom prompt',
-            );
+            ErrorHandler.showValidation('Please enter a custom prompt', title: 'Custom Prompt Required');
             return;
           }
           if (numImages.value > remainingToday) {
@@ -326,7 +323,7 @@ class PhotoshootController extends GetxController {
       // Subscribe to SSE events for real-time progress
       _subscribeToEvents(response.jobId);
     } catch (e, stackTrace) {
-      error.value = e.toString().replaceAll('Exception: ', '');
+      error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
       AnalyticsService.instance.track(
         'photoshoot_session_failed',
@@ -341,7 +338,7 @@ class PhotoshootController extends GetxController {
       if (error.value.contains('limit') || error.value.contains('exceeded')) {
         _showReferralPrompt();
       } else {
-        Get.snackbar('Generation Failed', error.value);
+        ErrorHandler.showError(error.value, title: 'Generation Failed');
       }
 
       currentStep.value = PhotoshootStep.configure;
@@ -436,7 +433,7 @@ class PhotoshootController extends GetxController {
             'source': 'flutter_app',
           },
         );
-        Get.snackbar('Generation Failed', error.value);
+        ErrorHandler.showError(error.value, title: 'Generation Failed');
         currentStep.value = PhotoshootStep.configure;
         isGenerating.value = false;
         _sseSubscription?.cancel();
@@ -498,13 +495,17 @@ class PhotoshootController extends GetxController {
       },
     );
 
-    Get.snackbar(
-      partialSuccess.value ? 'Partially Complete' : 'Success',
-      partialSuccess.value
-          ? '${generatedImages.length} generated, ${failedCount.value} failed.'
-          : '${generatedImages.length} images generated!',
-      snackPosition: SnackPosition.TOP,
-    );
+    if (partialSuccess.value) {
+      ErrorHandler.showWarning(
+        '${generatedImages.length} generated, ${failedCount.value} failed.',
+        title: 'Partially Complete',
+      );
+    } else {
+      ErrorHandler.showSuccess(
+        '${generatedImages.length} images generated!',
+        title: 'Success',
+      );
+    }
   }
 
   /// Fallback polling if SSE fails
@@ -517,7 +518,7 @@ class PhotoshootController extends GetxController {
     if (attempt >= maxPollAttempts) {
       debugPrint('Polling for job $id gave up after $attempt attempts');
       error.value = 'Lost connection while generating. Please try again.';
-      Get.snackbar('Connection Lost', error.value);
+      ErrorHandler.showError(error.value, title: 'Connection Lost');
       currentStep.value = PhotoshootStep.configure;
       isGenerating.value = false;
       return;
@@ -554,7 +555,7 @@ class PhotoshootController extends GetxController {
           break;
         case 'failed':
           error.value = status.error ?? 'Generation failed';
-          Get.snackbar('Generation Failed', error.value);
+          ErrorHandler.showError(error.value, title: 'Generation Failed');
           currentStep.value = PhotoshootStep.configure;
           isGenerating.value = false;
           break;
@@ -614,7 +615,7 @@ class PhotoshootController extends GetxController {
       );
 
       if (result.images.isEmpty) {
-        Get.snackbar('Retry Failed', 'Could not generate replacement image');
+        ErrorHandler.showError('Could not generate replacement image', title: 'Retry Failed');
         return;
       }
 
@@ -634,12 +635,9 @@ class PhotoshootController extends GetxController {
         usage.value = result.usage;
       }
 
-      Get.snackbar(
-        'Slot Retried',
-        'Failed slot #${failedIndex + 1} has been replaced',
-      );
+      ErrorHandler.showError('Failed slot #${failedIndex + 1} has been replaced', title: 'Slot Retried');
     } catch (e) {
-      Get.snackbar('Retry Failed', e.toString().replaceAll('Exception: ', ''));
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Retry Failed');
     } finally {
       retryingFailedIndex.value = -1;
     }
@@ -677,9 +675,9 @@ class PhotoshootController extends GetxController {
         name: 'photoshoot_${sessionId.value}_$index',
       );
 
-      Get.snackbar('Saved', 'Image saved to gallery');
+      ErrorHandler.showSuccess('Image saved to gallery', title: 'Saved');
     } catch (e) {
-      Get.snackbar('Error', 'Failed to save image: $e');
+      ErrorHandler.showError('Failed to save image: $e', title: 'Error');
     } finally {
       isDownloading.value = false;
       downloadingIndex.value = -1;
@@ -714,15 +712,12 @@ class PhotoshootController extends GetxController {
       }
 
       if (failedIndices.isEmpty) {
-        Get.snackbar('Saved', 'All $savedCount images saved to gallery');
+        ErrorHandler.showSuccess('All $savedCount images saved to gallery', title: 'Saved');
       } else {
-        Get.snackbar(
-          'Partially Saved',
-          '$savedCount of ${generatedImages.length} saved. Failed: ${failedIndices.join(", ")}',
-        );
+        ErrorHandler.showError('$savedCount of ${generatedImages.length} saved. Failed: ${failedIndices.join(", ")}', title: 'Partially Saved');
       }
     } catch (e) {
-      Get.snackbar('Error', 'Failed to save images: $e');
+      ErrorHandler.showError('Failed to save images: $e', title: 'Error');
     } finally {
       isDownloading.value = false;
       downloadingIndex.value = -1;

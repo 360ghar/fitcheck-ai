@@ -9,6 +9,7 @@ import '../../../domain/enums/season.dart';
 import '../controllers/outfit_list_controller.dart';
 import '../models/outfit_model.dart';
 import '../repositories/outfit_repository.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Edit page for an existing outfit
 class OutfitEditPage extends StatefulWidget {
@@ -75,7 +76,7 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
       _applyOutfitToForm(outfit);
     } catch (e) {
       if (!mounted) return;
-      loadError.value = e.toString().replaceAll('Exception: ', '');
+      loadError.value = ErrorHandler.extractMessage(e);
     } finally {
       if (mounted) {
         isLoadingOutfit.value = false;
@@ -162,18 +163,9 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
       _outfitsController.fetchOutfits(refresh: true);
 
       Get.back();
-      Get.snackbar(
-        'Success',
-        'Outfit updated successfully',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 2),
-      );
+      ErrorHandler.showSuccess('Outfit updated successfully', title: 'Success');
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
       isSaving.value = false;
     }
@@ -578,17 +570,9 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
               try {
                 await _outfitsController.deleteOutfit(widget.outfitId);
                 Get.back(); // Close edit page
-                Get.snackbar(
-                  'Deleted',
-                  'Outfit removed successfully',
-                  snackPosition: SnackPosition.TOP,
-                );
+                ErrorHandler.showSuccess('Outfit removed successfully', title: 'Deleted');
               } catch (e) {
-                Get.snackbar(
-                  'Error',
-                  e.toString().replaceAll('Exception: ', ''),
-                  snackPosition: SnackPosition.TOP,
-                );
+                ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
               }
             },
             style: ElevatedButton.styleFrom(

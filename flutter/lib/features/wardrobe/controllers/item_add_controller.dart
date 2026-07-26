@@ -10,6 +10,7 @@ import '../models/batch_extraction_models.dart';
 import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
 import 'wardrobe_controller.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Controller for item add page
 /// Handles image processing, AI extraction, product image generation, and item creation
@@ -96,14 +97,7 @@ class ItemAddController extends GetxController {
         currentGenerationStatus.value = 'Items detected (cached)';
 
         // Show success message with cache indicator
-        Get.snackbar(
-          'Items Detected!',
-          'Loaded from cache ⚡',
-          snackPosition: SnackPosition.TOP,
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-          icon: const Icon(Icons.flash_on, color: Colors.white),
-        );
+        ErrorHandler.showInfo('Loaded from cache ⚡', title: 'Items Detected!');
       }
 
       // Subscribe to SSE events for real-time progress
@@ -289,19 +283,9 @@ class ItemAddController extends GetxController {
             .where((item) => item.generatedImageUrl != null)
             .length;
         if (successfulItems > 0) {
-          Get.snackbar(
-            'Success',
-            '$successfulItems item${successfulItems > 1 ? 's' : ''} ready to add',
-            snackPosition: SnackPosition.TOP,
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          );
+          ErrorHandler.showSuccess('$successfulItems item${successfulItems > 1 ? 's' : ''} ready to add', title: 'Success');
         } else if (generatedItems.isEmpty) {
-          Get.snackbar(
-            'No Items Detected',
-            'Try a clearer photo or enter details manually',
-            snackPosition: SnackPosition.TOP,
-          );
+          ErrorHandler.showValidation('Try a clearer photo or enter details manually', title: 'No Items Detected');
         }
 
         _cleanupSSE();
@@ -578,7 +562,7 @@ class ItemAddController extends GetxController {
 
   /// Handle extraction errors with categorization (Phase 1)
   void _handleExtractionError(dynamic e) {
-    final errorMsg = e.toString().replaceAll('Exception: ', '');
+    final errorMsg = ErrorHandler.extractMessage(e);
     error.value = errorMsg;
 
     // Categorize error and show actionable dialog
@@ -658,12 +642,7 @@ class ItemAddController extends GetxController {
       );
     } else {
       // Generic error
-      Get.snackbar(
-        'Error',
-        'Failed to analyze image. Please try again.',
-        snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red,
-      );
+      ErrorHandler.showError('Failed to analyze image. Please try again.', title: 'Error');
     }
   }
 
@@ -749,29 +728,13 @@ class ItemAddController extends GetxController {
           Get.find<WardrobeController>().addItems(createdItems.toList());
         }
         Get.back(); // Close item add page
-        Get.snackbar(
-          'Success',
-          '$savedCount of ${includedItems.length} item(s) added to your wardrobe',
-          snackPosition: SnackPosition.TOP,
-          duration: const Duration(seconds: 2),
-          backgroundColor: Colors.green,
-        );
+        ErrorHandler.showSuccess('$savedCount of ${includedItems.length} item(s) added to your wardrobe', title: 'Success');
       } else {
-        Get.snackbar(
-          'Failed',
-          'Could not save items. Please try again.',
-          snackPosition: SnackPosition.TOP,
-          backgroundColor: Colors.red,
-        );
+        ErrorHandler.showError('Could not save items. Please try again.', title: 'Failed');
       }
     } catch (e) {
       isSaving.value = false;
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     }
   }
 
@@ -850,29 +813,13 @@ class ItemAddController extends GetxController {
           Get.find<WardrobeController>().addItems(createdItems.toList());
         }
         Get.back(); // Close item add page
-        Get.snackbar(
-          'Success',
-          '$savedCount of ${itemsToSave.length} item(s) added to your wardrobe',
-          snackPosition: SnackPosition.TOP,
-          duration: const Duration(seconds: 2),
-          backgroundColor: Colors.green,
-        );
+        ErrorHandler.showSuccess('$savedCount of ${itemsToSave.length} item(s) added to your wardrobe', title: 'Success');
       } else {
-        Get.snackbar(
-          'Failed',
-          'Could not save items. Please try again.',
-          snackPosition: SnackPosition.TOP,
-          backgroundColor: Colors.red,
-        );
+        ErrorHandler.showError('Could not save items. Please try again.', title: 'Failed');
       }
     } catch (e) {
       isSaving.value = false;
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-        backgroundColor: Colors.red,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     }
   }
 

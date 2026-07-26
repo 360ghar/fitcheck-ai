@@ -7,10 +7,10 @@ import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../../../core/services/notification_service.dart';
 import '../controllers/outfit_list_controller.dart';
 import '../models/outfit_model.dart';
 import '../repositories/outfit_repository.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Detail page for a single outfit
 class OutfitDetailPage extends StatefulWidget {
@@ -918,8 +918,8 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
       }
     } catch (e) {
       Get.back();
-      NotificationService.instance.showError(
-        e.toString().replaceAll('Exception: ', ''),
+      ErrorHandler.showError(
+        ErrorHandler.extractMessage(e),
       );
     }
   }

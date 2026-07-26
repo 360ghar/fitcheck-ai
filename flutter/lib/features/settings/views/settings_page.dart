@@ -7,6 +7,7 @@ import '../../../core/widgets/app_ui.dart';
 import '../../../app/routes/app_routes.dart';
 import '../controllers/settings_controller.dart';
 import '../models/user_preferences_model.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Settings page - full implementation with user preferences management
 class SettingsPage extends StatefulWidget {
@@ -548,49 +549,34 @@ class _SettingsPageState extends State<SettingsPage> {
                     ? null
                     : () async {
                         if (currentPasswordController.text.isEmpty) {
-                          Get.snackbar(
-                            'Error',
-                            'Please enter your current password',
-                          );
+                          ErrorHandler.showValidation('Please enter your current password', title: 'Error');
                           return;
                         }
                         if (newPasswordController.text.isEmpty) {
-                          Get.snackbar('Error', 'Please enter a new password');
+                          ErrorHandler.showValidation('Please enter a new password', title: 'Error');
                           return;
                         }
                         // Password strength validation
                         final password = newPasswordController.text;
                         if (password.length < 8) {
-                          Get.snackbar(
-                            'Weak Password',
-                            'Password must be at least 8 characters',
-                          );
+                          ErrorHandler.showValidation('Password must be at least 8 characters', title: 'Weak Password');
                           return;
                         }
                         if (!password.contains(RegExp(r'[A-Z]'))) {
-                          Get.snackbar(
-                            'Weak Password',
-                            'Password must contain at least one uppercase letter',
-                          );
+                          ErrorHandler.showError('Password must contain at least one uppercase letter', title: 'Weak Password');
                           return;
                         }
                         if (!password.contains(RegExp(r'[a-z]'))) {
-                          Get.snackbar(
-                            'Weak Password',
-                            'Password must contain at least one lowercase letter',
-                          );
+                          ErrorHandler.showError('Password must contain at least one lowercase letter', title: 'Weak Password');
                           return;
                         }
                         if (!password.contains(RegExp(r'[0-9]'))) {
-                          Get.snackbar(
-                            'Weak Password',
-                            'Password must contain at least one number',
-                          );
+                          ErrorHandler.showError('Password must contain at least one number', title: 'Weak Password');
                           return;
                         }
                         if (newPasswordController.text !=
                             confirmPasswordController.text) {
-                          Get.snackbar('Error', 'Passwords do not match');
+                          ErrorHandler.showValidation('Passwords do not match', title: 'Error');
                           return;
                         }
                         try {

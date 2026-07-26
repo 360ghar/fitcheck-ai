@@ -10,6 +10,7 @@ import '../../../domain/enums/condition.dart' as domain;
 import '../controllers/wardrobe_controller.dart';
 import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Edit page for a single wardrobe item
 class ItemEditPage extends StatefulWidget {
@@ -123,12 +124,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
     }
 
     if (addedCount > 0 && mounted) {
-      Get.snackbar(
-        'Images Added',
-        '$addedCount image(s) added',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 2),
-      );
+      ErrorHandler.showSuccess('$addedCount image(s) added', title: 'Images Added');
     }
   }
 
@@ -216,18 +212,9 @@ class _ItemEditPageState extends State<ItemEditPage> {
       _wardrobeController.fetchItems(refresh: true);
 
       Get.back();
-      Get.snackbar(
-        'Success',
-        'Item updated successfully',
-        snackPosition: SnackPosition.TOP,
-        duration: const Duration(seconds: 2),
-      );
+      ErrorHandler.showSuccess('Item updated successfully', title: 'Success');
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        e.toString().replaceAll('Exception: ', ''),
-        snackPosition: SnackPosition.TOP,
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
       isSaving.value = false;
     }
@@ -791,17 +778,9 @@ class _ItemEditPageState extends State<ItemEditPage> {
                 await _itemRepository.deleteItem(widget.itemId);
                 _wardrobeController.fetchItems(refresh: true);
                 Get.back(); // Close edit page
-                Get.snackbar(
-                  'Deleted',
-                  'Item removed from wardrobe',
-                  snackPosition: SnackPosition.TOP,
-                );
+                ErrorHandler.showSuccess('Item removed from wardrobe', title: 'Deleted');
               } catch (e) {
-                Get.snackbar(
-                  'Error',
-                  e.toString().replaceAll('Exception: ', ''),
-                  snackPosition: SnackPosition.TOP,
-                );
+                ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
               }
             },
             style: ElevatedButton.styleFrom(

@@ -78,7 +78,7 @@ class SubscriptionController extends GetxController {
       subscription.value = data.subscription;
       usage.value = data.usage;
     } catch (e, stackTrace) {
-      error.value = e.toString();
+      error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
     } finally {
       isLoading.value = false;
@@ -91,7 +91,7 @@ class SubscriptionController extends GetxController {
     try {
       usage.value = await _repository.getUsage();
     } catch (e, stackTrace) {
-      error.value = e.toString();
+      error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
     }
   }
@@ -102,7 +102,7 @@ class SubscriptionController extends GetxController {
       final result = await _repository.getPlans();
       plans.assignAll(result);
     } catch (e, stackTrace) {
-      error.value = e.toString();
+      error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
     }
   }
@@ -115,7 +115,7 @@ class SubscriptionController extends GetxController {
     try {
       referralCode.value = await _repository.getReferralCode();
     } catch (e, stackTrace) {
-      referralError.value = e.toString().replaceAll('Exception: ', '');
+      referralError.value = ErrorHandler.extractMessage(e);
       // Auth race (401 before token ready) is common on cold start — surface for retry
       ErrorHandler.reportError(e, referralError.value, stackTrace: stackTrace);
     } finally {
@@ -129,7 +129,7 @@ class SubscriptionController extends GetxController {
     try {
       referralStats.value = await _repository.getReferralStats();
     } catch (e, stackTrace) {
-      error.value = e.toString();
+      error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
     }
   }
@@ -152,7 +152,7 @@ class SubscriptionController extends GetxController {
         error.value = 'Could not open checkout page';
       }
     } catch (e, stackTrace) {
-      error.value = e.toString();
+      error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
     } finally {
       isCheckingOut.value = false;
@@ -166,14 +166,11 @@ class SubscriptionController extends GetxController {
     try {
       await _repository.cancelSubscription();
       await fetchSubscription();
-      Get.snackbar(
-        'Success',
-        'Subscription cancelled. You\'ll retain access until period end.',
-      );
+      ErrorHandler.showSuccess('Subscription cancelled. You\'ll retain access until period end.', title: 'Success');
     } catch (e, stackTrace) {
-      error.value = e.toString();
+      error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
-      Get.snackbar('Error', 'Failed to cancel subscription');
+      ErrorHandler.showError('Failed to cancel subscription', title: 'Error');
     } finally {
       isLoading.value = false;
     }
@@ -186,16 +183,13 @@ class SubscriptionController extends GetxController {
     }
     final code = referralCode.value;
     if (code == null) {
-      Get.snackbar(
-        'Error',
-        referralError.value.isNotEmpty
+      ErrorHandler.showError(referralError.value.isNotEmpty
             ? referralError.value
-            : 'Could not load your referral link. Try again.',
-      );
+            : 'Could not load your referral link. Try again.', title: 'Error');
       return;
     }
     await Clipboard.setData(ClipboardData(text: code.shareUrl));
-    Get.snackbar('Copied', 'Referral link copied to clipboard');
+    ErrorHandler.showSuccess('Referral link copied to clipboard', title: 'Copied');
   }
 
   /// Share referral link via the platform share sheet.
@@ -206,12 +200,9 @@ class SubscriptionController extends GetxController {
     }
     final code = referralCode.value;
     if (code == null) {
-      Get.snackbar(
-        'Error',
-        referralError.value.isNotEmpty
+      ErrorHandler.showError(referralError.value.isNotEmpty
             ? referralError.value
-            : 'Could not load your referral link. Try again.',
-      );
+            : 'Could not load your referral link. Try again.', title: 'Error');
       return;
     }
     try {
@@ -224,12 +215,9 @@ class SubscriptionController extends GetxController {
       // Fall back to clipboard so the user still gets a working path
       try {
         await Clipboard.setData(ClipboardData(text: code.shareUrl));
-        Get.snackbar(
-          'Link copied',
-          'Share sheet failed — link copied to clipboard instead.',
-        );
+        ErrorHandler.showError('Share sheet failed — link copied to clipboard instead.', title: 'Link copied');
       } catch (_) {
-        Get.snackbar('Share failed', 'Please copy the link instead.');
+        ErrorHandler.showValidation('Please copy the link instead.', title: 'Share failed');
       }
     }
   }

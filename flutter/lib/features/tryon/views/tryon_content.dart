@@ -9,6 +9,7 @@ import '../../../core/widgets/report_content_sheet.dart';
 import '../controllers/tryon_controller.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../../wardrobe/repositories/item_repository.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Show full-screen viewer for a File image (local clothing image)
 void showFullScreenFileImage(BuildContext context, File imageFile) {
@@ -878,7 +879,7 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
       final response = await _itemRepository.getItems(limit: 100);
       items.value = response.items;
     } catch (e) {
-      error.value = e.toString().replaceAll('Exception: ', '');
+      error.value = ErrorHandler.extractMessage(e);
     } finally {
       isLoading.value = false;
     }

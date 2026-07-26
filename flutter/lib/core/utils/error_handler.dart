@@ -1,9 +1,9 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import '../exceptions/app_exceptions.dart';
 import '../services/analytics_service.dart';
+import '../services/notification_service.dart';
 
 /// Utility class for handling errors consistently across the app
 class ErrorHandler {
@@ -49,18 +49,25 @@ class ErrorHandler {
   static void showError(dynamic error, {String? title, StackTrace? stackTrace}) {
     final message = extractMessage(error);
     reportError(error, message, stackTrace: stackTrace);
-    Get.snackbar(
-      title ?? 'Error',
-      message,
-      snackPosition: SnackPosition.TOP,
-      backgroundColor: Colors.red.shade50,
-      colorText: Colors.red.shade900,
-      duration: const Duration(seconds: 4),
-      icon: const Icon(
-        Icons.error_outline,
-        color: Colors.red,
-      ),
-    );
+    NotificationService.present(AppNotification(
+      title: title ?? 'Error',
+      message: message,
+      type: NotificationType.error,
+    ));
+  }
+
+  /// Show a validation problem to the user WITHOUT reporting telemetry.
+  ///
+  /// "Please enter a title" is normal user behaviour, not a defect. Routing it
+  /// through [showError] would file a Sentry event every time someone taps Save
+  /// on an empty form and drown the signal this class exists to produce.
+  /// Presentation is identical -- only the reporting differs.
+  static void showValidation(String message, {String? title}) {
+    NotificationService.present(AppNotification(
+      title: title ?? 'Error',
+      message: message,
+      type: NotificationType.error,
+    ));
   }
 
   /// Report a handled error to telemetry without showing any UI. Useful for
@@ -89,50 +96,29 @@ class ErrorHandler {
 
   /// Show success message via snackbar
   static void showSuccess(String message, {String? title}) {
-    Get.snackbar(
-      title ?? 'Success',
-      message,
-      snackPosition: SnackPosition.TOP,
-      backgroundColor: Colors.green.shade50,
-      colorText: Colors.green.shade900,
-      duration: const Duration(seconds: 2),
-      icon: const Icon(
-        Icons.check_circle_outline,
-        color: Colors.green,
-      ),
-    );
+    NotificationService.present(AppNotification(
+      title: title ?? 'Success',
+      message: message,
+      type: NotificationType.success,
+    ));
   }
 
   /// Show info message via snackbar
   static void showInfo(String message, {String? title}) {
-    Get.snackbar(
-      title ?? 'Info',
-      message,
-      snackPosition: SnackPosition.TOP,
-      backgroundColor: Colors.blue.shade50,
-      colorText: Colors.blue.shade900,
-      duration: const Duration(seconds: 2),
-      icon: const Icon(
-        Icons.info_outline,
-        color: Colors.blue,
-      ),
-    );
+    NotificationService.present(AppNotification(
+      title: title ?? 'Info',
+      message: message,
+      type: NotificationType.info,
+    ));
   }
 
   /// Show warning message via snackbar
   static void showWarning(String message, {String? title}) {
-    Get.snackbar(
-      title ?? 'Warning',
-      message,
-      snackPosition: SnackPosition.TOP,
-      backgroundColor: Colors.orange.shade50,
-      colorText: Colors.orange.shade900,
-      duration: const Duration(seconds: 3),
-      icon: const Icon(
-        Icons.warning_outlined,
-        color: Colors.orange,
-      ),
-    );
+    NotificationService.present(AppNotification(
+      title: title ?? 'Warning',
+      message: message,
+      type: NotificationType.warning,
+    ));
   }
 }
 
