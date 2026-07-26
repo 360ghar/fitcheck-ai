@@ -6,6 +6,7 @@ import '../../../domain/enums/style.dart';
 import '../../../domain/enums/season.dart';
 import '../controllers/outfit_list_controller.dart';
 import '../controllers/outfit_generation_controller.dart';
+import '../../../app/routes/app_routes.dart';
 
 /// Outfits content without Scaffold wrapper (for IndexedStack in MainShellPage)
 /// Note: FAB is handled by MainShellPage
@@ -98,6 +99,8 @@ class _OutfitsContentState extends State<OutfitsContent> {
               _showFilterBottomSheet();
             } else if (value == 'favorites') {
               controller.favoritesOnly.toggle();
+            } else if (value == 'collections') {
+              Get.toNamed(Routes.outfitCollections);
             }
           },
           itemBuilder: (context) => [
@@ -122,6 +125,16 @@ class _OutfitsContentState extends State<OutfitsContent> {
                   Icon(Icons.filter_list),
                   SizedBox(width: AppConstants.spacing8),
                   Text('Filter'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'collections',
+              child: Row(
+                children: [
+                  Icon(Icons.folder_outlined),
+                  SizedBox(width: AppConstants.spacing8),
+                  Text('Collections'),
                 ],
               ),
             ),

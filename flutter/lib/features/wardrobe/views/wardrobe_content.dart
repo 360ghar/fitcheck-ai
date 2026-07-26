@@ -5,6 +5,7 @@ import '../../../core/widgets/app_ui.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
 import '../controllers/wardrobe_controller.dart';
+import '../../../app/routes/app_routes.dart';
 
 /// Wardrobe content without Scaffold wrapper (for IndexedStack in MainShellPage)
 /// Note: FAB is handled by MainShellPage
@@ -139,6 +140,8 @@ class _WardrobeContentState extends State<WardrobeContent> {
               _showFilterBottomSheet();
             } else if (value == 'sort') {
               _showSortBottomSheet();
+            } else if (value == 'stats') {
+              Get.toNamed(Routes.wardrobeStats);
             }
           },
           itemBuilder: (context) => [
@@ -159,6 +162,16 @@ class _WardrobeContentState extends State<WardrobeContent> {
                   Icon(Icons.sort),
                   SizedBox(width: AppConstants.spacing8),
                   Text('Sort'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'stats',
+              child: Row(
+                children: [
+                  Icon(Icons.insights_outlined),
+                  SizedBox(width: AppConstants.spacing8),
+                  Text('Wardrobe Stats'),
                 ],
               ),
             ),
