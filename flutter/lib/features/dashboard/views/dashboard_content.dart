@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
-import '../../../app/routes/app_routes.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../../shell/controllers/main_shell_controller.dart';
 import '../../subscription/controllers/subscription_controller.dart';
 import '../controllers/dashboard_controller.dart';
 import '../widgets/referral_promo_banner.dart';
@@ -138,7 +138,9 @@ class _DashboardContentState extends State<DashboardContent> {
             ),
           ),
           GestureDetector(
-            onTap: () => Get.toNamed(Routes.profile),
+            // Tab 4 is the profile hub — switch in place instead of pushing
+            // a visually identical copy over the shell.
+            onTap: () => Get.find<MainShellController>().changeTab(4),
             // Avatar wrapped in single Obx
             child: Obx(() {
               final user = authController.user.value;

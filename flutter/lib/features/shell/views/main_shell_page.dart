@@ -7,7 +7,7 @@ import '../../dashboard/views/dashboard_content.dart';
 import '../../wardrobe/views/wardrobe_content.dart';
 import '../../outfits/views/outfits_content.dart';
 import '../../photoshoot/views/photoshoot_content.dart';
-import '../../dashboard/views/more_content.dart';
+import '../../profile/views/profile_content.dart';
 
 /// Main shell page with persistent navbar and IndexedStack for tab switching.
 /// This eliminates navbar animation when switching between main tabs.
@@ -55,7 +55,7 @@ class MainShellPage extends StatelessWidget {
       case 3:
         return const OutfitsContent();
       case 4:
-        return const MoreContent();
+        return const ProfileContent();
       default:
         return const SizedBox.shrink();
     }

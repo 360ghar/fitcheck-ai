@@ -162,6 +162,11 @@ class AppBottomNavigationBar extends StatelessWidget {
       Routes.gamification,
       Routes.profile,
       Routes.settings,
+      Routes.help,
+      Routes.legal,
+      Routes.subscription,
+      Routes.referral,
+      Routes.feedback,
     };
     if (moreRoutes.contains(normalized) ||
         moreRoutes.any((item) => normalized.startsWith('$item/'))) {
