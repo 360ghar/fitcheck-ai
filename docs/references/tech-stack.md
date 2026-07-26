@@ -39,7 +39,7 @@ Why:
 Provider configuration groups:
 - `AI_GEMINI_*`
 - `AI_OPENAI_*`
-- `AI_CUSTOM_*`
+- `AI_CHAT_*` / `AI_VISION_*` / `AI_IMAGE_*` (per-leg; see `backend/.env.example`)
 
 ### Vector and Search (Optional)
 

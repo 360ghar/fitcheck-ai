@@ -184,7 +184,8 @@ async def test_generate_image_routes_reference_image_through_images_api_when_sty
         result = await service.generate_image(prompt="a cat", reference_image="abc123")
 
     mock_images_api.assert_awaited_once_with(
-        "a cat", model="image-model", reference_images=["data:image/jpeg;base64,abc123"]
+        "a cat", model="image-model", reference_images=["data:image/jpeg;base64,abc123"],
+        api_url="https://image.example.com/v1", api_key="image-key",
     )
     assert result == "sentinel"
 
@@ -220,6 +221,7 @@ async def test_chat_routes_multi_image_content_through_images_api_when_style_is_
         "put them in a park",
         model="image-model",
         reference_images=["data:image/jpeg;base64,ref1", "data:image/jpeg;base64,ref2"],
+        api_url="https://image.example.com/v1", api_key="image-key",
     )
     assert result == "sentinel"
 
@@ -511,7 +513,8 @@ async def test_chat_does_not_fall_back_when_explicit_non_default_model_requested
             )
 
     mock_images_api.assert_awaited_once_with(
-        "a cat", model="custom-override-model", reference_images=[]
+        "a cat", model="custom-override-model", reference_images=[],
+        api_url="https://image.example.com/v1", api_key="image-key",
     )
 
 
@@ -783,3 +786,156 @@ async def test_with_retry_retries_when_should_retry_true():
 
     assert result == "ok"
     assert calls["n"] == 3
+
+
+# ---------------------------------------------------------------------------
+# Vision primary -> fallback model routing (chat_with_vision)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_chat_with_vision_falls_back_to_vision_fallback_model_on_retryable_error():
+    from app.core.exceptions import AIServiceError
+
+    config = _make_config()
+    config.vision_model = "vision-primary"
+    config.vision_fallback_model = "vision-fallback"
+    service = AIProviderService(config)
+
+    mock_chat = AsyncMock(
+        side_effect=[AIServiceError("overloaded", retryable=True), "sentinel"]
+    )
+    with patch.object(AIProviderService, "chat", mock_chat):
+        result = await service.chat_with_vision("describe this outfit", ["aGVsbG8="])
+
+    assert result == "sentinel"
+    assert mock_chat.await_args_list[0].kwargs["model"] == "vision-primary"
+    assert mock_chat.await_args_list[1].kwargs["model"] == "vision-fallback"
+
+
+@pytest.mark.asyncio
+async def test_chat_with_vision_does_not_fall_back_on_non_retryable_error():
+    from app.core.exceptions import AIServiceError
+
+    config = _make_config()
+    config.vision_model = "vision-primary"
+    config.vision_fallback_model = "vision-fallback"
+    service = AIProviderService(config)
+
+    mock_chat = AsyncMock(side_effect=AIServiceError("bad api key", retryable=False))
+    with patch.object(AIProviderService, "chat", mock_chat):
+        with pytest.raises(AIServiceError):
+            await service.chat_with_vision("describe this outfit", ["aGVsbG8="])
+
+    mock_chat.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_chat_with_vision_does_not_fall_back_when_no_fallback_configured():
+    from app.core.exceptions import AIServiceError
+
+    config = _make_config()
+    config.vision_model = "vision-primary"
+    config.vision_fallback_model = None
+    service = AIProviderService(config)
+
+    mock_chat = AsyncMock(side_effect=AIServiceError("overloaded", retryable=True))
+    with patch.object(AIProviderService, "chat", mock_chat):
+        with pytest.raises(AIServiceError):
+            await service.chat_with_vision("describe this outfit", ["aGVsbG8="])
+
+    mock_chat.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_chat_with_vision_does_not_fall_back_when_fallback_equals_primary():
+    from app.core.exceptions import AIServiceError
+
+    config = _make_config()
+    config.vision_model = "vision-primary"
+    config.vision_fallback_model = "vision-primary"
+    service = AIProviderService(config)
+
+    mock_chat = AsyncMock(side_effect=AIServiceError("overloaded", retryable=True))
+    with patch.object(AIProviderService, "chat", mock_chat):
+        with pytest.raises(AIServiceError):
+            await service.chat_with_vision("describe this outfit", ["aGVsbG8="])
+
+    mock_chat.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_chat_with_vision_routes_to_per_leg_url_and_key():
+    """Each vision leg uses its own url+key, with fallback inheriting vision."""
+    from app.core.exceptions import AIServiceError
+
+    config = _make_config()
+    config.vision_model = "vision-primary"
+    config.vision_api_url = "https://vision.example.com/v1"
+    config.vision_api_key = "vision-key"
+    config.vision_fallback_model = "vision-fallback"
+    config.vision_fallback_api_url = "https://visionfb.example.com/v1"
+    config.vision_fallback_api_key = "visionfb-key"
+    service = AIProviderService(config)
+
+    mock_chat = AsyncMock(
+        side_effect=[AIServiceError("overloaded", retryable=True), "sentinel"]
+    )
+    with patch.object(AIProviderService, "chat", mock_chat):
+        result = await service.chat_with_vision("describe this outfit", ["aGVsbG8="])
+
+    assert result == "sentinel"
+    # Primary vision attempt -> vision url/key
+    assert mock_chat.await_args_list[0].kwargs["api_url"] == "https://vision.example.com/v1"
+    assert mock_chat.await_args_list[0].kwargs["api_key"] == "vision-key"
+    # Fallback attempt -> vision-fallback url/key
+    assert mock_chat.await_args_list[1].kwargs["api_url"] == "https://visionfb.example.com/v1"
+    assert mock_chat.await_args_list[1].kwargs["api_key"] == "visionfb-key"
+
+
+@pytest.mark.asyncio
+async def test_chat_with_vision_inherits_chat_url_when_vision_url_blank():
+    """Vision url/key blank -> inherits the chat api_url/api_key."""
+    config = _make_config()
+    config.vision_model = "vision-primary"
+    # vision_api_url / vision_api_key intentionally unset
+    service = AIProviderService(config)
+
+    mock_chat = AsyncMock(return_value="ok")
+    with patch.object(AIProviderService, "chat", mock_chat):
+        await service.chat_with_vision("describe this outfit", ["aGVsbG8="])
+
+    assert mock_chat.await_args_list[0].kwargs["api_url"] == config.api_url
+    assert mock_chat.await_args_list[0].kwargs["api_key"] == config.api_key
+
+
+def test_vision_model_config_defaults():
+    """Vision policy defaults: gemini-3.6-flash primary, agnes-2.5-flash fallback.
+
+    Non-vision chat must remain on agnes-2.5-flash.
+    """
+    from app.core.config import Settings
+
+    fields = Settings.model_fields
+    assert fields["AI_VISION_MODEL"].default == "gemini-3.6-flash"
+    assert fields["AI_VISION_FALLBACK_MODEL"].default == "agnes-2.5-flash"
+    assert fields["AI_CHAT_MODEL"].default == "agnes-2.5-flash"
+
+
+def test_ai_env_per_leg_url_key_inheritance_defaults():
+    """Per-leg url/key fields default to None so they inherit their parent leg."""
+    from app.core.config import Settings
+
+    f = Settings.model_fields
+    # All per-leg override URLs/keys must default to None (blank) so the
+    # inheritance chain resolves them to the CHAT trio when unset.
+    for name in (
+        "AI_VISION_API_URL", "AI_VISION_API_KEY",
+        "AI_VISION_FALLBACK_API_URL", "AI_VISION_FALLBACK_API_KEY",
+        "AI_IMAGE_API_URL", "AI_IMAGE_API_KEY",
+        "AI_IMAGE_FALLBACK_API_URL", "AI_IMAGE_FALLBACK_API_KEY",
+    ):
+        assert f[name].default is None, f"{name} should default to None"
+    # CHAT root + image model/style carry real defaults.
+    assert f["AI_CHAT_API_URL"].default == "https://apihub.agnes-ai.com/v1"
+    assert f["AI_IMAGE_API_STYLE"].default == "images"

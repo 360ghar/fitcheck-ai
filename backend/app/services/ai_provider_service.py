@@ -17,7 +17,7 @@ Sample request format (Agnes chat/vision):
     --header 'Content-Type: application/json' \
     --header 'Authorization: Bearer api-key' \
     --data '{
-        "model": "agnes-2.5-flash",
+        "model": "gemini-3.6-flash",
         "messages": [
           {"role": "user", "content": "Describe this outfit"}
         ]
@@ -56,22 +56,39 @@ class AIProvider(str, Enum):
 
 @dataclass
 class ProviderConfig:
-    """Configuration for a single AI provider."""
+    """Configuration for a single AI provider.
+
+    Each leg (chat, vision, vision-fallback, image, image-fallback) can have
+    its own host/key/model. Per-leg url/key falls back to its parent when blank:
+    vision -> chat; vision_fallback -> vision; image -> chat; image_fallback
+    -> image. So a single-host setup only needs api_url/api_key/model.
+    """
+    # CHAT (root)
     api_url: str
     api_key: str
     model: str
-    vision_model: Optional[str] = None
-    image_gen_model: Optional[str] = None
-    image_fallback_model: Optional[str] = None
-    max_tokens: int = 4096
 
-    # Optional separate endpoint/key for image generation (OpenAI-compatible providers
-    # that host LLM and image models on different hosts/keys, e.g. agnes-ai.com).
-    # Falls back to api_url/api_key when unset.
+    # VISION primary
+    vision_api_url: Optional[str] = None
+    vision_api_key: Optional[str] = None
+    vision_model: Optional[str] = None
+    # VISION fallback
+    vision_fallback_api_url: Optional[str] = None
+    vision_fallback_api_key: Optional[str] = None
+    vision_fallback_model: Optional[str] = None
+
+    # IMAGE primary
     image_api_url: Optional[str] = None
     image_api_key: Optional[str] = None
-    # "chat" (response_modalities on /chat/completions) | "images" (real /images/generations)
+    image_gen_model: Optional[str] = None
+    # "chat" (response_modalities on /chat/completions) | "images" (/images/generations)
     image_api_style: str = "chat"
+    # IMAGE fallback
+    image_fallback_api_url: Optional[str] = None
+    image_fallback_api_key: Optional[str] = None
+    image_fallback_model: Optional[str] = None
+
+    max_tokens: int = 4096
 
     # Optimized timeout configuration (separate connect vs read)
     connect_timeout: float = 5.0     # 5s for connection establishment
@@ -86,21 +103,55 @@ class ProviderConfig:
     # Legacy timeout field for backward compatibility
     timeout: float = 600.0  # Deprecated - use specific timeouts above
 
+    # --- VISION resolvers (inherit chat when blank) ---
     def get_vision_model(self) -> str:
         """Get the vision model, falling back to the default model."""
         return self.vision_model or self.model
 
+    def get_vision_fallback_model(self) -> Optional[str]:
+        """Get the vision fallback model (used when primary vision model fails)."""
+        return self.vision_fallback_model
+
+    def get_vision_api_url(self) -> str:
+        """Get the vision endpoint, falling back to the chat api_url."""
+        return self.vision_api_url or self.api_url
+
+    def get_vision_api_key(self) -> str:
+        """Get the vision API key, falling back to the chat api_key."""
+        return self.vision_api_key or self.api_key
+
+    def get_vision_fallback_api_url(self) -> str:
+        """Get the vision-fallback endpoint, inheriting vision then chat."""
+        return self.vision_fallback_api_url or self.get_vision_api_url()
+
+    def get_vision_fallback_api_key(self) -> str:
+        """Get the vision-fallback key, inheriting vision then chat."""
+        return self.vision_fallback_api_key or self.get_vision_api_key()
+
+    # --- IMAGE resolvers (inherit chat when blank) ---
     def get_image_gen_model(self) -> str:
         """Get the image generation model, falling back to the default model."""
         return self.image_gen_model or self.model
 
     def get_image_api_url(self) -> str:
-        """Get the image generation endpoint, falling back to the main api_url."""
+        """Get the image endpoint, falling back to the chat api_url."""
         return self.image_api_url or self.api_url
 
     def get_image_api_key(self) -> str:
-        """Get the image generation API key, falling back to the main api_key."""
+        """Get the image API key, falling back to the chat api_key."""
         return self.image_api_key or self.api_key
+
+    def get_image_fallback_model(self) -> Optional[str]:
+        """Get the image fallback model (used when primary image model fails)."""
+        return self.image_fallback_model
+
+    def get_image_fallback_api_url(self) -> str:
+        """Get the image-fallback endpoint, inheriting image then chat."""
+        return self.image_fallback_api_url or self.get_image_api_url()
+
+    def get_image_fallback_api_key(self) -> str:
+        """Get the image-fallback key, inheriting image then chat."""
+        return self.image_fallback_api_key or self.get_image_api_key()
 
 
 @dataclass
@@ -141,15 +192,22 @@ def get_system_provider_config(provider: AIProvider) -> Optional[ProviderConfig]
         )
     elif provider == AIProvider.CUSTOM:
         return ProviderConfig(
-            api_url=settings.OPENAI_LLM_URL or settings.AI_CUSTOM_API_URL,
-            api_key=settings.OPENAI_LLM_API_KEY or settings.AI_CUSTOM_API_KEY,
-            model=settings.OPENAI_LLM_MODEL or settings.AI_CUSTOM_CHAT_MODEL,
-            vision_model=settings.OPENAI_LLM_VISION_MODEL or settings.AI_CUSTOM_VISION_MODEL,
-            image_gen_model=settings.OPENAI_IMAGE_MODEL or settings.AI_CUSTOM_IMAGE_MODEL,
-            image_fallback_model=getattr(settings, 'AI_CUSTOM_IMAGE_FALLBACK_MODEL', None),
-            image_api_url=settings.OPENAI_IMAGE_URL,
-            image_api_key=settings.OPENAI_IMAGE_API_KEY,
-            image_api_style=settings.OPENAI_IMAGE_API_STYLE,
+            api_url=settings.AI_CHAT_API_URL,
+            api_key=settings.AI_CHAT_API_KEY,
+            model=settings.AI_CHAT_MODEL,
+            vision_api_url=settings.AI_VISION_API_URL,
+            vision_api_key=settings.AI_VISION_API_KEY,
+            vision_model=settings.AI_VISION_MODEL,
+            vision_fallback_api_url=settings.AI_VISION_FALLBACK_API_URL,
+            vision_fallback_api_key=settings.AI_VISION_FALLBACK_API_KEY,
+            vision_fallback_model=settings.AI_VISION_FALLBACK_MODEL,
+            image_api_url=settings.AI_IMAGE_API_URL,
+            image_api_key=settings.AI_IMAGE_API_KEY,
+            image_gen_model=settings.AI_IMAGE_MODEL,
+            image_api_style=settings.AI_IMAGE_API_STYLE,
+            image_fallback_api_url=settings.AI_IMAGE_FALLBACK_API_URL,
+            image_fallback_api_key=settings.AI_IMAGE_FALLBACK_API_KEY,
+            image_fallback_model=settings.AI_IMAGE_FALLBACK_MODEL,
         )
     return None
 
@@ -359,6 +417,8 @@ class AIProviderService:
         temperature: float = 0.7,
         response_modalities: Optional[List[str]] = None,
         response_format: Optional[Dict[str, Any]] = None,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
     ) -> AIResponse:
         """
         Send a chat completion request.
@@ -370,6 +430,8 @@ class AIProviderService:
             temperature: Sampling temperature
             response_modalities: Response types ["TEXT", "IMAGE"] for image generation
             response_format: Optional structured output format
+            api_url: Override the endpoint (resolves the per-leg url first when None)
+            api_key: Override the API key (resolves the per-leg key first when None)
 
         Returns:
             AIResponse with text and/or images
@@ -385,8 +447,12 @@ class AIProviderService:
             # fixes all of them at the root instead of duplicating per caller.
             prompt_text, reference_images = self._extract_prompt_and_images(messages)
             primary_model = model or self.config.get_image_gen_model()
-            fallback_model = self.config.image_fallback_model
-            models_to_try = [primary_model]
+            fallback_model = self.config.get_image_fallback_model()
+            # (model, api_url, api_key) tuples - per-leg endpoint so the
+            # fallback attempt uses the image-fallback host/key when set.
+            attempts: List[tuple] = [
+                (primary_model, self.config.get_image_api_url(), self.config.get_image_api_key())
+            ]
             # Only substitute the configured fallback when the caller used the
             # system default model - an explicit non-default `model=` should
             # error, not silently swap in a model the caller never requested.
@@ -395,14 +461,18 @@ class AIProviderService:
                 and fallback_model != primary_model
                 and primary_model == self.config.get_image_gen_model()
             ):
-                models_to_try.append(fallback_model)
+                attempts.append(
+                    (fallback_model, self.config.get_image_fallback_api_url(), self.config.get_image_fallback_api_key())
+                )
 
-            for i, attempt_model in enumerate(models_to_try):
+            for i, (attempt_model, attempt_url, attempt_key) in enumerate(attempts):
                 try:
                     return await self._generate_image_via_images_api(
                         prompt_text,
                         model=attempt_model,
                         reference_images=reference_images,
+                        api_url=attempt_url,
+                        api_key=attempt_key,
                     )
                 except AIServiceError as e:
                     # Only fall through to the next model for errors documented
@@ -410,19 +480,19 @@ class AIProviderService:
                     # (bad key, content policy, parse failure after a possibly
                     # successful generation) would either fail identically or
                     # risk a second billable request, so it should propagate.
-                    if i == len(models_to_try) - 1 or not e.retryable:
+                    if i == len(attempts) - 1 or not e.retryable:
                         raise
                     logger.warning(
                         "Image generation failed, trying fallback model",
                         primary_model=primary_model,
-                        fallback_model=models_to_try[i + 1],
+                        fallback_model=attempts[i + 1][0],
                         error=str(e)[:200],
                     )
 
-        # Image generation (response_modalities) uses the image-specific endpoint/key
-        # when configured, so LLM and image hosts can differ (e.g. agnes-ai.com).
-        active_base_url = self.config.get_image_api_url() if is_image_request else self.config.api_url
-        active_api_key = self.config.get_image_api_key() if is_image_request else self.config.api_key
+        # Endpoint/key resolution: explicit per-call override wins, then the
+        # per-leg config (image vs chat) for response_modalities requests.
+        active_base_url = api_url or (self.config.get_image_api_url() if is_image_request else self.config.api_url)
+        active_api_key = api_key or (self.config.get_image_api_key() if is_image_request else self.config.api_key)
 
         client = await self._get_client()
         url = self._build_chat_url(active_base_url)
@@ -480,7 +550,9 @@ class AIProviderService:
         )
 
         if not health_status.available:
-            # Provider is down - fail fast instead of retrying
+            # Provider is down - fail fast. Marked retryable so a configured
+            # fallback host (vision/image fallback can have its own url) is
+            # still attempted; same-host fallback fails identically on retry.
             error_msg = (
                 f"AI provider {active_base_url} is unavailable. "
                 f"Error: {health_status.error}. "
@@ -492,7 +564,7 @@ class AIProviderService:
                 error=health_status.error,
                 consecutive_failures=health_status.consecutive_failures,
             )
-            raise AIServiceError(error_msg)
+            raise AIServiceError(error_msg, retryable=True)
 
         async def _post_chat(req_payload: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
             nonlocal client
@@ -812,17 +884,22 @@ class AIProviderService:
         """
         Send a chat completion request with images (vision).
 
+        Attempts the primary vision model first. On retryable failure,
+        retries once with the configured fallback vision model (e.g.
+        agnes-2.5-flash), then raises the last error if that also fails.
+
         Args:
             prompt: Text prompt
             images: List of base64-encoded images
-            model: Vision model to use
+            model: Vision model to use (overrides config)
             max_tokens: Maximum tokens in response
             response_format: Optional structured output format
 
         Returns:
             AIResponse with text analysis
         """
-        use_model = model or self.config.get_vision_model()
+        primary_model = model or self.config.get_vision_model()
+        fallback_model = self.config.get_vision_fallback_model()
 
         # Build multimodal content
         content: List[Dict[str, Any]] = [
@@ -842,12 +919,33 @@ class AIProviderService:
 
         messages = [ChatMessage(role="user", content=content)]
 
-        return await self.chat(
-            messages=messages,
-            model=use_model,
-            max_tokens=max_tokens,
-            response_format=response_format,
-        )
+        try:
+            return await self.chat(
+                messages=messages,
+                model=primary_model,
+                max_tokens=max_tokens,
+                response_format=response_format,
+                api_url=self.config.get_vision_api_url(),
+                api_key=self.config.get_vision_api_key(),
+            )
+        except AIServiceError as e:
+            if not fallback_model or fallback_model == primary_model or not e.retryable:
+                raise
+
+            logger.warning(
+                "Primary vision model failed, retrying with fallback",
+                primary_model=primary_model,
+                fallback_model=fallback_model,
+                error=str(e)[:200],
+            )
+            return await self.chat(
+                messages=messages,
+                model=fallback_model,
+                max_tokens=max_tokens,
+                response_format=response_format,
+                api_url=self.config.get_vision_fallback_api_url(),
+                api_key=self.config.get_vision_fallback_api_key(),
+            )
 
     async def generate_image(
         self,
@@ -892,13 +990,18 @@ class AIProviderService:
     async def _generate_image_via_images_api(
         self, prompt: str, model: str, size: str = "1024x1024",
         reference_images: Optional[List[str]] = None,
+        api_url: Optional[str] = None,
+        api_key: Optional[str] = None,
     ) -> AIResponse:
         """
         Generate an image using the real OpenAI-compatible /images/generations
         endpoint (e.g. agnes-ai.com, OpenAI).
+
+        api_url/api_key override the configured image endpoint/key (used to
+        route the fallback attempt at the image-fallback host).
         """
-        image_url = self.config.get_image_api_url()
-        image_key = self.config.get_image_api_key()
+        image_url = api_url or self.config.get_image_api_url()
+        image_key = api_key or self.config.get_image_api_key()
         url = self._build_images_url(image_url)
 
         from app.services.ai_provider_health_service import get_health_service
@@ -910,11 +1013,13 @@ class AIProviderService:
             timeout_seconds=3.0,
         )
         if not health_status.available:
-            # Not retryable: primary and fallback models share this same host,
-            # so a full provider outage would fail identically on both.
+            # Retryable so the image-fallback host (which can have its own
+            # url/key) is attempted when the primary image host is down; a
+            # same-host fallback fails identically on the second attempt.
             raise AIServiceError(
                 f"AI image provider {image_url} is unavailable. Error: {health_status.error}. "
-                "Please check if the service is running or configure an alternative provider."
+                "Please check if the service is running or configure an alternative provider.",
+                retryable=True,
             )
 
         client = await self._get_client()
@@ -978,6 +1083,11 @@ class AIProviderService:
             data = response.json()
         except self._TransientImageAPIOverload as e:
             # Transient gateway status after exhausting retries: fallback-worthy.
+            logger.warning(
+                "Image generation provider overloaded after retries; raising fallback",
+                error_message=str(e)[:500],
+                exc_info=False,
+            )
             raise AIServiceError(
                 f"AI image provider overloaded after retries: {e}",
                 retryable=True,
@@ -985,6 +1095,13 @@ class AIProviderService:
         except httpx.HTTPStatusError as e:
             error_detail = self._http_error_detail(e.response)
             status = e.response.status_code
+            logger.error(
+                "Image generation request failed with HTTP error",
+                status_code=status,
+                error=error_detail,
+                retryable=self._is_transient_http_status(status),
+                exc_info=False,
+            )
             # Permanent 4xx (or any status that escaped the transient branch).
             raise AIServiceError(
                 f"AI image request failed ({status}): {error_detail}",
@@ -994,12 +1111,26 @@ class AIProviderService:
             # Timeout/connection error that exhausted with_retry's internal
             # attempts: no response was ever received, so retrying the
             # fallback model can't double-bill a completed generation.
-            raise AIServiceError(f"AI image request failed: {self._format_exception_message(e)}", retryable=True)
+            error_msg = self._format_exception_message(e)
+            logger.error(
+                "Image generation request failed with transport error after retries",
+                error=error_msg,
+                error_type=type(e).__name__,
+                exc_info=False,
+            )
+            raise AIServiceError(f"AI image request failed: {error_msg}", retryable=True)
         except Exception as e:
+            error_msg = self._format_exception_message(e)
+            logger.error(
+                "Image generation request failed with unexpected error",
+                error=error_msg,
+                error_type=type(e).__name__,
+                exc_info=False,
+            )
             # e.g. response.json() parse failure - the primary call may have
             # already generated (and billed) an image server-side, so this is
             # not safe to retry against the fallback model.
-            raise AIServiceError(f"AI image request failed: {self._format_exception_message(e)}")
+            raise AIServiceError(f"AI image request failed: {error_msg}")
 
         images = []
         for item in data.get("data", []):
@@ -1097,7 +1228,7 @@ async def get_ai_service(
             config = ProviderConfig(
                 api_url=user_provider_config["api_url"],
                 api_key=user_provider_config["api_key"],
-                model=user_provider_config.get("model", settings.AI_CUSTOM_CHAT_MODEL),
+                model=user_provider_config.get("model", settings.AI_CHAT_MODEL),
                 vision_model=user_provider_config.get("vision_model"),
                 image_gen_model=user_provider_config.get("image_gen_model"),
             )

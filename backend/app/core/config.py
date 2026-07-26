@@ -103,29 +103,34 @@ class Settings(BaseSettings):
     AI_OPENAI_VISION_MODEL: str = "gpt-4o"
     AI_OPENAI_IMAGE_MODEL: str = "dall-e-3"
 
-    # Custom provider defaults: Agnes AI OpenAI-compatible gateway
+    # Custom provider defaults: Agnes AI OpenAI-compatible gateway.
     # Chat/vision: /v1/chat/completions | Images: /v1/images/generations
-    AI_CUSTOM_API_URL: str = "https://apihub.agnes-ai.com/v1"
-    AI_CUSTOM_API_KEY: Optional[str] = None
-    AI_CUSTOM_CHAT_MODEL: str = "agnes-2.5-flash"
-    AI_CUSTOM_VISION_MODEL: str = "agnes-2.5-flash"
-    AI_CUSTOM_IMAGE_MODEL: str = "agnes-image-2.1-flash"
-    AI_CUSTOM_IMAGE_FALLBACK_MODEL: str = "agnes-image-2.0-flash"
+    #
+    # Each leg (chat, vision, vision-fallback, image, image-fallback) can have
+    # its own host/key/model. Per-leg url/key falls back to its parent when
+    # blank: vision -> chat; vision_fallback -> vision; image -> chat;
+    # image_fallback -> image. So a single-host setup only needs the CHAT trio.
+    AI_CHAT_API_URL: str = "https://apihub.agnes-ai.com/v1"
+    AI_CHAT_API_KEY: Optional[str] = None
+    AI_CHAT_MODEL: str = "agnes-2.5-flash"
 
-    # Generic OpenAI-compatible overrides for the "custom" provider (Agnes, etc.)
-    # All optional; unset values fall back to AI_CUSTOM_* above. LLM and Image
-    # can point at different hosts/keys if needed.
-    OPENAI_LLM_URL: Optional[str] = None
-    OPENAI_LLM_API_KEY: Optional[str] = None
-    OPENAI_LLM_MODEL: Optional[str] = None
-    OPENAI_LLM_VISION_MODEL: Optional[str] = None
+    AI_VISION_API_URL: Optional[str] = None
+    AI_VISION_API_KEY: Optional[str] = None
+    AI_VISION_MODEL: str = "gemini-3.6-flash"
 
-    OPENAI_IMAGE_URL: Optional[str] = None
-    OPENAI_IMAGE_API_KEY: Optional[str] = None
-    OPENAI_IMAGE_MODEL: Optional[str] = None
-    # "chat" (response_modalities on /chat/completions, legacy proxy-style trick)
-    # "images" (real OpenAI-compatible /images/generations endpoint, e.g. Agnes)
-    OPENAI_IMAGE_API_STYLE: str = "images"
+    AI_VISION_FALLBACK_API_URL: Optional[str] = None
+    AI_VISION_FALLBACK_API_KEY: Optional[str] = None
+    AI_VISION_FALLBACK_MODEL: str = "agnes-2.5-flash"
+
+    AI_IMAGE_API_URL: Optional[str] = None
+    AI_IMAGE_API_KEY: Optional[str] = None
+    AI_IMAGE_MODEL: str = "agnes-image-2.1-flash"
+    # "chat" (response_modalities on /chat/completions) | "images" (/images/generations)
+    AI_IMAGE_API_STYLE: str = "images"
+
+    AI_IMAGE_FALLBACK_API_URL: Optional[str] = None
+    AI_IMAGE_FALLBACK_API_KEY: Optional[str] = None
+    AI_IMAGE_FALLBACK_MODEL: str = "agnes-image-2.0-flash"
 
     # Rate Limiting (legacy daily limits - used as fallback)
     AI_DAILY_EXTRACTION_LIMIT: int = 100

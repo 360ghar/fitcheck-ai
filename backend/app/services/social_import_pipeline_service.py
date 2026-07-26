@@ -1479,8 +1479,13 @@ class SocialImportPipelineService:
                             "name": item_data["name"],
                         },
                     )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(
+                "Failed to generate or store embedding for imported item (best-effort, continuing)",
+                user_id=self.user_id,
+                item_id=item_id,
+                error=str(e)[:300],
+            )
 
         return item_id
 

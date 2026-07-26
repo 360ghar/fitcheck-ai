@@ -345,7 +345,7 @@ DEMO_RATE_LIMITS = {
 
 ### Setup Notes
 - Supabase: run `backend/db/supabase/migrations/010_photoshoot_generator.sql` in the Supabase SQL editor to enable daily usage tracking.
-- Backend: configure AI provider keys in `.env` (`AI_GEMINI_*`, `AI_OPENAI_*`, or `AI_CUSTOM_*`) and set `AI_DEFAULT_PROVIDER` as needed.
+- Backend: configure AI provider keys in `.env` (`AI_GEMINI_*` for embeddings, `AI_CHAT_*`/`AI_VISION_*`/`AI_IMAGE_*` per-leg) and set `AI_DEFAULT_PROVIDER` as needed.
 
 ---
 

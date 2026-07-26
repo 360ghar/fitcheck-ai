@@ -338,11 +338,15 @@ async def register(
                 )
             except (EmailAlreadyExistsError, DatabaseError):
                 raise
-            except Exception:
-                logger.error("Error creating user profile")
+            except Exception as e:
+                logger.error(
+                    "Error creating user profile",
+                    error=str(e),
+                    user_id=user_id,
+                )
                 raise DatabaseError(
                     "User profile could not be created. Ensure Supabase migrations have been applied.",
-                    operation="create_profile"
+                    operation="create_profile",
                 )
 
             logger.info("User registered successfully", user_id=user_id, email=register_request.email)
@@ -379,10 +383,14 @@ async def register(
         except (HTTPException, FitCheckException):
             raise
         except AuthApiError as e:
-            logger.error("Registration error", error=str(e))
+            logger.error(
+                "Registration error",
+                error=str(e),
+                error_code=e.code if hasattr(e, 'code') else None,
+            )
             raise AuthenticationError(str(e) or "Registration failed", error_code="AUTH_REGISTRATION_FAILED")
-        except Exception:
-            logger.error("Registration error")
+        except Exception as e:
+            logger.error("Registration error", error=str(e), error_type=type(e).__name__)
             raise DatabaseError("An error occurred during registration")
 
 
@@ -509,10 +517,14 @@ async def login(
         except (HTTPException, FitCheckException):
             raise
         except AuthApiError as e:
-            logger.error("Login error", error=str(e))
+            logger.error(
+                "Login error",
+                error=str(e),
+                error_code=e.code if hasattr(e, 'code') else None,
+            )
             raise AuthenticationError(str(e) or "Login failed", error_code="AUTH_LOGIN_FAILED")
-        except Exception:
-            logger.error("Login error")
+        except Exception as e:
+            logger.error("Login error", error=str(e), error_type=type(e).__name__)
             raise DatabaseError("An error occurred during login")
 
 
@@ -634,6 +646,7 @@ async def confirm_reset_password(
         try:
             anon_db.auth.sign_out()
         except Exception:
+            # sign_out is best-effort; don't fail the reset if it errors.
             pass
 
         logger.info("Password reset confirmed successfully")
@@ -641,8 +654,12 @@ async def confirm_reset_password(
 
     except ValidationError:
         raise
-    except Exception:
-        logger.error("Confirm password reset error")
+    except Exception as e:
+        logger.error(
+            "Confirm password reset error",
+            error=str(e)[:300],
+            error_type=type(e).__name__,
+        )
         raise DatabaseError("An error occurred while resetting password")
 
 

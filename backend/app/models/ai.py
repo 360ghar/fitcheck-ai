@@ -176,6 +176,7 @@ class ProviderConfigInput(BaseModel):
     api_key: Optional[str] = None  # Will be encrypted before storage
     model: Optional[str] = None
     vision_model: Optional[str] = None
+    vision_fallback_model: Optional[str] = None
     image_gen_model: Optional[str] = None
 
 
@@ -184,6 +185,7 @@ class ProviderConfigDisplay(BaseModel):
     api_url: str = ""
     model: str = ""
     vision_model: str = ""
+    vision_fallback_model: str = ""
     image_gen_model: str = ""
     api_key_set: bool = False
 

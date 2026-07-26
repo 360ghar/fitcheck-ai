@@ -254,7 +254,15 @@ SCENE (change only these):
             except AIServiceError:
                 raise
             except Exception as e:
-                logger.error("Outfit generation with avatar failed", error=str(e))
+                logger.error(
+                    "Outfit generation with avatar failed",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    style=style,
+                    item_count=len(items),
+                    include_model=include_model,
+                    has_avatar=True,
+                )
                 raise AIServiceError(f"Outfit generation with avatar failed: {str(e)}")
 
         else:
@@ -478,7 +486,13 @@ Specs:
         except AIServiceError:
             raise
         except Exception as e:
-            logger.error("Image generation failed", error=str(e))
+            logger.error(
+                "Image generation failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                prompt_length=len(prompt),
+                has_reference_image=reference_image is not None,
+            )
             raise AIServiceError(f"Image generation failed: {str(e)}")
 
     async def generate_try_on(
@@ -575,7 +589,14 @@ Output one cohesive image of THIS same person wearing that exact garment."""
         except AIServiceError:
             raise
         except Exception as e:
-            logger.error("Try-on image generation failed", error=str(e))
+            logger.error(
+                "Try-on image generation failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                style=style,
+                pose=pose,
+                has_clothing_description=clothing_description is not None,
+            )
             raise AIServiceError(f"Try-on generation failed: {str(e)}")
 
 
@@ -627,7 +648,13 @@ async def save_generated_image(
         }
 
     except Exception as e:
-        logger.error("Failed to save generated image", error=str(e))
+        logger.error(
+            "Failed to save generated image",
+            error=str(e),
+            error_type=type(e).__name__,
+            user_id=user_id,
+            image_type=image_type,
+        )
         return {"image_url": "", "storage_path": ""}
 
 

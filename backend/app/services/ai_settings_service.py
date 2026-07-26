@@ -283,8 +283,9 @@ class AISettingsService:
                 return ProviderConfig(
                     api_url=user_config["api_url"],
                     api_key=api_key,
-                    model=user_config.get("model", settings.AI_CUSTOM_CHAT_MODEL),
+                    model=user_config.get("model", settings.AI_CHAT_MODEL),
                     vision_model=user_config.get("vision_model"),
+                    vision_fallback_model=user_config.get("vision_fallback_model"),
                     image_gen_model=user_config.get("image_gen_model"),
                 )
 
@@ -466,6 +467,7 @@ class AISettingsService:
                 "api_url": config.get("api_url", ""),
                 "model": config.get("model", ""),
                 "vision_model": config.get("vision_model", ""),
+                "vision_fallback_model": config.get("vision_fallback_model", ""),
                 "image_gen_model": config.get("image_gen_model", ""),
                 "api_key_set": bool(config.get("api_key_encrypted")),
             }

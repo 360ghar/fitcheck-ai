@@ -553,7 +553,11 @@ RULES:
 
             # Fall back to templates if the model under-generated or returned invalid JSON entries
             logger.warning(
-                f"Prompt generation incomplete, using fallback prompts (want={num_prompts}, got={len(prompts)})"
+                "Prompt generation incomplete, using fallback prompts",
+                requested=num_prompts,
+                generated=len(prompts),
+                use_case=use_case.value,
+                has_reference_photo=reference_photo is not None,
             )
             return PhotoshootService._fallback_prompts(
                 use_case=use_case,
@@ -563,7 +567,12 @@ RULES:
             )
 
         except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse prompts JSON after retry; using fallback: {e}")
+            logger.warning(
+                "Failed to parse prompts JSON after retry; using fallback",
+                error=str(e)[:300],
+                use_case=use_case.value,
+                has_reference_photo=reference_photo is not None,
+            )
             return PhotoshootService._fallback_prompts(
                 use_case=use_case,
                 num_prompts=num_prompts,
@@ -571,7 +580,13 @@ RULES:
                 subject_hint=subject_hint,
             )
         except Exception as e:
-            logger.warning(f"Error generating prompts; using fallback: {e}")
+            logger.warning(
+                "Error generating prompts; using fallback",
+                error=str(e)[:300],
+                error_type=type(e).__name__,
+                use_case=use_case.value,
+                has_reference_photo=reference_photo is not None,
+            )
             return PhotoshootService._fallback_prompts(
                 use_case=use_case,
                 num_prompts=num_prompts,
@@ -813,7 +828,12 @@ RULES:
                 )
 
                 if not response.images:
-                    logger.warning(f"No images generated for prompt {prompt.index}")
+                    logger.warning(
+                        "No images generated for photoshoot prompt (possible silent refusal)",
+                        prompt_index=prompt.index,
+                        response_model=response.model,
+                        response_provider=response.provider,
+                    )
                     return None
 
                 return GeneratedImage(
@@ -832,7 +852,12 @@ RULES:
                     try:
                         return await generate_single(prompt)
                     except Exception as e:
-                        logger.error(f"Failed to generate image {prompt.index}: {e}")
+                        logger.error(
+                            "Failed to generate photoshoot image",
+                            prompt_index=prompt.index,
+                            error=str(e),
+                            error_type=type(e).__name__,
+                        )
                         return None
 
             tasks = [generate_with_semaphore(p) for p in prompts]
@@ -847,11 +872,19 @@ RULES:
                     successful.append(result)
                 elif isinstance(result, Exception):
                     error_text = str(result).strip() or result.__class__.__name__
-                    logger.error(f"Image {prompt_index} generation failed with exception: {error_text}")
+                    logger.error(
+                        "Photoshoot image generation failed with exception",
+                        prompt_index=prompt_index,
+                        error=error_text,
+                        error_type=type(result).__name__,
+                    )
                     failures.append(ImageGenerationFailure(index=prompt_index, error=error_text))
                 else:
                     error_text = "Image generation returned no result"
-                    logger.warning(f"Image {prompt_index} generation returned None")
+                    logger.warning(
+                        "Photoshoot image generation returned no result",
+                        prompt_index=prompt_index,
+                    )
                     failures.append(ImageGenerationFailure(index=prompt_index, error=error_text))
 
             if not successful:
@@ -939,7 +972,15 @@ RULES:
         except (ValidationError, RateLimitError, ServiceError, DatabaseError):
             raise
         except Exception as e:
-            logger.exception(f"Error in photoshoot generation for user {user_id}: {e}")
+            logger.exception(
+                "Error in photoshoot generation",
+                user_id=user_id,
+                use_case=use_case.value,
+                num_images=num_images,
+                session_id=session_id,
+                elapsed_seconds=round(time.time() - start_time, 2),
+                error=str(e)[:300],
+            )
             raise ServiceError("Photoshoot generation failed", service_name="photoshoot")
 
 
@@ -1212,7 +1253,12 @@ class PhotoshootStreamingService:
             )
 
         except Exception as e:
-            logger.error(f"Failed to generate image {prompt.index}: {e}")
+            logger.error(
+                "Failed to generate streaming photoshoot image",
+                prompt_index=prompt.index,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
 
             await PhotoshootJobService.mark_image_failed(job.job_id, prompt.index, str(e))
 

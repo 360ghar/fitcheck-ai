@@ -43,7 +43,7 @@ Template: `backend/.env.example`
 
 Core keys:
 - Supabase: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_SECRET`
-- AI provider config: `AI_DEFAULT_PROVIDER`, `AI_OPENAI_*`, `AI_CUSTOM_*`
+- AI provider config: `AI_DEFAULT_PROVIDER`, `AI_OPENAI_*`, `AI_CHAT_*`/`AI_VISION_*`/`AI_IMAGE_*` (per-leg)
 - Embeddings (separate from the provider config above): `AI_GEMINI_API_KEY`, `AI_GEMINI_EMBEDDING_MODEL`
 - Optional integrations: `PINECONE_*`, `STRIPE_*`, `WEATHER_API_KEY`, `META_OAUTH_*`
 

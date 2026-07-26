@@ -87,10 +87,12 @@ Configured in `app/core/config.py` / env:
 
 Typical custom stack:
 
-- Chat/vision: `agnes-2.5-flash` via `/v1/chat/completions`
+- Chat/vision: `gemini-3.6-flash` (primary) / `agnes-2.5-flash` (fallback after 1 retry) via `/v1/chat/completions`
 - Images: `agnes-image-2.1-flash` primary → `agnes-image-2.0-flash` fallback via `/v1/images/generations`
 - Transient failures (429/503/timeout/empty images) retry fallback; non-transient raise
 - Embeddings: Google `google.genai` via `AI_GEMINI_API_KEY` (not a selectable chat provider)
+
+Env: one flat `AI_*` per-leg scheme. Each of chat / vision / vision-fallback / image / image-fallback can have its OWN `AI_<LEG>_API_URL` + `AI_<LEG>_API_KEY` + `AI_<LEG>_MODEL`; a blank url/key inherits its parent (`vision`→`chat`, `vision_fallback`→`vision`, `image`→`chat`, `image_fallback`→`image`), so a single-host setup only needs the `AI_CHAT_*` trio. See `backend/.env.example`.
 
 User AI settings: `user_ai_settings` with encrypted keys (`AI_ENCRYPTION_KEY`).
 
@@ -149,7 +151,7 @@ Modules wired from `main.py` include: auth, users, items, outfits, shared_outfit
 
 Required: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_SECRET`  
 
-AI: `AI_DEFAULT_PROVIDER`, `AI_GEMINI_*` (embeddings), `AI_CUSTOM_*` / `OPENAI_*` overrides  
+AI: `AI_DEFAULT_PROVIDER`, `AI_GEMINI_*` (embeddings), `AI_CHAT_*`/`AI_VISION_*`/`AI_IMAGE_*` (per-leg, see `.env.example`)
 
 Optional: `PINECONE_*`, `STRIPE_*`, `WEATHER_API_KEY`, social import flags, `AI_ENCRYPTION_KEY`  
 

@@ -449,6 +449,7 @@ class ItemExtractionAgent:
                 logger.warning(
                     "Failed to parse item extraction response",
                     response=response.text[:200],
+                    response_length=len(response.text or ""),
                 )
                 return self._empty_result(
                     response.text or "Unable to analyze image",
@@ -464,7 +465,12 @@ class ItemExtractionAgent:
         except AIServiceError:
             raise
         except Exception as e:
-            logger.error("Item extraction failed", error=str(e))
+            logger.error(
+                "Item extraction failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                has_profile_reference=has_profile_reference,
+            )
             return self._empty_result(
                 "Unable to analyze image automatically",
                 has_profile_reference=has_profile_reference,
@@ -714,7 +720,12 @@ class ItemExtractionAgent:
         except AIServiceError:
             raise
         except Exception as e:
-            logger.error("Single item extraction failed", error=str(e))
+            logger.error(
+                "Single item extraction failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                category_hint=category_hint,
+            )
             return self._empty_single_item()
 
     async def detect_colors(
@@ -749,7 +760,11 @@ class ItemExtractionAgent:
             return []
 
         except Exception as e:
-            logger.error("Color detection failed", error=str(e))
+            logger.error(
+                "Color detection failed",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
             return []
 
     def _empty_result(self, description: str = "", has_profile_reference: bool = False) -> Dict[str, Any]:
