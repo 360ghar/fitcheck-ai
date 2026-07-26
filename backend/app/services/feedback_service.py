@@ -1,6 +1,7 @@
 """
 Feedback service for managing support tickets.
 """
+import asyncio
 from typing import Optional, List
 
 from supabase import Client
@@ -52,7 +53,7 @@ class FeedbackService:
             "status": TicketStatus.OPEN.value,
         }
 
-        result = db.table("support_tickets").insert(ticket_data).execute()
+        result = await asyncio.to_thread(db.table("support_tickets").insert(ticket_data).execute)
 
         if not result.data:
             raise Exception("Failed to create support ticket")
@@ -93,18 +94,18 @@ class FeedbackService:
             List of tickets with total count
         """
         # Get total count
-        count_result = db.table("support_tickets").select(
+        count_result = await asyncio.to_thread(db.table("support_tickets").select(
             "id", count="exact"
-        ).eq("user_id", user_id).execute()
+        ).eq("user_id", user_id).execute)
 
         total = count_result.count or 0
 
         # Get paginated tickets
-        result = db.table("support_tickets").select(
+        result = await asyncio.to_thread(db.table("support_tickets").select(
             "id, category, subject, status, created_at"
         ).eq("user_id", user_id).order(
             "created_at", desc=True
-        ).range(offset, offset + limit - 1).execute()
+        ).range(offset, offset + limit - 1).execute)
 
         tickets = [
             TicketListItem(

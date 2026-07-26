@@ -308,12 +308,12 @@ class BatchExtractionService:
         skip it and continue without avatar. Don't block extraction pipeline.
         """
         try:
-            user_result = (
+            user_result = await asyncio.to_thread(
                 self.db.table("users")
                 .select("avatar_url")
                 .eq("id", self.user_id)
                 .single()
-                .execute()
+                .execute
             )
             if not user_result or not user_result.data:
                 return None

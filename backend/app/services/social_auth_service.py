@@ -8,6 +8,7 @@ Supports two auth session types:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -119,10 +120,10 @@ class SocialAuthService:
             "encrypted_session_blob": cls.encrypt_session_payload(payload),
             "expires_at": cls._expiry().isoformat(),
         }
-        db.table("social_import_auth_sessions").upsert(
+        await asyncio.to_thread(db.table("social_import_auth_sessions").upsert(
             data,
             on_conflict="job_id,auth_type",
-        ).execute()
+        ).execute)
         return data
 
     @classmethod
@@ -167,10 +168,10 @@ class SocialAuthService:
             "encrypted_session_blob": cls.encrypt_session_payload(payload),
             "expires_at": cls._expiry().isoformat(),
         }
-        db.table("social_import_auth_sessions").upsert(
+        await asyncio.to_thread(db.table("social_import_auth_sessions").upsert(
             data,
             on_conflict="job_id,auth_type",
-        ).execute()
+        ).execute)
         return data
 
     @classmethod
@@ -182,7 +183,7 @@ class SocialAuthService:
         user_id: str,
     ) -> Optional[Dict[str, Any]]:
         now_iso = datetime.now(timezone.utc).isoformat()
-        result = (
+        result = await asyncio.to_thread(
             db.table("social_import_auth_sessions")
             .select("*")
             .eq("job_id", job_id)
@@ -190,7 +191,7 @@ class SocialAuthService:
             .gte("expires_at", now_iso)
             .order("created_at", desc=True)
             .limit(1)
-            .execute()
+            .execute
         )
 
         rows = result.data or []
@@ -207,21 +208,21 @@ class SocialAuthService:
 
     @staticmethod
     async def delete_sessions(db, *, job_id: str, user_id: str) -> None:
-        (
+        await asyncio.to_thread(
             db.table("social_import_auth_sessions")
             .delete()
             .eq("job_id", job_id)
             .eq("user_id", user_id)
-            .execute()
+            .execute
         )
 
     @staticmethod
     async def cleanup_expired_sessions(db) -> int:
         now_iso = datetime.now(timezone.utc).isoformat()
-        result = (
+        result = await asyncio.to_thread(
             db.table("social_import_auth_sessions")
             .delete()
             .lt("expires_at", now_iso)
-            .execute()
+            .execute
         )
         return len(result.data or [])

@@ -1,5 +1,5 @@
 """
-Regression: no synchronous Supabase ``.execute()`` inside an ``async def`` route.
+Regression: no synchronous Supabase ``.execute()`` inside an ``async def``.
 
 ``supabase-py``'s ``Client`` is synchronous. An un-wrapped ``.execute()`` inside
 a coroutine blocks the whole event loop for a full DB round-trip, so on a
@@ -16,7 +16,8 @@ the wrapped ``to_thread`` form are not false positives.
 import ast
 from pathlib import Path
 
-ROUTES_DIR = Path(__file__).resolve().parents[1] / "app" / "api" / "v1"
+APP_DIR = Path(__file__).resolve().parents[1] / "app"
+SCANNED_DIRS = (APP_DIR / "api" / "v1", APP_DIR / "services")
 
 # Callables that hand work off to a worker thread; anything inside their
 # argument list is already off the event loop.
@@ -59,16 +60,18 @@ def _find_bare_executes(tree: ast.AST) -> list[tuple[int, str]]:
     return hits
 
 
-def test_no_blocking_supabase_execute_in_async_routes():
+def test_no_blocking_supabase_execute_in_async_code():
     offenders = []
-    for path in sorted(ROUTES_DIR.glob("*.py")):
-        tree = ast.parse(path.read_text(), filename=str(path))
-        for lineno, fn_name in _find_bare_executes(tree):
-            offenders.append(f"  {path.name}:{lineno} in async def {fn_name}()")
+    for directory in SCANNED_DIRS:
+        for path in sorted(directory.glob("*.py")):
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for lineno, fn_name in _find_bare_executes(tree):
+                rel = path.relative_to(APP_DIR.parent)
+                offenders.append(f"  {rel}:{lineno} in async def {fn_name}()")
 
     assert not offenders, (
         f"{len(offenders)} blocking Supabase .execute() call(s) inside async def "
-        "found in app/api/v1/. Wrap each in "
+        "found in app/api/v1/ or app/services/. Wrap each in "
         "`await asyncio.to_thread(lambda: <chain>.execute())` so the sync "
         "supabase-py client does not block the event loop:\n" + "\n".join(offenders)
     )

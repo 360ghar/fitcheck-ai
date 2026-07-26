@@ -5,6 +5,7 @@ from datetime import datetime, date, timedelta
 from typing import Optional
 from dateutil.relativedelta import relativedelta
 
+import asyncio
 import httpx
 from supabase import Client
 
@@ -68,12 +69,12 @@ class SubscriptionService:
     async def get_subscription(user_id: str, db: Client) -> SubscriptionResponse:
         """Get user's current subscription."""
         try:
-            result = (
+            result = await asyncio.to_thread(
                 db.table("subscriptions")
                 .select("*")
                 .eq("user_id", user_id)
                 .maybe_single()
-                .execute()
+                .execute
             )
 
             data = maybe_single_data(result)
@@ -81,12 +82,12 @@ class SubscriptionService:
                 # Create a default free subscription if none exists
                 logger.info(f"Creating default subscription for user {user_id}")
                 await SubscriptionService.create_default_subscription(user_id, db)
-                result = (
+                result = await asyncio.to_thread(
                     db.table("subscriptions")
                     .select("*")
                     .eq("user_id", user_id)
                     .maybe_single()
-                    .execute()
+                    .execute
                 )
                 data = maybe_single_data(result)
 
@@ -117,12 +118,12 @@ class SubscriptionService:
     async def create_default_subscription(user_id: str, db: Client) -> None:
         """Create a default free subscription for a user."""
         try:
-            db.table("subscriptions").upsert({
+            await asyncio.to_thread(db.table("subscriptions").upsert({
                 "user_id": user_id,
                 "plan_type": "free",
                 "status": "active",
                 "current_period_start": datetime.utcnow().isoformat(),
-            }, on_conflict="user_id").execute()
+            }, on_conflict="user_id").execute)
         except Exception as e:
             logger.error(f"Error creating default subscription for user {user_id}: {e}")
             raise DatabaseError(f"Failed to create subscription: {str(e)}")
@@ -145,7 +146,7 @@ class SubscriptionService:
             else:
                 period_end = now + relativedelta(months=1)
 
-            db.table("subscriptions").upsert({
+            await asyncio.to_thread(db.table("subscriptions").upsert({
                 "user_id": user_id,
                 "plan_type": plan_type.value,
                 "status": "active",
@@ -155,7 +156,7 @@ class SubscriptionService:
                 "stripe_subscription_id": stripe_subscription_id,
                 "cancel_at_period_end": False,
                 "updated_at": now.isoformat(),
-            }, on_conflict="user_id").execute()
+            }, on_conflict="user_id").execute)
 
             logger.info(f"User {user_id} upgraded to {plan_type.value}")
             return await SubscriptionService.get_subscription(user_id, db)
@@ -169,23 +170,23 @@ class SubscriptionService:
         """Apply referral credit months to a user's subscription."""
         try:
             # Get current subscription
-            result = (
+            result = await asyncio.to_thread(
                 db.table("subscriptions")
                 .select("*")
                 .eq("user_id", user_id)
                 .maybe_single()
-                .execute()
+                .execute
             )
 
             current_data = maybe_single_data(result)
             if not current_data:
                 await SubscriptionService.create_default_subscription(user_id, db)
-                result = (
+                result = await asyncio.to_thread(
                     db.table("subscriptions")
                     .select("*")
                     .eq("user_id", user_id)
                     .maybe_single()
-                    .execute()
+                    .execute
                 )
                 current_data = maybe_single_data(result)
 
@@ -199,19 +200,19 @@ class SubscriptionService:
                 now = datetime.utcnow()
                 trial_end = now + relativedelta(months=months)
 
-                db.table("subscriptions").update({
+                await asyncio.to_thread(db.table("subscriptions").update({
                     "plan_type": "pro_monthly",  # Give them Pro benefits
                     "status": "trial",
                     "trial_end": trial_end.isoformat(),
                     "referral_credit_months": current_credits + months,
                     "updated_at": now.isoformat(),
-                }).eq("user_id", user_id).execute()
+                }).eq("user_id", user_id).execute)
             else:
                 # Just add to their credit balance
-                db.table("subscriptions").update({
+                await asyncio.to_thread(db.table("subscriptions").update({
                     "referral_credit_months": current_credits + months,
                     "updated_at": datetime.utcnow().isoformat(),
-                }).eq("user_id", user_id).execute()
+                }).eq("user_id", user_id).execute)
 
             logger.info(f"Applied {months} referral credit months to user {user_id}")
 
@@ -223,10 +224,10 @@ class SubscriptionService:
     async def cancel_subscription(user_id: str, db: Client) -> SubscriptionResponse:
         """Cancel subscription at period end."""
         try:
-            db.table("subscriptions").update({
+            await asyncio.to_thread(db.table("subscriptions").update({
                 "cancel_at_period_end": True,
                 "updated_at": datetime.utcnow().isoformat(),
-            }).eq("user_id", user_id).execute()
+            }).eq("user_id", user_id).execute)
 
             logger.info(f"Subscription cancelled for user {user_id}")
             return await SubscriptionService.get_subscription(user_id, db)
@@ -258,7 +259,7 @@ class SubscriptionService:
         period_start = SubscriptionService._get_current_period_start()
 
         try:
-            result = db.table("subscription_usage").select("*").eq("user_id", user_id).eq("period_start", period_start.isoformat()).single().execute()
+            result = await asyncio.to_thread(db.table("subscription_usage").select("*").eq("user_id", user_id).eq("period_start", period_start.isoformat()).single().execute)
 
             if result.data:
                 return result.data
@@ -272,7 +273,7 @@ class SubscriptionService:
                 "monthly_embeddings": 0,
             }
 
-            db.table("subscription_usage").insert(new_record).execute()
+            await asyncio.to_thread(db.table("subscription_usage").insert(new_record).execute)
             return new_record
 
         except Exception as e:
@@ -285,7 +286,7 @@ class SubscriptionService:
                     "monthly_generations": 0,
                     "monthly_embeddings": 0,
                 }
-                db.table("subscription_usage").insert(new_record).execute()
+                await asyncio.to_thread(db.table("subscription_usage").insert(new_record).execute)
                 return new_record
             raise
 
@@ -411,12 +412,12 @@ class SubscriptionService:
             column = column_map[operation_type]
 
             # Use atomic increment via RPC to prevent race conditions
-            db.rpc("increment_usage", {
+            await asyncio.to_thread(db.rpc("increment_usage", {
                 "p_user_id": user_id,
                 "p_period_start": period_start.isoformat(),
                 "p_field": column,
                 "p_count": count,
-            }).execute()
+            }).execute)
 
             logger.debug(f"Incremented {operation_type} usage for user {user_id} by {count}")
 

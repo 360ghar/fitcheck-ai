@@ -4,6 +4,8 @@ Persistence layer for social import jobs.
 
 from __future__ import annotations
 
+import asyncio
+
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -39,7 +41,7 @@ class SocialImportJobStore:
             "created_at": _utc_now_iso(),
             "updated_at": _utc_now_iso(),
         }
-        result = db.table("social_import_jobs").insert(payload).execute()
+        result = await asyncio.to_thread(db.table("social_import_jobs").insert(payload).execute)
         rows = result.data or []
         if not rows:
             raise RuntimeError("Failed to create social import job")
@@ -47,13 +49,13 @@ class SocialImportJobStore:
 
     @staticmethod
     async def get_job(db, *, job_id: str, user_id: str) -> Optional[Dict[str, Any]]:
-        result = (
+        result = await asyncio.to_thread(
             db.table("social_import_jobs")
             .select("*")
             .eq("id", job_id)
             .eq("user_id", user_id)
             .limit(1)
-            .execute()
+            .execute
         )
         rows = result.data or []
         return rows[0] if rows else None
@@ -65,12 +67,12 @@ class SocialImportJobStore:
             SocialImportJobStatus.CANCELLED.value,
             SocialImportJobStatus.FAILED.value,
         ]
-        result = (
+        result = await asyncio.to_thread(
             db.table("social_import_jobs")
             .select("id")
             .eq("user_id", user_id)
             .not_.in_("status", terminal_statuses)
-            .execute()
+            .execute
         )
         return len(result.data or [])
 
@@ -84,12 +86,12 @@ class SocialImportJobStore:
     ) -> Optional[Dict[str, Any]]:
         payload = dict(updates)
         payload["updated_at"] = _utc_now_iso()
-        result = (
+        result = await asyncio.to_thread(
             db.table("social_import_jobs")
             .update(payload)
             .eq("id", job_id)
             .eq("user_id", user_id)
-            .execute()
+            .execute
         )
         rows = result.data or []
         return rows[0] if rows else None
@@ -144,7 +146,7 @@ class SocialImportJobStore:
                 }
             )
 
-        result = db.table("social_import_photos").insert(rows).execute()
+        result = await asyncio.to_thread(db.table("social_import_photos").insert(rows).execute)
         inserted = result.data or []
 
         job = await SocialImportJobStore.get_job(db, job_id=job_id, user_id=user_id)
@@ -171,14 +173,14 @@ class SocialImportJobStore:
         user_id: str,
         photo_id: str,
     ) -> Optional[Dict[str, Any]]:
-        result = (
+        result = await asyncio.to_thread(
             db.table("social_import_photos")
             .select("*")
             .eq("id", photo_id)
             .eq("job_id", job_id)
             .eq("user_id", user_id)
             .limit(1)
-            .execute()
+            .execute
         )
         rows = result.data or []
         return rows[0] if rows else None
@@ -210,7 +212,7 @@ class SocialImportJobStore:
         if limit is not None:
             query = query.limit(limit)
 
-        result = query.execute()
+        result = await asyncio.to_thread(query.execute)
         return result.data or []
 
     @staticmethod
@@ -224,13 +226,13 @@ class SocialImportJobStore:
     ) -> Optional[Dict[str, Any]]:
         payload = dict(updates)
         payload["updated_at"] = _utc_now_iso()
-        result = (
+        result = await asyncio.to_thread(
             db.table("social_import_photos")
             .update(payload)
             .eq("id", photo_id)
             .eq("job_id", job_id)
             .eq("user_id", user_id)
-            .execute()
+            .execute
         )
         rows = result.data or []
         return rows[0] if rows else None
@@ -253,7 +255,7 @@ class SocialImportJobStore:
             return None
 
         candidate = queued[0]
-        result = (
+        result = await asyncio.to_thread(
             db.table("social_import_photos")
             .update(
                 {
@@ -266,7 +268,7 @@ class SocialImportJobStore:
             .eq("job_id", job_id)
             .eq("user_id", user_id)
             .eq("status", SocialImportPhotoStatus.QUEUED.value)
-            .execute()
+            .execute
         )
         rows = result.data or []
         return rows[0] if rows else None
@@ -350,10 +352,10 @@ class SocialImportJobStore:
                 }
             )
 
-        result = db.table("social_import_items").upsert(
+        result = await asyncio.to_thread(db.table("social_import_items").upsert(
             rows,
             on_conflict="job_id,temp_id",
-        ).execute()
+        ).execute)
         return result.data or []
 
     @staticmethod
@@ -364,14 +366,14 @@ class SocialImportJobStore:
         photo_id: str,
         user_id: str,
     ) -> List[Dict[str, Any]]:
-        result = (
+        result = await asyncio.to_thread(
             db.table("social_import_items")
             .select("*")
             .eq("job_id", job_id)
             .eq("photo_id", photo_id)
             .eq("user_id", user_id)
             .order("created_at")
-            .execute()
+            .execute
         )
         return result.data or []
 
@@ -387,14 +389,14 @@ class SocialImportJobStore:
     ) -> Optional[Dict[str, Any]]:
         payload = dict(updates)
         payload["updated_at"] = _utc_now_iso()
-        result = (
+        result = await asyncio.to_thread(
             db.table("social_import_items")
             .update(payload)
             .eq("id", item_id)
             .eq("job_id", job_id)
             .eq("photo_id", photo_id)
             .eq("user_id", user_id)
-            .execute()
+            .execute
         )
         rows = result.data or []
         return rows[0] if rows else None
@@ -408,13 +410,13 @@ class SocialImportJobStore:
         user_id: str,
         status: SocialImportItemStatus,
     ) -> None:
-        (
+        await asyncio.to_thread(
             db.table("social_import_items")
             .update({"status": status.value, "updated_at": _utc_now_iso()})
             .eq("job_id", job_id)
             .eq("photo_id", photo_id)
             .eq("user_id", user_id)
-            .execute()
+            .execute
         )
 
     @staticmethod
@@ -426,7 +428,7 @@ class SocialImportJobStore:
         event_type: str,
         payload: Dict[str, Any],
     ) -> Dict[str, Any]:
-        result = (
+        result = await asyncio.to_thread(
             db.table("social_import_events")
             .insert(
                 {
@@ -437,7 +439,7 @@ class SocialImportJobStore:
                     "created_at": _utc_now_iso(),
                 }
             )
-            .execute()
+            .execute
         )
         rows = result.data or []
         return rows[0] if rows else {}
@@ -460,7 +462,7 @@ class SocialImportJobStore:
         if after_id is not None:
             query = query.gt("id", after_id)
 
-        result = query.execute()
+        result = await asyncio.to_thread(query.execute)
         return result.data or []
 
     @staticmethod
@@ -470,12 +472,12 @@ class SocialImportJobStore:
         job_id: str,
         user_id: str,
     ) -> None:
-        (
+        await asyncio.to_thread(
             db.table("social_import_auth_sessions")
             .delete()
             .eq("job_id", job_id)
             .eq("user_id", user_id)
-            .execute()
+            .execute
         )
 
     @staticmethod

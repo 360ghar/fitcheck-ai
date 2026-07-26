@@ -9,6 +9,7 @@ This service handles:
 - Reset rate limits daily
 """
 
+import asyncio
 from datetime import date
 from typing import Any, Dict, Optional
 
@@ -149,7 +150,7 @@ class AISettingsService:
             User's AI settings dict
         """
         try:
-            result = db.table("user_ai_settings").select("*").eq("user_id", user_id).execute()
+            result = await asyncio.to_thread(db.table("user_ai_settings").select("*").eq("user_id", user_id).execute)
 
             if result.data and len(result.data) > 0:
                 settings_row = result.data[0]
@@ -161,12 +162,12 @@ class AISettingsService:
                         last_reset = date.fromisoformat(last_reset)
                     if last_reset < date.today():
                         # Reset daily counts
-                        db.table("user_ai_settings").update({
+                        await asyncio.to_thread(db.table("user_ai_settings").update({
                             "daily_extraction_count": 0,
                             "daily_generation_count": 0,
                             "daily_embedding_count": 0,
                             "last_reset_date": date.today().isoformat(),
-                        }).eq("user_id", user_id).execute()
+                        }).eq("user_id", user_id).execute)
                         settings_row["daily_extraction_count"] = 0
                         settings_row["daily_generation_count"] = 0
                         settings_row["daily_embedding_count"] = 0
@@ -187,7 +188,7 @@ class AISettingsService:
                 "total_embeddings": 0,
             }
 
-            db.table("user_ai_settings").insert(default_settings).execute()
+            await asyncio.to_thread(db.table("user_ai_settings").insert(default_settings).execute)
             return default_settings
 
         except Exception as e:
@@ -239,7 +240,7 @@ class AISettingsService:
                 updates["provider_configs"] = current_configs
 
             # Update in database
-            result = db.table("user_ai_settings").update(updates).eq("user_id", user_id).execute()
+            result = await asyncio.to_thread(db.table("user_ai_settings").update(updates).eq("user_id", user_id).execute)
 
             if result.data and len(result.data) > 0:
                 return result.data[0]
@@ -402,7 +403,7 @@ class AISettingsService:
                     "total_generations": user_settings.get("total_generations", 0) + count,
                 }
 
-            db.table("user_ai_settings").update(updates).eq("user_id", user_id).execute()
+            await asyncio.to_thread(db.table("user_ai_settings").update(updates).eq("user_id", user_id).execute)
 
         except Exception as e:
             logger.error("Failed to increment usage", user_id=user_id, error=str(e))

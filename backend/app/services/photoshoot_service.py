@@ -192,24 +192,24 @@ class PhotoshootService:
 
             # Prefer DB-side reset for correctness/atomicity (migration 010)
             try:
-                db.rpc(
+                await asyncio.to_thread(db.rpc(
                     "reset_daily_photoshoot_if_needed",
                     {
                         "p_user_id": user_id,
                         "p_period_start": period_start.isoformat(),
                     },
-                ).execute()
+                ).execute)
             except Exception as e:
                 # Migration may not be applied yet; fall back to app-side reset in get_usage().
                 logger.debug(f"RPC reset_daily_photoshoot_if_needed not available: {e}")
 
-            result = (
+            result = await asyncio.to_thread(
                 db.table("subscription_usage")
                 .select("*")
                 .eq("user_id", user_id)
                 .eq("period_start", period_start.isoformat())
                 .single()
-                .execute()
+                .execute
             )
 
             return result.data or {}
@@ -240,14 +240,14 @@ class PhotoshootService:
                     )
                     if last_reset_date < today:
                         period_start = SubscriptionService._get_current_period_start()
-                        db.table("subscription_usage").update(
+                        await asyncio.to_thread(db.table("subscription_usage").update(
                             {
                                 "daily_photoshoot_images": 0,
                                 "last_photoshoot_reset": today.isoformat(),
                             }
                         ).eq("user_id", user_id).eq(
                             "period_start", period_start.isoformat()
-                        ).execute()
+                        ).execute)
                         used_today = 0
                 except Exception as e:
                     logger.debug(f"Failed to parse last_photoshoot_reset date: {e}")
@@ -297,7 +297,7 @@ class PhotoshootService:
 
             # Use atomic increment via RPC when available (migration 010)
             try:
-                db.rpc(
+                await asyncio.to_thread(db.rpc(
                     "increment_usage",
                     {
                         "p_user_id": user_id,
@@ -305,7 +305,7 @@ class PhotoshootService:
                         "p_field": "daily_photoshoot_images",
                         "p_count": num_images,
                     },
-                ).execute()
+                ).execute)
                 return
             except Exception as rpc_err:
                 logger.debug(f"RPC increment_usage not available, using fallback: {rpc_err}")
@@ -313,16 +313,16 @@ class PhotoshootService:
             # Fallback: Use SQL UPDATE with increment expression for atomicity
             # This is safer than read-then-write but still not fully atomic
             try:
-                db.table("subscription_usage").update(
+                await asyncio.to_thread(db.table("subscription_usage").update(
                     {"daily_photoshoot_images": db.func("daily_photoshoot_images + %s", num_images)}
-                ).eq("user_id", user_id).eq("period_start", period_start.isoformat()).execute()
+                ).eq("user_id", user_id).eq("period_start", period_start.isoformat()).execute)
             except Exception:
                 # Final fallback: non-atomic update (best-effort)
                 usage_record = await PhotoshootService.get_or_create_daily_usage(user_id, db)
                 current = usage_record.get("daily_photoshoot_images", 0) or 0
-                db.table("subscription_usage").update(
+                await asyncio.to_thread(db.table("subscription_usage").update(
                     {"daily_photoshoot_images": current + num_images}
-                ).eq("user_id", user_id).eq("period_start", period_start.isoformat()).execute()
+                ).eq("user_id", user_id).eq("period_start", period_start.isoformat()).execute)
 
             logger.debug(f"Incremented photoshoot usage for user {user_id} by {num_images}")
 

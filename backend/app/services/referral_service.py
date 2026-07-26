@@ -1,6 +1,7 @@
 """
 Referral service for managing referral codes and redemptions.
 """
+import asyncio
 import re
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -66,12 +67,12 @@ class ReferralService:
         """Get user's referral code, creating one if it doesn't exist."""
         try:
             # Try to get existing code
-            result = (
+            result = await asyncio.to_thread(
                 db.table("referral_codes")
                 .select("*")
                 .eq("user_id", user_id)
                 .maybe_single()
-                .execute()
+                .execute
             )
 
             if result and result.data:
@@ -90,11 +91,11 @@ class ReferralService:
             inserted_row = None
             while attempts < 5:
                 try:
-                    insert_result = db.table("referral_codes").insert({
+                    insert_result = await asyncio.to_thread(db.table("referral_codes").insert({
                         "user_id": user_id,
                         "code": code,
                         "times_used": 0,
-                    }).execute()
+                    }).execute)
                     if insert_result.data:
                         inserted_row = insert_result.data[0]
                     break
@@ -129,22 +130,22 @@ class ReferralService:
         """Get detailed referral statistics for a user."""
         try:
             # Get user's referral code
-            code_result = (
+            code_result = await asyncio.to_thread(
                 db.table("referral_codes")
                 .select("*")
                 .eq("user_id", user_id)
                 .maybe_single()
-                .execute()
+                .execute
             )
 
             if not code_result or not code_result.data:
                 # Create one
-                user_result = (
+                user_result = await asyncio.to_thread(
                     db.table("users")
                     .select("full_name")
                     .eq("id", user_id)
                     .maybe_single()
-                    .execute()
+                    .execute
                 )
                 full_name = user_result.data.get("full_name") if user_result and user_result.data else None
                 code_response = await ReferralService.get_or_create_referral_code(user_id, full_name, db)
@@ -159,9 +160,9 @@ class ReferralService:
             total_credits = 0
             successful_referrals = 0
 
-            redemptions = db.table("referral_redemptions").select(
+            redemptions = await asyncio.to_thread(db.table("referral_redemptions").select(
                 "referred_user_id, redeemed_at, referrer_credit_applied"
-            ).eq("referrer_user_id", user_id).execute()
+            ).eq("referrer_user_id", user_id).execute)
 
             if redemptions.data:
                 # One batched lookup instead of a query per redemption
@@ -171,11 +172,11 @@ class ReferralService:
                 ]
                 referred_users: Dict[str, Dict[str, Any]] = {}
                 if referred_ids:
-                    users_result = (
+                    users_result = await asyncio.to_thread(
                         db.table("users")
                         .select("id, email, full_name")
                         .in_("id", referred_ids)
-                        .execute()
+                        .execute
                     )
                     referred_users = {
                         str(u["id"]): u
@@ -228,9 +229,9 @@ class ReferralService:
         normalized_code = ReferralService._normalize_code(code)
         try:
             # Case-insensitive lookup
-            result = db.table("referral_codes").select(
+            result = await asyncio.to_thread(db.table("referral_codes").select(
                 "*, users(full_name)"
-            ).eq("code", normalized_code).maybe_single().execute()
+            ).eq("code", normalized_code).maybe_single().execute)
 
             if not result or not result.data:
                 return ValidateReferralResponse(
@@ -244,12 +245,12 @@ class ReferralService:
                 referrer_name = result.data["users"].get("full_name", "A friend")
             else:
                 # Fallback: query user separately
-                user_result = (
+                user_result = await asyncio.to_thread(
                     db.table("users")
                     .select("full_name")
                     .eq("id", result.data["user_id"])
                     .maybe_single()
-                    .execute()
+                    .execute
                 )
                 if user_result and user_result.data:
                     referrer_name = user_result.data.get("full_name", "A friend")
@@ -289,12 +290,12 @@ class ReferralService:
                 )
 
             # Get the referral code record
-            code_result = (
+            code_result = await asyncio.to_thread(
                 db.table("referral_codes")
                 .select("*")
                 .eq("code", normalized_code)
                 .maybe_single()
-                .execute()
+                .execute
             )
 
             if not code_result or not code_result.data:
@@ -316,7 +317,7 @@ class ReferralService:
                 )
 
             # Check if this user has already been referred
-            existing = db.table("referral_redemptions").select("id").eq("referred_user_id", referred_user_id).execute()
+            existing = await asyncio.to_thread(db.table("referral_redemptions").select("id").eq("referred_user_id", referred_user_id).execute)
 
             if existing.data:
                 return RedeemReferralResponse(
@@ -326,40 +327,40 @@ class ReferralService:
                 )
 
             # Create redemption record
-            db.table("referral_redemptions").insert({
+            await asyncio.to_thread(db.table("referral_redemptions").insert({
                 "referrer_user_id": referrer_user_id,
                 "referred_user_id": referred_user_id,
                 "referral_code_id": referral_code_id,
                 "referrer_credit_applied": False,
                 "referred_credit_applied": False,
                 "redeemed_at": datetime.utcnow().isoformat(),
-            }).execute()
+            }).execute)
 
             # Increment times_used on the referral code atomically to prevent race conditions
-            db.rpc("increment_referral_times_used", {
+            await asyncio.to_thread(db.rpc("increment_referral_times_used", {
                 "p_referral_code_id": referral_code_id,
                 "p_count": 1,
-            }).execute()
+            }).execute)
 
             # Apply credits to both users
             credit_months = settings.REFERRAL_CREDIT_MONTHS
 
             # Credit the referred user (new user)
             await SubscriptionService.apply_referral_credit(referred_user_id, credit_months, db)
-            db.table("referral_redemptions").update({
+            await asyncio.to_thread(db.table("referral_redemptions").update({
                 "referred_credit_applied": True,
-            }).eq("referred_user_id", referred_user_id).execute()
+            }).eq("referred_user_id", referred_user_id).execute)
 
             # Credit the referrer
             await SubscriptionService.apply_referral_credit(referrer_user_id, credit_months, db)
-            db.table("referral_redemptions").update({
+            await asyncio.to_thread(db.table("referral_redemptions").update({
                 "referrer_credit_applied": True,
-            }).eq("referred_user_id", referred_user_id).execute()
+            }).eq("referred_user_id", referred_user_id).execute)
 
             # Update the referred_by_code on the user
-            db.table("users").update({
+            await asyncio.to_thread(db.table("users").update({
                 "referred_by_code": normalized_code,
-            }).eq("id", referred_user_id).execute()
+            }).eq("id", referred_user_id).execute)
 
             logger.info(f"Referral redeemed: {referred_user_id} used code {normalized_code} from {referrer_user_id}")
 
@@ -378,23 +379,23 @@ class ReferralService:
         """Process any pending referral code stored on the user record."""
         try:
             # Check if user has a pending referral code
-            result = (
+            result = await asyncio.to_thread(
                 db.table("users")
                 .select("referred_by_code")
                 .eq("id", user_id)
                 .maybe_single()
-                .execute()
+                .execute
             )
 
             if not result or not result.data or not result.data.get("referred_by_code"):
                 return None
 
             # Check if already redeemed
-            existing = db.table("referral_redemptions").select("id").eq("referred_user_id", user_id).execute()
+            existing = await asyncio.to_thread(db.table("referral_redemptions").select("id").eq("referred_user_id", user_id).execute)
 
             if existing.data:
                 # Already redeemed, clear the field
-                db.table("users").update({"referred_by_code": None}).eq("id", user_id).execute()
+                await asyncio.to_thread(db.table("users").update({"referred_by_code": None}).eq("id", user_id).execute)
                 return None
 
             # Redeem the code

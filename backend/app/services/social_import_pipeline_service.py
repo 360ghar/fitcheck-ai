@@ -1436,7 +1436,7 @@ class SocialImportPipelineService:
             "is_deleted": False,
         }
 
-        self.db.table("items").insert(item_data).execute()
+        await asyncio.to_thread(self.db.table("items").insert(item_data).execute)
 
         image_data = {
             "id": str(uuid.uuid4()),
@@ -1449,7 +1449,7 @@ class SocialImportPipelineService:
             "height": None,
             "created_at": now_iso,
         }
-        self.db.table("item_images").insert(image_data).execute()
+        await asyncio.to_thread(self.db.table("item_images").insert(image_data).execute)
 
         try:
             rate_check = await AISettingsService.check_rate_limit(
