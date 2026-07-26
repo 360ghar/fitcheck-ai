@@ -155,6 +155,8 @@ class RecommendationsController extends GetxController
 
   // Weather delegates
   RxString get weatherLocation => weatherController.location;
+  TextEditingController get weatherLocationInput =>
+      weatherController.locationInput;
   Rx<Map<String, dynamic>?> get weatherData => weatherController.weatherData;
   RxList<String> get preferredCategories =>
       weatherController.preferredCategories;

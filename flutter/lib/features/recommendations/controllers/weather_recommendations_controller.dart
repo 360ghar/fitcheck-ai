@@ -1,5 +1,8 @@
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/utils/error_handler.dart';
+import '../../settings/repositories/settings_repository.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../repositories/recommendations_repository.dart';
 import '../../../core/utils/frame_safe.dart';
@@ -7,7 +10,14 @@ import '../../../core/utils/frame_safe.dart';
 /// Controller for Weather-Based Recommendations tab
 /// Manages weather data and clothing recommendations
 class WeatherRecommendationsController extends GetxController {
-  final RecommendationsRepository _repository = RecommendationsRepository();
+  WeatherRecommendationsController({
+    RecommendationsRepository? repository,
+    SettingsRepository? settingsRepository,
+  })  : _repository = repository ?? RecommendationsRepository(),
+        _settingsRepository = settingsRepository ?? SettingsRepository();
+
+  final RecommendationsRepository _repository;
+  final SettingsRepository _settingsRepository;
 
   // Reactive state
   final RxBool isLoading = false.obs;
@@ -17,10 +27,25 @@ class WeatherRecommendationsController extends GetxController {
   final RxList<String> preferredCategories = <String>[].obs;
   final RxList<ItemModel> recommendations = <ItemModel>[].obs;
 
+  /// Backs the tab's location field. Owned here so the saved default is
+  /// actually visible in the input rather than being an invisible value the
+  /// user gets searched on without knowing.
+  final TextEditingController locationInput = TextEditingController();
+
+  /// Completes once the saved location has been read, so a fetch triggered
+  /// before that lands can wait instead of seeing an empty location.
+  Future<void>? _locationSeed;
+
   @override
   void onInit() {
     super.onInit();
-    _loadUserLocation();
+    _locationSeed = _loadUserLocation();
+  }
+
+  @override
+  void onClose() {
+    locationInput.dispose();
+    super.onClose();
   }
 
   Future<void> _loadUserLocation() async {
@@ -29,8 +54,20 @@ class WeatherRecommendationsController extends GetxController {
     // write, so the returned future still means "location is set" — callers
     // (and fetchRecommendations' `location.value.isEmpty` guard) depend on that.
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
-    // Try to get user's saved location from settings
-    location.value = 'San Francisco'; // Default
+    try {
+      final settings = await _settingsRepository.getSettings();
+      if (isClosed) return;
+      final saved = (settings['default_location'] as String?)?.trim() ?? '';
+      if (saved.isNotEmpty) {
+        location.value = saved;
+        locationInput.text = saved;
+      }
+    } catch (e) {
+      // A missing saved location is not an error worth interrupting the user
+      // for — the field simply stays empty and fetchRecommendations asks for
+      // one. Report it so the failure is not invisible to us.
+      ErrorHandler.reportError(e, 'Failed to load saved weather location');
+    }
   }
 
   /// Update location and fetch recommendations
@@ -41,7 +78,15 @@ class WeatherRecommendationsController extends GetxController {
 
   /// Fetch weather-based recommendations
   Future<void> fetchRecommendations(List<ItemModel> availableItems) async {
-    if (location.value.isEmpty) return;
+    // The seed reads user settings over the network, so a tap that beats it
+    // used to hit `location.isEmpty` and return silently — no spinner, no
+    // error, a blank tab. Wait for it, then ask if there is still nothing.
+    await _locationSeed;
+    if (isClosed) return;
+    if (location.value.trim().isEmpty) {
+      error.value = 'Enter your city to get weather-based recommendations.';
+      return;
+    }
 
     isLoading.value = true;
     error.value = '';

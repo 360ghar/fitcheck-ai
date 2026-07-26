@@ -144,6 +144,17 @@ class AppPages {
       binding: BatchExtractionBinding(),
       middlewares: [AuthMiddleware()],
     ),
+    // Static paths MUST be registered before their `:id` siblings. GetX
+    // resolves with `routes.firstWhereOrNull((r) => r.path.regex.hasMatch(name))`
+    // -- first match wins, with no preference for an exact match -- so
+    // `/wardrobe/stats` registered after `/wardrobe/:id` resolves to
+    // ItemDetailPage(itemId: 'stats') and 404s against the API.
+    GetPage(
+      name: Routes.wardrobeStats,
+      page: () => const WardrobeStatsPage(),
+      binding: WardrobeBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
     GetPage(
       name: Routes.wardrobeItemDetail,
       page: () => ItemDetailPage(itemId: Get.parameters['id'] ?? ''),
@@ -157,14 +168,15 @@ class AppPages {
       middlewares: [AuthMiddleware()],
     ),
     GetPage(
-      name: Routes.wardrobeStats,
-      page: () => const WardrobeStatsPage(),
-      binding: WardrobeBinding(),
-      middlewares: [AuthMiddleware()],
-    ),
-    GetPage(
       name: Routes.outfitBuilder,
       page: () => const OutfitBuilderPage(),
+      binding: OutfitBinding(),
+      middlewares: [AuthMiddleware()],
+    ),
+    // Static before `:id` -- see the note above Routes.wardrobeStats.
+    GetPage(
+      name: Routes.outfitCollections,
+      page: () => const OutfitCollectionsPage(),
       binding: OutfitBinding(),
       middlewares: [AuthMiddleware()],
     ),
@@ -177,12 +189,6 @@ class AppPages {
     GetPage(
       name: Routes.outfitEdit,
       page: () => OutfitEditPage(outfitId: Get.parameters['id'] ?? ''),
-      binding: OutfitBinding(),
-      middlewares: [AuthMiddleware()],
-    ),
-    GetPage(
-      name: Routes.outfitCollections,
-      page: () => const OutfitCollectionsPage(),
       binding: OutfitBinding(),
       middlewares: [AuthMiddleware()],
     ),

@@ -25,6 +25,9 @@ class WeatherBasedTab extends StatelessWidget {
               children: [
                 Expanded(
                   child: TextField(
+                    controller: controller.weatherLocationInput,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) => controller.fetchWeatherRecommendations(),
                     onChanged: (value) => controller.weatherLocation.value = value,
                     decoration: InputDecoration(
                       labelText: 'Your Location',
