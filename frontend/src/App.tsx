@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useIsAuthenticated, useHasHydrated } from './stores/authStore'
-import { memo } from 'react'
+import { memo, lazy, Suspense } from 'react'
 
 // Analytics
 import { PostHogIdentify } from './components/analytics/PostHogIdentify'
@@ -13,54 +13,57 @@ import AppLayout from './components/layout/AppLayout'
 import AuthLayout from './components/layout/AuthLayout'
 import PublicLayout from './layouts/PublicLayout'
 
-// Public pages
+// Eager: the cold-start paths. A first-time visitor lands on one of these, so
+// putting them behind a chunk fetch would only add a round-trip before the
+// first paint. Everything else is lazy -- see the block below.
 import LandingPage from './pages/public/LandingPage'
-import AboutPage from './pages/public/AboutPage'
-import TermsPage from './pages/public/TermsPage'
-import PrivacyPage from './pages/public/PrivacyPage'
-import SupportPage from './pages/public/SupportPage'
-import FAQPage from './pages/public/FAQPage'
-
-// Blog pages
-import BlogIndexPage from './pages/blog/BlogIndexPage'
-import BlogPostPage from './pages/blog/BlogPostPage'
-
-// Auth pages
 import LoginPage from './pages/auth/LoginPage'
 import RegisterPage from './pages/auth/RegisterPage'
-import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
-import ResetPasswordPage from './pages/auth/ResetPasswordPage'
-import AuthCallbackPage from './pages/auth/AuthCallbackPage'
 
-// Main pages
-import WardrobePage from './pages/wardrobe/WardrobePage'
-import OutfitsPage from './pages/outfits/OutfitsPage'
-import RecommendationsPage from './pages/recommendations/RecommendationsPage'
-import ProfilePage from './pages/settings/ProfilePage'
-import DashboardPage from './pages/DashboardPage'
-import CalendarPage from './pages/calendar/CalendarPage'
-import GamificationPage from './pages/gamification/GamificationPage'
-import SharedOutfitPage from './pages/shared/SharedOutfitPage'
-import TryOnPage from './pages/try-on/TryOnPage'
-import PhotoshootPage from './pages/photoshoot/PhotoshootPage'
+// Lazy: every route the user reaches by navigating. Previously all ~40 page
+// modules were static imports, so landing on "/" downloaded the blog admin
+// rich-text editor, the photoshoot wizard and the try-on page before the hero
+// rendered. React guarantees the Suspense fallback resolves, so no content is
+// gated on an animation that might not fire.
+const AboutPage = lazy(() => import('./pages/public/AboutPage'))
+const TermsPage = lazy(() => import('./pages/public/TermsPage'))
+const PrivacyPage = lazy(() => import('./pages/public/PrivacyPage'))
+const SupportPage = lazy(() => import('./pages/public/SupportPage'))
+const FAQPage = lazy(() => import('./pages/public/FAQPage'))
 
-// Admin pages
-import BlogAdminLayout from './pages/admin/BlogAdminLayout'
-import BlogDashboardPage from './pages/admin/BlogDashboardPage'
-import BlogListPage from './pages/admin/BlogListPage'
-import BlogEditorPage from './pages/admin/BlogEditorPage'
-import BlogCategoriesPage from './pages/admin/BlogCategoriesPage'
+const BlogIndexPage = lazy(() => import('./pages/blog/BlogIndexPage'))
+const BlogPostPage = lazy(() => import('./pages/blog/BlogPostPage'))
 
-// Feature landing pages
-import FeaturesIndexPage from './pages/features/FeaturesIndexPage'
-import AIWardrobeExtractionPage from './pages/features/AIWardrobeExtractionPage'
-import VirtualTryOnPage from './pages/features/VirtualTryOnPage'
-import AIPhotoshootGeneratorPage from './pages/features/AIPhotoshootGeneratorPage'
-import OutfitRecommendationsPage from './pages/features/OutfitRecommendationsPage'
-import WardrobeAnalyticsPage from './pages/features/WardrobeAnalyticsPage'
+const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage'))
+const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'))
+const AuthCallbackPage = lazy(() => import('./pages/auth/AuthCallbackPage'))
+
+const WardrobePage = lazy(() => import('./pages/wardrobe/WardrobePage'))
+const OutfitsPage = lazy(() => import('./pages/outfits/OutfitsPage'))
+const RecommendationsPage = lazy(() => import('./pages/recommendations/RecommendationsPage'))
+const ProfilePage = lazy(() => import('./pages/settings/ProfilePage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage'))
+const GamificationPage = lazy(() => import('./pages/gamification/GamificationPage'))
+const SharedOutfitPage = lazy(() => import('./pages/shared/SharedOutfitPage'))
+const TryOnPage = lazy(() => import('./pages/try-on/TryOnPage'))
+const PhotoshootPage = lazy(() => import('./pages/photoshoot/PhotoshootPage'))
+
+const BlogAdminLayout = lazy(() => import('./pages/admin/BlogAdminLayout'))
+const BlogDashboardPage = lazy(() => import('./pages/admin/BlogDashboardPage'))
+const BlogListPage = lazy(() => import('./pages/admin/BlogListPage'))
+const BlogEditorPage = lazy(() => import('./pages/admin/BlogEditorPage'))
+const BlogCategoriesPage = lazy(() => import('./pages/admin/BlogCategoriesPage'))
+
+const FeaturesIndexPage = lazy(() => import('./pages/features/FeaturesIndexPage'))
+const AIWardrobeExtractionPage = lazy(() => import('./pages/features/AIWardrobeExtractionPage'))
+const VirtualTryOnPage = lazy(() => import('./pages/features/VirtualTryOnPage'))
+const AIPhotoshootGeneratorPage = lazy(() => import('./pages/features/AIPhotoshootGeneratorPage'))
+const OutfitRecommendationsPage = lazy(() => import('./pages/features/OutfitRecommendationsPage'))
+const WardrobeAnalyticsPage = lazy(() => import('./pages/features/WardrobeAnalyticsPage'))
 
 // Intent SEO pages (compare, best-of, personas, guides)
-import IntentSeoPage from './pages/seo/IntentSeoPage'
+const IntentSeoPage = lazy(() => import('./pages/seo/IntentSeoPage'))
 
 // Loading spinner for hydration state (theme-aware)
 function LoadingSpinner() {
@@ -129,127 +132,131 @@ function App() {
       {/* PostHog user identification - syncs auth state with analytics */}
       <PostHogIdentify />
 
-      <Routes>
-        {/* Public marketing routes */}
-        <Route element={<PublicLayout />}>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/about" element={<AboutPage />} />
-          <Route path="/terms" element={<TermsPage />} />
-          <Route path="/privacy" element={<PrivacyPage />} />
-          <Route path="/support" element={<SupportPage />} />
-          <Route path="/faq" element={<FAQPage />} />
-          <Route path="/blog" element={<BlogIndexPage />} />
-          <Route path="/blog/category/:category" element={<BlogIndexPage />} />
-          <Route path="/blog/:slug" element={<BlogPostPage />} />
+      {/* One boundary around all routes: React guarantees it resolves, so a
+          lazy chunk can never leave a page blank the way a JS-gated reveal can. */}
+      <Suspense fallback={<LoadingSpinner />}>
+        <Routes>
+          {/* Public marketing routes */}
+          <Route element={<PublicLayout />}>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/support" element={<SupportPage />} />
+            <Route path="/faq" element={<FAQPage />} />
+            <Route path="/blog" element={<BlogIndexPage />} />
+            <Route path="/blog/category/:category" element={<BlogIndexPage />} />
+            <Route path="/blog/:slug" element={<BlogPostPage />} />
 
-          {/* Feature landing pages */}
-          <Route path="/features" element={<FeaturesIndexPage />} />
-          <Route path="/features/ai-wardrobe-extraction" element={<AIWardrobeExtractionPage />} />
-          <Route path="/features/virtual-try-on" element={<VirtualTryOnPage />} />
-          <Route path="/features/ai-photoshoot-generator" element={<AIPhotoshootGeneratorPage />} />
-          <Route path="/features/outfit-recommendations" element={<OutfitRecommendationsPage />} />
-          <Route path="/features/wardrobe-analytics" element={<WardrobeAnalyticsPage />} />
+            {/* Feature landing pages */}
+            <Route path="/features" element={<FeaturesIndexPage />} />
+            <Route path="/features/ai-wardrobe-extraction" element={<AIWardrobeExtractionPage />} />
+            <Route path="/features/virtual-try-on" element={<VirtualTryOnPage />} />
+            <Route path="/features/ai-photoshoot-generator" element={<AIPhotoshootGeneratorPage />} />
+            <Route path="/features/outfit-recommendations" element={<OutfitRecommendationsPage />} />
+            <Route path="/features/wardrobe-analytics" element={<WardrobeAnalyticsPage />} />
 
-          {/* SEO intent pages: best-of, comparisons, personas, guides */}
-          <Route path="/best/virtual-closet-apps" element={<IntentSeoPage />} />
-          <Route path="/best/ai-outfit-planners" element={<IntentSeoPage />} />
-          <Route path="/compare/fitcheck-vs-acloset" element={<IntentSeoPage />} />
-          <Route path="/compare/fitcheck-vs-whering" element={<IntentSeoPage />} />
-          <Route path="/alternatives/acloset-alternatives" element={<IntentSeoPage />} />
-          <Route path="/for/busy-professionals" element={<IntentSeoPage />} />
-          <Route path="/for/content-creators" element={<IntentSeoPage />} />
-          <Route path="/for/festive-and-wedding-outfits" element={<IntentSeoPage />} />
-          <Route path="/guides/how-to-digitize-your-wardrobe" element={<IntentSeoPage />} />
-          <Route path="/guides/what-to-wear-today" element={<IntentSeoPage />} />
-          <Route path="/guides/cost-per-wear-calculator-explained" element={<IntentSeoPage />} />
-          <Route path="/guides/how-to-reduce-clothing-returns-with-virtual-try-on" element={<IntentSeoPage />} />
-        </Route>
+            {/* SEO intent pages: best-of, comparisons, personas, guides */}
+            <Route path="/best/virtual-closet-apps" element={<IntentSeoPage />} />
+            <Route path="/best/ai-outfit-planners" element={<IntentSeoPage />} />
+            <Route path="/compare/fitcheck-vs-acloset" element={<IntentSeoPage />} />
+            <Route path="/compare/fitcheck-vs-whering" element={<IntentSeoPage />} />
+            <Route path="/alternatives/acloset-alternatives" element={<IntentSeoPage />} />
+            <Route path="/for/busy-professionals" element={<IntentSeoPage />} />
+            <Route path="/for/content-creators" element={<IntentSeoPage />} />
+            <Route path="/for/festive-and-wedding-outfits" element={<IntentSeoPage />} />
+            <Route path="/guides/how-to-digitize-your-wardrobe" element={<IntentSeoPage />} />
+            <Route path="/guides/what-to-wear-today" element={<IntentSeoPage />} />
+            <Route path="/guides/cost-per-wear-calculator-explained" element={<IntentSeoPage />} />
+            <Route path="/guides/how-to-reduce-clothing-returns-with-virtual-try-on" element={<IntentSeoPage />} />
+          </Route>
 
-        {/* Auth routes */}
-        <Route
-          path="/auth/login"
-          element={
-            <PublicRoute>
+          {/* Auth routes */}
+          <Route
+            path="/auth/login"
+            element={
+              <PublicRoute>
+                <AuthLayout>
+                  <LoginPage />
+                </AuthLayout>
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/auth/register"
+            element={
+              <PublicRoute>
+                <AuthLayout>
+                  <RegisterPage />
+                </AuthLayout>
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/auth/forgot-password"
+            element={
               <AuthLayout>
-                <LoginPage />
+                <ForgotPasswordPage />
               </AuthLayout>
-            </PublicRoute>
-          }
-        />
-        <Route
-          path="/auth/register"
-          element={
-            <PublicRoute>
+            }
+          />
+          <Route
+            path="/auth/reset-password"
+            element={
               <AuthLayout>
-                <RegisterPage />
+                <ResetPasswordPage />
               </AuthLayout>
-            </PublicRoute>
-          }
-        />
-        <Route
-          path="/auth/forgot-password"
-          element={
-            <AuthLayout>
-              <ForgotPasswordPage />
-            </AuthLayout>
-          }
-        />
-        <Route
-          path="/auth/reset-password"
-          element={
-            <AuthLayout>
-              <ResetPasswordPage />
-            </AuthLayout>
-          }
-        />
-        <Route
-          path="/auth/callback"
-          element={<AuthCallbackPage />}
-        />
+            }
+          />
+          <Route
+            path="/auth/callback"
+            element={<AuthCallbackPage />}
+          />
 
-        {/* Public share routes */}
-        <Route path="/shared/outfits/:id" element={<SharedOutfitPage />} />
+          {/* Public share routes */}
+          <Route path="/shared/outfits/:id" element={<SharedOutfitPage />} />
 
-        {/* Main app routes - protected */}
-        <Route
-          element={
-            <ProtectedRoute>
-              <AppLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/wardrobe" element={<FeatureErrorBoundary featureName="Wardrobe"><WardrobePage /></FeatureErrorBoundary>} />
-          <Route path="/wardrobe/:id" element={<FeatureErrorBoundary featureName="Wardrobe"><WardrobePage /></FeatureErrorBoundary>} />
-          <Route path="/outfits" element={<FeatureErrorBoundary featureName="Outfits"><OutfitsPage /></FeatureErrorBoundary>} />
-          <Route path="/outfits/:id" element={<FeatureErrorBoundary featureName="Outfits"><OutfitsPage /></FeatureErrorBoundary>} />
-          <Route path="/calendar" element={<FeatureErrorBoundary featureName="Calendar"><CalendarPage /></FeatureErrorBoundary>} />
-          <Route path="/recommendations" element={<FeatureErrorBoundary featureName="Recommendations"><RecommendationsPage /></FeatureErrorBoundary>} />
-          <Route path="/photoshoot" element={<FeatureErrorBoundary featureName="Photoshoot"><PhotoshootPage /></FeatureErrorBoundary>} />
-          <Route path="/try-on" element={<FeatureErrorBoundary featureName="Virtual Try-On"><TryOnPage /></FeatureErrorBoundary>} />
-          <Route path="/gamification" element={<GamificationPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/settings" element={<SettingsRedirect />} />
-        </Route>
+          {/* Main app routes - protected */}
+          <Route
+            element={
+              <ProtectedRoute>
+                <AppLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/wardrobe" element={<FeatureErrorBoundary featureName="Wardrobe"><WardrobePage /></FeatureErrorBoundary>} />
+            <Route path="/wardrobe/:id" element={<FeatureErrorBoundary featureName="Wardrobe"><WardrobePage /></FeatureErrorBoundary>} />
+            <Route path="/outfits" element={<FeatureErrorBoundary featureName="Outfits"><OutfitsPage /></FeatureErrorBoundary>} />
+            <Route path="/outfits/:id" element={<FeatureErrorBoundary featureName="Outfits"><OutfitsPage /></FeatureErrorBoundary>} />
+            <Route path="/calendar" element={<FeatureErrorBoundary featureName="Calendar"><CalendarPage /></FeatureErrorBoundary>} />
+            <Route path="/recommendations" element={<FeatureErrorBoundary featureName="Recommendations"><RecommendationsPage /></FeatureErrorBoundary>} />
+            <Route path="/photoshoot" element={<FeatureErrorBoundary featureName="Photoshoot"><PhotoshootPage /></FeatureErrorBoundary>} />
+            <Route path="/try-on" element={<FeatureErrorBoundary featureName="Virtual Try-On"><TryOnPage /></FeatureErrorBoundary>} />
+            <Route path="/gamification" element={<GamificationPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/settings" element={<SettingsRedirect />} />
+          </Route>
 
-        {/* Admin routes - protected */}
-        <Route
-          element={
-            <ProtectedRoute>
-              <BlogAdminLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/admin/blog" element={<BlogDashboardPage />} />
-          <Route path="/admin/blog/posts" element={<BlogListPage />} />
-          <Route path="/admin/blog/new" element={<BlogEditorPage />} />
-          <Route path="/admin/blog/edit/:slug" element={<BlogEditorPage />} />
-          <Route path="/admin/blog/categories" element={<BlogCategoriesPage />} />
-        </Route>
+          {/* Admin routes - protected */}
+          <Route
+            element={
+              <ProtectedRoute>
+                <BlogAdminLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/admin/blog" element={<BlogDashboardPage />} />
+            <Route path="/admin/blog/posts" element={<BlogListPage />} />
+            <Route path="/admin/blog/new" element={<BlogEditorPage />} />
+            <Route path="/admin/blog/edit/:slug" element={<BlogEditorPage />} />
+            <Route path="/admin/blog/categories" element={<BlogCategoriesPage />} />
+          </Route>
 
-        {/* Catch all - redirect to dashboard or landing */}
-        <Route path="*" element={<CatchAllRoute />} />
-      </Routes>
+          {/* Catch all - redirect to dashboard or landing */}
+          <Route path="*" element={<CatchAllRoute />} />
+        </Routes>
+      </Suspense>
     </>
   )
 }

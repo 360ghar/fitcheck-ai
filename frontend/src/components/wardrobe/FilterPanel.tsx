@@ -53,8 +53,8 @@ export interface SortOptions {
 interface FilterPanelProps {
   filters: ItemFilters
   sort: SortOptions
-  onFilterChange: (key: keyof ItemFilters, value: any) => void
-  onSortChange: (key: keyof SortOptions, value: any) => void
+  onFilterChange: <K extends keyof ItemFilters>(key: K, value: ItemFilters[K]) => void
+  onSortChange: <K extends keyof SortOptions>(key: K, value: SortOptions[K]) => void
   onResetFilters: () => void
 }
 
@@ -197,7 +197,7 @@ export function FilterPanel({
                   <label htmlFor="filter-category-mobile" className="text-sm font-medium text-foreground">Category</label>
                   <Select
                     value={filters.category}
-                    onValueChange={(value) => onFilterChange('category', value)}
+                    onValueChange={(value) => onFilterChange('category', value as ItemFilters['category'])}
                   >
                     <SelectTrigger id="filter-category-mobile" className="w-full">
                       <SelectValue placeholder="Category" />
@@ -246,7 +246,7 @@ export function FilterPanel({
                   <label htmlFor="filter-condition-mobile" className="text-sm font-medium text-foreground">Condition</label>
                   <Select
                     value={filters.condition}
-                    onValueChange={(value) => onFilterChange('condition', value)}
+                    onValueChange={(value) => onFilterChange('condition', value as ItemFilters['condition'])}
                   >
                     <SelectTrigger id="filter-condition-mobile" className="w-full">
                       <SelectValue placeholder="Condition" />
@@ -336,7 +336,7 @@ export function FilterPanel({
                   <div className="flex gap-2">
                     <Select
                       value={sort.sortBy}
-                      onValueChange={(value) => onSortChange('sortBy', value)}
+                      onValueChange={(value) => onSortChange('sortBy', value as SortOptions['sortBy'])}
                     >
                       <SelectTrigger id="filter-sortby-mobile" className="flex-1">
                         <SelectValue placeholder="Sort by" />
@@ -405,7 +405,7 @@ export function FilterPanel({
           {/* Category filter */}
           <Select
             value={filters.category}
-            onValueChange={(value) => onFilterChange('category', value)}
+            onValueChange={(value) => onFilterChange('category', value as ItemFilters['category'])}
           >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Category" />
@@ -447,7 +447,7 @@ export function FilterPanel({
           {/* Condition filter */}
           <Select
             value={filters.condition}
-            onValueChange={(value) => onFilterChange('condition', value)}
+            onValueChange={(value) => onFilterChange('condition', value as ItemFilters['condition'])}
           >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Condition" />
@@ -465,7 +465,7 @@ export function FilterPanel({
           <div className="flex items-center gap-2">
             <Select
               value={sort.sortBy}
-              onValueChange={(value) => onSortChange('sortBy', value)}
+              onValueChange={(value) => onSortChange('sortBy', value as SortOptions['sortBy'])}
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Sort by" />

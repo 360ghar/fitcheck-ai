@@ -14,9 +14,13 @@ module.exports = {
     'no-constant-condition': ['error', { checkLoops: false }],
     // Allow exporting constants alongside components (common pattern in this codebase)
     'react-refresh/only-export-components': 'off',
-    // Pre-existing dependency arrays - changing them risks breaking functionality
-    'react-hooks/exhaustive-deps': 'off',
-    '@typescript-eslint/no-explicit-any': 'off',
+    // These two are the bug class this codebase actually has -- a stale
+    // closure in an effect, and an `any` that hides a wrong property read.
+    // Kept at 'warn' rather than 'error': the lint script runs with
+    // --max-warnings 0, so CI still fails on a new one, but a targeted
+    // eslint-disable-next-line with a reason stays the escape hatch.
+    'react-hooks/exhaustive-deps': 'warn',
+    '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/no-unused-vars': [
       'error',
       { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },

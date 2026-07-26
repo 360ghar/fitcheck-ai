@@ -168,6 +168,9 @@ export default function ProfilePage() {
     const next = new URLSearchParams(searchParams)
     next.set('tab', activeTab)
     setSearchParams(next, { replace: true })
+  // searchParams/setSearchParams change identity on every navigation; adding them
+  // re-runs this one-shot tab sync and fights the user's own tab clicks.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]) // Only react to activeTab changes, not searchParams
 
   const tabs = PROFILE_TABS
@@ -232,6 +235,10 @@ export default function ProfilePage() {
     return () => {
       cancelled = true
     }
+    // Keyed on the id, not the whole user object: `user` gets a new identity on
+    // every profile save, which would refetch preferences over the values the
+    // user just wrote. The cancelled flag above handles the switch case.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id])
 
   const handleSaveProfile = async () => {

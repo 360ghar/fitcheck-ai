@@ -51,7 +51,7 @@ interface WardrobeState {
   setSelectedItem: (item: Item | null) => void;
   toggleItemSelected: (itemId: string) => void;
   clearSelectedItems: () => void;
-  setFilter: (filter: keyof WardrobeState['filters'], value: any) => void;
+  setFilter: <K extends keyof WardrobeState['filters']>(filter: K, value: WardrobeState['filters'][K]) => void;
   resetFilters: () => void;
   setViewMode: (mode: 'all' | 'favorites' | 'recent') => void;
   setSortBy: (sortBy: WardrobeState['sortBy']) => void;
@@ -283,7 +283,7 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
   },
 
   // Set filter
-  setFilter: (filter: keyof WardrobeState['filters'], value: any) => {
+  setFilter: <K extends keyof WardrobeState['filters']>(filter: K, value: WardrobeState['filters'][K]) => {
     set({ filters: { ...get().filters, [filter]: value }, page: 1 });
     const state = get();
     set({

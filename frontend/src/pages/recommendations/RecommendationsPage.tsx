@@ -241,6 +241,9 @@ export default function RecommendationsPage() {
     if (activeTab !== 'today' || todayAutoRanRef.current || isLoadingItems) return
     todayAutoRanRef.current = true
     void runWeather()
+  // runWeather is recreated each render; adding it would re-fire the weather
+  // request on every render. This effect is meant to run on the listed keys only.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isLoadingItems])
 
   const weatherSuggestedItems = useMemo(() => {

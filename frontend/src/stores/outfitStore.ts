@@ -73,7 +73,7 @@ interface OutfitState {
   setSelectedOutfit: (outfit: Outfit | null) => void;
   toggleOutfitSelected: (outfitId: string) => void;
   clearSelectedOutfits: () => void;
-  setFilter: (filter: keyof OutfitState['filters'], value: any) => void;
+  setFilter: <K extends keyof OutfitState['filters']>(filter: K, value: OutfitState['filters'][K]) => void;
   resetFilters: () => void;
   setViewMode: (mode: 'all' | 'favorites' | 'recent') => void;
   setSortBy: (sortBy: OutfitState['sortBy']) => void;
@@ -328,7 +328,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
   },
 
   // Set filter
-  setFilter: (filter: keyof OutfitState['filters'], value: any) => {
+  setFilter: <K extends keyof OutfitState['filters']>(filter: K, value: OutfitState['filters'][K]) => {
     set({ filters: { ...get().filters, [filter]: value }, page: 1 });
     const state = get();
     set({

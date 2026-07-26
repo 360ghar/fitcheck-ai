@@ -38,7 +38,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FilterPanel, type ItemFilters, type SortOptions } from '@/components/wardrobe/FilterPanel'
-import { BatchExtractionFlow } from '@/components/wardrobe/BatchExtractionFlow'
+import { BatchExtractionFlow, type ItemUploadResult } from '@/components/wardrobe/BatchExtractionFlow'
 import { ItemDetailModal } from '@/components/wardrobe/ItemDetailModal'
 import { ItemCard } from '@/components/wardrobe/ItemCard'
 import { useToast } from '@/components/ui/use-toast'
@@ -192,7 +192,7 @@ export default function WardrobePage() {
   // HANDLERS
   // ============================================================================
 
-  const handleFilterChange = useCallback((key: keyof ItemFilters, value: any) => {
+  const handleFilterChange = useCallback(<K extends keyof ItemFilters>(key: K, value: ItemFilters[K]) => {
     setFilters((prev) => ({ ...prev, [key]: value }))
     // Update store filters
     useWardrobeStore.getState().setFilter(key, value)
@@ -203,15 +203,17 @@ export default function WardrobePage() {
     }
   }, [])
 
-  const handleSortChange = useCallback((key: keyof SortOptions, value: any) => {
+  const handleSortChange = useCallback(<K extends keyof SortOptions>(key: K, value: SortOptions[K]) => {
     setSort((prev) => ({ ...prev, [key]: value }))
     // Update store sort
+    // The key comparison guarantees each value type; TS cannot narrow a
+    // generic parameter from it, hence the assertions.
     if (key === 'sortBy') {
-      useWardrobeStore.getState().setSortBy(value)
+      useWardrobeStore.getState().setSortBy(value as SortOptions['sortBy'])
     } else if (key === 'sortOrder') {
-      useWardrobeStore.getState().setSortOrder(value)
+      useWardrobeStore.getState().setSortOrder(value as SortOptions['sortOrder'])
     } else if (key === 'isGridView') {
-      useWardrobeStore.getState().setGridView(value)
+      useWardrobeStore.getState().setGridView(value as SortOptions['isGridView'])
     }
   }, [])
 
@@ -341,7 +343,7 @@ export default function WardrobePage() {
     fetchItems(true)
   }
 
-  const handleUploadComplete = (results: any[]) => {
+  const handleUploadComplete = (results: ItemUploadResult[]) => {
     const successCount = results.filter((r) => r.success).length
     const failCount = results.filter((r) => !r.success).length
 

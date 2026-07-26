@@ -320,6 +320,9 @@ export function BatchExtractionFlow({
         extractionProgress: state.extractionProgress,
       })
     );
+  // isBatchProcessing is read as a snapshot here; adding it re-runs this effect
+  // on every progress tick, which is what the empty-ish array is avoiding.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isActivelyWorking,
     onJobStatusChange,

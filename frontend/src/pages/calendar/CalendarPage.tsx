@@ -192,7 +192,7 @@ export default function CalendarPage() {
         setIsLoadingEvents(false)
       }
     },
-    [fetchOutfits, toast]
+    [fetchOutfits]
   )
 
   const handleConnect = async () => {

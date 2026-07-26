@@ -40,7 +40,7 @@ export interface Challenge {
   subtitle?: string
   challenge_type: string
   difficulty: 'easy' | 'medium' | 'hard' | 'expert'
-  criteria: Record<string, any>
+  criteria: Record<string, number>
   xp_reward: number
   reward_description?: string
   start_date: Date

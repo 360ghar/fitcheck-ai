@@ -135,6 +135,9 @@ export function AISettingsPanel() {
 
   useEffect(() => {
     loadSettings();
+  // loadSettings is defined in this component and would change identity every
+  // render; adding it re-runs the load in a loop. Mount-only is intended.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadSettings = async () => {
@@ -243,7 +246,10 @@ export function AISettingsPanel() {
     }
 
     setTestingProvider(providerId);
-    setTestResults((prev) => ({ ...prev, [providerId]: undefined as any }));
+    setTestResults((prev) => {
+      const { [providerId]: _cleared, ...rest } = prev;
+      return rest;
+    });
 
     try {
       const result = await testProviderConfig(

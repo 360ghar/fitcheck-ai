@@ -118,6 +118,10 @@ export default function DashboardPage() {
     } catch {
       return false
     }
+    // The extra deps are intentional cache-busters: TryOnPage writes this
+    // localStorage key while the dashboard is mounted, and these values changing
+    // is the signal to re-read it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, userAvatar, totalItems, totalOutfits])
 
   const activationInput: ActivationInput = useMemo(
