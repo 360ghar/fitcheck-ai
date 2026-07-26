@@ -2,7 +2,6 @@ import 'package:get/get.dart';
 import '../../../../domain/constants/use_cases.dart';
 import '../../../../domain/enums/category.dart';
 import '../../../../domain/enums/condition.dart' as domain;
-import '../../../app/routes/app_routes.dart';
 import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
 import '../../../core/services/haptic_service.dart';
@@ -71,7 +70,6 @@ class WardrobeController extends GetxController {
     fetchItems();
     _setupFilters();
     _setupNetworkMonitoring();
-    _setupRouteListener();
   }
 
   @override
@@ -490,41 +488,4 @@ class WardrobeController extends GetxController {
   }
 
   /// Setup route listener to refresh when returning to this page
-  void _setupRouteListener() {
-    // Track previous route to detect when we're coming back from item add/edit
-    String? previousRoute;
-    bool shouldRefreshOnWardrobe = false;
-
-    _workers.add(
-      ever(Get.routing.obs, (routing) {
-        final currentRoute = Get.currentRoute;
-
-        // Mark that we should refresh when we come back to wardrobe
-        // after being on item add, batch add, or item edit pages
-        if (previousRoute != null &&
-            (previousRoute == Routes.wardrobeAdd ||
-                previousRoute == Routes.wardrobeBatchAdd ||
-                previousRoute == Routes.wardrobeBatchReview ||
-                previousRoute == Routes.wardrobeBatchProgress ||
-                previousRoute?.startsWith(Routes.wardrobeItemEdit) == true ||
-                previousRoute == Routes.outfitBuilder)) {
-          shouldRefreshOnWardrobe = true;
-        }
-
-        // When navigating to wardrobe/home and we marked that we should refresh
-        if ((currentRoute == Routes.wardrobe || currentRoute == Routes.home) &&
-            shouldRefreshOnWardrobe) {
-          shouldRefreshOnWardrobe = false;
-          // Give UI time to settle before refreshing
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (!isLoading.value && !isLoadingMore.value) {
-              fetchItems(refresh: true);
-            }
-          });
-        }
-
-        previousRoute = currentRoute;
-      }),
-    );
-  }
 }

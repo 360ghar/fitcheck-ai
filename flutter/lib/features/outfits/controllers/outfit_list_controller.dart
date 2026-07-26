@@ -1,7 +1,6 @@
 import 'package:get/get.dart';
 import '../../../../domain/enums/style.dart';
 import '../../../../domain/enums/season.dart';
-import '../../../app/routes/app_routes.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/network_service.dart' show RetryHelper, NetworkService;
@@ -74,7 +73,6 @@ class OutfitListController extends GetxController {
     fetchOutfits();
     _setupFilters();
     _setupNetworkMonitoring();
-    _setupRouteListener();
   }
 
   @override
@@ -426,24 +424,4 @@ class OutfitListController extends GetxController {
   }
 
   /// Setup route listener to refresh when returning to this page
-  void _setupRouteListener() {
-    // Listen to route changes using routing observable
-    _workers.add(
-      debounce(
-        Get.routing.obs,
-        (_) {
-          final currentRoute = Get.currentRoute;
-          if (currentRoute == Routes.outfits || currentRoute == Routes.home) {
-            // Slight delay to ensure page is fully visible
-            Future.delayed(const Duration(milliseconds: 100), () {
-              if (outfits.isEmpty && !isLoading.value) {
-                fetchOutfits();
-              }
-            });
-          }
-        },
-        time: const Duration(milliseconds: 100),
-      ),
-    );
-  }
 }
