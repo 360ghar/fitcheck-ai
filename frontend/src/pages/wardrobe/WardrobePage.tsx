@@ -49,6 +49,7 @@ import {
 } from '@/api/items'
 import type { BatchJobUiStatus, Item } from '@/types'
 import { useJobUiStore } from '@/stores/jobUiStore'
+import { EmptyState } from '@/components/ui/empty-state'
 
 export default function WardrobePage() {
   const { id } = useParams()
@@ -92,6 +93,13 @@ export default function WardrobePage() {
     condition: 'all',
     isFavorite: false,
   })
+  const hasActiveFilters = Boolean(
+    filters.search ||
+      filters.category !== 'all' ||
+      filters.condition !== 'all' ||
+      filters.occasion ||
+      filters.isFavorite
+  )
 
   const [sort, setSort] = useState<SortOptions>({
     sortBy: 'date_added',
@@ -472,29 +480,23 @@ export default function WardrobePage() {
           ))}
         </div>
       ) : filteredItems.length === 0 ? (
-        <div className="text-center py-12 bg-card rounded-lg shadow">
-          <Shirt className="mx-auto h-12 w-12 md:h-16 md:w-16 text-muted-foreground" />
-          <h3 className="mt-4 text-lg font-medium text-foreground">
-            {filters.search || filters.category !== 'all' || filters.condition !== 'all' || filters.occasion || filters.isFavorite
-              ? 'No items match'
-              : 'Your wardrobe is empty'}
-          </h3>
-          <p className="mt-2 text-sm text-muted-foreground max-w-sm mx-auto">
-            {filters.search || filters.category !== 'all' || filters.condition !== 'all' || filters.occasion || filters.isFavorite
-              ? 'Try adjusting your filters or search query'
-              : 'Upload photos — AI finds each item so you can build outfits the same day.'}
-          </p>
-          {filters.search || filters.category !== 'all' || filters.condition !== 'all' || filters.occasion || filters.isFavorite ? (
-            <Button className="mt-6" variant="outline" onClick={handleResetFilters}>
-              Clear filters
-            </Button>
-          ) : (
-            <Button className="mt-6" onClick={() => setIsUploadModalOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Upload photos
-            </Button>
-          )}
-        </div>
+        hasActiveFilters ? (
+          <EmptyState
+            icon={Shirt}
+            title="No items match"
+            description="Try adjusting your filters or search query"
+            actionLabel="Clear filters"
+            onAction={handleResetFilters}
+          />
+        ) : (
+          <EmptyState
+            icon={Shirt}
+            title="Your wardrobe is empty"
+            description="Upload photos and AI finds each item, so you can build outfits the same day."
+            actionLabel="Upload photos"
+            onAction={() => setIsUploadModalOpen(true)}
+          />
+        )
       ) : (
         <div
           className={`grid gap-3 md:gap-4 ${

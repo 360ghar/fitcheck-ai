@@ -32,10 +32,14 @@ export function EmptyState({
         className
       )}
     >
+      {/* Bare mark, no tile behind it. A filled circle around an icon is the
+          component-kit default; the icon carries itself at this size. */}
       {Icon && (
-        <div className="mx-auto mb-4 flex h-16 w-16 md:h-20 md:w-20 items-center justify-center rounded-full bg-muted">
-          <Icon className="h-8 w-8 md:h-10 md:w-10 text-muted-foreground" />
-        </div>
+        <Icon
+          className="mx-auto mb-4 h-10 w-10 md:h-12 md:w-12 text-muted-foreground/70"
+          strokeWidth={1.25}
+          aria-hidden
+        />
       )}
       <h3 className="text-base md:text-lg font-medium text-foreground">{title}</h3>
       {description && (

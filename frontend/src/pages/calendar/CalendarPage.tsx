@@ -22,6 +22,8 @@ import { getWeatherRecommendations } from '@/api/recommendations'
 import { getUserSettings, updateUserSettings } from '@/api/users'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { useOutfitStore } from '@/stores/outfitStore'
+import { getApiError } from '@/api/client'
+import { ErrorState } from '@/components/ui/error-state'
 
 function formatDateOnly(date: Date): string {
   const y = date.getFullYear()
@@ -47,10 +49,13 @@ export default function CalendarPage() {
 
   const [events, setEvents] = useState<CalendarViewEvent[]>([])
   const [isLoadingEvents, setIsLoadingEvents] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   /** Month key successfully loaded — prevents repeat fetches for the same month. */
   const activeMonthKeyRef = useRef<string>('')
   /** In-flight guard (refs avoid re-creating loadEventsForMonth while loading). */
   const loadingMonthRef = useRef(false)
+  /** The month CalendarView last asked for, so the error state can retry it. */
+  const lastMonthRef = useRef<Date>(new Date())
   /**
    * Month that last failed to load. Blocks effect re-entry loops when the parent
    * re-renders (toast) and CalendarView re-fires onMonthChange. Cleared when the
@@ -157,7 +162,9 @@ export default function CalendarPage() {
         failedMonthKeyRef.current = ''
       }
 
+      lastMonthRef.current = month
       loadingMonthRef.current = true
+      setLoadError(null)
       setIsLoadingEvents(true)
       try {
         // Load outfits alongside events (best-effort)
@@ -184,9 +191,13 @@ export default function CalendarPage() {
         )
         activeMonthKeyRef.current = monthKey
         failedMonthKeyRef.current = ''
-      } catch {
-        // api/client interceptor already toasts the failure.
+        setLoadError(null)
+      } catch (err) {
+        // The interceptor toasts, but a toast is gone in four seconds and the
+        // failure lock below stops any retry -- so without this the month just
+        // renders empty forever with no explanation.
         failedMonthKeyRef.current = monthKey
+        setLoadError(getApiError(err).message)
       } finally {
         loadingMonthRef.current = false
         setIsLoadingEvents(false)
@@ -429,7 +440,17 @@ export default function CalendarPage() {
           )}
         </CardHeader>
         <CardContent className="p-2 md:p-4 space-y-3">
-          {!isLoadingEvents && events.length === 0 && (
+          {!isLoadingEvents && loadError && (
+            <ErrorState
+              title="Couldn't load this month"
+              description={loadError}
+              onRetry={() => {
+                failedMonthKeyRef.current = ''
+                void loadEventsForMonth(lastMonthRef.current)
+              }}
+            />
+          )}
+          {!isLoadingEvents && !loadError && events.length === 0 && (
             <div className="rounded-lg border border-dashed border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
               No events yet. Tap a day to plan your first outfit, or use{' '}
               <button

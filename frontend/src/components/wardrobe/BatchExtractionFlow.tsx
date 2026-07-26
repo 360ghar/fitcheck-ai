@@ -704,7 +704,9 @@ export function BatchExtractionFlow({
               </span>
             )}
           </DialogTitle>
-          <DialogDescription>{getStepDescription()}</DialogDescription>
+          {/* Already re-renders per step, so it doubles as the live region:
+              screen-reader users hear the wizard advance instead of silence. */}
+          <DialogDescription aria-live="polite">{getStepDescription()}</DialogDescription>
         </DialogHeader>
 
         {!socialImportEnabled || inputMode === 'upload' ? (

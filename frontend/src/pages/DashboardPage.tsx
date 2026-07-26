@@ -36,6 +36,7 @@ import {
   type ActivationInput,
 } from '@/lib/activation'
 import type { BatchJobUiStatus } from '@/types'
+import { ErrorState } from '@/components/ui/error-state'
 
 const aiTools = [
   {
@@ -74,6 +75,8 @@ export default function DashboardPage() {
   const fetchOutfits = useOutfitStore((state) => state.fetchOutfits)
   const isLoadingItems = useWardrobeStore((state) => state.isLoading)
   const isLoadingOutfits = useOutfitStore((state) => state.isLoading)
+  const itemsError = useWardrobeStore((state) => state.error)
+  const outfitsError = useOutfitStore((state) => state.error)
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const setJob = useJobUiStore((s) => s.setJob)
@@ -134,12 +137,16 @@ export default function DashboardPage() {
     [totalItems, totalOutfits, userAvatar, tryOnUsed]
   )
 
+  // Both stores already carry a typed error that nothing rendered, so a failed
+  // load left the dashboard showing a confident "0 items" instead of saying it
+  // could not reach the server.
+  const loadError = itemsError || outfitsError
   const isLoadingHome = isLoadingItems || isLoadingOutfits
   // Avoid flashing activation chrome for returning users while stores rehydrate.
   const dataReady = !isLoadingHome || totalItems > 0 || totalOutfits > 0
   const showActivation =
     dataReady && shouldShowActivation(activationInput, activationDismissed)
-  const isEmpty = dataReady && totalItems === 0 && totalOutfits === 0
+  const isEmpty = dataReady && !loadError && totalItems === 0 && totalOutfits === 0
 
   const publishedBatchJobIdRef = useRef<string | null>(null)
 
@@ -253,6 +260,21 @@ export default function DashboardPage() {
       link: '/recommendations',
     },
   ]
+
+  if (loadError && totalItems === 0 && totalOutfits === 0) {
+    return (
+      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
+        <ErrorState
+          title="Couldn't load your wardrobe"
+          description={loadError.message}
+          onRetry={() => {
+            void fetchItems(true)
+            void fetchOutfits(true)
+          }}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">

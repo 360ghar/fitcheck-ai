@@ -43,16 +43,34 @@ function NavItem({ to, icon, label, end }: NavItemProps) {
   );
 }
 
-function isBlogAdmin(email: string | undefined | null): boolean {
+/**
+ * NOT AN AUTHORIZATION CHECK. This only decides whether to render the admin
+ * shell or a "no access" screen, so a non-admin gets one clear message instead
+ * of a page full of failed requests.
+ *
+ * It cannot be a security boundary: `VITE_BLOG_ADMIN_EMAILS` is a Vite
+ * build-time variable, so the allowlist is inlined into the shipped bundle and
+ * readable by anyone who opens devtools, and any user can render this UI by
+ * skipping the client redirect.
+ *
+ * The real gate is `verify_admin` in `backend/app/api/v1/blog.py`, applied to
+ * every mutating and admin-read endpoint (create/update/delete post,
+ * GET /blog/admin/posts). Note the two use *different* rules: the backend
+ * checks the `is_admin` column or an `@fitcheckaiapp.com` email, this checks an
+ * env allowlist. They can disagree — someone on this list without `is_admin`
+ * reaches the UI and then gets 403s. That is the safe direction to fail, but if
+ * you add an admin, add them in both places.
+ */
+function canSeeBlogAdminUi(email: string | undefined | null): boolean {
   if (!email) return false
-  // Comma-separated allowlist via env; empty list denies all in production builds
   const raw = (import.meta.env.VITE_BLOG_ADMIN_EMAILS as string | undefined) || ''
   const allowlist = raw
     .split(',')
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean)
   if (allowlist.length === 0) {
-    // Dev fallback: allow any authenticated user only in DEV
+    // No list configured: show the UI in dev so the pages are workable, hide it
+    // in production. Either way the backend decides what actually succeeds.
     return import.meta.env.DEV
   }
   return allowlist.includes(email.toLowerCase())
@@ -61,7 +79,7 @@ function isBlogAdmin(email: string | undefined | null): boolean {
 export default function BlogAdminLayout() {
   const user = useCurrentUser();
   const navigate = useNavigate();
-  const allowed = isBlogAdmin(user?.email)
+  const allowed = canSeeBlogAdminUi(user?.email)
 
   useEffect(() => {
     if (!allowed) {

@@ -36,7 +36,9 @@ export default function PhotoshootPage() {
     <div className="max-w-4xl mx-auto px-4 md:px-6 py-4 md:py-8">
       <div className="mb-6">
         <h1 className="text-xl md:text-2xl font-bold text-foreground">AI Photoshoot</h1>
-        <p className="text-sm text-muted-foreground mt-1">
+        {/* This line already changes with the step, so making it the live
+            region announces wizard progress without adding hidden markup. */}
+        <p className="text-sm text-muted-foreground mt-1" aria-live="polite">
           {currentStep === 'upload' && 'Upload 1–4 photos of yourself'}
           {currentStep === 'configure' && 'Choose your photoshoot style'}
           {currentStep === 'generating' && 'Creating your images…'}
