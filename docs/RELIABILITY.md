@@ -68,3 +68,29 @@ Last updated: 2026-07-25
 
 - Clear error JSON with codes for clients.
 - SSE event streams should not silently die without a terminal error/complete event when the server knows the job failed.
+
+## SSE fan-out policy (decided 2026-07-26)
+
+One rule for all three event streams, in `app/utils/sse_queue.py`:
+**bounded queue (100), `put_nowait`, and drop the subscriber on `QueueFull`**
+with a single terminal `stream_overflow` event.
+
+The failure this replaces was the same decision answered two opposite ways.
+Batch used a bounded queue with `await queue.put`, so a client that stopped
+reading back-pressured the **extraction pipeline** rather than itself.
+Photoshoot and social import used unbounded queues fed with base64 image
+payloads, so the same client grew RSS instead. `remove_subscriber` cannot
+rescue either: it only runs in the SSE generator's `finally`, which a client
+that never reads never reaches.
+
+A slow client degrades **itself** — never the pipeline, never the process.
+
+`stream_overflow` is deliberately distinct from `job_failed`: the clients act
+on `job_failed` (the Flutter photoshoot controller resets to the configure
+step, batch cancels its subscription), and the job is still running with
+images already billed. It is server-side terminal only; clients see a plain
+stream close and recover through their existing replay / `/status` path.
+
+All three responses carry `ping=15` and `X-Accel-Buffering: no` /
+`Cache-Control: no-transform`. The app-level 30s heartbeat is longer than many
+proxy idle timeouts, so it is not sufficient on its own.

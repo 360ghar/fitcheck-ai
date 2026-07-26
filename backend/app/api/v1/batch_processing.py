@@ -18,7 +18,6 @@ from sse_starlette.sse import EventSourceResponse
 from supabase import Client
 
 from app.core.exceptions import (
-    FileTooLargeError,
     FitCheckException,
     InvalidInputError,
     RateLimitError,
@@ -26,6 +25,7 @@ from app.core.exceptions import (
 )
 from app.core.logging_config import get_context_logger
 from app.core.security import get_current_user_id
+from app.core.uploads import read_upload_capped
 from app.db.connection import get_db
 from app.services.ai_settings_service import AISettingsService
 from app.services.batch_job_service import BatchJobService, BatchJobStatus
@@ -65,21 +65,6 @@ def _spawn_pipeline(service: BatchExtractionService, job) -> None:
     task = asyncio.create_task(service.run_pipeline(job))
     _pipeline_tasks.add(task)
     task.add_done_callback(_pipeline_tasks.discard)
-
-
-async def _read_upload_capped(upload: UploadFile, max_bytes: int) -> bytes:
-    """Read an upload in chunks, rejecting once max_bytes is crossed."""
-    chunks: List[bytes] = []
-    total = 0
-    while True:
-        chunk = await upload.read(_READ_CHUNK_BYTES)
-        if not chunk:
-            break
-        total += len(chunk)
-        if total > max_bytes:
-            raise FileTooLargeError(max_size_mb=_MAX_BATCH_IMAGE_BYTES // (1024 * 1024))
-        chunks.append(chunk)
-    return b"".join(chunks)
 
 
 class BatchImageInput(BaseModel):
@@ -373,7 +358,7 @@ async def start_batch_extraction_multipart(
                         f"{content_type or '(missing)'}"
                     )
                 )
-            content = await _read_upload_capped(upload, _MAX_BATCH_IMAGE_BYTES)
+            content = await read_upload_capped(upload, _MAX_BATCH_IMAGE_BYTES)
             if not content:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
