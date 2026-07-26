@@ -4,6 +4,7 @@ AI Settings API routes.
 Provides endpoints for managing per-user AI provider configuration.
 """
 
+import asyncio
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, status
@@ -307,9 +308,9 @@ async def reset_provider_config(
             del provider_configs[provider]
 
             # Update settings
-            db.table("user_ai_settings").update({
+            await asyncio.to_thread(db.table("user_ai_settings").update({
                 "provider_configs": provider_configs,
-            }).eq("user_id", user_id).execute()
+            }).eq("user_id", user_id).execute)
 
         return {
             "data": {"provider": provider, "reset": True},

@@ -7,6 +7,7 @@ For MVP we provide deterministic, fast recommendations using:
 """
 
 from datetime import date, datetime, time as dt_time
+import asyncio
 import functools
 import re
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
@@ -475,13 +476,13 @@ async def match_items(
     """Find items that match the given item(s)."""
     requested_limit = request.limit or limit
     source_ids = list(dict.fromkeys(request.item_ids or ([request.item_id] if request.item_id else [])))
-    sources_res = (
+    sources_res = await asyncio.to_thread(
         db.table("items")
         .select("*, item_images(*)")
         .eq("user_id", user_id)
         .eq("is_deleted", False)
         .in_("id", source_ids)
-        .execute()
+        .execute
     )
     sources = [_prepare_item_for_response(i) for i in (sources_res.data or [])]
     if not sources:
@@ -499,7 +500,7 @@ async def match_items(
         candidates_q = candidates_q.eq("category", category)
     # Exclude laundry/repair/donate by default (docs)
     candidates_q = candidates_q.not_.in_("condition", ["laundry", "repair", "donate"])
-    candidates_res = candidates_q.limit(500).execute()
+    candidates_res = await asyncio.to_thread(candidates_q.limit(500).execute)
     candidates = [_prepare_item_for_response(i) for i in (candidates_res.data or [])]
 
     matches: List[Dict[str, Any]] = []
@@ -568,13 +569,13 @@ async def complete_look(
             details={"field": "item_ids or start_item_id"}
         )
 
-    seed_res = (
+    seed_res = await asyncio.to_thread(
         db.table("items")
         .select("*, item_images(*)")
         .eq("user_id", user_id)
         .eq("is_deleted", False)
         .in_("id", seed_ids)
-        .execute()
+        .execute
     )
     seeds = [_prepare_item_for_response(i) for i in (seed_res.data or [])]
     if not seeds:
@@ -622,29 +623,29 @@ async def personalized(
     """Return simple personalized recommendations (favorites + least worn)."""
     items_fav = [
         _prepare_item_for_response(i)
-        for i in (
+        for i in (await asyncio.to_thread(
             db.table("items")
             .select("*, item_images(*)")
             .eq("user_id", user_id)
             .eq("is_deleted", False)
             .eq("is_favorite", True)
             .limit(limit)
-            .execute()
-        ).data
+            .execute
+        )).data
         or []
     ]
 
     items_least = [
         _prepare_item_for_response(i)
-        for i in (
+        for i in (await asyncio.to_thread(
             db.table("items")
             .select("*, item_images(*)")
             .eq("user_id", user_id)
             .eq("is_deleted", False)
             .order("usage_times_worn", desc=False)
             .limit(limit)
-            .execute()
-        ).data
+            .execute
+        )).data
         or []
     ]
 
@@ -697,7 +698,7 @@ async def weather_recommendations(
     # Prefer user settings default_location when location isn't provided
     if not location:
         try:
-            settings_row = db.table("user_settings").select("default_location").eq("user_id", user_id).single().execute()
+            settings_row = await asyncio.to_thread(db.table("user_settings").select("default_location").eq("user_id", user_id).single().execute)
             location = settings_row.data.get("default_location") if settings_row.data else None
         except Exception:
             location = None
@@ -814,12 +815,12 @@ async def astrology_recommendations(
 
     settings_timezone: Optional[str] = None
     try:
-        settings_row = (
+        settings_row = await asyncio.to_thread(
             db.table("user_settings")
             .select("timezone")
             .eq("user_id", user_id)
             .single()
-            .execute()
+            .execute
         )
         settings_timezone = (settings_row.data or {}).get("timezone")
     except Exception:
@@ -870,14 +871,14 @@ async def astrology_recommendations(
         }
 
     try:
-        items_res = (
+        items_res = await asyncio.to_thread(
             db.table("items")
             .select("*, item_images(*)")
             .eq("user_id", user_id)
             .eq("is_deleted", False)
             .not_.in_("condition", ["laundry", "repair", "donate"])
             .limit(600)
-            .execute()
+            .execute
         )
         items = [_prepare_item_for_response(i) for i in (items_res.data or [])]
     except Exception:
@@ -932,7 +933,7 @@ async def similar_items(
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
 ):
-    source = db.table("items").select("*").eq("id", item_id).eq("user_id", user_id).single().execute()
+    source = await asyncio.to_thread(db.table("items").select("*").eq("id", item_id).eq("user_id", user_id).single().execute)
     if not source.data:
         raise ItemNotFoundError(item_id=item_id)
 
@@ -963,7 +964,7 @@ async def similar_items(
                 )
                 match_ids = [m["item_id"] for m in matches if m.get("item_id")]
                 if match_ids:
-                    items_res = db.table("items").select("*, item_images(*)").in_("id", match_ids).execute()
+                    items_res = await asyncio.to_thread(db.table("items").select("*, item_images(*)").in_("id", match_ids).execute)
                     by_id = {r["id"]: r for r in (items_res.data or [])}
                     results = [
                         _build_similar_item_response(m, by_id[m["item_id"]])
@@ -989,14 +990,14 @@ async def similar_items(
 
     # Fallback: same category + color overlap
     if not results:
-        candidates = (
+        candidates = (await asyncio.to_thread(
             db.table("items")
             .select("*, item_images(*)")
             .eq("user_id", user_id)
             .neq("id", item_id)
             .limit(200)
-            .execute()
-        ).data or []
+            .execute
+        )).data or []
         src_colors = set((source.data.get("colors") or []))
         scored = []
         for cand in candidates:
@@ -1037,7 +1038,7 @@ async def style_analysis(
     db: Client = Depends(get_db),
 ):
     item_id_str = str(item_id)
-    item = db.table("items").select("*").eq("id", item_id_str).eq("user_id", user_id).single().execute()
+    item = await asyncio.to_thread(db.table("items").select("*").eq("id", item_id_str).eq("user_id", user_id).single().execute)
     if not item.data:
         raise ItemNotFoundError(item_id=item_id_str)
 
@@ -1103,7 +1104,7 @@ async def wardrobe_gaps(
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
 ):
-    items = db.table("items").select("id,category").eq("user_id", user_id).eq("is_deleted", False).execute().data or []
+    items = (await asyncio.to_thread(db.table("items").select("id,category").eq("user_id", user_id).eq("is_deleted", False).execute)).data or []
     analysis = _analyze_wardrobe_gaps(items)
 
     logger.debug(
@@ -1131,7 +1132,7 @@ async def shopping_recommendations(
     db: Client = Depends(get_db),
 ):
     """Return actionable shopping recommendations based on wardrobe gaps."""
-    items = db.table("items").select("id,category").eq("user_id", user_id).eq("is_deleted", False).execute().data or []
+    items = (await asyncio.to_thread(db.table("items").select("id,category").eq("user_id", user_id).eq("is_deleted", False).execute)).data or []
     analysis = _analyze_wardrobe_gaps(items)
     missing = analysis.get("missing_essentials") or []
     if category:
@@ -1158,7 +1159,7 @@ async def capsule_wardrobe(
     db: Client = Depends(get_db),
 ):
     """Return a simple capsule wardrobe suggestion from existing favorites."""
-    items_res = (
+    items_res = await asyncio.to_thread(
         db.table("items")
         .select("id,name,category,colors,brand,item_images(image_url,thumbnail_url,is_primary)")
         .eq("user_id", user_id)
@@ -1166,7 +1167,7 @@ async def capsule_wardrobe(
         .order("is_favorite", desc=True)
         .order("usage_times_worn", desc=True)
         .limit(item_count)
-        .execute()
+        .execute
     )
     items = [_build_complete_look_response(it, 0) for it in items_res.data or []]
 
@@ -1204,14 +1205,14 @@ async def rate_recommendation(
     db: Client = Depends(get_db),
 ):
     """Store user feedback to improve future recommendations."""
-    db.table("recommendation_logs").insert(
+    await asyncio.to_thread(db.table("recommendation_logs").insert(
         {
             "id": str(recommendation_id),
             "user_id": user_id,
             "recommendation_type": "rating",
             "feedback": {"rating": request.rating},
         }
-    ).execute()
+    ).execute)
     logger.info(
         "Recommendation rated",
         user_id=user_id,

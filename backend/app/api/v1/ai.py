@@ -7,6 +7,7 @@ All AI processing is done server-side using configurable providers.
 
 from typing import Any, Dict, List, Optional
 
+import asyncio
 import base64
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -49,7 +50,7 @@ router = APIRouter()
 async def _fetch_user_avatar_base64(user_id: str, db: Client) -> Optional[str]:
     """Best-effort avatar fetch for profile-aware extraction and generation."""
     try:
-        user_result = db.table("users").select("avatar_url").eq("id", user_id).single().execute()
+        user_result = await asyncio.to_thread(db.table("users").select("avatar_url").eq("id", user_id).single().execute)
         if not user_result or not user_result.data:
             return None
 
@@ -208,12 +209,12 @@ async def generate_outfit(
 
             if request.include_user_face:
                 # Fetch user avatar_url and body_profile_id
-                user_result = (
+                user_result = await asyncio.to_thread(
                     db.table("users")
                     .select("avatar_url, body_profile_id")
                     .eq("id", user_id)
                     .single()
-                    .execute()
+                    .execute
                 )
 
                 if user_result.data and user_result.data.get("avatar_url"):
@@ -236,12 +237,12 @@ async def generate_outfit(
                         user_result.data.get("body_profile_id") if user_result.data else None
                     )
                     if body_profile_id:
-                        bp_result = (
+                        bp_result = await asyncio.to_thread(
                             db.table("body_profiles")
                             .select("height_cm, weight_kg, body_shape, skin_tone")
                             .eq("id", body_profile_id)
                             .single()
-                            .execute()
+                            .execute
                         )
                         if bp_result.data:
                             body_profile = bp_result.data
@@ -419,7 +420,7 @@ async def generate_try_on(
     """
     try:
         # 1. Fetch user's avatar_url from database
-        user_result = db.table("users").select("avatar_url").eq("id", user_id).single().execute()
+        user_result = await asyncio.to_thread(db.table("users").select("avatar_url").eq("id", user_id).single().execute)
         if not user_result or not user_result.data:
             from fastapi import HTTPException
             raise HTTPException(

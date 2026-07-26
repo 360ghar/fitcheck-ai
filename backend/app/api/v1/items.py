@@ -6,6 +6,7 @@ AI item extraction is performed server-side via the AI provider service, while t
 stores items/images and maintains embeddings for recommendations.
 """
 
+import asyncio
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -227,7 +228,7 @@ async def create_item(
             "is_deleted": False,
         }
 
-        inserted = db.table("items").insert(item_data).execute()
+        inserted = await asyncio.to_thread(db.table("items").insert(item_data).execute)
         row = (inserted.data or [None])[0]
         if not row:
             raise DatabaseError("Failed to create item", operation="insert")
@@ -252,7 +253,7 @@ async def create_item(
                 image_rows.append(img_row)
 
             # Single batch insert for all images
-            db.table("item_images").insert(image_rows).execute()
+            await asyncio.to_thread(db.table("item_images").insert(image_rows).execute)
             images = image_rows
 
         # Generate embedding + upsert to Pinecone (best-effort)
@@ -379,13 +380,13 @@ async def list_items(
         if search:
             like = f"%{search}%"
             count_q = count_q.or_(f"name.ilike.{like},brand.ilike.{like}")
-        count_res = count_q.execute()
+        count_res = await asyncio.to_thread(count_q.execute)
         total = getattr(count_res, "count", len(count_res.data or []))
 
         start = (page - 1) * page_size
         end = start + page_size - 1
 
-        res = query.order("created_at", desc=True).range(start, end).execute()
+        res = await asyncio.to_thread(query.order("created_at", desc=True).range(start, end).execute)
         items = [_normalize_item_images(i) for i in (res.data or [])]
 
         total_pages = max(1, (total + page_size - 1) // page_size)
@@ -416,13 +417,13 @@ async def get_item(
 ):
     try:
         item_id_str = str(item_id)
-        result = (
+        result = await asyncio.to_thread(
             db.table("items")
             .select("*, item_images(*)")
             .eq("id", item_id_str)
             .eq("user_id", user_id)
             .single()
-            .execute()
+            .execute
         )
         if not result.data:
             raise ItemNotFoundError(item_id=item_id_str)
@@ -443,7 +444,7 @@ async def update_item(
 ):
     try:
         item_id_str = str(item_id)
-        existing = db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).single().execute()
+        existing = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).single().execute)
         if not existing.data:
             raise ItemNotFoundError(item_id=item_id_str)
 
@@ -455,19 +456,19 @@ async def update_item(
             update_dict["purchase_date"] = update_dict["purchase_date"].date().isoformat()
         update_dict["updated_at"] = _now()
 
-        result = db.table("items").update(update_dict).eq("id", item_id_str).eq("user_id", user_id).execute()
+        result = await asyncio.to_thread(db.table("items").update(update_dict).eq("id", item_id_str).eq("user_id", user_id).execute)
         row = (result.data or [None])[0]
         if not row:
             raise DatabaseError("Failed to update item", operation="update")
 
         # Refresh item with images
-        item_result = (
+        item_result = await asyncio.to_thread(
             db.table("items")
             .select("*, item_images(*)")
             .eq("id", item_id_str)
             .eq("user_id", user_id)
             .single()
-            .execute()
+            .execute
         )
         if not item_result or not item_result.data:
             raise ItemNotFoundError(item_id_str)
@@ -530,7 +531,7 @@ async def delete_item(
     """Delete an item (hard delete)."""
     try:
         item_id_str = str(item_id)
-        existing = db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).single().execute()
+        existing = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).single().execute)
         if not existing.data:
             raise ItemNotFoundError(item_id=item_id_str)
 
@@ -541,7 +542,7 @@ async def delete_item(
         except Exception as e:
             logger.warning("Failed to delete item embedding", item_id=item_id_str, error=str(e))
 
-        db.table("items").delete().eq("id", item_id_str).eq("user_id", user_id).execute()
+        await asyncio.to_thread(db.table("items").delete().eq("id", item_id_str).eq("user_id", user_id).execute)
         return None
     except (ItemNotFoundError, ValidationError, DatabaseError):
         raise
@@ -563,11 +564,11 @@ async def toggle_favorite(
 ):
     try:
         item_id_str = str(item_id)
-        existing = db.table("items").select("is_favorite").eq("id", item_id_str).eq("user_id", user_id).single().execute()
+        existing = await asyncio.to_thread(db.table("items").select("is_favorite").eq("id", item_id_str).eq("user_id", user_id).single().execute)
         if not existing.data:
             raise ItemNotFoundError(item_id=item_id_str)
         new_value = not bool(existing.data.get("is_favorite", False))
-        result = db.table("items").update({"is_favorite": new_value, "updated_at": _now()}).eq("id", item_id_str).execute()
+        result = await asyncio.to_thread(db.table("items").update({"is_favorite": new_value, "updated_at": _now()}).eq("id", item_id_str).execute)
         row = (result.data or [None])[0]
         if not row:
             raise DatabaseError("Failed to update item", operation="update")
@@ -587,19 +588,19 @@ async def mark_worn(
 ):
     try:
         item_id_str = str(item_id)
-        existing = (
+        existing = await asyncio.to_thread(
             db.table("items")
             .select("usage_times_worn")
             .eq("id", item_id_str)
             .eq("user_id", user_id)
             .single()
-            .execute()
+            .execute
         )
         if not existing.data:
             raise ItemNotFoundError(item_id=item_id_str)
         current = int(existing.data.get("usage_times_worn", 0))
         update = {"usage_times_worn": current + 1, "usage_last_worn": _now(), "updated_at": _now()}
-        db.table("items").update(update).eq("id", item_id_str).eq("user_id", user_id).execute()
+        await asyncio.to_thread(db.table("items").update(update).eq("id", item_id_str).eq("user_id", user_id).execute)
         return {"data": {"id": item_id_str, "usage_times_worn": current + 1}, "message": "OK"}
     except (ItemNotFoundError, ValidationError, DatabaseError):
         raise
@@ -624,7 +625,7 @@ async def upload_item_image(
     """Upload an additional image for an existing item."""
     try:
         item_id_str = str(item_id)
-        item = db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).single().execute()
+        item = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).single().execute)
         if not item.data:
             raise ItemNotFoundError(item_id=item_id_str)
 
@@ -656,12 +657,12 @@ async def upload_item_image(
 
         # Insert new image first, then clear is_primary on other images
         # This minimizes the race window where no primary exists
-        insert_result = db.table("item_images").insert(img_row).execute()
+        insert_result = await asyncio.to_thread(db.table("item_images").insert(img_row).execute)
         new_image_id = insert_result.data[0]["id"] if insert_result.data else None
 
         if is_primary and new_image_id:
             # Clear is_primary on all OTHER images for this item
-            db.table("item_images").update({"is_primary": False}).eq("item_id", item_id_str).neq("id", new_image_id).execute()
+            await asyncio.to_thread(db.table("item_images").update({"is_primary": False}).eq("item_id", item_id_str).neq("id", new_image_id).execute)
 
         return {"data": img_row, "message": "Created"}
     except (ItemNotFoundError, ImageNotFoundError, ValidationError, UnsupportedMediaTypeError, StorageServiceError, DatabaseError):
@@ -684,19 +685,19 @@ async def delete_item_image(
     try:
         item_id_str = str(item_id)
         image_id_str = str(image_id)
-        img = (
+        img = await asyncio.to_thread(
             db.table("item_images")
             .select("id, storage_path")
             .eq("id", image_id_str)
             .eq("item_id", item_id_str)
             .single()
-            .execute()
+            .execute
         )
         if not img.data:
             raise ImageNotFoundError(image_id=image_id_str)
 
         # Ensure the item belongs to the current user
-        item = db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).single().execute()
+        item = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).single().execute)
         if not item.data:
             raise ItemNotFoundError(item_id=item_id_str)
 
@@ -707,7 +708,7 @@ async def delete_item_image(
             except Exception as e:
                 logger.warning("Failed to delete image from storage", storage_path=storage_path, error=str(e))
 
-        db.table("item_images").delete().eq("id", image_id_str).eq("item_id", item_id_str).execute()
+        await asyncio.to_thread(db.table("item_images").delete().eq("id", image_id_str).eq("item_id", item_id_str).execute)
         return {"data": {"deleted": True}, "message": "OK"}
     except (ItemNotFoundError, ImageNotFoundError, ValidationError, StorageServiceError, DatabaseError):
         raise
@@ -734,11 +735,11 @@ async def batch_delete_items(
 
     try:
         # Fetch storage paths for cleanup
-        imgs_res = (
+        imgs_res = await asyncio.to_thread(
             db.table("item_images")
             .select("id, item_id, storage_path")
             .in_("item_id", item_ids)
-            .execute()
+            .execute
         )
         storage_paths = [row.get("storage_path") for row in (imgs_res.data or []) if row.get("storage_path")]
         if storage_paths:
@@ -755,7 +756,7 @@ async def batch_delete_items(
             logger.warning("Failed to delete item embeddings", item_count=len(item_ids), error=str(e))
 
         # Delete items (FK cascade removes item_images)
-        delete_res = db.table("items").delete().eq("user_id", user_id).in_("id", item_ids).execute()
+        delete_res = await asyncio.to_thread(db.table("items").delete().eq("user_id", user_id).in_("id", item_ids).execute)
         deleted_count = len(delete_res.data or [])
 
         return {"data": {"deleted_count": deleted_count}, "message": "OK"}
@@ -774,11 +775,11 @@ async def get_item_stats(
     """Compute wardrobe item statistics for dashboard/analytics."""
     try:
         items = (
-            db.table("items")
+            (await asyncio.to_thread(db.table("items")
             .select("id,name,category,colors,condition,price,usage_times_worn")
             .eq("user_id", user_id)
             .limit(1000)  # Limit to prevent fetching thousands of items
-            .execute()
+            .execute))
             .data or []
         )
 
@@ -843,13 +844,13 @@ async def get_items_by_category(
     if cat not in VALID_CATEGORIES:
         raise ValidationError("Invalid category", details={"category": cat, "valid_categories": list(VALID_CATEGORIES)})
     try:
-        res = (
+        res = await asyncio.to_thread(
             db.table("items")
             .select("*, item_images(*)")
             .eq("user_id", user_id)
             .eq("category", cat)
             .order("created_at", desc=True)
-            .execute()
+            .execute
         )
         items = [_normalize_item_images(i) for i in (res.data or [])]
         return {"data": {"items": items}, "message": "OK"}
@@ -870,13 +871,13 @@ async def search_items(
     """Search items by name/brand (best-effort; Supabase full-text can be added later)."""
     try:
         like = f"%{q}%"
-        res = (
+        res = await asyncio.to_thread(
             db.table("items")
             .select("*, item_images(*)")
             .eq("user_id", user_id)
             .or_(f"name.ilike.{like},brand.ilike.{like},notes.ilike.{like}")
             .limit(limit)
-            .execute()
+            .execute
         )
         items = [_normalize_item_images(i) for i in (res.data or [])]
         return {"data": {"items": items}, "message": "OK"}
@@ -905,13 +906,13 @@ async def categorize_item(
     """
     try:
         item_id_str = str(item_id)
-        item = (
+        item = await asyncio.to_thread(
             db.table("items")
             .select("*")
             .eq("id", item_id_str)
             .eq("user_id", user_id)
             .single()
-            .execute()
+            .execute
         )
         if not item.data:
             raise ItemNotFoundError(item_id=item_id_str)
@@ -945,7 +946,7 @@ async def categorize_item(
             "materials": materials,
             "updated_at": _now(),
         }
-        db.table("items").update(update).eq("id", item_id_str).eq("user_id", user_id).execute()
+        await asyncio.to_thread(db.table("items").update(update).eq("id", item_id_str).eq("user_id", user_id).execute)
 
         return {
             "data": {
@@ -976,7 +977,7 @@ async def update_item_categories(
     """Update item category-related fields (user override)."""
     try:
         item_id_str = str(item_id)
-        existing = db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).single().execute()
+        existing = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).single().execute)
         if not existing.data:
             raise ItemNotFoundError(item_id=item_id_str)
 
@@ -989,18 +990,18 @@ async def update_item_categories(
             update["occasion_tags"] = normalize_tag_list(update["occasion_tags"])
 
         update["updated_at"] = _now()
-        res = db.table("items").update(update).eq("id", item_id_str).eq("user_id", user_id).execute()
+        res = await asyncio.to_thread(db.table("items").update(update).eq("id", item_id_str).eq("user_id", user_id).execute)
         row = (res.data or [None])[0]
         if not row:
             raise DatabaseError("Failed to update item", operation="update")
 
-        item = (
+        item = await asyncio.to_thread(
             db.table("items")
             .select("*, item_images(*)")
             .eq("id", item_id_str)
             .eq("user_id", user_id)
             .single()
-            .execute()
+            .execute
         )
         return {"data": _normalize_item_images(item.data or {}), "message": "Updated"}
     except (ItemNotFoundError, ValidationError, DatabaseError):
@@ -1072,13 +1073,13 @@ async def check_duplicates(
     try:
         # Empty wardrobe: no duplicates possible. Skip embedding + Pinecone
         # (observed 6–10s per check during first-time batch saves).
-        wardrobe_count_result = (
+        wardrobe_count_result = await asyncio.to_thread(
             db.table("items")
             .select("id", count="exact")
             .eq("user_id", user_id)
             .eq("is_deleted", False)
             .limit(1)
-            .execute()
+            .execute
         )
         wardrobe_count = getattr(wardrobe_count_result, "count", None)
         if wardrobe_count is None:
@@ -1158,12 +1159,12 @@ async def check_duplicates(
 
         # Fetch full item details for matches
         item_ids = [item["item_id"] for item in similar_items]
-        items_result = (
+        items_result = await asyncio.to_thread(
             db.table("items")
             .select("*, item_images(*)")
             .in_("id", item_ids)
             .eq("user_id", user_id)
-            .execute()
+            .execute
         )
 
         items_by_id = {item["id"]: _normalize_item_images(item) for item in (items_result.data or [])}
@@ -1259,13 +1260,13 @@ async def find_similar_items(
         item_id_str = str(item_id)
 
         # Fetch the source item
-        item_result = (
+        item_result = await asyncio.to_thread(
             db.table("items")
             .select("*")
             .eq("id", item_id_str)
             .eq("user_id", user_id)
             .single()
-            .execute()
+            .execute
         )
 
         if not item_result.data:
@@ -1322,12 +1323,12 @@ async def find_similar_items(
 
         # Fetch full item details
         similar_ids = [item["item_id"] for item in similar_items]
-        items_result = (
+        items_result = await asyncio.to_thread(
             db.table("items")
             .select("*, item_images(*)")
             .in_("id", similar_ids)
             .eq("user_id", user_id)
-            .execute()
+            .execute
         )
 
         items_by_id = {item["id"]: _normalize_item_images(item) for item in (items_result.data or [])}
@@ -1375,14 +1376,14 @@ async def _fallback_duplicate_check(
         # Search by name similarity and same category
         name_pattern = f"%{request.name}%"
 
-        items_result = (
+        items_result = await asyncio.to_thread(
             db.table("items")
             .select("*, item_images(*)")
             .eq("user_id", user_id)
             .eq("category", request.category.lower())
             .ilike("name", name_pattern)
             .limit(limit)
-            .execute()
+            .execute
         )
 
         duplicates = []

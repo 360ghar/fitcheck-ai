@@ -9,6 +9,7 @@ Weather data is fetched from OpenWeatherMap when configured; otherwise a safe
 mock is returned for local development.
 """
 
+import asyncio
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, Query
@@ -92,12 +93,12 @@ async def _resolve_location(
         return location
 
     try:
-        settings_row = (
+        settings_row = await asyncio.to_thread(
             db.table("user_settings")
             .select("default_location")
             .eq("user_id", user_id)
             .single()
-            .execute()
+            .execute
         )
         if settings_row.data and settings_row.data.get("default_location"):
             return str(settings_row.data["default_location"])

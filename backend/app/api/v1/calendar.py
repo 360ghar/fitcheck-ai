@@ -10,6 +10,7 @@ For MVP, external provider sync is not implemented. We store the connection and
 events in Supabase tables so the user can plan outfits against events.
 """
 
+import asyncio
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -110,13 +111,13 @@ async def connect_calendar(
     try:
         # Upsert-like behavior: one connection per provider per user.
         # Use maybe_single() so a first-time connect (0 rows) does not raise PGRST116.
-        existing = (
+        existing = await asyncio.to_thread(
             db.table("calendar_connections")
             .select("id")
             .eq("user_id", user_id)
             .eq("provider", provider)
             .maybe_single()
-            .execute()
+            .execute
         )
 
         now = datetime.utcnow().isoformat()
@@ -129,11 +130,11 @@ async def connect_calendar(
                 "updated_at": now,
                 "is_active": True,
             }
-            result = (
+            result = await asyncio.to_thread(
                 db.table("calendar_connections")
                 .update(update)
                 .eq("id", existing_row["id"])
-                .execute()
+                .execute
             )
             row = (result.data or [None])[0]
             logger.info(
@@ -155,7 +156,7 @@ async def connect_calendar(
                 "updated_at": now,
                 "is_active": True,
             }
-            result = db.table("calendar_connections").insert(insert).execute()
+            result = await asyncio.to_thread(db.table("calendar_connections").insert(insert).execute)
             row = (result.data or [None])[0]
             logger.info(
                 "Calendar connection created",
@@ -200,12 +201,12 @@ async def list_calendar_connections(
 ):
     """List connected calendar providers for the user."""
     try:
-        res = (
+        res = await asyncio.to_thread(
             db.table("calendar_connections")
             .select("*")
             .eq("user_id", user_id)
             .order("connected_at", desc=True)
-            .execute()
+            .execute
         )
         connections: List[CalendarConnectionData] = []
         for row in res.data or []:
@@ -243,13 +244,13 @@ async def disconnect_calendar(
 ):
     """Disconnect a calendar provider (soft disable)."""
     try:
-        existing = (
+        existing = await asyncio.to_thread(
             db.table("calendar_connections")
             .select("id")
             .eq("id", connection_id)
             .eq("user_id", user_id)
             .single()
-            .execute()
+            .execute
         )
         if not existing.data:
             raise NotFoundError(
@@ -259,7 +260,7 @@ async def disconnect_calendar(
             )
 
         now = datetime.utcnow().isoformat()
-        db.table("calendar_connections").update({"is_active": False, "updated_at": now}).eq("id", connection_id).execute()
+        await asyncio.to_thread(db.table("calendar_connections").update({"is_active": False, "updated_at": now}).eq("id", connection_id).execute)
         logger.info(
             "Calendar connection disconnected",
             user_id=user_id,
@@ -321,7 +322,7 @@ async def get_calendar_events(
         # Fetch one past the limit so has_more is known without a second
         # count query (items.py pays for count="exact" because it renders
         # page numbers; the calendar only needs "is there more").
-        result = query.order("start_time", desc=False).range(offset, offset + limit).execute()
+        result = await asyncio.to_thread(query.order("start_time", desc=False).range(offset, offset + limit).execute)
         rows = list(result.data or [])
         has_more = len(rows) > limit
         events: List[CalendarEventData] = []
@@ -395,7 +396,7 @@ async def create_calendar_event(
             "created_at": now,
             "updated_at": now,
         }
-        result = db.table("calendar_events").insert(insert).execute()
+        result = await asyncio.to_thread(db.table("calendar_events").insert(insert).execute)
         row = (result.data or [None])[0]
         if not row:
             raise DatabaseError(
@@ -434,13 +435,13 @@ async def update_calendar_event(
     """Update a calendar event."""
     try:
         # Verify event exists and belongs to user
-        existing = (
+        existing = await asyncio.to_thread(
             db.table("calendar_events")
             .select("id")
             .eq("id", event_id)
             .eq("user_id", user_id)
             .single()
-            .execute()
+            .execute
         )
         if not existing.data:
             raise CalendarEventNotFoundError(event_id=event_id)
@@ -464,23 +465,23 @@ async def update_calendar_event(
 
         if not update_data:
             # No fields to update, return existing event
-            result = (
+            result = await asyncio.to_thread(
                 db.table("calendar_events")
                 .select("*")
                 .eq("id", event_id)
                 .single()
-                .execute()
+                .execute
             )
             return {"data": {"event": result.data}, "message": "No changes"}
 
         now = datetime.utcnow().isoformat()
         update_data["updated_at"] = now
 
-        result = (
+        result = await asyncio.to_thread(
             db.table("calendar_events")
             .update(update_data)
             .eq("id", event_id)
-            .execute()
+            .execute
         )
         row = (result.data or [None])[0]
         if not row:
@@ -520,19 +521,19 @@ async def delete_calendar_event(
     """Delete a calendar event."""
     try:
         # Verify event exists and belongs to user
-        existing = (
+        existing = await asyncio.to_thread(
             db.table("calendar_events")
             .select("id")
             .eq("id", event_id)
             .eq("user_id", user_id)
             .single()
-            .execute()
+            .execute
         )
         if not existing.data:
             raise CalendarEventNotFoundError(event_id=event_id)
 
         # Delete the event
-        db.table("calendar_events").delete().eq("id", event_id).execute()
+        await asyncio.to_thread(db.table("calendar_events").delete().eq("id", event_id).execute)
 
         logger.info(
             "Calendar event deleted",
@@ -566,23 +567,23 @@ async def assign_outfit_to_event(
     """Assign an outfit to a calendar event."""
     try:
         # Verify event exists and belongs to user
-        existing = (
+        existing = await asyncio.to_thread(
             db.table("calendar_events")
             .select("id")
             .eq("id", event_id)
             .eq("user_id", user_id)
             .single()
-            .execute()
+            .execute
         )
         if not existing.data:
             raise CalendarEventNotFoundError(event_id=event_id)
 
         now = datetime.utcnow().isoformat()
-        result = (
+        result = await asyncio.to_thread(
             db.table("calendar_events")
             .update({"outfit_id": request.outfit_id, "updated_at": now})
             .eq("id", event_id)
-            .execute()
+            .execute
         )
         row = (result.data or [None])[0]
         if not row:
@@ -624,12 +625,12 @@ async def remove_outfit_from_event(
     """Remove outfit assignment from an event."""
     try:
         now = datetime.utcnow().isoformat()
-        result = (
+        result = await asyncio.to_thread(
             db.table("calendar_events")
             .update({"outfit_id": None, "updated_at": now})
             .eq("id", event_id)
             .eq("user_id", user_id)
-            .execute()
+            .execute
         )
         if not result.data:
             raise CalendarEventNotFoundError(event_id=event_id)

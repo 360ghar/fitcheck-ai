@@ -76,7 +76,10 @@ async def _upsert_user_profile(
     last_fk_error = False
     for attempt in range(max_attempts):
         try:
-            db.table("users").upsert(payload, on_conflict="id").execute()
+            # Query built outside the callable so the retry loop can't capture a
+            # stale binding; to_thread keeps the sync client off the event loop.
+            upsert = db.table("users").upsert(payload, on_conflict="id")
+            await asyncio.to_thread(upsert.execute)
             return True
         except PostgrestAPIError as e:
             error_info = getattr(e, "json", lambda: {})() or {}
@@ -96,12 +99,12 @@ async def _upsert_user_profile(
             f"FK constraint error persisted after {max_attempts} attempts for user {payload.get('id')}"
         )
         try:
-            existing = (
+            existing = await asyncio.to_thread(
                 db.table("users")
                 .select("id")
                 .eq("id", payload.get("id"))
                 .limit(1)
-                .execute()
+                .execute
             )
             if existing.data:
                 return True
@@ -275,7 +278,7 @@ async def register(
 
                 # Create default user preferences (upsert to handle trigger-created records)
                 try:
-                    db.table("user_preferences").upsert({
+                    await asyncio.to_thread(db.table("user_preferences").upsert({
                         "user_id": user_id,
                         "favorite_colors": [],
                         "preferred_styles": [],
@@ -283,20 +286,20 @@ async def register(
                         "disliked_patterns": [],
                         "preferred_occasions": [],
                         "data_points_collected": 0,
-                    }, on_conflict="user_id").execute()
+                    }, on_conflict="user_id").execute)
                 except Exception as e:
                     logger.debug(f"User preferences upsert skipped (may exist from trigger): {e}")
 
                 # Create default user settings (upsert to handle trigger-created records)
                 try:
-                    db.table("user_settings").upsert({
+                    await asyncio.to_thread(db.table("user_settings").upsert({
                         "user_id": user_id,
                         "language": "en",
                         "measurement_units": "imperial",
                         "notifications_enabled": True,
                         "email_marketing": False,
                         "dark_mode": False
-                    }, on_conflict="user_id").execute()
+                    }, on_conflict="user_id").execute)
                 except Exception as e:
                     logger.debug(f"User settings upsert skipped (may exist from trigger): {e}")
 
@@ -422,7 +425,7 @@ async def login(
 
             # Ensure user profile exists in public.users (handles missing trigger case)
             try:
-                existing = db.table("users").select("id").eq("id", user.id).execute()
+                existing = await asyncio.to_thread(db.table("users").select("id").eq("id", user.id).execute)
                 if not existing.data:
                     # Profile doesn't exist - create it
                     profile_payload = {
@@ -438,7 +441,7 @@ async def login(
                     await _upsert_user_profile(db, profile_payload)
 
                     # Create default user_preferences
-                    db.table("user_preferences").upsert({
+                    await asyncio.to_thread(db.table("user_preferences").upsert({
                         "user_id": user.id,
                         "favorite_colors": [],
                         "preferred_styles": [],
@@ -446,30 +449,30 @@ async def login(
                         "disliked_patterns": [],
                         "preferred_occasions": [],
                         "data_points_collected": 0,
-                    }, on_conflict="user_id").execute()
+                    }, on_conflict="user_id").execute)
 
                     # Create default user_settings
-                    db.table("user_settings").upsert({
+                    await asyncio.to_thread(db.table("user_settings").upsert({
                         "user_id": user.id,
                         "language": "en",
                         "measurement_units": "imperial",
                         "notifications_enabled": True,
                         "email_marketing": False,
                         "dark_mode": False,
-                    }, on_conflict="user_id").execute()
+                    }, on_conflict="user_id").execute)
 
                     logger.info("Created missing user profile on login", user_id=user.id)
                 else:
                     # Profile exists - just update last_login_at
-                    db.table("users").update({
+                    await asyncio.to_thread(db.table("users").update({
                         "last_login_at": datetime.now().isoformat()
-                    }).eq("id", user.id).execute()
+                    }).eq("id", user.id).execute)
             except Exception as e:
                 logger.warning("Failed to ensure user profile", user_id=user.id, error=str(e))
 
             # Get user profile data from database (not auth metadata) to ensure
             # avatar_url and other profile fields are returned correctly
-            profile_result = db.table("users").select("*").eq("id", user.id).execute()
+            profile_result = await asyncio.to_thread(db.table("users").select("*").eq("id", user.id).execute)
             if profile_result.data and len(profile_result.data) > 0:
                 profile = profile_result.data[0]
                 user_data = {
@@ -664,7 +667,7 @@ async def oauth_sync(
         _require_schema(db)
 
         # Check if user profile already exists
-        existing = db.table("users").select("*").eq("id", user_id).execute()
+        existing = await asyncio.to_thread(db.table("users").select("*").eq("id", user_id).execute)
         is_new_user = not existing.data
 
         if is_new_user:
@@ -716,7 +719,7 @@ async def oauth_sync(
 
             # Create default user_preferences
             try:
-                db.table("user_preferences").upsert({
+                await asyncio.to_thread(db.table("user_preferences").upsert({
                     "user_id": user_id,
                     "favorite_colors": [],
                     "preferred_styles": [],
@@ -724,20 +727,20 @@ async def oauth_sync(
                     "disliked_patterns": [],
                     "preferred_occasions": [],
                     "data_points_collected": 0,
-                }, on_conflict="user_id").execute()
+                }, on_conflict="user_id").execute)
             except Exception as e:
                 logger.debug(f"User preferences upsert skipped: {e}")
 
             # Create default user_settings
             try:
-                db.table("user_settings").upsert({
+                await asyncio.to_thread(db.table("user_settings").upsert({
                     "user_id": user_id,
                     "language": "en",
                     "measurement_units": "imperial",
                     "notifications_enabled": True,
                     "email_marketing": False,
                     "dark_mode": False,
-                }, on_conflict="user_id").execute()
+                }, on_conflict="user_id").execute)
             except Exception as e:
                 logger.debug(f"User settings upsert skipped: {e}")
 
@@ -758,13 +761,13 @@ async def oauth_sync(
             logger.info("Created user profile via OAuth sync", user_id=user_id)
 
             # Fetch the created profile
-            profile_result = db.table("users").select("*").eq("id", user_id).execute()
+            profile_result = await asyncio.to_thread(db.table("users").select("*").eq("id", user_id).execute)
             user_data = profile_result.data[0] if (profile_result.data and len(profile_result.data) > 0) else profile_payload
         else:
             # Profile exists - update last_login_at
-            db.table("users").update({
+            await asyncio.to_thread(db.table("users").update({
                 "last_login_at": datetime.now().isoformat()
-            }).eq("id", user_id).execute()
+            }).eq("id", user_id).execute)
 
             user_data = existing.data[0] if (existing.data and len(existing.data) > 0) else {}
             logger.info("OAuth sync for existing user", user_id=user_id)

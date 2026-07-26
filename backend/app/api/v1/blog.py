@@ -5,6 +5,7 @@ Provides CRUD operations for blog posts with public read access
 and admin-only write access.
 """
 
+import asyncio
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, Query, status
@@ -87,7 +88,7 @@ async def list_posts(
         query = query.order("date", desc=True)
 
         # Get total count first
-        count_result = query.execute()
+        count_result = await asyncio.to_thread(query.execute)
         total = count_result.count if hasattr(count_result, "count") else 0
 
         # Apply pagination
@@ -95,7 +96,7 @@ async def list_posts(
         query = query.range(offset, offset + params.page_size - 1)
 
         # Execute query
-        result = query.execute()
+        result = await asyncio.to_thread(query.execute)
 
         # Convert to response models
         posts = [BlogPostSummary(**post) for post in (result.data or [])]
@@ -135,13 +136,13 @@ async def get_post(
     Only returns published posts for public access.
     """
     try:
-        result = (
+        result = await asyncio.to_thread(
             db.table("blog_posts")
             .select("*")
             .eq("slug", slug)
             .eq("is_published", True)
             .single()
-            .execute()
+            .execute
         )
 
         if not result.data:
@@ -174,11 +175,11 @@ async def get_categories(db: Client = Depends(get_db)):
     """
     try:
         # Get distinct categories from published posts
-        result = (
+        result = await asyncio.to_thread(
             db.table("blog_posts")
             .select("category")
             .eq("is_published", True)
-            .execute()
+            .execute
         )
 
         categories = sorted(list(set(row["category"] for row in (result.data or []))))
@@ -214,12 +215,12 @@ async def create_post(
 
     try:
         # Check for duplicate slug
-        existing = (
+        existing = await asyncio.to_thread(
             db.table("blog_posts")
             .select("id")
             .eq("slug", post_data.slug)
             .maybe_single()
-            .execute()
+            .execute
         )
 
         if maybe_single_data(existing):
@@ -230,7 +231,7 @@ async def create_post(
 
         # Insert the new post
         insert_data = post_data.model_dump()
-        result = db.table("blog_posts").insert(insert_data).execute()
+        result = await asyncio.to_thread(db.table("blog_posts").insert(insert_data).execute)
 
         if not result.data:
             raise Exception("Failed to create blog post")
@@ -268,12 +269,12 @@ async def update_post(
 
     try:
         # Check if post exists
-        existing = (
+        existing = await asyncio.to_thread(
             db.table("blog_posts")
             .select("*")
             .eq("slug", slug)
             .maybe_single()
-            .execute()
+            .execute
         )
 
         if not maybe_single_data(existing):
@@ -285,12 +286,12 @@ async def update_post(
 
         # If changing slug, check new slug is unique
         if post_data.slug and post_data.slug != slug:
-            slug_check = (
+            slug_check = await asyncio.to_thread(
                 db.table("blog_posts")
                 .select("id")
                 .eq("slug", post_data.slug)
                 .maybe_single()
-                .execute()
+                .execute
             )
 
             if maybe_single_data(slug_check):
@@ -310,7 +311,7 @@ async def update_post(
             )
 
         # Update the post
-        result = db.table("blog_posts").update(update_data).eq("slug", slug).execute()
+        result = await asyncio.to_thread(db.table("blog_posts").update(update_data).eq("slug", slug).execute)
 
         if not result.data:
             raise Exception("Failed to update blog post")
@@ -347,12 +348,12 @@ async def delete_post(
 
     try:
         # Check if post exists
-        existing = (
+        existing = await asyncio.to_thread(
             db.table("blog_posts")
             .select("id")
             .eq("slug", slug)
             .maybe_single()
-            .execute()
+            .execute
         )
 
         if not maybe_single_data(existing):
@@ -363,7 +364,7 @@ async def delete_post(
             )
 
         # Delete the post
-        db.table("blog_posts").delete().eq("slug", slug).execute()
+        await asyncio.to_thread(db.table("blog_posts").delete().eq("slug", slug).execute)
 
         logger.info(f"Admin {user.get('id')} deleted blog post: {slug}")
 
@@ -411,7 +412,7 @@ async def list_all_posts(
         query = query.order("updated_at", desc=True)
 
         # Get total count
-        count_result = query.execute()
+        count_result = await asyncio.to_thread(query.execute)
         total = count_result.count if hasattr(count_result, "count") else 0
 
         # Apply pagination
@@ -419,7 +420,7 @@ async def list_all_posts(
         query = query.range(offset, offset + page_size - 1)
 
         # Execute query
-        result = query.execute()
+        result = await asyncio.to_thread(query.execute)
 
         # Convert to response models (use full BlogPost for admin)
         posts = [BlogPost(**post) for post in (result.data or [])]

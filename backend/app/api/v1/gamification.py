@@ -8,6 +8,7 @@ When the Supabase schema for gamification is finalized, these handlers can be
 backed by tables like user_streaks, user_achievements, challenges, etc.
 """
 
+import asyncio
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -79,7 +80,7 @@ async def get_streak(
     db: Client = Depends(get_db),
 ):
     try:
-        result = db.table("user_streaks").select("*").eq("user_id", user_id).maybe_single().execute()
+        result = await asyncio.to_thread(db.table("user_streaks").select("*").eq("user_id", user_id).maybe_single().execute)
         row = result.data if result else None
         if not row:
             now = _now()
@@ -92,7 +93,7 @@ async def get_streak(
                 "streak_skips_remaining": 1,
                 "updated_at": now,
             }
-            insert_result = db.table("user_streaks").insert(insert).execute()
+            insert_result = await asyncio.to_thread(db.table("user_streaks").insert(insert).execute)
             if insert_result is None or not insert_result.data:
                 raise DatabaseError("Failed to insert streak record")
             row = insert_result.data[0]
@@ -171,7 +172,7 @@ async def get_achievements(
         return enriched
 
     try:
-        result = db.table("user_achievements").select("*").eq("user_id", user_id).order("earned_at", desc=True).execute()
+        result = await asyncio.to_thread(db.table("user_achievements").select("*").eq("user_id", user_id).order("earned_at", desc=True).execute)
         earned_rows = enrich_earned(result.data if result else [])
         logger.debug(
             "Achievements retrieved",
@@ -196,23 +197,23 @@ async def get_leaderboard(
 ):
     try:
         # Minimal leaderboard by current streak
-        streaks_result = (
+        streaks_result = await asyncio.to_thread(
             db.table("user_streaks")
             .select("user_id,current_streak")
             .order("current_streak", desc=True)
             .limit(25)
-            .execute()
+            .execute
         )
         rows: List[Dict[str, Any]] = streaks_result.data if streaks_result else []
 
         user_ids = [r.get("user_id") for r in rows if r.get("user_id")]
         profiles: Dict[str, Dict[str, Any]] = {}
         if user_ids:
-            prof_result = (
+            prof_result = await asyncio.to_thread(
                 db.table("users")
                 .select("id,full_name,avatar_url")
                 .in_("id", user_ids)
-                .execute()
+                .execute
             )
             prof_rows = prof_result.data if prof_result else []
             profiles = {str(p.get("id")): p for p in prof_rows if p.get("id")}
@@ -238,12 +239,12 @@ async def get_leaderboard(
         # User rank summary (best-effort)
         user_rank: Optional[Dict[str, Any]] = None
         try:
-            me_result = db.table("user_streaks").select("current_streak").eq("user_id", user_id).maybe_single().execute()
+            me_result = await asyncio.to_thread(db.table("user_streaks").select("current_streak").eq("user_id", user_id).maybe_single().execute)
             me_row = me_result.data if me_result else None
             me_streak = _safe_int((me_row or {}).get("current_streak"), 0)
-            higher = db.table("user_streaks").select("user_id", count="exact").gt("current_streak", me_streak).execute()
+            higher = await asyncio.to_thread(db.table("user_streaks").select("user_id", count="exact").gt("current_streak", me_streak).execute)
             higher_count = getattr(higher, "count", len(getattr(higher, "data", []) or [])) or 0
-            total = db.table("user_streaks").select("user_id", count="exact").execute()
+            total = await asyncio.to_thread(db.table("user_streaks").select("user_id", count="exact").execute)
             total_users = getattr(total, "count", len(getattr(total, "data", []) or [])) or 0
             rank = int(higher_count) + 1
             points = _compute_points(me_streak)

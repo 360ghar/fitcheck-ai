@@ -10,6 +10,7 @@ Implements:
 - GET /api/v1/users/dashboard (MVP aggregate)
 """
 
+import asyncio
 import uuid
 import re
 from datetime import datetime
@@ -224,7 +225,7 @@ async def get_current_user(
     db: Client = Depends(get_db),
 ):
     try:
-        result = db.table("users").select("*").eq("id", user_id).execute()
+        result = await asyncio.to_thread(db.table("users").select("*").eq("id", user_id).execute)
         if not result.data:
             raise UserNotFoundError(user_id=user_id)
 
@@ -264,7 +265,7 @@ async def update_current_user(
         while True:
             update_payload["updated_at"] = _now()
             try:
-                result = db.table("users").update(update_payload).eq("id", user_id).execute()
+                result = await asyncio.to_thread(db.table("users").update(update_payload).eq("id", user_id).execute)
                 break
             except Exception as e:
                 missing_col = _extract_missing_users_column(e)
@@ -330,7 +331,7 @@ async def delete_current_user(
 
         # Ensure public data is deleted even if auth deletion isn't available
         try:
-            db.table("users").delete().eq("id", user_id).execute()
+            await asyncio.to_thread(db.table("users").delete().eq("id", user_id).execute)
         except Exception:
             pass
 
@@ -357,7 +358,7 @@ async def upload_avatar(
             db=db, user_id=user_id, filename=file.filename or "avatar.png", file_data=file_bytes
         )
 
-        db.table("users").update({"avatar_url": avatar_url, "updated_at": _now()}).eq("id", user_id).execute()
+        await asyncio.to_thread(db.table("users").update({"avatar_url": avatar_url, "updated_at": _now()}).eq("id", user_id).execute)
         return {"data": {"avatar_url": avatar_url}, "message": "OK"}
 
     except (UserNotFoundError, ValidationError, DatabaseError, UnsupportedMediaTypeError, StorageServiceError):
@@ -490,13 +491,13 @@ async def list_body_profiles(
 ):
     """List all body profiles for the user."""
     try:
-        res = (
+        res = await asyncio.to_thread(
             db.table("body_profiles")
             .select("*")
             .eq("user_id", user_id)
             .order("is_default", desc=True)
             .order("created_at", desc=True)
-            .execute()
+            .execute
         )
         profiles = [BodyProfile.model_validate(r).model_dump(mode="json") for r in (res.data or [])]
         return {"data": {"body_profiles": profiles}, "message": "OK"}
@@ -516,7 +517,7 @@ async def create_body_profile(
     """Create a new body profile."""
     try:
         now = _now()
-        existing_count = db.table("body_profiles").select("id", count="exact").eq("user_id", user_id).execute()
+        existing_count = await asyncio.to_thread(db.table("body_profiles").select("id", count="exact").eq("user_id", user_id).execute)
         count = getattr(existing_count, "count", len(existing_count.data or []))
 
         payload = request.model_dump()
@@ -524,17 +525,17 @@ async def create_body_profile(
             payload["is_default"] = True
 
         if payload.get("is_default"):
-            db.table("body_profiles").update({"is_default": False}).eq("user_id", user_id).execute()
+            await asyncio.to_thread(db.table("body_profiles").update({"is_default": False}).eq("user_id", user_id).execute)
 
         profile_id = str(uuid.uuid4())
         insert = {"id": profile_id, "user_id": user_id, **payload, "created_at": now, "updated_at": now}
-        res = db.table("body_profiles").insert(insert).execute()
+        res = await asyncio.to_thread(db.table("body_profiles").insert(insert).execute)
         row = _first_row(res.data or [])
         if not row:
             raise DatabaseError("Failed to create body profile")
 
         if payload.get("is_default"):
-            db.table("users").update({"body_profile_id": profile_id}).eq("id", user_id).execute()
+            await asyncio.to_thread(db.table("users").update({"body_profile_id": profile_id}).eq("id", user_id).execute)
 
         profile = BodyProfile.model_validate(row)
         return {"data": profile.model_dump(mode="json"), "message": "Created"}
@@ -555,7 +556,7 @@ async def update_body_profile(
     """Update an existing body profile."""
     try:
         profile_id_str = str(profile_id)
-        existing = db.table("body_profiles").select("*").eq("id", profile_id_str).eq("user_id", user_id).execute()
+        existing = await asyncio.to_thread(db.table("body_profiles").select("*").eq("id", profile_id_str).eq("user_id", user_id).execute)
         if not existing.data:
             raise BodyProfileNotFoundError(profile_id=profile_id_str)
 
@@ -563,15 +564,15 @@ async def update_body_profile(
         update["updated_at"] = _now()
 
         if update.get("is_default") is True:
-            db.table("body_profiles").update({"is_default": False}).eq("user_id", user_id).execute()
+            await asyncio.to_thread(db.table("body_profiles").update({"is_default": False}).eq("user_id", user_id).execute)
 
-        res = db.table("body_profiles").update(update).eq("id", profile_id_str).eq("user_id", user_id).execute()
+        res = await asyncio.to_thread(db.table("body_profiles").update(update).eq("id", profile_id_str).eq("user_id", user_id).execute)
         row = _first_row(res.data or [])
         if not row:
             raise DatabaseError("Failed to update body profile")
 
         if update.get("is_default") is True:
-            db.table("users").update({"body_profile_id": profile_id_str}).eq("id", user_id).execute()
+            await asyncio.to_thread(db.table("users").update({"body_profile_id": profile_id_str}).eq("id", user_id).execute)
 
         profile = BodyProfile.model_validate(row)
         return {"data": profile.model_dump(mode="json"), "message": "Updated"}
@@ -591,30 +592,30 @@ async def delete_body_profile(
     """Delete a body profile."""
     try:
         profile_id_str = str(profile_id)
-        existing = db.table("body_profiles").select("id,is_default").eq("id", profile_id_str).eq("user_id", user_id).execute()
+        existing = await asyncio.to_thread(db.table("body_profiles").select("id,is_default").eq("id", profile_id_str).eq("user_id", user_id).execute)
         if not existing.data:
             raise BodyProfileNotFoundError(profile_id=profile_id_str)
 
         was_default = existing.data[0].get("is_default") if existing.data else False
 
-        db.table("body_profiles").delete().eq("id", profile_id_str).eq("user_id", user_id).execute()
+        await asyncio.to_thread(db.table("body_profiles").delete().eq("id", profile_id_str).eq("user_id", user_id).execute)
 
         # If deleting the default profile, promote the newest remaining profile (if any)
         if was_default:
-            remaining = (
+            remaining = await asyncio.to_thread(
                 db.table("body_profiles")
                 .select("id")
                 .eq("user_id", user_id)
                 .order("created_at", desc=True)
                 .limit(1)
-                .execute()
+                .execute
             )
             if remaining.data:
                 new_default_id = remaining.data[0]["id"]
-                db.table("body_profiles").update({"is_default": True, "updated_at": _now()}).eq("id", new_default_id).execute()
-                db.table("users").update({"body_profile_id": new_default_id}).eq("id", user_id).execute()
+                await asyncio.to_thread(db.table("body_profiles").update({"is_default": True, "updated_at": _now()}).eq("id", new_default_id).execute)
+                await asyncio.to_thread(db.table("users").update({"body_profile_id": new_default_id}).eq("id", user_id).execute)
             else:
-                db.table("users").update({"body_profile_id": None}).eq("id", user_id).execute()
+                await asyncio.to_thread(db.table("users").update({"body_profile_id": None}).eq("id", user_id).execute)
 
         return None
 
@@ -630,7 +631,7 @@ async def get_body_profile(
     db: Client = Depends(get_db),
 ):
     try:
-        result = (
+        result = await asyncio.to_thread(
             db.table("body_profiles")
             .select("*")
             .eq("user_id", user_id)
@@ -638,7 +639,7 @@ async def get_body_profile(
             .order("created_at", desc=True)
             .limit(1)
             .single()
-            .execute()
+            .execute
         )
         if not result.data:
             raise BodyProfileNotFoundError()
@@ -659,7 +660,7 @@ async def upsert_body_profile(
     db: Client = Depends(get_db),
 ):
     try:
-        existing = (
+        existing = await asyncio.to_thread(
             db.table("body_profiles")
             .select("id, is_default")
             .eq("user_id", user_id)
@@ -667,7 +668,7 @@ async def upsert_body_profile(
             .order("created_at", desc=True)
             .limit(1)
             .single()
-            .execute()
+            .execute
         )
 
         now = _now()
@@ -681,13 +682,13 @@ async def upsert_body_profile(
                 "created_at": now,
                 "updated_at": now,
             }
-            result = db.table("body_profiles").insert(insert).execute()
+            result = await asyncio.to_thread(db.table("body_profiles").insert(insert).execute)
             row = _first_row(result.data or [])
             if not row:
                 raise DatabaseError("Failed to create body profile")
             profile_id = row["id"]
             # Link default profile
-            db.table("users").update({"body_profile_id": profile_id}).eq("id", user_id).execute()
+            await asyncio.to_thread(db.table("users").update({"body_profile_id": profile_id}).eq("id", user_id).execute)
             profile = BodyProfile.model_validate(row)
             return {"data": profile.model_dump(mode="json"), "message": "Created"}
 
@@ -696,16 +697,16 @@ async def upsert_body_profile(
         update_dict["updated_at"] = now
 
         if update_dict.get("is_default") is True:
-            db.table("body_profiles").update({"is_default": False}).eq("user_id", user_id).execute()
+            await asyncio.to_thread(db.table("body_profiles").update({"is_default": False}).eq("user_id", user_id).execute)
 
-        result = db.table("body_profiles").update(update_dict).eq("id", profile_id).execute()
+        result = await asyncio.to_thread(db.table("body_profiles").update(update_dict).eq("id", profile_id).execute)
         row = _first_row(result.data or [])
         if not row:
             raise DatabaseError("Failed to update body profile")
 
         # If user toggles is_default, keep users.body_profile_id updated
         if update_dict.get("is_default") is True:
-            db.table("users").update({"body_profile_id": profile_id}).eq("id", user_id).execute()
+            await asyncio.to_thread(db.table("users").update({"body_profile_id": profile_id}).eq("id", user_id).execute)
 
         profile = BodyProfile.model_validate(row)
         return {"data": profile.model_dump(mode="json"), "message": "Updated"}
@@ -750,7 +751,7 @@ def _build_recent_activity(items: List[Dict], outfits: List[Dict]) -> List[Dict[
 async def _get_weather_suggestion(user_id: str, db: Client) -> Optional[Dict[str, Any]]:
     """Get weather-based suggestion for user."""
     try:
-        settings_row = db.table("user_settings").select("default_location").eq("user_id", user_id).execute()
+        settings_row = await asyncio.to_thread(db.table("user_settings").select("default_location").eq("user_id", user_id).execute)
         location = settings_row.data[0].get("default_location") if (settings_row.data and len(settings_row.data) > 0) else None
         if not location:
             return None
@@ -778,14 +779,14 @@ async def _get_weather_suggestion(user_id: str, db: Client) -> Optional[Dict[str
 async def _get_outfit_of_the_day(user_id: str, db: Client) -> Optional[Dict[str, Any]]:
     """Get the most recently updated outfit for the user."""
     try:
-        outfit = (
+        outfit = (await asyncio.to_thread(
             db.table("outfits")
             .select("id,name,outfit_images(image_url,thumbnail_url,is_primary)")
             .eq("user_id", user_id)
             .order("updated_at", desc=True)
             .limit(1)
-            .execute()
-        ).data or []
+            .execute
+        )).data or []
 
         if not outfit:
             return None
@@ -809,7 +810,7 @@ async def get_dashboard(
 ):
     """Aggregate endpoint for the dashboard UI."""
     try:
-        user_row = db.table("users").select("*").eq("id", user_id).execute()
+        user_row = await asyncio.to_thread(db.table("users").select("*").eq("id", user_id).execute)
         if not user_row.data:
             raise UserNotFoundError(user_id=user_id)
 
@@ -817,57 +818,57 @@ async def get_dashboard(
         month_start = now_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
 
         # Parallel queries for counts
-        items_count = db.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_deleted", False).execute()
-        outfits_count = db.table("outfits").select("id", count="exact").eq("user_id", user_id).execute()
+        items_count = await asyncio.to_thread(db.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_deleted", False).execute)
+        outfits_count = await asyncio.to_thread(db.table("outfits").select("id", count="exact").eq("user_id", user_id).execute)
 
-        items_added_month = (
+        items_added_month = await asyncio.to_thread(
             db.table("items")
             .select("id", count="exact")
             .eq("user_id", user_id)
             .eq("is_deleted", False)
             .gte("created_at", month_start)
-            .execute()
+            .execute
         )
-        outfits_created_month = (
+        outfits_created_month = await asyncio.to_thread(
             db.table("outfits")
             .select("id", count="exact")
             .eq("user_id", user_id)
             .gte("created_at", month_start)
-            .execute()
+            .execute
         )
 
-        most_worn_item = (
+        most_worn_item = (await asyncio.to_thread(
             db.table("items")
             .select("name,usage_times_worn")
             .eq("user_id", user_id)
             .eq("is_deleted", False)
             .order("usage_times_worn", desc=True)
             .limit(1)
-            .execute()
-        ).data or []
+            .execute
+        )).data or []
 
-        fav_items = db.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).eq("is_deleted", False).execute()
-        fav_outfits = db.table("outfits").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).execute()
+        fav_items = await asyncio.to_thread(db.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).eq("is_deleted", False).execute)
+        fav_outfits = await asyncio.to_thread(db.table("outfits").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).execute)
 
         # Recent activity
-        recent_items = (
+        recent_items = (await asyncio.to_thread(
             db.table("items")
             .select("id,name,created_at")
             .eq("user_id", user_id)
             .eq("is_deleted", False)
             .order("created_at", desc=True)
             .limit(5)
-            .execute()
-        ).data or []
+            .execute
+        )).data or []
 
-        recent_outfits = (
+        recent_outfits = (await asyncio.to_thread(
             db.table("outfits")
             .select("id,name,created_at")
             .eq("user_id", user_id)
             .order("created_at", desc=True)
             .limit(5)
-            .execute()
-        ).data or []
+            .execute
+        )).data or []
 
         recent_activity = _build_recent_activity(recent_items, recent_outfits)
 

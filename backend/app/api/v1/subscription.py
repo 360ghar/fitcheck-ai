@@ -3,6 +3,7 @@ Subscription API endpoints for managing user subscriptions and billing.
 """
 from typing import Any, Dict, Optional
 
+import asyncio
 import stripe
 from fastapi import APIRouter, Depends, Request, HTTPException
 from supabase import Client
@@ -163,12 +164,12 @@ async def create_checkout_session(
 
         # Check existing stripe customer
         customer_id = None
-        sub_result = (
+        sub_result = await asyncio.to_thread(
             db.table("subscriptions")
             .select("stripe_customer_id")
             .eq("user_id", user["id"])
             .maybe_single()
-            .execute()
+            .execute
         )
 
         sub_data = maybe_single_data(sub_result)
@@ -184,9 +185,9 @@ async def create_checkout_session(
             customer_id = customer.id
 
             # Save customer ID
-            db.table("subscriptions").update({
+            await asyncio.to_thread(db.table("subscriptions").update({
                 "stripe_customer_id": customer_id,
-            }).eq("user_id", user["id"]).execute()
+            }).eq("user_id", user["id"]).execute)
 
         # Create checkout session
         checkout_session = stripe.checkout.Session.create(
@@ -238,12 +239,12 @@ async def create_portal_session(
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
     # Get customer ID
-    sub_result = (
+    sub_result = await asyncio.to_thread(
         db.table("subscriptions")
         .select("stripe_customer_id")
         .eq("user_id", user["id"])
         .maybe_single()
-        .execute()
+        .execute
     )
 
     sub_data = maybe_single_data(sub_result)
@@ -280,12 +281,12 @@ async def cancel_subscription(
         raise ValidationError("You don't have an active paid subscription")
 
     # If Stripe subscription exists, cancel it there too
-    sub_result = (
+    sub_result = await asyncio.to_thread(
         db.table("subscriptions")
         .select("stripe_subscription_id")
         .eq("user_id", user["id"])
         .maybe_single()
-        .execute()
+        .execute
     )
 
     sub_data = maybe_single_data(sub_result)
@@ -372,13 +373,13 @@ async def stripe_webhook(request: Request, db: Client = Depends(get_db)):
 
             if user_id:
                 # Downgrade to free
-                db.table("subscriptions").update({
+                await asyncio.to_thread(db.table("subscriptions").update({
                     "plan_type": "free",
                     "status": "active",
                     "stripe_subscription_id": None,
                     "current_period_end": None,
                     "cancel_at_period_end": False,
-                }).eq("user_id", user_id).execute()
+                }).eq("user_id", user_id).execute)
                 logger.info(f"Downgraded user {user_id} to free plan")
 
         elif event["type"] == "invoice.payment_failed":
@@ -386,15 +387,15 @@ async def stripe_webhook(request: Request, db: Client = Depends(get_db)):
 
             if subscription_id:
                 # Find user by subscription ID
-                result = db.table("subscriptions").select("user_id").eq(
+                result = await asyncio.to_thread(db.table("subscriptions").select("user_id").eq(
                     "stripe_subscription_id", subscription_id
-                ).maybe_single().execute()
+                ).maybe_single().execute)
 
                 result_data = maybe_single_data(result)
                 if result_data:
-                    db.table("subscriptions").update({
+                    await asyncio.to_thread(db.table("subscriptions").update({
                         "status": "past_due",
-                    }).eq("user_id", result_data["user_id"]).execute()
+                    }).eq("user_id", result_data["user_id"]).execute)
                     logger.info(f"Marked subscription as past_due for subscription {subscription_id}")
 
     except Exception as e:
