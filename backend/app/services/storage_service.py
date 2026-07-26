@@ -4,11 +4,13 @@ Handles item images, outfit images, and user avatars.
 """
 
 import asyncio
+import base64
 import os
 import uuid
 from typing import Optional, List, Tuple
 from datetime import datetime
 
+import httpx
 from supabase import Client
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
@@ -553,6 +555,65 @@ class StorageService:
             "thumbnail_url": upload["public_url"],
             "storage_path": upload["storage_path"],
         }
+
+    @staticmethod
+    async def upload_source_image(
+        db: Client,
+        user_id: str,
+        file_data: bytes,
+        extension: str = ".jpg",
+    ) -> dict:
+        """Upload the ORIGINAL source photo an item was extracted from.
+
+        Stored once per source photo (the caller dedupes multi-item photos).
+        URL is attached to every item extracted from that photo so the image
+        generation pipeline can re-fetch it as a reference image without
+        pinning source bytes in process memory.
+
+        Returns {image_url, storage_path} under {user_id}/sources/.
+        """
+        ext = extension if extension.startswith(".") else f".{extension}"
+        # .jpg / .jpeg -> image/jpeg, everything else -> image/png (covers .png
+        # screenshots, .webp uploads, etc.). Source photos in practice are JPEGs
+        # from phone cameras / social platforms.
+        content_type = "image/jpeg" if ext.lower() in (".jpg", ".jpeg") else "image/png"
+        path = f"{user_id}/sources/source_{uuid.uuid4().hex}{ext}"
+        upload = await StorageService.upload_file(
+            db=db,
+            file_data=file_data,
+            file_path=path,
+            content_type=content_type,
+        )
+        return {
+            "image_url": upload["public_url"],
+            "storage_path": upload["storage_path"],
+        }
+
+    @staticmethod
+    async def download_to_base64(url: str, timeout: float = 10.0) -> Optional[str]:
+        """Download a stored image URL back to base64 for image-gen reference.
+
+        Returns base64-encoded bytes (no data: prefix) or None on any failure
+        so callers can fall back to text-only generation gracefully.
+        """
+        if not url:
+            return None
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(timeout),
+                limits=httpx.Limits(max_connections=10),
+                follow_redirects=True,
+            ) as client:
+                response = await client.get(url)
+                response.raise_for_status()
+                return base64.b64encode(response.content).decode("utf-8")
+        except Exception as e:
+            logger.warning(
+                "Failed to download source image for reference",
+                url=url[:120],
+                error=str(e),
+            )
+            return None
 
     @staticmethod
     async def promote_temp_image_to_item(

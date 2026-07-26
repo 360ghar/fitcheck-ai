@@ -62,7 +62,7 @@ function getStatusIndicator(status: BatchImageInput['status']) {
 function getBorderStyle(status: BatchImageInput['status']) {
   switch (status) {
     case 'extracting':
-      return 'ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-gray-900 animate-pulse';
+      return 'ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-gray-900';
     case 'completed':
       return 'ring-2 ring-green-500 ring-offset-1 dark:ring-offset-gray-900';
     case 'failed':
@@ -119,6 +119,14 @@ export function BatchExtractionProgress({
           </div>
           <Progress value={progress} className="h-2" />
         </div>
+      </div>
+
+      {/* Honest time expectation so users know it isn't stuck */}
+      <div className="flex items-center gap-2 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-2">
+        <Loader2 className="h-4 w-4 text-indigo-500 animate-spin flex-shrink-0" />
+        <p className="text-sm text-indigo-800 dark:text-indigo-200">
+          Vision analysis typically takes about a minute. We'll show items as soon as they're found.
+        </p>
       </div>
 
       {/* Error message */}

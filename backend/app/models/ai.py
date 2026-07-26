@@ -152,7 +152,7 @@ class GenerateProductImageRequest(BaseModel):
     view_angle: str = "front"
     include_shadows: bool = False
     save_to_storage: bool = False
-    reference_image: Optional[str] = None  # Base64 reference image for exact matching
+    reference_image: Optional[str] = None  # Base64 of source photo
 
 
 class GenerateProductImageResponse(BaseModel):

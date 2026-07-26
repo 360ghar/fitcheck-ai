@@ -169,10 +169,34 @@ For each detected item:
 6. brand (null if unknown)
 7. confidence (0.0 to 1.0)
 8. boundingBox — see BOUNDING BOX RULES below
-9. detailedDescription (detailed product-quality description)
+9. detailedDescription — see DETAILED DESCRIPTION RULES below (critical for image generation fidelity)
 10. person_id
 11. person_label
 12. is_current_user_person
+
+DETAILED DESCRIPTION RULES (critical — this paragraph drives the image generator):
+Write ONE dense paragraph (>= 35 words) covering these visual categories IN THIS
+EXACT ORDER, separated by ";":
+  cut/silhouette; colorway; print or graphic content; pattern geometry if any;
+  collar/neckline; sleeve style + length; hem length + shape; pockets/buttons/zips;
+  fabric weave + weight; surface texture + sheen + distress; hardware color + finish;
+  logo/branding placement + scale; fit note; other distinctive marks.
+- Use only OBSERVABLE visual facts. No vague praise (nice, stylish, modern, trendy,
+  fashionable, beautiful). No guesses about price or fabric composition if not visible.
+- If a category does not apply (e.g. a t-shirt has no hardware), write "none" for it.
+- Examples:
+  "crew-neck cropped t-shirt; off-white base with charcoal sleeves; small front-left
+   embroidered tiger graphic; solid no pattern; ribbed crew collar; short set-in
+   sleeves; straight cropped hem at waist; no pockets; plain-weave cotton midweight;
+   matte soft hand no distress; none; no visible logo; relaxed cropped fit; faint
+   yellowing at collar"
+  "high-rise wide-leg jeans; mid-blue indigo wash; no print; faded vertical
+   honeycomb whiskering at hips; classic 5-pocket waist with belt loops; full
+   length raw hem; front slash + back patch pockets; 12oz twill denim; matte
+   broken-in mild knee bagging; antiqued brass rivets; leather patch back-right
+   waist; slim-straight through thigh wide from knee; contrast orange bartack
+   stitching"
+
 
 BOUNDING BOX RULES (critical — boxes are used for crops and overlays):
 - Format: object with x, y, width, height.
@@ -789,24 +813,51 @@ class ItemExtractionAgent:
         }
 
     def _generate_default_description(self, item: Dict[str, Any]) -> str:
-        """Generate a default description from item attributes."""
-        parts = []
+        """Generate a fallback description from item attributes.
 
-        if item.get("sub_category"):
-            parts.append(f"A {item['sub_category']}")
-        elif item.get("category"):
-            parts.append(f"A {item['category']}")
-        else:
-            parts.append("A clothing item")
+        Only used when the VLM returned an empty detailedDescription — the
+        prompt asks for a 35+ word paragraph, so this fallback is a last
+        resort. Build the densest description we can from whatever structured
+        fields are present, covering silhouette, color, material, pattern, and
+        branding when available.
+        """
+        parts: List[str] = []
 
-        colors = item.get("colors", [])
+        # Silhouette / cut
+        sub = _clean_text(item.get("sub_category"))
+        cat = _normalize_category(item.get("category", ""))
+        silhouette = sub or cat or "clothing item"
+        parts.append(silhouette)
+
+        # Colorway
+        colors = item.get("colors") or []
+        colors = [str(c).strip().lower() for c in colors if str(c).strip()]
         if colors:
-            parts.append(f"in {' and '.join(colors)}")
+            parts.append(f"in {', '.join(colors)}")
 
-        if item.get("material"):
-            parts.append(f"made of {item['material']}")
+        # Material / fabric weight
+        material = _clean_text(item.get("material"))
+        if material:
+            parts.append(f"made of {material}")
 
-        return " ".join(parts)
+        # Pattern / print geometry
+        pattern = _clean_text(item.get("pattern"))
+        if pattern and pattern.lower() not in {"solid", "none", "plain"}:
+            parts.append(f"with {pattern} pattern")
+        elif pattern:
+            parts.append("solid colorway")
+
+        # Brand / logo placement
+        brand = _clean_text(item.get("brand"))
+        if brand:
+            parts.append(f"by {brand}")
+
+        # If we still have very little, pad with category so the image-gen
+        # prompt has at least silhouette + color to anchor on.
+        description = "; ".join(p for p in parts if p)
+        if len(description.split()) < 10:
+            description = f"{description}; further visual details not specified"
+        return description
 
 
 # =============================================================================

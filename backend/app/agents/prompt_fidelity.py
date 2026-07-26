@@ -42,14 +42,24 @@ PERSON_REFERENCE_FIDELITY = f"""{IDENTITY_LOCK}
 
 {SHORT_NEGATIVES}"""
 
-# Product extraction from a reference photo
+# Product extraction from a reference photo. Stronger than the old version:
+# enumerates every visual category the extraction prompt captures, so the
+# generator cannot drift on print, texture, hardware, or branding.
 PRODUCT_REFERENCE_LOCK = """PRODUCT LOCK (highest priority):
-- Extract ONLY the described garment/item from the reference image.
-- Ignore the person, face, body, and background.
-- Keep exact color, print, cut, fabric look, logos, and hardware from the reference.
+- Reproduce ONLY the single item described in the prompt, EXACTLY as it
+  appears in the reference image: same colors, print, graphic content,
+  pattern geometry, collar/neckline, sleeves, hem length and shape, pockets,
+  fabric weave and weight, surface texture, sheen, distress, hardware color
+  and finish, logo/branding placement and scale, and fit.
+- The dense description in the prompt identifies WHICH item to reproduce and
+  is the source of truth for those tokens.
+- Ignore EVERY other garment, footwear, accessory, prop, person, face, body,
+  and background visible in the reference photo. Output one item only.
 - Single isolated product shot only.
 
-AVOID: wrong color, different design, extra items, mannequin face, person, watermark, text"""
+AVOID: extra items, second garment, partial second item, wrong color,
+       different design, restyled cut, mannequin face, person, watermark,
+       text, beautification, fabric smoothing."""
 
 # Shared instructions for the photoshoot *text* planner (LLM, not image model)
 SUBJECT_LOCK_FIELDS = """Write subject_lock as one dense paragraph with concrete visual tokens:

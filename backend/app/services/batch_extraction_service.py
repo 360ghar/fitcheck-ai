@@ -23,6 +23,7 @@ from app.services.batch_job_service import (
     BatchJobStatus,
     DetectedItemData,
 )
+from app.services.storage_service import StorageService
 from app.utils.image_processing import downscale_base64_image
 from app.utils.retry import is_retryable_error, with_retry
 
@@ -229,6 +230,29 @@ class BatchExtractionService:
             if job.is_cancelled():
                 return []
 
+            # Persist the source photo to Supabase Storage BEFORE the vision
+            # call. The returned URL is attached to every item detected in
+            # this photo so the generation phase can re-fetch it as a
+            # reference image (full image + bbox) for accurate reproduction.
+            # Best-effort: failures degrade to text-only generation, not a
+            # failed pipeline.
+            image_data_ref = job.images.get(image_id)
+            if (
+                image_data_ref is not None
+                and not image_data_ref.source_image_url
+                and image_base64
+            ):
+                try:
+                    upload = await self._persist_source_image(image_id, image_base64)
+                    if upload:
+                        image_data_ref.source_image_url = upload.get("image_url")
+                        image_data_ref.source_image_storage_path = upload.get("storage_path")
+                except Exception as upload_err:
+                    logger.warning(
+                        "Source image upload failed; falling back to text-only generation",
+                        extra={"job_id": job.job_id, "image_id": image_id, "error": str(upload_err)},
+                    )
+
             # ponytail: shrink the photo before the vision call. Off the event
             # loop because PIL decode is CPU-bound and would stall heartbeats.
             # Cache keys use the original payload (route looks up before this).
@@ -340,6 +364,35 @@ class BatchExtractionService:
             logger.info(
                 "Failed to fetch user avatar - continuing without it",
                 extra={"user_id": self.user_id, "error": str(e)},
+            )
+            return None
+
+    async def _persist_source_image(
+        self,
+        image_id: str,
+        image_base64: str,
+    ) -> Optional[Dict[str, str]]:
+        """Upload the original source photo to Supabase Storage.
+
+        Returns {image_url, storage_path} on success, or None on decode/upload
+        failure. Best-effort: callers degrade to text-only generation.
+        """
+        if not image_base64:
+            return None
+        try:
+            # Strip data URL prefix if present
+            raw_b64 = image_base64.split("base64,", 1)[-1] if "base64," in image_base64 else image_base64
+            file_data = base64.b64decode(raw_b64)
+            return await StorageService.upload_source_image(
+                db=self.db,
+                user_id=self.user_id,
+                file_data=file_data,
+                extension=".jpg",
+            )
+        except Exception as e:
+            logger.warning(
+                "Source image decode/upload failed",
+                extra={"image_id": image_id, "error": str(e)},
             )
             return None
 
@@ -474,6 +527,25 @@ class BatchExtractionService:
                     or item.category
                 )
 
+                # Re-fetch the persisted source photo so the image-gen model
+                # has the original garment as a visual reference (full image;
+                # bbox pins the region). Falls back to text-only if the URL
+                # is missing or the download fails.
+                reference_image_base64: Optional[str] = None
+                if item.source_image_url:
+                    reference_image_base64 = await StorageService.download_to_base64(
+                        item.source_image_url
+                    )
+                    if reference_image_base64 is None:
+                        logger.info(
+                            "Source image unavailable; text-only generation",
+                            extra={
+                                "job_id": job.job_id,
+                                "temp_id": item.temp_id,
+                                "image_id": item.image_id,
+                            },
+                        )
+
                 result = await with_retry(
                     lambda: agent.generate_product_image(
                         item_description=item_description,
@@ -484,6 +556,7 @@ class BatchExtractionService:
                         background="white",
                         view_angle="front",
                         include_shadows=False,
+                        reference_image=reference_image_base64,
                     ),
                     max_retries=1,
                     initial_delay=2.0,

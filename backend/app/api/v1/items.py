@@ -223,6 +223,8 @@ async def create_item(
             "usage_times_worn": 0,
             "usage_last_worn": None,
             "cost_per_wear": None,
+            "source_image_url": item.source_image_url,
+            "source_image_storage_path": item.source_image_storage_path,
             "created_at": now,
             "updated_at": now,
             "is_deleted": False,

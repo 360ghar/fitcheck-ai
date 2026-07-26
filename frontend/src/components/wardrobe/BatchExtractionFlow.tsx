@@ -655,7 +655,7 @@ export function BatchExtractionFlow({
       case 'select':
         return inputMode === 'social'
           ? 'Import wardrobe candidates from an Instagram/Facebook profile URL with queued review.'
-          : 'We find items first, then polish studio photos in the background (often 15–40s each).';
+          : 'AI finds each clothing item (about a minute), then polishes clean studio photos in the background (a few minutes). You can review and edit items as they arrive.';
       case 'uploading':
         return 'Preparing your images for processing…';
       case 'extracting':

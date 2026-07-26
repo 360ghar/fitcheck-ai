@@ -322,6 +322,24 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
 
+    # Surface mis-set production env vars (empty AI_ENCRYPTION_KEY, wrong
+    # FRONTEND_URL, non-OpenAI vision host, etc.) on every boot so Railway's
+    # log drain catches them before they bite at request time. Never raises;
+    # see app/core/config_health.py.
+    try:
+        from app.core.config_health import validate_production_config
+        for issue in validate_production_config():
+            getattr(logger, "error" if issue.severity == "error" else "warning")(
+                "Config issue at startup",
+                extra={
+                    "config_key": issue.key,
+                    "config_severity": issue.severity,
+                    "config_message": issue.message,
+                },
+            )
+    except Exception:
+        logger.exception("Config health check itself failed; continuing")
+
     # Schedule heavy init without blocking the accept path
     bg_task = asyncio.create_task(
         _background_startup(logger),

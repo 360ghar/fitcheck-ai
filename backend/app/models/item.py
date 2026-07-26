@@ -134,6 +134,11 @@ class ItemBase(BaseModel):
 class ItemCreate(ItemBase):
     """Model for creating a new item."""
     images: List[ItemImageBase] = Field(default_factory=list)
+    # Original source photo reference (set by AI extraction flows; optional for
+    # manual creation). Used as the reference image for product-image
+    # regeneration so the exact garment (pattern, texture, branding) is preserved.
+    source_image_url: Optional[str] = None
+    source_image_storage_path: Optional[str] = None
 
 
 class ItemUpdate(BaseModel):
@@ -200,6 +205,8 @@ class ItemResponse(ItemBase):
     created_at: datetime
     updated_at: datetime
     images: List[ItemImage] = Field(default_factory=list)
+    source_image_url: Optional[str] = None
+    source_image_storage_path: Optional[str] = None
 
     class Config:
         from_attributes = True

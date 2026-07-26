@@ -70,7 +70,7 @@ function getStatusIndicator(item: DetectedItem) {
  */
 function getBorderStyle(item: DetectedItem, isInCurrentBatch: boolean) {
   if (item.status === 'generating') {
-    return 'ring-2 ring-purple-500 ring-offset-2 dark:ring-offset-gray-900 animate-pulse';
+    return 'ring-2 ring-purple-500 ring-offset-2 dark:ring-offset-gray-900';
   }
   if (item.status === 'generated') {
     return 'ring-2 ring-green-500 ring-offset-1 dark:ring-offset-gray-900';
@@ -169,6 +169,14 @@ export function BatchGenerationProgress({
           </div>
           <Progress value={progress} className="h-2" />
         </div>
+      </div>
+
+      {/* Honest time expectation so users know it isn't stuck */}
+      <div className="flex items-center gap-2 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 px-3 py-2">
+        <Sparkles className="h-4 w-4 text-purple-500 flex-shrink-0" />
+        <p className="text-sm text-purple-800 dark:text-purple-200">
+          Studio photos take a few minutes to generate. Items appear here as they're ready.
+        </p>
       </div>
 
       {/* Error message */}

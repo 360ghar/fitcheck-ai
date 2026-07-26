@@ -576,6 +576,8 @@ class SocialImportPipelineService:
             "confidence": item.get("confidence") or 0,
             "bounding_box": item.get("bounding_box"),
             "detailed_description": item.get("detailed_description"),
+            "source_image_url": item.get("source_image_url"),
+            "source_image_storage_path": item.get("source_image_storage_path"),
             "status": status.value,
         }
         if generated_urls:
@@ -652,6 +654,40 @@ class SocialImportPipelineService:
                 await self._sync_job_counters(job_id)
                 return
 
+            # Persist the source photo once and attach to every item extracted
+            # from it, so the image generator can reproduce the exact garment.
+            # Best-effort: missing source image degrades to text-only gen.
+            source_image_url: Optional[str] = None
+            source_image_storage_path: Optional[str] = None
+            try:
+                raw_b64 = (
+                    image_base64.split("base64,", 1)[-1]
+                    if "base64," in image_base64
+                    else image_base64
+                )
+                source_upload = await StorageService.upload_source_image(
+                    db=self.db,
+                    user_id=self.user_id,
+                    file_data=base64.b64decode(raw_b64),
+                    extension=".jpg",
+                )
+                source_image_url = source_upload.get("image_url")
+                source_image_storage_path = source_upload.get("storage_path")
+            except Exception as upload_err:
+                logger.warning(
+                    "Source image upload failed in social import; continuing",
+                    extra={
+                        "job_id": job_id,
+                        "photo_id": photo_id,
+                        "error": str(upload_err),
+                    },
+                )
+
+            for item in raw_items:
+                if not item.get("source_image_url"):
+                    item["source_image_url"] = source_image_url
+                    item["source_image_storage_path"] = source_image_storage_path
+
             if not await self._check_rate_limit_with_pause(
                 job_id, "generation", count=len(raw_items)
             ):
@@ -676,6 +712,16 @@ class SocialImportPipelineService:
                     item.get("detailed_description")
                     or f"{(item.get('colors') or [''])[0]} {item.get('sub_category') or item.get('category') or 'clothing'}".strip()
                 )
+
+                # Re-fetch the persisted source photo as a visual reference so
+                # the generator reproduces the exact garment. The fetched
+                # bytes never hit DB storage (kept in-memory only for this call).
+                reference_image_base64: Optional[str] = None
+                if item.get("source_image_url"):
+                    reference_image_base64 = await StorageService.download_to_base64(
+                        item["source_image_url"]
+                    )
+
                 try:
                     generated = await generation_agent.generate_product_image(
                         item_description=item_description,
@@ -686,6 +732,7 @@ class SocialImportPipelineService:
                         background="white",
                         view_angle="front",
                         include_shadows=False,
+                        reference_image=reference_image_base64,
                     )
 
                     image_bytes = base64.b64decode(generated.image_base64)
@@ -1431,6 +1478,10 @@ class SocialImportPipelineService:
             "usage_times_worn": 0,
             "usage_last_worn": None,
             "cost_per_wear": None,
+            # Persist the source photo reference so re-generation, audit, and
+            # UI can fetch the original garment photo later.
+            "source_image_url": social_item.get("source_image_url"),
+            "source_image_storage_path": social_item.get("source_image_storage_path"),
             "created_at": now_iso,
             "updated_at": now_iso,
             "is_deleted": False,

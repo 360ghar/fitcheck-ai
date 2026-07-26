@@ -208,3 +208,191 @@ async def test_auto_generate_false_skips_generation():
     assert job.status == BatchJobStatus.COMPLETED
 
     await _unregister(job.job_id)
+
+
+@pytest.mark.asyncio
+async def test_persist_source_image_uploads_and_returns_url():
+    """_persist_source_image should call StorageService.upload_source_image
+    and return its {image_url, storage_path}."""
+    from app.services.batch_extraction_service import BatchExtractionService
+
+    service = BatchExtractionService(user_id="user-1", db=MagicMock())
+
+    captured: dict = {}
+
+    async def fake_upload(*, db, user_id, file_data, extension):
+        captured.update(user_id=user_id, file_data=file_data, extension=extension)
+        return {"image_url": "https://example/source.jpg", "storage_path": "u/sources/s.jpg"}
+
+    with patch(
+        "app.services.batch_extraction_service.StorageService.upload_source_image",
+        new=fake_upload,
+    ):
+        result = await service._persist_source_image("img-a", "dGVzdA==")
+
+    assert result == {
+        "image_url": "https://example/source.jpg",
+        "storage_path": "u/sources/s.jpg",
+    }
+    assert captured["user_id"] == "user-1"
+    assert captured["extension"] == ".jpg"
+    # base64 "dGVzdA==" decodes to b"test"
+    assert captured["file_data"] == b"test"
+
+
+@pytest.mark.asyncio
+async def test_persist_source_image_returns_none_on_garbage_input():
+    from app.services.batch_extraction_service import BatchExtractionService
+
+    service = BatchExtractionService(user_id="user-1", db=MagicMock())
+    result = await service._persist_source_image("img-a", "!!!not-base64!!!")
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_add_detected_items_inherits_source_image_from_photo():
+    """Items extracted from a photo must carry that photo's source_image_url."""
+    job = _make_job(["img-a"])
+    # Simulate the source image having been uploaded before extraction.
+    job.images["img-a"].source_image_url = "https://example/source.jpg"
+    job.images["img-a"].source_image_storage_path = "u/sources/s.jpg"
+    await _register(job)
+
+    added = await BatchJobService.add_detected_items(
+        job.job_id,
+        "img-a",
+        [
+            {
+                "temp_id": "i1",
+                "category": "tops",
+                "bounding_box": {"x": 10, "y": 20, "width": 40, "height": 50},
+            },
+            {"temp_id": "i2", "category": "bottoms"},
+        ],
+    )
+
+    assert len(added) == 2
+    for item in added:
+        assert item.source_image_url == "https://example/source.jpg"
+        assert item.source_image_storage_path == "u/sources/s.jpg"
+
+    # to_dict round-trips the fields.
+    serialized = added[0].to_dict()
+    assert serialized["source_image_url"] == "https://example/source.jpg"
+    assert serialized["source_image_storage_path"] == "u/sources/s.jpg"
+
+    await _unregister(job.job_id)
+
+
+@pytest.mark.asyncio
+async def test_generate_single_item_passes_reference_image_and_description():
+    """_generate_single_item must fetch the source URL and pass it as
+    reference_image to generate_product_image. The item is identified by its
+    dense description; the bounding_box is NOT forwarded to generation."""
+    from app.services.batch_extraction_service import BatchExtractionService
+    from app.services.batch_job_service import DetectedItemData
+    from app.agents.image_generation_agent import GeneratedImage
+
+    job = _make_job(["img-a"])
+    await _register(job)
+
+    item = DetectedItemData(
+        temp_id="i1",
+        image_id="img-a",
+        category="tops",
+        sub_category="t-shirt",
+        colors=["white"],
+        detailed_description="white crew tee; solid; ribbed collar",
+        bounding_box={"x": 10.0, "y": 20.0, "width": 40.0, "height": 50.0},
+        source_image_url="https://example/source.jpg",
+    )
+    job.detected_items.append(item)
+
+    captured_kwargs: dict = {}
+
+    async def fake_generate_product_image(**kwargs):
+        captured_kwargs.update(kwargs)
+        return GeneratedImage(
+            image_base64="ZmFrZQ==", prompt="p", model="m", provider="p"
+        )
+
+    fake_agent = MagicMock()
+    fake_agent.generate_product_image = fake_generate_product_image
+
+    download_calls: List[str] = []
+
+    async def fake_download(url, timeout=10.0):
+        download_calls.append(url)
+        return "c291cmNl"  # base64 of b"source"
+
+    service = BatchExtractionService(user_id="user-1", db=MagicMock())
+
+    with (
+        patch(
+            "app.services.batch_extraction_service.StorageService.download_to_base64",
+            new=fake_download,
+        ),
+        patch.object(BatchJobService, "broadcast_event", AsyncMock()),
+        patch.object(BatchJobService, "update_item_generation", AsyncMock()),
+    ):
+        result = await service._generate_single_item(job, item, fake_agent)
+
+    assert result == "ZmFrZQ=="
+    assert download_calls == ["https://example/source.jpg"]
+    assert captured_kwargs["reference_image"] == "c291cmNl"
+    # The bounding box is intentionally not forwarded to image generation —
+    # the item is identified by its dense description instead.
+    assert "bounding_box" not in captured_kwargs
+    assert captured_kwargs["item_description"] == "white crew tee; solid; ribbed collar"
+
+    await _unregister(job.job_id)
+
+
+@pytest.mark.asyncio
+async def test_generate_single_item_falls_back_when_source_unavailable():
+    """If the source URL is missing or download fails, generation still runs
+    text-only (no reference_image)."""
+    from app.services.batch_extraction_service import BatchExtractionService
+    from app.services.batch_job_service import DetectedItemData
+    from app.agents.image_generation_agent import GeneratedImage
+
+    job = _make_job(["img-a"])
+    await _register(job)
+
+    # No source_image_url on the item (e.g. upload failed in extraction phase).
+    item = DetectedItemData(
+        temp_id="i2",
+        image_id="img-a",
+        category="tops",
+        colors=["blue"],
+        detailed_description="blue tee",
+        bounding_box={"x": 5.0, "y": 5.0, "width": 20.0, "height": 20.0},
+        source_image_url=None,
+    )
+    job.detected_items.append(item)
+
+    captured_kwargs: dict = {}
+
+    async def fake_generate_product_image(**kwargs):
+        captured_kwargs.update(kwargs)
+        return GeneratedImage(
+            image_base64="ZmFrZQ==", prompt="p", model="m", provider="p"
+        )
+
+    fake_agent = MagicMock()
+    fake_agent.generate_product_image = fake_generate_product_image
+
+    service = BatchExtractionService(user_id="user-1", db=MagicMock())
+
+    with (
+        patch.object(BatchJobService, "broadcast_event", AsyncMock()),
+        patch.object(BatchJobService, "update_item_generation", AsyncMock()),
+    ):
+        result = await service._generate_single_item(job, item, fake_agent)
+
+    assert result == "ZmFrZQ=="
+    assert captured_kwargs["reference_image"] is None
+    # No bounding box is forwarded to generation.
+    assert "bounding_box" not in captured_kwargs
+
+    await _unregister(job.job_id)

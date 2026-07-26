@@ -311,7 +311,10 @@ Style:
             background: Background style
             view_angle: Camera angle
             include_shadows: Whether to include shadows
-            reference_image: Optional base64 reference image for exact matching
+            reference_image: Optional base64 of the source photo. Used ONLY as
+                the appearance source of truth to replicate the single item
+                described by item_description; the description identifies which
+                item, the photo supplies its look.
 
         Returns:
             GeneratedImage with the result
@@ -340,18 +343,33 @@ Style:
         color_desc = " and ".join(colors) if colors else ""
 
         if reference_image:
-            prompt = f"""REFERENCE IMAGE = product appearance source of truth.
-Extract ONLY the {category_name} item into a clean e-commerce product photo.
+            # The item is IDENTIFIED by its dense description below, and
+            # REPLICATED from the reference photo. We deliberately do NOT pass
+            # a bounding box: extraction bboxes are imprecise and weak
+            # region-attention still let other items (e.g. a jacket) bleed into
+            # a single-item shot. The description names which item; the photo
+            # supplies its look; the lock forces a single isolated product.
+            tokens = category_name
+            if color_desc:
+                tokens += f"; colors: {color_desc}"
+            if material:
+                tokens += f"; material: {material}"
+
+            prompt = f"""REFERENCE IMAGE = the source photo. Use it ONLY as the appearance source of truth to replicate the ONE item described below.
+
+IDENTIFY the item to reproduce from this dense description (NOT any other item in the photo):
+{item_description}
 
 {PRODUCT_REFERENCE_LOCK}
 
-Item details: {item_description}
+Item: {tokens}.
 
 Output:
 - {background_map.get(background, background_map["white"])}
 - {view_map.get(view_angle, view_map["front"])}
 - {"Subtle natural drop shadow" if include_shadows else "No shadows; fully isolated"}
 - Soft studio light, sharp focus, catalog quality
+- Reproduce ONLY that single item, exactly as it appears in the reference photo. Ignore every other garment, footwear, accessory, prop, person, and background visible in the photo. One isolated product shot; no second or partial second item.
 - Flat or invisible mannequin; no person""".strip()
         else:
             prompt = f"""Professional e-commerce product photo of a single {category_name}:
@@ -364,7 +382,7 @@ Specs:
 - {"Subtle natural drop shadow" if include_shadows else "No shadows; fully isolated"}
 - Accurate colors{f": {color_desc}" if color_desc else ""}, realistic fabric{f" ({material})" if material else ""}
 - Soft studio light, sharp focus
-- Only this item; no model or extra garments
+- Only this single item; no model, extra garments, or second item
 
 {SHORT_NEGATIVES}""".strip()
 

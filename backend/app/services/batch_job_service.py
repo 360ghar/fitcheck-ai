@@ -55,6 +55,12 @@ class BatchImageData:
     image_id: str
     image_base64: str
     filename: Optional[str] = None
+    # Persisted source photo (Supabase Storage URL + path). Set once before
+    # extraction runs so every item detected in this photo can carry the same
+    # reference for product-image generation. The in-memory base64 is dropped
+    # after extraction (release_image_payloads); the URL survives.
+    source_image_url: Optional[str] = None
+    source_image_storage_path: Optional[str] = None
 
 
 @dataclass
@@ -76,6 +82,11 @@ class DetectedItemData:
     is_current_user_person: bool = False
     include_in_wardrobe: bool = True
     status: str = "detected"
+    # Original source photo reference. Copied from BatchImageData at add time
+    # so the generation phase can fetch it back as the reference image without
+    # needing the in-memory bytes (which are released after extraction).
+    source_image_url: Optional[str] = None
+    source_image_storage_path: Optional[str] = None
     generated_image_base64: Optional[str] = None
     generated_image_url: Optional[str] = None
     generation_error: Optional[str] = None
@@ -99,6 +110,8 @@ class DetectedItemData:
             "is_current_user_person": self.is_current_user_person,
             "include_in_wardrobe": self.include_in_wardrobe,
             "status": self.status,
+            "source_image_url": self.source_image_url,
+            "source_image_storage_path": self.source_image_storage_path,
             "generated_image_base64": self.generated_image_base64,
             "generated_image_url": self.generated_image_url,
             "generation_error": self.generation_error,
@@ -347,6 +360,14 @@ class BatchJobService:
         async with cls._lock:
             job = cls._jobs.get(job_id)
             if job:
+                # Items inherit the source photo's persisted URL so the
+                # generation phase can re-fetch it as a reference image even
+                # after the in-memory base64 has been released.
+                image_data = job.images.get(image_id)
+                source_url = image_data.source_image_url if image_data else None
+                source_path = (
+                    image_data.source_image_storage_path if image_data else None
+                )
                 for item in items:
                     item_data = DetectedItemData(
                         temp_id=item.get("temp_id", str(uuid4())),
@@ -365,6 +386,8 @@ class BatchJobService:
                         is_current_user_person=bool(item.get("is_current_user_person", False)),
                         include_in_wardrobe=bool(item.get("include_in_wardrobe", True)),
                         status="detected",
+                        source_image_url=item.get("source_image_url") or source_url,
+                        source_image_storage_path=item.get("source_image_storage_path") or source_path,
                     )
                     job.detected_items.append(item_data)
                     added.append(item_data)
@@ -429,6 +452,8 @@ class BatchJobService:
                         is_current_user_person=bool(raw.get("is_current_user_person", False)),
                         include_in_wardrobe=include_in_wardrobe,
                         status=str(raw.get("status") or "detected"),
+                        source_image_url=raw.get("source_image_url"),
+                        source_image_storage_path=raw.get("source_image_storage_path"),
                         generated_image_base64=raw.get("generated_image_base64"),
                         generated_image_url=raw.get("generated_image_url"),
                         generation_error=raw.get("generation_error"),
