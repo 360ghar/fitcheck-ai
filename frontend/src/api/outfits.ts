@@ -11,7 +11,6 @@ import type {
   PaginatedOutfitsResponse,
   GenerationRequest,
   GenerationResponse,
-  GenerationStatus,
   OutfitImage,
 } from '../types';
 
@@ -133,30 +132,6 @@ export async function generateOutfitVisualization(
       `/api/v1/outfits/${outfitId}/generate`,
       request
     );
-    return response.data.data;
-  } catch (error) {
-    throw getApiError(error);
-  }
-}
-
-/**
- * Check the status of an AI generation
- */
-export async function getGenerationStatus(generationId: string): Promise<{
-  status: GenerationStatus | string;
-  progress?: number;
-  images?: string[];
-  error?: string;
-}> {
-  try {
-    const response = await apiClient.get<
-      ApiEnvelope<{
-        status: GenerationStatus | string;
-        progress?: number;
-        images?: string[];
-        error?: string;
-      }>
-    >(`/api/v1/outfits/generation/${generationId}`);
     return response.data.data;
   } catch (error) {
     throw getApiError(error);

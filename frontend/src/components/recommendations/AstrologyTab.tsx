@@ -5,11 +5,14 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ItemImage } from '@/components/ui/item-image'
+import { ActionStatusLabel, ActionErrorNote } from '@/components/ui/action-status'
+import { useElapsedSeconds } from '@/hooks/useElapsedSeconds'
 import type { AstrologyRecommendation, AstrologyRecommendationMode, Item } from '@/types'
 
 interface AstrologyTabProps {
   data: AstrologyRecommendation | null
   isLoading: boolean
+  error: string | null
   targetDate: string
   mode: AstrologyRecommendationMode
   onTargetDateChange: (value: string) => void
@@ -65,12 +68,14 @@ function safeItems(items: Item[] | undefined): Item[] {
 export function AstrologyTab({
   data,
   isLoading,
+  error,
   targetDate,
   mode,
   onTargetDateChange,
   onModeChange,
   onRun,
 }: AstrologyTabProps) {
+  const elapsedSeconds = useElapsedSeconds(isLoading)
   const outfitNameById = new Map<string, string>()
   for (const group of data?.wardrobe_picks || []) {
     for (const item of safeItems(group.items)) {
@@ -118,12 +123,28 @@ export function AstrologyTab({
 
             <div className="flex items-end">
               <Button onClick={onRun} disabled={isLoading || !targetDate} className="w-full">
-                {isLoading ? 'Checking…' : 'Get Astrology Colors'}
+                <ActionStatusLabel
+                  loading={isLoading}
+                  elapsedSeconds={elapsedSeconds}
+                  phaseText="Reading the stars…"
+                  idleText="Get Astrology Colors"
+                />
               </Button>
             </div>
           </div>
 
-          {isLoading && <div className="text-sm text-muted-foreground">Generating Vedic-style color guidance…</div>}
+          {isLoading && (
+            <div className="text-sm text-muted-foreground">
+              <ActionStatusLabel
+                loading
+                elapsedSeconds={elapsedSeconds}
+                phaseText="Reading the stars…"
+                idleText=""
+              />
+            </div>
+          )}
+
+          {error && !isLoading && <ActionErrorNote message={error} />}
         </CardContent>
       </Card>
 

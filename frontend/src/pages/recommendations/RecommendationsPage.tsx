@@ -15,10 +15,13 @@ import { ScrollableTabs, ScrollableTab } from '@/components/ui/scrollable-tabs'
 import { useToast } from '@/components/ui/use-toast'
 import { ItemImage } from '@/components/ui/item-image'
 import { EmptyState } from '@/components/ui/empty-state'
+import { ActionStatusLabel, ActionErrorNote } from '@/components/ui/action-status'
+import { useElapsedSeconds } from '@/hooks/useElapsedSeconds'
 import { cn } from '@/lib/utils'
 import { generateFallbackOutfits } from '@/lib/outfit-generator'
 import { AstrologyTab } from '@/components/recommendations'
 
+import { isApiError } from '@/api/client'
 import { useWardrobeStore } from '@/stores/wardrobeStore'
 import {
   findMatchingItems,
@@ -29,6 +32,13 @@ import {
 } from '@/api/recommendations'
 import { ensureSessionRecording, trackEvent } from '@/lib/analytics'
 import type { AstrologyRecommendationMode, CompleteLookSuggestion, MatchResult, Item } from '@/types'
+
+/** Normalize a thrown value (ApiError plain object, real Error, or unknown) into copy. */
+function getErrorMessage(err: unknown): string {
+  if (isApiError(err)) return err.message
+  if (err instanceof Error) return err.message
+  return 'An error occurred'
+}
 
 type TabType = 'today' | 'match' | 'complete' | 'weather' | 'astrology' | 'shopping'
 
@@ -139,6 +149,8 @@ export default function RecommendationsPage() {
   const [matchSearch, setMatchSearch] = useState('')
   const [matchData, setMatchData] = useState<{ matches: MatchResult[]; complete_looks: CompleteLookSuggestion[] } | null>(null)
   const [isLoadingMatch, setIsLoadingMatch] = useState(false)
+  const [matchError, setMatchError] = useState<string | null>(null)
+  const matchElapsed = useElapsedSeconds(isLoadingMatch)
   const todayAutoRanRef = useRef(false)
 
   const selectedMatchItem = useMemo(
@@ -149,11 +161,14 @@ export default function RecommendationsPage() {
   const runMatch = async (id: string) => {
     if (!id) return
     setIsLoadingMatch(true)
+    setMatchError(null)
     try {
       const data = await findMatchingItems(id, { limit: 12 })
       setMatchData(data)
-    } catch {
-      // api/client interceptor already toasts the failure.
+    } catch (err) {
+      // api/client interceptor already toasts the failure; this note keeps
+      // the real message visible past the toast's auto-dismiss.
+      setMatchError(getErrorMessage(err))
     } finally {
       setIsLoadingMatch(false)
     }
@@ -167,6 +182,8 @@ export default function RecommendationsPage() {
   const [completeLooks, setCompleteLooks] = useState<CompleteLookSuggestion[]>([])
   const [isLoadingComplete, setIsLoadingComplete] = useState(false)
   const [hasAttemptedComplete, setHasAttemptedComplete] = useState(false)
+  const [completeError, setCompleteError] = useState<string | null>(null)
+  const completeElapsed = useElapsedSeconds(isLoadingComplete)
 
   const toggleCompleteItem = (itemId: string) => {
     setCompleteSelection((prev) => {
@@ -186,6 +203,7 @@ export default function RecommendationsPage() {
 
     setIsLoadingComplete(true)
     setHasAttemptedComplete(true)
+    setCompleteError(null)
 
     try {
       let looks = await getCompleteLookSuggestions(ids, { limit: 6 })
@@ -205,9 +223,11 @@ export default function RecommendationsPage() {
       if (fallbackLooks.length > 0) {
         setCompleteLooks(fallbackLooks)
       } else {
+        const message = getErrorMessage(err)
+        setCompleteError(message)
         toast({
           title: 'Failed to generate complete looks',
-          description: err instanceof Error ? err.message : 'An error occurred',
+          description: message,
           variant: 'destructive',
         })
       }
@@ -223,14 +243,19 @@ export default function RecommendationsPage() {
   const [weatherLocation, setWeatherLocation] = useState('')
   const [weatherData, setWeatherData] = useState<Awaited<ReturnType<typeof getWeatherRecommendations>> | null>(null)
   const [isLoadingWeather, setIsLoadingWeather] = useState(false)
+  const [weatherError, setWeatherError] = useState<string | null>(null)
+  const weatherElapsed = useElapsedSeconds(isLoadingWeather)
 
   const runWeather = async () => {
     setIsLoadingWeather(true)
+    setWeatherError(null)
     try {
       const data = await getWeatherRecommendations(weatherLocation.trim() || undefined)
       setWeatherData(data)
-    } catch {
-      // api/client interceptor already toasts the failure.
+    } catch (err) {
+      // api/client interceptor already toasts the failure; this note keeps
+      // the real message visible past the toast's auto-dismiss.
+      setWeatherError(getErrorMessage(err))
     } finally {
       setIsLoadingWeather(false)
     }
@@ -273,11 +298,13 @@ export default function RecommendationsPage() {
   const [astrologyDate, setAstrologyDate] = useState(localDateISO)
   const [astrologyData, setAstrologyData] = useState<Awaited<ReturnType<typeof getAstrologyRecommendations>> | null>(null)
   const [isLoadingAstrology, setIsLoadingAstrology] = useState(false)
+  const [astrologyError, setAstrologyError] = useState<string | null>(null)
   const astrologyRequestIdRef = useRef(0)
 
   const runAstrology = async () => {
     const requestId = ++astrologyRequestIdRef.current
     setIsLoadingAstrology(true)
+    setAstrologyError(null)
     try {
       const data = await getAstrologyRecommendations({
         target_date: astrologyDate,
@@ -289,9 +316,11 @@ export default function RecommendationsPage() {
       // This endpoint opts out of the interceptor toast (see api/recommendations)
       // so a superseded request cannot toast over the one still loading.
       if (requestId !== astrologyRequestIdRef.current) return
+      const message = getErrorMessage(err)
+      setAstrologyError(message)
       toast({
         title: 'Failed to load astrology recommendations',
-        description: err instanceof Error ? err.message : 'An error occurred',
+        description: message,
         variant: 'destructive',
       })
     } finally {
@@ -310,9 +339,12 @@ export default function RecommendationsPage() {
   const [shoppingBudget, setShoppingBudget] = useState('')
   const [shopping, setShopping] = useState<Awaited<ReturnType<typeof getShoppingRecommendations>>>([])
   const [isLoadingShopping, setIsLoadingShopping] = useState(false)
+  const [shoppingError, setShoppingError] = useState<string | null>(null)
+  const shoppingElapsed = useElapsedSeconds(isLoadingShopping)
 
   const runShopping = async () => {
     setIsLoadingShopping(true)
+    setShoppingError(null)
     ensureSessionRecording()
     trackEvent('shopping_recommendations_requested', {
       category: shoppingCategory.trim() || 'all',
@@ -334,7 +366,8 @@ export default function RecommendationsPage() {
         source: 'web_app',
       })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'An error occurred'
+      const message = getErrorMessage(err)
+      setShoppingError(message)
       trackEvent('shopping_recommendations_failed', {
         error_message: message,
         source: 'web_app',
@@ -414,13 +447,27 @@ export default function RecommendationsPage() {
                       onClick={() => void runWeather()}
                       disabled={isLoadingWeather}
                     >
-                      {isLoadingWeather ? 'Refreshing…' : 'Refresh'}
+                      <ActionStatusLabel
+                        loading={isLoadingWeather}
+                        elapsedSeconds={weatherElapsed}
+                        phaseText="Checking the weather…"
+                        idleText="Refresh"
+                      />
                     </Button>
                   </div>
 
                   {isLoadingWeather && !weatherData && (
-                    <p className="text-sm text-muted-foreground">Loading today’s recommendations…</p>
+                    <p className="text-sm text-muted-foreground inline-flex items-center gap-2">
+                      <ActionStatusLabel
+                        loading
+                        elapsedSeconds={weatherElapsed}
+                        phaseText="Checking the weather…"
+                        idleText=""
+                      />
+                    </p>
                   )}
+
+                  {weatherError && !isLoadingWeather && <ActionErrorNote message={weatherError} />}
 
                   {weatherData && (
                     <div className="space-y-4">
@@ -526,8 +573,15 @@ export default function RecommendationsPage() {
                     disabled={!matchItemId || isLoadingMatch}
                     className="w-full md:w-auto"
                   >
-                    {isLoadingMatch ? 'Finding…' : 'Find matches'}
+                    <ActionStatusLabel
+                      loading={isLoadingMatch}
+                      elapsedSeconds={matchElapsed}
+                      phaseText="Finding matches…"
+                      idleText="Find matches"
+                    />
                   </Button>
+
+                  {matchError && !isLoadingMatch && <ActionErrorNote message={matchError} />}
 
                   {selectedMatchItem && (
                     <div className="p-3 rounded-lg bg-muted">
@@ -614,9 +668,16 @@ export default function RecommendationsPage() {
                   disabled={isLoadingComplete || completeSelection.size === 0}
                   className="w-full md:w-auto"
                 >
-                  {isLoadingComplete ? 'Generating…' : 'Generate'}
+                  <ActionStatusLabel
+                    loading={isLoadingComplete}
+                    elapsedSeconds={completeElapsed}
+                    phaseText="Building your look…"
+                    idleText="Generate"
+                  />
                 </Button>
               </div>
+
+              {completeError && !isLoadingComplete && <ActionErrorNote message={completeError} />}
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3 max-h-[40vh] md:max-h-[18rem] overflow-y-auto pr-1">
                 {items.map((item) => {
@@ -663,7 +724,7 @@ export default function RecommendationsPage() {
                 </div>
               )}
 
-              {completeLooks.length === 0 && hasAttemptedComplete && !isLoadingComplete && (
+              {completeLooks.length === 0 && hasAttemptedComplete && !isLoadingComplete && !completeError && (
                 <div className="p-4 rounded-lg bg-muted text-center">
                   <div className="text-sm text-muted-foreground">
                     No outfit suggestions could be generated.
@@ -699,9 +760,16 @@ export default function RecommendationsPage() {
                   />
                 </div>
                 <Button onClick={runWeather} disabled={isLoadingWeather} className="w-full md:w-auto">
-                  {isLoadingWeather ? 'Loading…' : 'Get Recommendations'}
+                  <ActionStatusLabel
+                    loading={isLoadingWeather}
+                    elapsedSeconds={weatherElapsed}
+                    phaseText="Checking the weather…"
+                    idleText="Get Recommendations"
+                  />
                 </Button>
               </div>
+
+              {weatherError && !isLoadingWeather && <ActionErrorNote message={weatherError} />}
 
               {weatherData && (
                 <div className="space-y-3">
@@ -767,6 +835,7 @@ export default function RecommendationsPage() {
           <AstrologyTab
             data={astrologyData}
             isLoading={isLoadingAstrology}
+            error={astrologyError}
             targetDate={astrologyDate}
             mode={astrologyMode}
             onTargetDateChange={setAstrologyDate}
@@ -809,8 +878,15 @@ export default function RecommendationsPage() {
               </div>
 
               <Button onClick={runShopping} disabled={isLoadingShopping} className="w-full md:w-auto">
-                {isLoadingShopping ? 'Loading…' : 'Get Suggestions'}
+                <ActionStatusLabel
+                  loading={isLoadingShopping}
+                  elapsedSeconds={shoppingElapsed}
+                  phaseText="Finding items…"
+                  idleText="Get Suggestions"
+                />
               </Button>
+
+              {shoppingError && !isLoadingShopping && <ActionErrorNote message={shoppingError} />}
 
               {shopping.length > 0 && (
                 <div className="space-y-2">
@@ -833,7 +909,7 @@ export default function RecommendationsPage() {
                 </div>
               )}
 
-              {shopping.length === 0 && !isLoadingShopping && (
+              {shopping.length === 0 && !isLoadingShopping && !shoppingError && (
                 <div className="text-sm text-muted-foreground">
                   Generate suggestions to see recommended items to buy.
                 </div>

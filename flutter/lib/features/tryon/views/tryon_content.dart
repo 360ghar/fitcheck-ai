@@ -167,28 +167,27 @@ class TryOnContent extends StatelessWidget {
 
               // Generate button
               Obx(
-                () => ElevatedButton.icon(
-                  onPressed:
-                      controller.isGenerating.value ||
-                          controller.clothingImage.value == null
-                      ? null
-                      : () => controller.generateTryOn(),
-                  icon: controller.isGenerating.value
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.auto_awesome),
-                  label: Text(
-                    controller.isGenerating.value
-                        ? 'Generating...'
-                        : 'Generate Try-On',
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52),
-                  ),
-                ),
+                () => controller.isGenerating.value
+                    ? ElevatedButton(
+                        onPressed: null,
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(52),
+                        ),
+                        child: const InlineProcessingStatus(
+                          phase: ProcessingPhase.processing,
+                          processingLabel: 'Generating',
+                        ),
+                      )
+                    : ElevatedButton.icon(
+                        onPressed: controller.clothingImage.value == null
+                            ? null
+                            : () => controller.generateTryOn(),
+                        icon: const Icon(Icons.auto_awesome),
+                        label: const Text('Generate Try-On'),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(52),
+                        ),
+                      ),
               ),
 
               Obx(() {
@@ -285,28 +284,24 @@ class TryOnContent extends StatelessWidget {
                     ),
                     const SizedBox(height: AppConstants.spacing8),
                     Obx(
-                      () => ElevatedButton.icon(
-                        onPressed: controller.isUploadingAvatar.value
-                            ? null
-                            : () => controller.uploadUserAvatar(),
-                        icon: controller.isUploadingAvatar.value
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.camera_alt),
-                        label: Text(
-                          controller.isUploadingAvatar.value
-                              ? 'Uploading...'
-                              : 'Upload Avatar',
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(36),
-                        ),
-                      ),
+                      () => controller.isUploadingAvatar.value
+                          ? ElevatedButton(
+                              onPressed: null,
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(36),
+                              ),
+                              child: const InlineProcessingStatus(
+                                phase: ProcessingPhase.uploading,
+                              ),
+                            )
+                          : ElevatedButton.icon(
+                              onPressed: () => controller.uploadUserAvatar(),
+                              icon: const Icon(Icons.camera_alt),
+                              label: const Text('Upload Avatar'),
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(36),
+                              ),
+                            ),
                     ),
                   ],
                 ),

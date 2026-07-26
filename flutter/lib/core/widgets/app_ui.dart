@@ -8,6 +8,9 @@ export 'app_image_viewer.dart';
 // Export shimmer/skeleton widgets
 export 'shimmer_widgets.dart';
 
+// Export inline processing status (spinner + phase text for buttons)
+export 'inline_processing_status.dart';
+
 // Export infinite scroll wrapper
 export 'infinite_scroll_wrapper.dart';
 

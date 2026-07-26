@@ -250,15 +250,16 @@ class _ItemEditPageState extends State<ItemEditPage> {
         title: const Text('Edit Item'),
         elevation: 0,
         actions: [
-          TextButton(
-            onPressed: isSaving.value ? null : _saveChanges,
-            child: isSaving.value
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Save'),
+          Obx(
+            () => TextButton(
+              onPressed: isSaving.value ? null : _saveChanges,
+              child: isSaving.value
+                  ? const InlineProcessingStatus(
+                      phase: ProcessingPhase.processing,
+                      processingLabel: 'Saving',
+                    )
+                  : const Text('Save'),
+            ),
           ),
         ],
       ),

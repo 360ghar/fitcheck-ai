@@ -791,6 +791,11 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
     final awaitingPhoto = controller.socialAwaitingPhoto;
     final bufferedPhoto = controller.socialBufferedPhoto;
     final processingPhoto = controller.socialProcessingPhoto;
+    // A rate-limit pause is a "paused, will auto-resume" state, not a
+    // failure - it must read differently from a genuinely stuck/errored
+    // import, even though both set the same socialError string.
+    final isPausedForRateLimit =
+        job.status == SocialImportJobStatus.pausedRateLimited;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppConstants.spacing16),
@@ -805,7 +810,7 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Processing Photos',
+                      isPausedForRateLimit ? 'Import Paused' : 'Processing Photos',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: tokens.textPrimary,
                         fontWeight: FontWeight.w600,
@@ -873,6 +878,45 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
             valueColor: AlwaysStoppedAnimation<Color>(tokens.brandColor),
             borderRadius: BorderRadius.circular(4),
           ),
+
+          // Real backend message for a non-terminal pause (e.g. rate-limited,
+          // "will auto-resume after reset") - this state carried no visible
+          // copy before, so a paused job looked pixel-identical to one
+          // actively processing. Tinted brand color, not the red error card -
+          // pausing to auto-resume later is not a failure, and the message
+          // itself already explains the pause, so no separate title is added.
+          if (isPausedForRateLimit && controller.hasSocialError) ...[
+            const SizedBox(height: AppConstants.spacing12),
+            Container(
+              padding: const EdgeInsets.all(AppConstants.spacing12),
+              decoration: BoxDecoration(
+                color: tokens.brandColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppConstants.radius12),
+                border: Border.all(
+                  color: tokens.brandColor.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.hourglass_top_outlined,
+                    color: tokens.brandColor,
+                    size: 20,
+                  ),
+                  const SizedBox(width: AppConstants.spacing8),
+                  Expanded(
+                    child: Text(
+                      controller.socialError.value,
+                      style: TextStyle(color: tokens.brandColor, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (!isPausedForRateLimit && controller.hasSocialError) ...[
+            const SizedBox(height: AppConstants.spacing12),
+            _buildErrorCard(tokens, controller.socialError.value),
+          ],
 
           const SizedBox(height: AppConstants.spacing8),
 

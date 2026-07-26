@@ -141,7 +141,11 @@ export async function updateUserSettings(data: {
 /**
  * Upload avatar image
  */
-export async function uploadAvatar(file: File): Promise<{ avatar_url: string }> {
+export async function uploadAvatar(
+  file: File,
+  /** Real byte-upload percent (0-100); omitted (never fabricated) when the browser can't report a total. */
+  onUploadPercent?: (percent: number) => void
+): Promise<{ avatar_url: string }> {
   try {
     const formData = new FormData();
     formData.append('file', file);
@@ -153,6 +157,13 @@ export async function uploadAvatar(file: File): Promise<{ avatar_url: string }> 
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        onUploadProgress: onUploadPercent
+          ? (progressEvent) => {
+              if (progressEvent.total) {
+                onUploadPercent(Math.round((progressEvent.loaded / progressEvent.total) * 100));
+              }
+            }
+          : undefined,
       }
     );
     return response.data.data;

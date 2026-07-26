@@ -8,6 +8,7 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useOutfitStore } from '../../stores/outfitStore'
 import { useWardrobeStore } from '../../stores/wardrobeStore'
 import { useJobUiStore } from '../../stores/jobUiStore'
+import { useElapsedSeconds } from '@/hooks/useElapsedSeconds'
 import { GeneratingSurface } from '@/components/jobs'
 import {
   Layers,
@@ -166,11 +167,14 @@ export default function OutfitsPage() {
   const setJob = useJobUiStore((s) => s.setJob)
   const clearJob = useJobUiStore((s) => s.clearJob)
 
+  // Single opaque client-side AI call — no real phases, so the honest signal
+  // is elapsed time, never a fabricated percentage.
+  const generationElapsed = useElapsedSeconds(generationStatus === 'processing')
   const generationStageLabel =
     generationStatus === 'pending'
       ? 'Preparing…'
       : generationStatus === 'processing'
-        ? 'Generating look…'
+        ? `Generating look… (${generationElapsed}s elapsed)`
         : generationStatus === 'failed'
           ? 'Generation failed'
           : generationStatus === 'completed'
@@ -355,13 +359,15 @@ export default function OutfitsPage() {
           }`}
         >
           {displayedOutfits.map((outfit) => {
-            const genStatus = generatingOutfits.get(outfit.id)?.status || null
+            const genEntry = generatingOutfits.get(outfit.id)
+            const genStatus = genEntry?.status || null
             return (
               <OutfitCard
                 key={outfit.id}
                 outfit={outfit}
                 variant={isGridView ? 'default' : 'list'}
                 generationStatus={genStatus}
+                generationError={genEntry?.error}
                 onClick={() => {
                   if (genStatus === 'failed') {
                     void startGenerationForNewOutfit(outfit.id)

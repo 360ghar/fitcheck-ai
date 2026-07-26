@@ -16,6 +16,7 @@ import * as React from 'react'
 import { Heart, Layers, Sparkles, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { useElapsedSeconds } from '@/hooks/useElapsedSeconds'
 import type { Outfit } from '@/types'
 
 // ============================================================================
@@ -28,6 +29,8 @@ export interface OutfitCardProps {
   onToggleFavorite?: (e: React.MouseEvent) => void
   /** Generation status from store */
   generationStatus?: 'pending' | 'processing' | 'failed' | 'completed' | null
+  /** Real failure message from the store, shown instead of a generic label */
+  generationError?: string
   /** Display variant */
   variant?: 'default' | 'compact' | 'list'
   /** Show favorite button */
@@ -47,6 +50,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
       onClick,
       onToggleFavorite,
       generationStatus,
+      generationError,
       variant = 'default',
       showFavorite = true,
       className,
@@ -58,6 +62,10 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
     const isGenerating = generationStatus === 'pending' || generationStatus === 'processing'
     const generationFailed = generationStatus === 'failed'
     const [imageError, setImageError] = React.useState(false)
+    // Only surface elapsed time once the wait is long enough to matter — a
+    // tiny grid tile doesn't need a "1s" flicker for near-instant generations.
+    const elapsedSeconds = useElapsedSeconds(isGenerating)
+    const showElapsed = isGenerating && elapsedSeconds >= 3
 
     React.useEffect(() => {
       setImageError(false)
@@ -177,13 +185,17 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
         {isGenerating ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-primary/10 to-violet-500/10">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-xs text-muted-foreground mt-2">Generating AI image...</p>
+            <p className="text-xs text-muted-foreground mt-2">
+              Generating AI image…{showElapsed ? ` (${elapsedSeconds}s elapsed)` : ''}
+            </p>
           </div>
         ) : generationFailed ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-destructive/5">
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-destructive/5 px-3">
             <Sparkles className="h-8 w-8 text-destructive/50" />
-            <p className="text-xs text-muted-foreground mt-2">Generation failed</p>
-            <p className="text-[10px] text-muted-foreground">Click to retry</p>
+            <p className="text-xs font-medium text-foreground mt-2">Generation failed</p>
+            <p className="text-[10px] text-muted-foreground text-center line-clamp-2">
+              {generationError || 'Tap to retry'}
+            </p>
           </div>
         ) : imageSrc ? (
           <img

@@ -102,7 +102,6 @@ interface OutfitState {
   // Generation actions
   startGeneration: (outfitId: string, request?: { pose?: string; variations?: number; lighting?: string; body_profile_id?: string }) => Promise<void>;
   startGenerationForNewOutfit: (outfitId: string) => void;
-  checkGenerationStatus: () => Promise<void>;
   resetGeneration: () => void;
   clearError: () => void;
 }
@@ -751,45 +750,6 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
     }
   },
 
-  // Check generation status
-  checkGenerationStatus: async () => {
-    const { generationId } = get();
-
-    if (!generationId) return;
-
-    try {
-      const status = await outfitsApi.getGenerationStatus(generationId);
-
-      set({
-        generationStatus:
-          status.status === 'pending' ||
-          status.status === 'processing' ||
-          status.status === 'completed' ||
-          status.status === 'failed'
-            ? status.status
-            : 'processing',
-      });
-
-      if (status.status === 'completed') {
-        set({
-          generatedImageUrl: status.images?.[0] || null,
-          isGenerating: false,
-        });
-      } else if (status.status === 'failed') {
-        set({
-          error: { message: status.error || 'Generation failed' },
-          isGenerating: false,
-        });
-      } else {
-        // Continue polling
-        setTimeout(() => get().checkGenerationStatus(), 2000);
-      }
-    } catch (error) {
-      const apiError = getApiError(error);
-      set({ error: apiError, isGenerating: false, generationStatus: 'failed' });
-    }
-  },
-
   // Reset generation state
   resetGeneration: () => {
     set({
@@ -927,7 +887,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         const failedMap = new Map(current.generatingOutfits);
         failedMap.set(outfitId, {
           status: 'failed',
-          error: error instanceof Error ? error.message : 'Generation failed',
+          error: getApiError(error).message || 'Generation failed',
         });
         set({ generatingOutfits: failedMap });
         try {

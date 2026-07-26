@@ -622,24 +622,25 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
 
             // Generate AI Preview button
             Expanded(
-              child: ElevatedButton.icon(
-                onPressed: controller.isGenerating.value
-                    ? null
-                    : () => controller.generateAIOutfit(),
-                icon: controller.isGenerating.value
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.auto_awesome),
-                label: Text(controller.isGenerating.value
-                    ? 'Generating...'
-                    : 'Generate AI Preview'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                ),
-              ),
+              child: controller.isGenerating.value
+                  ? ElevatedButton(
+                      onPressed: null,
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                      child: const InlineProcessingStatus(
+                        phase: ProcessingPhase.processing,
+                        processingLabel: 'Generating',
+                      ),
+                    )
+                  : ElevatedButton.icon(
+                      onPressed: () => controller.generateAIOutfit(),
+                      icon: const Icon(Icons.auto_awesome),
+                      label: const Text('Generate AI Preview'),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                    ),
             ),
           ],
         ),

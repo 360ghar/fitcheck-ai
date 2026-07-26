@@ -24,6 +24,15 @@ _ACTIVE_JOB_TTL = timedelta(minutes=30)
 _FINISHED_JOB_TTL = timedelta(minutes=15)
 _CLEANUP_INTERVAL_S = 60
 
+# Terminal statuses are final: a late status write from a pipeline phase that
+# is still unwinding (e.g. a consumer flipping to PROCESSING after the user
+# cancelled) must not overwrite them. Same guard as BatchJobService.
+_TERMINAL_STATUSES = frozenset({
+    PhotoshootJobStatus.COMPLETE,
+    PhotoshootJobStatus.CANCELLED,
+    PhotoshootJobStatus.FAILED,
+})
+
 
 @dataclass
 class PhotoshootJob:
@@ -261,11 +270,14 @@ class PhotoshootJobService:
 
     @classmethod
     async def update_status(cls, job_id: str, status: PhotoshootJobStatus) -> None:
-        """Update job status."""
+        """Update job status. Terminal statuses are final and never overwritten."""
         async with cls._lock:
             job = cls._jobs.get(job_id)
-            if job:
-                job.status = status
+            if not job:
+                return
+            if job.status in _TERMINAL_STATUSES and status not in _TERMINAL_STATUSES:
+                return
+            job.status = status
 
     @classmethod
     async def update_current_batch(cls, job_id: str, batch_num: int) -> None:

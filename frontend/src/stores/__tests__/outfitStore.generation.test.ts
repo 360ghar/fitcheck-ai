@@ -17,7 +17,6 @@ vi.mock('@/api/outfits', () => ({
   uploadOutfitImage: vi.fn(),
   generateOutfitVisualization: vi.fn(),
   getOutfits: vi.fn(),
-  getGenerationStatus: vi.fn(),
 }))
 
 vi.mock('@/api/ai', () => ({

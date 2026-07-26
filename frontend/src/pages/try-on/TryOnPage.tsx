@@ -12,6 +12,7 @@ import { useJobUiStore } from '@/stores/jobUiStore';
 import { generateTryOn, TryOnOptions, TryOnResult } from '@/api/ai';
 import { uploadAvatar } from '@/api/users';
 import { tryOnUsedKey } from '@/lib/activation';
+import { useElapsedSeconds } from '@/hooks/useElapsedSeconds';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -90,10 +91,17 @@ export default function TryOnPage() {
   const [background, setBackground] = useState('studio white');
   const [pose, setPose] = useState('standing front');
   const [isGenerating, setIsGenerating] = useState(false);
+  // Single opaque backend call — no phases to report, so show elapsed time
+  // rather than a fabricated percentage.
+  const tryOnElapsed = useElapsedSeconds(isGenerating);
   const [result, setResult] = useState<TryOnResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const previewUrlRef = useRef<string | null>(null);
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  // Uploading = client sending bytes (real % from axios progress, else
+  // indeterminate); Processing = server has the file, we're just waiting.
+  const [avatarPhase, setAvatarPhase] = useState<'uploading' | 'processing' | null>(null);
+  const [avatarUploadPercent, setAvatarUploadPercent] = useState<number | null>(null);
+  const avatarElapsed = useElapsedSeconds(avatarPhase === 'processing');
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const revokePreviewUrl = useCallback(() => {
@@ -149,9 +157,13 @@ export default function TryOnPage() {
   });
 
   const handleAvatarUpload = async (file: File) => {
-    setIsUploadingAvatar(true);
+    setAvatarPhase('uploading');
+    setAvatarUploadPercent(null);
     try {
-      const { avatar_url } = await uploadAvatar(file);
+      const { avatar_url } = await uploadAvatar(file, (percent) => {
+        setAvatarUploadPercent(percent);
+        if (percent >= 100) setAvatarPhase('processing');
+      });
       if (user) {
         setUser({ ...user, avatar_url });
       }
@@ -159,7 +171,8 @@ export default function TryOnPage() {
     } catch {
       // api/client interceptor already toasts the failure.
     } finally {
-      setIsUploadingAvatar(false);
+      setAvatarPhase(null);
+      setAvatarUploadPercent(null);
     }
   };
 
@@ -286,12 +299,19 @@ export default function TryOnPage() {
             />
             <Button
               onClick={() => avatarInputRef.current?.click()}
-              disabled={isUploadingAvatar}
+              disabled={avatarPhase !== null}
             >
-              {isUploadingAvatar ? (
+              {avatarPhase === 'uploading' ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Uploading…
+                  {avatarUploadPercent != null
+                    ? `Uploading photo… ${avatarUploadPercent}%`
+                    : 'Uploading photo…'}
+                </>
+              ) : avatarPhase === 'processing' ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {`Processing… (${avatarElapsed}s elapsed)`}
                 </>
               ) : (
                 <>
@@ -467,7 +487,7 @@ export default function TryOnPage() {
 
       {step === 'generating' && (
         <GeneratingSurface
-          stage="Generating your try-on…"
+          stage={`Generating your try-on… (${tryOnElapsed}s elapsed)`}
           detail="Often under a minute. Combining your photo with the clothing."
           isActive
           previewUrls={[clothingPreview, userAvatar].filter(Boolean) as string[]}

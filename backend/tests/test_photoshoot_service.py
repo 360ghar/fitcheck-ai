@@ -289,6 +289,24 @@ class TestPhotoshootJobLifecycle:
         assert result is False
 
     @pytest.mark.asyncio
+    async def test_update_status_does_not_overwrite_terminal_status(self):
+        """A late status write from an unwinding pipeline must not un-cancel a job."""
+        job = await PhotoshootJobService.create_job(
+            user_id="user-123",
+            photos=["photo1"],
+            use_case="LINKEDIN",
+            num_images=4,
+        )
+
+        await PhotoshootJobService.cancel_job(job.job_id, "user-123")
+
+        # A stale pipeline phase tries to flip it back to processing.
+        await PhotoshootJobService.update_status(job.job_id, PhotoshootJobStatus.PROCESSING)
+
+        status = await PhotoshootJobService.get_job_status(job.job_id)
+        assert status["status"] == "cancelled"
+
+    @pytest.mark.asyncio
     async def test_job_cleanup_removes_expired_jobs(self):
         """Test that expired jobs are cleaned up."""
         # Create a job with old timestamp
