@@ -823,7 +823,7 @@ RULES:
 
                 response = await ai_service.chat(
                     messages=messages,
-                    model=ai_service.config.get_image_gen_model(),
+                    model=ai_service.get_image_gen_model(),
                     response_modalities=["TEXT", "IMAGE"],
                 )
 
@@ -1212,7 +1212,7 @@ class PhotoshootStreamingService:
 
             response = await ai_service.chat(
                 messages=messages,
-                model=ai_service.config.get_image_gen_model(),
+                model=ai_service.get_image_gen_model(),
                 response_modalities=["TEXT", "IMAGE"],
             )
 

@@ -88,13 +88,23 @@ class Settings(BaseSettings):
     # AI Provider Configuration (Multi-provider support)
     # ==========================================================================
 
-    # Default AI Provider (openai, custom)
+    # Default AI Provider (openai, custom, gemini)
     AI_DEFAULT_PROVIDER: str = "custom"
 
-    # Gemini is not a selectable chat/vision/image provider - these two fields
-    # are used only by ai_service.py's embeddings client (google.genai SDK).
+    # AI_GEMINI_API_KEY is dual-purpose: ai_service.py's embeddings client
+    # (google.genai SDK) AND the native chat/vision/image provider below
+    # (app/services/gemini_provider.py) - both use the same key, different
+    # models. Native Gemini is opt-in (AI_DEFAULT_PROVIDER=gemini, or a user
+    # selecting it via BYOK settings); it has NO per-leg URL fields the way
+    # AI_CHAT_*/AI_VISION_*/AI_IMAGE_* below do - the SDK always talks
+    # directly to Google, so only model names are configurable.
     AI_GEMINI_API_KEY: Optional[str] = None
     AI_GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
+    AI_GEMINI_CHAT_MODEL: str = "gemini-3.6-flash"
+    AI_GEMINI_VISION_MODEL: Optional[str] = None            # inherits AI_GEMINI_CHAT_MODEL when blank
+    AI_GEMINI_VISION_FALLBACK_MODEL: Optional[str] = None
+    AI_GEMINI_IMAGE_MODEL: str = "gemini-3.1-flash-image"
+    AI_GEMINI_IMAGE_FALLBACK_MODEL: Optional[str] = None
 
     # OpenAI Provider Defaults
     AI_OPENAI_API_URL: str = "https://api.openai.com/v1"
@@ -114,6 +124,13 @@ class Settings(BaseSettings):
     AI_CHAT_API_KEY: Optional[str] = None
     AI_CHAT_MODEL: str = "agnes-2.5-flash"
 
+    # "custom" (default): vision stays OpenAI-compatible, uses AI_VISION_API_URL
+    # above. "gemini": the vision leg's primary call is routed directly to
+    # Google's native SDK (app/services/gemini_provider.py) instead - AI_VISION_MODEL
+    # is then read as a Gemini model name, and AI_VISION_API_URL must be left
+    # blank (config_health.py flags the combination as a startup error, since
+    # the URL would otherwise be silently dead once the leg is redirected).
+    AI_VISION_PROVIDER: str = "custom"
     AI_VISION_API_URL: Optional[str] = None
     AI_VISION_API_KEY: Optional[str] = None
     AI_VISION_MODEL: str = "gemini-3.6-flash"

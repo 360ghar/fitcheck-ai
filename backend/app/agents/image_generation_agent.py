@@ -234,7 +234,7 @@ SCENE (change only these):
 
                 response = await self.ai_service.chat(
                     messages=messages,
-                    model=self.ai_service.config.get_image_gen_model(),
+                    model=self.ai_service.get_image_gen_model(),
                     response_modalities=["TEXT", "IMAGE"],
                 )
 
@@ -344,11 +344,19 @@ Style:
 
         if reference_image:
             # The item is IDENTIFIED by its dense description below, and
-            # REPLICATED from the reference photo. We deliberately do NOT pass
-            # a bounding box: extraction bboxes are imprecise and weak
-            # region-attention still let other items (e.g. a jacket) bleed into
-            # a single-item shot. The description names which item; the photo
-            # supplies its look; the lock forces a single isolated product.
+            # REPLICATED from the reference photo. This function itself never
+            # sees or uses bbox coordinates as text/region-attention hints in
+            # the prompt - that was tried and is weak, models don't reliably
+            # attend to a described region within a busy photo. Instead,
+            # callers (batch_extraction_service.py, social_import_pipeline_
+            # service.py, via resolve_product_reference_image in
+            # app/utils/image_processing.py) now physically pre-crop the
+            # reference image to the item's bbox before it ever reaches this
+            # function whenever the source photo has multiple items and the
+            # bbox is trustworthy - or drop the reference entirely and rely on
+            # the description alone when it isn't. So `reference_image` here
+            # is already either a single-item photo, a cropped close-up, or
+            # absent; this prompt is defense-in-depth for whichever it is.
             tokens = category_name
             if color_desc:
                 tokens += f"; colors: {color_desc}"
@@ -589,7 +597,7 @@ Output one cohesive image of THIS same person wearing that exact garment."""
 
             response = await self.ai_service.chat(
                 messages=messages,
-                model=self.ai_service.config.get_image_gen_model(),
+                model=self.ai_service.get_image_gen_model(),
                 response_modalities=["TEXT", "IMAGE"],
             )
 

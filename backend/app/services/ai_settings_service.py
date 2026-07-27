@@ -20,11 +20,10 @@ from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
 from app.services.ai_provider_service import (
     AIProvider,
-    AIProviderService,
-    ProviderConfig,
     get_system_provider_config,
     get_default_provider,
 )
+from app.services.ai_provider_interface import AIProviderClient, get_provider_class
 from app.utils.crypto import derive_fernet_key, legacy_derive_fernet_key
 
 logger = get_context_logger(__name__)
@@ -256,7 +255,7 @@ class AISettingsService:
         user_id: str,
         provider: AIProvider,
         db,
-    ) -> ProviderConfig:
+    ) -> Any:
         """
         Get the effective provider configuration (user override or system default).
 
@@ -266,7 +265,10 @@ class AISettingsService:
             db: Supabase client
 
         Returns:
-            ProviderConfig for the specified provider
+            Provider config for the specified provider (ProviderConfig for
+            OPENAI/CUSTOM, GeminiConfig for GEMINI) - dispatched via the
+            provider registry so adding a new provider doesn't require
+            editing this function.
 
         Raises:
             AIServiceError: If no valid configuration is available
@@ -274,28 +276,19 @@ class AISettingsService:
         # Get user settings
         user_settings = await AISettingsService.get_user_settings(user_id, db)
         provider_configs = user_settings.get("provider_configs", {})
-
-        # Check for user-level override
         user_config = provider_configs.get(provider.value, {})
-        if user_config.get("api_key_encrypted") and user_config.get("api_url"):
+        provider_cls = get_provider_class(provider)
+
+        # Check for user-level override. Completeness (e.g. an OpenAI-
+        # compatible config also needs api_url) is decided by
+        # config_cls.from_user_dict(), which returns None if incomplete -
+        # Gemini has no such requirement beyond the key.
+        if user_config.get("api_key_encrypted"):
             api_key = decrypt_api_key(user_config["api_key_encrypted"])
             if api_key:
-                return ProviderConfig(
-                    api_url=user_config["api_url"],
-                    api_key=api_key,
-                    model=user_config.get("model", settings.AI_CHAT_MODEL),
-                    vision_model=user_config.get("vision_model"),
-                    vision_fallback_model=user_config.get("vision_fallback_model"),
-                    vision_fallback_api_url=user_config.get("vision_fallback_api_url"),
-                    vision_fallback_api_key=user_config.get("vision_fallback_api_key"),
-                    image_gen_model=user_config.get("image_gen_model"),
-                    image_api_style=user_config.get("image_api_style", "images"),
-                    image_api_url=user_config.get("image_api_url"),
-                    image_api_key=user_config.get("image_api_key"),
-                    image_fallback_model=user_config.get("image_fallback_model"),
-                    image_fallback_api_url=user_config.get("image_fallback_api_url"),
-                    image_fallback_api_key=user_config.get("image_fallback_api_key"),
-                )
+                config = provider_cls.config_cls.from_user_dict(user_config, api_key=api_key)
+                if config:
+                    return config
 
         # Fall back to system configuration
         system_config = get_system_provider_config(provider)
@@ -312,7 +305,7 @@ class AISettingsService:
         user_id: str,
         db,
         provider: Optional[AIProvider] = None,
-    ) -> AIProviderService:
+    ) -> AIProviderClient:
         """
         Get an AI service instance configured for a specific user.
 
@@ -322,7 +315,7 @@ class AISettingsService:
             provider: Optional provider override (uses user default if not specified)
 
         Returns:
-            Configured AIProviderService instance
+            Configured provider instance (AIProviderClient)
         """
         # Get user settings to determine default provider
         user_settings = await AISettingsService.get_user_settings(user_id, db)
@@ -335,7 +328,7 @@ class AISettingsService:
                 provider = AIProvider.CUSTOM
 
         config = await AISettingsService.get_effective_provider_config(user_id, provider, db)
-        return AIProviderService(config)
+        return get_provider_class(provider)(config)
 
     @staticmethod
     async def check_rate_limit(
@@ -485,30 +478,27 @@ class AISettingsService:
 
     @staticmethod
     async def test_provider_config(
-        api_url: str,
         api_key: str,
         model: str,
+        api_url: Optional[str] = None,
+        provider: AIProvider = AIProvider.CUSTOM,
     ) -> Dict[str, Any]:
         """
         Test a provider configuration.
 
         Args:
-            api_url: The API URL to test
             api_key: The API key to test
             model: The model to test with
+            api_url: The API URL to test (required for openai/custom, ignored for gemini)
+            provider: Which provider implementation to test against
 
         Returns:
             Test result with success status and message
         """
-        config = ProviderConfig(
-            api_url=api_url,
-            api_key=api_key,
-            model=model,
-            timeout=30.0,  # Shorter timeout for testing
-            image_api_style="images",
-        )
+        provider_cls = get_provider_class(provider)
+        config = provider_cls.config_cls.for_test(api_key=api_key, model=model, api_url=api_url)
 
-        service = AIProviderService(config)
+        service = provider_cls(config)
         try:
             result = await service.test_connection()
             return result

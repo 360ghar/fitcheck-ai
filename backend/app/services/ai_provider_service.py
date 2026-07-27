@@ -29,8 +29,7 @@ import base64
 import random
 import time
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -40,19 +39,33 @@ from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
 from app.utils.retry import with_retry
 from app.services.ai_provider_health_service import _is_non_openai_host
+from app.services.ai_provider_interface import (
+    AIProvider,
+    AIProviderClient,
+    AIResponse,
+    ChatMessage,
+    build_user_multimodal_messages,
+    get_provider_class,
+    register_provider,
+)
+# No circularity: gemini_provider.py only imports ai_provider_interface.py,
+# never this module. Imported at module scope (rather than the old bottom-of-
+# file `import app.services.gemini_provider` side-effect trick) both to
+# trigger @register_provider(AIProvider.GEMINI) and to give the hybrid vision
+# leg below direct symbol access.
+from app.services.gemini_provider import GeminiConfig, GeminiProvider
 
 logger = get_context_logger(__name__)
 
 
 # =============================================================================
-# ENUMS AND DATA CLASSES
+# DATA CLASSES
 # =============================================================================
-
-
-class AIProvider(str, Enum):
-    """Supported AI providers."""
-    OPENAI = "openai"
-    CUSTOM = "custom"
+# AIProvider, ChatMessage, and AIResponse now live in ai_provider_interface.py
+# (imported above) so gemini_provider.py can depend on them without a circular
+# import back to this module. Re-imported here under the same names so every
+# existing importer of `app.services.ai_provider_service` keeps working
+# unchanged.
 
 
 @dataclass
@@ -73,6 +86,15 @@ class ProviderConfig:
     vision_api_url: Optional[str] = None
     vision_api_key: Optional[str] = None
     vision_model: Optional[str] = None
+    # When set to GEMINI, chat_with_vision()'s primary call bypasses the
+    # OpenAI-compatible HTTP path above entirely and goes straight to Google's
+    # native SDK via an internal GeminiProvider - vision_model is then read as
+    # a Gemini model name. None (default) preserves today's behavior. System-
+    # config only in v1: from_user_dict() (BYOK) never sets this.
+    vision_provider: Optional[AIProvider] = None
+    # Gemini API key for the hybrid vision leg above, resolved once at
+    # construction time (system settings only, not per-user/BYOK in v1).
+    vision_gemini_api_key: Optional[str] = None
     # VISION fallback
     vision_fallback_api_url: Optional[str] = None
     vision_fallback_api_key: Optional[str] = None
@@ -154,23 +176,87 @@ class ProviderConfig:
         """Get the image-fallback key, inheriting image then chat."""
         return self.image_fallback_api_key or self.get_image_api_key()
 
+    @classmethod
+    def from_settings(cls, provider: AIProvider, s) -> Optional["ProviderConfig"]:
+        """System-level default configuration for OPENAI or CUSTOM (the two
+        provider values this config type serves - Gemini has its own
+        GeminiConfig). Body unchanged from the old get_system_provider_config()."""
+        if provider == AIProvider.OPENAI:
+            api_key = getattr(s, 'AI_OPENAI_API_KEY', None)
+            if not api_key:
+                return None
+            return cls(
+                api_url=getattr(s, 'AI_OPENAI_API_URL', 'https://api.openai.com/v1'),
+                api_key=api_key,
+                model=getattr(s, 'AI_OPENAI_CHAT_MODEL', 'gpt-4o'),
+                vision_model=getattr(s, 'AI_OPENAI_VISION_MODEL', 'gpt-4o'),
+                image_gen_model=getattr(s, 'AI_OPENAI_IMAGE_MODEL', 'dall-e-3'),
+            )
+        elif provider == AIProvider.CUSTOM:
+            return cls(
+                api_url=s.AI_CHAT_API_URL,
+                api_key=s.AI_CHAT_API_KEY,
+                model=s.AI_CHAT_MODEL,
+                vision_api_url=s.AI_VISION_API_URL,
+                vision_api_key=s.AI_VISION_API_KEY,
+                vision_model=s.AI_VISION_MODEL,
+                vision_provider=(
+                    AIProvider.GEMINI
+                    if getattr(s, "AI_VISION_PROVIDER", "custom").lower() == "gemini"
+                    else None
+                ),
+                vision_gemini_api_key=getattr(s, "AI_GEMINI_API_KEY", None),
+                vision_fallback_api_url=s.AI_VISION_FALLBACK_API_URL,
+                vision_fallback_api_key=s.AI_VISION_FALLBACK_API_KEY,
+                vision_fallback_model=s.AI_VISION_FALLBACK_MODEL,
+                image_api_url=s.AI_IMAGE_API_URL,
+                image_api_key=s.AI_IMAGE_API_KEY,
+                image_gen_model=s.AI_IMAGE_MODEL,
+                image_api_style=s.AI_IMAGE_API_STYLE,
+                image_fallback_api_url=s.AI_IMAGE_FALLBACK_API_URL,
+                image_fallback_api_key=s.AI_IMAGE_FALLBACK_API_KEY,
+                image_fallback_model=s.AI_IMAGE_FALLBACK_MODEL,
+            )
+        return None
 
-@dataclass
-class AIResponse:
-    """Unified response from AI operations."""
-    text: Optional[str] = None
-    images: Optional[List[str]] = None  # Base64 encoded images
-    model: str = ""
-    provider: str = ""
-    usage: Optional[Dict[str, int]] = None
-    raw_response: Optional[Dict[str, Any]] = None
+    @classmethod
+    def from_user_dict(cls, raw: Dict[str, Any], api_key: str) -> Optional["ProviderConfig"]:
+        """BYOK / per-call override configuration. Requires api_url (an
+        OpenAI-compatible config has nowhere else to send requests); the
+        caller resolves api_key (raw or decrypted) and its own presence check.
+        Body unchanged from the old inline construction in get_ai_service()
+        and AISettingsService.get_effective_provider_config()."""
+        if not raw.get("api_url"):
+            return None
+        return cls(
+            api_url=raw["api_url"],
+            api_key=api_key,
+            model=raw.get("model", settings.AI_CHAT_MODEL),
+            vision_model=raw.get("vision_model"),
+            vision_fallback_model=raw.get("vision_fallback_model"),
+            vision_fallback_api_url=raw.get("vision_fallback_api_url"),
+            vision_fallback_api_key=raw.get("vision_fallback_api_key"),
+            image_gen_model=raw.get("image_gen_model"),
+            image_api_style=raw.get("image_api_style", "images"),
+            image_api_url=raw.get("image_api_url"),
+            image_api_key=raw.get("image_api_key"),
+            image_fallback_model=raw.get("image_fallback_model"),
+            image_fallback_api_url=raw.get("image_fallback_api_url"),
+            image_fallback_api_key=raw.get("image_fallback_api_key"),
+        )
 
-
-@dataclass
-class ChatMessage:
-    """A single chat message."""
-    role: str  # "user", "assistant", "system"
-    content: Union[str, List[Dict[str, Any]]]  # String or multimodal content
+    @classmethod
+    def for_test(cls, api_key: str, model: str, api_url: str) -> "ProviderConfig":
+        """Minimal config for the 'Test connection' endpoint: just enough to
+        reach the provider once with a short timeout. Mirrors what the old
+        inline branch in AISettingsService.test_provider_config built."""
+        return cls(
+            api_url=api_url,
+            api_key=api_key,
+            model=model,
+            timeout=30.0,
+            image_api_style="images",
+        )
 
 
 # =============================================================================
@@ -178,39 +264,15 @@ class ChatMessage:
 # =============================================================================
 
 
-def get_system_provider_config(provider: AIProvider) -> Optional[ProviderConfig]:
-    """Get system-level default configuration for a provider."""
-    if provider == AIProvider.OPENAI:
-        api_key = getattr(settings, 'AI_OPENAI_API_KEY', None)
-        if not api_key:
-            return None
-        return ProviderConfig(
-            api_url=getattr(settings, 'AI_OPENAI_API_URL', 'https://api.openai.com/v1'),
-            api_key=api_key,
-            model=getattr(settings, 'AI_OPENAI_CHAT_MODEL', 'gpt-4o'),
-            vision_model=getattr(settings, 'AI_OPENAI_VISION_MODEL', 'gpt-4o'),
-            image_gen_model=getattr(settings, 'AI_OPENAI_IMAGE_MODEL', 'dall-e-3'),
-        )
-    elif provider == AIProvider.CUSTOM:
-        return ProviderConfig(
-            api_url=settings.AI_CHAT_API_URL,
-            api_key=settings.AI_CHAT_API_KEY,
-            model=settings.AI_CHAT_MODEL,
-            vision_api_url=settings.AI_VISION_API_URL,
-            vision_api_key=settings.AI_VISION_API_KEY,
-            vision_model=settings.AI_VISION_MODEL,
-            vision_fallback_api_url=settings.AI_VISION_FALLBACK_API_URL,
-            vision_fallback_api_key=settings.AI_VISION_FALLBACK_API_KEY,
-            vision_fallback_model=settings.AI_VISION_FALLBACK_MODEL,
-            image_api_url=settings.AI_IMAGE_API_URL,
-            image_api_key=settings.AI_IMAGE_API_KEY,
-            image_gen_model=settings.AI_IMAGE_MODEL,
-            image_api_style=settings.AI_IMAGE_API_STYLE,
-            image_fallback_api_url=settings.AI_IMAGE_FALLBACK_API_URL,
-            image_fallback_api_key=settings.AI_IMAGE_FALLBACK_API_KEY,
-            image_fallback_model=settings.AI_IMAGE_FALLBACK_MODEL,
-        )
-    return None
+def get_system_provider_config(provider: AIProvider) -> Optional[Any]:
+    """Get system-level default configuration for a provider, via the registry.
+
+    Returns whatever config type that provider's implementation uses
+    (ProviderConfig for OPENAI/CUSTOM, GeminiConfig for GEMINI) - callers that
+    need a specific shape already know which provider they asked for.
+    """
+    provider_cls = get_provider_class(provider)
+    return provider_cls.config_cls.from_settings(provider, settings)
 
 
 def get_default_provider() -> AIProvider:
@@ -227,18 +289,27 @@ def get_default_provider() -> AIProvider:
 # =============================================================================
 
 
+@register_provider(AIProvider.OPENAI, AIProvider.CUSTOM)
 class AIProviderService:
     """
     Main AI provider service using OpenAI-compatible API format.
 
     This service handles all AI operations by making HTTP requests to
-    OpenAI-compatible endpoints (OpenAI, or custom proxies).
+    OpenAI-compatible endpoints (OpenAI, or custom proxies). Registered under
+    both AIProvider.OPENAI and .CUSTOM - they differ only in config defaults
+    (see ProviderConfig.from_settings), never in wire protocol, so one
+    implementation serves both rather than two identical-body classes.
     """
+
+    config_cls = ProviderConfig
 
     def __init__(self, config: ProviderConfig):
         """Initialize the service with a provider configuration."""
         self.config = config
         self._client: Optional[httpx.AsyncClient] = None
+        # Lazily built only when config.vision_provider == AIProvider.GEMINI
+        # (see _get_native_vision_provider / chat_with_vision).
+        self._native_vision_provider: Optional[GeminiProvider] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client with connection pooling."""
@@ -273,10 +344,18 @@ class AIProviderService:
         return self._client
 
     async def close(self):
-        """Close the HTTP client."""
+        """Close the HTTP client (and the internal Gemini provider, if the
+        hybrid vision leg constructed one)."""
         if self._client:
             await self._client.aclose()
             self._client = None
+        if self._native_vision_provider is not None:
+            await self._native_vision_provider.close()
+            self._native_vision_provider = None
+
+    def get_image_gen_model(self) -> str:
+        """Resolved image-gen model name, without reaching into `.config`."""
+        return self.config.get_image_gen_model()
 
     @staticmethod
     def _build_url(base_url: str, endpoint: str) -> str:
@@ -889,6 +968,12 @@ class AIProviderService:
         retries once with the configured fallback vision model (e.g.
         agnes-2.5-flash), then raises the last error if that also fails.
 
+        If config.vision_provider is AIProvider.GEMINI (AI_VISION_PROVIDER=gemini),
+        delegates to _chat_with_vision_via_native_gemini() instead - the
+        primary call goes straight to Google's native API, falling back to
+        this same Agnes/OpenAI-compatible path on ANY failure (not just
+        retryable ones).
+
         Args:
             prompt: Text prompt
             images: List of base64-encoded images
@@ -899,26 +984,15 @@ class AIProviderService:
         Returns:
             AIResponse with text analysis
         """
+        if self.config.vision_provider == AIProvider.GEMINI:
+            return await self._chat_with_vision_via_native_gemini(
+                prompt, images, model, max_tokens, response_format
+            )
+
         primary_model = model or self.config.get_vision_model()
         fallback_model = self.config.get_vision_fallback_model()
 
-        # Build multimodal content
-        content: List[Dict[str, Any]] = [
-            {"type": "text", "text": prompt}
-        ]
-
-        for img in images:
-            # Ensure we have a proper data URL
-            if not img.startswith("data:"):
-                # Assume JPEG if no prefix, but try to detect
-                img = f"data:image/jpeg;base64,{img}"
-
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": img}
-            })
-
-        messages = [ChatMessage(role="user", content=content)]
+        messages = build_user_multimodal_messages(prompt, images)
 
         primary_api_url = self.config.get_vision_api_url()
         # Non-OpenAI hosts (e.g. Google Generative Language API) do not
@@ -949,6 +1023,73 @@ class AIProviderService:
 
             logger.warning(
                 "Primary vision model failed, retrying with fallback",
+                primary_model=primary_model,
+                fallback_model=fallback_model,
+                error=str(e)[:200],
+            )
+            return await self.chat(
+                messages=messages,
+                model=fallback_model,
+                max_tokens=max_tokens,
+                response_format=response_format,
+                api_url=self.config.get_vision_fallback_api_url(),
+                api_key=self.config.get_vision_fallback_api_key(),
+            )
+
+    def _get_native_vision_provider(self) -> GeminiProvider:
+        """Lazily build the internal GeminiProvider used by the hybrid vision
+        leg (AI_VISION_PROVIDER=gemini). One per AIProviderService instance,
+        matching GeminiProvider's own not-shared-across-callers client policy."""
+        if self._native_vision_provider is None:
+            self._native_vision_provider = GeminiProvider(
+                GeminiConfig(api_key=self.config.vision_gemini_api_key)
+            )
+        return self._native_vision_provider
+
+    async def _chat_with_vision_via_native_gemini(
+        self,
+        prompt: str,
+        images: List[str],
+        model: Optional[str],
+        max_tokens: Optional[int],
+        response_format: Optional[Dict[str, Any]],
+    ) -> AIResponse:
+        """Vision leg routed directly to Google's native Gemini API
+        (AI_VISION_PROVIDER=gemini), falling back to the configured Agnes/
+        OpenAI-compatible vision-fallback leg on ANY failure - not just
+        retryable ones. This is deliberately permissive (unlike every other
+        fallback path in this file, which only retries on e.retryable):
+        the fallback here is a genuinely different vendor, so even a Gemini
+        safety-block or bad-request error is worth retrying against Agnes
+        rather than surfacing immediately.
+
+        Calls GeminiProvider.chat() directly, not .chat_with_vision() - the
+        latter has its own Gemini-to-Gemini fallback (vision_fallback_model
+        on GeminiConfig), which would silently insert a second hop nobody
+        configured. This keeps it exactly one hop: Gemini -> Agnes.
+        """
+        if not self.config.vision_gemini_api_key:
+            raise AIServiceError(
+                "AI_GEMINI_API_KEY must be set when AI_VISION_PROVIDER=gemini",
+                retryable=False,
+            )
+
+        primary_model = model or self.config.get_vision_model()
+        messages = build_user_multimodal_messages(prompt, images)
+
+        fallback_model = self.config.get_vision_fallback_model()
+        try:
+            return await self._get_native_vision_provider().chat(
+                messages=messages,
+                model=primary_model,
+                max_tokens=max_tokens,
+                response_format=response_format,
+            )
+        except AIServiceError as e:
+            if not fallback_model or fallback_model == primary_model:
+                raise
+            logger.warning(
+                "Native Gemini vision call failed, falling back to Agnes",
                 primary_model=primary_model,
                 fallback_model=fallback_model,
                 error=str(e)[:200],
@@ -1220,50 +1361,40 @@ class AIProviderService:
 async def get_ai_service(
     provider: Optional[AIProvider] = None,
     user_config: Optional[Dict[str, Any]] = None,
-) -> AIProviderService:
+) -> AIProviderClient:
     """
-    Get an AI service instance with the appropriate configuration.
+    Get an AI service instance with the appropriate configuration, dispatched
+    through the provider registry so adding a new provider doesn't require
+    editing this function.
 
     Args:
         provider: Which provider to use (defaults to system default)
         user_config: Optional user-level configuration override
 
     Returns:
-        Configured AIProviderService instance
+        Configured provider instance (AIProviderClient)
 
     Raises:
         AIServiceError: If no valid configuration is available
     """
     use_provider = provider or get_default_provider()
+    provider_cls = get_provider_class(use_provider)
 
     # Check for user-level override first
     if user_config and use_provider.value in user_config:
-        user_provider_config = user_config[use_provider.value]
-        if user_provider_config.get("api_key") and user_provider_config.get("api_url"):
-            config = ProviderConfig(
-                api_url=user_provider_config["api_url"],
-                api_key=user_provider_config["api_key"],
-                model=user_provider_config.get("model", settings.AI_CHAT_MODEL),
-                vision_model=user_provider_config.get("vision_model"),
-                vision_fallback_model=user_provider_config.get("vision_fallback_model"),
-                vision_fallback_api_url=user_provider_config.get("vision_fallback_api_url"),
-                vision_fallback_api_key=user_provider_config.get("vision_fallback_api_key"),
-                image_gen_model=user_provider_config.get("image_gen_model"),
-                image_api_style=user_provider_config.get("image_api_style", "images"),
-                image_api_url=user_provider_config.get("image_api_url"),
-                image_api_key=user_provider_config.get("image_api_key"),
-                image_fallback_model=user_provider_config.get("image_fallback_model"),
-                image_fallback_api_url=user_provider_config.get("image_fallback_api_url"),
-                image_fallback_api_key=user_provider_config.get("image_fallback_api_key"),
-            )
-            return AIProviderService(config)
+        raw = user_config[use_provider.value]
+        api_key = raw.get("api_key")
+        if api_key:
+            config = provider_cls.config_cls.from_user_dict(raw, api_key=api_key)
+            if config:
+                return provider_cls(config)
 
     # Fall back to system configuration
-    config = get_system_provider_config(use_provider)
+    config = provider_cls.config_cls.from_settings(use_provider, settings)
     if not config:
         raise AIServiceError(
             f"AI provider '{use_provider.value}' is not configured. "
             "Please configure the provider in settings or environment variables."
         )
 
-    return AIProviderService(config)
+    return provider_cls(config)

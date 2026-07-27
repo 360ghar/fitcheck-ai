@@ -31,6 +31,8 @@ def _settings(**overrides):
         FRONTEND_URL="https://www.fitcheckaiapp.com",
         AI_DEFAULT_PROVIDER="custom",
         AI_OPENAI_API_KEY=None,
+        AI_GEMINI_API_KEY=None,
+        AI_VISION_PROVIDER="custom",
         AI_CHAT_API_URL="https://apihub.agnes-ai.com/v1",
         AI_VISION_API_URL=None,
         AI_VISION_FALLBACK_API_URL=None,
@@ -150,6 +152,91 @@ def test_openai_default_with_key_not_flagged():
     ):
         issues = validate_production_config()
     assert not any(i.key == "AI_OPENAI_API_KEY" for i in issues)
+
+
+def test_default_provider_gemini_without_key_flagged():
+    """Backfills coverage for the pre-existing AI_DEFAULT_PROVIDER=gemini
+    check, which had no dedicated test before this pass touched the same
+    merged condition."""
+    with _force_prod(), patch.object(
+        config_health,
+        "settings",
+        _settings(AI_DEFAULT_PROVIDER="gemini", AI_GEMINI_API_KEY=None),
+    ):
+        issues = validate_production_config()
+    gem = [i for i in issues if i.key == "AI_GEMINI_API_KEY"]
+    assert len(gem) == 1
+    assert gem[0].severity == "error"
+    assert "AI_DEFAULT_PROVIDER=gemini" in gem[0].message
+
+
+def test_default_provider_and_hybrid_vision_both_gemini_without_key_flagged_once():
+    """AI_DEFAULT_PROVIDER=gemini and AI_VISION_PROVIDER=gemini both set with
+    a blank key must produce exactly ONE AI_GEMINI_API_KEY issue, not two -
+    both conditions share the same root cause and the same key."""
+    with _force_prod(), patch.object(
+        config_health,
+        "settings",
+        _settings(AI_DEFAULT_PROVIDER="gemini", AI_VISION_PROVIDER="gemini", AI_GEMINI_API_KEY=None),
+    ):
+        issues = validate_production_config()
+    gem = [i for i in issues if i.key == "AI_GEMINI_API_KEY"]
+    assert len(gem) == 1
+    assert "AI_DEFAULT_PROVIDER=gemini" in gem[0].message
+    assert "AI_VISION_PROVIDER=gemini" in gem[0].message
+
+
+def test_hybrid_vision_provider_gemini_without_key_flagged():
+    with _force_prod(), patch.object(
+        config_health,
+        "settings",
+        _settings(AI_VISION_PROVIDER="gemini", AI_GEMINI_API_KEY=None),
+    ):
+        issues = validate_production_config()
+    gem = [i for i in issues if i.key == "AI_GEMINI_API_KEY"]
+    assert len(gem) == 1
+    assert gem[0].severity == "error"
+
+
+def test_hybrid_vision_provider_gemini_with_key_not_flagged_for_key_check():
+    with _force_prod(), patch.object(
+        config_health,
+        "settings",
+        _settings(AI_VISION_PROVIDER="gemini", AI_GEMINI_API_KEY="real-key"),
+    ):
+        issues = validate_production_config()
+    assert not any(i.key == "AI_GEMINI_API_KEY" for i in issues)
+
+
+def test_hybrid_vision_provider_gemini_with_nonblank_vision_url_flagged_as_ambiguous():
+    """AI_VISION_API_URL becomes dead config once the leg is redirected to
+    native Gemini - uses an Agnes (OpenAI-compatible) URL so this assertion
+    isolates the new ambiguity check from the pre-existing non-OpenAI-host
+    check (#3), which would otherwise also fire on a Google URL."""
+    with _force_prod(), patch.object(
+        config_health,
+        "settings",
+        _settings(
+            AI_VISION_PROVIDER="gemini",
+            AI_GEMINI_API_KEY="real-key",
+            AI_VISION_API_URL="https://apihub.agnes-ai.com/v1",
+        ),
+    ):
+        issues = validate_production_config()
+    url_issues = [i for i in issues if i.key == "AI_VISION_API_URL"]
+    assert len(url_issues) == 1
+    assert url_issues[0].severity == "error"
+    assert "dead config" in url_issues[0].message
+
+
+def test_hybrid_vision_provider_gemini_with_blank_vision_url_not_flagged():
+    with _force_prod(), patch.object(
+        config_health,
+        "settings",
+        _settings(AI_VISION_PROVIDER="gemini", AI_GEMINI_API_KEY="real-key", AI_VISION_API_URL=None),
+    ):
+        issues = validate_production_config()
+    assert not any(i.key == "AI_VISION_API_URL" for i in issues)
 
 
 def test_config_issue_is_frozen():

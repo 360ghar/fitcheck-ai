@@ -24,6 +24,7 @@ from app.models.ai import (
     RateLimitCheckResponse,
 )
 from app.services.ai_settings_service import AISettingsService
+from app.services.ai_provider_interface import AIProvider, valid_provider_values
 
 logger = get_context_logger(__name__)
 
@@ -100,7 +101,7 @@ async def update_ai_settings(
         updates: Dict[str, Any] = {}
 
         if request.default_provider is not None:
-            valid_providers = ["openai", "custom"]
+            valid_providers = valid_provider_values()
             if request.default_provider not in valid_providers:
                 raise ValidationError(
                     "Invalid provider",
@@ -153,13 +154,28 @@ async def test_provider_config(
     """
     Test an AI provider configuration.
 
-    Sends a simple test request to verify the API URL and key are valid.
+    Sends a simple test request to verify the API URL and key are valid
+    (api_url is required for openai/custom, ignored for gemini).
     """
     try:
+        valid_providers = valid_provider_values()
+        if request.provider not in valid_providers:
+            raise ValidationError(
+                "Invalid provider",
+                details={"valid_providers": valid_providers},
+            )
+        provider = AIProvider(request.provider)
+        if provider != AIProvider.GEMINI and not request.api_url:
+            raise ValidationError(
+                "api_url is required for this provider",
+                details={"provider": request.provider},
+            )
+
         result = await AISettingsService.test_provider_config(
             api_url=request.api_url,
             api_key=request.api_key,
             model=request.model,
+            provider=provider,
         )
 
         response = TestProviderResponse(
@@ -292,7 +308,7 @@ async def reset_provider_config(
     Removes any user-specific API key and URL for the specified provider.
     """
     try:
-        valid_providers = ["openai", "custom"]
+        valid_providers = valid_provider_values()
         if provider not in valid_providers:
             raise ValidationError(
                 "Invalid provider",

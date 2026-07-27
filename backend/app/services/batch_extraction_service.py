@@ -24,7 +24,7 @@ from app.services.batch_job_service import (
     DetectedItemData,
 )
 from app.services.storage_service import StorageService
-from app.utils.image_processing import downscale_base64_image
+from app.utils.image_processing import downscale_base64_image, resolve_product_reference_image
 from app.utils.retry import is_retryable_error, with_retry
 
 logger = logging.getLogger(__name__)
@@ -414,10 +414,14 @@ class BatchExtractionService:
         # Local semaphore so generation_batch_size can tighten below the global
         # GENERATION_SEMAPHORE (3); the global cap is the effective ceiling.
         local_sem = asyncio.Semaphore(concurrent_cap)
+        # Consumer-scoped cache of source-photo downloads, keyed by URL.
+        # Sibling items detected across one or more batches share a photo, so
+        # this turns N downloads of one multi-MB JPEG into one per unique photo.
+        photo_cache: Dict[str, Optional[str]] = {}
 
-        async def run_one(item: DetectedItemData) -> None:
+        async def run_one(item: DetectedItemData, reference_image_base64: Optional[str]) -> None:
             async with local_sem:
-                await self._generate_single_item(job, item, agent)
+                await self._generate_single_item(job, item, agent, reference_image_base64)
 
         try:
             while True:
@@ -462,7 +466,17 @@ class BatchExtractionService:
                 for item in batch:
                     if job.is_cancelled():
                         break
-                    task = asyncio.create_task(run_one(item))
+                    # Resolve this item's source photo via the shared cache
+                    # before dispatch, so sibling items on the same photo share
+                    # one download instead of each re-GETting it under the
+                    # generation semaphore.
+                    src_url = getattr(item, "source_image_url", None)
+                    reference_image_base64: Optional[str] = None
+                    if src_url:
+                        if src_url not in photo_cache:
+                            photo_cache[src_url] = await StorageService.download_to_base64(src_url)
+                        reference_image_base64 = photo_cache[src_url]
+                    task = asyncio.create_task(run_one(item, reference_image_base64))
                     in_flight.add(task)
                     task.add_done_callback(in_flight.discard)
 
@@ -503,6 +517,7 @@ class BatchExtractionService:
         job: BatchJob,
         item: DetectedItemData,
         agent,
+        reference_image_base64: Optional[str],
     ) -> Optional[str]:
         """Generate product image for a single item with global semaphore and retry."""
         if job.is_cancelled():
@@ -527,24 +542,42 @@ class BatchExtractionService:
                     or item.category
                 )
 
-                # Re-fetch the persisted source photo so the image-gen model
-                # has the original garment as a visual reference (full image;
-                # bbox pins the region). Falls back to text-only if the URL
-                # is missing or the download fails.
-                reference_image_base64: Optional[str] = None
-                if item.source_image_url:
-                    reference_image_base64 = await StorageService.download_to_base64(
-                        item.source_image_url
+                # The source photo was pre-fetched by the consumer (one
+                # download per unique photo, shared across sibling items) and
+                # passed in here. resolve_product_reference_image then decides
+                # whether to use it as-is, crop it to the item's bbox, or drop
+                # it for text-only generation - see that function for why.
+                if reference_image_base64 is None and item.source_image_url:
+                    logger.info(
+                        "Source image unavailable; text-only generation",
+                        extra={
+                            "job_id": job.job_id,
+                            "temp_id": item.temp_id,
+                            "image_id": item.image_id,
+                        },
                     )
-                    if reference_image_base64 is None:
-                        logger.info(
-                            "Source image unavailable; text-only generation",
-                            extra={
-                                "job_id": job.job_id,
-                                "temp_id": item.temp_id,
-                                "image_id": item.image_id,
-                            },
-                        )
+
+                sibling_count = sum(
+                    1 for i in job.detected_items if i.image_id == item.image_id
+                )
+                reference_image_base64, reference_strategy = resolve_product_reference_image(
+                    reference_image_base64,
+                    item.bounding_box,
+                    item.confidence,
+                    sibling_count,
+                )
+                logger.info(
+                    "Resolved product-image reference strategy",
+                    extra={
+                        "job_id": job.job_id,
+                        "temp_id": item.temp_id,
+                        "image_id": item.image_id,
+                        "strategy": reference_strategy,
+                        "sibling_count": sibling_count,
+                        "confidence": item.confidence,
+                        "has_bounding_box": item.bounding_box is not None,
+                    },
+                )
 
                 result = await with_retry(
                     lambda: agent.generate_product_image(

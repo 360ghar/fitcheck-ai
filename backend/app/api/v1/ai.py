@@ -555,6 +555,11 @@ async def get_available_models(
             "vision": ["Use model names from your proxy"],
             "image_generation": ["Use model names from your proxy"],
         },
+        gemini={
+            "chat": ["gemini-3.6-flash", "gemini-3-pro-preview"],
+            "vision": ["gemini-3.6-flash", "gemini-3-pro-preview"],
+            "image_generation": ["gemini-3.1-flash-image", "gemini-3-pro-image"],
+        },
     )
 
     return {

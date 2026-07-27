@@ -120,4 +120,45 @@ def validate_production_config() -> List[ConfigIssue]:
             ),
         ))
 
+    # 5. Native Gemini API key must be configured whenever anything routes to
+    # it - either as the system default provider, or as the Custom provider's
+    # hybrid vision leg (#6 below). Not gated on the per-leg checks above
+    # (#3) - those are scoped to the OpenAI-compatible Custom provider's URLs
+    # only and never apply to Gemini's own (URL-less) config. Checked as one
+    # combined condition, not two separate ConfigIssues, so a config with
+    # both flags set (unusual but valid - AI_DEFAULT_PROVIDER=gemini and a
+    # per-request AIProvider.CUSTOM caller also using the hybrid vision leg)
+    # doesn't log the same missing-key problem twice under the same key.
+    gemini_is_default = settings.AI_DEFAULT_PROVIDER.lower() == "gemini"
+    gemini_is_vision_leg = settings.AI_VISION_PROVIDER.lower() == "gemini"
+    if (gemini_is_default or gemini_is_vision_leg) and not settings.AI_GEMINI_API_KEY:
+        reasons = []
+        if gemini_is_default:
+            reasons.append("AI_DEFAULT_PROVIDER=gemini")
+        if gemini_is_vision_leg:
+            reasons.append("AI_VISION_PROVIDER=gemini")
+        issues.append(ConfigIssue(
+            severity="error",
+            key="AI_GEMINI_API_KEY",
+            message=(
+                f"{' and '.join(reasons)} but AI_GEMINI_API_KEY is empty. "
+                "Every request routed through native Gemini will fail with "
+                "'provider not configured'."
+            ),
+        ))
+
+    # 6. AI_VISION_API_URL becomes dead config once the vision leg is
+    # redirected to native Gemini - flag the combination instead of letting
+    # an operator wonder which of the two settings actually wins.
+    if settings.AI_VISION_PROVIDER.lower() == "gemini" and (settings.AI_VISION_API_URL or "").strip():
+        issues.append(ConfigIssue(
+            severity="error",
+            key="AI_VISION_API_URL",
+            message=(
+                f"Set to {settings.AI_VISION_API_URL!r} but AI_VISION_PROVIDER=gemini "
+                "already routes the vision leg straight to Google's native API - this "
+                "URL is never read and is dead config. Clear it to avoid confusion."
+            ),
+        ))
+
     return issues

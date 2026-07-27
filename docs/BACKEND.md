@@ -84,19 +84,36 @@ Configured in `app/core/config.py` / env:
 
 - **Custom** (default): Agnes AI OpenAI-compatible gateway (`apihub.agnes-ai.com`)
 - **OpenAI**: GPT-4o / DALL-E style paths when selected
+- **Gemini** (opt-in): native `google-genai` SDK, not OpenAI-compatible HTTP - chat/vision/image
+  all via `client.aio.models.generate_content`. No per-leg URL config (the SDK talks directly to
+  Google); fallback is Gemini-model-to-Gemini-model only, not cross-provider. Bypasses
+  `ai_provider_health_service` entirely (no pre-flight probe - a bad key/model/quota surfaces
+  from the real call itself). See `app/services/gemini_provider.py`.
+- **Hybrid vision leg** (`AI_VISION_PROVIDER=gemini`, opt-in, system-config only - no BYOK):
+  keeps chat/image on the Custom provider (Agnes) but routes the vision leg's *primary* call
+  directly to Google's native API via an internal `GeminiProvider` instance, falling back to
+  Agnes (`AI_VISION_FALLBACK_MODEL`) on **any** failure - not just retryable ones, since the
+  fallback is a genuinely different vendor that may succeed where Gemini refused. This is the
+  first real cross-provider fallback in the codebase (see `AIProviderService._chat_with_vision_via_native_gemini`
+  in `ai_provider_service.py`). `AI_VISION_API_URL` must stay blank in this mode -
+  `config_health.py` flags it as an error otherwise, since it becomes dead config once the leg
+  is redirected.
 
 Typical custom stack:
 
 - Chat/vision: `gemini-3.6-flash` (primary) / `agnes-2.5-flash` (fallback after 1 retry) via `/v1/chat/completions`
 - Images: `agnes-image-2.1-flash` primary → `agnes-image-2.0-flash` fallback via `/v1/images/generations`
 - Transient failures (429/503/timeout/empty images) retry fallback; non-transient raise
-- Embeddings: Google `google.genai` via `AI_GEMINI_API_KEY` (not a selectable chat provider)
+- Embeddings: Google `google.genai` via `AI_GEMINI_API_KEY` (not the same code path as the
+  native Gemini chat/vision/image provider above, though it shares the same key)
 
-Env: one flat `AI_*` per-leg scheme. Each of chat / vision / vision-fallback / image / image-fallback can have its OWN `AI_<LEG>_API_URL` + `AI_<LEG>_API_KEY` + `AI_<LEG>_MODEL`; a blank url/key inherits its parent (`vision`→`chat`, `vision_fallback`→`vision`, `image`→`chat`, `image_fallback`→`image`), so a single-host setup only needs the `AI_CHAT_*` trio. See `backend/.env.example`.
+Env: one flat `AI_*` per-leg scheme. Each of chat / vision / vision-fallback / image / image-fallback can have its OWN `AI_<LEG>_API_URL` + `AI_<LEG>_API_KEY` + `AI_<LEG>_MODEL`; a blank url/key inherits its parent (`vision`→`chat`, `vision_fallback`→`vision`, `image`→`chat`, `image_fallback`→`image`), so a single-host setup only needs the `AI_CHAT_*` trio. See `backend/.env.example`. Gemini's own `AI_GEMINI_CHAT_MODEL` / `AI_GEMINI_VISION_MODEL` / `AI_GEMINI_IMAGE_MODEL` are separate settings with no per-leg URLs - do not confuse them with the Custom-leg vars above.
+
+Provider dispatch is registry-driven: `AIProvider` (enum) → concrete class, via `PROVIDER_REGISTRY` in `app/services/ai_provider_interface.py`. `AIProviderService` (OpenAI-compatible) registers itself under both `OPENAI` and `CUSTOM`; `GeminiProvider` registers under `GEMINI`. Adding a fourth provider means writing one class + `@register_provider(...)`, not editing the factory functions.
 
 User AI settings: `user_ai_settings` with encrypted keys (`AI_ENCRYPTION_KEY`).
 
-Services: `ai_service.py`, `ai_provider_service.py`, `ai_settings_service.py`, `ai_provider_health_service.py`.
+Services: `ai_service.py` (embeddings only), `ai_provider_service.py` (OpenAI-compatible provider + shared factories), `ai_provider_interface.py` (common interface + registry), `gemini_provider.py` (native Gemini provider), `ai_settings_service.py`, `ai_provider_health_service.py`.
 
 ## Runtime flows
 
@@ -110,7 +127,7 @@ Pipeline: `batch_processing.py` + `batch_extraction_service.py` + `batch_job_ser
    - Flutter / legacy: `POST /api/v1/ai/batch-extract` (JSON base64)
 3. Backend returns `202` with `job_id` + `sse_url`; work continues in the background.
 4. **Extract:** images processed in parallel; each completion emits SSE `image_extraction_complete`.
-5. **Generate (optional `auto_generate`):** as items appear, product-image generation is enqueued and **overlaps** remaining extracts (concurrency capped, historically up to 5).
+5. **Generate (optional `auto_generate`):** as items appear, product-image generation is enqueued and **overlaps** remaining extracts (concurrency capped, historically up to 5). Reference-image strategy per item (`resolve_product_reference_image` in `app/utils/image_processing.py`): a single-item source photo is sent as-is; a multi-item photo crops to the item's bbox when it's confident and not near-full-frame, otherwise the reference is dropped entirely and generation falls back to text-only from the dense description — the full uncropped multi-item photo is never sent, since that reliably caused the model to bleed in other garments or pass the photo through unchanged.
 6. **Client review:** UI may open review as soon as items exist; studio images fill in via SSE. User can save mid-generation using original photos when studio images are not ready.
 7. **Persist:** client uploads chosen images via `POST /api/v1/items/upload` and creates items via `POST /api/v1/items`.
 8. Optional embeddings/vector indexing after item create.

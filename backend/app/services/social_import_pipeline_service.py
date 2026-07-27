@@ -32,6 +32,7 @@ from app.services.social_import_job_store import SocialImportJobStore
 from app.services.social_scraper_service import SocialScraperService
 from app.services.storage_service import StorageService
 from app.services.vector_service import get_vector_service
+from app.utils.image_processing import resolve_product_reference_image
 from app.utils.retry import with_retry
 
 logger = get_context_logger(__name__)
@@ -706,6 +707,11 @@ class SocialImportPipelineService:
             processed_items: List[Dict[str, Any]] = []
             generation_success_count = 0
 
+            # Cache the source-photo download by URL: every item on a photo
+            # shares the same source_image_url, so fetch it once instead of
+            # re-GETting the multi-MB JPEG per item. (Items carrying their own
+            # distinct URL are still fetched once each.)
+            source_photo_cache: Dict[str, Optional[str]] = {}
             for item in raw_items:
                 temp_id = item.get("temp_id") or f"item-{uuid.uuid4().hex[:8]}"
                 item_description = (
@@ -713,14 +719,36 @@ class SocialImportPipelineService:
                     or f"{(item.get('colors') or [''])[0]} {item.get('sub_category') or item.get('category') or 'clothing'}".strip()
                 )
 
-                # Re-fetch the persisted source photo as a visual reference so
-                # the generator reproduces the exact garment. The fetched
-                # bytes never hit DB storage (kept in-memory only for this call).
-                reference_image_base64: Optional[str] = None
-                if item.get("source_image_url"):
-                    reference_image_base64 = await StorageService.download_to_base64(
-                        item["source_image_url"]
-                    )
+                # Resolve this item's source photo via the cache so siblings
+                # share one download. The bytes never hit DB storage (kept
+                # in-memory only for this call); resolve_product_reference_image
+                # then decides whether to use this full photo as-is, crop it to
+                # the item's bbox, or drop it entirely - see that function for why.
+                src_url = item.get("source_image_url")
+                if src_url and src_url not in source_photo_cache:
+                    source_photo_cache[src_url] = await StorageService.download_to_base64(src_url)
+                reference_image_base64: Optional[str] = (
+                    source_photo_cache.get(src_url) if src_url else None
+                )
+
+                reference_image_base64, reference_strategy = resolve_product_reference_image(
+                    reference_image_base64,
+                    item.get("bounding_box"),
+                    float(item.get("confidence") or 0.0),
+                    len(raw_items),
+                )
+                logger.info(
+                    "Resolved product-image reference strategy",
+                    extra={
+                        "job_id": job_id,
+                        "photo_id": photo_id,
+                        "temp_id": temp_id,
+                        "strategy": reference_strategy,
+                        "sibling_count": len(raw_items),
+                        "confidence": item.get("confidence"),
+                        "has_bounding_box": item.get("bounding_box") is not None,
+                    },
+                )
 
                 try:
                     generated = await generation_agent.generate_product_image(

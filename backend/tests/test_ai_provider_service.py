@@ -11,8 +11,11 @@ import httpx
 import pytest
 from unittest.mock import AsyncMock, patch
 
+from app.core.exceptions import AIServiceError
+from app.services.ai_provider_interface import AIProvider, AIResponse
 from app.services.ai_provider_service import AIProviderService, ChatMessage, ProviderConfig
 from app.services.ai_provider_health_service import HealthStatus
+from app.services.gemini_provider import GeminiProvider
 
 
 def _make_config() -> ProviderConfig:
@@ -968,3 +971,88 @@ async def test_chat_with_vision_falls_back_for_non_openai_host_on_non_retryable_
     assert result == "sentinel"
     assert mock_chat.await_args_list[0].kwargs["api_url"] == "https://generativelanguage.googleapis.com/v1"
     assert mock_chat.await_args_list[1].kwargs["api_url"] == "https://apihub.agnes-ai.com/v1"
+
+
+class TestHybridGeminiVisionLeg:
+    """AI_VISION_PROVIDER=gemini: the vision leg's primary call is routed to
+    an internal native GeminiProvider instance, falling back to Agnes (via
+    self.chat()) on ANY failure - not just retryable ones. This is the
+    permissive semantics the user explicitly chose: the fallback is a
+    genuinely different vendor, so even a Gemini safety-block or bad-request
+    error is worth retrying against Agnes rather than surfacing immediately.
+    """
+
+    @staticmethod
+    def _make_hybrid_config() -> ProviderConfig:
+        config = _make_config()
+        config.vision_provider = AIProvider.GEMINI
+        config.vision_gemini_api_key = "gemini-key"
+        config.vision_model = "gemini-3.6-flash"
+        config.vision_fallback_model = "agnes-2.5-flash"
+        config.vision_fallback_api_url = "https://apihub.agnes-ai.com/v1"
+        config.vision_fallback_api_key = "agnes-key"
+        return config
+
+    @pytest.mark.asyncio
+    async def test_primary_gemini_success_never_calls_agnes(self):
+        service = AIProviderService(self._make_hybrid_config())
+        gemini_response = AIResponse(text="red shirt", model="gemini-3.6-flash", provider="google-genai")
+        mock_gemini_chat = AsyncMock(return_value=gemini_response)
+        mock_agnes_chat = AsyncMock()
+
+        with patch.object(GeminiProvider, "chat", mock_gemini_chat), \
+             patch.object(AIProviderService, "chat", mock_agnes_chat):
+            result = await service.chat_with_vision("describe this outfit", ["aGVsbG8="])
+
+        assert result is gemini_response
+        mock_gemini_chat.assert_awaited_once()
+        mock_agnes_chat.assert_not_awaited()
+        assert mock_gemini_chat.await_args.kwargs["model"] == "gemini-3.6-flash"
+
+    @pytest.mark.asyncio
+    async def test_permissive_fallback_on_non_retryable_gemini_error(self):
+        """Differs from every other fallback path in this file: those only
+        retry on e.retryable. Here the fallback is a different vendor, so a
+        non-retryable error (e.g. a Gemini safety-block) still falls through."""
+        service = AIProviderService(self._make_hybrid_config())
+        mock_gemini_chat = AsyncMock(side_effect=AIServiceError("safety block", retryable=False))
+        mock_agnes_chat = AsyncMock(return_value="sentinel")
+
+        with patch.object(GeminiProvider, "chat", mock_gemini_chat), \
+             patch.object(AIProviderService, "chat", mock_agnes_chat):
+            result = await service.chat_with_vision("describe this outfit", ["aGVsbG8="])
+
+        assert result == "sentinel"
+        mock_agnes_chat.assert_awaited_once()
+        kwargs = mock_agnes_chat.await_args.kwargs
+        assert kwargs["model"] == "agnes-2.5-flash"
+        assert kwargs["api_url"] == "https://apihub.agnes-ai.com/v1"
+        assert kwargs["api_key"] == "agnes-key"
+
+    @pytest.mark.asyncio
+    async def test_missing_gemini_api_key_raises_before_any_call(self):
+        config = self._make_hybrid_config()
+        config.vision_gemini_api_key = None
+        service = AIProviderService(config)
+        mock_gemini_chat = AsyncMock()
+        mock_agnes_chat = AsyncMock()
+
+        with patch.object(GeminiProvider, "chat", mock_gemini_chat), \
+             patch.object(AIProviderService, "chat", mock_agnes_chat):
+            with pytest.raises(AIServiceError, match="AI_GEMINI_API_KEY"):
+                await service.chat_with_vision("describe this outfit", ["aGVsbG8="])
+
+        mock_gemini_chat.assert_not_awaited()
+        mock_agnes_chat.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_close_cleans_up_internal_gemini_provider(self):
+        service = AIProviderService(self._make_hybrid_config())
+        service._get_native_vision_provider()  # force lazy construction
+        close_mock = AsyncMock()
+
+        with patch.object(GeminiProvider, "close", close_mock):
+            await service.close()
+
+        close_mock.assert_awaited_once()
+        assert service._native_vision_provider is None

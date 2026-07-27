@@ -6,18 +6,6 @@ Models for AI operations including item extraction and image generation.
 
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
-from enum import Enum
-
-
-# =============================================================================
-# ENUMS
-# =============================================================================
-
-
-class AIProviderEnum(str, Enum):
-    """Supported AI providers."""
-    OPENAI = "openai"
-    CUSTOM = "custom"
 
 
 # =============================================================================
@@ -205,7 +193,10 @@ class AISettingsResponse(BaseModel):
 
 class TestProviderRequest(BaseModel):
     """Request to test a provider configuration."""
-    api_url: str
+    provider: str = "custom"  # "openai" | "custom" | "gemini". Default keeps
+    # the existing frontend call (which never sent this field) working
+    # unchanged.
+    api_url: Optional[str] = None  # required for openai/custom, ignored for gemini
     api_key: str
     model: str
 
@@ -269,3 +260,4 @@ class AvailableModelsResponse(BaseModel):
     """Available models by provider."""
     openai: Dict[str, List[str]] = Field(default_factory=dict)
     custom: Dict[str, List[str]] = Field(default_factory=dict)
+    gemini: Dict[str, List[str]] = Field(default_factory=dict)

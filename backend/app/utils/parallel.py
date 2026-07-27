@@ -82,9 +82,11 @@ async def parallel_with_retry(
         except Exception as e:
             logger.warning(
                 "Item failed after all retries",
-                item_index=index,
-                exception_type=type(e).__name__,
-                exception_message=str(e)[:500],
+                extra={
+                    "item_index": index,
+                    "exception_type": type(e).__name__,
+                    "exception_message": str(e)[:500],
+                },
                 exc_info=False,
             )
             pr = ParallelResult(success=False, error=e, index=index)

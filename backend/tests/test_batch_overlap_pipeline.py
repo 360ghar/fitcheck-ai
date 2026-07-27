@@ -107,7 +107,7 @@ async def test_generation_starts_before_all_extractions_complete():
             await on_items_ready(added)
         return items
 
-    async def fake_generate(self, job_arg, item, agent):
+    async def fake_generate(self, job_arg, item, agent, reference_image_base64):
         await asyncio.sleep(0.05)
         await BatchJobService.update_item_generation(
             job_arg.job_id, item.temp_id, generated_image_base64="ZmFrZQ=="
@@ -286,7 +286,7 @@ async def test_add_detected_items_inherits_source_image_from_photo():
 
 @pytest.mark.asyncio
 async def test_generate_single_item_passes_reference_image_and_description():
-    """_generate_single_item must fetch the source URL and pass it as
+    """_generate_single_item passes the pre-fetched source photo through as
     reference_image to generate_product_image. The item is identified by its
     dense description; the bounding_box is NOT forwarded to generation."""
     from app.services.batch_extraction_service import BatchExtractionService
@@ -319,26 +319,19 @@ async def test_generate_single_item_passes_reference_image_and_description():
     fake_agent = MagicMock()
     fake_agent.generate_product_image = fake_generate_product_image
 
-    download_calls: List[str] = []
-
-    async def fake_download(url, timeout=10.0):
-        download_calls.append(url)
-        return "c291cmNl"  # base64 of b"source"
-
     service = BatchExtractionService(user_id="user-1", db=MagicMock())
 
     with (
-        patch(
-            "app.services.batch_extraction_service.StorageService.download_to_base64",
-            new=fake_download,
-        ),
         patch.object(BatchJobService, "broadcast_event", AsyncMock()),
         patch.object(BatchJobService, "update_item_generation", AsyncMock()),
     ):
-        result = await service._generate_single_item(job, item, fake_agent)
+        # The source photo is pre-fetched by the pipeline consumer (one
+        # download per unique photo) and passed in here as reference_image_base64.
+        result = await service._generate_single_item(
+            job, item, fake_agent, reference_image_base64="c291cmNl"
+        )
 
     assert result == "ZmFrZQ=="
-    assert download_calls == ["https://example/source.jpg"]
     assert captured_kwargs["reference_image"] == "c291cmNl"
     # The bounding box is intentionally not forwarded to image generation —
     # the item is identified by its dense description instead.
@@ -350,8 +343,8 @@ async def test_generate_single_item_passes_reference_image_and_description():
 
 @pytest.mark.asyncio
 async def test_generate_single_item_falls_back_when_source_unavailable():
-    """If the source URL is missing or download fails, generation still runs
-    text-only (no reference_image)."""
+    """If no source photo is available (missing URL or failed download
+    upstream), generation still runs text-only (no reference_image)."""
     from app.services.batch_extraction_service import BatchExtractionService
     from app.services.batch_job_service import DetectedItemData
     from app.agents.image_generation_agent import GeneratedImage
@@ -388,7 +381,9 @@ async def test_generate_single_item_falls_back_when_source_unavailable():
         patch.object(BatchJobService, "broadcast_event", AsyncMock()),
         patch.object(BatchJobService, "update_item_generation", AsyncMock()),
     ):
-        result = await service._generate_single_item(job, item, fake_agent)
+        result = await service._generate_single_item(
+            job, item, fake_agent, reference_image_base64=None
+        )
 
     assert result == "ZmFrZQ=="
     assert captured_kwargs["reference_image"] is None
