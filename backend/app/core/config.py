@@ -124,13 +124,15 @@ class Settings(BaseSettings):
     AI_CHAT_API_KEY: Optional[str] = None
     AI_CHAT_MODEL: str = "agnes-2.5-flash"
 
-    # "custom" (default): vision stays OpenAI-compatible, uses AI_VISION_API_URL
-    # above. "gemini": the vision leg's primary call is routed directly to
+    # "custom": vision stays OpenAI-compatible, uses AI_VISION_API_URL above.
+    # "gemini" (default): the vision leg's primary call is routed directly to
     # Google's native SDK (app/services/gemini_provider.py) instead - AI_VISION_MODEL
     # is then read as a Gemini model name, and AI_VISION_API_URL must be left
     # blank (config_health.py flags the combination as a startup error, since
     # the URL would otherwise be silently dead once the leg is redirected).
-    AI_VISION_PROVIDER: str = "custom"
+    # Production runs Gemini-primary/Agnes-fallback by default; local dev
+    # without a Gemini key should override to AI_VISION_PROVIDER=custom.
+    AI_VISION_PROVIDER: str = "gemini"
     AI_VISION_API_URL: Optional[str] = None
     AI_VISION_API_KEY: Optional[str] = None
     AI_VISION_MODEL: str = "gemini-3.6-flash"

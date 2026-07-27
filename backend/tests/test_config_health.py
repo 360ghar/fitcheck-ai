@@ -49,6 +49,20 @@ def test_dev_mode_returns_no_issues():
         assert validate_production_config() == []
 
 
+def test_vision_provider_defaults_to_gemini():
+    """The config.py default must be 'gemini' (Gemini-primary, Agnes-fallback)
+    so an unset var in production can't silently regress to Agnes-primary,
+    which caused the original double-401 vision outage (see exec-plan
+    2026-07-27-hybrid-vision-leg.md). Local dev without a Gemini key overrides
+    explicitly via env."""
+    from app.core.config import Settings
+
+    # Read the field default directly; instantiating Settings requires
+    # Supabase env vars that aren't relevant to this contract.
+    default = Settings.model_fields["AI_VISION_PROVIDER"].default
+    assert default == "gemini"
+
+
 def test_healthy_prod_config_returns_no_issues():
     with _force_prod(), patch.object(config_health, "settings", _settings()):
         assert validate_production_config() == []

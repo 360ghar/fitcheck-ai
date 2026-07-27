@@ -134,18 +134,42 @@ class AIProviderHealthService:
                 # Accept 2xx or 404 (404 means API is up but endpoint may vary)
                 is_healthy = response.status_code in (200, 404)
 
+                # 401/403 from the /models probe almost always means the
+                # bearer key (AI_CHAT_API_KEY / AI_VISION_API_KEY / per-leg
+                # override) was rejected or expired. Surface that explicitly
+                # so the downstream AIServiceError message points at the key
+                # instead of the generic "Status 401 / service not running".
+                if not is_healthy and response.status_code in (401, 403):
+                    error_msg = (
+                        f"Auth rejected (HTTP {response.status_code}) at {base_url}: "
+                        "API key is missing, invalid, or expired. Check the matching "
+                        "AI_CHAT_API_KEY / AI_VISION_API_KEY / per-leg key."
+                    )
+                else:
+                    error_msg = f"Status {response.status_code}"
+
                 status = HealthStatus(
                     available=is_healthy,
                     last_check=time.time(),
                     consecutive_failures=0 if is_healthy else 1,
                     latency_ms=latency,
-                    error=None if is_healthy else f"Status {response.status_code}",
+                    error=None if is_healthy else error_msg,
                 )
 
                 if is_healthy:
                     logger.info(
                         f"Provider {base_url} is healthy",
                         extra={"latency_ms": round(latency, 2)},
+                    )
+                elif response.status_code in (401, 403):
+                    # Auth failures are operator-actionable; log at error so
+                    # they stand out from routine transient gateway 5xx.
+                    logger.error(
+                        f"Provider {base_url} rejected auth (HTTP {response.status_code})",
+                        extra={
+                            "latency_ms": round(latency, 2),
+                            "status_code": response.status_code,
+                        },
                     )
                 else:
                     logger.warning(
