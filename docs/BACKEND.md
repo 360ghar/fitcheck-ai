@@ -127,12 +127,23 @@ Pipeline: `batch_processing.py` + `batch_extraction_service.py` + `batch_job_ser
    - Flutter / legacy: `POST /api/v1/ai/batch-extract` (JSON base64)
 3. Backend returns `202` with `job_id` + `sse_url`; work continues in the background.
 4. **Extract:** images processed in parallel; each completion emits SSE `image_extraction_complete`.
-5. **Generate (optional `auto_generate`):** as items appear, product-image generation is enqueued and **overlaps** remaining extracts (concurrency capped, historically up to 5). Reference-image strategy per item (`resolve_product_reference_image` in `app/utils/image_processing.py`): a single-item source photo is sent as-is; a multi-item photo crops to the item's bbox when it's confident and not near-full-frame, otherwise the reference is dropped entirely and generation falls back to text-only from the dense description — the full uncropped multi-item photo is never sent, since that reliably caused the model to bleed in other garments or pass the photo through unchanged.
+5. **Generate (optional `auto_generate`):** as items appear, product-image generation is enqueued and **overlaps** remaining extracts (capped by `AI_GENERATION_CONCURRENCY`, default 30; see "Batch concurrency caps" below). Reference-image strategy per item (`resolve_product_reference_image` in `app/utils/image_processing.py`): a single-item source photo is sent as-is; a multi-item photo crops to the item's bbox when it's confident and not near-full-frame, otherwise the reference is dropped entirely and generation falls back to text-only from the dense description — the full uncropped multi-item photo is never sent, since that reliably caused the model to bleed in other garments or pass the photo through unchanged.
 6. **Client review:** UI may open review as soon as items exist; studio images fill in via SSE. User can save mid-generation using original photos when studio images are not ready.
 7. **Persist:** client uploads chosen images via `POST /api/v1/items/upload` and creates items via `POST /api/v1/items`.
 8. Optional embeddings/vector indexing after item create.
 
 Synchronous helpers still exist for one-offs (`POST /ai/extract-items`, `POST /ai/generate-product-image`); wardrobe multi-upload is job-based.
+
+#### Batch concurrency caps
+
+The pipeline enforces two **process-wide** `asyncio.Semaphore` ceilings (singletons in `app/core/concurrency.py`, shared across all concurrent jobs on the worker and the outfit-variation fan-out in `image_generation_agent`):
+
+| Env var | Default | Caps |
+|---------|---------|------|
+| `AI_EXTRACTION_CONCURRENCY` | 30 | concurrent per-image vision extraction calls |
+| `AI_GENERATION_CONCURRENCY` | 30 | concurrent per-item product-image generations (also gates `generate_variations`) |
+
+These are NOT per-job: two simultaneous batch jobs draw from the same pool. A per-job `generation_batch_size` (route default = `AI_GENERATION_CONCURRENCY`) can only tighten below the global ceiling, never exceed it. Raise cautiously: each in-flight request holds a multi-MB base64 buffer, and shared AI gateways can 429/503 under high parallelism. Floors at 1 so a misconfigured 0/negative value cannot deadlock the pipeline.
 
 ### Outfit generation
 

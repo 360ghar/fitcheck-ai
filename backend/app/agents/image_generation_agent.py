@@ -22,6 +22,7 @@ from app.agents.prompt_fidelity import (
 )
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
+from app.core.concurrency import GENERATION_SEMAPHORE
 from app.services.ai_provider_service import AIProviderService
 from app.services.ai_settings_service import AISettingsService
 from app.services.storage_service import StorageService
@@ -448,10 +449,17 @@ Specs:
             item_count=len(items),
         )
 
+        # Gate the per-style fan-out through the process-wide
+        # GENERATION_SEMAPHORE so variations share the same concurrency
+        # budget as batch product-image generation (AI_GENERATION_CONCURRENCY).
+        async def _generate_one_style(style, _):
+            async with GENERATION_SEMAPHORE:
+                return await self.generate_outfit(items=items, style=style)
+
         # Process all styles in parallel with retry
         results = await parallel_with_retry(
             styles,
-            lambda style, _: self.generate_outfit(items=items, style=style),
+            _generate_one_style,
             max_retries=3,
             initial_delay=2.0,  # AI operations need longer delays
             backoff_factor=2.0,

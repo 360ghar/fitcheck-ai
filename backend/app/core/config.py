@@ -190,6 +190,15 @@ class Settings(BaseSettings):
     PLAN_PRO_DAILY_PHOTOSHOOT_IMAGES: int = 50
     PHOTOSHOOT_CONCURRENCY_LIMIT: int = 2  # Max concurrent image generations (lower = fewer protocol/OOM failures)
 
+    # Process-wide asyncio.Semaphore caps for the batch extract+generate
+    # pipeline (batch_extraction_service.py) and the variation fan-out
+    # (image_generation_agent.generate_variations). Shared across ALL
+    # concurrent jobs on this worker — NOT per-job. Each in-flight request
+    # holds a multi-MB base64 buffer, and shared AI gateways can 429/503
+    # under high parallelism, so raise cautiously.
+    AI_EXTRACTION_CONCURRENCY: int = 30
+    AI_GENERATION_CONCURRENCY: int = 30
+
     # Social Import
     ENABLE_SOCIAL_IMPORT: bool = True
     SOCIAL_IMPORT_MAX_CONCURRENT_JOBS: int = 1

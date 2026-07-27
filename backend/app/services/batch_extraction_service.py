@@ -16,6 +16,8 @@ import httpx
 
 from app.agents.item_extraction_agent import get_item_extraction_agent
 from app.agents.image_generation_agent import get_image_generation_agent
+from app.core.concurrency import EXTRACTION_SEMAPHORE, GENERATION_SEMAPHORE
+from app.core.config import settings
 from app.core.exceptions import AIServiceError
 from app.services.batch_job_service import (
     BatchJob,
@@ -29,11 +31,10 @@ from app.utils.retry import is_retryable_error, with_retry
 
 logger = logging.getLogger(__name__)
 
-# Semaphores to limit concurrent AI calls. Keep both low: Agnes-style
-# shared gateways 429/503 under many parallel multi-MB vision/image POSTs.
-# Generation at 3 (not 5) also caps peak base64 buffers on the single Railway worker.
-EXTRACTION_SEMAPHORE = asyncio.Semaphore(3)
-GENERATION_SEMAPHORE = asyncio.Semaphore(3)
+# EXTRACTION_SEMAPHORE / GENERATION_SEMAPHORE live in app.core.concurrency so
+# they are shared process-wide across all concurrent jobs AND the variation
+# fan-out in image_generation_agent. Cap is configurable via
+# AI_EXTRACTION_CONCURRENCY / AI_GENERATION_CONCURRENCY env vars (default 30).
 
 OnItemsReady = Optional[Callable[[List[DetectedItemData]], Awaitable[None]]]
 
@@ -404,15 +405,20 @@ class BatchExtractionService:
         """
         Consume detected-item batches and generate product images continuously.
 
-        Uses GENERATION_SEMAPHORE for concurrency (same cap as former batch size).
+        Uses GENERATION_SEMAPHORE (process-wide ceiling, configurable via
+        AI_GENERATION_CONCURRENCY) for concurrency. A per-job local semaphore
+        (job.generation_batch_size) can only tighten below that ceiling.
         Items are processed as they arrive rather than waiting for all extracts.
         """
         agent = None
         generation_started = False
         in_flight: set[asyncio.Task] = set()
-        concurrent_cap = max(1, min(3, job.generation_batch_size or 3))
-        # Local semaphore so generation_batch_size can tighten below the global
-        # GENERATION_SEMAPHORE (3); the global cap is the effective ceiling.
+        # Local semaphore so generation_batch_size can tighten below the
+        # process-wide GENERATION_SEMAPHORE ceiling when a caller passes a
+        # smaller value. The global cap (AI_GENERATION_CONCURRENCY, default
+        # 30) is the effective maximum; this local sem only narrows further.
+        ceiling = max(1, settings.AI_GENERATION_CONCURRENCY)
+        concurrent_cap = max(1, min(ceiling, job.generation_batch_size or ceiling))
         local_sem = asyncio.Semaphore(concurrent_cap)
         # Consumer-scoped cache of source-photo downloads, keyed by URL.
         # Sibling items detected across one or more batches share a photo, so

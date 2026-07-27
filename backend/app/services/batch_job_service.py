@@ -126,7 +126,7 @@ class BatchJob:
     status: BatchJobStatus
     created_at: datetime
     auto_generate: bool = True
-    generation_batch_size: int = 5
+    generation_batch_size: int = 30
 
     # Images and items
     images: Dict[str, BatchImageData] = field(default_factory=dict)
@@ -186,7 +186,7 @@ class BatchJobService:
         user_id: str,
         images: List[Dict[str, Any]],
         auto_generate: bool = True,
-        generation_batch_size: int = 5,
+        generation_batch_size: int = 30,
     ) -> BatchJob:
         """Create a new batch job.
 

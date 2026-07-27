@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 from supabase import Client
 
+from app.core.config import settings
 from app.core.exceptions import (
     FitCheckException,
     InvalidInputError,
@@ -91,10 +92,14 @@ class BatchExtractionRequest(BaseModel):
         description="Automatically start generation after extraction",
     )
     generation_batch_size: int = Field(
-        5,
+        settings.AI_GENERATION_CONCURRENCY,
         ge=1,
-        le=5,
-        description="Max concurrent product-image generations (max 5)",
+        le=settings.AI_GENERATION_CONCURRENCY,
+        description=(
+            "Max concurrent product-image generations for this job "
+            f"(1-{settings.AI_GENERATION_CONCURRENCY}). The process-wide "
+            "GENERATION_SEMAPHORE (same cap) is the hard ceiling regardless."
+        ),
     )
 
 
@@ -290,7 +295,11 @@ async def start_batch_extraction_multipart(
         description="Optional JSON array of client image IDs, parallel to files",
     ),
     auto_generate: bool = Form(True),
-    generation_batch_size: int = Form(5, ge=1, le=5),
+    generation_batch_size: int = Form(
+        settings.AI_GENERATION_CONCURRENCY,
+        ge=1,
+        le=settings.AI_GENERATION_CONCURRENCY,
+    ),
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
 ):
@@ -660,9 +669,10 @@ async def start_single_extraction(
             user_id=user_id,
             images=[image_data],
             auto_generate=request.auto_generate,
-            # ponytail: generate a single photo's ~3 items concurrently, not one-at-a-time.
-            # GENERATION_SEMAPHORE(5) still caps process-wide concurrency.
-            generation_batch_size=5,
+            # Generate one photo's items concurrently rather than one-at-a-time.
+            # The process-wide GENERATION_SEMAPHORE (AI_GENERATION_CONCURRENCY,
+            # default 30) is the real ceiling; this only tightens below it.
+            generation_batch_size=settings.AI_GENERATION_CONCURRENCY,
         )
 
         # Start processing in background
