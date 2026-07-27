@@ -939,3 +939,32 @@ def test_ai_env_per_leg_url_key_inheritance_defaults():
     # CHAT root + image model/style carry real defaults.
     assert f["AI_CHAT_API_URL"].default == "https://apihub.agnes-ai.com/v1"
     assert f["AI_IMAGE_API_STYLE"].default == "images"
+
+
+@pytest.mark.asyncio
+async def test_chat_with_vision_falls_back_for_non_openai_host_on_non_retryable_error():
+    """A native Google (non-OpenAI) vision URL must fall back on any error.
+
+    gemini-3.6-flash is proxied through Agnes (OpenAI-shaped). If the primary
+    vision leg is pointed directly at generativelanguage.googleapis.com it 404s
+    on /v1/chat/completions; that 404 is non-retryable, so it must still fall
+    through to the configured fallback host instead of 500-ing the request.
+    """
+    from app.core.exceptions import AIServiceError
+
+    config = _make_config()
+    config.vision_model = "gemini-3.6-flash"
+    config.vision_api_url = "https://generativelanguage.googleapis.com/v1"
+    config.vision_fallback_model = "agnes-2.5-flash"
+    config.vision_fallback_api_url = "https://apihub.agnes-ai.com/v1"
+    service = AIProviderService(config)
+
+    mock_chat = AsyncMock(
+        side_effect=[AIServiceError("404 not found", retryable=False), "sentinel"]
+    )
+    with patch.object(AIProviderService, "chat", mock_chat):
+        result = await service.chat_with_vision("describe this outfit", ["aGVsbG8="])
+
+    assert result == "sentinel"
+    assert mock_chat.await_args_list[0].kwargs["api_url"] == "https://generativelanguage.googleapis.com/v1"
+    assert mock_chat.await_args_list[1].kwargs["api_url"] == "https://apihub.agnes-ai.com/v1"

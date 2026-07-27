@@ -16,8 +16,24 @@ import time
 from typing import Dict, Optional
 from dataclasses import dataclass
 import httpx
+from urllib.parse import urlparse
 
 from app.core.logging_config import get_context_logger
+
+# Hosts that are not OpenAI-compatible. The provider service POSTs to
+# `<host>/v1/chat/completions`, which 404s on these native Google endpoints.
+# Agnes already proxies the same Gemini models through an OpenAI-shaped API,
+# so leaving the per-leg URL blank (inherit chat) is the correct setup.
+_NON_OPENAI_HOSTS = (
+    "generativelanguage.googleapis.com",
+)
+
+
+def _is_non_openai_host(base_url: str) -> bool:
+    if not base_url:
+        return False
+    host = (urlparse(base_url).hostname or "").lower()
+    return any(host == bad or host.endswith("." + bad) for bad in _NON_OPENAI_HOSTS)
 
 logger = get_context_logger(__name__)
 
@@ -92,14 +108,25 @@ class AIProviderHealthService:
         try:
             # Build health check URL - try /models endpoint (OpenAI-compatible)
             health_url = f"{base_url.rstrip('/')}/models"
+            is_non_openai = _is_non_openai_host(base_url)
 
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(timeout_seconds),
                 follow_redirects=False,
             ) as client:
+                headers = {}
+                # Non-OpenAI hosts (e.g. Google Generative Language API) do not
+                # accept Bearer auth tokens. Sending Bearer auth always fails with
+                # 401, which marks the provider unavailable and forces a fallback
+                # to the Agnes gateway on every vision call, adding ~5s latency.
+                # For these hosts we skip the Authorization header and rely on
+                # the actual request error handling instead.
+                if not is_non_openai:
+                    headers["Authorization"] = f"Bearer {api_key}"
+
                 response = await client.get(
                     health_url,
-                    headers={"Authorization": f"Bearer {api_key}"},
+                    headers=headers,
                 )
 
                 latency = (time.time() - start_time) * 1000

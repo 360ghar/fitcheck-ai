@@ -39,6 +39,7 @@ from app.core.config import settings
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
 from app.utils.retry import with_retry
+from app.services.ai_provider_health_service import _is_non_openai_host
 
 logger = get_context_logger(__name__)
 
@@ -919,17 +920,31 @@ class AIProviderService:
 
         messages = [ChatMessage(role="user", content=content)]
 
+        primary_api_url = self.config.get_vision_api_url()
+        # Non-OpenAI hosts (e.g. Google Generative Language API) do not
+        # expose OpenAI-compatible /v1/chat/completions, so the request will
+        # fail with a non-retryable 404. Treat any failure from such a host as
+        # retryable so the configured fallback model/host (Agnes, which proxies
+        # Gemini through an OpenAI-shaped API) is still attempted.
+        primary_is_non_openai = _is_non_openai_host(primary_api_url)
+
         try:
             return await self.chat(
                 messages=messages,
                 model=primary_model,
                 max_tokens=max_tokens,
                 response_format=response_format,
-                api_url=self.config.get_vision_api_url(),
+                api_url=primary_api_url,
                 api_key=self.config.get_vision_api_key(),
             )
         except AIServiceError as e:
-            if not fallback_model or fallback_model == primary_model or not e.retryable:
+            if not fallback_model or fallback_model == primary_model:
+                raise
+            # Retry on explicitly retryable errors, or when the primary host is
+            # known to be non-OpenAI-compatible (the per-leg URL should normally
+            # inherit the chat URL; a native Google URL is a misconfiguration
+            # that must fall through to the Agnes gateway instead of 500-ing).
+            if not e.retryable and not primary_is_non_openai:
                 raise
 
             logger.warning(
@@ -1230,7 +1245,16 @@ async def get_ai_service(
                 api_key=user_provider_config["api_key"],
                 model=user_provider_config.get("model", settings.AI_CHAT_MODEL),
                 vision_model=user_provider_config.get("vision_model"),
+                vision_fallback_model=user_provider_config.get("vision_fallback_model"),
+                vision_fallback_api_url=user_provider_config.get("vision_fallback_api_url"),
+                vision_fallback_api_key=user_provider_config.get("vision_fallback_api_key"),
                 image_gen_model=user_provider_config.get("image_gen_model"),
+                image_api_style=user_provider_config.get("image_api_style", "images"),
+                image_api_url=user_provider_config.get("image_api_url"),
+                image_api_key=user_provider_config.get("image_api_key"),
+                image_fallback_model=user_provider_config.get("image_fallback_model"),
+                image_fallback_api_url=user_provider_config.get("image_fallback_api_url"),
+                image_fallback_api_key=user_provider_config.get("image_fallback_api_key"),
             )
             return AIProviderService(config)
 

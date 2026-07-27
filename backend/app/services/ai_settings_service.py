@@ -286,7 +286,15 @@ class AISettingsService:
                     model=user_config.get("model", settings.AI_CHAT_MODEL),
                     vision_model=user_config.get("vision_model"),
                     vision_fallback_model=user_config.get("vision_fallback_model"),
+                    vision_fallback_api_url=user_config.get("vision_fallback_api_url"),
+                    vision_fallback_api_key=user_config.get("vision_fallback_api_key"),
                     image_gen_model=user_config.get("image_gen_model"),
+                    image_api_style=user_config.get("image_api_style", "images"),
+                    image_api_url=user_config.get("image_api_url"),
+                    image_api_key=user_config.get("image_api_key"),
+                    image_fallback_model=user_config.get("image_fallback_model"),
+                    image_fallback_api_url=user_config.get("image_fallback_api_url"),
+                    image_fallback_api_key=user_config.get("image_fallback_api_key"),
                 )
 
         # Fall back to system configuration
@@ -497,6 +505,7 @@ class AISettingsService:
             api_key=api_key,
             model=model,
             timeout=30.0,  # Shorter timeout for testing
+            image_api_style="images",
         )
 
         service = AIProviderService(config)
