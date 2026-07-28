@@ -10,6 +10,7 @@ import json
 import re
 import uuid
 from datetime import datetime, date, timedelta
+from app.utils.datetime_util import utcnow, utcnow_iso, utc_today
 from typing import Any, List, Optional, Tuple
 
 from supabase import Client
@@ -172,7 +173,7 @@ class PhotoshootService:
     @staticmethod
     def _get_today() -> date:
         """Get today's date in UTC."""
-        return datetime.utcnow().date()
+        return utc_today()
 
     @staticmethod
     def _get_daily_limit(plan_type: PlanType) -> int:
@@ -930,7 +931,7 @@ RULES:
             if not allowed:
                 raise RateLimitError(
                     message=f"Daily limit exceeded. You have {usage.remaining} images remaining today.",
-                    retry_after=int((usage.resets_at - datetime.utcnow()).total_seconds()) if usage.resets_at else 86400,
+                    retry_after=int((usage.resets_at - utcnow()).total_seconds()) if usage.resets_at else 86400,
                 )
 
             # Generate prompts
@@ -1031,7 +1032,7 @@ class PhotoshootStreamingService:
                 "job_id": job.job_id,
                 "total_images": job.num_images,
                 "total_batches": job.total_batches,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utcnow_iso(),
             })
 
             # Generate prompts
@@ -1074,7 +1075,7 @@ class PhotoshootStreamingService:
                 "failed_indices": sorted(job.failed_indices),
                 "partial_success": job.failed_count > 0,
                 "usage": usage_dict,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utcnow_iso(),
             })
             # Keep generated images for GET status / poll fallback; drop
             # the SSE replay buffer which duplicates base64 payloads.
@@ -1086,7 +1087,7 @@ class PhotoshootStreamingService:
             await PhotoshootJobService.broadcast_event(job.job_id, "job_failed", {
                 "job_id": job.job_id,
                 "error": str(e),
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utcnow_iso(),
             })
             await PhotoshootJobService.release_reference_photos(job.job_id)
             await PhotoshootJobService.clear_event_history(job.job_id)
@@ -1097,7 +1098,7 @@ class PhotoshootStreamingService:
             await PhotoshootJobService.broadcast_event(job.job_id, "job_failed", {
                 "job_id": job.job_id,
                 "error": str(e),
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utcnow_iso(),
             })
             await PhotoshootJobService.release_reference_photos(job.job_id)
             await PhotoshootJobService.clear_event_history(job.job_id)
@@ -1147,7 +1148,7 @@ class PhotoshootStreamingService:
                     "batch_number": batch_num + 1,
                     "total_batches": job.total_batches,
                     "images_in_batch": len(batch_prompts),
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow_iso(),
                 })
 
                 # Generate batch images concurrently
@@ -1176,7 +1177,7 @@ class PhotoshootStreamingService:
                     "batch_number": batch_num + 1,
                     "total_batches": job.total_batches,
                     "generated_count": generated_count,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow_iso(),
                 })
         finally:
             await ai_service.close()
@@ -1243,7 +1244,7 @@ class PhotoshootStreamingService:
                 "image_url": None,
                 "generated_count": generated_count,
                 "total_count": job.num_images,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utcnow_iso(),
             })
 
             return GeneratedImage(
@@ -1275,7 +1276,7 @@ class PhotoshootStreamingService:
                 "generated_count": generated_count,
                 "failed_count": failed_count,
                 "total_count": job.num_images,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utcnow_iso(),
             })
 
             return None

@@ -57,10 +57,16 @@ async def test_concurrent_same_token_calls_supabase_once(
     mock_supabase_client,
     mock_auth_response,
 ):
-    """Concurrent refreshes for one token should share a single upstream call."""
+    """Concurrent refreshes for one token should share a single upstream call.
+
+    The side_effect uses a short time.sleep to simulate upstream latency.
+    This intentionally blocks the event loop so the leader task is the only
+    one inside refresh_session when followers are scheduled; they then join
+    the in-flight dedupe instead of issuing a second call.
+    """
 
     def delayed_refresh(_token):
-        time.sleep(0.05)
+        time.sleep(0.01)
         return mock_auth_response
 
     mock_supabase_client.auth.refresh_session.side_effect = delayed_refresh
@@ -109,7 +115,7 @@ async def test_different_tokens_dont_dedupe(
     """Different refresh tokens should each call Supabase once."""
 
     def delayed_refresh(_token):
-        time.sleep(0.05)
+        time.sleep(0.01)
         return mock_auth_response
 
     mock_supabase_client.auth.refresh_session.side_effect = delayed_refresh
@@ -131,7 +137,7 @@ async def test_supabase_error_is_shared_for_waiters(mock_supabase_client):
     """If leader refresh fails, waiters should receive the same auth error."""
 
     def delayed_error(_token):
-        time.sleep(0.05)
+        time.sleep(0.01)
         raise Exception("Supabase error")
 
     mock_supabase_client.auth.refresh_session.side_effect = delayed_error
@@ -167,7 +173,7 @@ async def test_waiter_timeout(mock_supabase_client, mock_auth_response, monkeypa
     monkeypatch.setattr(svc, "LOCK_TIMEOUT_SECONDS", 0.1)
 
     def slow_refresh(_token):
-        time.sleep(0.5)
+        time.sleep(0.2)
         return mock_auth_response
 
     mock_supabase_client.auth.refresh_session.side_effect = slow_refresh
@@ -177,7 +183,10 @@ async def test_waiter_timeout(mock_supabase_client, mock_auth_response, monkeypa
         refresh_token_with_deduplication(mock_supabase_client, refresh_token)
     )
 
-    await asyncio.sleep(0.02)
+    # Yield once so the leader registers itself before the follower arrives.
+    # asyncio.sleep(0) is enough since the leader's time.sleep blocks the
+    # loop, guaranteeing the follower queues behind it rather than racing.
+    await asyncio.sleep(0)
 
     with pytest.raises(AuthenticationError) as exc_info:
         await refresh_token_with_deduplication(mock_supabase_client, refresh_token)
@@ -195,7 +204,7 @@ async def test_clear_token_cache_cancels_inflight(mock_supabase_client, monkeypa
     monkeypatch.setattr(svc, "LOCK_TIMEOUT_SECONDS", 1)
 
     def slow_refresh(_token):
-        time.sleep(0.3)
+        time.sleep(0.1)
         return Mock(session=None)
 
     mock_supabase_client.auth.refresh_session.side_effect = slow_refresh
@@ -205,7 +214,7 @@ async def test_clear_token_cache_cancels_inflight(mock_supabase_client, monkeypa
         refresh_token_with_deduplication(mock_supabase_client, refresh_token)
     )
 
-    await asyncio.sleep(0.05)
+    await asyncio.sleep(0)
     await clear_token_cache(refresh_token)
 
     with pytest.raises(AuthenticationError) as exc_info:
@@ -219,7 +228,7 @@ async def test_cache_stats_reports_inflight(mock_supabase_client, mock_auth_resp
     """Stats should expose in-flight counts and no long-lived cache entries."""
 
     def slow_refresh(_token):
-        time.sleep(0.2)
+        time.sleep(0.05)
         return mock_auth_response
 
     mock_supabase_client.auth.refresh_session.side_effect = slow_refresh
@@ -227,7 +236,7 @@ async def test_cache_stats_reports_inflight(mock_supabase_client, mock_auth_resp
     task = asyncio.create_task(
         refresh_token_with_deduplication(mock_supabase_client, "stats_token")
     )
-    await asyncio.sleep(0.02)
+    await asyncio.sleep(0)
 
     stats = get_cache_stats()
     assert stats["cache_size"] == 0

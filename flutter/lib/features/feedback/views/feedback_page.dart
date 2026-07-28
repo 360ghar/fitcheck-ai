@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/feedback_controller.dart';
 import '../models/feedback_model.dart';
@@ -522,7 +523,7 @@ class FeedbackPage extends GetView<FeedbackController> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  _formatDate(ticket.createdAt),
+                  AppDateUtils.formatDate(ticket.createdAt),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: tokens.textMuted,
                       ),
@@ -549,7 +550,4 @@ class FeedbackPage extends GetView<FeedbackController> {
     );
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.month}/${date.day}/${date.year}';
-  }
 }

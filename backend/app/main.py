@@ -3,7 +3,8 @@ FitCheck AI - Main Application Entry Point
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.datetime_util import utcnow
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -179,7 +180,7 @@ def _get_cached_schema_status() -> tuple[bool, list[str]]:
     not call this. Cache avoids re-running ~30-40 sequential table/column
     existence queries on every readiness poll.
     """
-    now = datetime.utcnow()
+    now = utcnow()
     cached_at = _SCHEMA_STATUS_CACHE["checked_at"]
     if cached_at is not None and now - cached_at < _SCHEMA_STATUS_TTL:
         missing = _SCHEMA_STATUS_CACHE["missing"]
@@ -220,7 +221,7 @@ async def _seed_schema_status_in_thread() -> None:
     try:
         missing = await asyncio.to_thread(_check)
         _SCHEMA_STATUS_CACHE["missing"] = missing
-        _SCHEMA_STATUS_CACHE["checked_at"] = datetime.utcnow()
+        _SCHEMA_STATUS_CACHE["checked_at"] = utcnow()
         log = logging.getLogger(__name__)
         if missing:
             log.warning(

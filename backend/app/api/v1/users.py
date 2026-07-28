@@ -13,7 +13,7 @@ Implements:
 import asyncio
 import uuid
 import re
-from datetime import datetime
+from app.utils.datetime_util import utcnow, utcnow_iso
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
@@ -52,7 +52,7 @@ router = APIRouter()
 
 
 def _now() -> str:
-    return datetime.utcnow().isoformat()
+    return utcnow_iso()
 
 
 def _extract_missing_users_column(err: Exception) -> Optional[str]:
@@ -814,7 +814,7 @@ async def get_dashboard(
         if not user_row.data:
             raise UserNotFoundError(user_id=user_id)
 
-        now_dt = datetime.utcnow()
+        now_dt = utcnow()
         month_start = now_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
 
         # Parallel queries for counts

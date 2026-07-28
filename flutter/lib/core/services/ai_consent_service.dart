@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/ai_consent_sheet.dart';
+import 'persistence_service.dart';
 
 /// Service that records and gates the user's consent to sharing their photos
 /// with a third-party AI provider (OpenAI) for image generation.
@@ -9,10 +9,12 @@ import '../widgets/ai_consent_sheet.dart';
 /// Required for Apple App Store Guideline 5.1.2(i): explicit permission must be
 /// obtained before sharing user data with third parties. Consent is captured
 /// once at the first AI-feature use and persisted locally via
-/// SharedPreferences (modeled on [ThemeService]).
+/// [PersistenceService] (modeled on [ThemeService]).
 class AiConsentService extends GetxController {
   /// Versioned key so we can re-prompt if the disclosure materially changes.
-  static const String _consentKey = 'fitcheck_ai_consent_v1';
+  static const String _consentKey = '**********************';
+
+  PersistenceService get _persistence => Get.find<PersistenceService>();
 
   /// Cached in-memory value to avoid repeated disk reads after first check.
   bool _consented = false;
@@ -25,8 +27,7 @@ class AiConsentService extends GetxController {
 
   Future<void> _loadCachedConsent() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      _consented = prefs.getBool(_consentKey) ?? false;
+      _consented = (await _persistence.getBool(_consentKey)) ?? false;
     } catch (e) {
       debugPrint('Failed to load AI consent: $e');
     }
@@ -36,8 +37,7 @@ class AiConsentService extends GetxController {
   Future<bool> hasConsented() async {
     if (_consented) return true;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      _consented = prefs.getBool(_consentKey) ?? false;
+      _consented = (await _persistence.getBool(_consentKey)) ?? false;
     } catch (e) {
       debugPrint('Failed to read AI consent: $e');
     }
@@ -48,8 +48,7 @@ class AiConsentService extends GetxController {
   Future<void> setConsented() async {
     _consented = true;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_consentKey, true);
+      await _persistence.setBool(_consentKey, true);
     } catch (e) {
       debugPrint('Failed to persist AI consent: $e');
     }

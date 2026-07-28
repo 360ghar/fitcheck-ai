@@ -18,6 +18,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
+from app.models.ai import HealthCheckResult
 from app.services.ai_provider_service import (
     AIProvider,
     get_system_provider_config,
@@ -57,7 +58,8 @@ def _get_legacy_encryption_key() -> Optional[bytes]:
         return None
     try:
         return legacy_derive_fernet_key(key)
-    except Exception:
+    except (ValueError, TypeError, ImportError):
+        logger.error("Failed to derive encryption key", exc_info=True)
         return None
 
 
@@ -482,7 +484,7 @@ class AISettingsService:
         model: str,
         api_url: Optional[str] = None,
         provider: AIProvider = AIProvider.CUSTOM,
-    ) -> Dict[str, Any]:
+    ) -> HealthCheckResult:
         """
         Test a provider configuration.
 

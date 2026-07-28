@@ -7,8 +7,9 @@ import { create } from 'zustand';
 import type { Outfit, OutfitImage, Style, Season, OutfitFilters as ApiOutfitFilters } from '../types';
 import * as outfitsApi from '../api/outfits';
 import { generateOutfit } from '../api/ai';
-import { getApiError, ApiError } from '../api/client';
+import { getApiError, type ApiError } from '../lib/errors';
 import { withRetry } from '../lib/retry';
+import { logger } from '../lib/logger';
 
 // ============================================================================
 // OUTFIT STATE INTERFACE
@@ -17,7 +18,6 @@ import { withRetry } from '../lib/retry';
 interface OutfitState {
   // Outfits data
   outfits: Outfit[];
-  filteredOutfits: Outfit[];
   selectedOutfit: Outfit | null;
   selectedOutfits: Set<string>;
 
@@ -208,7 +208,6 @@ function mapPoseToPrompt(pose?: string): string {
 export const useOutfitStore = create<OutfitState>((set, get) => ({
   // Initial state
   outfits: [],
-  filteredOutfits: [],
   selectedOutfit: null,
   selectedOutfits: new Set(),
   isCreating: false,
@@ -261,17 +260,6 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         // Keep generatingOutfits across refresh so mid-flight auto-gen badges
         // and job pills are not wiped while AI is still running.
       });
-
-      // Apply filters and sort after outfits are set
-      const currentState = get();
-      set({
-        filteredOutfits: applyFiltersAndSort(
-          currentState.outfits,
-          currentState.filters,
-          currentState.sortBy,
-          currentState.sortOrder
-        ),
-      });
     } catch (error) {
       const apiError = getApiError(error);
       set({ error: apiError, isLoading: false });
@@ -296,7 +284,6 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         outfits: newOutfits,
         selectedOutfit: outfit,
         isLoading: false,
-        filteredOutfits: applyFiltersAndSort(newOutfits, state.filters, state.sortBy, state.sortOrder),
       });
     } catch (error) {
       const apiError = getApiError(error);
@@ -329,19 +316,11 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
   // Set filter
   setFilter: <K extends keyof OutfitState['filters']>(filter: K, value: OutfitState['filters'][K]) => {
     set({ filters: { ...get().filters, [filter]: value }, page: 1 });
-    const state = get();
-    set({
-      filteredOutfits: applyFiltersAndSort(state.outfits, state.filters, state.sortBy, state.sortOrder),
-    });
   },
 
   // Reset filters
   resetFilters: () => {
     set({ filters: initialFilters, page: 1 });
-    const state = get();
-    set({
-      filteredOutfits: applyFiltersAndSort(state.outfits, state.filters, state.sortBy, state.sortOrder),
-    });
   },
 
   // Set view mode
@@ -352,19 +331,11 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
   // Set sort by
   setSortBy: (sortBy: OutfitState['sortBy']) => {
     set({ sortBy });
-    const state = get();
-    set({
-      filteredOutfits: applyFiltersAndSort(state.outfits, state.filters, state.sortBy, state.sortOrder),
-    });
   },
 
   // Set sort order
   setSortOrder: (sortOrder: 'asc' | 'desc') => {
     set({ sortOrder });
-    const state = get();
-    set({
-      filteredOutfits: applyFiltersAndSort(state.outfits, state.filters, state.sortBy, state.sortOrder),
-    });
   },
 
   // Set grid view
@@ -386,7 +357,6 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
           state.selectedOutfit?.id === outfitId
             ? { ...state.selectedOutfit, is_favorite: updated.is_favorite }
             : state.selectedOutfit,
-        filteredOutfits: applyFiltersAndSort(newOutfits, state.filters, state.sortBy, state.sortOrder),
       });
     } catch (error) {
       const apiError = getApiError(error);
@@ -407,7 +377,6 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 
       set({
         outfits: newOutfits,
-        filteredOutfits: applyFiltersAndSort(newOutfits, state.filters, state.sortBy, state.sortOrder),
         selectedOutfit:
           state.selectedOutfit?.id === outfitId
             ? { ...state.selectedOutfit, worn_count: updated.worn_count, last_worn_at: updated.last_worn_at }
@@ -428,7 +397,6 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       const newOutfits = [duplicated, ...state.outfits];
       set({
         outfits: newOutfits,
-        filteredOutfits: applyFiltersAndSort(newOutfits, state.filters, state.sortBy, state.sortOrder),
       });
       return duplicated;
     } catch (error) {
@@ -449,7 +417,6 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 
       set({
         outfits: newOutfits,
-        filteredOutfits: applyFiltersAndSort(newOutfits, state.filters, state.sortBy, state.sortOrder),
         selectedOutfit: state.selectedOutfit?.id === outfitId ? null : state.selectedOutfit,
         selectedOutfits: newSelected,
       });
@@ -471,7 +438,6 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       const newOutfits = state.outfits.filter((o) => !selectedOutfits.has(o.id));
       set({
         outfits: newOutfits,
-        filteredOutfits: applyFiltersAndSort(newOutfits, state.filters, state.sortBy, state.sortOrder),
         selectedOutfits: new Set(),
       });
     } catch (error) {
@@ -590,7 +556,6 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 
       set({
         outfits: newOutfits,
-        filteredOutfits: applyFiltersAndSort(newOutfits, currentState.filters, currentState.sortBy, currentState.sortOrder),
         isCreating: false,
         isLoading: false,
         creationItems: new Set(),
@@ -673,7 +638,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
           initialDelayMs: 2000, // AI operations need longer initial delay
           backoffFactor: 2,
           onRetry: (attempt, error, delayMs) => {
-            console.log(`Retrying outfit generation, attempt ${attempt}, waiting ${delayMs}ms`, error);
+            logger.info(`Retrying outfit generation, attempt ${attempt}, waiting ${delayMs}ms`, error);
           },
         }
       );
@@ -718,12 +683,6 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 
       set({
         outfits: updatedOutfits,
-        filteredOutfits: applyFiltersAndSort(
-          updatedOutfits,
-          current.filters,
-          current.sortBy,
-          current.sortOrder
-        ),
         selectedOutfit:
           current.selectedOutfit?.id === outfitId
             ? { ...current.selectedOutfit, images: [...(current.selectedOutfit.images || []).map((img) => ({ ...img, is_primary: uploaded.is_primary ? false : img.is_primary })), uploaded] }
@@ -736,7 +695,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         const { useJobUiStore } = await import('@/stores/jobUiStore');
         useJobUiStore.getState().clearJob('outfit-generate');
       } catch {
-        // ignore
+        logger.error('Failed to clear outfit-generate job from jobUiStore');
       }
     } catch (error) {
       const apiError = getApiError(error);
@@ -745,7 +704,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         const { useJobUiStore } = await import('@/stores/jobUiStore');
         useJobUiStore.getState().clearJob('outfit-generate');
       } catch {
-        // ignore
+        logger.error('Failed to clear outfit-generate job from jobUiStore');
       }
     }
   },
@@ -784,7 +743,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
             href: '/outfits',
           });
         } catch {
-          // ignore
+          logger.error('Failed to set outfit-generate job from jobUiStore');
         }
 
         // Get outfit data
@@ -824,7 +783,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
             initialDelayMs: 2000,
             backoffFactor: 2,
             onRetry: (attempt, error, delayMs) => {
-              console.log(`Retrying auto outfit generation, attempt ${attempt}, waiting ${delayMs}ms`, error);
+              logger.info(`Retrying auto outfit generation, attempt ${attempt}, waiting ${delayMs}ms`, error);
             },
           }
         );
@@ -863,12 +822,6 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 
         set({
           outfits: updatedOutfits,
-          filteredOutfits: applyFiltersAndSort(
-            updatedOutfits,
-            current.filters,
-            current.sortBy,
-            current.sortOrder
-          ),
           generatingOutfits: finalMap,
         });
 
@@ -877,11 +830,11 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
           const { useJobUiStore } = await import('@/stores/jobUiStore');
           useJobUiStore.getState().clearJob('outfit-generate');
         } catch {
-          // ignore
+          logger.error('Failed to clear outfit-generate job from jobUiStore');
         }
 
       } catch (error) {
-        console.error('Auto generation failed for outfit', outfitId, error);
+        logger.error('Auto generation failed for outfit', outfitId, error);
         // Mark as failed in the map
         const current = get();
         const failedMap = new Map(current.generatingOutfits);
@@ -894,7 +847,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
           const { useJobUiStore } = await import('@/stores/jobUiStore');
           useJobUiStore.getState().clearJob('outfit-generate');
         } catch {
-          // ignore
+          logger.error('Failed to clear outfit-generate job from jobUiStore');
         }
       }
     })();
@@ -909,7 +862,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 // ============================================================================
 
 export const selectOutfits = (state: OutfitState) => state.outfits;
-export const selectFilteredOutfits = (state: OutfitState) => state.filteredOutfits;
+export const selectFilteredOutfits = (state: OutfitState) =>
+  applyFiltersAndSort(state.outfits, state.filters, state.sortBy, state.sortOrder);
 export const selectSelectedOutfit = (state: OutfitState) => state.selectedOutfit;
 
 // ============================================================================

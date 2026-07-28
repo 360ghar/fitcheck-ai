@@ -1,9 +1,18 @@
 # Database schema (generated)
 
-Generated: 2026-07-27
+Generated: 2026-07-28
 
 Source: `backend/db/supabase/migrations/`.
 Regenerate: `python scripts/generate_db_schema_doc.py`.
+
+## Limitations
+
+> This file is produced by regular-expression heuristics, not a real SQL parser.
+> Quoted identifiers, schema-qualified names, materialized views, statements inside
+> PL/pgSQL / dollar-quoted bodies, and CREATE/ALTER TABLE calls hidden behind IF/ELSE
+> or multi-line conditional blocks may be missed or misattributed. Treat this as an
+> orientation index for agents; confirm DDL in the migration files or live Supabase
+> before relying on it.
 
 This is an orientation index for agents, not a substitute for reading migrations or live Supabase.
 

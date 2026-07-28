@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import uuid
-from datetime import datetime, timezone
+from app.utils.datetime_util import utcnow_iso
 from typing import Any, Dict, List, Optional
 
 from app.agents.image_generation_agent import get_image_generation_agent
@@ -24,6 +24,7 @@ from app.models.social_import import (
     SocialImportPhotoStatus,
     SocialPlatform,
 )
+from app.models.subscription import OperationType
 from app.services.ai_service import AIService
 from app.services.ai_settings_service import AISettingsService
 from app.services.social_auth_service import SocialAuthService
@@ -602,7 +603,7 @@ class SocialImportPipelineService:
         )
 
         try:
-            if not await self._check_rate_limit_with_pause(job_id, "extraction"):
+            if not await self._check_rate_limit_with_pause(job_id, OperationType.EXTRACTION):
                 await SocialImportJobStore.update_photo(
                     self.db,
                     job_id=job_id,
@@ -624,7 +625,7 @@ class SocialImportPipelineService:
             raw_items = extraction_result.get("items") or []
             await AISettingsService.increment_usage(
                 user_id=self.user_id,
-                operation_type="extraction",
+                operation_type=OperationType.EXTRACTION,
                 db=self.db,
                 count=1,
             )
@@ -638,9 +639,7 @@ class SocialImportPipelineService:
                     updates={
                         "status": SocialImportPhotoStatus.FAILED.value,
                         "error_message": "No clothing items detected in photo",
-                        "processing_completed_at": datetime.now(
-                            timezone.utc
-                        ).isoformat(),
+                        "processing_completed_at": utcnow_iso(),
                     },
                 )
                 await self._publish_event(
@@ -690,7 +689,7 @@ class SocialImportPipelineService:
                     item["source_image_storage_path"] = source_image_storage_path
 
             if not await self._check_rate_limit_with_pause(
-                job_id, "generation", count=len(raw_items)
+                job_id, OperationType.GENERATION, count=len(raw_items)
             ):
                 await SocialImportJobStore.update_photo(
                     self.db,
@@ -796,7 +795,7 @@ class SocialImportPipelineService:
             if generation_success_count > 0:
                 await AISettingsService.increment_usage(
                     user_id=self.user_id,
-                    operation_type="generation",
+                    operation_type=OperationType.GENERATION,
                     db=self.db,
                     count=generation_success_count,
                 )
@@ -825,7 +824,7 @@ class SocialImportPipelineService:
                 photo_id=photo_id,
                 updates={
                     "status": target_status.value,
-                    "processing_completed_at": datetime.now(timezone.utc).isoformat(),
+                    "processing_completed_at": utcnow_iso(),
                     "error_message": None,
                 },
             )
@@ -857,7 +856,7 @@ class SocialImportPipelineService:
                 updates={
                     "status": SocialImportPhotoStatus.FAILED.value,
                     "error_message": str(e),
-                    "processing_completed_at": datetime.now(timezone.utc).isoformat(),
+                    "processing_completed_at": utcnow_iso(),
                 },
             )
             await self._publish_event(
@@ -937,7 +936,7 @@ class SocialImportPipelineService:
                 photo_id=photo_id,
                 updates={
                     "status": SocialImportPhotoStatus.APPROVED.value,
-                    "reviewed_at": datetime.now(timezone.utc).isoformat(),
+                    "reviewed_at": utcnow_iso(),
                 },
             )
 
@@ -997,7 +996,7 @@ class SocialImportPipelineService:
                 photo_id=photo_id,
                 updates={
                     "status": SocialImportPhotoStatus.REJECTED.value,
-                    "reviewed_at": datetime.now(timezone.utc).isoformat(),
+                    "reviewed_at": utcnow_iso(),
                 },
             )
 
@@ -1358,13 +1357,13 @@ class SocialImportPipelineService:
     async def _try_resume_rate_limited_job(self, job_id: str) -> bool:
         extraction_check = await AISettingsService.check_rate_limit(
             user_id=self.user_id,
-            operation_type="extraction",
+            operation_type=OperationType.EXTRACTION,
             db=self.db,
             count=1,
         )
         generation_check = await AISettingsService.check_rate_limit(
             user_id=self.user_id,
-            operation_type="generation",
+            operation_type=OperationType.GENERATION,
             db=self.db,
             count=1,
         )
@@ -1480,7 +1479,7 @@ class SocialImportPipelineService:
         )
 
         item_id = str(uuid.uuid4())
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = utcnow_iso()
         item_data = {
             "id": item_id,
             "user_id": self.user_id,
@@ -1533,7 +1532,7 @@ class SocialImportPipelineService:
         try:
             rate_check = await AISettingsService.check_rate_limit(
                 user_id=self.user_id,
-                operation_type="embedding",
+                operation_type=OperationType.EMBEDDING,
                 db=self.db,
             )
             if rate_check["allowed"]:
@@ -1543,7 +1542,7 @@ class SocialImportPipelineService:
                 if embedding:
                     await AISettingsService.increment_usage(
                         user_id=self.user_id,
-                        operation_type="embedding",
+                        operation_type=OperationType.EMBEDDING,
                         db=self.db,
                     )
                     vector_service = get_vector_service()

@@ -6,7 +6,7 @@ Previously had zero test coverage despite directly controlling revenue-path
 correctness (see architecture review, section 16).
 """
 from unittest.mock import Mock, patch
-from datetime import datetime
+from datetime import datetime, timezone
 
 import httpx
 import pytest
@@ -24,13 +24,13 @@ def _subscription_row(**overrides):
         "user_id": USER_ID,
         "plan_type": "free",
         "status": "active",
-        "current_period_start": datetime.utcnow().isoformat(),
+        "current_period_start": datetime.now(timezone.utc).isoformat(),
         "current_period_end": None,
         "cancel_at_period_end": False,
         "trial_end": None,
         "referral_credit_months": 0,
-        "created_at": datetime.utcnow().isoformat(),
-        "updated_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     row.update(overrides)
     return row
@@ -69,6 +69,10 @@ async def test_get_subscription_creates_default_when_none_exists():
 
     assert result.plan_type == PlanType.FREE
     db.table.return_value.upsert.assert_called_once()
+    upsert_call = db.table.return_value.upsert.call_args
+    assert upsert_call.args[0]["user_id"] == USER_ID
+    assert upsert_call.args[0]["plan_type"] == "free"
+    assert upsert_call.args[0]["status"] == "active"
 
 
 @pytest.mark.asyncio

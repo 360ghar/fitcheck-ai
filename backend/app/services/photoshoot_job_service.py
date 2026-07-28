@@ -8,6 +8,7 @@ Jobs are stored in process memory and auto-expire quickly to limit OOM risk.
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from app.utils.datetime_util import utcnow, utcnow_iso
 from typing import Any, Dict, List, Optional, Set
 from uuid import uuid4
 
@@ -140,7 +141,7 @@ class PhotoshootJobService:
             job_id=job_id,
             user_id=user_id,
             status=PhotoshootJobStatus.PENDING,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
             photos=photos,
             use_case=use_case,
             custom_prompt=custom_prompt,
@@ -262,7 +263,7 @@ class PhotoshootJobService:
         # Broadcast cancellation
         await cls.broadcast_event(job_id, "job_cancelled", {
             "job_id": job_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow_iso(),
         })
 
         logger.info("Cancelled photoshoot job", extra={"job_id": job_id})
@@ -449,7 +450,7 @@ class PhotoshootJobService:
     @classmethod
     async def _cleanup_expired_jobs(cls) -> None:
         """Remove jobs past active/finished TTLs and free base64 early."""
-        now = datetime.utcnow()
+        now = utcnow()
         expired_ids = []
         finished = {
             PhotoshootJobStatus.COMPLETE,

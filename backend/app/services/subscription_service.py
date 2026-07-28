@@ -2,7 +2,7 @@
 Subscription service for managing user subscriptions and usage tracking.
 """
 from datetime import datetime, date, timedelta
-from typing import Optional
+from typing import Optional, Union
 from dateutil.relativedelta import relativedelta
 
 import asyncio
@@ -14,12 +14,14 @@ from app.core.exceptions import DatabaseError
 from app.core.logging_config import get_context_logger
 from app.models.subscription import (
     PlanType,
+    OperationType,
     SubscriptionStatus,
     SubscriptionResponse,
     UsageLimits,
     SubscriptionWithUsage,
     UsageCheckResult,
 )
+from app.utils.datetime_util import utcnow, utcnow_iso
 from app.utils import maybe_single_data
 
 logger = get_context_logger(__name__)
@@ -101,7 +103,7 @@ class SubscriptionService:
                 user_id=data["user_id"],
                 plan_type=plan_type,
                 status=SubscriptionStatus(data.get("status", "active")),
-                current_period_start=SubscriptionService._parse_datetime(data.get("current_period_start")) or datetime.utcnow(),
+                current_period_start=SubscriptionService._parse_datetime(data.get("current_period_start")) or utcnow(),
                 current_period_end=SubscriptionService._parse_datetime(data.get("current_period_end")),
                 cancel_at_period_end=data.get("cancel_at_period_end", False),
                 trial_end=SubscriptionService._parse_datetime(data.get("trial_end")),
@@ -122,7 +124,7 @@ class SubscriptionService:
                 "user_id": user_id,
                 "plan_type": "free",
                 "status": "active",
-                "current_period_start": datetime.utcnow().isoformat(),
+                "current_period_start": utcnow_iso(),
             }, on_conflict="user_id").execute)
         except Exception as e:
             logger.error(f"Error creating default subscription for user {user_id}: {e}")
@@ -138,7 +140,7 @@ class SubscriptionService:
     ) -> SubscriptionResponse:
         """Upgrade user to Pro plan after successful Stripe payment."""
         try:
-            now = datetime.utcnow()
+            now = utcnow()
 
             # Calculate period end based on plan type
             if plan_type == PlanType.PRO_YEARLY:
@@ -197,7 +199,7 @@ class SubscriptionService:
 
             # If user is on free plan, upgrade them to trial Pro
             if current_data.get("plan_type") == "free":
-                now = datetime.utcnow()
+                now = utcnow()
                 trial_end = now + relativedelta(months=months)
 
                 await asyncio.to_thread(db.table("subscriptions").update({
@@ -211,7 +213,7 @@ class SubscriptionService:
                 # Just add to their credit balance
                 await asyncio.to_thread(db.table("subscriptions").update({
                     "referral_credit_months": current_credits + months,
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "updated_at": utcnow_iso(),
                 }).eq("user_id", user_id).execute)
 
             logger.info(f"Applied {months} referral credit months to user {user_id}")
@@ -226,7 +228,7 @@ class SubscriptionService:
         try:
             await asyncio.to_thread(db.table("subscriptions").update({
                 "cancel_at_period_end": True,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": utcnow_iso(),
             }).eq("user_id", user_id).execute)
 
             logger.info(f"Subscription cancelled for user {user_id}")
@@ -324,30 +326,42 @@ class SubscriptionService:
             raise DatabaseError(f"Failed to get usage: {str(e)}")
 
     @staticmethod
+    def _coerce_operation_type(operation_type: Union[OperationType, str]) -> OperationType:
+        """Normalize an operation type to OperationType.
+
+        Strings and OperationType members are both accepted at the boundary so
+        existing callers (which pass bare literals like "extraction") keep
+        working. Unknown values raise ValueError instead of silently branching
+        into a fallback.
+        """
+        try:
+            return OperationType(operation_type)
+        except ValueError as exc:
+            raise ValueError(f"Unknown operation type: {operation_type}") from exc
+
+    @staticmethod
     async def check_limit(
         user_id: str,
-        operation_type: str,
+        operation_type: Union[OperationType, str],
         db: Client,
         count: int = 1,
         _retry: bool = True,
     ) -> UsageCheckResult:
         """Check if user can perform an operation based on their plan limits."""
         try:
+            op = SubscriptionService._coerce_operation_type(operation_type)
             subscription = await SubscriptionService.get_subscription(user_id, db)
             limits = SubscriptionService.get_plan_limits(subscription.plan_type)
             usage_record = await SubscriptionService.get_or_create_usage_record(user_id, db)
 
             # Map operation type to usage field
             field_map = {
-                "extraction": ("monthly_extractions", "monthly_extractions"),
-                "generation": ("monthly_generations", "monthly_generations"),
-                "embedding": ("monthly_embeddings", "monthly_embeddings"),
+                OperationType.EXTRACTION: ("monthly_extractions", "monthly_extractions"),
+                OperationType.GENERATION: ("monthly_generations", "monthly_generations"),
+                OperationType.EMBEDDING: ("monthly_embeddings", "monthly_embeddings"),
             }
 
-            if operation_type not in field_map:
-                raise ValueError(f"Unknown operation type: {operation_type}")
-
-            usage_field, limit_field = field_map[operation_type]
+            usage_field, limit_field = field_map[op]
             current_count = usage_record.get(usage_field, 0)
             limit = limits.get(limit_field, 0)
             remaining = max(0, limit - current_count)
@@ -357,7 +371,7 @@ class SubscriptionService:
             message = None
             if not allowed:
                 plan_name = "Pro" if subscription.is_pro else "Free"
-                message = f"You've reached your monthly {operation_type} limit ({limit}) on the {plan_name} plan. Upgrade to Pro for more!"
+                message = f"You've reached your monthly {op.value} limit ({limit}) on the {plan_name} plan. Upgrade to Pro for more!"
 
             return UsageCheckResult(
                 allowed=allowed,
@@ -388,12 +402,13 @@ class SubscriptionService:
     @staticmethod
     async def increment_usage(
         user_id: str,
-        operation_type: str,
+        operation_type: Union[OperationType, str],
         db: Client,
         count: int = 1,
     ) -> None:
         """Increment usage counter for an operation."""
         try:
+            op = SubscriptionService._coerce_operation_type(operation_type)
             period_start = SubscriptionService._get_current_period_start()
 
             # Ensure usage record exists
@@ -401,15 +416,12 @@ class SubscriptionService:
 
             # Map operation type to column
             column_map = {
-                "extraction": "monthly_extractions",
-                "generation": "monthly_generations",
-                "embedding": "monthly_embeddings",
+                OperationType.EXTRACTION: "monthly_extractions",
+                OperationType.GENERATION: "monthly_generations",
+                OperationType.EMBEDDING: "monthly_embeddings",
             }
 
-            if operation_type not in column_map:
-                raise ValueError(f"Unknown operation type: {operation_type}")
-
-            column = column_map[operation_type]
+            column = column_map[op]
 
             # Use atomic increment via RPC to prevent race conditions
             await asyncio.to_thread(db.rpc("increment_usage", {
@@ -419,7 +431,7 @@ class SubscriptionService:
                 "p_count": count,
             }).execute)
 
-            logger.debug(f"Incremented {operation_type} usage for user {user_id} by {count}")
+            logger.debug(f"Incremented {op.value} usage for user {user_id} by {count}")
 
         except Exception as e:
             logger.error(f"Error incrementing usage for user {user_id}: {e}")

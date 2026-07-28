@@ -9,7 +9,9 @@ import { toast } from '../components/ui/use-toast';
 import type { User, AuthTokens, AuthResponse } from '../types';
 import * as authApi from '../api/auth';
 import { getCurrentUser } from '../api/users';
-import { getApiError, resetForcedLogoutFlag, setTokens } from '../api/client';
+import { getApiError } from '../lib/errors';
+import { logger } from '../lib/logger';
+import { resetForcedLogoutFlag, setTokens } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 
 // ============================================================================
@@ -135,7 +137,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           await authApi.logout();
         } catch (error) {
-          console.warn('Logout API call failed:', error);
+          logger.warn('Logout API call failed:', error);
         } finally {
           set({
             user: null,

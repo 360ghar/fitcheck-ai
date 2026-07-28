@@ -1,6 +1,7 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
 import { AlertTriangle, ChevronDown, ChevronUp, Home, RefreshCw } from 'lucide-react'
 import * as Sentry from '@sentry/react'
+import { logger } from '../../lib/logger'
 
 interface Props {
   children: ReactNode
@@ -32,8 +33,8 @@ class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     // Log the error to console
-    console.error('ErrorBoundary caught an error:', error)
-    console.error('Error info:', errorInfo)
+    logger.error('ErrorBoundary caught an error:', error)
+    logger.error('Error info:', errorInfo)
 
     // Report to Sentry (no-op if SDK is not initialized)
     Sentry.captureException(error, { extra: { componentStack: errorInfo.componentStack } })

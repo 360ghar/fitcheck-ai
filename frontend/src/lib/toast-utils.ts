@@ -6,8 +6,9 @@
  */
 
 import { toast } from '@/components/ui/use-toast';
-import type { ApiError } from '@/api/client';
-import { isApiError, getApiError } from '@/api/client';
+import { logger } from '@/lib/logger';
+import type { ApiError } from '@/lib/errors';
+import { isApiError, getApiError } from '@/lib/errors';
 
 /**
  * Get a user-friendly error title based on HTTP status code
@@ -70,8 +71,8 @@ export function showApiError(error: ApiError | unknown, fallbackMessage = 'An er
     const status = apiError.status;
     const title = getErrorTitle(status);
 
-    // Log full error details to console for debugging
-    console.error('[API Error]', {
+    // Log full error details for debugging
+    logger.error('[API Error]', {
         message: apiError.message,
         code: apiError.code,
         status: apiError.status,
@@ -99,7 +100,7 @@ export function showApiError(error: ApiError | unknown, fallbackMessage = 'An er
 export function showNetworkError(message?: string) {
     const defaultMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
 
-    console.error('[Network Error]', { message: message || defaultMessage });
+    logger.error('[Network Error]', { message: message || defaultMessage });
 
     return toast({
         title: 'Connection Error',

@@ -39,7 +39,6 @@ function seedOutfit() {
 
   useOutfitStore.setState({
     outfits: [outfit],
-    filteredOutfits: [outfit],
     generatingOutfits: new Map([[OUTFIT_ID, { status: 'pending' as const }]]),
   })
 }

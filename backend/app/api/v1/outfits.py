@@ -10,6 +10,7 @@ stores generated images in Supabase Storage and records metadata for retrieval.
 import asyncio
 import uuid
 from datetime import datetime, timezone
+from app.utils.datetime_util import utcnow, utcnow_iso
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -72,7 +73,7 @@ class UpdateCollectionOutfitsRequest(BaseModel):
 
 
 def _now() -> str:
-    return datetime.utcnow().isoformat()
+    return utcnow_iso()
 
 
 def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
@@ -431,7 +432,7 @@ async def get_public_outfit(
         share_row = (share.data or [None])[0]
         if share_row:
             expires_at = _parse_iso_datetime(share_row.get("expires_at"))
-            if expires_at and expires_at < datetime.now(timezone.utc):
+            if expires_at and expires_at < utcnow():
                 raise SharedOutfitNotFoundError(share_id=outfit_id_str)
             views = int(share_row.get("view_count") or 0) + 1
             await asyncio.to_thread(db.table("shared_outfits").update({"view_count": views}).eq("id", share_row["id"]).execute)

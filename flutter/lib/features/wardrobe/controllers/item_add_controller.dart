@@ -3,19 +3,23 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/config/env_config.dart';
+import '../services/wardrobe_sync_service.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
 import '../../../domain/enums/condition.dart' as app_condition;
 import '../models/batch_extraction_models.dart';
 import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
-import 'wardrobe_controller.dart';
 import '../../../core/utils/error_handler.dart';
 
 /// Controller for item add page
 /// Handles image processing, AI extraction, product image generation, and item creation
 class ItemAddController extends GetxController {
   final ItemRepository _itemRepository = ItemRepository();
+  WardrobeSyncService get _wardrobeSync =>
+      Get.isRegistered<WardrobeSyncService>()
+          ? Get.find<WardrobeSyncService>()
+          : WardrobeSyncService();
 
   // Reactive state
   final Rx<File?> selectedImage = Rx<File?>(null);
@@ -723,10 +727,7 @@ class ItemAddController extends GetxController {
       isSaving.value = false;
 
       if (savedCount > 0) {
-        // Notify WardrobeController for immediate UI update
-        if (Get.isRegistered<WardrobeController>()) {
-          Get.find<WardrobeController>().addItems(createdItems.toList());
-        }
+        _wardrobeSync.addItems(createdItems.toList());
         Get.back(); // Close item add page
         ErrorHandler.showSuccess('$savedCount of ${includedItems.length} item(s) added to your wardrobe', title: 'Success');
       } else {
@@ -808,10 +809,7 @@ class ItemAddController extends GetxController {
       isSaving.value = false;
 
       if (savedCount > 0) {
-        // Notify WardrobeController for immediate UI update
-        if (Get.isRegistered<WardrobeController>()) {
-          Get.find<WardrobeController>().addItems(createdItems.toList());
-        }
+        _wardrobeSync.addItems(createdItems.toList());
         Get.back(); // Close item add page
         ErrorHandler.showSuccess('$savedCount of ${itemsToSave.length} item(s) added to your wardrobe', title: 'Success');
       } else {

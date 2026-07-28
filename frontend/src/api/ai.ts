@@ -5,6 +5,8 @@
  */
 
 import { apiClient } from './client';
+import { logger } from '../lib/logger';
+import { ENDPOINTS } from '@/lib/endpoints';
 
 // =============================================================================
 // TYPES
@@ -289,7 +291,7 @@ export async function fileToBase64(file: File): Promise<string> {
 export async function extractItems(imageFile: File): Promise<ExtractItemsResult> {
   const imageBase64 = await fileToBase64(imageFile);
 
-  const response = await apiClient.post<{ data: ExtractItemsResult }>('/api/v1/ai/extract-items', {
+  const response = await apiClient.post<{ data: ExtractItemsResult }>(ENDPOINTS.AI.EXTRACT_ITEMS, {
     image: imageBase64,
   });
 
@@ -307,7 +309,7 @@ export async function generateOutfit(
   items: OutfitItemInput[],
   options: GenerateOutfitOptions = {}
 ): Promise<GeneratedOutfit> {
-  const response = await apiClient.post<{ data: GeneratedOutfit }>('/api/v1/ai/generate-outfit', {
+  const response = await apiClient.post<{ data: GeneratedOutfit }>(ENDPOINTS.AI.GENERATE_OUTFIT, {
     items,
     style: options.style ?? 'casual',
     background: options.background ?? 'studio white',
@@ -380,7 +382,7 @@ export async function generateMultiPoseOutfit(
         results.push(result.value);
       } else {
         failedPoses.push(batch[j]);
-        console.error(`Failed to generate pose ${batch[j]}:`, result.reason);
+        logger.error(`Failed to generate pose ${batch[j]}:`, result.reason);
       }
     }
   }
@@ -399,7 +401,7 @@ export async function generateProductImage(
   options: GenerateProductImageOptions
 ): Promise<GeneratedProductImage> {
   const response = await apiClient.post<{ data: GeneratedProductImage }>(
-    '/api/v1/ai/generate-product-image',
+    ENDPOINTS.AI.GENERATE_PRODUCT_IMAGE,
     {
       item_description: options.item_description,
       category: options.category,
@@ -431,7 +433,7 @@ export async function generateTryOn(
   const clothingBase64 = await fileToBase64(clothingImage);
 
   const response = await apiClient.post<{ data: TryOnResult }>(
-    '/api/v1/ai/try-on',
+    ENDPOINTS.AI.TRY_ON,
     {
       clothing_image: clothingBase64,
       clothing_description: options.clothing_description,
@@ -454,7 +456,7 @@ export async function generateTryOn(
  * Get AI settings for the current user.
  */
 export async function getAISettings(): Promise<AISettings> {
-  const response = await apiClient.get<{ data: AISettings }>('/api/v1/ai/settings');
+  const response = await apiClient.get<{ data: AISettings }>(ENDPOINTS.AI.SETTINGS);
   return response.data.data;
 }
 
@@ -465,7 +467,7 @@ export async function updateAISettings(settings: {
   default_provider?: string;
   provider_configs?: Record<string, ProviderConfigInput>;
 }): Promise<AISettings> {
-  const response = await apiClient.put<{ data: AISettings }>('/api/v1/ai/settings', settings);
+  const response = await apiClient.put<{ data: AISettings }>(ENDPOINTS.AI.SETTINGS, settings);
   return response.data.data;
 }
 
@@ -477,7 +479,7 @@ export async function testProviderConfig(
   apiKey: string,
   model: string
 ): Promise<TestProviderResult> {
-  const response = await apiClient.post<{ data: TestProviderResult }>('/api/v1/ai/settings/test', {
+  const response = await apiClient.post<{ data: TestProviderResult }>(ENDPOINTS.AI.SETTINGS_TEST, {
     api_url: apiUrl,
     api_key: apiKey,
     model,
@@ -489,7 +491,7 @@ export async function testProviderConfig(
  * Reset a provider configuration to defaults.
  */
 export async function resetProviderConfig(provider: string): Promise<void> {
-  await apiClient.post(`/api/v1/ai/settings/reset-provider/${provider}`);
+  await apiClient.post(`${ENDPOINTS.AI.SETTINGS}/reset-provider/${provider}`);
 }
 
 // =============================================================================
@@ -500,7 +502,7 @@ export async function resetProviderConfig(provider: string): Promise<void> {
  * Generate an embedding for a single text.
  */
 export async function generateEmbedding(text: string, model?: string): Promise<EmbeddingResult> {
-  const response = await apiClient.post<{ data: EmbeddingResult }>('/api/v1/ai/embeddings', {
+  const response = await apiClient.post<{ data: EmbeddingResult }>(ENDPOINTS.AI.EMBEDDINGS, {
     text,
     model,
   });
@@ -515,7 +517,7 @@ export async function generateBatchEmbeddings(
   model?: string
 ): Promise<BatchEmbeddingResult> {
   const response = await apiClient.post<{ data: BatchEmbeddingResult }>(
-    '/api/v1/ai/embeddings/batch',
+    ENDPOINTS.AI.EMBEDDINGS_BATCH,
     {
       texts,
       model,
@@ -531,7 +533,7 @@ export async function searchSimilarItems(
   request: SimilaritySearchRequest
 ): Promise<SimilaritySearchResult> {
   const response = await apiClient.post<{ data: SimilaritySearchResult }>(
-    '/api/v1/ai/embeddings/search',
+    ENDPOINTS.AI.EMBEDDINGS_SEARCH,
     request
   );
   return response.data.data;

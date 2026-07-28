@@ -9,6 +9,7 @@ on single-worker Railway deploys (base64 images are large).
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from app.utils.datetime_util import utcnow, utcnow_iso
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 from uuid import uuid4
@@ -227,7 +228,7 @@ class BatchJobService:
             job_id=job_id,
             user_id=user_id,
             status=BatchJobStatus.PENDING,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
             auto_generate=auto_generate,
             generation_batch_size=generation_batch_size,
             images=image_dict,
@@ -334,7 +335,7 @@ class BatchJobService:
         # Broadcast cancellation
         await cls.broadcast_event(job_id, "job_cancelled", {
             "job_id": job_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow_iso(),
         })
 
         logger.info("Cancelled batch job", extra={"job_id": job_id})
@@ -636,7 +637,7 @@ class BatchJobService:
     @classmethod
     async def _cleanup_expired_jobs(cls) -> None:
         """Remove jobs past active/finished TTLs and free base64 from finished ones."""
-        now = datetime.utcnow()
+        now = utcnow()
         expired_ids = []
         finished_statuses = {
             BatchJobStatus.COMPLETED,

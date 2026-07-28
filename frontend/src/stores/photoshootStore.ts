@@ -11,7 +11,8 @@ import {
   PhotoshootUseCase,
   GeneratedImage,
 } from '@/api/photoshoot';
-import { getApiError } from '@/api/client';
+import { getApiError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { ensureSessionRecording, setPersonProperties, trackEvent } from '@/lib/analytics';
 import { useJobUiStore } from '@/stores/jobUiStore';
 
@@ -133,7 +134,7 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
       }
     } catch (error) {
       // Log the error for debugging, but don't block the user
-      console.warn('Failed to fetch photoshoot usage, using defaults:', error);
+      logger.warn('Failed to fetch photoshoot usage, using defaults:', error);
       set({ isLoadingUsage: false });
       // Default to free limits
       set({ usage: { used_today: 0, limit_today: 10, remaining: 10, plan_type: 'free' } });

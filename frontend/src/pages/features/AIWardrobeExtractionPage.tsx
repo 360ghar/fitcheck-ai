@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom'
 import SEO from '@/components/seo/SEO'
 import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
+import { LandingFeatureSection } from '@/components/landing/LandingFeatureSection'
+import { BenefitGrid } from '@/components/landing/BenefitGrid'
+import { CtaBand } from '@/components/landing/CtaBand'
 import {
   Camera,
   Sparkles,
@@ -155,54 +158,15 @@ export default function AIWardrobeExtractionPage() {
       <BreadcrumbJsonLd items={breadcrumbs} />
 
       <div className="pt-20">
-        {/* Hero Section */}
-        <section className="relative overflow-hidden bg-stone-900 dark:bg-stone-950">
-          {/* Background Pattern */}
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute top-20 left-10 w-72 h-72 bg-white rounded-full blur-3xl" />
-            <div className="absolute bottom-20 right-10 w-96 h-96 bg-white rounded-full blur-3xl" />
-          </div>
-
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32">
-            <AnimatedSection>
-              <div className="text-center max-w-4xl mx-auto">
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-white/90 text-sm font-medium mb-6">
-                  <Sparkles className="w-4 h-4" />
-                  AI-Powered Technology
-                </div>
-
-                <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
-                  AI Wardrobe Extraction
-                </h1>
-
-                <p className="text-xl md:text-2xl text-indigo-100 mb-4 max-w-3xl mx-auto">
-                  Transform Your Closet with AI-Powered Clothing Recognition
-                </p>
-
-                <p className="text-lg text-indigo-200 mb-10 max-w-2xl mx-auto">
-                  Upload photos and automatically catalog your entire wardrobe. Our AI detects items,
-                  extracts colors, identifies categories, and recognizes brands—in minutes, not hours.
-                </p>
-
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <Link
-                    to="/auth/register"
-                    className="inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
-                  >
-                    Start free
-                    <ArrowRight className="w-5 h-5" />
-                  </Link>
-                  <Link
-                    to="#how-it-works"
-                    className="inline-flex items-center justify-center gap-2 bg-white/10 backdrop-blur-sm text-white px-8 py-4 rounded-full font-semibold text-lg hover:bg-white/20 transition-all"
-                  >
-                    See How It Works
-                  </Link>
-                </div>
-              </div>
-            </AnimatedSection>
-          </div>
-        </section>
+        <LandingFeatureSection
+          badge={{ icon: Sparkles, text: 'AI-Powered Technology' }}
+          title="AI Wardrobe Extraction"
+          subtitle="Transform Your Closet with AI-Powered Clothing Recognition"
+          description="Upload photos and automatically catalog your entire wardrobe. Our AI detects items, extracts colors, identifies categories, and recognizes brands—in minutes, not hours."
+          accentColor="indigo"
+          primaryCta={{ text: 'Start free', to: '/auth/register' }}
+          secondaryCta={{ text: 'See How It Works', to: '#how-it-works' }}
+        />
 
         {/* Stats Section */}
         <section className="py-16 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
@@ -228,38 +192,12 @@ export default function AIWardrobeExtractionPage() {
         </section>
 
         {/* Features Grid */}
-        <section className="py-20 md:py-28 bg-white dark:bg-gray-950">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <AnimatedSection>
-              <div className="text-center max-w-3xl mx-auto mb-16">
-                <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-                  Intelligent Wardrobe Recognition
-                </h2>
-                <p className="text-lg text-gray-600 dark:text-gray-400">
-                  Our advanced AI does the heavy lifting, automatically identifying and cataloging every detail of your clothing.
-                </p>
-              </div>
-            </AnimatedSection>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {features.map((feature, index) => (
-                <AnimatedSection key={feature.title} delay={index * 100}>
-                  <div className="group p-8 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-all duration-300 hover:shadow-lg border border-gray-100 dark:border-gray-800 hover:border-indigo-200 dark:hover:border-indigo-800">
-                    <div className="w-14 h-14 bg-indigo-100 dark:bg-indigo-900/50 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                      <feature.icon className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
-                    </div>
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                      {feature.title}
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                      {feature.description}
-                    </p>
-                  </div>
-                </AnimatedSection>
-              ))}
-            </div>
-          </div>
-        </section>
+        <BenefitGrid
+          items={features}
+          heading="Intelligent Wardrobe Recognition"
+          subheading="Our advanced AI does the heavy lifting, automatically identifying and cataloging every detail of your clothing."
+          accentColor="indigo"
+        />
 
         {/* How It Works Section */}
         <section id="how-it-works" className="py-20 md:py-28 bg-stone-50 dark:bg-stone-950">
@@ -432,30 +370,13 @@ export default function AIWardrobeExtractionPage() {
         </section>
 
         {/* CTA Section */}
-        <section className="py-20 md:py-28 bg-stone-900">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <AnimatedSection>
-              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">
-                Ready to digitize your wardrobe?
-              </h2>
-              <p className="text-xl text-indigo-100 mb-10 max-w-2xl mx-auto">
-                Join thousands who have transformed their closets with AI. Start cataloging your wardrobe in minutes, not hours.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link
-                  to="/auth/register"
-                  className="inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
-                >
-                  Start free
-                  <ArrowRight className="w-5 h-5" />
-                </Link>
-              </div>
-              <p className="text-indigo-200 mt-6 text-sm">
-                No credit card required. Free plan includes 25 item extractions per month.
-              </p>
-            </AnimatedSection>
-          </div>
-        </section>
+        <CtaBand
+          heading="Ready to digitize your wardrobe?"
+          subtext="Join thousands who have transformed their closets with AI. Start cataloging your wardrobe in minutes, not hours."
+          primaryCta={{ text: 'Start free', to: '/auth/register' }}
+          footnote="No credit card required. Free plan includes 25 item extractions per month."
+          accentColor="indigo"
+        />
       </div>
     </>
   )

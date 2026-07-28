@@ -13,13 +13,15 @@ import '../../../core/utils/error_handler.dart';
 /// Wardrobe controller
 class WardrobeController extends GetxController {
   final ItemRepository _itemRepository;
-  final NetworkService _networkService = Get.find<NetworkService>();
+  final NetworkService _networkService;
 
-  /// [itemRepository] is injectable to allow unit tests to exercise the
-  /// controller's error-handling paths without hitting the real API / Supabase
-  /// stack. Defaults to a live [ItemRepository] in production.
-  WardrobeController({ItemRepository? itemRepository})
-    : _itemRepository = itemRepository ?? ItemRepository();
+  /// Both [itemRepository] and [networkService] are injectable for unit tests.
+  /// Default to live implementations in production.
+  WardrobeController({
+    ItemRepository? itemRepository,
+    NetworkService? networkService,
+  }) : _itemRepository = itemRepository ?? ItemRepository(),
+       _networkService = networkService ?? Get.find<NetworkService>();
 
   // Workers for cleanup
   final List<Worker> _workers = [];

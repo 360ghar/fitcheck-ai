@@ -17,6 +17,18 @@ class PlanType(str, Enum):
     PRO_YEARLY = "pro_yearly"
 
 
+class OperationType(str, Enum):
+    """AI operation types used by rate limits and subscription usage tracking.
+
+    Wire/DB values remain the literal strings ("extraction", "generation",
+    "embedding"); the enum centralizes them so callers cannot typo a value
+    that only surfaces as a runtime ValueError at the service boundary.
+    """
+    EXTRACTION = "extraction"
+    GENERATION = "generation"
+    EMBEDDING = "embedding"
+
+
 class SubscriptionStatus(str, Enum):
     """Subscription status values."""
     ACTIVE = "active"

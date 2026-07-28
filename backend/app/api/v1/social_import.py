@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 import json
 from html import escape
-from datetime import datetime, timezone
+from app.utils.datetime_util import utcnow_iso
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -298,7 +298,7 @@ async def social_import_events(
             connected_payload = {
                 "job_id": job_id,
                 "status": status_payload["status"],
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow_iso(),
             }
             yield {"event": "connected", "data": json.dumps(connected_payload)}
 
@@ -339,7 +339,7 @@ async def social_import_events(
                     status_payload = await _service(user_id, db).get_status(job_id)
                     heartbeat = {
                         "job_id": job_id,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": utcnow_iso(),
                         "last_event_id": max_replayed_id,
                         "status": status_payload.get("status"),
                     }
@@ -358,7 +358,7 @@ async def social_import_events(
                 "event": "job_failed",
                 "data": json.dumps({
                     "error": "Internal error while streaming import events",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utcnow_iso(),
                 }),
             }
         finally:

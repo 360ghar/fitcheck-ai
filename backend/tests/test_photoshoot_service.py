@@ -3,7 +3,7 @@ Tests for photoshoot service with retry logic.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from unittest.mock import Mock, patch
 
 from app.services.photoshoot_service import PhotoshootService, USE_CASE_TEMPLATES, PhotoshootUseCase
@@ -62,7 +62,7 @@ class TestPhotoshootRetryLogic:
             job_id="test-job-123",
             user_id="user-456",
             status=PhotoshootJobStatus.PENDING,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             photos=["base64photo1"],
             use_case="LINKEDIN",
             num_images=4,
@@ -314,7 +314,7 @@ class TestPhotoshootJobLifecycle:
             job_id="old-job",
             user_id="user-123",
             status=PhotoshootJobStatus.COMPLETE,
-            created_at=datetime.utcnow() - timedelta(hours=2),  # Expired
+            created_at=datetime.now(timezone.utc) - timedelta(hours=2),  # Expired
             photos=["photo1"],
             use_case="LINKEDIN",
             num_images=4,

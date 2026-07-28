@@ -35,6 +35,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/components/ui/use-toast'
+import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 import type { Outfit } from '@/types'
 
@@ -442,7 +443,7 @@ export function CalendarView({
             const weather = await onGetWeather(date)
             return { dateStr, weather }
           } catch (err) {
-            console.error('Failed to fetch weather:', err)
+            logger.error('Failed to fetch weather:', err)
             return { dateStr, weather: null as WeatherData | null }
           }
         })

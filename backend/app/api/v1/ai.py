@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError, FitCheckException, RateLimitError
 from app.services.rate_limit import rate_limited_operation
+from app.models.subscription import OperationType
 from app.core.security import get_current_user_id
 from app.db.connection import get_db
 from app.utils.retry import is_retryable_error, with_retry
@@ -93,7 +94,7 @@ async def extract_items(
     and detailed descriptions suitable for image generation.
     """
     try:
-        async with rate_limited_operation(user_id, "extraction", db):
+        async with rate_limited_operation(user_id, OperationType.EXTRACTION, db):
             # Get extraction agent
             agent = await get_item_extraction_agent(user_id=user_id, db=db)
             user_avatar_base64 = await _fetch_user_avatar_base64(user_id=user_id, db=db)
@@ -145,7 +146,7 @@ async def extract_single_item(
     Useful when the image contains only one item.
     """
     try:
-        async with rate_limited_operation(user_id, "extraction", db):
+        async with rate_limited_operation(user_id, OperationType.EXTRACTION, db):
             # Get extraction agent
             agent = await get_item_extraction_agent(user_id=user_id, db=db)
 
@@ -202,7 +203,7 @@ async def generate_outfit(
     If include_user_face is True and user has an avatar, generates with the user's face.
     """
     try:
-        async with rate_limited_operation(user_id, "generation", db):
+        async with rate_limited_operation(user_id, OperationType.GENERATION, db):
             # Fetch user avatar and body profile if include_user_face is enabled
             user_avatar_base64 = None
             body_profile = None
@@ -331,7 +332,7 @@ async def generate_product_image(
     Creates a professional product photo suitable for catalog listings.
     """
     try:
-        async with rate_limited_operation(user_id, "generation", db):
+        async with rate_limited_operation(user_id, OperationType.GENERATION, db):
             # Get generation agent
             agent = await get_image_generation_agent(user_id=user_id, db=db)
 
@@ -446,7 +447,7 @@ async def generate_try_on(
 
         avatar_url = user_data["avatar_url"]
 
-        async with rate_limited_operation(user_id, "generation", db):
+        async with rate_limited_operation(user_id, OperationType.GENERATION, db):
             # 2. Fetch avatar image and convert to base64
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(avatar_url)
@@ -654,7 +655,7 @@ async def generate_embedding(
     Used for similarity matching and semantic search.
     """
     try:
-        async with rate_limited_operation(user_id, "embedding", db):
+        async with rate_limited_operation(user_id, OperationType.EMBEDDING, db):
             # Generate embedding
             embedding = await EmbeddingService.generate_embedding(request.text)
 
@@ -703,7 +704,7 @@ async def generate_batch_embeddings(
                 "message": "No texts provided",
             }
 
-        async with rate_limited_operation(user_id, "embedding", db, count=len(request.texts)):
+        async with rate_limited_operation(user_id, OperationType.EMBEDDING, db, count=len(request.texts)):
             # Generate batch embeddings
             embeddings = await EmbeddingService.batch_generate_embeddings(request.texts)
 
@@ -753,7 +754,7 @@ async def search_similar_items(
             query_embedding = request.embedding
         else:
             # Rate limit only applies when generating embedding from text
-            async with rate_limited_operation(user_id, "embedding", db):
+            async with rate_limited_operation(user_id, OperationType.EMBEDDING, db):
                 query_embedding = await EmbeddingService.generate_embedding(request.text)
 
         # Get vector service and search
@@ -810,7 +811,7 @@ async def test_embedding_model(
     Generates a test embedding to verify the model is working correctly.
     """
     try:
-        async with rate_limited_operation(user_id, "embedding", db):
+        async with rate_limited_operation(user_id, OperationType.EMBEDDING, db):
             # Generate test embedding
             test_embedding = await EmbeddingService.generate_embedding("test embedding")
 

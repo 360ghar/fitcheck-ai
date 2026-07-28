@@ -9,7 +9,7 @@ soon as each image's items are detected (overlapped with remaining extracts).
 import asyncio
 import base64
 import logging
-from datetime import datetime
+from app.utils.datetime_util import utcnow_iso
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 import httpx
@@ -63,6 +63,7 @@ class BatchExtractionService:
                 try:
                     await gen_queue.put(None)
                 except Exception:
+                    # Cleanup path - queue may already be closed.
                     pass
             if consumer_task is None:
                 return
@@ -136,7 +137,7 @@ class BatchExtractionService:
             await BatchJobService.broadcast_event(job.job_id, "job_failed", {
                 "job_id": job.job_id,
                 "error": error_msg,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utcnow_iso(),
             })
             await BatchJobService.release_image_payloads(job.job_id)
             await BatchJobService.clear_event_history(job.job_id)
@@ -158,7 +159,7 @@ class BatchExtractionService:
         await BatchJobService.broadcast_event(job.job_id, "extraction_started", {
             "job_id": job.job_id,
             "total_images": job.total_images,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow_iso(),
         })
 
         agent = await get_item_extraction_agent(user_id=self.user_id, db=self.db)
@@ -187,7 +188,7 @@ class BatchExtractionService:
             "successful": len(job.extraction_completed),
             "failed": len(job.extraction_failed),
             "total_items_detected": job.total_items,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow_iso(),
         })
 
         # If the generation consumer already died, surface its real error now
@@ -289,7 +290,7 @@ class BatchExtractionService:
                     "items_count": len(items),
                     "completed_count": len(job.extraction_completed),
                     "total_images": job.total_images,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow_iso(),
                 })
 
                 # Overlap: enqueue for generation immediately
@@ -320,7 +321,7 @@ class BatchExtractionService:
                     "completed_count": len(job.extraction_completed),
                     "failed_count": len(job.extraction_failed),
                     "total_images": job.total_images,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow_iso(),
                 })
 
                 return []
@@ -465,7 +466,7 @@ class BatchExtractionService:
                             # Continuous pool (not discrete waves). Clients may
                             # ignore total_batches when 0.
                             "total_batches": 0,
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": utcnow_iso(),
                         },
                     )
 
@@ -499,7 +500,7 @@ class BatchExtractionService:
                         "total_items": job.total_items,
                         "successful": len(job.generation_completed),
                         "failed": len(job.generation_failed),
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": utcnow_iso(),
                     },
                 )
 
@@ -623,7 +624,7 @@ class BatchExtractionService:
                     "generated_image_base64": image_base64,
                     "completed_count": len(job.generation_completed),
                     "total_items": job.total_items,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow_iso(),
                 })
 
                 return image_base64
@@ -649,7 +650,7 @@ class BatchExtractionService:
                     "completed_count": len(job.generation_completed),
                     "failed_count": len(job.generation_failed),
                     "total_items": job.total_items,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow_iso(),
                 })
 
                 return None
@@ -673,7 +674,7 @@ class BatchExtractionService:
 
             result = {
                 "items": [item.to_dict() for item in job.detected_items],
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utcnow_iso(),
             }
 
             await ExtractionCacheService.set_cached_result(
@@ -708,5 +709,5 @@ class BatchExtractionService:
             "successful_generations": len(job.generation_completed),
             "failed_generations": len(job.generation_failed),
             "items": [item.to_dict() for item in job.detected_items],
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow_iso(),
         })

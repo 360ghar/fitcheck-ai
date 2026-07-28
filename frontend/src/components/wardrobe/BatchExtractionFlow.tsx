@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ToastAction } from '@/components/ui/toast';
 import { useToast } from '@/components/ui/use-toast';
+import { logger } from '@/lib/logger';
 import { WizardSteps } from '@/components/ui/wizard-steps';
 import { useBatchExtraction, useSocialImportQueue } from '@/hooks';
 import { createItem, uploadItemImages } from '@/api/items';
@@ -590,7 +591,7 @@ export function BatchExtractionFlow({
         initialDelayMs: 1000,
         backoffFactor: 2,
         onRetry: (attempt, error, delayMs) => {
-          console.log(`Retrying item save, attempt ${attempt}, waiting ${delayMs}ms`, error);
+          logger.info(`Retrying item save, attempt ${attempt}, waiting ${delayMs}ms`, error);
         },
         onItemComplete: () => {
           completedRef.current += 1;

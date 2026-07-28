@@ -2,7 +2,13 @@
 """Generate docs/generated/db-schema.md from Supabase SQL migrations.
 
 Heuristic extractor: lists CREATE TABLE / ALTER TABLE statements and migration files.
-Not a full SQL parser—good enough for agent orientation.
+Not a full SQL parser, good enough for agent orientation.
+
+Limitations (kept visible on purpose): regex extraction can miss PostgreSQL-quoted
+identifiers, schema-qualified names, materialized views, statements embedded in
+PL/pgSQL or dollar-quoted bodies, and CREATE/ALTER TABLE calls hidden inside IF/ELSE
+or multi-line conditional blocks. Treat the generated file as an orientation index;
+confirm DDL in the source migrations or live Supabase before relying on it.
 """
 
 from __future__ import annotations
@@ -49,6 +55,15 @@ def main() -> None:
         "",
         "Source: `backend/db/supabase/migrations/`.",
         "Regenerate: `python scripts/generate_db_schema_doc.py`.",
+        "",
+        "## Limitations",
+        "",
+        "> This file is produced by regular-expression heuristics, not a real SQL parser.",
+        "> Quoted identifiers, schema-qualified names, materialized views, statements inside",
+        "> PL/pgSQL / dollar-quoted bodies, and CREATE/ALTER TABLE calls hidden behind IF/ELSE",
+        "> or multi-line conditional blocks may be missed or misattributed. Treat this as an",
+        "> orientation index for agents; confirm DDL in the migration files or live Supabase",
+        "> before relying on it.",
         "",
         "This is an orientation index for agents, not a substitute for reading migrations or live Supabase.",
         "",

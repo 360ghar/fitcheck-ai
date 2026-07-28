@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom'
 import SEO from '@/components/seo/SEO'
 import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
+import { LandingFeatureSection } from '@/components/landing/LandingFeatureSection'
+import { BenefitGrid } from '@/components/landing/BenefitGrid'
+import { CtaBand } from '@/components/landing/CtaBand'
 import {
   Smartphone,
   Sparkles,
@@ -179,54 +182,15 @@ export default function VirtualTryOnPage() {
       <BreadcrumbJsonLd items={breadcrumbs} />
 
       <div className="pt-20">
-        {/* Hero Section */}
-        <section className="relative overflow-hidden bg-stone-900 dark:bg-stone-950">
-          {/* Background Pattern */}
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute top-20 right-10 w-72 h-72 bg-white rounded-full blur-3xl" />
-            <div className="absolute bottom-20 left-10 w-96 h-96 bg-white rounded-full blur-3xl" />
-          </div>
-
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32">
-            <AnimatedSection>
-              <div className="text-center max-w-4xl mx-auto">
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-white/90 text-sm font-medium mb-6">
-                  <Smartphone className="w-4 h-4" />
-                  Virtual Fitting Room
-                </div>
-
-                <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
-                  Virtual Try-On
-                </h1>
-
-                <p className="text-xl md:text-2xl text-purple-100 mb-4 max-w-3xl mx-auto">
-                  See How Any Outfit Looks on You Before Getting Dressed
-                </p>
-
-                <p className="text-lg text-purple-200 mb-10 max-w-2xl mx-auto">
-                  AI-powered virtual fitting room technology lets you visualize clothes on your body.
-                  Try before you buy, plan outfits effortlessly, and never wonder "what if" again.
-                </p>
-
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <Link
-                    to="/auth/register"
-                    className="inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
-                  >
-                    Start free
-                    <ArrowRight className="w-5 h-5" />
-                  </Link>
-                  <Link
-                    to="#how-it-works"
-                    className="inline-flex items-center justify-center gap-2 bg-white/10 backdrop-blur-sm text-white px-8 py-4 rounded-full font-semibold text-lg hover:bg-white/20 transition-all"
-                  >
-                    See How It Works
-                  </Link>
-                </div>
-              </div>
-            </AnimatedSection>
-          </div>
-        </section>
+        <LandingFeatureSection
+          badge={{ icon: Smartphone, text: 'Virtual Fitting Room' }}
+          title="Virtual Try-On"
+          subtitle="See How Any Outfit Looks on You Before Getting Dressed"
+          description="AI-powered virtual fitting room technology lets you visualize clothes on your body. Try before you buy, plan outfits effortlessly, and never wonder &quot;what if&quot; again."
+          accentColor="purple"
+          primaryCta={{ text: 'Start free', to: '/auth/register' }}
+          secondaryCta={{ text: 'See How It Works', to: '#how-it-works' }}
+        />
 
         {/* Stats Section */}
         <section className="py-16 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
@@ -252,38 +216,12 @@ export default function VirtualTryOnPage() {
         </section>
 
         {/* Features Grid */}
-        <section className="py-20 md:py-28 bg-white dark:bg-gray-950">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <AnimatedSection>
-              <div className="text-center max-w-3xl mx-auto mb-16">
-                <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-                  Advanced Virtual Fitting Technology
-                </h2>
-                <p className="text-lg text-gray-600 dark:text-gray-400">
-                  Our AI doesn't just overlay clothes—it understands your body, preserves your identity, and generates photorealistic visualizations.
-                </p>
-              </div>
-            </AnimatedSection>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {features.map((feature, index) => (
-                <AnimatedSection key={feature.title} delay={index * 100}>
-                  <div className="group p-8 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-purple-50 dark:hover:bg-purple-950/30 transition-all duration-300 hover:shadow-lg border border-gray-100 dark:border-gray-800 hover:border-purple-200 dark:hover:border-purple-800">
-                    <div className="w-14 h-14 bg-purple-100 dark:bg-purple-900/50 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                      <feature.icon className="w-7 h-7 text-purple-600 dark:text-purple-400" />
-                    </div>
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                      {feature.title}
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                      {feature.description}
-                    </p>
-                  </div>
-                </AnimatedSection>
-              ))}
-            </div>
-          </div>
-        </section>
+        <BenefitGrid
+          items={features}
+          heading="Advanced Virtual Fitting Technology"
+          subheading="Our AI doesn't just overlay clothes—it understands your body, preserves your identity, and generates photorealistic visualizations."
+          accentColor="purple"
+        />
 
         {/* How It Works */}
         <section id="how-it-works" className="py-20 md:py-28 bg-stone-50 dark:bg-stone-950">
@@ -480,30 +418,13 @@ export default function VirtualTryOnPage() {
         </section>
 
         {/* CTA Section */}
-        <section className="py-20 md:py-28 bg-stone-900">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <AnimatedSection>
-              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">
-                Try before you dress
-              </h2>
-              <p className="text-xl text-purple-100 mb-10 max-w-2xl mx-auto">
-                Join thousands using virtual try-on to shop smarter, dress better, and save time. Your personal fitting room is just a click away.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link
-                  to="/auth/register"
-                  className="inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
-                >
-                  Start free
-                  <ArrowRight className="w-5 h-5" />
-                </Link>
-              </div>
-              <p className="text-purple-200 mt-6 text-sm">
-                Try 5 virtual outfits free. No credit card required.
-              </p>
-            </AnimatedSection>
-          </div>
-        </section>
+        <CtaBand
+          heading="Try before you dress"
+          subtext="Join thousands using virtual try-on to shop smarter, dress better, and save time. Your personal fitting room is just a click away."
+          primaryCta={{ text: 'Start free', to: '/auth/register' }}
+          footnote="Try 5 virtual outfits free. No credit card required."
+          accentColor="purple"
+        />
       </div>
     </>
   )

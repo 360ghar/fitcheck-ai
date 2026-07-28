@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { HelmetProvider } from 'react-helmet-async'
 import { PostHogProvider } from 'posthog-js/react'
 import * as Sentry from '@sentry/react'
+import { logger } from './lib/logger'
 import App from './App'
 import { Toaster } from './components/ui/toaster'
 import { TooltipProvider } from './components/ui/tooltip'
@@ -31,7 +32,7 @@ if (sentryDsn) {
 // Sentry when a DSN is configured; always logs for local debugging.
 
 window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
-  console.error('[Unhandled Rejection]', event.reason)
+  logger.error('[Unhandled Rejection]', event.reason)
   if (sentryDsn) {
     Sentry.captureException(
       event.reason instanceof Error
@@ -42,7 +43,7 @@ window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => 
 })
 
 window.addEventListener('error', (event: ErrorEvent) => {
-  console.error('[Global Error]', event.error ?? event.message)
+  logger.error('[Global Error]', event.error ?? event.message)
   if (sentryDsn && event.error) {
     Sentry.captureException(event.error)
   }

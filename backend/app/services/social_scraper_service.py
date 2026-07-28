@@ -359,7 +359,13 @@ class SocialScraperService:
             )
 
         except Exception as e:
-            cls._logger.error(
+            # Use logger.exception to preserve the full traceback instead of
+            # the previous one-line error log, and do not overload the
+            # exhausted=True sentinel for transient errors (it should only
+            # signal that pagination has ended). Tag the failure in metadata
+            # so callers can distinguish a real "no more pages" from a
+            # transport/parse failure that happened to swallow the request.
+            cls._logger.exception(
                 "Error discovering Instagram photos",
                 extra={
                     "error": str(e),
@@ -371,7 +377,10 @@ class SocialScraperService:
                 photos=[],
                 next_cursor=None,
                 exhausted=True,
-                metadata={"error": str(e)},
+                metadata={
+                    "error_type": "discovery_failure",
+                    "message": str(e),
+                },
             )
 
     @staticmethod
@@ -437,7 +446,7 @@ class SocialScraperService:
                 return None
 
         except Exception as e:
-            cls._logger.error(
+            cls._logger.exception(
                 "Error getting user ID",
                 extra={"error": str(e), "username": username},
             )
@@ -523,7 +532,7 @@ class SocialScraperService:
                 metadata={"error": str(e)},
             )
         except Exception as e:
-            cls._logger.error(
+            cls._logger.exception(
                 "Error fetching feed",
                 extra={"error": str(e)},
             )
@@ -532,7 +541,10 @@ class SocialScraperService:
                 photos=[],
                 next_cursor=None,
                 exhausted=True,
-                metadata={"error": str(e)},
+                metadata={
+                    "error_type": "fetch_failure",
+                    "message": str(e),
+                },
             )
 
     @classmethod
@@ -790,7 +802,19 @@ class SocialScraperService:
         try:
             async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
                 response = await client.get(f"{cls._META_GRAPH_BASE}/{ig_user_id}/media", params=params)
-        except Exception:
+        except httpx.HTTPStatusError as e:
+            cls._logger.warning(
+                "Meta Instagram API HTTP error",
+                extra={"status_code": e.response.status_code, "error": str(e)},
+                exc_info=True,
+            )
+            return None
+        except httpx.RequestError as e:
+            cls._logger.warning(
+                "Meta Instagram API transport error",
+                extra={"error": str(e)},
+                exc_info=True,
+            )
             return None
 
         if response.status_code in {400, 401, 403}:
@@ -806,7 +830,12 @@ class SocialScraperService:
 
         try:
             payload_data = response.json()
-        except Exception:
+        except (ValueError, json.JSONDecodeError) as e:
+            cls._logger.warning(
+                "Meta Instagram API returned non-JSON body",
+                extra={"error": str(e)},
+                exc_info=True,
+            )
             return None
 
         rows = payload_data.get("data") or []
@@ -893,7 +922,19 @@ class SocialScraperService:
         try:
             async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
                 response = await client.get(f"{cls._META_GRAPH_BASE}/me/posts", params=params)
-        except Exception:
+        except httpx.HTTPStatusError as e:
+            cls._logger.warning(
+                "Meta Facebook API HTTP error",
+                extra={"status_code": e.response.status_code, "error": str(e)},
+                exc_info=True,
+            )
+            return None
+        except httpx.RequestError as e:
+            cls._logger.warning(
+                "Meta Facebook API transport error",
+                extra={"error": str(e)},
+                exc_info=True,
+            )
             return None
 
         if response.status_code in {400, 401, 403}:
@@ -909,7 +950,12 @@ class SocialScraperService:
 
         try:
             payload_data = response.json()
-        except Exception:
+        except (ValueError, json.JSONDecodeError) as e:
+            cls._logger.warning(
+                "Meta Facebook API returned non-JSON body",
+                extra={"error": str(e)},
+                exc_info=True,
+            )
             return None
 
         rows = payload_data.get("data") or []

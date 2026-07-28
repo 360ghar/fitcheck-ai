@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import type { Item, Category, Condition, ItemFilters as ApiItemFilters } from '../types';
 import * as itemsApi from '../api/items';
-import { getApiError, ApiError } from '../api/client';
+import { getApiError, type ApiError } from '../lib/errors';
 
 // ============================================================================
 // WARDROBE STATE INTERFACE

@@ -9,7 +9,15 @@ import '../../../core/utils/error_handler.dart';
 /// Settings controller - manages settings and preferences state
 class SettingsController extends GetxController {
   final SettingsRepository _repository = SettingsRepository();
-  final AuthController _authController = Get.find<AuthController>();
+  final AuthController _authController;
+  final ThemeService _themeService;
+
+  /// [authController] and [themeService] are injectable for unit tests.
+  SettingsController({
+    AuthController? authController,
+    ThemeService? themeService,
+  }) : _authController = authController ?? Get.find<AuthController>(),
+       _themeService = themeService ?? Get.find<ThemeService>();
 
   // State
   final Rx<UserPreferencesModel?> preferences = Rx<UserPreferencesModel?>(null);
@@ -41,8 +49,7 @@ class SettingsController extends GetxController {
       preferences.value = await _repository.getPreferences();
 
       // Sync theme from backend to ThemeService
-      final themeService = Get.find<ThemeService>();
-      themeService.syncFromBackend(preferences.value?.themeMode);
+      _themeService.syncFromBackend(preferences.value?.themeMode);
     } catch (e) {
       error.value = ErrorHandler.extractMessage(e);
       // If preferences don't exist yet, use defaults
@@ -62,8 +69,7 @@ class SettingsController extends GetxController {
     preferences.value = updated;
 
     // Update ThemeService (handles local storage and applies theme)
-    final themeService = Get.find<ThemeService>();
-    await themeService.setThemeMode(mode);
+    await _themeService.setThemeMode(mode);
 
     // Save to backend
     await savePreferences(updated);

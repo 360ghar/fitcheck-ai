@@ -107,7 +107,8 @@ class AstrologyService:
         try:
             resolved = await self._resolve_birth_place(birth_place)
             return resolved.get("timezone")
-        except Exception:
+        except (httpx.HTTPError, KeyError, ValueError, TypeError, IndexError):
+            logger.exception("Failed to resolve birth timezone", birth_place=birth_place)
             return None
 
     async def generate_recommendation(
@@ -289,7 +290,7 @@ class AstrologyService:
     ) -> Dict[str, str]:
         try:
             import swisseph as swe
-        except Exception as e:
+        except ImportError as e:
             raise RuntimeError("pyswisseph is unavailable") from e
 
         swe.set_sid_mode(swe.SIDM_LAHIRI, 0, 0)
@@ -526,7 +527,8 @@ class AstrologyService:
             return timezone.utc
         try:
             return ZoneInfo(timezone_name)
-        except Exception:
+        except (ValueError, TypeError, OSError):
+            logger.exception("Failed to parse timezone, falling back to UTC", timezone_name=timezone_name)
             return timezone.utc
 
     # Sidereal sun sign date windows: (start_month, start_day, end_month, end_day, sign)

@@ -9,6 +9,7 @@ import asyncio
 import base64
 import json
 from datetime import datetime
+from app.utils.datetime_util import utcnow, utcnow_iso
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -28,6 +29,7 @@ from app.core.logging_config import get_context_logger
 from app.core.security import get_current_user_id
 from app.core.uploads import read_upload_capped
 from app.db.connection import get_db
+from app.models.subscription import OperationType
 from app.services.ai_settings_service import AISettingsService
 from app.services.batch_job_service import BatchJobService, BatchJobStatus
 from app.services.batch_extraction_service import BatchExtractionService
@@ -158,7 +160,7 @@ async def _check_batch_rate_limits(
     """Raise RateLimitError if this batch would exceed the user's daily limits."""
     extraction_check = await AISettingsService.check_rate_limit(
         user_id=user_id,
-        operation_type="extraction",
+        operation_type=OperationType.EXTRACTION,
         db=db,
         count=total_images,
     )
@@ -172,7 +174,7 @@ async def _check_batch_rate_limits(
         estimated_generations = total_images * 3
         generation_check = await AISettingsService.check_rate_limit(
             user_id=user_id,
-            operation_type="generation",
+            operation_type=OperationType.GENERATION,
             db=db,
             count=estimated_generations,
         )
@@ -455,7 +457,7 @@ async def batch_job_events(
                     "job_id": job_id,
                     "status": job.status.value,
                     "total_images": job.total_images,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow_iso(),
                 }),
             }
 
@@ -492,7 +494,7 @@ async def batch_job_events(
                     yield {
                         "event": "heartbeat",
                         "data": json.dumps({
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": utcnow_iso(),
                         }),
                     }
 
@@ -510,7 +512,7 @@ async def batch_job_events(
                 "event": "job_failed",
                 "data": json.dumps({
                     "error": "Internal error while streaming batch events",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow_iso(),
                 }),
             }
         finally:
@@ -612,7 +614,7 @@ async def start_single_extraction(
             if cached_result:
                 # Cache hit! Create a completed job with cached results
                 image_data = {
-                    "image_id": f"cached_{datetime.utcnow().timestamp()}",
+                    "image_id": f"cached_{utcnow().timestamp()}",
                     "image_base64": request.image,
                     "filename": "uploaded_image.jpg",
                 }
@@ -649,7 +651,7 @@ async def start_single_extraction(
 
         extraction_check = await AISettingsService.check_rate_limit(
             user_id=user_id,
-            operation_type="extraction",
+            operation_type=OperationType.EXTRACTION,
             db=db,
             count=1,
         )
@@ -660,7 +662,7 @@ async def start_single_extraction(
 
         # Create single-image batch job (reuse batch infrastructure)
         image_data = {
-            "image_id": f"single_{datetime.utcnow().timestamp()}",
+            "image_id": f"single_{utcnow().timestamp()}",
             "image_base64": request.image,
             "filename": "uploaded_image.jpg",
         }

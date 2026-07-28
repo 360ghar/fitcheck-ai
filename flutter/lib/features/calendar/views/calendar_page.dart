@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../outfits/controllers/outfit_list_controller.dart';
@@ -205,8 +206,8 @@ class _CalendarPageState extends State<CalendarPage> {
                 final date = DateTime(focusedMonth.year, focusedMonth.month, dayNumber);
                 final dateKey = DateTime(date.year, date.month, date.day);
                 final hasEvents = controller.eventsByDate.containsKey(dateKey);
-                final isSelected = _isSameDay(date, selectedDate);
-                final isToday = _isSameDay(date, DateTime.now());
+                final isSelected = AppDateUtils.isSameDay(date, selectedDate);
+                final isToday = AppDateUtils.isSameDay(date, DateTime.now());
 
                 return Expanded(
                   child: GestureDetector(
@@ -271,7 +272,7 @@ class _CalendarPageState extends State<CalendarPage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Events for ${_formatDate(controller.selectedDate.value)}',
+              'Events for ${AppDateUtils.formatDate(controller.selectedDate.value)}',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -519,7 +520,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   if (!isAllDay) ...[
                     ListTile(
                       title: const Text('Start Time'),
-                      trailing: Text(_formatTimeOnly(startTime)),
+                      trailing: Text(AppDateUtils.formatTimeOnly(startTime)),
                       onTap: () async {
                         final picked = await showDatePicker(
                           context: context,
@@ -544,7 +545,7 @@ class _CalendarPageState extends State<CalendarPage> {
                     ),
                     ListTile(
                       title: const Text('End Time'),
-                      trailing: Text(_formatTimeOnly(endTime)),
+                      trailing: Text(AppDateUtils.formatTimeOnly(endTime)),
                       onTap: () async {
                         final picked = await showDatePicker(
                           context: context,
@@ -675,7 +676,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   if (!isAllDay) ...[
                     ListTile(
                       title: const Text('Start Time'),
-                      trailing: Text(_formatTimeOnly(startTime)),
+                      trailing: Text(AppDateUtils.formatTimeOnly(startTime)),
                       onTap: () async {
                         final time = await showTimePicker(
                           context: context,
@@ -691,7 +692,7 @@ class _CalendarPageState extends State<CalendarPage> {
                     ),
                     ListTile(
                       title: const Text('End Time'),
-                      trailing: Text(_formatTimeOnly(endTime)),
+                      trailing: Text(AppDateUtils.formatTimeOnly(endTime)),
                       onTap: () async {
                         final time = await showTimePicker(
                           context: context,
@@ -936,19 +937,7 @@ class _CalendarPageState extends State<CalendarPage> {
     return '${months[date.month - 1]} ${date.year}';
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.month}/${date.day}/${date.year}';
-  }
-
   String _formatTime(DateTime start, DateTime end) {
-    return '${_formatTimeOnly(start)} - ${_formatTimeOnly(end)}';
-  }
-
-  String _formatTimeOnly(DateTime time) {
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-  }
-
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
+    return '${AppDateUtils.formatTimeOnly(start)} - ${AppDateUtils.formatTimeOnly(end)}';
   }
 }

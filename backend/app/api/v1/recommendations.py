@@ -26,6 +26,7 @@ from app.core.exceptions import (
 from app.core.logging_config import get_context_logger
 from app.core.security import get_current_user_id
 from app.db.connection import get_db
+from app.models.subscription import OperationType
 from app.services.ai_service import AIService
 from app.services.ai_settings_service import AISettingsService
 from app.services.astrology_service import get_astrology_service
@@ -942,7 +943,7 @@ async def similar_items(
     try:
         rate_check = await AISettingsService.check_rate_limit(
             user_id=user_id,
-            operation_type="embedding",
+            operation_type=OperationType.EMBEDDING,
             db=db,
         )
         if rate_check["allowed"]:
@@ -950,7 +951,7 @@ async def similar_items(
             if embedding:
                 await AISettingsService.increment_usage(
                     user_id=user_id,
-                    operation_type="embedding",
+                    operation_type=OperationType.EMBEDDING,
                     db=db,
                 )
                 vector_service = get_vector_service()

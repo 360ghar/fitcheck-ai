@@ -20,6 +20,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { logger } from '@/lib/logger'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -131,7 +132,7 @@ export function ExtractedItemCard({
         setDuplicates(result.duplicates)
       } catch (error) {
         if (!controller.signal.aborted) {
-          console.error('Duplicate check failed:', error)
+          logger.error('Duplicate check failed:', error)
         }
       } finally {
         setIsCheckingDuplicates(false)

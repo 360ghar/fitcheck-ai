@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import asyncio
 
-from datetime import datetime, timezone
+from app.utils.datetime_util import utcnow_iso
 from typing import Any, Dict, Iterable, List, Optional
 
 from app.models.social_import import (
@@ -17,7 +17,7 @@ from app.models.social_import import (
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return utcnow_iso()
 
 
 class SocialImportJobStore:

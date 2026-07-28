@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom'
 import SEO from '@/components/seo/SEO'
 import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
+import { LandingFeatureSection } from '@/components/landing/LandingFeatureSection'
+import { BenefitGrid } from '@/components/landing/BenefitGrid'
+import { CtaBand } from '@/components/landing/CtaBand'
 import {
   Camera,
   User,
@@ -183,54 +186,15 @@ export default function AIPhotoshootGeneratorPage() {
       <BreadcrumbJsonLd items={breadcrumbs} />
 
       <div className="pt-20">
-        {/* Hero Section */}
-        <section className="relative overflow-hidden bg-stone-900 dark:bg-stone-950">
-          {/* Background Pattern */}
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute top-20 left-1/4 w-72 h-72 bg-white rounded-full blur-3xl" />
-            <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-white rounded-full blur-3xl" />
-          </div>
-
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32">
-            <AnimatedSection>
-              <div className="text-center max-w-4xl mx-auto">
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-white/90 text-sm font-medium mb-6">
-                  <Camera className="w-4 h-4" />
-                  Professional AI Photography
-                </div>
-
-                <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
-                  AI Photoshoot Generator
-                </h1>
-
-                <p className="text-xl md:text-2xl text-orange-100 mb-4 max-w-3xl mx-auto">
-                  Studio-Quality Professional Photos Without the Studio Price
-                </p>
-
-                <p className="text-lg text-orange-200 mb-10 max-w-2xl mx-auto">
-                  Create stunning LinkedIn headshots, dating profile photos, and Instagram-worthy shots
-                  using just your phone. Professional results in minutes, completely free.
-                </p>
-
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <Link
-                    to="/auth/register"
-                    className="inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
-                  >
-                    Create Free Photos
-                    <ArrowRight className="w-5 h-5" />
-                  </Link>
-                  <Link
-                    to="#photoshoot-styles"
-                    className="inline-flex items-center justify-center gap-2 bg-white/10 backdrop-blur-sm text-white px-8 py-4 rounded-full font-semibold text-lg hover:bg-white/20 transition-all"
-                  >
-                    See Styles
-                  </Link>
-                </div>
-              </div>
-            </AnimatedSection>
-          </div>
-        </section>
+        <LandingFeatureSection
+          badge={{ icon: Camera, text: 'Professional AI Photography' }}
+          title="AI Photoshoot Generator"
+          subtitle="Studio-Quality Professional Photos Without the Studio Price"
+          description="Create stunning LinkedIn headshots, dating profile photos, and Instagram-worthy shots using just your phone. Professional results in minutes, completely free."
+          accentColor="orange"
+          primaryCta={{ text: 'Create Free Photos', to: '/auth/register' }}
+          secondaryCta={{ text: 'See Styles', to: '#photoshoot-styles' }}
+        />
 
         {/* Stats Section */}
         <section className="py-16 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
@@ -317,38 +281,13 @@ export default function AIPhotoshootGeneratorPage() {
         </section>
 
         {/* Features Grid */}
-        <section className="py-20 md:py-28 bg-stone-50 dark:bg-stone-950">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <AnimatedSection>
-              <div className="text-center max-w-3xl mx-auto mb-16">
-                <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-                  Professional Results, Zero Hassle
-                </h2>
-                <p className="text-lg text-gray-600 dark:text-gray-400">
-                  Advanced AI technology delivers studio-quality photos with features designed for perfect results
-                </p>
-              </div>
-            </AnimatedSection>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {features.map((feature, index) => (
-                <AnimatedSection key={feature.title} delay={index * 100}>
-                  <div className="group p-8 bg-white dark:bg-gray-800 rounded-2xl hover:shadow-lg transition-all duration-300 border border-gray-100 dark:border-gray-700 hover:border-orange-200 dark:hover:border-orange-800">
-                    <div className="w-14 h-14 bg-orange-100 dark:bg-orange-900/50 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                      <feature.icon className="w-7 h-7 text-orange-600 dark:text-orange-400" />
-                    </div>
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                      {feature.title}
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                      {feature.description}
-                    </p>
-                  </div>
-                </AnimatedSection>
-              ))}
-            </div>
-          </div>
-        </section>
+        <BenefitGrid
+          items={features}
+          heading="Professional Results, Zero Hassle"
+          subheading="Advanced AI technology delivers studio-quality photos with features designed for perfect results"
+          accentColor="orange"
+          background="stone"
+        />
 
         {/* Comparison Section */}
         <section className="py-20 md:py-28 bg-white dark:bg-gray-950">
@@ -494,30 +433,14 @@ export default function AIPhotoshootGeneratorPage() {
         </section>
 
         {/* CTA Section */}
-        <section className="py-20 md:py-28 bg-indigo-600">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <AnimatedSection>
-              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">
-                Ready for your close-up?
-              </h2>
-              <p className="text-xl text-orange-100 mb-10 max-w-2xl mx-auto">
-                Create professional photos in minutes. No studio, no expensive photographer, no waiting. Just stunning results.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link
-                  to="/auth/register"
-                  className="inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
-                >
-                  Generate Free Photos
-                  <ArrowRight className="w-5 h-5" />
-                </Link>
-              </div>
-              <p className="text-orange-200 mt-6 text-sm">
-                5 free photoshoots included. No credit card required.
-              </p>
-            </AnimatedSection>
-          </div>
-        </section>
+        <CtaBand
+          heading="Ready for your close-up?"
+          subtext="Create professional photos in minutes. No studio, no expensive photographer, no waiting. Just stunning results."
+          primaryCta={{ text: 'Generate Free Photos', to: '/auth/register' }}
+          footnote="5 free photoshoots included. No credit card required."
+          accentColor="orange"
+          variant="indigo"
+        />
       </div>
     </>
   )

@@ -364,13 +364,18 @@ class TestLifecycle:
         gen = AsyncMock(return_value=_fake_response(text="OK"))
         with _patched_client(provider, gen):
             result = await provider.test_connection()
-        assert result["success"] is True
-        assert result["response"] == "OK"
+        assert result.success is True
+        assert result.response == "OK"
+        assert result.available is True
 
     @pytest.mark.asyncio
-    async def test_test_connection_failure(self):
+    async def test_test_connection_failure_propagates_domain_error(self):
+        """Domain errors (AIServiceError) must propagate from test_connection
+        rather than being flattened into a failure envelope, so callers can
+        branch on retryable/classification."""
         provider = GeminiProvider(_make_config())
         gen = AsyncMock(side_effect=genai_errors.APIError(401, {"message": "invalid key"}))
         with _patched_client(provider, gen):
-            result = await provider.test_connection()
-        assert result["success"] is False
+            with pytest.raises(AIServiceError) as exc_info:
+                await provider.test_connection()
+        assert exc_info.value.retryable is False

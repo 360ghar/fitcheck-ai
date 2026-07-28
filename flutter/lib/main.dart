@@ -9,6 +9,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import 'core/config/env_config.dart';
 import 'core/services/analytics_service.dart';
 import 'core/services/supabase_service.dart';
+import 'core/services/persistence_service.dart';
 import 'core/services/theme_service.dart';
 import 'core/services/route_observer.dart';
 import 'core/utils/error_handler.dart';
@@ -24,6 +25,11 @@ void main() async {
 
   await SupabaseService.instance.init();
   await AnalyticsService.instance.init();
+
+  // PersistenceService must be registered before ThemeService (and any other
+  // service that reads cached prefs in onInit), since ThemeService.onInit
+  // calls Get.find<PersistenceService>().
+  Get.put(PersistenceService());
 
   // Must be registered before FitCheckApp builds GetMaterialApp, since its
   // themeMode argument reads Get.find<ThemeService>() eagerly - InitialBinding
@@ -114,10 +120,13 @@ class FitCheckApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Defensive: guarantees ThemeService exists even if this widget is ever
-    // pumped without main() having run first (e.g. widget tests), since
-    // initialBinding below only registers dependencies after this build()
-    // call returns.
+    // Defensive: guarantees ThemeService (and its PersistenceService dep)
+    // exist even if this widget is ever pumped without main() having run
+    // first (e.g. widget tests), since initialBinding below only registers
+    // dependencies after this build() call returns.
+    if (!Get.isRegistered<PersistenceService>()) {
+      Get.put(PersistenceService());
+    }
     if (!Get.isRegistered<ThemeService>()) {
       Get.put(ThemeService());
     }

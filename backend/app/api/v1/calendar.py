@@ -13,6 +13,7 @@ events in Supabase tables so the user can plan outfits against events.
 import asyncio
 import uuid
 from datetime import datetime
+from app.utils.datetime_util import utcnow_iso
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
@@ -120,7 +121,7 @@ async def connect_calendar(
             .execute
         )
 
-        now = datetime.utcnow().isoformat()
+        now = utcnow_iso()
         existing_row = existing.data if existing is not None else None
         if existing_row:
             update = {
@@ -215,7 +216,7 @@ async def list_calendar_connections(
                     id=row["id"],
                     provider=row.get("provider") or "",
                     email=row.get("email"),
-                    connected_at=row.get("connected_at") or row.get("created_at") or datetime.utcnow().isoformat(),
+                    connected_at=row.get("connected_at") or row.get("created_at") or utcnow_iso(),
                 )
             )
         logger.debug(
@@ -259,7 +260,7 @@ async def disconnect_calendar(
                 resource_id=connection_id
             )
 
-        now = datetime.utcnow().isoformat()
+        now = utcnow_iso()
         await asyncio.to_thread(db.table("calendar_connections").update({"is_active": False, "updated_at": now}).eq("id", connection_id).execute)
         logger.info(
             "Calendar connection disconnected",
@@ -382,7 +383,7 @@ async def create_calendar_event(
     """Create an in-app calendar event (local planning)."""
     try:
         event_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = utcnow_iso()
         insert = {
             "id": event_id,
             "user_id": user_id,
@@ -474,7 +475,7 @@ async def update_calendar_event(
             )
             return {"data": {"event": result.data}, "message": "No changes"}
 
-        now = datetime.utcnow().isoformat()
+        now = utcnow_iso()
         update_data["updated_at"] = now
 
         result = await asyncio.to_thread(
@@ -578,7 +579,7 @@ async def assign_outfit_to_event(
         if not existing.data:
             raise CalendarEventNotFoundError(event_id=event_id)
 
-        now = datetime.utcnow().isoformat()
+        now = utcnow_iso()
         result = await asyncio.to_thread(
             db.table("calendar_events")
             .update({"outfit_id": request.outfit_id, "updated_at": now})
@@ -624,7 +625,7 @@ async def remove_outfit_from_event(
 ):
     """Remove outfit assignment from an event."""
     try:
-        now = datetime.utcnow().isoformat()
+        now = utcnow_iso()
         result = await asyncio.to_thread(
             db.table("calendar_events")
             .update({"outfit_id": None, "updated_at": now})

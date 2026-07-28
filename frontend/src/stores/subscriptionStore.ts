@@ -13,7 +13,8 @@ import type {
   PlansResponse,
 } from '../types';
 import * as subscriptionApi from '../api/subscription';
-import { getApiError } from '../api/client';
+import { logger } from '../lib/logger';
+import { getApiError } from '../lib/errors';
 
 // ============================================================================
 // SUBSCRIPTION STATE INTERFACE
@@ -88,7 +89,7 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
       const usage = await subscriptionApi.getUsage();
       set({ usage });
     } catch (error) {
-      console.error('Failed to fetch usage:', error);
+      logger.error('Failed to fetch usage:', error);
     }
   },
 
@@ -98,7 +99,7 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
       const plans = await subscriptionApi.getPlans();
       set({ plans });
     } catch (error) {
-      console.error('Failed to fetch plans:', error);
+      logger.error('Failed to fetch plans:', error);
     }
   },
 
@@ -108,7 +109,7 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
       const referralCode = await subscriptionApi.getReferralCode();
       set({ referralCode });
     } catch (error) {
-      console.error('Failed to fetch referral code:', error);
+      logger.error('Failed to fetch referral code:', error);
     }
   },
 
@@ -118,7 +119,7 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
       const referralStats = await subscriptionApi.getReferralStats();
       set({ referralStats });
     } catch (error) {
-      console.error('Failed to fetch referral stats:', error);
+      logger.error('Failed to fetch referral stats:', error);
     }
   },
 

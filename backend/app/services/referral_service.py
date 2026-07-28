@@ -3,7 +3,7 @@ Referral service for managing referral codes and redemptions.
 """
 import asyncio
 import re
-from datetime import datetime
+from app.utils.datetime_util import utcnow, utcnow_iso
 from typing import Any, Dict, Optional
 
 from supabase import Client
@@ -118,7 +118,7 @@ class ReferralService:
                 code=code,
                 times_used=0,
                 share_url=ReferralService.get_share_url(code),
-                created_at=inserted_row.get("created_at") if inserted_row else datetime.utcnow(),
+                created_at=inserted_row.get("created_at") if inserted_row else utcnow(),
             )
 
         except Exception as e:
@@ -333,7 +333,7 @@ class ReferralService:
                 "referral_code_id": referral_code_id,
                 "referrer_credit_applied": False,
                 "referred_credit_applied": False,
-                "redeemed_at": datetime.utcnow().isoformat(),
+                "redeemed_at": utcnow_iso(),
             }).execute)
 
             # Increment times_used on the referral code atomically to prevent race conditions

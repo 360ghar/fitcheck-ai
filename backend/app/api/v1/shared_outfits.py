@@ -6,6 +6,7 @@ Enables public or authenticated feedback on shared outfits.
 
 import asyncio
 from datetime import datetime, timezone
+from app.utils.datetime_util import utcnow
 from typing import Any, Dict, Optional
 from uuid import UUID
 
@@ -98,7 +99,7 @@ async def _insert_share_feedback(
             )
 
         expires_at = _parse_iso_datetime(share.data.get("expires_at"))
-        if expires_at and expires_at < datetime.now(timezone.utc):
+        if expires_at and expires_at < utcnow():
             raise ShareExpiredError(share_id=share_id_str)
 
         insert = {

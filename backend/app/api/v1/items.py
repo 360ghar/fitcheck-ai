@@ -8,7 +8,7 @@ stores items/images and maintains embeddings for recommendations.
 
 import asyncio
 import uuid
-from datetime import datetime
+from app.utils.datetime_util import utcnow_iso
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -29,6 +29,7 @@ from app.core.exceptions import (
 from app.core.security import get_current_user_id
 from app.core.uploads import MAX_UPLOAD_FILES, read_upload_capped
 from app.db.connection import get_db
+from app.models.subscription import OperationType
 from app.models.item import (
     ItemCreate,
     ItemUpdate,
@@ -62,7 +63,7 @@ class UpdateItemCategoriesRequest(BaseModel):
 
 
 def _now() -> str:
-    return datetime.utcnow().isoformat()
+    return utcnow_iso()
 
 def _normalize_item_images(item: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize nested images field to the public API contract.
@@ -262,7 +263,7 @@ async def create_item(
         try:
             rate_check = await AISettingsService.check_rate_limit(
                 user_id=user_id,
-                operation_type="embedding",
+                operation_type=OperationType.EMBEDDING,
                 db=db,
             )
             if not rate_check["allowed"]:
@@ -278,7 +279,7 @@ async def create_item(
                 if embedding:
                     await AISettingsService.increment_usage(
                         user_id=user_id,
-                        operation_type="embedding",
+                        operation_type=OperationType.EMBEDDING,
                         db=db,
                     )
                     vector_service = get_vector_service()
@@ -481,7 +482,7 @@ async def update_item(
             try:
                 rate_check = await AISettingsService.check_rate_limit(
                     user_id=user_id,
-                    operation_type="embedding",
+                    operation_type=OperationType.EMBEDDING,
                     db=db,
                 )
                 if not rate_check["allowed"]:
@@ -497,7 +498,7 @@ async def update_item(
                     if embedding:
                         await AISettingsService.increment_usage(
                             user_id=user_id,
-                            operation_type="embedding",
+                            operation_type=OperationType.EMBEDDING,
                             db=db,
                         )
                         vector_service = get_vector_service()
@@ -1099,7 +1100,7 @@ async def check_duplicates(
         # If embedding quota is exhausted, fall back to text-based matching
         rate_check = await AISettingsService.check_rate_limit(
             user_id=user_id,
-            operation_type="embedding",
+            operation_type=OperationType.EMBEDDING,
             db=db,
         )
         if not rate_check["allowed"]:
@@ -1127,7 +1128,7 @@ async def check_duplicates(
             embedding = await AIService.generate_item_embedding(item_data)
             await AISettingsService.increment_usage(
                 user_id=user_id,
-                operation_type="embedding",
+                operation_type=OperationType.EMBEDDING,
                 db=db,
             )
         except Exception as e:
@@ -1279,7 +1280,7 @@ async def find_similar_items(
         # Check rate limit before generating the source embedding
         rate_check = await AISettingsService.check_rate_limit(
             user_id=user_id,
-            operation_type="embedding",
+            operation_type=OperationType.EMBEDDING,
             db=db,
         )
         if not rate_check["allowed"]:
@@ -1293,7 +1294,7 @@ async def find_similar_items(
             embedding = await AIService.generate_item_embedding(source_item)
             await AISettingsService.increment_usage(
                 user_id=user_id,
-                operation_type="embedding",
+                operation_type=OperationType.EMBEDDING,
                 db=db,
             )
         except Exception as e:

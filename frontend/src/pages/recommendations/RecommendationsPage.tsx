@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils'
 import { generateFallbackOutfits } from '@/lib/outfit-generator'
 import { AstrologyTab } from '@/components/recommendations'
 
-import { isApiError } from '@/api/client'
+import { isApiError } from '@/lib/errors'
 import { useWardrobeStore } from '@/stores/wardrobeStore'
 import {
   findMatchingItems,

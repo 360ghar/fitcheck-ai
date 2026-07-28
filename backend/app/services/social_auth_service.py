@@ -11,7 +11,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
+from app.utils.datetime_util import utcnow, utcnow_iso
 from typing import Any, Dict, Optional
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -85,7 +86,7 @@ class SocialAuthService:
     @staticmethod
     def _expiry() -> datetime:
         ttl_minutes = max(5, settings.SOCIAL_IMPORT_AUTH_SESSION_TTL_MINUTES)
-        return datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes)
+        return utcnow() + timedelta(minutes=ttl_minutes)
 
     @classmethod
     async def store_oauth_session(
@@ -110,7 +111,7 @@ class SocialAuthService:
             "provider_page_id": provider_page_id,
             "provider_username": provider_username,
             "provider_expires_at": expires_at.isoformat() if expires_at else None,
-            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "saved_at": utcnow_iso(),
         }
 
         data = {
@@ -157,7 +158,7 @@ class SocialAuthService:
             "sessionid": sessionid,
             "csrftoken": csrftoken,
             "ds_user_id": ds_user_id,
-            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "saved_at": utcnow_iso(),
             "session_kind": "ephemeral_credentials",
         }
 
@@ -182,7 +183,7 @@ class SocialAuthService:
         job_id: str,
         user_id: str,
     ) -> Optional[Dict[str, Any]]:
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = utcnow_iso()
         result = await asyncio.to_thread(
             db.table("social_import_auth_sessions")
             .select("*")
@@ -218,7 +219,7 @@ class SocialAuthService:
 
     @staticmethod
     async def cleanup_expired_sessions(db) -> int:
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = utcnow_iso()
         result = await asyncio.to_thread(
             db.table("social_import_auth_sessions")
             .delete()

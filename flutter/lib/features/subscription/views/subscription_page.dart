@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/subscription_controller.dart';
 import 'widgets/plan_card.dart';
@@ -150,7 +151,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Subscription ends on ${_formatDate(sub!.currentPeriodEnd!)}',
+                      'Subscription ends on ${AppDateUtils.formatDate(sub!.currentPeriodEnd!)}',
                       style: TextStyle(
                         color: Colors.orange.shade800,
                         fontSize: 13,
@@ -389,7 +390,4 @@ class SubscriptionPage extends GetView<SubscriptionController> {
     );
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.month}/${date.day}/${date.year}';
-  }
 }

@@ -22,7 +22,7 @@ import { getWeatherRecommendations } from '@/api/recommendations'
 import { getUserSettings, updateUserSettings } from '@/api/users'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { useOutfitStore } from '@/stores/outfitStore'
-import { getApiError } from '@/api/client'
+import { getApiError } from '@/lib/errors'
 import { ErrorState } from '@/components/ui/error-state'
 
 function formatDateOnly(date: Date): string {

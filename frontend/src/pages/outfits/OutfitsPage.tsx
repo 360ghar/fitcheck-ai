@@ -5,7 +5,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
-import { useOutfitStore } from '../../stores/outfitStore'
+import {
+  useFilteredOutfits,
+  useOutfitStore,
+} from '../../stores/outfitStore'
 import { useWardrobeStore } from '../../stores/wardrobeStore'
 import { useJobUiStore } from '../../stores/jobUiStore'
 import { useElapsedSeconds } from '@/hooks/useElapsedSeconds'
@@ -56,7 +59,7 @@ import { ErrorState } from '@/components/ui/error-state'
 import { LoadingGrid } from '@/components/ui/loading-grid'
 import { PageHeader } from '@/components/ui/page-header'
 import { ItemImage } from '@/components/ui/item-image'
-import type { Item } from '@/types'
+import type { Item, Outfit } from '@/types'
 
 export default function OutfitsPage() {
   const { id } = useParams()
@@ -69,7 +72,7 @@ export default function OutfitsPage() {
   const [favoritesOnly, setFavoritesOnly] = useState(false)
   const { toast } = useToast()
 
-  const filteredOutfits = useOutfitStore((state) => state.filteredOutfits)
+  const filteredOutfits = useFilteredOutfits()
   const isLoading = useOutfitStore((state) => state.isLoading)
   const error = useOutfitStore((state) => state.error)
   const isGridView = useOutfitStore((state) => state.isGridView)
@@ -96,16 +99,16 @@ export default function OutfitsPage() {
   const fetchItems = useWardrobeStore((s) => s.fetchItems)
 
   const displayedOutfits = useMemo(() => {
-    let list = filteredOutfits
-    if (favoritesOnly) list = list.filter((o) => o.is_favorite)
+    let list: Outfit[] = filteredOutfits
+    if (favoritesOnly) list = list.filter((o: Outfit) => o.is_favorite)
     const q = searchQuery.trim().toLowerCase()
     if (q) {
       list = list.filter(
-        (o) =>
+        (o: Outfit) =>
           o.name.toLowerCase().includes(q) ||
           (o.description || '').toLowerCase().includes(q) ||
           (o.occasion || '').toLowerCase().includes(q) ||
-          (o.tags || []).some((t) => t.toLowerCase().includes(q))
+          (o.tags || []).some((t: string) => t.toLowerCase().includes(q))
       )
     }
     return list

@@ -13,7 +13,7 @@ Provides endpoints for:
 import asyncio
 import json
 import uuid
-from datetime import datetime
+from app.utils.datetime_util import utcnow_iso
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -308,7 +308,7 @@ async def photoshoot_job_events(
                     "job_id": job_id,
                     "status": job.status.value,
                     "total_images": job.num_images,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow_iso(),
                 }),
             }
 
@@ -360,7 +360,7 @@ async def photoshoot_job_events(
                     yield {
                         "event": "heartbeat",
                         "data": json.dumps({
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": utcnow_iso(),
                         }),
                     }
 
@@ -378,7 +378,7 @@ async def photoshoot_job_events(
                 "event": "job_failed",
                 "data": json.dumps({
                     "error": "Internal error while streaming photoshoot events",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow_iso(),
                 }),
             }
         finally:

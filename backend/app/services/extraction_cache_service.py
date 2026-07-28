@@ -7,7 +7,8 @@ Uses SHA256 hash of image content as cache key with 24-hour TTL.
 
 import asyncio
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from app.utils.datetime_util import utcnow, utcnow_iso
 from typing import Any, Dict, Optional
 
 from app.core.logging_config import get_context_logger
@@ -83,7 +84,11 @@ class ExtractionCacheService:
 
             # Check expiry
             expiry = datetime.fromisoformat(cached["expiry"])
-            if datetime.utcnow() > expiry:
+            # Stale entries from before the UTC migration store naive ISO
+            # strings; coerce to aware so comparison doesn't raise TypeError.
+            if expiry.tzinfo is None:
+                expiry = expiry.replace(tzinfo=timezone.utc)
+            if utcnow() > expiry:
                 # Expired - remove from cache
                 del _cache[cache_key]
                 logger.info(
@@ -125,12 +130,12 @@ class ExtractionCacheService:
             image_hash = await cls._hash_image(image_base64)
             cache_key = f"{user_id}:{image_hash}"
 
-            expiry = datetime.utcnow() + timedelta(hours=cls.CACHE_TTL_HOURS)
+            expiry = utcnow() + timedelta(hours=cls.CACHE_TTL_HOURS)
 
             _cache[cache_key] = {
                 "result": result,
                 "expiry": expiry.isoformat(),
-                "cached_at": datetime.utcnow().isoformat(),
+                "cached_at": utcnow_iso(),
             }
 
             # Evict oldest entries when over the hard cap (simple LRU-by-age).

@@ -141,7 +141,7 @@ class WeatherService:
                     detail = None
                     try:
                         detail = (response.json() or {}).get("message")
-                    except Exception:
+                    except (KeyError, ValueError, TypeError, AttributeError):
                         detail = None
                     message = f"Weather API error: {response.status_code}"
                     if detail:
@@ -150,7 +150,7 @@ class WeatherService:
 
         except WeatherServiceError:
             raise
-        except Exception as e:
+        except (httpx.RequestError, httpx.HTTPStatusError, ValueError, KeyError, TypeError, AttributeError) as e:
             logger.error(
                 "Failed to fetch weather",
                 location=location,
@@ -219,7 +219,7 @@ class WeatherService:
                     detail = None
                     try:
                         detail = (response.json() or {}).get("message")
-                    except Exception:
+                    except (KeyError, ValueError, TypeError, AttributeError):
                         detail = None
                     message = f"Weather API error: {response.status_code}"
                     if detail:
@@ -228,7 +228,7 @@ class WeatherService:
 
         except WeatherServiceError:
             raise
-        except Exception as e:
+        except (httpx.RequestError, httpx.HTTPStatusError, ValueError, KeyError, TypeError, AttributeError) as e:
             logger.error(
                 "Failed to fetch weather by coordinates",
                 lat=lat,
@@ -307,7 +307,7 @@ class WeatherService:
                     detail = None
                     try:
                         detail = (response.json() or {}).get("message")
-                    except Exception:
+                    except (KeyError, ValueError, TypeError, AttributeError):
                         detail = None
                     message = f"Forecast API error: {response.status_code}"
                     if detail:
@@ -325,7 +325,7 @@ class WeatherService:
 
         except WeatherServiceError:
             raise
-        except Exception as e:
+        except (httpx.RequestError, httpx.HTTPStatusError, ValueError, KeyError, TypeError, AttributeError) as e:
             logger.error(
                 "Failed to fetch forecast",
                 location=location,

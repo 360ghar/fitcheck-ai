@@ -15,6 +15,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Protocol, Type, Union, runtime_checkable
 
 from app.core.exceptions import AIServiceError
+from app.models.ai import HealthCheckResult
 
 
 class AIProvider(str, Enum):
@@ -99,7 +100,7 @@ class AIProviderClient(Protocol):
         """Resolved image-gen model name, without reaching into `.config`."""
         ...
 
-    async def test_connection(self) -> Dict[str, Any]: ...
+    async def test_connection(self) -> HealthCheckResult: ...
 
     async def close(self) -> None: ...
 

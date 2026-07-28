@@ -209,6 +209,49 @@ class TestProviderResponse(BaseModel):
     response: Optional[str] = None
 
 
+class HealthCheckResult(BaseModel):
+    """Result of a provider connection/health probe.
+
+    Canonical fields are ``available`` and ``message``. ``success``, ``model``,
+    and ``response`` are preserved as wire-compatible aliases so existing
+    callers (including tests that subscript the result) keep working during
+    migration. Domain exceptions such as ``AIServiceError`` / ``DatabaseError``
+    must still propagate from provider methods; they are intentionally not
+    flattened into this envelope.
+    """
+    available: bool
+    message: str
+    model: Optional[str] = None
+    response: Optional[str] = None
+    error_type: Optional[str] = None
+    latency_ms: Optional[float] = None
+
+    @property
+    def success(self) -> bool:
+        return self.available
+
+    def to_api_dict(self) -> Dict[str, Any]:
+        data: Dict[str, Any] = {
+            "success": self.available,
+            "message": self.message,
+        }
+        for key in ("model", "response", "error_type", "latency_ms"):
+            value = getattr(self, key, None)
+            if value is not None:
+                data[key] = value
+        return data
+
+    def __getitem__(self, key: str) -> Any:
+        """Backward-compatibility shim: allow result['success'] style access."""
+        if key == "success":
+            return self.success
+        if key == "available":
+            return self.available
+        if hasattr(self, key):
+            return getattr(self, key)
+        raise KeyError(key)
+
+
 class UsageStatsResponse(BaseModel):
     """AI usage statistics."""
     daily: Dict[str, int]

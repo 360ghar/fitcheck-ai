@@ -13,7 +13,11 @@ import '../../../core/utils/error_handler.dart';
 /// Focused responsibility: Managing the outfit list and filters
 class OutfitListController extends GetxController {
   final OutfitRepository _repository = OutfitRepository();
-  final NetworkService _networkService = Get.find<NetworkService>();
+  final NetworkService _networkService;
+
+  /// [networkService] is injectable for unit tests.
+  OutfitListController({NetworkService? networkService})
+    : _networkService = networkService ?? Get.find<NetworkService>();
 
   // Workers for cleanup
   final List<Worker> _workers = [];

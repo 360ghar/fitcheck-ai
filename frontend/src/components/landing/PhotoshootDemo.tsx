@@ -11,6 +11,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Camera, Loader2, Download, AlertCircle, CheckCircle2, ArrowRight, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { logger } from '@/lib/logger';
 import { GlassCard } from './GlassCard';
 import { LoginPromptModal } from './LoginPromptModal';
 import { demoPhotoshoot, DemoPhotoshootResult, DemoApiError } from '@/api/demo';
@@ -40,7 +41,7 @@ async function handleDownload(imageData: string, index: number) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   } catch (e) {
-    console.error('Download failed:', e);
+    logger.error('Download failed:', e);
   }
 }
 

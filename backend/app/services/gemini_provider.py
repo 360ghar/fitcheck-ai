@@ -15,6 +15,7 @@ same AIProviderClient interface every other provider does.
 """
 
 import base64
+import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -24,6 +25,7 @@ from google.genai import types
 
 from app.core.exceptions import AIServiceError
 from app.core.logging_config import get_context_logger
+from app.models.ai import HealthCheckResult
 from app.services.ai_provider_interface import (
     AIProvider,
     AIResponse,
@@ -385,20 +387,27 @@ class GeminiProvider:
     def get_image_gen_model(self) -> str:
         return self.config.get_image_gen_model()
 
-    async def test_connection(self) -> Dict[str, Any]:
+    async def test_connection(self) -> HealthCheckResult:
+        started_at = time.monotonic()
         try:
             messages = [ChatMessage(role="user", content="Hello, respond with 'OK' only.")]
             response = await self.chat(messages=messages, max_tokens=10)
-            return {
-                "success": True,
-                "message": "Connection successful",
-                "model": response.model,
-                "response": response.text,
-            }
-        except AIServiceError as e:
-            return {"success": False, "message": str(e)}
+            return HealthCheckResult(
+                available=True,
+                message="Connection successful",
+                model=response.model,
+                response=response.text,
+                latency_ms=round((time.monotonic() - started_at) * 1000, 2),
+            )
+        except AIServiceError:
+            raise
         except Exception as e:
-            return {"success": False, "message": f"Unexpected error: {str(e)}"}
+            return HealthCheckResult(
+                available=False,
+                message=f"Unexpected error: {str(e)}",
+                error_type=e.__class__.__name__,
+                latency_ms=round((time.monotonic() - started_at) * 1000, 2),
+            )
 
     async def close(self) -> None:
         if self._client is not None:

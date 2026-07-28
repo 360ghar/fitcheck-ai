@@ -11,7 +11,7 @@ that:
   * finished jobs free their base64 payloads/history promptly on sweep.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 import pytest
 
@@ -40,7 +40,7 @@ def _clear_job_stores():
 
 def _age(job_service, job_id, ttl: timedelta):
     """Backdate a job's created_at so it appears older than the given TTL."""
-    job_service._jobs[job_id].created_at = datetime.utcnow() - (ttl + timedelta(seconds=1))
+    job_service._jobs[job_id].created_at = datetime.now(timezone.utc) - (ttl + timedelta(seconds=1))
 
 
 # ---------------------------------------------------------------------------

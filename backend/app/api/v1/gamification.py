@@ -9,7 +9,7 @@ backed by tables like user_streaks, user_achievements, challenges, etc.
 """
 
 import asyncio
-from datetime import datetime
+from app.utils.datetime_util import utcnow_iso
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends
@@ -37,7 +37,7 @@ MILESTONES = [
 
 
 def _now() -> str:
-    return datetime.utcnow().isoformat()
+    return utcnow_iso()
 
 
 def _safe_int(value: Any, default: int = 0) -> int:

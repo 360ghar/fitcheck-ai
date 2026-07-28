@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.core.config import settings
+from app.models.ai import HealthCheckResult
 from app.services.ai_provider_interface import AIProvider
 from app.services.ai_provider_service import AIProviderService
 from app.services.ai_settings_service import AISettingsService, encrypt_api_key
@@ -150,22 +151,26 @@ class TestTestProviderConfig:
     @pytest.mark.asyncio
     async def test_gemini_provider_does_not_require_api_url(self):
         with patch.object(
-            GeminiProvider, "test_connection", AsyncMock(return_value={"success": True, "message": "ok"})
+            GeminiProvider, "test_connection", AsyncMock(return_value=HealthCheckResult(
+                available=True, message="Connection successful", model="gemini-3.6-flash", response="OK",
+            ))
         ):
             result = await AISettingsService.test_provider_config(
                 api_key="k", model="gemini-3.6-flash", api_url=None, provider=AIProvider.GEMINI,
             )
-        assert result["success"] is True
+        assert result.success is True
 
     @pytest.mark.asyncio
     async def test_custom_provider_dispatch_still_works(self):
         with patch.object(
-            AIProviderService, "test_connection", AsyncMock(return_value={"success": True, "message": "ok"})
+            AIProviderService, "test_connection", AsyncMock(return_value=HealthCheckResult(
+                available=True, message="Connection successful", model="m", response="OK",
+            ))
         ):
             result = await AISettingsService.test_provider_config(
                 api_key="k", model="m", api_url="https://example.com/v1", provider=AIProvider.CUSTOM,
             )
-        assert result["success"] is True
+        assert result.success is True
 
     @pytest.mark.asyncio
     async def test_default_provider_is_custom_for_backward_compatibility(self):
@@ -173,9 +178,11 @@ class TestTestProviderConfig:
         change added the parameter) must keep getting the OpenAI-compatible
         path, matching the old hardcoded behavior."""
         with patch.object(
-            AIProviderService, "test_connection", AsyncMock(return_value={"success": True, "message": "ok"})
+            AIProviderService, "test_connection", AsyncMock(return_value=HealthCheckResult(
+                available=True, message="Connection successful", model="m", response="OK",
+            ))
         ):
             result = await AISettingsService.test_provider_config(
                 api_key="k", model="m", api_url="https://example.com/v1",
             )
-        assert result["success"] is True
+        assert result.success is True

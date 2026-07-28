@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { TransitionSeries, linearTiming } from '@remotion/transitions'
 import { fade } from '@remotion/transitions/fade'
 import {
@@ -14,54 +15,35 @@ import { SceneTryOn } from './scenes/SceneTryOn'
 import { SceneDashboard } from './scenes/SceneDashboard'
 import { SceneCTA } from './scenes/SceneCTA'
 
+const SCENES = [
+  { component: SceneBrand, durationInFrames: SCENE_DURATION },
+  { component: SceneHero, durationInFrames: SCENE_DURATION },
+  { component: SceneWardrobe, durationInFrames: SCENE_DURATION },
+  { component: ScenePhotoshoot, durationInFrames: SCENE_DURATION },
+  { component: SceneTryOn, durationInFrames: SCENE_DURATION },
+  { component: SceneDashboard, durationInFrames: SCENE_DURATION },
+  { component: SceneCTA, durationInFrames: CTA_DURATION },
+] as const
+
 export const FitCheckPromo = () => {
   return (
     <TransitionSeries>
-      <TransitionSeries.Sequence durationInFrames={SCENE_DURATION} premountFor={30}>
-        <SceneBrand />
-      </TransitionSeries.Sequence>
-      <TransitionSeries.Transition
-        presentation={fade()}
-        timing={linearTiming({ durationInFrames: TRANSITION_DURATION })}
-      />
-      <TransitionSeries.Sequence durationInFrames={SCENE_DURATION} premountFor={30}>
-        <SceneHero />
-      </TransitionSeries.Sequence>
-      <TransitionSeries.Transition
-        presentation={fade()}
-        timing={linearTiming({ durationInFrames: TRANSITION_DURATION })}
-      />
-      <TransitionSeries.Sequence durationInFrames={SCENE_DURATION} premountFor={30}>
-        <SceneWardrobe />
-      </TransitionSeries.Sequence>
-      <TransitionSeries.Transition
-        presentation={fade()}
-        timing={linearTiming({ durationInFrames: TRANSITION_DURATION })}
-      />
-      <TransitionSeries.Sequence durationInFrames={SCENE_DURATION} premountFor={30}>
-        <ScenePhotoshoot />
-      </TransitionSeries.Sequence>
-      <TransitionSeries.Transition
-        presentation={fade()}
-        timing={linearTiming({ durationInFrames: TRANSITION_DURATION })}
-      />
-      <TransitionSeries.Sequence durationInFrames={SCENE_DURATION} premountFor={30}>
-        <SceneTryOn />
-      </TransitionSeries.Sequence>
-      <TransitionSeries.Transition
-        presentation={fade()}
-        timing={linearTiming({ durationInFrames: TRANSITION_DURATION })}
-      />
-      <TransitionSeries.Sequence durationInFrames={SCENE_DURATION} premountFor={30}>
-        <SceneDashboard />
-      </TransitionSeries.Sequence>
-      <TransitionSeries.Transition
-        presentation={fade()}
-        timing={linearTiming({ durationInFrames: TRANSITION_DURATION })}
-      />
-      <TransitionSeries.Sequence durationInFrames={CTA_DURATION} premountFor={30}>
-        <SceneCTA />
-      </TransitionSeries.Sequence>
+      {SCENES.map((scene, i) => (
+        <Fragment key={i}>
+          <TransitionSeries.Sequence
+            durationInFrames={scene.durationInFrames}
+            premountFor={TRANSITION_DURATION}
+          >
+            <scene.component />
+          </TransitionSeries.Sequence>
+          {i < SCENES.length - 1 && (
+            <TransitionSeries.Transition
+              presentation={fade()}
+              timing={linearTiming({ durationInFrames: TRANSITION_DURATION })}
+            />
+          )}
+        </Fragment>
+      ))}
     </TransitionSeries>
   )
 }
