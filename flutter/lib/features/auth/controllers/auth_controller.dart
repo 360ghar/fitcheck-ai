@@ -172,6 +172,19 @@ class AuthController extends GetxController {
       );
 
       if (response.user != null) {
+        // Check if email confirmation is required (no session means
+        // Supabase is configured to send a verification email first).
+        if (response.session?.accessToken == null) {
+          showEmailNotVerifiedError.value = true;
+          unverifiedEmail.value = email;
+          ErrorHandler.showInfo(
+            'Check your inbox for a confirmation email, then sign in to continue.',
+            title: 'Confirm your email',
+          );
+          isLoading.value = false;
+          return;
+        }
+
         await _loadUserData(supabaseUser: response.user);
         _authService.trackRegister(
           hasReferral: referralCode != null && referralCode.isNotEmpty,

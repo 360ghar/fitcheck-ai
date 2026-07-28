@@ -294,7 +294,7 @@ for (const file of files) {
     walk(ast.body);
     out[file] = [...specs].filter(Boolean);
   } catch (e) {
-    out[file] = '__PARSE_ERROR__:' + (e && e.message ? e.message : String(e));
+    out[file] = ['__PARSE_ERROR__:' + (e && e.message ? e.message : String(e))];
   }
 }
 process.stdout.write(JSON.stringify(out));
@@ -342,6 +342,8 @@ def _collect_frontend_imports(path: Path, ast_cache: dict[Path, list[str]]) -> l
     if path in ast_cache:
         cached = ast_cache[path]
         if cached and cached[0].startswith("__PARSE_ERROR__:"):
+            # Surface the per-file parse failure so CI can see degraded coverage.
+            print(f"  [warn] AST parse failure in {path.name}: {cached[0][len('__PARSE_ERROR__:'):]}", file=sys.stderr)
             return _regex_fallback_imports(path.read_text(encoding="utf-8", errors="replace"))
         return cached or []
 

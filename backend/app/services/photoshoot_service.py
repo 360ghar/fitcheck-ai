@@ -9,7 +9,7 @@ import asyncio
 import json
 import re
 import uuid
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from app.utils.datetime_util import utcnow, utcnow_iso, utc_today
 from typing import Any, List, Optional, Tuple
 
@@ -255,7 +255,7 @@ class PhotoshootService:
 
             # Calculate reset time (midnight UTC)
             tomorrow = today + timedelta(days=1)
-            resets_at = datetime.combine(tomorrow, datetime.min.time())
+            resets_at = datetime.combine(tomorrow, datetime.min.time(), tzinfo=timezone.utc)
 
             return PhotoshootUsage(
                 used_today=used_today,

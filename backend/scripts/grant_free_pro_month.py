@@ -311,10 +311,11 @@ def _send_email_smtp(
 def main() -> int:
     supabase_url = _env("SUPABASE_URL", required=True).rstrip("/")
     supabase_key = _env("SUPABASE_SECRET_KEY", required=True)
-    resend_key = _env("RESEND_API_KEY", required=True)
-    from_email = _env("FROM_EMAIL", "FitCheck AI <team@fitcheckaiapp.com>")
 
     duration_months = _env_int("DURATION_MONTHS", 1)
+    if duration_months < 1:
+        print(f"ERROR: DURATION_MONTHS={duration_months} must be at least 1", file=sys.stderr)
+        sys.exit(1)
     skip_email = _env_bool("SKIP_EMAIL", False)
     dry_run = _env_bool("DRY_RUN", False)
     page_size = _env_int("PAGE_SIZE", 500)
@@ -429,6 +430,8 @@ def main() -> int:
     print(f"\n[grant] {len(to_grant)} users to grant...")
 
     granted_now = 0
+    grant_failed = 0
+    newly_granted: set[str] = set()
     batch = 100
     for i in range(0, len(to_grant), batch):
         chunk = to_grant[i : i + batch]
@@ -448,8 +451,10 @@ def main() -> int:
             db.table("subscriptions").upsert(rows, on_conflict="user_id").execute()
         except Exception as e:
             print(f"  ERROR upserting batch {i}-{i+len(chunk)}: {e}", file=sys.stderr)
+            grant_failed += len(chunk)
             continue
         for u in chunk:
+            newly_granted.add(u["id"])
             _append_audit(audit_path, {
                 "user_id": u["id"],
                 "action": "granted",
@@ -459,12 +464,22 @@ def main() -> int:
         granted_now += len(chunk)
         print(f"  granted {granted_now}/{len(to_grant)}")
 
+    # All granted users = previously granted (from audit) + newly granted.
+    all_granted = state["granted"] | newly_granted
+
     # Step 2: emails
     if skip_email:
         print("\n[email] SKIP_EMAIL=1; not sending.")
-        return 0
+        return 1 if grant_failed > 0 else 0
 
-    to_email_all = [u for u in (eligible + email_only) if u["id"] not in state["emailed"]]
+    # Only email users who were actually granted (not failed batches) plus
+    # the email_only (paid) users. This prevents falsely telling a user their
+    # Pro is active when the upsert didn't succeed.
+    to_email_all = [
+        u for u in (eligible + email_only)
+        if u["id"] not in state["emailed"]
+        and (u["id"] in all_granted or u in email_only)
+    ]
 
     # Drop recipients on bogus/reserved domains (example.com, test.com, ...).
     # These would hard-bounce or be rejected; we leave them un-emailed so they
@@ -486,7 +501,7 @@ def main() -> int:
 
     subject = "You've got Pro, on us. Thanks for being an early FitCheck user."
     sent = 0
-    failed: list[tuple[str, str]] = []
+    email_failed = 0
 
     if email_transport == "smtp":
         # SMTP: one connection per recipient (simple, robust to mid-run drops).
@@ -508,12 +523,15 @@ def main() -> int:
                 if sent % 25 == 0:
                     print(f"  emailed {sent}/{len(to_email)}")
             else:
-                failed.append((u["email"], str(detail)))
+                email_failed += 1
                 print(f"  FAIL {u['email']}: {detail}", file=sys.stderr)
             if rate_ms > 0:
                 time.sleep(rate_ms / 1000.0)
     else:
-        # Resend over httpx.
+        # Resend over httpx. Validate Resend credentials here (not at the top
+        # of main()) so that SMTP mode and SKIP_EMAIL=1 don't need the key.
+        resend_key = _env("RESEND_API_KEY", required=True)
+        from_email = _env("FROM_EMAIL", "FitCheck AI <team@fitcheckaiapp.com>")
         with httpx.Client() as client:
             for u in to_email:
                 html, text = _render_email(u.get("full_name"), trial_end_pretty)
@@ -532,18 +550,19 @@ def main() -> int:
                     if sent % 25 == 0:
                         print(f"  emailed {sent}/{len(to_email)}")
                 else:
-                    failed.append((u["email"], str(detail)))
+                    email_failed += 1
                     print(f"  FAIL {u['email']}: {detail}", file=sys.stderr)
                 if rate_ms > 0:
                     time.sleep(rate_ms / 1000.0)
 
+    total_failed = grant_failed + email_failed
     print()
-    print(f"DONE. granted_now={granted_now} emailed_now={sent} failed={len(failed)}")
-    if failed:
-        print("failed recipients (see stderr above):")
-        for email, _ in failed:
-            print(f"  - {email}")
-    return 0
+    print(f"DONE. granted_now={granted_now} grant_failed={grant_failed} emailed_now={sent} email_failed={email_failed}")
+    if grant_failed > 0:
+        print(f"  {grant_failed} grant(s) failed (see stderr above).", file=sys.stderr)
+    if email_failed > 0:
+        print(f"  {email_failed} email(s) failed (see stderr above).", file=sys.stderr)
+    return 1 if total_failed > 0 else 0
 
 
 if __name__ == "__main__":

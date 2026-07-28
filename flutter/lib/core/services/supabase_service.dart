@@ -131,7 +131,7 @@ class SupabaseService extends GetxService {
     required String password,
   }) async {
     final response = await _client.auth.signInWithPassword(
-      email: email,
+      email: email.toLowerCase(),
       password: password,
     );
     return response;
@@ -156,7 +156,7 @@ class SupabaseService extends GetxService {
     String? fullName,
   }) async {
     final response = await _client.auth.signUp(
-      email: email,
+      email: email.toLowerCase(),
       password: password,
       data: fullName != null ? {'full_name': fullName} : null,
     );
@@ -255,7 +255,7 @@ class SupabaseService extends GetxService {
   /// Send password reset email
   Future<void> resetPassword(String email) async {
     await _client.auth.resetPasswordForEmail(
-      email,
+      email.toLowerCase(),
       redirectTo: '${ApiConstants.webBaseUrl}/auth/reset-password',
     );
   }
@@ -272,6 +272,6 @@ class SupabaseService extends GetxService {
 
   /// Resend verification email
   Future<void> resendVerificationEmail(String email) async {
-    await _client.auth.resend(type: OtpType.signup, email: email);
+    await _client.auth.resend(type: OtpType.signup, email: email.toLowerCase());
   }
 }

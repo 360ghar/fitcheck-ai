@@ -79,6 +79,17 @@ def main() -> int:
     include_paid = _env_bool("INCLUDE_PAID", False)
     dry_run = _env_bool("DRY_RUN", False)
 
+    # INCLUDE_PAID=1 is dangerous: it strips paying users without cancelling
+    # their Stripe subscription, leaving paid users with no app access.
+    # Require an explicit second env var to confirm.
+    if include_paid and not _env_bool("STRIPE_CANCEL_CONFIRMED", False):
+        print(
+            "ERROR: INCLUDE_PAID=1 also requires STRIPE_CANCEL_CONFIRMED=1 "
+            "to confirm Stripe subscriptions have been cancelled externally.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     now = datetime.now(timezone.utc)
     mode = "DRY-RUN" if dry_run else "LIVE"
     print(f"[{mode}] revert expired Free Pro Month trials")
@@ -105,14 +116,19 @@ def main() -> int:
 
     # Fetch current subscription rows in pages to filter out paying users
     # and confirm the row is still on a pro/trial state worth reverting.
+    # Only rows whose trial_end matches the audited value (and are
+    # pro_monthly trial) are considered revertable — this prevents unrelated
+    # subscriptions (e.g. pro_yearly, a later upgraded state) from being
+    # accidentally downgraded.
     page = 500
     to_revert: list[str] = []
     skipped_paid = 0
     skipped_already_free = 0
+    skipped_trial_mismatch = 0
     for i in range(0, len(expired_ids), page):
         chunk = expired_ids[i : i + page]
         res = db.table("subscriptions").select(
-            "user_id,plan_type,status,stripe_subscription_id"
+            "user_id,plan_type,status,stripe_subscription_id,trial_end"
         ).in_("user_id", chunk).execute()
         for row in (res.data or []):
             uid = row["user_id"]
@@ -120,18 +136,24 @@ def main() -> int:
             if has_stripe and not include_paid:
                 skipped_paid += 1
                 continue
-            # Only revert rows that are actually still pro/trial from the gift.
-            # If the user already moved to free by some other path, leave them.
-            if row.get("plan_type") not in ("pro_monthly", "pro_yearly"):
+            # Only revert campaign-originated pro_monthly trials, not
+            # pro_yearly or other states the grant script never creates.
+            if row.get("plan_type") != "pro_monthly":
                 skipped_already_free += 1
                 continue
-            if row.get("status") not in ("trial", "active"):
+            if row.get("status") != "trial":
                 skipped_already_free += 1
+                continue
+            # Confirm the row's trial_end matches the audited campaign value.
+            audited_trial_end = campaign.get(uid)
+            if not audited_trial_end or str(row.get("trial_end") or "") != audited_trial_end:
+                skipped_trial_mismatch += 1
                 continue
             to_revert.append(uid)
 
     print(f"skipped (now paying): {skipped_paid}")
     print(f"skipped (already free/cancelled): {skipped_already_free}")
+    print(f"skipped (trial_end mismatch): {skipped_trial_mismatch}")
     print(f"to revert: {len(to_revert)}")
 
     if dry_run:
@@ -144,25 +166,35 @@ def main() -> int:
         return 0
 
     reverted = 0
+    failed_count = 0
     for uid in to_revert:
         try:
-            db.table("subscriptions").update({
+            # Atomic update: only revert if the row still matches the campaign
+            # state (pro_monthly trial, no Stripe subscription). This prevents
+            # a TOCTOU race where a user completes a paid checkout between the
+            # scan above and this update.
+            result = db.table("subscriptions").update({
                 "plan_type": "free",
                 "status": "active",
                 "trial_end": None,
                 "current_period_end": None,
                 "cancel_at_period_end": False,
-            }).eq("user_id", uid).execute()
+            }).eq("user_id", uid).eq("plan_type", "pro_monthly").eq("status", "trial").is_("stripe_subscription_id", "null").execute()
+            # If no row matched the filter, the subscription changed state
+            # since the scan (e.g. user became paid) — skip silently.
+            if not (result.data and len(result.data) > 0):
+                continue
         except Exception as e:
             print(f"  ERROR reverting {uid}: {e}", file=sys.stderr)
+            failed_count += 1
             continue
         reverted += 1
         if reverted % 25 == 0:
             print(f"  reverted {reverted}/{len(to_revert)}")
 
     print()
-    print(f"DONE. reverted={reverted}/{len(to_revert)}")
-    return 0
+    print(f"DONE. reverted={reverted}/{len(to_revert)} failed={failed_count}")
+    return 1 if failed_count > 0 else 0
 
 
 if __name__ == "__main__":

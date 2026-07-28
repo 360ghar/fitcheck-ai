@@ -1,4 +1,3 @@
-import { Fragment } from 'react'
 import { TransitionSeries, linearTiming } from '@remotion/transitions'
 import { fade } from '@remotion/transitions/fade'
 import {
@@ -28,22 +27,27 @@ const SCENES = [
 export const FitCheckPromo = () => {
   return (
     <TransitionSeries>
-      {SCENES.map((scene, i) => (
-        <Fragment key={i}>
+      {SCENES.flatMap((scene, i) => {
+        const children: React.ReactElement[] = [
           <TransitionSeries.Sequence
+            key={`seq-${i}`}
             durationInFrames={scene.durationInFrames}
             premountFor={TRANSITION_DURATION}
           >
             <scene.component />
-          </TransitionSeries.Sequence>
-          {i < SCENES.length - 1 && (
+          </TransitionSeries.Sequence>,
+        ]
+        if (i < SCENES.length - 1) {
+          children.push(
             <TransitionSeries.Transition
+              key={`trans-${i}`}
               presentation={fade()}
               timing={linearTiming({ durationInFrames: TRANSITION_DURATION })}
             />
-          )}
-        </Fragment>
-      ))}
+          )
+        }
+        return children
+      })}
     </TransitionSeries>
   )
 }

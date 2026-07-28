@@ -30,12 +30,10 @@ export function isApiError(error: unknown): error is ApiError {
  * AxiosError, the dedicated extractor in `api/client.ts` is equivalent.
  */
 export function getApiError(error: unknown): ApiError {
-  // Already an ApiError-shaped object — return as-is.
-  if (isApiError(error)) {
-    return error
-  }
-
   // Axios-like error: extract status, code, correlationId from response.
+  // Must check BEFORE the generic isApiError guard because AxiosError already
+  // has a `message` property which would match isApiError and bypass the
+  // response-metadata extraction below.
   if (typeof error === 'object' && error !== null && 'isAxiosError' in error) {
     const resp = (error as { response?: { status?: number; data?: Record<string, unknown>; headers?: Record<string, string> } }).response
     const status = resp?.status
@@ -55,6 +53,11 @@ export function getApiError(error: unknown): ApiError {
       details: data?.details ?? data,
       correlationId,
     }
+  }
+
+  // Already an ApiError-shaped object — return as-is.
+  if (isApiError(error)) {
+    return error
   }
 
   if (error instanceof Error) {

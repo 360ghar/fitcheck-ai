@@ -169,8 +169,12 @@ async def test_generation_starts_before_all_extractions_complete():
 
         fallback = asyncio.create_task(_fallback_release())
         await service.run_pipeline(job)
-        await releaser
-        await fallback
+        # Cancel the releaser task once the pipeline is done. If the overlap
+        # signal never fired, _release_on_generation_start would still be
+        # awaiting gen_started_while_b_pending.wait() and the test would hang.
+        releaser.cancel()
+        fallback.cancel()
+        await asyncio.gather(releaser, fallback, return_exceptions=True)
 
     assert "generation_started" in events
     assert "all_extractions_complete" in events

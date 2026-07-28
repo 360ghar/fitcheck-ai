@@ -18,6 +18,7 @@ from urllib.parse import urlencode, urlparse, urlunparse
 import httpx
 
 from app.core.config import settings
+from app.core.logging_config import get_context_logger
 from app.core.exceptions import (
     SocialImportOAuthConfigError,
     SocialImportOAuthExchangeError,
@@ -25,6 +26,9 @@ from app.core.exceptions import (
 )
 from app.models.social_import import SocialPlatform
 from app.utils.crypto import derive_key
+
+
+logger = get_context_logger(__name__)
 
 
 @dataclass
