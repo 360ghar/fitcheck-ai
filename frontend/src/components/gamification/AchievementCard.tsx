@@ -137,7 +137,7 @@ export function AchievementCard({
       <Card
         onClick={handleClick}
         className={`
-          cursor-pointer transition-all hover:shadow-md
+          cursor-pointer transition-colors
           ${colors.border} border-2
           ${isCompleted ? colors.bg : 'bg-white dark:bg-gray-800'}
           ${onClick ? 'hover:scale-[1.02]' : ''}
@@ -247,7 +247,7 @@ export function AchievementGrid({
   })
 
   return (
-    <div className={`grid gap-4 ${GRID_COLS[size]}`}>
+    <div className={`grid gap-3 ${GRID_COLS[size]}`}>
       {sortedAchievements.map((achievement) => (
         <AchievementCard
           key={'achievement' in achievement ? achievement.achievement.id : achievement.id}

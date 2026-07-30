@@ -173,6 +173,8 @@ class Settings(BaseSettings):
     # Stripe Configuration
     STRIPE_SECRET_KEY: Optional[str] = None
     STRIPE_WEBHOOK_SECRET: Optional[str] = None
+    STRIPE_PLUS_MONTHLY_PRICE_ID: Optional[str] = None
+    STRIPE_PLUS_YEARLY_PRICE_ID: Optional[str] = None
     STRIPE_PRO_MONTHLY_PRICE_ID: Optional[str] = None
     STRIPE_PRO_YEARLY_PRICE_ID: Optional[str] = None
 
@@ -181,11 +183,17 @@ class Settings(BaseSettings):
     PLAN_FREE_MONTHLY_GENERATIONS: int = 50
     PLAN_FREE_MONTHLY_EMBEDDINGS: int = 200
 
+    PLAN_PLUS_MONTHLY_EXTRACTIONS: int = 100
+    PLAN_PLUS_MONTHLY_GENERATIONS: int = 350
+    PLAN_PLUS_MONTHLY_EMBEDDINGS: int = 2000
+
     PLAN_PRO_MONTHLY_EXTRACTIONS: int = 200
     PLAN_PRO_MONTHLY_GENERATIONS: int = 1000
     PLAN_PRO_MONTHLY_EMBEDDINGS: int = 5000
 
     # Plan Pricing (for display purposes)
+    PLAN_PLUS_MONTHLY_PRICE: float = 10.00
+    PLAN_PLUS_YEARLY_PRICE: float = 100.00
     PLAN_PRO_MONTHLY_PRICE: float = 20.00
     PLAN_PRO_YEARLY_PRICE: float = 200.00
 
@@ -194,6 +202,7 @@ class Settings(BaseSettings):
 
     # Photoshoot Generator Configuration
     PLAN_FREE_DAILY_PHOTOSHOOT_IMAGES: int = 10
+    PLAN_PLUS_DAILY_PHOTOSHOOT_IMAGES: int = 30
     PLAN_PRO_DAILY_PHOTOSHOOT_IMAGES: int = 50
     PHOTOSHOOT_CONCURRENCY_LIMIT: int = 2  # Max concurrent image generations (lower = fewer protocol/OOM failures)
 
@@ -205,6 +214,15 @@ class Settings(BaseSettings):
     # under high parallelism, so raise cautiously.
     AI_EXTRACTION_CONCURRENCY: int = 30
     AI_GENERATION_CONCURRENCY: int = 30
+
+    # Outfit generation sends every selected item's own stored image to the
+    # image model as a labelled garment reference (see
+    # item_reference_service.resolve_outfit_item_references). Those references
+    # are flat studio product shots — 768px preserves color, print, and
+    # hardware while keeping the payload sane when an outfit has many items.
+    # The avatar keeps the larger image_processing default: identity needs
+    # more pixels than a garment does.
+    AI_OUTFIT_ITEM_REFERENCE_MAX_EDGE: int = 768
 
     # Social Import
     ENABLE_SOCIAL_IMPORT: bool = True

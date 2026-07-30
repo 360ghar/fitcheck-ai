@@ -180,6 +180,8 @@ class PhotoshootService:
         """Get the daily photoshoot image limit for a plan type."""
         if plan_type in (PlanType.PRO_MONTHLY, PlanType.PRO_YEARLY):
             return settings.PLAN_PRO_DAILY_PHOTOSHOOT_IMAGES
+        if plan_type in (PlanType.PLUS_MONTHLY, PlanType.PLUS_YEARLY):
+            return settings.PLAN_PLUS_DAILY_PHOTOSHOOT_IMAGES
         return settings.PLAN_FREE_DAILY_PHOTOSHOOT_IMAGES
 
     @staticmethod

@@ -136,7 +136,7 @@ export function ReferralBanner({ variant = 'default', onDismiss }: ReferralBanne
     <div
       className={cn(
         'relative rounded-xl p-4 text-white overflow-hidden',
-        'transition-all duration-300',
+        'transition-[transform,opacity] duration-300',
         isUrgent
           ? 'bg-gradient-to-r from-amber-500 via-indigo-600 to-purple-600'
           : 'bg-gradient-to-r from-indigo-600 to-purple-600'

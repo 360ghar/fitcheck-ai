@@ -41,7 +41,9 @@ from app.agents.image_generation_agent import (
     save_generated_image,
 )
 from app.services.ai_service import EmbeddingService
+from app.services.item_reference_service import resolve_outfit_item_references
 from app.services.vector_service import get_vector_service
+from app.utils.image_processing import downscale_base64_image
 
 logger = get_context_logger(__name__)
 
@@ -224,7 +226,12 @@ async def generate_outfit(
                         async with httpx.AsyncClient(timeout=30.0) as client:
                             resp = await client.get(avatar_url)
                             resp.raise_for_status()
-                            user_avatar_base64 = base64.b64encode(resp.content).decode("utf-8")
+                            # Downscale: a raw full-res phone avatar can be
+                            # bigger than every garment reference combined.
+                            user_avatar_base64 = await asyncio.to_thread(
+                                downscale_base64_image,
+                                base64.b64encode(resp.content).decode("utf-8"),
+                            )
                     except Exception as e:
                         logger.warning(
                             "Failed to fetch user avatar, falling back to generic model",
@@ -253,6 +260,21 @@ async def generate_outfit(
 
             # Convert items to dict format
             items = [item.model_dump() for item in request.items]
+
+            # Resolve each item's own stored image into a garment reference the
+            # image model can copy from, instead of describing the garment in
+            # words and letting the model invent a lookalike. Inside the rate
+            # limit (one generation charge regardless of reference count) but
+            # outside with_retry, so a retried generation does not re-download.
+            items, reference_stats = await resolve_outfit_item_references(
+                db=db, user_id=user_id, items=items
+            )
+            logger.info(
+                "Outfit item references resolved",
+                user_id=user_id,
+                has_avatar=user_avatar_base64 is not None,
+                **reference_stats,
+            )
 
             # Generate outfit with retry
             result = await with_retry(

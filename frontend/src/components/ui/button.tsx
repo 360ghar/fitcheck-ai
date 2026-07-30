@@ -5,26 +5,31 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-pointer [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "relative inline-flex min-w-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 text-sm font-bold leading-none text-ink transition-colors before:absolute before:-inset-y-0.5 before:left-0 before:right-0 before:content-[''] disabled:pointer-events-none disabled:bg-surface-card disabled:text-ash disabled:opacity-100 cursor-pointer [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        default: "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary-pressed",
+        primary: "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary-pressed",
+        "primary-pressed": "bg-primary-pressed text-primary-foreground",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
+        tertiary: "bg-transparent hover:bg-surface-card",
+        ghost: "bg-transparent hover:bg-surface-card",
         link: "text-primary underline-offset-4 hover:underline",
+        "pill-on-image": "rounded-full bg-background text-ink hover:bg-surface-card",
+        "icon-circular": "rounded-full bg-surface-card text-ink hover:bg-secondary",
       },
       size: {
-        default: "h-11 px-5 py-2.5",
-        sm: "h-10 rounded-md px-4",
-        lg: "h-12 rounded-md px-8",
-        icon: "h-11 w-11",
-        "icon-sm": "h-10 w-10",
+        default: "h-11",
+        sm: "h-11 px-3 text-xs",
+        lg: "h-11 px-6",
+        icon: "h-11 w-11 rounded-full px-0",
+        "icon-sm": "h-11 w-11 rounded-full px-0",
       },
     },
     defaultVariants: {

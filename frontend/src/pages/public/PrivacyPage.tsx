@@ -12,13 +12,13 @@ export default function PrivacyPage() {
       />
     <div className="pt-20">
       <section className="py-24 bg-stone-50 dark:bg-stone-950">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimatedSection>
             <div className="text-center mb-12">
-              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
+              <h1 className="landing-display text-4xl md:text-5xl font-semibold text-stone-900 dark:text-stone-50 mb-4">
                 Privacy Policy
               </h1>
-              <p className="text-gray-600 dark:text-gray-300">
+              <p className="text-stone-600 dark:text-stone-400">
                 Last updated: July 13, 2026
               </p>
             </div>
@@ -26,8 +26,8 @@ export default function PrivacyPage() {
         </div>
       </section>
 
-      <section className="py-16 bg-white dark:bg-gray-950">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="py-16 bg-white dark:bg-stone-950">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <AnimatedSection>
             <div className="prose prose-gray dark:prose-invert max-w-none">
               <h2>1. Introduction</h2>

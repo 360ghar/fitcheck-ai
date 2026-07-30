@@ -121,9 +121,8 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
         <div
           ref={ref}
           className={cn(
-            'flex items-center gap-3 p-3 bg-card rounded-xl',
-            'border border-border/50',
-            'hover:bg-accent/50 transition-colors cursor-pointer',
+            'flex items-center gap-3 rounded-md border border-hairline bg-card p-3',
+            'hover:bg-surface-soft transition-colors cursor-pointer',
             'touch-target',
             className
           )}
@@ -139,7 +138,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
           }}
         >
           {/* Image */}
-          <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0">
+          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
             {imageSrc ? (
               <img
                 src={imageSrc}
@@ -196,11 +195,11 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
       <div
         ref={ref}
         className={cn(
-          'group relative rounded-xl overflow-hidden bg-muted',
+          'group relative overflow-hidden rounded-md bg-muted',
           'cursor-pointer',
-          'transition-all duration-300',
-          'hover:shadow-card-hover hover:-translate-y-1',
-          variant === 'compact' ? 'aspect-square' : 'aspect-[3/4]',
+          'border border-transparent transition-colors hover:border-hairline',
+          variant === 'compact' && 'aspect-square',
+          !imageSrc && 'aspect-[3/4] min-h-36',
           isSelected && 'ring-2 ring-primary ring-offset-2',
           className
         )}
@@ -221,11 +220,11 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
             src={imageSrc}
             alt={item.name}
             className={cn(
-              'absolute inset-0 w-full h-full object-cover',
-              'transition-transform duration-300',
-              'group-hover:scale-105'
+              variant === 'compact' ? 'absolute inset-0 h-full w-full object-cover' : 'relative block h-auto w-full object-contain',
             )}
             loading="lazy"
+            width={primaryImage?.width}
+            height={primaryImage?.height}
             onError={() => setImageError(true)}
           />
         ) : (
@@ -251,13 +250,13 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
             type="button"
             className={cn(
               'absolute top-2.5 left-2.5 z-10',
-              'w-6 h-6 rounded-md',
+              'h-11 w-11 rounded-full bg-background text-ink',
               'flex items-center justify-center',
-              'transition-all duration-200',
+              'transition-colors duration-200',
               'touch-target',
               isSelected
                 ? 'bg-primary text-primary-foreground'
-                : 'bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm border border-white/20'
+                : 'border border-hairline'
             )}
             onClick={(e) => {
               e.stopPropagation()
@@ -275,13 +274,13 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
             type="button"
             className={cn(
               'absolute top-2.5 right-2.5 z-10',
-              'w-9 h-9 rounded-full',
+              'h-11 w-11 rounded-full',
               'flex items-center justify-center',
-              'transition-all duration-200',
+              'transition-colors duration-200',
               'touch-target',
               item.is_favorite
-                ? 'bg-pink-500 text-white shadow-lg shadow-pink-500/30'
-                : 'bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm text-muted-foreground hover:text-pink-500'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-background text-mute hover:text-primary'
             )}
             onClick={(e) => {
               e.stopPropagation()
@@ -298,8 +297,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
           <Badge
             className={cn(
               'absolute bottom-14 left-2.5 z-10',
-              'text-[10px] font-medium px-2 py-0.5',
-              'shadow-sm',
+              'rounded-full px-3 py-2 text-xs font-bold',
               conditionConfig.bg,
               conditionConfig.text
             )}
@@ -310,7 +308,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
 
         {/* Bottom Info — compact: clean cutout + name/brand below (Alta-style); default: overlay */}
         {variant === 'compact' ? (
-          <div className="absolute bottom-0 left-0 right-0 bg-background/95 px-2 py-1.5 backdrop-blur-sm">
+          <div className="absolute bottom-0 left-0 right-0 bg-background/95 px-2 py-1.5">
             <h3 className="truncate text-[11px] font-medium leading-tight text-foreground">
               {item.name}
             </h3>
@@ -322,7 +320,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
           </div>
         ) : (
           <div className="absolute bottom-0 left-0 right-0 p-3 z-10">
-            <h3 className="font-semibold text-sm text-white truncate drop-shadow-sm">
+            <h3 className="text-sm font-semibold text-white truncate">
               {item.name}
             </h3>
             <p className="text-xs text-white/80 capitalize">{item.category}</p>

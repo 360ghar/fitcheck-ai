@@ -4,6 +4,7 @@
  */
 
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import type { Outfit, OutfitImage, Style, Season, OutfitFilters as ApiOutfitFilters } from '../types';
 import * as outfitsApi from '../api/outfits';
 import { generateOutfit } from '../api/ai';
@@ -614,7 +615,10 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       const promptItems: Parameters<typeof generateOutfit>[0] = [];
       for (const it of availableItems) {
         if (itemIds.has(it.id)) {
-          promptItems.push({ name: it.name, category: it.category, colors: it.colors });
+          // item_id lets the backend fetch this item's own image and send it to
+          // the model as a garment reference. it.image_url stays unused on
+          // purpose: the id is the contract, the backend resolves the image.
+          promptItems.push({ item_id: it.id, name: it.name, category: it.category, colors: it.colors });
         }
       }
 
@@ -758,7 +762,9 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         const promptItems: Parameters<typeof generateOutfit>[0] = [];
         for (const it of availableItems) {
           if (itemIds.has(it.id)) {
-            promptItems.push({ name: it.name, category: it.category, colors: it.colors });
+            // See startGeneration: item_id is how the backend resolves this
+            // item's image into a garment reference for the model.
+            promptItems.push({ item_id: it.id, name: it.name, category: it.category, colors: it.colors });
           }
         }
 
@@ -881,7 +887,7 @@ export function useOutfits(): Outfit[] {
  * Hook to get filtered outfits
  */
 export function useFilteredOutfits(): Outfit[] {
-  return useOutfitStore(selectFilteredOutfits);
+  return useOutfitStore(useShallow(selectFilteredOutfits));
 }
 
 /**
@@ -911,14 +917,16 @@ export function useOutfitCreation(): {
   tags: string[];
   occasion: string;
 } {
-  return useOutfitStore((state) => ({
-    isCreating: state.isCreating,
-    selectedItems: state.creationItems,
-    name: state.creationName,
-    description: state.creationDescription,
-    style: state.creationStyle,
-    season: state.creationSeason,
-    tags: state.creationTags,
-    occasion: state.creationOccasion,
-  }));
+  return useOutfitStore(
+    useShallow((state) => ({
+      isCreating: state.isCreating,
+      selectedItems: state.creationItems,
+      name: state.creationName,
+      description: state.creationDescription,
+      style: state.creationStyle,
+      season: state.creationSeason,
+      tags: state.creationTags,
+      occasion: state.creationOccasion,
+    }))
+  );
 }

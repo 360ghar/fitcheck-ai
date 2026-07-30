@@ -642,7 +642,7 @@ export function CalendarView({
                     }
                   }}
                   className={cn(
-                    'flex items-start gap-3 p-3 rounded-lg border transition-all cursor-pointer touch-target',
+                    'flex items-start gap-3 rounded-lg border p-3 transition-colors cursor-pointer touch-target',
                     day.isToday
                       ? 'bg-primary/5 border-primary'
                       : 'bg-card border-border hover:bg-accent'
@@ -840,7 +840,7 @@ export function CalendarView({
                       }
                     }}
                     className={cn(
-                      'group min-h-[52px] sm:min-h-[60px] md:min-h-24 p-0.5 sm:p-1 md:p-2 rounded-lg border transition-all cursor-pointer overflow-hidden',
+                      'group min-h-[52px] overflow-hidden rounded-lg border p-0.5 transition-colors cursor-pointer sm:min-h-[60px] sm:p-1 md:min-h-24 md:p-2',
                       day.isCurrentMonth
                         ? day.isToday
                           ? 'bg-primary/5 border-primary'

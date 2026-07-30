@@ -36,7 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Skeleton } from '@/components/ui/skeleton'
+import { LoadingGrid } from '@/components/ui/loading-grid'
 import { FilterPanel, type ItemFilters, type SortOptions } from '@/components/wardrobe/FilterPanel'
 import { BatchExtractionFlow, type ItemUploadResult } from '@/components/wardrobe/BatchExtractionFlow'
 import { ItemDetailModal } from '@/components/wardrobe/ItemDetailModal'
@@ -50,7 +50,8 @@ import {
 import type { BatchJobUiStatus, Category, Item } from '@/types'
 import { useJobUiStore } from '@/stores/jobUiStore'
 import { EmptyState } from '@/components/ui/empty-state'
-import { cn } from '@/lib/utils'
+import { FilterChip } from '@/components/ui/filter-chip'
+import { PinGrid } from '@/components/wardrobe/pin-grid'
 
 // Quick category filter chips (Alta-style), mirror the FilterPanel categories.
 const CATEGORY_CHIPS: { value: Category | 'all'; label: string }[] = [
@@ -398,12 +399,12 @@ export default function WardrobePage() {
   // ============================================================================
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-8">
+    <div className="app-page max-w-7xl">
       {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 md:mb-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 md:mb-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">Closet</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="type-heading-xl text-foreground">Closet</h1>
+          <p className="type-body-sm text-muted-foreground">
             {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
           </p>
         </div>
@@ -456,21 +457,17 @@ export default function WardrobePage() {
         {CATEGORY_CHIPS.map((chip) => {
           const isActive = filters.category === chip.value
           return (
-            <button
+            <FilterChip
               key={chip.value}
               type="button"
               role="tab"
               aria-selected={isActive}
               onClick={() => handleFilterChange('category', chip.value)}
-              className={cn(
-                'shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors',
-                isActive
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground'
-              )}
+              active={isActive}
+              className="shrink-0"
             >
               {chip.label}
-            </button>
+            </FilterChip>
           )
         })}
       </div>
@@ -507,20 +504,7 @@ export default function WardrobePage() {
 
       {/* Items grid/list */}
       {isLoading ? (
-        <div
-          className={`grid gap-3 ${
-            sort.isGridView
-              ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7'
-              : 'grid-cols-1'
-          }`}
-        >
-          {Array.from({ length: 14 }).map((_, i) => (
-            <Skeleton
-              key={i}
-              className={sort.isGridView ? 'aspect-square w-full rounded-xl' : 'h-20 w-full rounded-xl'}
-            />
-          ))}
-        </div>
+        <LoadingGrid count={14} variant={sort.isGridView ? 'masonry' : 'list'} />
       ) : filteredItems.length === 0 ? (
         hasActiveFilters ? (
           <EmptyState
@@ -540,20 +524,15 @@ export default function WardrobePage() {
           />
         )
       ) : (
-        <div
-          className={`grid gap-3 ${
-            sort.isGridView
-              ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7'
-              : 'grid-cols-1'
-          }`}
-        >
-          {filteredItems.map((item) => {
+        sort.isGridView ? (
+          <PinGrid>
+            {filteredItems.map((item) => {
             const isSelected = selectedItems.has(item.id)
             return (
               <ItemCard
                 key={item.id}
                 item={item}
-                variant={sort.isGridView ? 'compact' : 'list'}
+                variant="default"
                 isSelected={isSelected}
                 onClick={() => handleItemClick(item)}
                 onToggleFavorite={(e) => {
@@ -566,8 +545,16 @@ export default function WardrobePage() {
                 }}
               />
             )
-          })}
-        </div>
+            })}
+          </PinGrid>
+        ) : (
+          <div className="grid grid-cols-1 gap-2">
+            {filteredItems.map((item) => {
+              const isSelected = selectedItems.has(item.id)
+              return <ItemCard key={item.id} item={item} variant="list" isSelected={isSelected} onClick={() => handleItemClick(item)} onToggleFavorite={(e) => { e.stopPropagation(); handleToggleFavorite(item.id) }} onSelect={(e) => { e.stopPropagation(); toggleItemSelected(item.id) }} />
+            })}
+          </div>
+        )
       )}
 
       {/* Mobile primary add action is the BottomNav center FAB — avoid dual FABs */}

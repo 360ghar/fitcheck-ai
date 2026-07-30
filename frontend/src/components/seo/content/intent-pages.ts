@@ -460,7 +460,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
     path: '/guides/what-to-wear-today',
     title: 'What to Wear Today: A Simple System | FitCheck AI',
     description:
-      'Stop staring at a full closet. Use weather, occasion, and your real clothes to decide what to wear in minutes.',
+      'Stop staring at a full closet. Use weather, occasion, and your real clothes to decide what to wear.',
     h1: 'What to wear today: a simple system',
     lede:
       '“What to wear today” is not a fashion problem — it is a decision problem under time pressure. The fix is a short checklist (context → constraints → 2 options → commit) backed by a digital wardrobe that already knows what you own.',

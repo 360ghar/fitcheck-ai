@@ -11,7 +11,7 @@ export interface CtaBandProps {
   /** Small line rendered under the buttons (e.g. "No credit card required."). */
   footnote?: string
   accentColor?: AccentColor
-  /** Background style. `'dark'` (default, stone-900) or `'indigo'` (indigo-600). */
+  /** Background style. `'dark'` is editorial; `'indigo'` is retained for API compatibility and renders brand red. */
   variant?: 'dark' | 'indigo'
 }
 
@@ -29,7 +29,7 @@ export function CtaBand({
   variant = 'dark',
 }: CtaBandProps) {
   const accent = ACCENT_CLASSES[accentColor]
-  const sectionBg = variant === 'indigo' ? 'bg-indigo-600' : 'bg-stone-900'
+  const sectionBg = variant === 'indigo' ? 'bg-primary' : 'bg-stone-900'
 
   return (
     <section className={`py-20 md:py-28 ${sectionBg}`}>
@@ -43,7 +43,7 @@ export function CtaBand({
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
               to={primaryCta.to}
-              className="inline-flex items-center justify-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-all hover:scale-105"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-white px-8 py-4 text-lg font-semibold text-ink transition-colors hover:bg-surface-card focus-visible:outline-none"
             >
               {primaryCta.text}
               <ArrowRight className="w-5 h-5" />
@@ -51,7 +51,7 @@ export function CtaBand({
             {secondaryCta ? (
               <Link
                 to={secondaryCta.to}
-                className="inline-flex items-center justify-center gap-2 bg-white/10 backdrop-blur-sm text-white px-8 py-4 rounded-full font-semibold text-lg hover:bg-white/20 transition-all"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-8 py-4 text-lg font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none"
               >
                 {secondaryCta.text}
               </Link>

@@ -1296,7 +1296,15 @@ class AIProviderService:
                 for img in reference_images
             ]
 
-        logger.info("AI image generation request started", provider_host=urlparse(url).netloc, model=model)
+        logger.info(
+            "AI image generation request started",
+            provider_host=urlparse(url).netloc,
+            model=model,
+            # Outfit generation can send an avatar plus one reference per item;
+            # log the count so a provider that silently honours only the first
+            # is diagnosable from the payload side.
+            reference_images=len(reference_images or []),
+        )
 
         async def _post_image_request() -> httpx.Response:
             nonlocal client

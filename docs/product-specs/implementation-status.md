@@ -70,6 +70,7 @@ This document tracks the implementation status of all FitCheck AI features, comp
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Virtual try-on | ✅ | `TryOnPage.tsx` - requires user avatar |
+| Item images sent as garment references | ✅ | Clients send `item_id`; backend resolves each item's stored image and sends it as a numbered reference next to the avatar (`item_reference_service.py`, `docs/BACKEND.md` → Outfit generation) |
 | Multiple poses/angles | ✅ | `generateMultiPoseOutfit` API + AIGenerator.tsx |
 | **Body type customization** | 🟡 | BodyProfile exists but basic measurements only |
 | **Lighting scenarios** | ✅ | `AIGenerator.tsx` - 8 scenario presets (office, outdoor, evening, etc.) |
@@ -155,7 +156,7 @@ This document tracks the implementation status of all FitCheck AI features, comp
 | Image count slider | ✅ | 1-10 images selection |
 | Image generation | ✅ | Backend AI provider integration (configurable models) |
 | Results gallery | ✅ | Download individual/all |
-| Daily usage limits | ✅ | Free: 10/day, Pro: 50/day |
+| Daily usage limits | ✅ | Free: 10/day, Plus: 30/day, Pro: 50/day |
 | Landing page demo | ✅ | 2 images, IP-limited |
 | Referral limit prompt | ✅ | Flutter dialog + React referral banner |
 

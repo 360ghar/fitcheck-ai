@@ -65,6 +65,11 @@ export interface ExtractSingleItemResult {
 }
 
 export interface OutfitItemInput {
+  // Wardrobe item id. The backend resolves this item's stored image
+  // server-side and sends it to the image model as a garment reference, so the
+  // generated outfit reproduces the real garment instead of inventing a
+  // lookalike from the text attributes below. Never send image URLs or base64.
+  item_id?: string;
   name: string;
   category?: string;
   colors?: string[];

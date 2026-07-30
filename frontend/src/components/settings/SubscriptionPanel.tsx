@@ -40,8 +40,29 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useSubscriptionStore, usePlanName, useIsPro, useIsNearLimit } from "@/stores/subscriptionStore";
+import {
+  useSubscriptionStore,
+  usePlanName,
+  useIsPro,
+  useCanUpgrade,
+  useIsNearLimit,
+} from "@/stores/subscriptionStore";
+import { PLAN_LIMITS, PLAN_PRICES, yearlySavings } from "@/lib/plan-limits";
 import type { PlanType } from "@/types";
+
+// Upgrade options offered to users without a paid plan. Plus and Pro unlock
+// the same features - only the limits differ - so both tiers are rendered
+// from one shared shape instead of hand-copied blocks.
+const UPGRADE_TIERS = (["plus", "pro"] as const).map((tier) => ({
+  tier,
+  name: tier === "plus" ? "Plus" : "Pro",
+  recommended: tier === "plus",
+  limits: PLAN_LIMITS[tier],
+  prices: PLAN_PRICES[tier],
+  savings: yearlySavings(tier),
+  monthlyPlanType: `${tier}_monthly` as PlanType,
+  yearlyPlanType: `${tier}_yearly` as PlanType,
+}));
 
 // ============================================================================
 // COMPONENT
@@ -73,6 +94,13 @@ export function SubscriptionPanel() {
 
   const planName = usePlanName();
   const isPro = useIsPro();
+  const canUpgrade = useCanUpgrade();
+  // Never offer the tier the user is already on: a Plus subscriber sees Pro
+  // only, a free user sees both.
+  const currentPlan = subscription?.plan_type ?? "free";
+  const offeredTiers = UPGRADE_TIERS.filter(
+    (t) => !currentPlan.startsWith(t.tier)
+  );
   const nearLimit = useIsNearLimit();
 
   // Load data on mount
@@ -267,102 +295,111 @@ export function SubscriptionPanel() {
         </CardContent>
       </Card>
 
-      {/* Pricing Plans (show only for free users) */}
-      {!isPro && plans?.plans && (
+      {/* Upgrade options - shown whenever a higher tier exists, so a Plus
+          subscriber still has a path to Pro (gating this on !isPro stranded
+          them, since Plus counts as paid). */}
+      {canUpgrade && plans?.plans && offeredTiers.length > 0 && (
         <Card>
           <CardHeader className="px-4 py-4 md:px-6 md:py-6">
             <CardTitle className="flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-indigo-500" />
-              Upgrade to Pro
+              {isPro ? "Upgrade your plan" : "Choose a plan"}
             </CardTitle>
             <CardDescription>
-              Unlock more extractions and generations
+              {offeredTiers.length > 1
+                ? "Plus and Pro unlock the same features — pick the limits you need"
+                : "Same features, higher limits"}
             </CardDescription>
           </CardHeader>
           <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              {/* Monthly Plan */}
-              <div className="border rounded-lg p-4 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="font-semibold text-lg">Pro Monthly</h3>
-                    <p className="text-3xl font-bold mt-1">
-                      $20<span className="text-base font-normal text-gray-500">/mo</span>
-                    </p>
+            <div
+              className={
+                offeredTiers.length > 1
+                  ? "grid items-stretch gap-4 md:grid-cols-2"
+                  : "grid items-stretch gap-4"
+              }
+            >
+              {offeredTiers.map(
+                ({
+                  tier,
+                  name,
+                  recommended,
+                  limits,
+                  prices,
+                  savings,
+                  monthlyPlanType,
+                  yearlyPlanType,
+                }) => (
+                  <div
+                    key={tier}
+                    className={
+                      recommended
+                        ? "relative flex h-full flex-col rounded-lg border-2 border-indigo-500 p-4"
+                        : "relative flex h-full flex-col rounded-lg border p-4 transition-colors dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700"
+                    }
+                  >
+                    {recommended && (
+                      <Badge className="absolute -top-2.5 left-4 bg-indigo-500">
+                        Most popular
+                      </Badge>
+                    )}
+                    <div className="mb-4">
+                      <h3 className="font-semibold text-lg">{name}</h3>
+                      <p className="text-3xl font-bold mt-1">
+                        ${prices.monthly}
+                        <span className="text-base font-normal text-gray-500">/mo</span>
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        or ${prices.yearly}/yr — saves ${savings}
+                      </p>
+                    </div>
+                    <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400 mb-4 flex-1">
+                      <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-green-500 shrink-0" />
+                        {limits.monthlyExtractions} item extractions/month
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-green-500 shrink-0" />
+                        {limits.monthlyGenerations.toLocaleString()} outfit
+                        visualizations/month
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-green-500 shrink-0" />
+                        {limits.dailyPhotoshootImages} AI photoshoot images/day
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-green-500 shrink-0" />
+                        Virtual try-on, analytics &amp; priority support
+                      </li>
+                    </ul>
+                    <div className="mt-auto grid grid-cols-2 gap-2">
+                      <Button
+                        onClick={() => handleUpgrade(monthlyPlanType)}
+                        disabled={isCheckingOut}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        {isCheckingOut ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          "Monthly"
+                        )}
+                      </Button>
+                      <Button
+                        onClick={() => handleUpgrade(yearlyPlanType)}
+                        disabled={isCheckingOut}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700"
+                      >
+                        {isCheckingOut ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          "Yearly"
+                        )}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-                <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    200 item extractions/month
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    1,000 outfit visualizations/month
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    Priority support
-                  </li>
-                </ul>
-                <Button
-                  onClick={() => handleUpgrade("pro_monthly")}
-                  disabled={isCheckingOut}
-                  className="w-full"
-                  variant="outline"
-                >
-                  {isCheckingOut ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Choose Monthly"
-                  )}
-                </Button>
-              </div>
-
-              {/* Yearly Plan */}
-              <div className="border-2 border-indigo-500 rounded-lg p-4 relative">
-                <Badge className="absolute -top-2.5 left-4 bg-indigo-500">
-                  Save $40/year
-                </Badge>
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="font-semibold text-lg">Pro Yearly</h3>
-                    <p className="text-3xl font-bold mt-1">
-                      $200<span className="text-base font-normal text-gray-500">/yr</span>
-                    </p>
-                    <p className="text-sm text-gray-500">~$16.67/month</p>
-                  </div>
-                </div>
-                <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    200 item extractions/month
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    1,000 outfit visualizations/month
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    Priority support
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    Early access to new features
-                  </li>
-                </ul>
-                <Button
-                  onClick={() => handleUpgrade("pro_yearly")}
-                  disabled={isCheckingOut}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700"
-                >
-                  {isCheckingOut ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Choose Yearly"
-                  )}
-                </Button>
-              </div>
+                )
+              )}
             </div>
           </CardContent>
         </Card>

@@ -85,7 +85,7 @@ POST /api/v1/outfits/create
 **Requirements:**
 
 **Generation Process:**
-- Send selected item images to AI model
+- Send selected item images to AI model — implemented: the client sends each item's `item_id`, the backend resolves that item's stored image and sends it as a numbered garment reference alongside the avatar (see `docs/BACKEND.md` → Outfit generation)
 - Generate high-quality image (1080x1080 or higher)
 - Include realistic lighting, shadows, and natural positioning
 - Maintain accurate representation of each item's appearance

@@ -393,9 +393,9 @@ export default function RecommendationsPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
+    <div className="app-page max-w-7xl">
       {/* Header */}
-      <div className="mb-4 md:mb-8">
+      <div className="mb-4 md:mb-4">
         <h1 className="text-xl md:text-2xl font-bold text-foreground flex items-center">
           <Sparkles className="h-5 w-5 md:h-7 md:w-7 text-primary mr-2" />
           AI Recommendations

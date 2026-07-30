@@ -1,6 +1,6 @@
 # Database schema (generated)
 
-Generated: 2026-07-28
+Generated: 2026-07-31
 
 Source: `backend/db/supabase/migrations/`.
 Regenerate: `python scripts/generate_db_schema_doc.py`.
@@ -38,6 +38,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `017_blog_posts.sql`
 - `018_default_ai_provider_custom.sql`
 - `019_add_item_source_image.sql`
+- `020_plus_plan.sql`
 
 ## Tables (CREATE TABLE)
 

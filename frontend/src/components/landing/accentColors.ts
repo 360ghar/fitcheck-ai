@@ -21,42 +21,23 @@ export interface AccentClasses {
   cardHoverBorder: string
 }
 
+const wardrobeStudioAccent: AccentClasses = {
+  text100: 'text-white/90',
+  text200: 'text-white/70',
+  iconBg: 'bg-secondary',
+  iconText: 'text-primary',
+  cardHoverBorder: 'hover:border-primary/40',
+}
+
+// Feature pages previously used an unrelated accent per route. Keep the
+// public prop for compatibility while mapping all non-semantic decoration to
+// the one Wardrobe Studio visual language.
 export const ACCENT_CLASSES: Record<AccentColor, AccentClasses> = {
-  orange: {
-    text100: 'text-orange-100',
-    text200: 'text-orange-200',
-    iconBg: 'bg-orange-100 dark:bg-orange-900/50',
-    iconText: 'text-orange-600 dark:text-orange-400',
-    cardHoverBorder: 'hover:border-orange-200 dark:hover:border-orange-800',
-  },
-  indigo: {
-    text100: 'text-indigo-100',
-    text200: 'text-indigo-200',
-    iconBg: 'bg-indigo-100 dark:bg-indigo-900/50',
-    iconText: 'text-indigo-600 dark:text-indigo-400',
-    cardHoverBorder: 'hover:border-indigo-200 dark:hover:border-indigo-800',
-  },
-  emerald: {
-    text100: 'text-emerald-100',
-    text200: 'text-emerald-200',
-    iconBg: 'bg-emerald-100 dark:bg-emerald-900/50',
-    iconText: 'text-emerald-600 dark:text-emerald-400',
-    cardHoverBorder: 'hover:border-emerald-200 dark:hover:border-emerald-800',
-  },
-  purple: {
-    text100: 'text-purple-100',
-    text200: 'text-purple-200',
-    iconBg: 'bg-purple-100 dark:bg-purple-900/50',
-    iconText: 'text-purple-600 dark:text-purple-400',
-    cardHoverBorder: 'hover:border-purple-200 dark:hover:border-purple-800',
-  },
-  blue: {
-    text100: 'text-blue-100',
-    text200: 'text-blue-200',
-    iconBg: 'bg-blue-100 dark:bg-blue-900/50',
-    iconText: 'text-blue-600 dark:text-blue-400',
-    cardHoverBorder: 'hover:border-blue-200 dark:hover:border-blue-800',
-  },
+  orange: wardrobeStudioAccent,
+  indigo: wardrobeStudioAccent,
+  emerald: wardrobeStudioAccent,
+  purple: wardrobeStudioAccent,
+  blue: wardrobeStudioAccent,
 }
 
 export interface CTAButton {

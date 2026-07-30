@@ -47,8 +47,12 @@ class GenerationRequest(BaseModel):
 - Cannot generate an outfit with items currently marked as "dirty" or "laundry".
 
 ### AI Limits
-- Max 50 generations per day for Pro users.
-- Max 5 generations per month for Free users.
+Enforced from `backend/app/core/config.py` (`PLAN_*`); see
+`SubscriptionService.get_plan_limits`.
+
+- Monthly outfit generations: Free 50, Plus 350, Pro 1,000.
+- Monthly item extractions: Free 25, Plus 100, Pro 200.
+- Daily photoshoot images: Free 10, Plus 30, Pro 50.
 
 ## Error Responses
 - All validation errors return a `422 Unprocessable Entity` with a detailed `details` object mapping field names to error messages.

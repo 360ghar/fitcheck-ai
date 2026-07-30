@@ -51,17 +51,63 @@ class SubscriptionService:
                 "monthly_generations": settings.PLAN_PRO_MONTHLY_GENERATIONS,
                 "monthly_embeddings": settings.PLAN_PRO_MONTHLY_EMBEDDINGS,
             }
-        else:
+        if plan_type in (PlanType.PLUS_MONTHLY, PlanType.PLUS_YEARLY):
             return {
-                "monthly_extractions": settings.PLAN_FREE_MONTHLY_EXTRACTIONS,
-                "monthly_generations": settings.PLAN_FREE_MONTHLY_GENERATIONS,
-                "monthly_embeddings": settings.PLAN_FREE_MONTHLY_EMBEDDINGS,
+                "monthly_extractions": settings.PLAN_PLUS_MONTHLY_EXTRACTIONS,
+                "monthly_generations": settings.PLAN_PLUS_MONTHLY_GENERATIONS,
+                "monthly_embeddings": settings.PLAN_PLUS_MONTHLY_EMBEDDINGS,
             }
+        return {
+            "monthly_extractions": settings.PLAN_FREE_MONTHLY_EXTRACTIONS,
+            "monthly_generations": settings.PLAN_FREE_MONTHLY_GENERATIONS,
+            "monthly_embeddings": settings.PLAN_FREE_MONTHLY_EMBEDDINGS,
+        }
+
+    # All plans that unlock Pro-level features. Plus has lower usage limits
+    # than Pro (see get_plan_limits) but the SAME feature entitlement, so it
+    # is treated as a paid/entitled plan everywhere features are gated.
+    PAID_PLAN_TYPES = (
+        PlanType.PLUS_MONTHLY,
+        PlanType.PLUS_YEARLY,
+        PlanType.PRO_MONTHLY,
+        PlanType.PRO_YEARLY,
+    )
+
+    # Highest tier — nothing left to upsell. Distinct from PAID_PLAN_TYPES:
+    # "has paid features" and "is on the top tier" are different questions now
+    # that a middle tier exists, and conflating them either hides an upsell
+    # from Plus users or offers Pro users an upgrade to the plan they're on.
+    TOP_TIER_PLAN_TYPES = (PlanType.PRO_MONTHLY, PlanType.PRO_YEARLY)
+
+    @staticmethod
+    def is_paid_plan(plan_type: PlanType) -> bool:
+        """True for any paid plan (Plus or Pro) — Pro-level features unlocked."""
+        return plan_type in SubscriptionService.PAID_PLAN_TYPES
+
+    @staticmethod
+    def can_upgrade(plan_type: PlanType) -> bool:
+        """True when a higher tier exists to upsell (Free and Plus)."""
+        return plan_type not in SubscriptionService.TOP_TIER_PLAN_TYPES
 
     @staticmethod
     def is_pro_plan(plan_type: PlanType) -> bool:
-        """Check if the plan type is a Pro plan."""
-        return plan_type in (PlanType.PRO_MONTHLY, PlanType.PRO_YEARLY)
+        """Backward-compatible entitlement check.
+
+        Plus unlocks the same features as Pro (only the usage limits differ),
+        so it counts as entitled here. ``SubscriptionResponse.is_pro`` is
+        derived from this and means "paid / Pro-feature-entitled".
+        """
+        return SubscriptionService.is_paid_plan(plan_type)
+
+    @staticmethod
+    def plan_display_name(plan_type: PlanType) -> str:
+        """Human-readable plan name for messages/UI ("Free" / "Plus" / "Pro")."""
+        value = plan_type.value if isinstance(plan_type, PlanType) else str(plan_type)
+        if value.startswith("plus"):
+            return "Plus"
+        if value.startswith("pro"):
+            return "Pro"
+        return "Free"
 
     # ==========================================================================
     # Subscription CRUD
@@ -142,8 +188,8 @@ class SubscriptionService:
         try:
             now = utcnow()
 
-            # Calculate period end based on plan type
-            if plan_type == PlanType.PRO_YEARLY:
+            # Calculate period end based on plan type (any *_yearly plan = 1 year)
+            if plan_type.value.endswith("_yearly"):
                 period_end = now + relativedelta(years=1)
             else:
                 period_end = now + relativedelta(months=1)
@@ -370,8 +416,17 @@ class SubscriptionService:
 
             message = None
             if not allowed:
-                plan_name = "Pro" if subscription.is_pro else "Free"
-                message = f"You've reached your monthly {op.value} limit ({limit}) on the {plan_name} plan. Upgrade to Pro for more!"
+                plan_name = SubscriptionService.plan_display_name(subscription.plan_type)
+                message = (
+                    f"You've reached your monthly {op.value} limit ({limit}) "
+                    f"on the {plan_name} plan."
+                )
+                # Only upsell when a higher tier actually exists - a Pro user
+                # at their cap must not be told to "upgrade to Pro".
+                if SubscriptionService.can_upgrade(subscription.plan_type):
+                    message += " Upgrade to Pro for more!"
+                else:
+                    message += " Your limit resets at the start of the next billing period."
 
             return UsageCheckResult(
                 allowed=allowed,

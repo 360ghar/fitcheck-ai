@@ -23,7 +23,7 @@ export function ErrorState({
   return (
     <div
       className={cn(
-        'text-center py-12 px-4 bg-card rounded-xl border border-destructive/20',
+        'text-center py-12 px-4 bg-card rounded-2xl border border-destructive/20',
         className
       )}
       role="alert"

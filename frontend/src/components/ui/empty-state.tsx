@@ -28,7 +28,7 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'text-center py-12 px-4 bg-card rounded-xl border border-border/60',
+        'text-center py-12 px-4 bg-card rounded-2xl border border-border/60',
         className
       )}
     >

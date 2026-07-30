@@ -45,7 +45,7 @@ export function GeneratingSurface({
   return (
     <div
       className={cn(
-        'rounded-xl border border-border bg-card p-4 md:p-6 space-y-5',
+        'rounded-2xl border border-border bg-card p-4 md:p-6 space-y-5',
         className
       )}
     >
@@ -71,6 +71,8 @@ export function GeneratingSurface({
                   src={url}
                   alt=""
                   className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
             ))}
@@ -78,7 +80,7 @@ export function GeneratingSurface({
         </div>
       )}
 
-      <div className="flex flex-col items-center text-center space-y-3">
+      <div className="flex flex-col items-center text-center space-y-3" role="status" aria-live="polite">
         {isActive && (
           <Loader2 className="h-8 w-8 text-primary animate-spin" aria-hidden />
         )}

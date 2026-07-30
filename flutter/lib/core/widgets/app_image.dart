@@ -29,6 +29,7 @@ class AppImage extends StatelessWidget {
     this.galleryUrls,
     this.initialGalleryIndex = 0,
     this.errorIcon = Icons.image_not_supported_outlined,
+    this.semanticLabel,
   });
 
   /// The URL of the image to display.
@@ -74,6 +75,9 @@ class AppImage extends StatelessWidget {
   /// Icon to show on error.
   final IconData errorIcon;
 
+  /// A concise description of the image for assistive technology.
+  final String? semanticLabel;
+
   @override
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
@@ -100,31 +104,36 @@ class AppImage extends StatelessWidget {
             width: width,
             height: height,
             color: bgColor,
-            child: Image(
-              image: imageProvider,
-              fit: fit,
-            ),
+            child: Image(image: imageProvider, fit: fit),
           );
         },
       );
     }
 
     if (borderRadius != null) {
-      imageWidget = ClipRRect(
-        borderRadius: borderRadius!,
-        child: imageWidget,
-      );
+      imageWidget = ClipRRect(borderRadius: borderRadius!, child: imageWidget);
     }
 
     if (enableZoom && imageUrl != null && imageUrl!.isNotEmpty) {
       imageWidget = Semantics(
         button: true,
-        label: 'View full image',
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _openViewer(context),
-          child: imageWidget,
+        label: semanticLabel == null
+            ? 'View full image'
+            : 'View full image: $semanticLabel',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: borderRadius,
+            onTap: () => _openViewer(context),
+            child: imageWidget,
+          ),
         ),
+      );
+    } else {
+      imageWidget = Semantics(
+        image: true,
+        label: semanticLabel ?? 'Image',
+        child: imageWidget,
       );
     }
 
@@ -133,38 +142,45 @@ class AppImage extends StatelessWidget {
       height: height,
       color: borderRadius == null ? bgColor : null,
       decoration: borderRadius != null
-          ? BoxDecoration(
-              color: bgColor,
-              borderRadius: borderRadius,
-            )
+          ? BoxDecoration(color: bgColor, borderRadius: borderRadius)
           : null,
       child: imageWidget,
     );
   }
 
   Widget _buildPlaceholder(BuildContext context, AppUiTokens tokens) {
-    return Shimmer.fromColors(
-      baseColor: tokens.cardColor.withValues(alpha: 0.4),
-      highlightColor: tokens.cardColor.withValues(alpha: 0.7),
-      period: const Duration(milliseconds: 1200),
-      child: Container(
-        width: width,
-        height: height,
-        color: tokens.cardColor.withValues(alpha: 0.3),
+    final loadingSurface = Container(
+      width: width,
+      height: height,
+      color: tokens.cardColor.withValues(alpha: 0.3),
+    );
+
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return ExcludeSemantics(child: loadingSurface);
+    }
+
+    return ExcludeSemantics(
+      child: Shimmer.fromColors(
+        baseColor: tokens.cardColor.withValues(alpha: 0.4),
+        highlightColor: tokens.cardColor.withValues(alpha: 0.7),
+        period: const Duration(milliseconds: 1200),
+        child: loadingSurface,
       ),
     );
   }
 
   Widget _buildErrorWidget(BuildContext context, AppUiTokens tokens) {
-    return Container(
-      width: width,
-      height: height,
-      color: tokens.cardColor.withValues(alpha: 0.3),
-      child: Center(
-        child: Icon(
-          errorIcon,
-          size: 48,
-          color: tokens.textMuted,
+    return Semantics(
+      image: true,
+      label: semanticLabel == null
+          ? 'Image unavailable'
+          : '$semanticLabel is unavailable',
+      child: Container(
+        width: width,
+        height: height,
+        color: tokens.cardColor.withValues(alpha: 0.3),
+        child: Center(
+          child: Icon(errorIcon, size: 48, color: tokens.textMuted),
         ),
       ),
     );

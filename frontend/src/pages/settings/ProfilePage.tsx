@@ -151,14 +151,14 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
+    <div className="app-page max-w-7xl">
       {/* Header */}
-      <div className="mb-4 md:mb-8">
+      <div className="mb-4 md:mb-4">
         <h1 className="text-lg md:text-2xl font-bold text-foreground">Profile & Settings</h1>
         <p className="mt-1 md:mt-2 text-xs md:text-sm text-muted-foreground">Manage your account and preferences</p>
       </div>
 
-      <div className="bg-card shadow rounded-lg">
+      <div className="bg-card rounded-lg">
         {/* Avatar section */}
         <AvatarSection />
 

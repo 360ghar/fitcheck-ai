@@ -192,7 +192,7 @@ export function PhotoshootDemo() {
     <GlassCard className="p-6 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
           <Camera className="w-5 h-5 text-white" />
         </div>
         <div>
@@ -208,7 +208,7 @@ export function PhotoshootDemo() {
             {...getRootProps()}
             className={`h-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors flex flex-col items-center justify-center ${
               isDragActive
-                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30'
+                ? 'border-primary bg-secondary'
                 : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
             }`}
           >
@@ -227,19 +227,19 @@ export function PhotoshootDemo() {
         {state === 'idle' && photo && photoPreview && (
           <div className="h-full flex flex-col">
             {/* Success banner showing uploaded photo */}
-            <div className="flex items-center gap-3 mb-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+            <div className="flex items-center gap-3 mb-4 p-3 bg-success/10 rounded-lg">
               <img
                 src={photoPreview}
                 alt=""
                 className="w-12 h-12 rounded-lg object-cover"
               />
               <div className="flex-1">
-                <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                <p className="text-sm font-medium text-success">
                   Photo uploaded
                 </p>
                 <button
                   type="button"
-                  className="text-xs text-green-600 hover:underline"
+                  className="text-xs text-success hover:underline"
                   onClick={handleReset}
                 >
                   Change photo
@@ -254,7 +254,7 @@ export function PhotoshootDemo() {
               </p>
               <Button
                 onClick={handleGenerate}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                className="bg-primary hover:bg-primary-pressed text-white"
               >
                 Generate 2 Images
               </Button>
@@ -272,12 +272,12 @@ export function PhotoshootDemo() {
               className="max-h-48 rounded-lg mb-4 object-contain"
             />
           )}
-          <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-2" />
+          <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
           <p className="text-gray-600 dark:text-gray-400">
             Creating your AI photos...
           </p>
           <p className="text-xs text-gray-400 mt-1">
-            This may take 20-30 seconds
+            Generation time can vary. You can keep exploring while this runs.
           </p>
         </div>
       )}
@@ -285,7 +285,7 @@ export function PhotoshootDemo() {
       {/* Results State */}
       {state === 'results' && result && (
         <div className="space-y-4">
-          <div className="flex items-center gap-2 text-green-600">
+          <div className="flex items-center gap-2 text-success">
             <CheckCircle2 className="w-5 h-5" />
             <span className="text-sm font-medium">{result.images.length} images generated!</span>
           </div>
@@ -351,7 +351,7 @@ export function PhotoshootDemo() {
             </Button>
             <Button
               size="sm"
-              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+              className="flex-1 bg-primary hover:bg-primary-pressed text-white"
               onClick={() => setShowLoginModal(true)}
             >
               Get More Images

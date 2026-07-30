@@ -81,9 +81,8 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
         <div
           ref={ref}
           className={cn(
-            'flex items-center gap-3 p-3 bg-card rounded-xl',
-            'border border-border/50',
-            'hover:bg-accent/50 transition-colors cursor-pointer',
+            'flex items-center gap-3 rounded-md border border-hairline bg-card p-3',
+            'hover:bg-surface-soft transition-colors cursor-pointer',
             'touch-target',
             className
           )}
@@ -99,7 +98,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
           }}
         >
           {/* Image */}
-          <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0">
+          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
             {imageSrc ? (
               <img
                 src={imageSrc}
@@ -163,11 +162,11 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
       <div
         ref={ref}
         className={cn(
-          'group relative rounded-xl overflow-hidden bg-muted',
+          'group relative overflow-hidden rounded-md bg-muted',
           'cursor-pointer',
-          'transition-all duration-300',
-          'hover:shadow-card-hover hover:-translate-y-1',
-          variant === 'compact' ? 'aspect-square' : 'aspect-[4/3]',
+          'border border-transparent transition-colors hover:border-hairline',
+          variant === 'compact' && 'aspect-square',
+          (!imageSrc || isGenerating || generationFailed) && 'aspect-[3/4] min-h-36',
           className
         )}
         onClick={onClick}
@@ -202,11 +201,11 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
             src={imageSrc}
             alt={outfit.name}
             className={cn(
-              'absolute inset-0 w-full h-full object-cover',
-              'transition-transform duration-300',
-              'group-hover:scale-105'
+              variant === 'compact' ? 'absolute inset-0 h-full w-full object-cover' : 'relative block h-auto w-full object-contain',
             )}
             loading="lazy"
+            width={primaryImage?.width}
+            height={primaryImage?.height}
             onError={() => setImageError(true)}
           />
         ) : (
@@ -235,8 +234,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
           <Badge
             className={cn(
               'absolute top-2.5 left-2.5 z-10',
-              'bg-violet-500/90 text-white text-[10px]',
-              'shadow-sm'
+              'bg-violet-500/90 text-white text-[10px]'
             )}
           >
             <Sparkles className="h-3 w-3 mr-1" />
@@ -252,10 +250,10 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
               'absolute top-2.5 right-2.5 z-10',
               'w-9 h-9 rounded-full',
               'flex items-center justify-center',
-              'transition-all duration-200',
+              'transition-colors duration-200',
               'touch-target',
               outfit.is_favorite
-                ? 'bg-pink-500 text-white shadow-lg shadow-pink-500/30'
+                ? 'bg-pink-500 text-white'
                 : 'bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm text-muted-foreground hover:text-pink-500'
             )}
             onClick={(e) => {
@@ -270,7 +268,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
 
         {/* Bottom Info Overlay */}
         <div className="absolute bottom-0 left-0 right-0 p-3 z-10">
-          <h3 className="font-semibold text-sm text-white truncate drop-shadow-sm">
+          <h3 className="font-semibold text-sm text-white truncate">
             {outfit.name}
           </h3>
 

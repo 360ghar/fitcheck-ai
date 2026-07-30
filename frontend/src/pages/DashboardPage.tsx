@@ -263,7 +263,7 @@ export default function DashboardPage() {
 
   if (loadError && totalItems === 0 && totalOutfits === 0) {
     return (
-      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
+      <div className="app-page max-w-7xl">
         <ErrorState
           title="Couldn't load your closet"
           description={loadError.message}
@@ -277,9 +277,9 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
+    <div className="app-page max-w-7xl">
       {/* Welcome header */}
-      <div className="mb-4 md:mb-8">
+      <div className="mb-3 md:mb-4">
         <h1 className="text-xl md:text-3xl font-bold text-foreground">
           {isEmpty ? `Welcome, ${userDisplayName}` : `Welcome back, ${userDisplayName}`}
         </h1>
@@ -297,7 +297,7 @@ export default function DashboardPage() {
       </div>
 
       {shouldShowReferralBanner && (
-        <div className="mb-4 md:mb-6">
+        <div className="mb-3 md:mb-4">
           <ReferralBanner
             variant={isNearLimit ? 'urgent' : 'default'}
             onDismiss={dismissBanner}
@@ -307,7 +307,7 @@ export default function DashboardPage() {
 
       {/* Activation — primary surface for new / partial accounts */}
       {showActivation && (
-        <div className="mb-6 md:mb-8">
+        <div className="mb-3 md:mb-4">
           <ActivationChecklist
             input={activationInput}
             onAddItems={() => setIsUploadModalOpen(true)}
@@ -321,8 +321,8 @@ export default function DashboardPage() {
 
       {/* How it works — empty accounts only */}
       {isEmpty && (
-        <div className="mb-6 md:mb-8 rounded-xl border border-border bg-muted/20 px-4 py-4 md:px-6">
-          <h2 className="text-sm font-semibold text-foreground mb-3">How it works</h2>
+        <div className="mb-3 md:mb-4 rounded-xl border border-border bg-muted/20 px-4 py-3 md:px-6">
+          <h2 className="text-sm font-semibold text-foreground mb-2">How it works</h2>
           <ol className="space-y-2 text-sm text-muted-foreground">
             <li>
               <span className="font-medium text-foreground">1. Upload</span> — closet shots or
@@ -342,7 +342,7 @@ export default function DashboardPage() {
 
       {/* Stats — de-emphasize when empty */}
       {!isEmpty && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4 lg:gap-5 mb-6 md:mb-8">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-3 mb-3 md:mb-4">
           {stats.map((stat) => (
             <StatCard
               key={stat.name}
@@ -358,8 +358,8 @@ export default function DashboardPage() {
       )}
 
       {/* AI tools */}
-      <div className="mb-6 md:mb-8">
-        <div className="flex items-center justify-between mb-3 md:mb-4 px-1">
+      <div className="mb-3 md:mb-4">
+        <div className="flex items-center justify-between mb-2 md:mb-3 px-1">
           <h2 className="text-base md:text-lg font-semibold text-foreground">AI tools</h2>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-3">
@@ -384,21 +384,21 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick actions — tonal cards, not purple gradient slabs */}
-      <div className="mb-6 md:mb-8">
-        <div className="flex items-center justify-between mb-3 md:mb-4 px-1">
+      <div className="mb-3 md:mb-4">
+        <div className="flex items-center justify-between mb-2 md:mb-3 px-1">
           <h2 className="text-base md:text-lg font-semibold text-foreground">Quick actions</h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {quickActions.map((action) => {
             const commonClassName = cn(
-              'group relative rounded-xl border border-border bg-card p-4 md:p-5 text-left w-full',
+              'group relative rounded-xl border border-border bg-card p-3 md:p-4 text-left w-full',
               'transition-colors hover:bg-accent/40 hover:border-primary/20',
               'touch-target'
             )
 
             const content = (
-              <div className="relative flex items-start gap-3 md:gap-4">
+              <div className="relative flex items-start gap-3">
                 <action.icon className="h-5 w-5 md:h-6 md:w-6 text-foreground shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <h3 className="text-sm md:text-base font-semibold text-foreground">
@@ -411,7 +411,7 @@ export default function DashboardPage() {
                 <ArrowRight
                   className={cn(
                     'h-5 w-5 shrink-0 text-muted-foreground opacity-50',
-                    'transition-all duration-200',
+                    'transition-[opacity,transform] duration-200',
                     'group-hover:opacity-100 group-hover:translate-x-0.5'
                   )}
                 />
@@ -443,7 +443,7 @@ export default function DashboardPage() {
       {/* Recent activity — only when there is something to show */}
       {totalItems > 0 && (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
-          <div className="px-4 py-4 md:py-5 md:px-6 border-b border-border">
+          <div className="px-4 py-3 md:py-3 md:px-6 border-b border-border">
             <div className="flex items-center justify-between">
               <h3 className="text-base md:text-lg font-semibold text-foreground">Recent items</h3>
               {totalItems > 0 && totalOutfits === 0 && (
@@ -457,8 +457,8 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
-          <div className="px-4 py-4 md:p-6">
-            <div className="space-y-2 md:space-y-3">
+          <div className="px-4 py-3 md:p-5">
+            <div className="space-y-2">
               {items.slice(0, 3).map((item) => (
                 <Link
                   key={item.id}

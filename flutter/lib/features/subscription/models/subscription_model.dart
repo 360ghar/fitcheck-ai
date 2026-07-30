@@ -7,9 +7,16 @@ part 'subscription_model.freezed.dart';
 part 'subscription_model.g.dart';
 
 /// Plan types
+///
+/// `plus_*` and `pro_*` are paid plans with identical feature entitlement;
+/// only the usage limits differ (see backend `SubscriptionService`).
 enum PlanType {
   @JsonValue('free')
   free,
+  @JsonValue('plus_monthly')
+  plusMonthly,
+  @JsonValue('plus_yearly')
+  plusYearly,
   @JsonValue('pro_monthly')
   proMonthly,
   @JsonValue('pro_yearly')

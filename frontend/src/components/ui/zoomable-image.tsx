@@ -24,6 +24,7 @@ export function ZoomableImage({
   src,
   alt,
   onClick,
+  onKeyDown,
   ...imgProps
 }: ZoomableImageProps) {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -50,16 +51,17 @@ export function ZoomableImage({
         onClick={handleClick}
         role={isZoomable ? 'button' : undefined}
         tabIndex={isZoomable ? 0 : undefined}
-        onKeyDown={
-          isZoomable
-            ? (e) => {
+        onKeyDown={(e) => {
+          if (isZoomable) {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   setIsOpen(true);
                 }
-              }
-            : undefined
-        }
+          }
+          onKeyDown?.(e)
+        }}
+        aria-label={isZoomable ? `Open image preview: ${alt || 'image'}` : undefined}
+        decoding="async"
         {...imgProps}
       />
       {enableZoom && src && (

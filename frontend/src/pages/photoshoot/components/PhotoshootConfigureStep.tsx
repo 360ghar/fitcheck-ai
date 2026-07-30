@@ -38,8 +38,9 @@ export function PhotoshootConfigureStep() {
     await generate();
   };
 
-  // Check if user is on a pro plan (matches pro_monthly, pro_yearly, etc.)
-  const isPro = usage?.plan_type ? /^pro[_-]?/i.test(usage.plan_type) : false;
+  // Any paid plan (plus_* or pro_*) unlocks the same features - only the
+  // usage limits differ - so both count as entitled here.
+  const isPro = usage?.plan_type ? /^(plus|pro)[_-]?/i.test(usage.plan_type) : false;
   const remainingToday = usage?.remaining ?? 10;
   const isOutOfQuota = usage ? remainingToday <= 0 : false;
 
@@ -76,7 +77,7 @@ export function PhotoshootConfigureStep() {
                 key={uc}
                 onClick={() => setUseCase(uc)}
                 className={cn(
-                  'p-4 rounded-lg border-2 text-center transition-all',
+                  'p-4 rounded-lg border-2 text-center transition-colors',
                   isSelected
                     ? 'border-primary bg-primary/5'
                     : 'border-muted hover:border-muted-foreground/50'

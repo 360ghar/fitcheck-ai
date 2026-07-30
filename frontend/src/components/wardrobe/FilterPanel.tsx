@@ -14,8 +14,9 @@
  */
 
 import { useState } from 'react'
-import { Search, X, Grid3x3, List, SortAsc, SortDesc, SlidersHorizontal, Heart } from 'lucide-react'
+import { X, Grid3x3, List, SortAsc, SortDesc, SlidersHorizontal, Heart } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { SearchBar } from '@/components/ui/search-bar'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -149,18 +150,16 @@ export function FilterPanel({
   }
 
   return (
-    <div className="bg-card shadow-sm rounded-xl p-3 md:p-4 mb-4 md:mb-6">
+    <div className="mb-4 rounded-md border border-hairline bg-surface-soft p-3 md:mb-6 md:p-4">
       {/* Always visible: Search + Filter toggle (mobile) */}
       <div className="flex gap-2 md:gap-4">
         {/* Search */}
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
-          <Input
-            type="text"
+        <div className="flex-1">
+          <SearchBar
             placeholder="Search items..."
             value={filters.search}
             onChange={(e) => onFilterChange('search', e.target.value)}
-            className="pl-9 md:pl-10"
+            aria-label="Search items"
           />
         </div>
 
@@ -223,7 +222,7 @@ export function FilterPanel({
                         onClick={() => onFilterChange('color', c.value === 'all' ? '' : c.value)}
                         className={cn(
                           'flex items-center gap-2 px-3 py-2 rounded-full text-sm',
-                          'border transition-all duration-200',
+                          'border transition-colors duration-200',
                           (filters.color === c.value || (c.value === 'all' && filters.color === ''))
                             ? 'border-primary bg-primary/10 text-primary'
                             : 'border-border hover:border-primary/50'
@@ -269,7 +268,7 @@ export function FilterPanel({
                       type="button"
                       onClick={() => setOccasionFilter('')}
                       className={cn(
-                        'px-3 py-2 rounded-full text-sm border transition-all duration-200',
+                        'px-3 py-2 rounded-full text-sm border transition-colors duration-200',
                         filters.occasion === ''
                           ? 'border-primary bg-primary/10 text-primary'
                           : 'border-border hover:border-primary/50'
@@ -283,7 +282,7 @@ export function FilterPanel({
                         key={useCase}
                         onClick={() => setOccasionFilter(useCase)}
                         className={cn(
-                          'px-3 py-2 rounded-full text-sm border transition-all duration-200',
+                          'px-3 py-2 rounded-full text-sm border transition-colors duration-200',
                           filters.occasion === useCase
                             ? 'border-primary bg-primary/10 text-primary'
                             : 'border-border hover:border-primary/50'
@@ -319,7 +318,7 @@ export function FilterPanel({
                     onClick={() => onFilterChange('isFavorite', !filters.isFavorite)}
                     className={cn(
                       'flex items-center gap-2 px-4 py-3 rounded-xl w-full',
-                      'border transition-all duration-200',
+                      'border transition-colors duration-200',
                       filters.isFavorite
                         ? 'border-pink-500 bg-pink-500/10 text-pink-500'
                         : 'border-border hover:border-pink-500/50'

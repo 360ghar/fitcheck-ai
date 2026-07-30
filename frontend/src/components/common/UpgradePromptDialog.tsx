@@ -20,11 +20,13 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useUpgradePromptStore } from '@/stores/upgradePromptStore';
-import { useSubscriptionStore, selectIsPro } from '@/stores/subscriptionStore';
+import { useSubscriptionStore, selectCanUpgrade } from '@/stores/subscriptionStore';
 
 export function UpgradePromptDialog() {
   const { isOpen, reason, message, close } = useUpgradePromptStore();
-  const isPro = useSubscriptionStore(selectIsPro);
+  // Gate the upsell on "a higher tier exists", not "has paid features" - a
+  // Plus user is entitled but can still move to Pro.
+  const canUpgrade = useSubscriptionStore(selectCanUpgrade);
   const startCheckout = useSubscriptionStore((s) => s.startCheckout);
   const isCheckingOut = useSubscriptionStore((s) => s.isCheckingOut);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -55,10 +57,10 @@ export function UpgradePromptDialog() {
           <DialogDescription asChild>
             <div>
               {isRateLimit
-                ? isPro
+                ? !canUpgrade
                   ? "You've used all your AI extractions for today. Your allowance resets tomorrow."
                   : (message ??
-                    "You've used all the AI extractions on your plan for today. Upgrade to Pro for much higher daily limits, or wait for tomorrow's reset.")
+                    "You've used all the AI extractions on your plan for today. Upgrade for much higher daily limits, or wait for tomorrow's reset.")
                 : message ??
                   "Our AI provider is experiencing heavy demand right now. Please try again in a few minutes. Your items aren't lost."}
             </div>
@@ -70,7 +72,7 @@ export function UpgradePromptDialog() {
         )}
 
         <DialogFooter>
-          {isRateLimit && !isPro ? (
+          {isRateLimit && canUpgrade ? (
             <>
               <Button variant="ghost" onClick={close} disabled={isCheckingOut}>
                 Maybe later

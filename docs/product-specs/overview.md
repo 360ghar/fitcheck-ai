@@ -145,17 +145,22 @@ graph TD
 
 ### Revenue Streams
 
-1. **Freemium Subscription**
-   - **Free Tier:**
-     - Up to 50 clothing items
-     - 5 AI generations/month
-     - Basic wardrobe management
-   - **Pro Tier ($9.99/mo or $89.99/yr):**
-     - Unlimited items
-     - Unlimited AI generations
-     - Advanced analytics
-     - Priority support
-     - Style recommendations
+1. **Freemium Subscription** — three tiers. Plus and Pro unlock the *same*
+   features; only the monthly usage limits differ. Source of truth for limits
+   and display prices: `backend/app/core/config.py` (`PLAN_*` settings);
+   authoritative charge amounts live in Stripe.
+
+   | | Free | Plus ($10/mo, $100/yr) | Pro ($20/mo, $200/yr) |
+   |---|---|---|---|
+   | Item extractions / mo | 25 | 100 | 200 |
+   | Outfit visualizations / mo | 50 | 350 | 1,000 |
+   | Embeddings / mo | 200 | 2,000 | 5,000 |
+   | Photoshoot images / day | 10 | 30 | 50 |
+   | Virtual try-on, analytics, calendar planning, priority support | — | ✅ | ✅ |
+
+   Yearly billing on either paid tier is 10× the monthly price (2 months free).
+   Entitlement is a single predicate (`SubscriptionService.is_paid_plan`) — any
+   paid plan unlocks all paid features.
 
 2. **Commission-Based Shopping**
    - 5% commission on purchases through affiliate links

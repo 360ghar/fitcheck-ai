@@ -33,8 +33,8 @@ export default function PhotoshootPage() {
   }, [fetchUsage]);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 md:px-6 py-4 md:py-8">
-      <div className="mb-6">
+    <div className="app-page max-w-4xl">
+      <div className="mb-4">
         <h1 className="text-xl md:text-2xl font-bold text-foreground">AI Photoshoot</h1>
         {/* This line already changes with the step, so making it the live
             region announces wizard progress without adding hidden markup. */}
@@ -47,7 +47,7 @@ export default function PhotoshootPage() {
       </div>
 
       <WizardSteps
-        className="mb-6"
+        className="mb-4"
         variant="bars"
         steps={[...WIZARD_STEPS]}
         currentStepId={currentStep}

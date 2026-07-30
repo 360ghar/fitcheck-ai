@@ -12,7 +12,8 @@ import { TooltipProvider } from './components/ui/tooltip'
 import { UpgradePromptDialog } from './components/common/UpgradePromptDialog'
 import ErrorBoundary from './components/errors/ErrorBoundary'
 import { ThemeProvider } from './components/theme/ThemeProvider'
-import '@fontsource-variable/plus-jakarta-sans'
+import '@fontsource-variable/inter'
+import '@fontsource-variable/manrope'
 import './index.css'
 
 // Sentry error tracking — only initializes when a DSN is configured.
@@ -111,4 +112,3 @@ createRoot(document.getElementById('root')!).render(
     </PostHogProvider>
   </StrictMode>,
 )
-

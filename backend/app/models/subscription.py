@@ -13,6 +13,8 @@ from pydantic import ConfigDict
 class PlanType(str, Enum):
     """Subscription plan types."""
     FREE = "free"
+    PLUS_MONTHLY = "plus_monthly"
+    PLUS_YEARLY = "plus_yearly"
     PRO_MONTHLY = "pro_monthly"
     PRO_YEARLY = "pro_yearly"
 
@@ -97,7 +99,7 @@ class SubscriptionWithUsage(BaseModel):
 
 class CreateCheckoutRequest(BaseModel):
     """Request to create a Stripe checkout session."""
-    plan_type: PlanType = Field(..., description="Plan to subscribe to (pro_monthly or pro_yearly)")
+    plan_type: PlanType = Field(..., description="Plan to subscribe to (plus_monthly, plus_yearly, pro_monthly or pro_yearly)")
     success_url: str = Field(..., description="URL to redirect to after successful payment")
     cancel_url: str = Field(..., description="URL to redirect to if payment is cancelled")
 

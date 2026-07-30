@@ -71,6 +71,11 @@ async def get_plans():
         "monthly_generations": settings.PLAN_FREE_MONTHLY_GENERATIONS,
         "monthly_embeddings": settings.PLAN_FREE_MONTHLY_EMBEDDINGS,
     }
+    plus_limits = {
+        "monthly_extractions": settings.PLAN_PLUS_MONTHLY_EXTRACTIONS,
+        "monthly_generations": settings.PLAN_PLUS_MONTHLY_GENERATIONS,
+        "monthly_embeddings": settings.PLAN_PLUS_MONTHLY_EMBEDDINGS,
+    }
     pro_limits = {
         "monthly_extractions": settings.PLAN_PRO_MONTHLY_EXTRACTIONS,
         "monthly_generations": settings.PLAN_PRO_MONTHLY_GENERATIONS,
@@ -95,6 +100,25 @@ async def get_plans():
                     f"{settings.PLAN_FREE_MONTHLY_GENERATIONS} outfit visualizations per month",
                     "Basic wardrobe management",
                     "Calendar integration",
+                ],
+            },
+            {
+                "id": "plus",
+                "name": "Plus",
+                "price_monthly": settings.PLAN_PLUS_MONTHLY_PRICE,
+                "price_yearly": settings.PLAN_PLUS_YEARLY_PRICE,
+                "savings_yearly": (settings.PLAN_PLUS_MONTHLY_PRICE * 12) - settings.PLAN_PLUS_YEARLY_PRICE,
+                # Flutter client expects flattened limit keys
+                **plus_limits,
+                "limits": {
+                    **plus_limits,
+                },
+                "features": [
+                    f"{settings.PLAN_PLUS_MONTHLY_EXTRACTIONS} item extractions per month",
+                    f"{settings.PLAN_PLUS_MONTHLY_GENERATIONS} outfit visualizations per month",
+                    "Virtual try-on visualization",
+                    "Advanced AI styling recommendations",
+                    "Calendar planning",
                 ],
             },
             {
@@ -148,11 +172,16 @@ async def create_checkout_session(
     # Set Stripe API key
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
-    # Get the appropriate price ID
-    if request.plan_type == PlanType.PRO_YEARLY:
-        price_id = settings.STRIPE_PRO_YEARLY_PRICE_ID
-    else:
-        price_id = settings.STRIPE_PRO_MONTHLY_PRICE_ID
+    # Map each paid plan type to its Stripe price ID explicitly. No silent
+    # fallback: an unmapped plan raises so a new tier can never accidentally
+    # charge the monthly Pro price.
+    plan_price_ids = {
+        PlanType.PLUS_MONTHLY: settings.STRIPE_PLUS_MONTHLY_PRICE_ID,
+        PlanType.PLUS_YEARLY: settings.STRIPE_PLUS_YEARLY_PRICE_ID,
+        PlanType.PRO_MONTHLY: settings.STRIPE_PRO_MONTHLY_PRICE_ID,
+        PlanType.PRO_YEARLY: settings.STRIPE_PRO_YEARLY_PRICE_ID,
+    }
+    price_id = plan_price_ids.get(request.plan_type)
 
     if not price_id:
         raise ServiceError("Stripe price not configured. Please contact support.")

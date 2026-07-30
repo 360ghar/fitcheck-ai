@@ -57,7 +57,7 @@ export default function HowItWorks() {
                     : 'h-full p-7 md:p-9'
                 }
               >
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600 dark:text-indigo-400">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
                   {step.verb}
                 </p>
                 <h3 className="mt-4 text-xl font-semibold text-stone-900 dark:text-stone-50 tracking-tight">
@@ -68,7 +68,7 @@ export default function HowItWorks() {
                 </p>
                 <Link
                   to={step.href}
-                  className="mt-4 inline-block text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+                  className="mt-4 inline-flex min-h-11 items-center text-sm font-medium text-primary hover:text-primary-pressed transition-colors"
                 >
                   {step.linkLabel}
                 </Link>
@@ -92,7 +92,7 @@ export default function HowItWorks() {
               </div>
               <a
                 href="#demo"
-                className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+                className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-pressed transition-colors"
               >
                 Try extraction free
               </a>

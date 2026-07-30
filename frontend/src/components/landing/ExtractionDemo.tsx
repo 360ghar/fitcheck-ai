@@ -83,7 +83,7 @@ export function ExtractionDemo() {
   return (
     <GlassCard className="p-6 h-full flex flex-col">
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
           <Camera className="w-5 h-5 text-white" />
         </div>
         <div>
@@ -103,7 +103,7 @@ export function ExtractionDemo() {
             {...getRootProps()}
             className={`h-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors flex flex-col items-center justify-center ${
               isDragActive
-                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                ? 'border-primary bg-secondary'
                 : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
             }`}
           >
@@ -126,7 +126,7 @@ export function ExtractionDemo() {
               alt="Preview"
               className="max-h-48 rounded-lg mb-4 object-contain"
             />
-            <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-2" />
+            <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
             <p className="text-gray-600 dark:text-gray-400">
               Analyzing clothing items...
             </p>
@@ -167,7 +167,7 @@ export function ExtractionDemo() {
               </Button>
               <Button
                 size="sm"
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                className="flex-1 bg-primary hover:bg-primary-pressed text-white"
                 onClick={handleSaveToWardrobe}
               >
                 Save to Closet
@@ -201,7 +201,7 @@ export function ExtractionDemo() {
 function ExtractedItemCard({ item }: { item: DemoDetectedItem }) {
   return (
     <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-      <div className="w-8 h-8 rounded bg-indigo-600 flex items-center justify-center">
+      <div className="w-8 h-8 rounded bg-primary flex items-center justify-center">
         <Shirt className="w-4 h-4 text-white" />
       </div>
       <div className="flex-1 min-w-0">

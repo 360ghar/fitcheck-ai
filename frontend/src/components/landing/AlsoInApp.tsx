@@ -70,7 +70,7 @@ export default function AlsoInApp() {
         <AnimatedSection delay={200}>
           <Link
             to="/features"
-            className="mt-10 inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+            className="mt-10 inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary hover:text-primary-pressed transition-colors"
           >
             See all product features
             <ArrowUpRight className="h-4 w-4" />

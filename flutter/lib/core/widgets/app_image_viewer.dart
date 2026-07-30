@@ -42,21 +42,10 @@ class AppImageViewer extends StatefulWidget {
       barrierColor: Colors.black.withValues(alpha: 0.9),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) {
-        return AppImageViewer(
-          imageUrls: imageUrls,
-          initialIndex: initialIndex,
-        );
+        return AppImageViewer(imageUrls: imageUrls, initialIndex: initialIndex);
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
-        return FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.95, end: 1.0).animate(
-              CurvedAnimation(parent: animation, curve: Curves.easeOut),
-            ),
-            child: child,
-          ),
-        );
+        return FadeTransition(opacity: animation, child: child);
       },
     );
   }
@@ -162,23 +151,18 @@ class _AppImageViewerState extends State<AppImageViewer> {
             Positioned(
               top: MediaQuery.of(context).padding.top + AppConstants.spacing8,
               right: AppConstants.spacing16,
-              child: Opacity(
-                opacity: opacity,
-                child: _buildCloseButton(),
-              ),
+              child: Opacity(opacity: opacity, child: _buildCloseButton()),
             ),
 
             // Page indicator for galleries
             if (isGallery)
               Positioned(
-                bottom: MediaQuery.of(context).padding.bottom +
+                bottom:
+                    MediaQuery.of(context).padding.bottom +
                     AppConstants.spacing24,
                 left: 0,
                 right: 0,
-                child: Opacity(
-                  opacity: opacity,
-                  child: _buildPageIndicator(),
-                ),
+                child: Opacity(opacity: opacity, child: _buildPageIndicator()),
               ),
           ],
         ),
@@ -200,16 +184,13 @@ class _AppImageViewerState extends State<AppImageViewer> {
             child: CircularProgressIndicator(
               value: event == null
                   ? null
-                  : event.cumulativeBytesLoaded / (event.expectedTotalBytes ?? 1),
+                  : event.cumulativeBytesLoaded /
+                        (event.expectedTotalBytes ?? 1),
               color: Colors.white,
             ),
           ),
           errorBuilder: (context, error, stackTrace) => const Center(
-            child: Icon(
-              Icons.error_outline,
-              color: Colors.white54,
-              size: 48,
-            ),
+            child: Icon(Icons.error_outline, color: Colors.white54, size: 48),
           ),
         ),
       ),
@@ -226,8 +207,7 @@ class _AppImageViewerState extends State<AppImageViewer> {
         backgroundDecoration: const BoxDecoration(color: Colors.transparent),
         builder: (context, index) {
           return PhotoViewGalleryPageOptions(
-            imageProvider:
-                CachedNetworkImageProvider(widget.imageUrls[index]),
+            imageProvider: CachedNetworkImageProvider(widget.imageUrls[index]),
             minScale: PhotoViewComputedScale.contained,
             maxScale: PhotoViewComputedScale.covered * 3,
             initialScale: PhotoViewComputedScale.contained,
@@ -253,9 +233,10 @@ class _AppImageViewerState extends State<AppImageViewer> {
       ),
       child: IconButton(
         icon: const Icon(Icons.close, color: Colors.white),
+        tooltip: 'Close image viewer',
         onPressed: _close,
         padding: const EdgeInsets.all(AppConstants.spacing8),
-        constraints: const BoxConstraints(),
+        constraints: const BoxConstraints.tightFor(width: 44, height: 44),
       ),
     );
   }

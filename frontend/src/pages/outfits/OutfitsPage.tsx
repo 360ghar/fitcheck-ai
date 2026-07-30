@@ -16,7 +16,6 @@ import {
   Layers,
   Plus,
   Camera,
-  Search,
   Heart,
   Grid3x3,
   List,
@@ -32,7 +31,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { SearchBar } from '@/components/ui/search-bar'
 import { OutfitCreateDialog } from '@/components/outfits/OutfitCreateDialog'
 import { OutfitCard } from '@/components/outfits/OutfitCard'
 import { OutfitDetailPanel } from '@/components/outfits/OutfitDetailPanel'
@@ -42,11 +41,13 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
 import { LoadingGrid } from '@/components/ui/loading-grid'
 import { PageHeader } from '@/components/ui/page-header'
+import { PinGrid } from '@/components/wardrobe/pin-grid'
 import type { Outfit } from '@/types'
 
 export default function OutfitsPage() {
   const { id } = useParams()
   const [searchParams] = useSearchParams()
+  const requestedAction = searchParams.get('action')
   const navigate = useNavigate()
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [isManaging, setIsManaging] = useState(false)
@@ -98,15 +99,14 @@ export default function OutfitsPage() {
   }, [filteredOutfits, favoritesOnly, searchQuery])
 
   useEffect(() => {
-    const action = searchParams.get('action')
-    if (action === 'create') {
+    if (requestedAction === 'create') {
       startCreating()
     }
     fetchOutfits(true)
     if (wardrobeItems.length === 0) {
       void fetchItems(true).catch(() => null)
     }
-  }, [fetchOutfits, searchParams, startCreating, fetchItems, wardrobeItems.length])
+  }, [fetchOutfits, requestedAction, startCreating, fetchItems, wardrobeItems.length])
 
   // Handle single outfit view
   useEffect(() => {
@@ -217,7 +217,7 @@ export default function OutfitsPage() {
   ])
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
+    <div className="app-page max-w-7xl">
       <PageHeader
         title="Outfits"
         description={`${displayedOutfits.length} ${displayedOutfits.length === 1 ? 'outfit' : 'outfits'}`}
@@ -241,13 +241,11 @@ export default function OutfitsPage() {
 
       {/* Search + filters */}
       <div className="flex flex-col sm:flex-row gap-2 mb-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
+        <div className="flex-1">
+          <SearchBar
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search outfits…"
-            className="pl-9"
             aria-label="Search outfits"
           />
         </div>
@@ -288,7 +286,7 @@ export default function OutfitsPage() {
       {isLoading ? (
         <LoadingGrid
           count={12}
-          variant={isGridView ? 'square' : 'list'}
+          variant={isGridView ? 'masonry' : 'list'}
           columns={
             isGridView
               ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
@@ -335,21 +333,16 @@ export default function OutfitsPage() {
           }}
         />
       ) : (
-        <div
-          className={`grid gap-2 md:gap-3 ${
-            isGridView
-              ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
-              : 'grid-cols-1'
-          }`}
-        >
-          {displayedOutfits.map((outfit) => {
+        isGridView ? (
+          <PinGrid>
+            {displayedOutfits.map((outfit) => {
             const genEntry = generatingOutfits.get(outfit.id)
             const genStatus = genEntry?.status || null
             return (
               <OutfitCard
                 key={outfit.id}
                 outfit={outfit}
-                variant={isGridView ? 'default' : 'list'}
+                variant="default"
                 generationStatus={genStatus}
                 generationError={genEntry?.error}
                 onClick={() => {
@@ -365,8 +358,16 @@ export default function OutfitsPage() {
                 }}
               />
             )
-          })}
-        </div>
+            })}
+          </PinGrid>
+        ) : (
+          <div className="grid grid-cols-1 gap-2">
+            {displayedOutfits.map((outfit) => {
+              const genEntry = generatingOutfits.get(outfit.id)
+              return <OutfitCard key={outfit.id} outfit={outfit} variant="list" generationStatus={genEntry?.status || null} generationError={genEntry?.error} onClick={() => setSelectedOutfit(outfit)} onToggleFavorite={(e) => { e.stopPropagation(); toggleOutfitFavorite(outfit.id) }} />
+            })}
+          </div>
+        )
       )}
 
       {/* Mobile primary create action is the BottomNav center FAB — avoid dual FABs */}

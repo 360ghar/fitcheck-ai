@@ -63,10 +63,7 @@ export function BottomNav() {
       className={cn(
         // Fixed to bottom with safe area padding
         'fixed bottom-0 left-0 right-0 z-[100] w-screen max-w-[100vw]',
-        // Glassmorphism background
-        'bg-background/80 backdrop-blur-xl',
-        // Top shadow for depth
-        'shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.1)]',
+        'bg-background',
         // Border
         'border-t border-border/50',
         // Safe area for notched devices
@@ -90,19 +87,15 @@ export function BottomNav() {
             className={cn(
               // Size and shape
               'w-12 h-12 rounded-full',
-              // Gradient background
-              'bg-gradient-to-br from-indigo-500 to-purple-600',
-              // Shadow and glow
-              'shadow-lg shadow-indigo-500/30',
+              'bg-primary',
               // Flex center
               'flex items-center justify-center',
               // Offset to float above nav bar
               '-mt-6',
               // Hover effects
-              'hover:shadow-xl hover:shadow-indigo-500/40 hover:scale-105',
-              'active:scale-95',
+              'hover:bg-primary/90 active:bg-primary-pressed',
               // Transition
-              'transition-all duration-200'
+              'transition-colors duration-200'
             )}
             aria-label={fabAction.label}
           >
@@ -141,7 +134,7 @@ function NavItem({ item, location }: NavItemProps) {
         'flex flex-1 max-w-[72px] flex-col items-center justify-center',
         'min-h-[44px] py-1.5 px-2',
         // Transition
-        'transition-all duration-200',
+        'transition-colors duration-200',
         // Text styling
         'text-[10px] font-medium'
       )}
@@ -150,7 +143,7 @@ function NavItem({ item, location }: NavItemProps) {
         className={cn(
           'flex items-center justify-center',
           'w-10 h-7 rounded-full mb-0.5',
-          'transition-all duration-200',
+          'transition-colors duration-200',
           isActive
             ? 'bg-primary/15 text-primary'
             : 'text-muted-foreground'

@@ -216,7 +216,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
               Ready to try FitCheck AI?
             </h2>
             <p className="mt-3 text-indigo-100 max-w-xl mx-auto">
-              Photograph a few pieces, build your digital closet, and see an outfit idea in minutes.
+              Photograph a few pieces, build your digital closet, and see an outfit idea from clothes you own.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
               <Button

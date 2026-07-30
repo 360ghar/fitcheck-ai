@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { AlertCircle, CheckCircle, Lock } from 'lucide-react'
+import { AlertCircle, CheckCircle, Eye, EyeOff, Lock } from 'lucide-react'
 import { confirmPasswordReset } from '@/api/auth'
 import { Button } from '@/components/ui/button'
 import SEO from '@/components/seo/SEO'
@@ -29,6 +29,8 @@ export default function ResetPasswordPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const { accessToken, refreshToken } = useMemo(() => {
     const hash = getHashParams()
@@ -90,21 +92,21 @@ export default function ResetPasswordPage() {
         noIndex={true}
       />
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="text-xl md:text-2xl font-extrabold text-foreground">Choose a new password</h2>
+        <h1 className="text-xl md:text-2xl font-extrabold text-foreground">Choose a new password</h1>
         <p className="mt-2 text-sm text-muted-foreground">Your new password must be at least 8 characters.</p>
       </div>
 
       <div className="mt-6 md:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-card py-6 px-4 shadow rounded-lg sm:py-8 sm:px-10">
+        <div className="rounded-2xl border border-border bg-card py-6 px-4 sm:py-8 sm:px-10">
           {error && (
-            <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start">
+            <div role="alert" aria-live="polite" className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start">
               <AlertCircle className="h-5 w-5 text-destructive mt-0.5 mr-2 flex-shrink-0" />
               <p className="text-sm text-destructive">{error}</p>
             </div>
           )}
 
           {success && (
-            <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md flex items-start">
+            <div role="status" aria-live="polite" className="mb-4 p-3 bg-success/10 border border-success/30 rounded-md flex items-start">
               <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
               <p className="text-sm text-green-800 dark:text-green-300">{success}</p>
             </div>
@@ -122,14 +124,22 @@ export default function ResetPasswordPage() {
                 <input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full h-12 pl-10 pr-3 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
+                  className="block w-full h-12 pl-10 pr-12 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
                   placeholder="••••••••"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground touch-target"
+                  aria-label={showPassword ? 'Hide new password' : 'Show new password'}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
             </div>
 
@@ -144,7 +154,7 @@ export default function ResetPasswordPage() {
                 <input
                   id="confirmPassword"
                   name="confirmPassword"
-                  type="password"
+                  type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
                   value={confirmPassword}
@@ -152,15 +162,23 @@ export default function ResetPasswordPage() {
                   className="block w-full h-12 pl-10 pr-10 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
                   placeholder="••••••••"
                 />
-                {confirmPassword.length > 0 && (
-                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                {confirmPassword.length > 0 ? (
+                  <div className="absolute inset-y-0 right-10 flex items-center">
                     {passwordsMatch ? (
                       <CheckCircle className="h-5 w-5 text-green-500" />
                     ) : (
                       <AlertCircle className="h-5 w-5 text-destructive" />
                     )}
                   </div>
-                )}
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((visible) => !visible)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground touch-target"
+                  aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
               {!passwordsMatch && confirmPassword.length > 0 && (
                 <p className="mt-1 text-sm text-destructive">Passwords do not match</p>

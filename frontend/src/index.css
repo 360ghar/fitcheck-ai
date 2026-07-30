@@ -6,25 +6,31 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --foreground: 0 0% 0%;
+    --card: 60 14% 96%;
+    --card-foreground: 0 0% 0%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 238.7 83.5% 66.7%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 238.7 83.5% 66.7%;
-    --radius: 0.5rem;
+    --popover-foreground: 0 0% 0%;
+    --primary: 354 100% 45%;
+    --primary-foreground: 0 0% 100%;
+    --primary-pressed: 351 100% 40%;
+    --secondary: 60 9% 89%;
+    --secondary-foreground: 0 0% 0%;
+    --muted: 60 14% 96%;
+    --muted-foreground: 60 3% 37%;
+    --accent: 60 14% 96%;
+    --accent-foreground: 0 0% 0%;
+    --destructive: 0 88% 33%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 60 12% 84%;
+    --input: 60 3% 56%;
+    --ring: 354 100% 45%;
+    --focus-inner: 0 0% 0%;
+    --error: 0 88% 33%;
+    --success: 145 58% 15%;
+    --success-pale: 143 57% 86%;
+    --surface-elevated: 0 0% 100%;
+    --radius: 1rem;
 
     /* Sidebar */
     --sidebar-width: 240px;
@@ -32,7 +38,7 @@
 
     /* Mobile navigation */
     --bottom-nav-height: 64px;
-    --mobile-header-height: 56px;
+    --mobile-header-height: 64px;
 
     /* Safe area insets for notched devices */
     --safe-area-top: env(safe-area-inset-top, 0px);
@@ -42,25 +48,31 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 238.7 83.5% 66.7%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 238.7 83.5% 66.7%;
+    --background: 60 5% 10%;
+    --foreground: 60 20% 98%;
+    --card: 60 5% 13%;
+    --card-foreground: 60 20% 98%;
+    --popover: 60 5% 13%;
+    --popover-foreground: 60 20% 98%;
+    --primary: 354 100% 45%;
+    --primary-foreground: 0 0% 100%;
+    --primary-pressed: 351 100% 40%;
+    --secondary: 60 5% 17%;
+    --secondary-foreground: 60 20% 98%;
+    --muted: 60 5% 13%;
+    --muted-foreground: 60 3% 37%;
+    --accent: 60 5% 17%;
+    --accent-foreground: 60 20% 98%;
+    --destructive: 0 88% 43%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 60 5% 22%;
+    --input: 60 5% 22%;
+    --ring: 354 100% 45%;
+    --focus-inner: 60 20% 98%;
+    --error: 0 88% 43%;
+    --success: 143 57% 86%;
+    --success-pale: 145 58% 15%;
+    --surface-elevated: 60 5% 17%;
   }
 
   * {
@@ -69,8 +81,7 @@
 
   body {
     @apply bg-background text-foreground overflow-x-hidden w-full max-w-[100vw];
-    font-family: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, sans-serif;
-    font-feature-settings: 'ss01' on, 'cv11' on;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     min-height: 100svh;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -82,7 +93,9 @@
 
   /* Focus styles */
   *:focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2;
+    outline: 4px solid hsl(var(--ring));
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px hsl(var(--focus-inner));
   }
 }
 
@@ -97,18 +110,18 @@
     container-type: normal;
   }
 
-  /* Glass morphism (legacy; landing prefers solid panels) */
+  /* Compatibility aliases for older callers; Wardrobe Studio uses flat panels. */
   .glass {
-    @apply bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/20 dark:border-gray-700/30;
+    @apply bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800;
   }
 
   .glass-card {
-    @apply bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 shadow-sm;
+    @apply bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800;
   }
 
   /* Solid brand accent (landing) */
   .text-gradient {
-    @apply text-indigo-600 dark:text-indigo-400;
+    @apply text-primary;
   }
 
   /* Landing surface helpers */
@@ -126,7 +139,22 @@
 
   .landing-display {
     @apply font-display tracking-tight;
+    letter-spacing: -1.2px;
   }
+
+  .type-display-xl { @apply font-display text-[70px] font-semibold leading-[1.1]; letter-spacing: -1.2px; }
+  .type-display-lg { @apply font-display text-[44px] font-bold leading-[1.15]; letter-spacing: -1.2px; }
+  .type-heading-xl { @apply font-display text-[28px] font-bold leading-[1.2]; letter-spacing: -1.2px; }
+  .type-heading-lg { @apply text-[22px] font-semibold leading-[1.25]; }
+  .type-heading-md { @apply text-lg font-semibold leading-[1.3]; }
+  .type-body-md { @apply text-base font-normal leading-[1.4]; }
+  .type-body-sm { @apply text-sm font-normal leading-[1.4]; }
+  .type-caption-md { @apply text-xs font-medium leading-[1.5]; }
+  .type-button-md { @apply text-sm font-bold leading-none; }
+
+  /* Shared compact rhythm for signed-in product routes. Public and editorial
+     layouts opt out by not using this class. */
+  .app-page { @apply w-full mx-auto px-4 md:px-6 py-3 md:py-4; }
 
   .line-clamp-2 {
     display: -webkit-box;
@@ -207,7 +235,7 @@
 }
 
 .prose h2 {
-  @apply text-2xl font-bold text-foreground mt-8 mb-4;
+  @apply scroll-mt-24 text-2xl font-bold text-foreground mt-8 mb-4;
 }
 
 .prose h3 {

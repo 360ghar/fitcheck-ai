@@ -56,11 +56,14 @@ async def rate_limited_operation(
     )
 
     if not rate_check.allowed:
-        plan_name = "Pro" if rate_check.plan_type.value.startswith("pro") else "Free"
+        plan_name = SubscriptionService.plan_display_name(rate_check.plan_type)
         msg = f"Monthly {op.value} limit ({rate_check.limit}) exceeded on {plan_name} plan."
         if count > 1:
             msg += f" Requested {count} with {rate_check.remaining} remaining."
-        msg += " Upgrade to Pro for more!"
+        # Only upsell when a higher tier exists - never tell a Pro user to
+        # "upgrade to Pro".
+        if SubscriptionService.can_upgrade(rate_check.plan_type):
+            msg += " Upgrade to Pro for more!"
         raise RateLimitError(msg)
 
     # Reserve usage before yielding (not after the operation completes) so

@@ -107,6 +107,8 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
           'rounded-lg bg-muted flex items-center justify-center text-muted-foreground',
           className
         )}
+        role="img"
+        aria-label={`No image available for ${item.name}`}
       >
         <CategoryIcon className={iconSize} />
       </div>
@@ -122,6 +124,8 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
           'rounded-lg bg-muted flex items-center justify-center',
           className
         )}
+        role="img"
+        aria-label={`Image for ${item.name} could not be loaded`}
       >
         <AlertTriangle className={cn(iconSize, 'text-muted-foreground')} />
       </div>
@@ -165,6 +169,7 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
           isLoading && 'opacity-0'
         )}
         loading="lazy"
+        decoding="async"
         onLoad={() => setIsLoading(false)}
         onError={() => {
           setIsLoading(false)
@@ -199,6 +204,8 @@ export function ItemImageSimple({
           'rounded-lg bg-muted flex items-center justify-center text-muted-foreground',
           className
         )}
+        role="img"
+        aria-label={`No image available for ${item.name}`}
       >
         <CategoryIcon className={iconSize} />
       </div>
@@ -211,6 +218,7 @@ export function ItemImageSimple({
       alt={item.name}
       className={cn(sizeClass, 'rounded-lg object-cover', className)}
       loading="lazy"
+      decoding="async"
       onError={() => setHasError(true)}
     />
   )

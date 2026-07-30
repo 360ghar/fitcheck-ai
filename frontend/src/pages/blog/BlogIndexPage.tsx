@@ -155,7 +155,7 @@ export default function BlogIndexPage() {
                   {posts.map((post, index) => (
                     <AnimatedSection key={post.slug} delay={index * 100}>
                       <Link to={`/blog/${post.slug}`} className="group block h-full">
-                        <article className="bg-gray-50 dark:bg-gray-900 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 h-full flex flex-col border border-gray-100 dark:border-gray-800">
+                        <article className="flex h-full flex-col overflow-hidden rounded-lg border border-gray-100 bg-gray-50 transition-[border-color] duration-300 dark:border-gray-800 dark:bg-gray-900">
                           {/* Image Placeholder */}
                           <div className="aspect-[16/9] bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center relative overflow-hidden">
                             {post.featured_image_url ? (

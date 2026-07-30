@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/themes/app_colors.dart';
 import '../constants/app_constants.dart';
 
 // Export image widgets for convenience
@@ -49,32 +50,19 @@ class AppUiTokens {
     final textMuted = textSecondary.withValues(alpha: isDarkMode ? 0.7 : 0.65);
     final brandColor = theme.colorScheme.primary;
 
-    final backgroundGradient = LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: isDarkMode
-          ? [
-              const Color(0xFF0B0B12),
-              const Color(0xFF111827),
-              const Color(0xFF0B0B12),
-            ]
-          : [
-              const Color(0xFFF8FAFC),
-              const Color(0xFFEFF2FF),
-              const Color(0xFFFFFFFF),
-            ],
-    );
-
+    final background = isDarkMode
+        ? AppColors.backgroundDark
+        : AppColors.backgroundLight;
+    final backgroundGradient = LinearGradient(colors: [background, background]);
     final cardColor = isDarkMode
-        ? const Color(0xFF111827).withValues(alpha: 0.72)
-        : Colors.white.withValues(alpha: 0.9);
-    final cardBorderColor = textPrimary.withValues(alpha: isDarkMode ? 0.12 : 0.08);
-    final cardShadowColor = Colors.black.withValues(alpha: isDarkMode ? 0.35 : 0.12);
-
-    final navBackground = isDarkMode
-        ? const Color(0xFF0B0F1D).withValues(alpha: 0.9)
-        : Colors.white.withValues(alpha: 0.95);
-    final navBorder = textPrimary.withValues(alpha: isDarkMode ? 0.18 : 0.1);
+        ? AppColors.surfaceDark
+        : AppColors.surfaceLight;
+    final cardBorderColor = isDarkMode
+        ? AppColors.borderDark
+        : AppColors.borderLight;
+    final cardShadowColor = Colors.transparent;
+    final navBackground = cardColor;
+    final navBorder = cardBorderColor;
 
     return AppUiTokens._(
       isDarkMode: isDarkMode,
@@ -93,11 +81,7 @@ class AppUiTokens {
 }
 
 class AppPageBackground extends StatelessWidget {
-  const AppPageBackground({
-    super.key,
-    required this.child,
-    this.padding,
-  });
+  const AppPageBackground({super.key, required this.child, this.padding});
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
@@ -107,17 +91,10 @@ class AppPageBackground extends StatelessWidget {
     final tokens = AppUiTokens.of(context);
 
     return Container(
-      decoration: BoxDecoration(
-        gradient: tokens.backgroundGradient,
-        // Also set a solid color fallback for the area behind bottom nav
-        color: tokens.isDarkMode
-            ? const Color(0xFF0B0B12)
-            : const Color(0xFFF8FAFC),
-      ),
-      child: Padding(
-        padding: padding ?? EdgeInsets.zero,
-        child: child,
-      ),
+      color: tokens.isDarkMode
+          ? AppColors.backgroundDark
+          : AppColors.backgroundLight,
+      child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
     );
   }
 }
@@ -146,13 +123,6 @@ class AppGlassCard extends StatelessWidget {
           borderRadius ?? AppConstants.radius16,
         ),
         border: Border.all(color: tokens.cardBorderColor),
-        boxShadow: [
-          BoxShadow(
-            color: tokens.cardShadowColor,
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
       ),
       child: child,
     );
@@ -185,17 +155,17 @@ class AppSectionHeader extends StatelessWidget {
               Text(
                 title,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: tokens.textPrimary,
-                    ),
+                  fontWeight: FontWeight.w700,
+                  color: tokens.textPrimary,
+                ),
               ),
               if (subtitle != null) ...[
                 const SizedBox(height: AppConstants.spacing4),
                 Text(
                   subtitle!,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
               ],
             ],

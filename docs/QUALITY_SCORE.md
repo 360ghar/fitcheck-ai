@@ -15,7 +15,7 @@ Scale: **A** solid · **B** workable · **C** fragile · **D** high risk
 | Recommendations | B- | 2026-07-22 | Service + astrology hooks tested partially | Vector path optional/config-sensitive |
 | Photoshoot | B | 2026-07-25 | Service tests, SSE error-path tests, bounded mobile polling | Job UX parity web/mobile |
 | Social import | B | 2026-07-25 | Pipeline + XSS-oriented tests, SSE error events | Feature-flagged; ops complexity |
-| Subscriptions / Stripe | B | 2026-07-22 | Webhook tests | Full billing matrix not fully graded |
+| Subscriptions / Stripe | B | 2026-07-31 | Webhook tests (incl. Plus activation), plan-limit/entitlement tests | Three tiers live; Stripe Plus price IDs must be set in env |
 | Web frontend | B- | 2026-07-25 | Vitest suite (16 tests), API retry, feature error boundaries, Sentry, global error handlers | No e2e suite yet |
 | Flutter | B | 2026-07-25 | 76 tests, offline queue hardening, bounded polling, error zone, Sentry | Architecture docs still thin |
 | Docs / harness | B | 2026-07-22 | Agent map + checks introduced | Generated schema must stay fresh |

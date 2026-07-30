@@ -5,25 +5,38 @@ import { Switch } from '@/components/ui/switch'
 import { AnimatedSection } from './AnimatedSection'
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { freePlanFeatureBullets, proPlanFeatureBullets } from '@/lib/plan-limits'
+import {
+  PLAN_PRICES,
+  freePlanFeatureBullets,
+  plusPlanFeatureBullets,
+  proPlanFeatureBullets,
+} from '@/lib/plan-limits'
 
 const tiers = [
   {
     name: 'Free',
-    price: { monthly: 0, yearly: 0 },
+    price: PLAN_PRICES.free,
     description: 'Perfect for getting started',
     features: freePlanFeatureBullets(),
     cta: 'Start free',
     highlighted: false,
   },
   {
+    name: 'Plus',
+    price: PLAN_PRICES.plus,
+    description: 'Every paid feature, everyday limits',
+    features: plusPlanFeatureBullets(),
+    cta: 'Get Plus',
+    highlighted: true,
+    badge: 'Most popular',
+  },
+  {
     name: 'Pro',
-    price: { monthly: 20, yearly: 200 },
-    description: 'For higher limits and deeper tools',
+    price: PLAN_PRICES.pro,
+    description: 'The same features at the highest limits',
     features: proPlanFeatureBullets(),
     cta: 'Upgrade to Pro',
-    highlighted: true,
-    badge: 'Best value',
+    highlighted: false,
   },
 ]
 
@@ -49,18 +62,20 @@ function PricingCard({
   isYearly,
 }: PricingCardProps) {
   const displayPrice = isYearly ? price.yearly : price.monthly
+  // Each tier states its own real saving rather than one hardcoded figure.
+  const savings = price.monthly * 12 - price.yearly
 
   return (
     <div
       className={cn(
         'relative flex h-full flex-col overflow-hidden rounded-2xl border p-6 md:p-8',
         highlighted
-          ? 'border-indigo-600 bg-white dark:bg-stone-950'
+          ? 'border-primary bg-white dark:bg-stone-950'
           : 'border-stone-200/90 bg-white dark:border-stone-800 dark:bg-stone-950'
       )}
     >
       {badge && (
-        <div className="absolute top-0 right-0 bg-indigo-600 text-white px-4 py-1 text-sm font-medium rounded-bl-lg">
+        <div className="absolute top-0 right-0 bg-primary text-white px-4 py-1 text-sm font-medium rounded-bl-lg">
           {badge}
         </div>
       )}
@@ -79,12 +94,17 @@ function PricingCard({
             /{isYearly ? 'year' : 'month'}
           </span>
         )}
+        {/* Reserve the line in every card so the feature lists and CTAs stay
+            on a shared baseline across all three columns. */}
+        <p className="mt-1 h-5 text-sm text-stone-500 dark:text-stone-400">
+          {isYearly && savings > 0 ? `Saves $${savings} a year` : ''}
+        </p>
       </div>
 
       <ul className="mb-8 flex-1 space-y-3">
         {features.map((feature) => (
           <li key={feature} className="flex items-start gap-3">
-            <Check className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+            <Check className="w-5 h-5 text-success shrink-0 mt-0.5" />
             <span className="text-stone-600 dark:text-stone-300 text-[15px]">{feature}</span>
           </li>
         ))}
@@ -94,7 +114,7 @@ function PricingCard({
         className={cn(
           'w-full h-12 text-base font-medium shadow-none',
           highlighted
-            ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+            ? 'bg-primary hover:bg-primary-pressed text-white'
             : 'border-stone-300 dark:border-stone-700'
         )}
         variant={highlighted ? 'default' : 'outline'}
@@ -119,7 +139,7 @@ export default function Pricing() {
               Simple, transparent pricing
             </h2>
             <p className="mt-4 text-base md:text-lg text-stone-600 dark:text-stone-400">
-              Start free. Upgrade when you need higher limits for extractions, try-on, and photoshoots.
+              Start free. Plus and Pro unlock the same features — pick the limits that match how much you generate.
             </p>
 
             <div className="mt-8 flex items-center gap-4">
@@ -143,17 +163,19 @@ export default function Pricing() {
                 )}
               >
                 Yearly
-                <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">
-                  Save $40
+                <span className="text-xs font-medium text-primary">
+                  2 months free
                 </span>
               </span>
             </div>
           </div>
         </AnimatedSection>
 
-        <div className="grid md:grid-cols-2 gap-5 md:gap-6 max-w-4xl">
+        {/* items-stretch + h-full cards keep every row (price, features, CTA)
+            on one baseline regardless of copy length. */}
+        <div className="grid items-stretch gap-5 md:grid-cols-3 md:gap-6 max-w-6xl">
           {tiers.map((tier, index) => (
-            <AnimatedSection key={tier.name} delay={index * 80}>
+            <AnimatedSection key={tier.name} delay={index * 80} className="h-full">
               <PricingCard {...tier} isYearly={isYearly} />
             </AnimatedSection>
           ))}
@@ -164,9 +186,9 @@ export default function Pricing() {
             No credit card required. Cancel anytime.{' '}
             <a
               href="#faq"
-              className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+              className="text-primary hover:text-primary-pressed transition-colors"
             >
-              See free vs Pro details
+              Compare plan details
             </a>
           </p>
         </AnimatedSection>

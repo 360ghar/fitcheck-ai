@@ -54,13 +54,13 @@ export default function LoginPage() {
         noIndex={true}
       />
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="text-xl md:text-2xl font-extrabold text-foreground">
+        <h1 className="text-xl md:text-2xl font-extrabold text-foreground">
           Sign in to your account
-        </h2>
+        </h1>
       </div>
 
       <div className="mt-6 md:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-card py-6 px-4 shadow rounded-lg sm:py-8 sm:px-10">
+        <div className="rounded-2xl border border-border bg-card py-6 px-4 sm:py-8 sm:px-10">
           {error && (
             <div
               role="alert"

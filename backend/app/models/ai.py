@@ -6,6 +6,7 @@ Models for AI operations including item extraction and image generation.
 
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 
 # =============================================================================
@@ -94,7 +95,21 @@ class ExtractSingleItemResponse(BaseModel):
 
 
 class OutfitItemInput(BaseModel):
-    """Input item for outfit generation."""
+    """Input item for outfit generation.
+
+    `item_id` is the caller's own wardrobe item. When present, the backend
+    resolves that item's stored image server-side (scoped to the caller) and
+    sends it to the image model as a labelled garment reference, so the
+    generated outfit reproduces the real garment instead of inventing a
+    lookalike from the text attributes below. Absent — or an item with no
+    stored image — degrades to the text-only inventory.
+
+    Clients never send image URLs or base64 here: a client-supplied URL the
+    backend fetches is an SSRF primitive (StorageService.download_to_base64
+    follows redirects with no host allow-list), and inline base64 would
+    triple mobile request size.
+    """
+    item_id: Optional[UUID] = None
     name: str
     category: Optional[str] = None
     colors: List[str] = Field(default_factory=list)
@@ -105,7 +120,14 @@ class OutfitItemInput(BaseModel):
 
 class GenerateOutfitRequest(BaseModel):
     """Request to generate an outfit visualization."""
-    items: List[OutfitItemInput] = Field(..., min_length=1)
+    # Every item with a stored image becomes an inline reference image, so the
+    # list length drives request payload size. max_length is purely an abuse
+    # guard against payload amplification, NOT a cap on how many references a
+    # genuine outfit may use - it has to sit above anything real. Real looks are
+    # 3-8 items, but createOutfitFromSavedItems (frontend/src/lib/
+    # outfit-from-upload.ts) builds one outfit from every item detected in a
+    # single photo, and a wardrobe flat-lay can legitimately produce dozens.
+    items: List[OutfitItemInput] = Field(..., min_length=1, max_length=60)
     style: str = "casual"
     background: str = "studio white"
     pose: str = "standing front"

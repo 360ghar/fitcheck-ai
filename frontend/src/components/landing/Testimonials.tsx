@@ -49,7 +49,7 @@ export default function Testimonials() {
         </div>
 
         <AnimatedSection delay={200}>
-          <blockquote className="mt-14 md:mt-16 max-w-3xl border-l-2 border-indigo-600 pl-6 md:pl-8">
+          <blockquote className="mt-14 md:mt-16 max-w-3xl border-l-2 border-primary pl-6 md:pl-8">
             <p className="text-lg md:text-xl text-stone-800 dark:text-stone-200 leading-relaxed font-medium">
               &ldquo;I stopped staring at a full closet wondering why nothing worked. Now I pick from outfits that already fit the weather and what I own.&rdquo;
             </p>

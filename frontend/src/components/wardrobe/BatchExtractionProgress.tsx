@@ -151,7 +151,7 @@ export function BatchExtractionProgress({
             <div
               key={image.imageId}
               className={cn(
-                'group relative aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 transition-all duration-300',
+                'group relative aspect-square overflow-hidden rounded-lg bg-gray-100 transition-colors duration-300 dark:bg-gray-800',
                 getBorderStyle(image.status)
               )}
             >

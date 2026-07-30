@@ -3,6 +3,7 @@ import { Check, Clock3, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PinGrid } from '@/components/wardrobe/pin-grid'
 import type { SocialImportPhoto } from '@/types'
 
 interface SocialImportQueueReviewProps {
@@ -35,21 +36,21 @@ export function SocialImportQueueReview({
   return (
     <div className="space-y-4">
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="space-y-3 rounded-lg border border-border p-4">
+        <div className="space-y-3 rounded-md border border-hairline bg-surface-soft p-4">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-foreground">Awaiting Confirmation</p>
-            <Badge className="bg-indigo-500 text-white">Photo #{awaitingPhoto.ordinal}</Badge>
+            <Badge>Photo #{awaitingPhoto.ordinal}</Badge>
           </div>
 
           <img
             src={awaitingPhoto.source_thumb_url || awaitingPhoto.source_photo_url}
             alt={`Social import #${awaitingPhoto.ordinal} awaiting confirmation`}
-            className="h-56 w-full rounded-md object-cover"
+            className="h-auto w-full rounded-md object-contain bg-surface-card"
           />
 
-          <div className="space-y-3">
+          <PinGrid className="columns-1 sm:columns-2">
             {awaitingPhoto.items.map((item) => (
-              <div key={item.id} className="rounded-md border border-border p-3">
+              <div key={item.id} className="rounded-md border border-hairline bg-background p-3">
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Input
                     defaultValue={item.name || ''}
@@ -87,7 +88,7 @@ export function SocialImportQueueReview({
                   <img
                     src={item.generated_image_url}
                     alt={item.name || item.category}
-                    className="mt-2 h-40 w-full rounded-md object-contain bg-muted"
+                    className="mt-2 h-auto w-full rounded-md bg-surface-card object-contain"
                   />
                 ) : (
                   <div className="mt-2 rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
@@ -96,7 +97,7 @@ export function SocialImportQueueReview({
                 )}
               </div>
             ))}
-          </div>
+          </PinGrid>
 
           <div className="flex flex-wrap justify-end gap-2 pt-2">
             <Button variant="outline" disabled={isBusy} onClick={() => onReject()}>
@@ -110,7 +111,7 @@ export function SocialImportQueueReview({
           </div>
         </div>
 
-        <div className="space-y-3 rounded-lg border border-border p-4">
+        <div className="space-y-3 rounded-md border border-hairline bg-surface-soft p-4">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-foreground">Next In Background</p>
             {bufferedPhoto ? (
@@ -130,7 +131,7 @@ export function SocialImportQueueReview({
               <img
                 src={bufferedPhoto.source_thumb_url || bufferedPhoto.source_photo_url}
                 alt={`Social import #${bufferedPhoto.ordinal} queued`}
-                className="h-56 w-full rounded-md object-cover"
+                className="h-auto w-full rounded-md bg-surface-card object-contain"
               />
               <p className="text-xs text-muted-foreground">
                 Photo #{bufferedPhoto.ordinal} is fully ready and will appear immediately after approval/rejection.
@@ -141,7 +142,7 @@ export function SocialImportQueueReview({
               <img
                 src={processingPhoto.source_thumb_url || processingPhoto.source_photo_url}
                 alt={`Social import #${processingPhoto.ordinal} processing`}
-                className="h-56 w-full rounded-md object-cover opacity-80"
+                className="h-auto w-full rounded-md bg-surface-card object-contain opacity-80"
               />
               <p className="text-xs text-muted-foreground">Photo #{processingPhoto.ordinal} is currently being processed.</p>
             </div>

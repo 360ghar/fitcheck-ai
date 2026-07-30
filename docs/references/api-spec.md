@@ -250,27 +250,56 @@ file: <image>
 
 ### POST /ai/generate-outfit
 
-Generate a realistic outfit visualization image.
+Generate a realistic outfit visualization image. Synchronous: the image comes
+back in the response body. (The `generation_id` bookkeeping record is a separate
+endpoint, `POST /outfits/{outfit_id}/generate`.)
+
+Send each item's `item_id`: the backend resolves that item's stored image
+server-side, scoped to the caller, and sends it to the model as a garment
+reference so the render reproduces the real garment. Omitting `item_id` still
+works and falls back to generating from the text attributes alone. Never send
+image URLs or base64 here. Max 30 items.
 
 **Request:**
 ```json
 {
-  "outfit_id": "outfit_uuid",
-  "body_profile_id": "body_profile_uuid",
-  "pose": "front",
-  "lighting": "natural",
-  "variations": 1
+  "items": [
+    {
+      "item_id": "item_uuid",
+      "name": "Cream ribbed knit sweater",
+      "category": "tops",
+      "colors": ["cream"],
+      "brand": "Uniqlo",
+      "material": "merino wool",
+      "pattern": "ribbed"
+    }
+  ],
+  "style": "casual",
+  "background": "studio white",
+  "pose": "standing front",
+  "lighting": "professional studio lighting",
+  "view_angle": "full body",
+  "include_model": true,
+  "model_gender": "female",
+  "custom_prompt": null,
+  "save_to_storage": false,
+  "include_user_face": true,
+  "use_body_profile": true
 }
 ```
 
-**Response (202):**
+**Response (200):**
 ```json
 {
   "data": {
-    "generation_id": "gen_uuid",
-    "status": "processing",
-    "estimated_time": 30
-  }
+    "image_base64": "...",
+    "image_url": null,
+    "storage_path": null,
+    "prompt": "REFERENCE IMAGES (in order): ...",
+    "model": "agnes-image-2.1-flash",
+    "provider": "custom"
+  },
+  "message": "Outfit generated successfully"
 }
 ```
 

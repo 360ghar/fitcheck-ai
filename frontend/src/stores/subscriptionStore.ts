@@ -212,9 +212,25 @@ export const selectUsage = (state: SubscriptionState) => state.usage;
 export const selectReferralCode = (state: SubscriptionState) => state.referralCode;
 export const selectIsLoading = (state: SubscriptionState) => state.isLoading;
 export const selectError = (state: SubscriptionState) => state.error;
+/**
+ * True for any paid plan. Plus unlocks the same features as Pro (only the
+ * usage limits differ), so it counts as entitled here — matching the
+ * backend's SubscriptionService.is_paid_plan.
+ */
 export const selectIsPro = (state: SubscriptionState) =>
+  state.subscription?.plan_type === 'plus_monthly' ||
+  state.subscription?.plan_type === 'plus_yearly' ||
   state.subscription?.plan_type === 'pro_monthly' ||
   state.subscription?.plan_type === 'pro_yearly';
+
+/**
+ * True when a higher tier exists to upsell (Free and Plus users).
+ * Distinct from `selectIsPro`: a Plus user HAS paid features but can still
+ * upgrade to Pro, so gating an upgrade CTA on `!isPro` would strand them.
+ */
+export const selectCanUpgrade = (state: SubscriptionState) =>
+  state.subscription?.plan_type !== 'pro_monthly' &&
+  state.subscription?.plan_type !== 'pro_yearly';
 
 // ============================================================================
 // HOOKS
@@ -242,6 +258,13 @@ export function useIsPro() {
 }
 
 /**
+ * Hook to check whether a higher tier is available to upsell
+ */
+export function useCanUpgrade() {
+  return useSubscriptionStore(selectCanUpgrade);
+}
+
+/**
  * Hook to get referral code
  */
 export function useReferralCode() {
@@ -255,6 +278,10 @@ export function usePlanName(): string {
   const subscription = useSubscription();
   if (!subscription) return 'Free';
   switch (subscription.plan_type) {
+    case 'plus_monthly':
+      return 'Plus (Monthly)';
+    case 'plus_yearly':
+      return 'Plus (Yearly)';
     case 'pro_monthly':
       return 'Pro (Monthly)';
     case 'pro_yearly':

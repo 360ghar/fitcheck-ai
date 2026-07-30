@@ -1050,7 +1050,12 @@ export interface SocialImportSSEEvent<T = unknown> {
 // SUBSCRIPTION TYPES
 // ============================================================================
 
-export type PlanType = 'free' | 'pro_monthly' | 'pro_yearly';
+export type PlanType =
+  | 'free'
+  | 'plus_monthly'
+  | 'plus_yearly'
+  | 'pro_monthly'
+  | 'pro_yearly';
 
 export type SubscriptionStatus = 'active' | 'cancelled' | 'past_due' | 'trial';
 

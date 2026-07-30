@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss'
+import colors from 'tailwindcss/colors'
 
 const config: Config = {
   darkMode: 'class',
@@ -7,6 +8,27 @@ const config: Config = {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
+    boxShadow: {
+      none: 'none',
+      DEFAULT: 'none',
+      sm: 'none',
+      md: 'none',
+      lg: 'none',
+      xl: 'none',
+      '2xl': 'none',
+      inner: 'none',
+    },
+    borderRadius: {
+      none: '0px',
+      sm: '8px',
+      md: '16px',
+      lg: '32px',
+      // Compatibility aliases collapse legacy shapes into the documented large radius.
+      xl: '32px',
+      '2xl': '32px',
+      '3xl': '32px',
+      full: '9999px',
+    },
     screens: {
       'xs': '375px',   // Small phones (iPhone SE)
       'sm': '640px',   // Large phones / small tablets
@@ -14,9 +36,18 @@ const config: Config = {
       'lg': '1024px',  // Small laptops
       'xl': '1280px',  // Desktops
       '2xl': '1536px', // Large screens
+      '3xl': '1920px', // Ultrawide masonry
     },
     extend: {
       spacing: {
+        xxs: '4px',
+        xs: '6px',
+        sm: '8px',
+        md: '12px',
+        lg: '16px',
+        xl: '24px',
+        xxl: '32px',
+        section: '64px',
         'touch': '44px',      // Minimum touch target (Apple HIG)
         'touch-lg': '48px',   // Comfortable touch target
         'safe-top': 'env(safe-area-inset-top)',
@@ -33,18 +64,49 @@ const config: Config = {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
-          50: '#eef2ff',
-          100: '#e0e7ff',
-          200: '#c7d2fe',
-          300: '#a5b4fc',
-          400: '#818cf8',
-          500: '#6366f1',
-          600: '#4f46e5',
-          700: '#4338ca',
-          800: '#3730a3',
-          900: '#312e81',
-          950: '#1e1b4b',
+          pressed: 'hsl(var(--primary-pressed))',
         },
+        ink: '#000000',
+        body: '#33332e',
+        charcoal: '#211922',
+        mute: '#62625b',
+        ash: '#91918c',
+        stone: { ...colors.stone, DEFAULT: '#c8c8c1' },
+        hairline: '#dadad3',
+        'hairline-soft': '#ecece7',
+        'surface-soft': '#fbfbf9',
+        'surface-card': '#f6f6f3',
+        'surface-elevated': 'hsl(var(--surface-elevated))',
+        'surface-dark': '#262622',
+        'on-dark': '#fbfbf9',
+        'focus-outer': '#435ee5',
+        'focus-inner': '#000000',
+        'accent-purple': '#7e238b',
+        success: { deep: '#103c25', pale: '#c7f0da' },
+        error: { DEFAULT: '#9e0a0a', pale: '#f9e5e5' },
+        // Compatibility mappings migrate pre-existing utility usage to the
+        // approved red/purple/warm-neutral system during the full route sweep.
+        indigo: {
+          50: '#fff1f2', 100: '#ffe4e6', 200: '#fecdd3', 300: '#fda4af',
+          400: '#fb7185', 500: '#e60023', 600: '#cc001f', 700: '#9e0a0a',
+          800: '#881337', 900: '#4c0519', 950: '#2a030e',
+        },
+        pink: {
+          50: '#fff1f2', 100: '#ffe4e6', 200: '#fecdd3', 300: '#fda4af',
+          400: '#fb7185', 500: '#e60023', 600: '#cc001f', 700: '#9e0a0a',
+          800: '#881337', 900: '#4c0519', 950: '#2a030e',
+        },
+        violet: {
+          50: '#f8eef9', 100: '#efd8f1', 200: '#dfb2e3', 300: '#ca80d0',
+          400: '#a948ae', 500: '#7e238b', 600: '#681d73', 700: '#51165a',
+          800: '#3b1042', 900: '#260a2c', 950: '#18051c',
+        },
+        purple: {
+          50: '#f8eef9', 100: '#efd8f1', 200: '#dfb2e3', 300: '#ca80d0',
+          400: '#a948ae', 500: '#7e238b', 600: '#681d73', 700: '#51165a',
+          800: '#3b1042', 900: '#260a2c', 950: '#18051c',
+        },
+        gray: colors.stone,
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
           foreground: "hsl(var(--secondary-foreground))",
@@ -70,40 +132,23 @@ const config: Config = {
           foreground: "hsl(var(--card-foreground))",
         },
       },
-      borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
-      },
       fontFamily: {
         sans: [
-          '"Plus Jakarta Sans Variable"',
-          'Plus Jakarta Sans',
-          'system-ui',
-          'sans-serif',
+          'Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif',
         ],
         display: [
-          '"Plus Jakarta Sans Variable"',
-          'Plus Jakarta Sans',
-          'system-ui',
-          'sans-serif',
+          'Manrope', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif',
         ],
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'gradient-primary': 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-        'gradient-accent': 'linear-gradient(135deg, #f59e0b, #ef4444)',
-        'gradient-cool': 'linear-gradient(135deg, #06b6d4, #3b82f6)',
-        'gradient-warm': 'linear-gradient(135deg, #f97316, #ec4899)',
-        'gradient-success': 'linear-gradient(135deg, #10b981, #06b6d4)',
+        'gradient-primary': 'linear-gradient(135deg, #e60023, #cc001f)',
+        'gradient-accent': 'linear-gradient(135deg, #e60023, #cc001f)',
+        'gradient-cool': 'linear-gradient(135deg, #f6f6f3, #ffffff)',
+        'gradient-warm': 'linear-gradient(135deg, #f6f6f3, #ffffff)',
+        'gradient-success': 'linear-gradient(135deg, #c7f0da, #103c25)',
       },
-      boxShadow: {
-        'glow': '0 0 20px -5px var(--tw-shadow-color)',
-        'glow-sm': '0 0 10px -3px var(--tw-shadow-color)',
-        'elevated': '0 10px 40px -10px rgba(0,0,0,0.15)',
-        'elevated-lg': '0 20px 50px -12px rgba(0,0,0,0.25)',
-        'card-hover': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-      },
+      boxShadow: { glow: 'none', 'glow-sm': 'none', elevated: 'none', 'elevated-lg': 'none', 'card-hover': 'none' },
       animation: {
         'float': 'float 3s ease-in-out infinite',
         'fade-in': 'fadeIn 0.5s ease-out',

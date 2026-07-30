@@ -57,7 +57,7 @@ export default function CTASection() {
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Button
                       size="lg"
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white h-12 px-6 shadow-none"
+                      className="bg-primary hover:bg-primary-pressed text-white h-12 px-6 shadow-none"
                       asChild
                     >
                       <Link to="/auth/register">
@@ -119,7 +119,7 @@ export default function CTASection() {
                         onChange={(e) => setEmail(e.target.value)}
                         required
                         disabled={isSubmitting}
-                        className="h-11 bg-stone-900 border-stone-700 text-stone-50 placeholder:text-stone-500 focus-visible:ring-indigo-500"
+                        className="h-11 bg-stone-900 border-stone-700 text-stone-50 placeholder:text-stone-500 focus-visible:ring-primary"
                       />
                     </div>
                     <div>
@@ -133,7 +133,7 @@ export default function CTASection() {
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
                         disabled={isSubmitting}
-                        className="h-11 bg-stone-900 border-stone-700 text-stone-50 placeholder:text-stone-500 focus-visible:ring-indigo-500"
+                        className="h-11 bg-stone-900 border-stone-700 text-stone-50 placeholder:text-stone-500 focus-visible:ring-primary"
                       />
                     </div>
                     {error && (

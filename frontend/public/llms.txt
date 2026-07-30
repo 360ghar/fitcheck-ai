@@ -71,7 +71,7 @@ A virtual closet app digitizes your real clothes so you can browse, mix, and pla
 Upload a photo of your clothes — individually or as a flat lay. FitCheck identifies each item, extracts colors, categorizes it, and adds style tags. Multi-item photos and batch uploads are supported in the app.
 
 ## Is FitCheck AI free?
-Yes. Free includes 25 item extractions/month, 50 outfit visualizations/month, and 10 AI photoshoot images/day. Pro ($20/month or $200/year) raises limits to 200 extractions, 1,000 visualizations, and 50 photoshoot images/day, plus higher-capacity try-on, analytics, calendar planning, and priority support. No credit card required to start free.
+Yes. Free includes 25 item extractions/month, 50 outfit visualizations/month, and 10 AI photoshoot images/day. Plus ($10/month or $100/year) unlocks every paid feature — try-on, analytics, calendar planning, and priority support — with 100 extractions, 350 visualizations, and 30 photoshoot images/day. Pro ($20/month or $200/year) has the same features at the highest limits: 200 extractions, 1,000 visualizations, and 50 photoshoot images/day. No credit card required to start free.
 
 ## How is FitCheck AI different from Acloset or Whering?
 FitCheck AI focuses on AI wardrobe extraction from photos, generative virtual try-on, AI photoshoot generation, weather/calendar-aware recommendations, and cost-per-wear analytics in one product. See https://fitcheckaiapp.com/compare/fitcheck-vs-acloset and https://fitcheckaiapp.com/compare/fitcheck-vs-whering.
@@ -101,6 +101,16 @@ Yes. Share a referral link from the app. When a friend joins, both get one month
 - Weather-based suggestions
 - Web + Android app
 
+## Plus ($10/month or $100/year)
+- 100 item extractions/month
+- 350 outfit visualizations/month
+- 30 AI photoshoot images/day
+- Virtual try-on visualization
+- Advanced wardrobe analytics
+- Calendar planning
+- Priority support
+- AI style recommendations
+
 ## Pro ($20/month or $200/year)
 - 200 item extractions/month
 - 1,000 outfit visualizations/month
@@ -110,6 +120,8 @@ Yes. Share a referral link from the app. When a friend joins, both get one month
 - Calendar planning
 - Priority support
 - AI style recommendations
+
+Plus and Pro unlock the same features; only the usage limits differ.
 
 Confirm live pricing in-product or on the homepage pricing section.
 

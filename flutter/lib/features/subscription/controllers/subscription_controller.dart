@@ -28,12 +28,26 @@ class SubscriptionController extends GetxController {
   bool get isPro => subscription.value?.planType != PlanType.free;
   bool get isCancelled => subscription.value?.cancelAtPeriodEnd ?? false;
 
+  /// Whether a higher tier exists to upsell (Free and Plus users).
+  ///
+  /// Distinct from [isPro]: a Plus subscriber is entitled to every paid
+  /// feature but can still move up to Pro, so an upgrade CTA gated on
+  /// `!isPro` would leave them with no way to do it.
+  bool get canUpgrade {
+    final plan = subscription.value?.planType;
+    return plan != PlanType.proMonthly && plan != PlanType.proYearly;
+  }
+
   /// Whether monetization CTAs (paywall, Stripe checkout, pricing) may render.
   /// OFF on iOS for v1 (App Store Guideline 3.1.1 anti-steering).
   bool get showPaywall => EnvConfig.paywallEnabled;
 
   String get planName {
     switch (subscription.value?.planType) {
+      case PlanType.plusMonthly:
+        return 'Plus Monthly';
+      case PlanType.plusYearly:
+        return 'Plus Yearly';
       case PlanType.proMonthly:
         return 'Pro Monthly';
       case PlanType.proYearly:

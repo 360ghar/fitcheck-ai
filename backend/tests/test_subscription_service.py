@@ -105,6 +105,93 @@ async def test_upgrade_to_pro_upserts_and_returns_pro_subscription():
 
 
 @pytest.mark.asyncio
+async def test_upgrade_to_plus_yearly_sets_one_year_period_end():
+    """A *_yearly plan must get a 1-year period, not the monthly fallback.
+
+    The period math previously special-cased PRO_YEARLY only, so a Plus yearly
+    subscriber would have been billed for a year but granted one month.
+    """
+    db = Mock()
+    _mock_maybe_single(db, _subscription_row(plan_type="plus_yearly", status="active"))
+
+    result = await SubscriptionService.upgrade_to_pro(
+        user_id=USER_ID,
+        plan_type=PlanType.PLUS_YEARLY,
+        stripe_customer_id="cus_plus",
+        stripe_subscription_id="sub_plus",
+        db=db,
+    )
+
+    assert result.plan_type == PlanType.PLUS_YEARLY
+    payload = db.table.return_value.upsert.call_args.args[0]
+    assert payload["plan_type"] == "plus_yearly"
+    start = datetime.fromisoformat(payload["current_period_start"])
+    end = datetime.fromisoformat(payload["current_period_end"])
+    assert (end - start).days >= 365
+
+
+@pytest.mark.parametrize(
+    "plan_type,expected",
+    [
+        (PlanType.FREE, False),
+        (PlanType.PLUS_MONTHLY, True),
+        (PlanType.PLUS_YEARLY, True),
+        (PlanType.PRO_MONTHLY, True),
+        (PlanType.PRO_YEARLY, True),
+    ],
+)
+def test_is_paid_plan_treats_plus_as_entitled(plan_type, expected):
+    """Plus unlocks the same features as Pro; only usage limits differ."""
+    assert SubscriptionService.is_paid_plan(plan_type) is expected
+    # is_pro_plan is the legacy alias feeding SubscriptionResponse.is_pro
+    assert SubscriptionService.is_pro_plan(plan_type) is expected
+
+
+@pytest.mark.parametrize(
+    "plan_type,expected",
+    [
+        (PlanType.FREE, True),
+        (PlanType.PLUS_MONTHLY, True),
+        (PlanType.PLUS_YEARLY, True),
+        (PlanType.PRO_MONTHLY, False),
+        (PlanType.PRO_YEARLY, False),
+    ],
+)
+def test_can_upgrade_offers_pro_to_plus_users(plan_type, expected):
+    """Plus is paid but NOT the top tier - it must still get an upsell.
+
+    Gating upgrade CTAs on is_paid_plan would strand Plus subscribers with no
+    route to Pro; gating them on `not is_paid_plan` is the same bug.
+    """
+    assert SubscriptionService.can_upgrade(plan_type) is expected
+
+
+@pytest.mark.parametrize(
+    "plan_type,expected",
+    [
+        (PlanType.FREE, "Free"),
+        (PlanType.PLUS_MONTHLY, "Plus"),
+        (PlanType.PLUS_YEARLY, "Plus"),
+        (PlanType.PRO_MONTHLY, "Pro"),
+        (PlanType.PRO_YEARLY, "Pro"),
+    ],
+)
+def test_plan_display_name(plan_type, expected):
+    assert SubscriptionService.plan_display_name(plan_type) == expected
+
+
+def test_get_plan_limits_returns_distinct_tier_for_plus():
+    """Plus limits must sit strictly between Free and Pro."""
+    free = SubscriptionService.get_plan_limits(PlanType.FREE)
+    plus = SubscriptionService.get_plan_limits(PlanType.PLUS_MONTHLY)
+    pro = SubscriptionService.get_plan_limits(PlanType.PRO_MONTHLY)
+
+    assert plus == SubscriptionService.get_plan_limits(PlanType.PLUS_YEARLY)
+    for field in ("monthly_extractions", "monthly_generations", "monthly_embeddings"):
+        assert free[field] < plus[field] < pro[field], field
+
+
+@pytest.mark.asyncio
 async def test_cancel_subscription_sets_cancel_at_period_end():
     db = Mock()
     _mock_maybe_single(db, _subscription_row(cancel_at_period_end=True))

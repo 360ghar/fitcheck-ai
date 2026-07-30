@@ -112,7 +112,7 @@ function StreakMilestones({ currentStreak, longestStreak }: { currentStreak: num
               <TooltipTrigger asChild>
                 <div
                   className={`
-                    h-6 rounded-full transition-all
+                    h-6 rounded-full transition-[width,background-color]
                     ${isCurrentReached
                       ? 'bg-gradient-to-t from-orange-500 to-yellow-400 w-6'
                       : isLongestReached
@@ -251,7 +251,7 @@ export function StreakDisplay({ streaks, onLogActivity, compact = false }: Strea
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {streaks.map((streak) => {
         const config = STREAK_CONFIGS[streak.streak_type] || {
           icon: Flame,

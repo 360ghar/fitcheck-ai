@@ -74,14 +74,14 @@ primary actions stay loud against dark.
 
 ## 02 — Typography
 
-All-sans, like Pinterest. Keep **Plus Jakarta Sans** ("FitCheck Sans"), already
-loaded in `src/index.css`. No serif. Steep hierarchy: display drops straight to
+All-sans, like Pinterest. Use **Inter** for UI/body text and **Manrope** for
+display tiers, loaded in `src/main.tsx`. No serif. Steep hierarchy: display drops straight to
 16px body with no intermediate display tier.
 
 | Role | Size / Weight / lh | Tracking | Use |
 |------|---------------------|----------|-----|
 | `display-xl` | 70px / 600 / 1.1 | -1.2px | Landing hero, marketing display |
-| `display-lg` | 44px / 700 / 1.15 | -0.8px | Section headlines |
+| `display-lg` | 44px / 700 / 1.15 | -1.2px | Section headlines |
 | `heading-xl` | 28px / 700 / 1.2 | -1.2px | Page headers |
 | `heading-lg` | 22px / 600 / 1.25 | 0 | Section titles |
 | `heading-md` | 18px / 600 / 1.3 | 0 | Card title, in-grid label |
@@ -93,8 +93,7 @@ loaded in `src/index.css`. No serif. Steep hierarchy: display drops straight to
 | `button-md` | 14px / 700 / 1 | 0 | Primary/secondary buttons |
 | `button-sm` | 12px / 700 / 1 | 0 | Compact pill chips |
 
-Enable Plus Jakarta stylistic sets: `font-feature-settings: 'ss01' on, 'cv11' on`
-(already set on `body`). Display tiers use the `.font-display tracking-tight`
+Display tiers use the `.font-display tracking-tight`
 utility (or a `landing-display` class) for the tight tracking.
 
 ---

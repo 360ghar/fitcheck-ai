@@ -15,7 +15,7 @@ export interface BenefitGridProps {
 /**
  * Responsive grid of `{ icon, title, description }` cards used for the
  * "Features" section on every public feature page. Cards are pure
- * presentation — animated on scroll via `AnimatedSection`.
+ * presentation — rendered visibly without JavaScript-dependent reveals.
  */
 export function BenefitGrid({
   items,
@@ -26,7 +26,7 @@ export function BenefitGrid({
 }: BenefitGridProps) {
   const accent = ACCENT_CLASSES[accentColor]
   const sectionBg =
-    background === 'stone' ? 'bg-stone-50 dark:bg-stone-950' : 'bg-white dark:bg-gray-950'
+    background === 'stone' ? 'bg-stone-50 dark:bg-stone-950' : 'bg-white dark:bg-stone-950'
 
   return (
     <section className={`py-20 md:py-28 ${sectionBg}`}>
@@ -35,12 +35,12 @@ export function BenefitGrid({
           <AnimatedSection>
             <div className="text-center max-w-3xl mx-auto mb-16">
               {heading ? (
-                <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+                <h2 className="landing-display text-3xl md:text-4xl font-semibold text-stone-900 dark:text-stone-50 mb-4">
                   {heading}
                 </h2>
               ) : null}
               {subheading ? (
-                <p className="text-lg text-gray-600 dark:text-gray-400">{subheading}</p>
+                <p className="text-lg text-stone-600 dark:text-stone-400">{subheading}</p>
               ) : null}
             </div>
           </AnimatedSection>
@@ -51,18 +51,16 @@ export function BenefitGrid({
             const Icon = item.icon
             return (
               <AnimatedSection key={item.title} delay={index * 100}>
-                <div
-                  className={`group p-8 bg-white dark:bg-gray-800 rounded-2xl hover:shadow-lg transition-all duration-300 border border-gray-100 dark:border-gray-700 ${accent.cardHoverBorder}`}
-                >
+                <div className={`group rounded-2xl border border-stone-200 bg-white p-7 transition-colors dark:border-stone-800 dark:bg-stone-900 ${accent.cardHoverBorder}`}>
                   <div
-                    className={`w-14 h-14 ${accent.iconBg} rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}
+                    className={`w-14 h-14 ${accent.iconBg} rounded-xl flex items-center justify-center mb-6`}
                   >
                     <Icon className={`w-7 h-7 ${accent.iconText}`} />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+                  <h3 className="text-xl font-semibold text-stone-900 dark:text-stone-50 mb-3">
                     {item.title}
                   </h3>
-                  <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
+                  <p className="text-stone-600 dark:text-stone-400 leading-relaxed">
                     {item.description}
                   </p>
                 </div>
