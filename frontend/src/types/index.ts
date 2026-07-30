@@ -648,6 +648,10 @@ export interface BatchImageInput {
   status: BatchImageStatus;
   /** Error message if failed */
   error?: string;
+  /** Backend AI-error bucket ("upstream_quota" | "transient" | "hard") when the
+   * failure was an upstream capacity issue ("on us"). Drives a retry message
+   * instead of a generic failure. */
+  errorKind?: string;
   /** Items detected from this image */
   detectedItems?: DetectedItem[];
 }
@@ -672,6 +676,7 @@ export type BatchSSEEventType =
   | 'extraction_started'
   | 'image_extraction_complete'
   | 'image_extraction_failed'
+  | 'extraction_capacity_exhausted'
   | 'all_extractions_complete'
   | 'generation_started'
   | 'batch_generation_started'
@@ -736,9 +741,29 @@ export interface ImageExtractionFailedData {
   job_id: string;
   image_id: string;
   error: string;
+  /** Machine-readable error code from the backend (e.g. AI_SERVICE_ERROR). */
+  code?: string;
+  /** Backend AI-error bucket for upstream capacity issues that are "on us":
+   * "upstream_quota" | "transient" | "hard". Drives a "try again shortly"
+   * message instead of a generic failure. */
+  error_kind?: string;
+  /** Advised retry delay (seconds) when the provider offered one. */
+  retry_after_seconds?: number | null;
   completed_count: number;
   failed_count: number;
   total_images: number;
+  timestamp: string;
+}
+
+/**
+ * Emitted once when upstream AI capacity is exhausted mid-batch, so the client
+ * can stop expecting per-image results and show a single "try again shortly".
+ */
+export interface ExtractionCapacityExhaustedData {
+  job_id: string;
+  error: string;
+  code?: string;
+  error_kind?: string;
   timestamp: string;
 }
 
@@ -887,6 +912,12 @@ export interface BatchExtractionState {
   itemsFailed: number;
   /** Total items expected for generation (from SSE) */
   generationTotalItems: number;
+
+  /** True when upstream AI capacity was exhausted mid-batch (the server's
+   * provider, "on us"). Suppresses the misleading "No items found" fallback in
+   * all_extractions_complete — the empty result is a capacity outage, not a
+   * bad photo. */
+  capacityExhausted: boolean;
 
   /** Error message if any */
   error: string | null;

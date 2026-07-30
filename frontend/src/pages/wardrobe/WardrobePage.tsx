@@ -17,7 +17,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { useWardrobeStore } from '../../stores/wardrobeStore'
+import { useClosetStore } from '../../stores/wardrobeStore'
 import {
   Shirt,
   Plus,
@@ -47,30 +47,44 @@ import {
   deleteItem as apiDeleteItem,
   updateItem as apiUpdateItem,
 } from '@/api/items'
-import type { BatchJobUiStatus, Item } from '@/types'
+import type { BatchJobUiStatus, Category, Item } from '@/types'
 import { useJobUiStore } from '@/stores/jobUiStore'
 import { EmptyState } from '@/components/ui/empty-state'
+import { cn } from '@/lib/utils'
+
+// Quick category filter chips (Alta-style), mirror the FilterPanel categories.
+const CATEGORY_CHIPS: { value: Category | 'all'; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'tops', label: 'Tops' },
+  { value: 'bottoms', label: 'Bottoms' },
+  { value: 'shoes', label: 'Shoes' },
+  { value: 'outerwear', label: 'Outerwear' },
+  { value: 'accessories', label: 'Accessories' },
+  { value: 'activewear', label: 'Activewear' },
+  { value: 'swimwear', label: 'Swimwear' },
+  { value: 'other', label: 'Other' },
+]
 
 export default function WardrobePage() {
   const { id } = useParams()
   const [searchParams] = useSearchParams()
 
   // Store state
-  const filteredItems = useWardrobeStore((state) => state.filteredItems)
-  const isLoading = useWardrobeStore((state) => state.isLoading)
-  const error = useWardrobeStore((state) => state.error)
+  const filteredItems = useClosetStore((state) => state.filteredItems)
+  const isLoading = useClosetStore((state) => state.isLoading)
+  const error = useClosetStore((state) => state.error)
   // Subscribe so multi-select checkboxes re-render when selection changes
-  const selectedItems = useWardrobeStore((state) => state.selectedItems)
+  const selectedItems = useClosetStore((state) => state.selectedItems)
 
   // Store actions
-  const fetchItems = useWardrobeStore((state) => state.fetchItems)
-  const fetchItemById = useWardrobeStore((state) => state.fetchItemById)
-  const toggleItemFavorite = useWardrobeStore((state) => state.toggleItemFavorite)
-  const setFilter = useWardrobeStore((state) => state.setFilter)
-  const toggleItemSelected = useWardrobeStore((state) => state.toggleItemSelected)
-  const clearSelectedItems = useWardrobeStore((state) => state.clearSelectedItems)
-  const deleteSelectedItems = useWardrobeStore((state) => state.deleteSelectedItems)
-  const clearError = useWardrobeStore((state) => state.clearError)
+  const fetchItems = useClosetStore((state) => state.fetchItems)
+  const fetchItemById = useClosetStore((state) => state.fetchItemById)
+  const toggleItemFavorite = useClosetStore((state) => state.toggleItemFavorite)
+  const setFilter = useClosetStore((state) => state.setFilter)
+  const toggleItemSelected = useClosetStore((state) => state.toggleItemSelected)
+  const clearSelectedItems = useClosetStore((state) => state.clearSelectedItems)
+  const deleteSelectedItems = useClosetStore((state) => state.deleteSelectedItems)
+  const clearError = useClosetStore((state) => state.clearError)
 
   // Local state
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
@@ -181,7 +195,7 @@ export default function WardrobePage() {
     fetchItemById(id)
       .then(() => {
         if (cancelled) return
-        const loaded = useWardrobeStore.getState().selectedItem
+        const loaded = useClosetStore.getState().selectedItem
         if (loaded?.id === id) {
           setSelectedItemDetail(loaded)
           setIsDetailModalOpen(true)
@@ -203,11 +217,11 @@ export default function WardrobePage() {
   const handleFilterChange = useCallback(<K extends keyof ItemFilters>(key: K, value: ItemFilters[K]) => {
     setFilters((prev) => ({ ...prev, [key]: value }))
     // Update store filters
-    useWardrobeStore.getState().setFilter(key, value)
+    useClosetStore.getState().setFilter(key, value)
     // Favorites uses server-side is_favorite and can leave `items` as a subset;
     // re-fetch when it flips so "all items" is restored when cleared.
     if (key === 'isFavorite') {
-      void useWardrobeStore.getState().fetchItems(true)
+      void useClosetStore.getState().fetchItems(true)
     }
   }, [])
 
@@ -217,11 +231,11 @@ export default function WardrobePage() {
     // The key comparison guarantees each value type; TS cannot narrow a
     // generic parameter from it, hence the assertions.
     if (key === 'sortBy') {
-      useWardrobeStore.getState().setSortBy(value as SortOptions['sortBy'])
+      useClosetStore.getState().setSortBy(value as SortOptions['sortBy'])
     } else if (key === 'sortOrder') {
-      useWardrobeStore.getState().setSortOrder(value as SortOptions['sortOrder'])
+      useClosetStore.getState().setSortOrder(value as SortOptions['sortOrder'])
     } else if (key === 'isGridView') {
-      useWardrobeStore.getState().setGridView(value as SortOptions['isGridView'])
+      useClosetStore.getState().setGridView(value as SortOptions['isGridView'])
     }
   }, [])
 
@@ -234,8 +248,8 @@ export default function WardrobePage() {
       condition: 'all',
       isFavorite: false,
     })
-    useWardrobeStore.getState().resetFilters()
-    void useWardrobeStore.getState().fetchItems(true)
+    useClosetStore.getState().resetFilters()
+    void useClosetStore.getState().fetchItems(true)
   }, [])
 
   const handleItemClick = (item: Item) => {
@@ -312,7 +326,7 @@ export default function WardrobePage() {
       await deleteSelectedItems()
       toast({
         title: 'Items deleted',
-        description: `${count} item${count === 1 ? '' : 's'} removed from your wardrobe`,
+        description: `${count} item${count === 1 ? '' : 's'} removed from your closet`,
       })
       setIsBulkDeleteOpen(false)
     } catch {
@@ -358,7 +372,7 @@ export default function WardrobePage() {
     if (successCount > 0) {
       toast({
         title: 'Items added',
-        description: `${successCount} item${successCount > 1 ? 's have' : ' has'} been added to your wardrobe`,
+        description: `${successCount} item${successCount > 1 ? 's have' : ' has'} been added to your closet`,
       })
       fetchItems(true)
     }
@@ -388,7 +402,7 @@ export default function WardrobePage() {
       {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 md:mb-6">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">Wardrobe</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Closet</h1>
           <p className="text-sm text-muted-foreground">
             {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
           </p>
@@ -433,6 +447,34 @@ export default function WardrobePage() {
         onResetFilters={handleResetFilters}
       />
 
+      {/* Quick category chips — dense closet browsing (Alta-style) */}
+      <div
+        className="mb-4 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        role="tablist"
+        aria-label="Filter by category"
+      >
+        {CATEGORY_CHIPS.map((chip) => {
+          const isActive = filters.category === chip.value
+          return (
+            <button
+              key={chip.value}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => handleFilterChange('category', chip.value)}
+              className={cn(
+                'shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors',
+                isActive
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground'
+              )}
+            >
+              {chip.label}
+            </button>
+          )
+        })}
+      </div>
+
       {/* Bulk selection bar */}
       {selectedItems.size > 0 && (
         <div
@@ -466,16 +508,16 @@ export default function WardrobePage() {
       {/* Items grid/list */}
       {isLoading ? (
         <div
-          className={`grid gap-3 md:gap-4 ${
+          className={`grid gap-3 ${
             sort.isGridView
-              ? 'grid-cols-2 gap-2 xs:gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+              ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7'
               : 'grid-cols-1'
           }`}
         >
-          {Array.from({ length: 8 }).map((_, i) => (
+          {Array.from({ length: 14 }).map((_, i) => (
             <Skeleton
               key={i}
-              className={sort.isGridView ? 'aspect-[3/4] w-full rounded-xl' : 'h-20 w-full rounded-xl'}
+              className={sort.isGridView ? 'aspect-square w-full rounded-xl' : 'h-20 w-full rounded-xl'}
             />
           ))}
         </div>
@@ -491,7 +533,7 @@ export default function WardrobePage() {
         ) : (
           <EmptyState
             icon={Shirt}
-            title="Your wardrobe is empty"
+            title="Your closet is empty"
             description="Upload photos and AI finds each item, so you can build outfits the same day."
             actionLabel="Upload photos"
             onAction={() => setIsUploadModalOpen(true)}
@@ -499,9 +541,9 @@ export default function WardrobePage() {
         )
       ) : (
         <div
-          className={`grid gap-3 md:gap-4 ${
+          className={`grid gap-3 ${
             sort.isGridView
-              ? 'grid-cols-2 gap-2 xs:gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+              ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7'
               : 'grid-cols-1'
           }`}
         >
@@ -511,7 +553,7 @@ export default function WardrobePage() {
               <ItemCard
                 key={item.id}
                 item={item}
-                variant={sort.isGridView ? 'default' : 'list'}
+                variant={sort.isGridView ? 'compact' : 'list'}
                 isSelected={isSelected}
                 onClick={() => handleItemClick(item)}
                 onToggleFavorite={(e) => {
@@ -561,8 +603,8 @@ export default function WardrobePage() {
             <AlertDialogTitle>Delete item?</AlertDialogTitle>
             <AlertDialogDescription>
               {itemPendingDelete
-                ? `"${itemPendingDelete.name}" will be permanently removed from your wardrobe. This cannot be undone.`
-                : 'This item will be permanently removed from your wardrobe.'}
+                ? `"${itemPendingDelete.name}" will be permanently removed from your closet. This cannot be undone.`
+                : 'This item will be permanently removed from your closet.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -594,7 +636,7 @@ export default function WardrobePage() {
               Delete {selectedItems.size} item{selectedItems.size === 1 ? '' : 's'}?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Selected items will be permanently removed from your wardrobe. This cannot be undone.
+              Selected items will be permanently removed from your closet. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

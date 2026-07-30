@@ -45,6 +45,12 @@ class BatchExtractionService:
     def __init__(self, user_id: str, db):
         self.user_id = user_id
         self.db = db
+        # Set when an image fails with an unrecoverable upstream capacity/quota
+        # error (both Gemini and the Agnes fallback failed). Subsequent images
+        # waiting on EXTRACTION_SEMAPHORE see this and skip without burning more
+        # guaranteed-to-fail VLM calls. Per-instance == per-job (the service is
+        # constructed fresh for each pipeline run).
+        self._extraction_capacity_exhausted = False
 
     async def run_pipeline(self, job: BatchJob) -> None:
         """
@@ -231,6 +237,25 @@ class BatchExtractionService:
         async with EXTRACTION_SEMAPHORE:
             if job.is_cancelled():
                 return []
+            if self._extraction_capacity_exhausted:
+                # A prior image already exhausted the upstream AI capacity
+                # (Gemini free-tier quota + Agnes fallback both failed). Don't
+                # burn another guaranteed-to-fail VLM call; mark this image
+                # skipped and move on.
+                skip_msg = "Skipped: AI service capacity exhausted"
+                await BatchJobService.mark_extraction_failed(job.job_id, image_id, skip_msg)
+                await BatchJobService.broadcast_event(job.job_id, "image_extraction_failed", {
+                    "job_id": job.job_id,
+                    "image_id": image_id,
+                    "error": skip_msg,
+                    "code": "AI_SERVICE_ERROR",
+                    "error_kind": "upstream_quota",
+                    "completed_count": len(job.extraction_completed),
+                    "failed_count": len(job.extraction_failed),
+                    "total_images": job.total_images,
+                    "timestamp": utcnow_iso(),
+                })
+                return []
 
             # Persist the source photo to Supabase Storage BEFORE the vision
             # call. The returned URL is attached to every item detected in
@@ -268,7 +293,7 @@ class BatchExtractionService:
                         image_base64=image_base64,
                         user_profile_image_base64=user_profile_image_base64,
                     ),
-                    max_retries=1,
+                    max_retries=2,
                     initial_delay=2.0,
                     backoff_factor=2.0,
                     retryable_exceptions=(AIServiceError,),
@@ -307,9 +332,38 @@ class BatchExtractionService:
 
             except Exception as e:
                 error_msg = str(e)
+                # Pull the structured bucket off an AIServiceError so the UI can
+                # show "AI busy, try again shortly" (upstream_quota/transient,
+                # which are "on us") distinctly from a hard failure. The user's
+                # own plan limit is a separate RateLimitError and never reaches
+                # here (it is raised pre-flight, before the job starts).
+                error_kind = getattr(e, "error_kind", None)
+                retry_after = getattr(e, "retry_after_seconds", None)
+                code = "AI_SERVICE_ERROR"
+
+                # Unrecoverable upstream capacity exhaustion: stop grinding the
+                # remaining images. The Agnes fallback already tried and failed
+                # inside chat_with_vision, so retrying won't help.
+                if error_kind == "upstream_quota" and not self._extraction_capacity_exhausted:
+                    self._extraction_capacity_exhausted = True
+                    await BatchJobService.broadcast_event(
+                        job.job_id, "extraction_capacity_exhausted", {
+                            "job_id": job.job_id,
+                            "error": "AI service capacity exhausted; remaining images skipped",
+                            "code": code,
+                            "error_kind": error_kind,
+                            "timestamp": utcnow_iso(),
+                        }
+                    )
+
                 logger.error(
                     f"Extraction failed for image {image_id}",
-                    extra={"job_id": job.job_id, "error": error_msg},
+                    extra={
+                        "job_id": job.job_id,
+                        "error": error_msg,
+                        "error_kind": error_kind,
+                        "retry_after_seconds": retry_after,
+                    },
                 )
 
                 await BatchJobService.mark_extraction_failed(job.job_id, image_id, error_msg)
@@ -318,6 +372,9 @@ class BatchExtractionService:
                     "job_id": job.job_id,
                     "image_id": image_id,
                     "error": error_msg,
+                    "code": code,
+                    "error_kind": error_kind,
+                    "retry_after_seconds": retry_after,
                     "completed_count": len(job.extraction_completed),
                     "failed_count": len(job.extraction_failed),
                     "total_images": job.total_images,

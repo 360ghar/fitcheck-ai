@@ -31,7 +31,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/dashboard', icon: Home, label: 'Home' },
-  { href: '/wardrobe', icon: Shirt, label: 'Wardrobe' },
+  { href: '/wardrobe', icon: Shirt, label: 'Closet' },
   // FAB placeholder will be in the middle
   { href: '/outfits', icon: Layers, label: 'Outfits' },
   { href: '/profile', icon: User, label: 'Profile' },

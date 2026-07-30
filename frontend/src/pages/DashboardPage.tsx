@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useWardrobeStore } from '../stores/wardrobeStore'
+import { useClosetStore } from '../stores/wardrobeStore'
 import { useOutfitStore } from '../stores/outfitStore'
 import { useUserAvatar, useUserDisplayName, useCurrentUser } from '../stores/authStore'
 import { useIsNearLimit } from '../stores/subscriptionStore'
@@ -69,13 +69,13 @@ export default function DashboardPage() {
   const userDisplayName = useUserDisplayName()
   const user = useCurrentUser()
   const userAvatar = useUserAvatar()
-  const items = useWardrobeStore((state) => state.items)
+  const items = useClosetStore((state) => state.items)
   const outfits = useOutfitStore((state) => state.outfits)
-  const fetchItems = useWardrobeStore((state) => state.fetchItems)
+  const fetchItems = useClosetStore((state) => state.fetchItems)
   const fetchOutfits = useOutfitStore((state) => state.fetchOutfits)
-  const isLoadingItems = useWardrobeStore((state) => state.isLoading)
+  const isLoadingItems = useClosetStore((state) => state.isLoading)
   const isLoadingOutfits = useOutfitStore((state) => state.isLoading)
-  const itemsError = useWardrobeStore((state) => state.error)
+  const itemsError = useClosetStore((state) => state.error)
   const outfitsError = useOutfitStore((state) => state.error)
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
@@ -255,7 +255,7 @@ export default function DashboardPage() {
     },
     {
       name: 'What to wear',
-      description: 'AI outfit ideas from your wardrobe',
+      description: 'AI outfit ideas from your closet',
       icon: Sparkles,
       link: '/recommendations',
     },
@@ -265,7 +265,7 @@ export default function DashboardPage() {
     return (
       <div className="w-full max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8">
         <ErrorState
-          title="Couldn't load your wardrobe"
+          title="Couldn't load your closet"
           description={loadError.message}
           onRetry={() => {
             void fetchItems(true)
@@ -286,7 +286,7 @@ export default function DashboardPage() {
         <p className="mt-1 md:mt-2 text-xs md:text-base text-muted-foreground">
           {isEmpty
             ? 'Start with a few clothing photos. AI finds each item so you can build outfits today.'
-            : "Here's what's happening with your wardrobe today."}
+            : "Here's what's happening with your closet today."}
         </p>
         {isEmpty && (
           <Button className="mt-4" onClick={() => setIsUploadModalOpen(true)}>

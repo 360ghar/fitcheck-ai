@@ -14,6 +14,7 @@ import {
 import { compressImageFile } from '@/lib/image-compress';
 import { cropImageFromBoundingBox } from '@/lib/crop-from-bounding-box';
 import { normalizeUseCases } from '@/lib/use-cases';
+import { useUpgradePromptStore } from '@/stores/upgradePromptStore';
 import type {
   BatchExtractionState,
   BatchImageInput,
@@ -21,6 +22,7 @@ import type {
   BatchSSEEventType,
   ImageExtractionCompleteData,
   ImageExtractionFailedData,
+  ExtractionCapacityExhaustedData,
   GenerationStartedData,
   BatchGenerationStartedData,
   ItemGenerationCompleteData,
@@ -46,6 +48,7 @@ const initialState: BatchExtractionState = {
   itemsGenerated: 0,
   itemsFailed: 0,
   generationTotalItems: 0,
+  capacityExhausted: false,
   error: null,
 };
 
@@ -507,7 +510,12 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
             ...prev,
             images: prev.images.map((img) =>
               img.imageId === data.image_id
-                ? { ...img, status: 'failed' as const, error: data.error }
+                ? {
+                    ...img,
+                    status: 'failed' as const,
+                    error: data.error,
+                    errorKind: data.error_kind,
+                  }
                 : img
             ),
             imagesFailed: data.failed_count,
@@ -517,18 +525,32 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           break;
         }
 
+        case 'extraction_capacity_exhausted': {
+          // Upstream AI capacity exhausted mid-batch (Gemini free-tier quota +
+          // Agnes fallback both failed). This is "on us" — show the capacity
+          // prompt, never an upgrade. Remaining images will arrive as failed.
+          const data = event.data as ExtractionCapacityExhaustedData;
+          useUpgradePromptStore.getState().open('capacity', data?.error);
+          setState((prev) => ({ ...prev, capacityExhausted: true }));
+          break;
+        }
+
         case 'all_extractions_complete':
           // Extraction is done - show results NOW. Studio photos keep streaming
           // in via item_generation_complete; we no longer hold the UI hostage
           // for the (slow) generation phase.
           setState((prev) => {
             const hasItems = prev.allDetectedItems.length > 0;
+            // An empty result from a capacity outage is NOT "no items found"
+            // (that would blame the user's photo). The capacity prompt already
+            // explained it; don't overwrite with a misleading message.
+            const noItemsDueToCapacity = !hasItems && prev.capacityExhausted;
             return {
               ...prev,
               extractionProgress: 100,
               step: resolveStepWithItems(prev.step, hasItems, 'terminal'),
               error:
-                !hasItems && prev.step !== 'saving'
+                !hasItems && prev.step !== 'saving' && !noItemsDueToCapacity
                   ? 'No items found. Try a clearer, well-lit photo.'
                   : prev.error,
             };
@@ -959,6 +981,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
       imagesCompleted: 0,
       imagesFailed: 0,
       allDetectedItems: [],
+      capacityExhausted: false,
       error: null,
     }));
 

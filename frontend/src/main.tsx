@@ -9,6 +9,7 @@ import { logger } from './lib/logger'
 import App from './App'
 import { Toaster } from './components/ui/toaster'
 import { TooltipProvider } from './components/ui/tooltip'
+import { UpgradePromptDialog } from './components/common/UpgradePromptDialog'
 import ErrorBoundary from './components/errors/ErrorBoundary'
 import { ThemeProvider } from './components/theme/ThemeProvider'
 import '@fontsource-variable/plus-jakarta-sans'
@@ -100,6 +101,7 @@ createRoot(document.getElementById('root')!).render(
                 <TooltipProvider delayDuration={0}>
                   <App />
                   <Toaster />
+                  <UpgradePromptDialog />
                 </TooltipProvider>
               </BrowserRouter>
             </QueryClientProvider>

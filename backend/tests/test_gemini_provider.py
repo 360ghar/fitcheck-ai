@@ -16,7 +16,7 @@ from google.genai import types
 
 from app.core.exceptions import AIServiceError
 from app.services.ai_provider_interface import AIProvider, ChatMessage
-from app.services.gemini_provider import GeminiConfig, GeminiProvider
+from app.services.gemini_provider import GeminiConfig, GeminiProvider, classify_gemini_error
 
 
 def _make_config(**overrides) -> GeminiConfig:
@@ -203,6 +203,79 @@ class TestErrorClassification:
         assert exc_info.value.retryable is False
 
 
+class TestFreeTierQuotaClassification:
+    """The whole point of classify_gemini_error: split a daily free-tier quota
+    (pointless to retry today -> forces the Agnes fallback) from a per-minute
+    quota (retryable after the advised delay) from a 503 overload."""
+
+    def test_free_tier_daily_quota_is_not_retryable_and_forces_fallback(self):
+        # Mirrors the real payload: quotaId ...PerDay...FreeTier, no retryDelay.
+        err = genai_errors.APIError(429, {
+            "status": "RESOURCE_EXHAUSTED",
+            "message": (
+                "You exceeded your current quota. Quota exceeded for metric "
+                "generativelanguage.googleapis.com/generate_content_free_tier_requests, "
+                "limit: 20, model: gemini-3.6-flash. "
+                "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+            ),
+            "details": [{"@type": "type.googleapis.com/google.rpc.QuotaFailure"}],
+        })
+        retryable, error_kind, retry_after = classify_gemini_error(err)
+        assert retryable is False
+        assert error_kind == "upstream_quota"
+        assert retry_after is None
+
+    def test_free_tier_per_minute_quota_is_retryable_after_advised_delay(self):
+        err = genai_errors.APIError(429, {
+            "status": "RESOURCE_EXHAUSTED",
+            "message": (
+                "Quota exceeded for generativelanguage.googleapis.com/"
+                "generate_content_free_tier_requests, limit: 5. "
+                "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+            ),
+            "details": [{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "56s"}],
+        })
+        retryable, error_kind, retry_after = classify_gemini_error(err)
+        assert retryable is True
+        assert error_kind == "upstream_quota"
+        assert retry_after == 56
+
+    def test_503_unavailable_is_transient_retryable(self):
+        err = genai_errors.APIError(503, {
+            "status": "UNAVAILABLE",
+            "message": "This model is currently experiencing high demand.",
+        })
+        retryable, error_kind, retry_after = classify_gemini_error(err)
+        assert retryable is True
+        assert error_kind == "transient"
+        assert retry_after is None
+
+    def test_hard_4xx_is_neither_retryable_nor_quota(self):
+        err = genai_errors.APIError(403, {"message": "Permission denied"})
+        retryable, error_kind, retry_after = classify_gemini_error(err)
+        assert retryable is False
+        assert error_kind == "hard"
+
+    @pytest.mark.asyncio
+    async def test_daily_quota_error_propagates_through_chat_as_upstream_quota(self):
+        """The chat() handler must stamp error_kind/retryable onto the raised
+        AIServiceError so the SSE/HTTP layer can show 'try again shortly'."""
+        provider = GeminiProvider(_make_config())
+        err = genai_errors.APIError(429, {
+            "status": "RESOURCE_EXHAUSTED",
+            "message": "free_tier limit: 20 GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+        })
+        gen = AsyncMock(side_effect=err)
+        with _patched_client(provider, gen):
+            with pytest.raises(AIServiceError) as exc_info:
+                await provider.chat(messages=[ChatMessage(role="user", content="hi")])
+        assert exc_info.value.retryable is False
+        assert exc_info.value.error_kind == "upstream_quota"
+        body = exc_info.value.to_dict()
+        assert body["retryable"] is False
+        assert body["error_kind"] == "upstream_quota"
+
+
 class TestSafetyAndTruncationGuards:
     @pytest.mark.asyncio
     async def test_prompt_blocked_raises_non_retryable(self):
@@ -316,6 +389,25 @@ class TestConfigResolution:
         config = GeminiConfig.from_settings(AIProvider.GEMINI, fake_settings)
         assert config.api_key == "k"
         assert config.chat_model == "gemini-3.6-flash"
+
+    def test_max_tokens_default_is_raised_above_4096(self):
+        """GeminiConfig.max_tokens must default well above the old 4096 cap
+        that truncated large structured extractions."""
+        assert GeminiConfig(api_key="k").max_tokens >= 32768
+
+    def test_from_settings_reads_ai_max_output_tokens(self):
+        """from_settings must honor AI_MAX_OUTPUT_TOKENS when present."""
+        fake_settings = SimpleNamespace(
+            AI_GEMINI_API_KEY="k",
+            AI_GEMINI_CHAT_MODEL="gemini-3.6-flash",
+            AI_GEMINI_VISION_MODEL=None,
+            AI_GEMINI_VISION_FALLBACK_MODEL=None,
+            AI_GEMINI_IMAGE_MODEL="gemini-3.1-flash-image",
+            AI_GEMINI_IMAGE_FALLBACK_MODEL=None,
+            AI_MAX_OUTPUT_TOKENS=16384,
+        )
+        config = GeminiConfig.from_settings(AIProvider.GEMINI, fake_settings)
+        assert config.max_tokens == 16384
 
     def test_from_user_dict_reads_only_understood_keys(self):
         config = GeminiConfig.from_user_dict(

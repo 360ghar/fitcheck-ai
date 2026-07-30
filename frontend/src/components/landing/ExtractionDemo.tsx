@@ -170,7 +170,7 @@ export function ExtractionDemo() {
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
                 onClick={handleSaveToWardrobe}
               >
-                Save to Wardrobe
+                Save to Closet
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </div>

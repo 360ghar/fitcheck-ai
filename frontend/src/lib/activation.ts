@@ -23,7 +23,7 @@ export function getActivationSteps(input: ActivationInput): ActivationStep[] {
     {
       id: 'items',
       title: 'Add clothes',
-      description: 'Upload photos — AI finds each item for your wardrobe.',
+      description: 'Upload photos — AI finds each item for your closet.',
       done: input.itemCount >= 1,
       required: true,
     },

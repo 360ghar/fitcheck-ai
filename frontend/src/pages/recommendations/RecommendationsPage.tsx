@@ -22,7 +22,7 @@ import { generateFallbackOutfits } from '@/lib/outfit-generator'
 import { AstrologyTab } from '@/components/recommendations'
 
 import { isApiError } from '@/lib/errors'
-import { useWardrobeStore } from '@/stores/wardrobeStore'
+import { useClosetStore } from '@/stores/wardrobeStore'
 import {
   findMatchingItems,
   getAstrologyRecommendations,
@@ -131,9 +131,9 @@ export default function RecommendationsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('today')
   const { toast } = useToast()
 
-  const items = useWardrobeStore((s) => s.items)
-  const isLoadingItems = useWardrobeStore((s) => s.isLoading)
-  const fetchItems = useWardrobeStore((s) => s.fetchItems)
+  const items = useClosetStore((s) => s.items)
+  const isLoadingItems = useClosetStore((s) => s.isLoading)
+  const fetchItems = useClosetStore((s) => s.fetchItems)
 
   useEffect(() => {
     if (items.length === 0) {
@@ -439,7 +439,7 @@ export default function RecommendationsPage() {
                 <>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">
-                      Weather-aware picks from your wardrobe for right now.
+                      Weather-aware picks from your closet for right now.
                     </p>
                     <Button
                       variant="outline"
@@ -483,7 +483,7 @@ export default function RecommendationsPage() {
                         <p className="text-sm text-foreground">{weatherData.notes.join(' ')}</p>
                       )}
                       <div>
-                        <p className="text-sm font-semibold mb-2">From your wardrobe</p>
+                        <p className="text-sm font-semibold mb-2">From your closet</p>
                         {weatherSuggestedItems.length === 0 ? (
                           <p className="text-sm text-muted-foreground">
                             No matching clean items for preferred categories (
@@ -532,7 +532,7 @@ export default function RecommendationsPage() {
                 <EmptyState
                   icon={Shirt}
                   title="Add items first"
-                  description="Add wardrobe items to find matching pieces."
+                  description="Add closet items to find matching pieces."
                   actionLabel="Add item"
                   onAction={() => { window.location.href = '/wardrobe?action=add' }}
                 />
@@ -543,7 +543,7 @@ export default function RecommendationsPage() {
                     <Input
                       value={matchSearch}
                       onChange={(e) => setMatchSearch(e.target.value)}
-                      placeholder="Search wardrobe…"
+                      placeholder="Search closet…"
                       className="pl-9"
                       aria-label="Search items to match"
                     />
@@ -730,14 +730,14 @@ export default function RecommendationsPage() {
                     No outfit suggestions could be generated.
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    Try adding more items to your wardrobe for better suggestions.
+                    Try adding more items to your closet for better suggestions.
                   </div>
                 </div>
               )}
 
               {items.length === 0 && !isLoadingItems && (
                 <div className="text-sm text-muted-foreground">
-                  Add items to your wardrobe first to unlock recommendations.
+                  Add items to your closet first to unlock recommendations.
                 </div>
               )}
             </CardContent>
@@ -815,7 +815,7 @@ export default function RecommendationsPage() {
 
                   {weatherSuggestedItems.length > 0 && (
                     <div>
-                      <div className="text-sm font-semibold text-foreground mb-2">Pieces from your wardrobe</div>
+                      <div className="text-sm font-semibold text-foreground mb-2">Pieces from your closet</div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {weatherSuggestedItems.map((item) => (
                           <div key={item.id} className="p-2 rounded-lg border border-border">

@@ -151,6 +151,13 @@ class Settings(BaseSettings):
     AI_IMAGE_FALLBACK_API_KEY: Optional[str] = None
     AI_IMAGE_FALLBACK_MODEL: str = "agnes-image-2.0-flash"
 
+    # Max output tokens per AI call. Both current providers comfortably exceed
+    # this: gemini-3.6-flash caps at 64K output, the Agnes gateway (agnes-2.5-
+    # flash / agnes-3.5-pro-alpha) at 65.5K. The old hardcoded 4096 default
+    # truncated large structured extractions and surfaced as "finish_reason=
+    # length / MAX_TOKENS" errors to users.
+    AI_MAX_OUTPUT_TOKENS: int = 32768
+
     # Rate Limiting (legacy daily limits - used as fallback)
     AI_DAILY_EXTRACTION_LIMIT: int = 100
     AI_DAILY_GENERATION_LIMIT: int = 50

@@ -234,14 +234,16 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
           </div>
         )}
 
-        {/* Gradient Overlay */}
-        <div
-          className={cn(
-            'absolute inset-0',
-            'bg-gradient-to-t from-black/70 via-black/20 to-transparent',
-            'pointer-events-none'
-          )}
-        />
+        {/* Gradient Overlay — only needed when overlaying text on the image */}
+        {variant !== 'compact' && (
+          <div
+            className={cn(
+              'absolute inset-0',
+              'bg-gradient-to-t from-black/70 via-black/20 to-transparent',
+              'pointer-events-none'
+            )}
+          />
+        )}
 
         {/* Selection Checkbox */}
         {showSelect && (
@@ -267,8 +269,8 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
           </button>
         )}
 
-        {/* Favorite Button */}
-        {showFavorite && (
+        {/* Favorite Button — hidden in compact (dense) mode to keep tiles clean */}
+        {showFavorite && variant !== 'compact' && (
           <button
             type="button"
             className={cn(
@@ -306,15 +308,26 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
           </Badge>
         )}
 
-        {/* Bottom Info Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 z-10">
-          <h3 className="font-semibold text-sm text-white truncate drop-shadow-sm">
-            {item.name}
-          </h3>
-          <p className="text-xs text-white/80 capitalize">{item.category}</p>
+        {/* Bottom Info — compact: clean cutout + name/brand below (Alta-style); default: overlay */}
+        {variant === 'compact' ? (
+          <div className="absolute bottom-0 left-0 right-0 bg-background/95 px-2 py-1.5 backdrop-blur-sm">
+            <h3 className="truncate text-[11px] font-medium leading-tight text-foreground">
+              {item.name}
+            </h3>
+            {item.brand && (
+              <p className="truncate text-[10px] leading-tight text-muted-foreground">
+                {item.brand}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="absolute bottom-0 left-0 right-0 p-3 z-10">
+            <h3 className="font-semibold text-sm text-white truncate drop-shadow-sm">
+              {item.name}
+            </h3>
+            <p className="text-xs text-white/80 capitalize">{item.category}</p>
 
-          {/* Additional info - shown on hover on desktop */}
-          {variant !== 'compact' && (
+            {/* Additional info - shown on hover on desktop */}
             <div className="hidden md:flex items-center gap-2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
               {item.brand && (
                 <span className="text-[10px] text-white/70 truncate">{item.brand}</span>
@@ -325,8 +338,8 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
                 </span>
               )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     )
   }

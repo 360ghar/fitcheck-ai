@@ -51,9 +51,9 @@ class _WardrobeContentState extends State<WardrobeContent> {
                       if (controller.isLoading.value &&
                           controller.items.isEmpty) {
                         return const ShimmerGridLoader(
-                          crossAxisCount: 2,
-                          itemCount: 6,
-                          childAspectRatio: 0.75,
+                          crossAxisCount: 3,
+                          itemCount: 9,
+                          childAspectRatio: 0.78,
                         );
                       }
 
@@ -90,7 +90,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
       elevation: 0,
       automaticallyImplyLeading: false,
       title: Text(
-        'Wardrobe',
+        'Closet',
         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
           fontWeight: FontWeight.w700,
           color: tokens.textPrimary,
@@ -105,10 +105,10 @@ class _WardrobeContentState extends State<WardrobeContent> {
                   onPressed: () => _showDeleteConfirmation(),
                 )
               : Semantics(
-                  label: 'Search wardrobe',
+                  label: 'Search closet',
                   button: true,
                   child: IconButton(
-                    tooltip: 'Search wardrobe',
+                    tooltip: 'Search closet',
                     icon: const Icon(Icons.search),
                     onPressed: () => _showSearchDialog(),
                   ),
@@ -171,7 +171,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                 children: [
                   Icon(Icons.insights_outlined),
                   SizedBox(width: AppConstants.spacing8),
-                  Text('Wardrobe Stats'),
+                  Text('Closet Stats'),
                 ],
               ),
             ),
@@ -322,10 +322,10 @@ class _WardrobeContentState extends State<WardrobeContent> {
   Widget _buildItemsGrid() {
     return SliverGrid(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
+        crossAxisCount: 3,
         mainAxisSpacing: AppConstants.spacing12,
         crossAxisSpacing: AppConstants.spacing12,
-        childAspectRatio: 0.75,
+        childAspectRatio: 0.78,
       ),
       delegate: SliverChildBuilderDelegate((context, index) {
         final item = controller.filteredItems[index];
@@ -344,7 +344,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
             _showItemOptions(item);
           },
           child: Semantics(
-            label: 'Wardrobe item: ${item.name}',
+            label: 'Closet item: ${item.name}',
             child: _buildItemCard(item, isSelected),
           ),
         );
@@ -371,7 +371,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
             _showItemOptions(item);
           },
           child: Semantics(
-            label: 'Wardrobe item: ${item.name}',
+            label: 'Closet item: ${item.name}',
             child: _buildListItemCard(item, isSelected),
           ),
         );
@@ -658,36 +658,45 @@ class _WardrobeContentState extends State<WardrobeContent> {
               ),
             ),
 
-          // Item name at bottom with gradient overlay
+          // Item name (+ brand) on a clean panel — dense closet look, no heavy gradient
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Container(
               padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.spacing12,
-                vertical: AppConstants.spacing8,
+                horizontal: AppConstants.spacing8,
+                vertical: AppConstants.spacing4,
               ),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)],
-                ),
+                color: tokens.cardColor.withValues(alpha: 0.92),
                 borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(AppConstants.radius16),
                   bottomRight: Radius.circular(AppConstants.radius16),
                 ),
               ),
-              child: Text(
-                item.name,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.name,
+                    style: TextStyle(
+                      color: tokens.textPrimary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (item.brand != null && item.brand!.isNotEmpty)
+                    Text(
+                      item.brand!,
+                      style: TextStyle(color: tokens.textMuted, fontSize: 10),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
               ),
             ),
           ),
@@ -739,7 +748,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                 ),
                 const SizedBox(height: AppConstants.spacing24),
                 Text(
-                  'Your wardrobe is empty',
+                  'Your closet is empty',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: tokens.textPrimary,
@@ -757,7 +766,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                 ),
                 const SizedBox(height: AppConstants.spacing24),
                 Semantics(
-                  label: 'Add your first wardrobe item',
+                  label: 'Add your first closet item',
                   button: true,
                   child: ElevatedButton.icon(
                     onPressed: () => _showAddItemOptions(),
@@ -988,7 +997,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
   void _showSearchDialog() {
     Get.dialog(
       AlertDialog(
-        title: const Text('Search Wardrobe'),
+        title: const Text('Search Closet'),
         content: TextField(
           decoration: const InputDecoration(
             hintText: 'Search by name or brand...',
@@ -1065,8 +1074,8 @@ class _WardrobeContentState extends State<WardrobeContent> {
         title: const Text('Delete Items?'),
         content: Text(
           itemId == null
-              ? 'Delete ${controller.selectedCount} items from your wardrobe?'
-              : 'Delete this item from your wardrobe?',
+              ? 'Delete ${controller.selectedCount} items from your closet?'
+              : 'Delete this item from your closet?',
         ),
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),

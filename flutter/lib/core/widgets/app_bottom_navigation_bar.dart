@@ -35,7 +35,7 @@ class AppBottomNavigationBar extends StatelessWidget {
     NavigationItem(
       icon: Icons.checkroom,
       activeIcon: Icons.checkroom,
-      label: 'Wardrobe',
+      label: 'Closet',
       route: Routes.wardrobe,
     ),
     NavigationItem(

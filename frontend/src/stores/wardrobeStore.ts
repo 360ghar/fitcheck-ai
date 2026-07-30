@@ -12,7 +12,7 @@ import { getApiError, type ApiError } from '../lib/errors';
 // WARDROBE STATE INTERFACE
 // ============================================================================
 
-interface WardrobeState {
+interface ClosetState {
   // Items data
   items: Item[];
   filteredItems: Item[];
@@ -51,10 +51,10 @@ interface WardrobeState {
   setSelectedItem: (item: Item | null) => void;
   toggleItemSelected: (itemId: string) => void;
   clearSelectedItems: () => void;
-  setFilter: <K extends keyof WardrobeState['filters']>(filter: K, value: WardrobeState['filters'][K]) => void;
+  setFilter: <K extends keyof ClosetState['filters']>(filter: K, value: ClosetState['filters'][K]) => void;
   resetFilters: () => void;
   setViewMode: (mode: 'all' | 'favorites' | 'recent') => void;
-  setSortBy: (sortBy: WardrobeState['sortBy']) => void;
+  setSortBy: (sortBy: ClosetState['sortBy']) => void;
   setSortOrder: (order: 'asc' | 'desc') => void;
   setGridView: (isGrid: boolean) => void;
   toggleItemFavorite: (itemId: string) => Promise<{ id: string; is_favorite: boolean }>;
@@ -68,7 +68,7 @@ interface WardrobeState {
 // INITIAL FILTERS STATE
 // ============================================================================
 
-const initialFilters: WardrobeState['filters'] = {
+const initialFilters: ClosetState['filters'] = {
   category: 'all',
   color: 'all',
   occasion: '',
@@ -83,9 +83,9 @@ const initialFilters: WardrobeState['filters'] = {
 
 function applyFiltersAndSort(
   items: Item[],
-  filters: WardrobeState['filters'],
-  sortBy: WardrobeState['sortBy'],
-  sortOrder: WardrobeState['sortOrder']
+  filters: ClosetState['filters'],
+  sortBy: ClosetState['sortBy'],
+  sortOrder: ClosetState['sortOrder']
 ): Item[] {
   let filtered = [...items];
 
@@ -168,7 +168,7 @@ function applyFiltersAndSort(
 // WARDROBE STORE
 // ============================================================================
 
-export const useWardrobeStore = create<WardrobeState>((set, get) => ({
+export const useClosetStore = create<ClosetState>((set, get) => ({
   // Initial state
   items: [],
   filteredItems: [],
@@ -283,7 +283,7 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
   },
 
   // Set filter
-  setFilter: <K extends keyof WardrobeState['filters']>(filter: K, value: WardrobeState['filters'][K]) => {
+  setFilter: <K extends keyof ClosetState['filters']>(filter: K, value: ClosetState['filters'][K]) => {
     set({ filters: { ...get().filters, [filter]: value }, page: 1 });
     const state = get();
     set({
@@ -306,7 +306,7 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
   },
 
   // Set sort by
-  setSortBy: (sortBy: WardrobeState['sortBy']) => {
+  setSortBy: (sortBy: ClosetState['sortBy']) => {
     set({ sortBy });
     const state = get();
     set({
@@ -409,14 +409,14 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
 // SELECTORS
 // ============================================================================
 
-export const selectItems = (state: WardrobeState) => state.items;
-export const selectFilteredItems = (state: WardrobeState) => state.filteredItems;
-export const selectSelectedItem = (state: WardrobeState) => state.selectedItem;
-export const selectSelectedItems = (state: WardrobeState) => state.selectedItems;
-export const selectFilters = (state: WardrobeState) => state.filters;
-export const selectIsLoading = (state: WardrobeState) => state.isLoading;
-export const selectError = (state: WardrobeState) => state.error;
-export const selectHasMore = (state: WardrobeState) => state.hasMore;
+export const selectItems = (state: ClosetState) => state.items;
+export const selectFilteredItems = (state: ClosetState) => state.filteredItems;
+export const selectSelectedItem = (state: ClosetState) => state.selectedItem;
+export const selectSelectedItems = (state: ClosetState) => state.selectedItems;
+export const selectFilters = (state: ClosetState) => state.filters;
+export const selectIsLoading = (state: ClosetState) => state.isLoading;
+export const selectError = (state: ClosetState) => state.error;
+export const selectHasMore = (state: ClosetState) => state.hasMore;
 
 // ============================================================================
 // HOOKS
@@ -426,33 +426,33 @@ export const selectHasMore = (state: WardrobeState) => state.hasMore;
  * Hook to get all items
  */
 export function useItems(): Item[] {
-  return useWardrobeStore(selectItems);
+  return useClosetStore(selectItems);
 }
 
 /**
  * Hook to get filtered items
  */
 export function useFilteredItems(): Item[] {
-  return useWardrobeStore(selectFilteredItems);
+  return useClosetStore(selectFilteredItems);
 }
 
 /**
  * Hook to get selected item
  */
 export function useSelectedItem(): Item | null {
-  return useWardrobeStore(selectSelectedItem);
+  return useClosetStore(selectSelectedItem);
 }
 
 /**
  * Hook to get selected items count
  */
 export function useSelectedItemsCount(): number {
-  return useWardrobeStore((state) => state.selectedItems.size);
+  return useClosetStore((state) => state.selectedItems.size);
 }
 
 /**
  * Hook to check if item is selected
  */
 export function useIsItemSelected(itemId: string): boolean {
-  return useWardrobeStore((state) => state.selectedItems.has(itemId));
+  return useClosetStore((state) => state.selectedItems.has(itemId));
 }

@@ -161,4 +161,29 @@ def validate_production_config() -> List[ConfigIssue]:
             ),
         ))
 
+    # 7. Gemini-primary needs a working Agnes fallback key. The fallback
+    # (AI_VISION_FALLBACK_MODEL defaults to agnes-2.5-flash) is what absorbs
+    # Gemini free-tier quota exhaustion (5/min, 20/day) so extraction keeps
+    # working instead of surfacing a 429. The key resolves
+    # AI_VISION_FALLBACK_API_KEY -> AI_VISION_API_KEY -> AI_CHAT_API_KEY; if all
+    # are empty the fallback can't fire and every Gemini 429 fails the request.
+    if settings.AI_VISION_PROVIDER.lower() == "gemini":
+        fallback_key = (
+            (settings.AI_VISION_FALLBACK_API_KEY or "")
+            or (settings.AI_VISION_API_KEY or "")
+            or (settings.AI_CHAT_API_KEY or "")
+        ).strip()
+        if not fallback_key:
+            issues.append(ConfigIssue(
+                severity="warning",
+                key="AI_CHAT_API_KEY",
+                message=(
+                    "AI_VISION_PROVIDER=gemini but no Agnes fallback key resolves "
+                    "(checked AI_VISION_FALLBACK_API_KEY, AI_VISION_API_KEY, "
+                    "AI_CHAT_API_KEY). The Agnes fallback absorbs Gemini free-tier "
+                    "quota exhaustion; without it, every Gemini 429 fails the "
+                    "extraction. Set AI_CHAT_API_KEY (or move Gemini to a paid tier)."
+                ),
+            ))
+
     return issues

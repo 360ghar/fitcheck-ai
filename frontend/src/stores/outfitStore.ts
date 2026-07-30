@@ -628,7 +628,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         () =>
           generateOutfit(promptItems, {
             style: outfit.style || 'casual',
-            background: 'studio white',
+            background: 'seamless clean light background',
             pose: mapPoseToPrompt(options.pose),
             lighting: options.lighting || 'studio',
             include_model: true,
@@ -771,7 +771,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
           () =>
             generateOutfit(promptItems, {
               style: outfit.style || 'casual',
-              background: 'studio white',
+              background: 'seamless clean light background',
               pose: 'standing front',
               lighting: 'studio',
               include_model: true,

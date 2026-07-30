@@ -107,8 +107,9 @@ export const PAGE_SEO = {
     description: 'Your FitCheck AI dashboard — wardrobe, outfits, and recommendations.',
   },
   wardrobe: {
-    title: 'My Wardrobe | FitCheck AI',
-    description: 'Manage your digital wardrobe with FitCheck AI.',
+    title: 'My Closet — Digital Wardrobe Organizer | FitCheck AI',
+    description:
+      'Your closet, organized. Manage your digital wardrobe and virtual closet with FitCheck AI — photograph clothes, catalog every item, and build outfits.',
   },
   outfits: {
     title: 'My Outfits | FitCheck AI',

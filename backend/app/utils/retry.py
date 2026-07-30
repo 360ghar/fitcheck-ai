@@ -97,6 +97,13 @@ async def with_retry(
             delay = _calculate_delay(
                 attempt, initial_delay, max_delay, backoff_factor, jitter
             )
+            # If the failing provider told us how long to wait (e.g. Gemini's
+            # RetryInfo "56s" for a per-minute free-tier quota), honour it as a
+            # floor so the retry actually lands after the reset window instead
+            # of hammering every 2s. Bounded by max_delay.
+            advised = getattr(e, "retry_after_seconds", None)
+            if advised:
+                delay = max(delay, min(float(advised), max_delay))
 
             logger.info(
                 f"Retry attempt {attempt + 1}/{max_retries} after {delay:.2f}s delay"

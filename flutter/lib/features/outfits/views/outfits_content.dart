@@ -7,6 +7,7 @@ import '../../../domain/enums/season.dart';
 import '../controllers/outfit_list_controller.dart';
 import '../controllers/outfit_generation_controller.dart';
 import '../../../app/routes/app_routes.dart';
+import 'outfit_detail_page.dart';
 
 /// Outfits content without Scaffold wrapper (for IndexedStack in MainShellPage)
 /// Note: FAB is handled by MainShellPage
@@ -170,7 +171,7 @@ class _OutfitsContentState extends State<OutfitsContent> {
         : <String>[];
 
     return GestureDetector(
-      onTap: () => Get.toNamed('/outfits/${outfit.id}'),
+      onTap: () => _openOutfitDetailModal(outfit),
       onLongPress: () => _showOutfitDetail(outfit),
       child: Semantics(
         label: 'Outfit: ${outfit.name}',
@@ -466,6 +467,25 @@ class _OutfitsContentState extends State<OutfitsContent> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Opens the outfit in a modal sheet (reference video UX) instead of pushing
+  /// a full-screen route. Long-press still surfaces the quick-actions sheet.
+  void _openOutfitDetailModal(dynamic outfit) {
+    final tokens = AppUiTokens.of(context);
+    Get.bottomSheet(
+      ClipRRect(
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppConstants.radius24),
+        ),
+        child: SizedBox(
+          height: Get.height * 0.9,
+          child: OutfitDetailPage(outfitId: outfit.id as String),
+        ),
+      ),
+      isScrollControlled: true,
+      backgroundColor: tokens.cardColor,
     );
   }
 

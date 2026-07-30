@@ -107,7 +107,7 @@ class ImageGenerationAgent:
         self,
         items: List[Dict[str, Any]],
         style: str = "casual",
-        background: str = "studio white",
+        background: str = "seamless clean light background",
         pose: str = "standing front",
         lighting: str = "professional studio lighting",
         view_angle: str = "full body",

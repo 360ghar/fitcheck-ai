@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/config/env_config.dart';
+import '../../../core/exceptions/app_exceptions.dart';
 import '../services/wardrobe_sync_service.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
@@ -569,6 +570,28 @@ class ItemAddController extends GetxController {
     final errorMsg = ErrorHandler.extractMessage(e);
     error.value = errorMsg;
 
+    // Structured signals from the backend (preferred over string matching).
+    // The Dio layer maps HTTP 429 -> RateLimitException(errorCode: RATE_LIMIT_EXCEEDED);
+    // SSE/stream failures arrive as a plain Exception wrapping the message, so
+    // keep the message fallbacks for those paths.
+    final String? code = e is AppException ? e.errorCode : null;
+    final bool isRateLimit = code == 'RATE_LIMIT_EXCEEDED' ||
+        errorMsg.contains('rate limit') ||
+        errorMsg.contains('limit exceeded');
+    // Upstream AI capacity/provider exhaustion is the SERVER's problem ("on us"):
+    // show a retry message, NEVER an upgrade CTA. Covers the wrapped
+    // "AI vision unavailable..." message, the raw Gemini quota/429 message, and
+    // the SSE "capacity exhausted" text. None of these appear in the user-plan
+    // rate-limit message, so there's no overlap with isRateLimit.
+    final String lower = errorMsg.toLowerCase();
+    final bool isCapacity = lower.contains('capacity') ||
+        lower.contains('unavailable') ||
+        lower.contains('quota') ||
+        lower.contains('resource_exhausted') ||
+        lower.contains('high demand') ||
+        lower.contains('service is busy') ||
+        lower.contains('try again');
+
     // Categorize error and show actionable dialog
     if (errorMsg.contains('timeout') || errorMsg.contains('connection')) {
       // Network timeout
@@ -585,9 +608,11 @@ class ItemAddController extends GetxController {
           }
         },
       );
-    } else if (errorMsg.contains('rate limit') ||
-        errorMsg.contains('limit exceeded')) {
-      // Rate limit exceeded
+    } else if (isRateLimit) {
+      // The user hit THEIR OWN daily plan limit -> offer upgrade. Checked
+      // BEFORE isCapacity because the default rate-limit message ("Too many
+      // requests. Please try again later.") contains "try again", which
+      // isCapacity also matches; the structured code here is authoritative.
       if (EnvConfig.paywallEnabled) {
         // Paywall enabled (Android/web/future IAP): offer an upgrade path.
         Get.defaultDialog(
@@ -607,11 +632,20 @@ class ItemAddController extends GetxController {
         Get.defaultDialog(
           title: 'Daily Limit Reached',
           middleText:
-              'You\'ve reached your daily extraction limit. It resets tomorrow — check back then!',
+              'You\'ve reached your daily extraction limit. It resets tomorrow - check back then!',
           textConfirm: 'Got it',
           onConfirm: () => Get.back(),
         );
       }
+    } else if (isCapacity) {
+      // AI service capacity/overload - "on us", not the user's plan limit.
+      Get.defaultDialog(
+        title: 'AI Service Busy',
+        middleText:
+            'Our AI provider is experiencing heavy demand right now. Please try again in a few minutes.',
+        textConfirm: 'Got it',
+        onConfirm: () => Get.back(),
+      );
     } else if (errorMsg.contains('no items') ||
         errorMsg.contains('not detected')) {
       // No items detected

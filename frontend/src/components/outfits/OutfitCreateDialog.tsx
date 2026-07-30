@@ -114,6 +114,17 @@ export function OutfitCreateDialog() {
     })
   }, [availableItems, category, search])
 
+  // Dense, horizontally-scrollable rails grouped by category (reference video UX).
+  const groupedItems = useMemo(() => {
+    const groups = new Map<string, AvailableItem[]>()
+    for (const item of filteredItems) {
+      const key = item.category || 'other'
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(item)
+    }
+    return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+  }, [filteredItems])
+
   const canCreate = creationName.trim().length > 0 && creationItems.size > 0 && !isSaving
 
   const onSubmit = async () => {
@@ -279,49 +290,65 @@ export function OutfitCreateDialog() {
             {isLoadingItems ? (
               <div className="py-10 text-center text-gray-600 dark:text-gray-400">
                 <Loader2 className="h-5 w-5 animate-spin inline-block mr-2" />
-                Loading wardrobe items...
+                Loading closet items...
               </div>
             ) : itemsError ? (
               <div className="py-10 text-center text-red-600 dark:text-red-400">{itemsError}</div>
+            ) : groupedItems.length === 0 ? (
+              <div className="py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+                No items match your search.
+              </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[26rem] overflow-y-auto pr-1">
-                {filteredItems.map((item) => {
-                  const selected = creationItems.has(item.id)
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => toggleCreationItem(item.id)}
-                      className={`relative rounded-lg border overflow-hidden text-left transition-colors ${
-                        selected ? 'border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-800' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                      }`}
-                    >
-                      <div className="aspect-square bg-gray-100 dark:bg-gray-700">
-                        {item.image_url ? (
-                          <img
-                            src={item.image_url}
-                            alt={item.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">
-                            No image
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-2">
-                        <div className="text-sm font-medium truncate text-gray-900 dark:text-white">{item.name}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 capitalize">{item.category}</div>
-                      </div>
+              <div className="space-y-4 max-h-[28rem] overflow-y-auto pr-1">
+                {groupedItems.map(([cat, items]) => (
+                  <div key={cat}>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 capitalize">
+                      {cat} <span className="font-normal">({items.length})</span>
+                    </p>
+                    <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 snap-x">
+                      {items.map((item) => {
+                        const selected = creationItems.has(item.id)
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => toggleCreationItem(item.id)}
+                            className={`relative flex-shrink-0 w-28 snap-start rounded-lg border overflow-hidden text-left transition-colors ${
+                              selected
+                                ? 'border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-800'
+                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                            }`}
+                          >
+                            <div className="w-28 h-28 bg-gray-100 dark:bg-gray-700">
+                              {item.image_url ? (
+                                <img
+                                  src={item.image_url}
+                                  alt={item.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500 text-xs">
+                                  No image
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-1.5">
+                              <div className="text-xs font-medium truncate text-gray-900 dark:text-white">
+                                {item.name}
+                              </div>
+                            </div>
 
-                      {selected && (
-                        <div className="absolute top-2 right-2 h-6 w-6 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow">
-                          <Check className="h-4 w-4" />
-                        </div>
-                      )}
-                    </button>
-                  )
-                })}
+                            {selected && (
+                              <div className="absolute top-1.5 right-1.5 h-5 w-5 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow">
+                                <Check className="h-3 w-3" />
+                              </div>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 

@@ -54,7 +54,7 @@ class AuthEntryPage extends StatelessWidget {
         ),
         const SizedBox(height: AppConstants.spacing16),
         Text(
-          'Organize your wardrobe, visualize new looks, and master your '
+          'Organize your closet, visualize new looks, and master your '
           'style with high-precision AI guidance built for you.',
           style: TextStyle(
             fontSize: bodySize,

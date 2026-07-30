@@ -13,6 +13,7 @@ import {
   submitSocialImportScraperLogin,
 } from '@/api/socialImport'
 import type { SocialImportJobData, SocialImportItem, SocialImportSSEEvent } from '@/types'
+import { useUpgradePromptStore } from '@/stores/upgradePromptStore'
 
 const SOCIAL_IMPORT_ACTIVE_JOB_KEY = 'fitcheck.socialImport.activeJobId'
 const SOCIAL_IMPORT_OAUTH_MESSAGE_SOURCE = 'fitcheck-social-oauth'
@@ -74,7 +75,7 @@ export interface UseSocialImportQueue {
   }) => Promise<void>
   submitScraperAuth: (payload: { username: string; password: string; otp_code?: string }) => Promise<void>
   updateItem: (photoId: string, itemId: string, updates: Partial<SocialImportItem>) => Promise<void>
-  approveAwaiting: () => Promise<void>
+  approveAwaiting: () => Promise<import('@/api/socialImport').ApprovedSavedItem[]>
   rejectAwaiting: () => Promise<void>
   cancelJob: () => Promise<void>
   reset: (options?: { cancelActiveJob?: boolean }) => Promise<void>
@@ -86,10 +87,25 @@ export function useSocialImportQueue(): UseSocialImportQueue {
   const reconnectAttempts = useRef(0)
   const reconnectTimerRef = useRef<number | null>(null)
   const lastEventIdRef = useRef<number | null>(null)
+  // Tracks whether we've already shown the plan-limit upgrade prompt for the
+  // current paused_rate_limited period (avoids re-prompting on each status poll).
+  const rateLimitPromptedRef = useRef(false)
 
   const applyJobData = useCallback((job: SocialImportJobData) => {
     const terminal = isTerminalStatus(job.status)
     setActiveJobId(terminal ? null : job.id)
+    // paused_rate_limited = the user hit THEIR OWN plan limit (app-level daily
+    // cap). That's the "show upgrade" condition. Dedupe so repeated status
+    // polls don't re-open the dialog. (Upstream AI capacity is a different,
+    // non-upsell path handled in the batch flow.)
+    if (job.status === 'paused_rate_limited') {
+      if (!rateLimitPromptedRef.current) {
+        rateLimitPromptedRef.current = true
+        useUpgradePromptStore.getState().open('rate_limit', job.error_message)
+      }
+    } else {
+      rateLimitPromptedRef.current = false
+    }
     setState((prev) => ({
       ...prev,
       jobId: job.id,
@@ -347,9 +363,10 @@ export function useSocialImportQueue(): UseSocialImportQueue {
   )
 
   const approveAwaiting = useCallback(async () => {
-    if (!state.jobId || !state.awaitingPhotoId) return
-    await approveSocialImportPhoto(state.jobId, state.awaitingPhotoId)
+    if (!state.jobId || !state.awaitingPhotoId) return []
+    const savedItems = await approveSocialImportPhoto(state.jobId, state.awaitingPhotoId)
     await refreshStatus()
+    return savedItems
   }, [refreshStatus, state.awaitingPhotoId, state.jobId])
 
   const rejectAwaiting = useCallback(async () => {

@@ -59,6 +59,12 @@ from app.services.gemini_provider import GeminiConfig, GeminiProvider
 logger = get_context_logger(__name__)
 
 
+# Default ceiling for AI output. Kept as a constant (not settings.AI_MAX_OUTPUT_TOKENS
+# inline) so callers below default to the same value in one place, while
+# from_settings() still reads the env-configured value for the system config.
+DEFAULT_MAX_OUTPUT_TOKENS = settings.AI_MAX_OUTPUT_TOKENS
+
+
 # =============================================================================
 # DATA CLASSES
 # =============================================================================
@@ -112,7 +118,7 @@ class ProviderConfig:
     image_fallback_api_key: Optional[str] = None
     image_fallback_model: Optional[str] = None
 
-    max_tokens: int = 4096
+    max_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
 
     # Optimized timeout configuration (separate connect vs read)
     connect_timeout: float = 5.0     # 5s for connection establishment
@@ -192,6 +198,7 @@ class ProviderConfig:
                 model=getattr(s, 'AI_OPENAI_CHAT_MODEL', 'gpt-4o'),
                 vision_model=getattr(s, 'AI_OPENAI_VISION_MODEL', 'gpt-4o'),
                 image_gen_model=getattr(s, 'AI_OPENAI_IMAGE_MODEL', 'dall-e-3'),
+                max_tokens=getattr(s, "AI_MAX_OUTPUT_TOKENS", DEFAULT_MAX_OUTPUT_TOKENS),
             )
         elif provider == AIProvider.CUSTOM:
             return cls(
@@ -217,6 +224,7 @@ class ProviderConfig:
                 image_fallback_api_url=s.AI_IMAGE_FALLBACK_API_URL,
                 image_fallback_api_key=s.AI_IMAGE_FALLBACK_API_KEY,
                 image_fallback_model=s.AI_IMAGE_FALLBACK_MODEL,
+                max_tokens=getattr(s, "AI_MAX_OUTPUT_TOKENS", DEFAULT_MAX_OUTPUT_TOKENS),
             )
         return None
 
@@ -244,6 +252,8 @@ class ProviderConfig:
             image_fallback_model=raw.get("image_fallback_model"),
             image_fallback_api_url=raw.get("image_fallback_api_url"),
             image_fallback_api_key=raw.get("image_fallback_api_key"),
+            # BYOK configs inherit the same output ceiling as the system config.
+            max_tokens=raw.get("max_tokens", settings.AI_MAX_OUTPUT_TOKENS),
         )
 
     @classmethod
@@ -1099,7 +1109,14 @@ class AIProviderService:
         matching GeminiProvider's own not-shared-across-callers client policy."""
         if self._native_vision_provider is None:
             self._native_vision_provider = GeminiProvider(
-                GeminiConfig(api_key=self.config.vision_gemini_api_key)
+                # Inherit the parent config's output ceiling instead of falling
+                # back to GeminiConfig's own default, which previously left the
+                # native Gemini vision leg pinned at 4096 while the OpenAI leg
+                # had already been raised.
+                GeminiConfig(
+                    api_key=self.config.vision_gemini_api_key,
+                    max_tokens=self.config.max_tokens,
+                )
             )
         return self._native_vision_provider
 
@@ -1142,23 +1159,47 @@ class AIProviderService:
                 max_tokens=max_tokens,
                 response_format=response_format,
             )
-        except AIServiceError as e:
+        except AIServiceError as primary_err:
             if not fallback_model or fallback_model == primary_model:
                 raise
             logger.warning(
                 "Native Gemini vision call failed, falling back to Agnes",
                 primary_model=primary_model,
                 fallback_model=fallback_model,
-                error=str(e)[:200],
+                error_kind=primary_err.error_kind,
+                error=str(primary_err)[:200],
             )
-            return await self.chat(
-                messages=messages,
-                model=fallback_model,
-                max_tokens=max_tokens,
-                response_format=response_format,
-                api_url=self.config.get_vision_fallback_api_url(),
-                api_key=self.config.get_vision_fallback_api_key(),
+            try:
+                result = await self.chat(
+                    messages=messages,
+                    model=fallback_model,
+                    max_tokens=max_tokens,
+                    response_format=response_format,
+                    api_url=self.config.get_vision_fallback_api_url(),
+                    api_key=self.config.get_vision_fallback_api_key(),
+                )
+            except AIServiceError as fallback_err:
+                # Both legs failed: this is a capacity/provider problem ("on us"),
+                # not the user's own plan limit. Tag it so the UI can show
+                # "try again shortly" instead of a generic failure, and preserve
+                # whichever retry hint was offered.
+                raise AIServiceError(
+                    "AI vision unavailable: primary and fallback providers both failed",
+                    retryable=bool(fallback_err.retryable or primary_err.retryable),
+                    error_kind=(
+                        primary_err.error_kind or fallback_err.error_kind or "transient"
+                    ),
+                    retry_after_seconds=(
+                        fallback_err.retry_after_seconds or primary_err.retry_after_seconds
+                    ),
+                ) from fallback_err
+            logger.info(
+                "Vision fallback to Agnes succeeded after Gemini failure",
+                primary_model=primary_model,
+                fallback_model=fallback_model,
+                primary_error_kind=primary_err.error_kind,
             )
+            return result
 
     async def generate_image(
         self,

@@ -11,6 +11,12 @@ export interface ApiError {
   status?: number
   details?: unknown
   correlationId?: string
+  /** Backend AI-error bucket ("upstream_quota" | "transient" | "hard") for
+   * capacity/provider failures that are "on us" — NOT the user's plan limit.
+   * Lets the UI show "try again shortly" instead of an upgrade prompt. */
+  errorKind?: string
+  /** Advised retry delay (seconds) from the provider's RetryInfo, when present. */
+  retryAfterSeconds?: number
 }
 
 export function isApiError(error: unknown): error is ApiError {
@@ -38,7 +44,7 @@ export function getApiError(error: unknown): ApiError {
     const resp = (error as { response?: { status?: number; data?: Record<string, unknown>; headers?: Record<string, string> } }).response
     const status = resp?.status
     const data = resp?.data as
-      | { error?: string; detail?: string; message?: string; code?: string; details?: unknown; correlation_id?: string }
+      | { error?: string; detail?: string; message?: string; code?: string; details?: unknown; correlation_id?: string; error_kind?: string; retry_after_seconds?: number }
       | undefined
     const headers = resp?.headers
     const correlationId =
@@ -52,6 +58,8 @@ export function getApiError(error: unknown): ApiError {
       status,
       details: data?.details ?? data,
       correlationId,
+      errorKind: data?.error_kind,
+      retryAfterSeconds: data?.retry_after_seconds,
     }
   }
 

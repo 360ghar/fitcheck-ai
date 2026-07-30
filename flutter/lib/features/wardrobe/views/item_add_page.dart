@@ -115,7 +115,7 @@ class _ItemAddPageState extends State<ItemAddPage> {
 
         // Header
         Text(
-          'Add to Your Wardrobe',
+          'Add to Your Closet',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w700,
             color: tokens.textPrimary,

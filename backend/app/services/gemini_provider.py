@@ -15,9 +15,10 @@ same AIProviderClient interface every other provider does.
 """
 
 import base64
+import re
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from google import genai
 from google.genai import errors as genai_errors
@@ -25,6 +26,7 @@ from google.genai import types
 
 from app.core.exceptions import AIServiceError
 from app.core.logging_config import get_context_logger
+from app.core.config import settings
 from app.models.ai import HealthCheckResult
 from app.services.ai_provider_interface import (
     AIProvider,
@@ -43,6 +45,10 @@ logger = get_context_logger(__name__)
 DEFAULT_GEMINI_CHAT_MODEL = "gemini-3.6-flash"
 DEFAULT_GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image"
 
+# Shared output ceiling (also used by ProviderConfig). gemini-3.6-flash supports
+# up to 64K output tokens, so 32K is a safe default well under the cap.
+DEFAULT_MAX_OUTPUT_TOKENS = settings.AI_MAX_OUTPUT_TOKENS
+
 
 @dataclass
 class GeminiConfig:
@@ -58,7 +64,7 @@ class GeminiConfig:
     vision_fallback_model: Optional[str] = None    # Gemini-to-Gemini fallback only
     image_gen_model: str = DEFAULT_GEMINI_IMAGE_MODEL
     image_fallback_model: Optional[str] = None
-    max_tokens: int = 4096
+    max_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
 
     def get_vision_model(self) -> str:
         """Get the vision model, falling back to the default chat model."""
@@ -81,6 +87,7 @@ class GeminiConfig:
             vision_fallback_model=getattr(s, "AI_GEMINI_VISION_FALLBACK_MODEL", None) or None,
             image_gen_model=getattr(s, "AI_GEMINI_IMAGE_MODEL", None) or DEFAULT_GEMINI_IMAGE_MODEL,
             image_fallback_model=getattr(s, "AI_GEMINI_IMAGE_FALLBACK_MODEL", None) or None,
+            max_tokens=getattr(s, "AI_MAX_OUTPUT_TOKENS", DEFAULT_MAX_OUTPUT_TOKENS),
         )
 
     @classmethod
@@ -97,6 +104,8 @@ class GeminiConfig:
             vision_fallback_model=raw.get("vision_fallback_model"),
             image_gen_model=raw.get("image_gen_model") or DEFAULT_GEMINI_IMAGE_MODEL,
             image_fallback_model=raw.get("image_fallback_model"),
+            # BYOK configs inherit the same output ceiling as the system config.
+            max_tokens=raw.get("max_tokens") or DEFAULT_MAX_OUTPUT_TOKENS,
         )
 
     @classmethod
@@ -109,6 +118,68 @@ class GeminiConfig:
 
 
 _TRANSIENT_CODES = frozenset({408, 429, 500, 502, 503, 504})
+
+
+def _parse_retry_delay_seconds(details: Any) -> Optional[int]:
+    """Extract the advised retry delay (seconds) from a Gemini APIError payload.
+
+    RESOURCE_EXHAUSTED responses carry a google.rpc.RetryInfo whose retryDelay
+    looks like "56s". ``details`` is the raw response_json the SDK stored on the
+    error; str() it and scan rather than recursing the nested dict shape, which
+    varies across SDK versions.
+    """
+    try:
+        text = str(details or "")
+    except Exception:
+        return None
+    # Match either JSON ("retryDelay": "56s") or Python dict repr
+    # ('retryDelay': '56s') - the SDK stores the parsed dict, so str() yields
+    # single-quoted repr, but defend against a JSON string form too.
+    match = re.search(r"retryDelay[\"']?\s*:\s*[\"']?(\d+)\s*s", text)
+    return int(match.group(1)) if match else None
+
+
+def classify_gemini_error(e: Exception) -> Tuple[bool, Optional[str], Optional[int]]:
+    """Bucket a google-genai APIError into (retryable, error_kind, retry_after_seconds).
+
+    Why this exists: the SDK exposes code/status/message/details, but the old
+    handler looked only at ``e.code`` and collapsed a daily free-tier quota
+    (pointless to retry today), a per-minute quota (retryable after ~60s), and a
+    503 overload into the same retryable flag. Splitting them lets the caller
+    fall over to the configured fallback immediately for daily quota, back off
+    for per-minute/transient, and fail fast for auth/parse errors.
+
+    error_kind values (surfaced to the UI via AIServiceError.to_dict()):
+      - "upstream_quota": provider free-tier/billing quota exhausted. This is
+        "on us" (the server's key), NOT the user's plan limit, so the UI shows
+        "try again shortly", never an upgrade prompt.
+      - "transient": 5xx overload / timeout. Retryable.
+      - "hard": 4xx auth/content/parse. Not retryable.
+    """
+    code = getattr(e, "code", None)
+    status_str = (getattr(e, "status", None) or "")
+    message = (getattr(e, "message", None) or "")
+    details = getattr(e, "details", None)
+    combined = f"{message} {details}".lower()
+    # Normalise so "PerDay" / "Per-Day" / "Per_Day" all match a single token.
+    combined_compact = combined.replace("_", "").replace("-", "")
+
+    is_quota = code == 429 or status_str == "RESOURCE_EXHAUSTED"
+    if is_quota:
+        retry_after = _parse_retry_delay_seconds(details)
+        # A daily quota will not reset until tomorrow, so retrying Gemini is
+        # futile -> not retryable, which forces the configured fallback provider
+        # (Agnes) to take over immediately instead of burning the retry.
+        if "perday" in combined_compact:
+            return (False, "upstream_quota", None)
+        # Per-minute quota (or indeterminate): retryable after the advised delay.
+        return (True, "upstream_quota", retry_after)
+
+    if code in _TRANSIENT_CODES or status_str == "UNAVAILABLE":
+        return (True, "transient", None)
+
+    return (False, "hard", None)
+
 
 # finish_reason values that mean the response was blocked, not just short.
 _BLOCKED_FINISH_REASONS = (
@@ -249,14 +320,21 @@ class GeminiProvider:
                 config=types.GenerateContentConfig(**config_kwargs),
             )
         except genai_errors.APIError as e:
-            retryable = getattr(e, "code", None) in _TRANSIENT_CODES
+            retryable, error_kind, retry_after = classify_gemini_error(e)
             logger.error(
                 f"Gemini request failed: {e}",
                 model=use_model,
                 retryable=retryable,
+                error_kind=error_kind,
+                retry_after_seconds=retry_after,
                 exc_info=False,
             )
-            raise AIServiceError(f"Gemini request failed: {e}", retryable=retryable)
+            raise AIServiceError(
+                f"Gemini request failed: {e}",
+                retryable=retryable,
+                error_kind=error_kind,
+                retry_after_seconds=retry_after,
+            )
 
         return self._parse_response(response, use_model, structured_output_requested=wants_json)
 

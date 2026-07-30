@@ -459,25 +459,74 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
         );
       }
 
+      // Dense, horizontally-scrollable rails grouped by category (reference video UX).
+      final grouped = <String, List<dynamic>>{};
+      for (final item in items) {
+        grouped.putIfAbsent(item.category.name, () => <dynamic>[]).add(item);
+      }
+      final categories = grouped.keys.toList()..sort();
+
       return Padding(
-        padding: const EdgeInsets.all(AppConstants.spacing16),
-        child: GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            mainAxisSpacing: AppConstants.spacing12,
-            crossAxisSpacing: AppConstants.spacing12,
-            childAspectRatio: 0.75,
-          ),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final item = items[index];
-            return _buildWardrobeItemCard(context, item, controller, tokens);
-          },
+        padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: categories.map((category) {
+            final categoryItems = grouped[category]!;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.spacing16,
+                    vertical: AppConstants.spacing8,
+                  ),
+                  child: Text(
+                    '${_categoryLabel(category)} (${categoryItems.length})',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: tokens.textMuted,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ),
+                SizedBox(
+                  height: 132,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppConstants.spacing16,
+                    ),
+                    itemCount: categoryItems.length,
+                    itemBuilder: (context, index) {
+                      final item = categoryItems[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(right: AppConstants.spacing12),
+                        child: SizedBox(
+                          width: 100,
+                          child: _buildWardrobeItemCard(context, item, controller, tokens),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: AppConstants.spacing8),
+              ],
+            );
+          }).toList(),
         ),
       );
     });
+  }
+
+  String _categoryLabel(String category) {
+    try {
+      return Category.values
+          .firstWhere((c) => c.name == category)
+          .displayName;
+    } catch (_) {
+      return category.isEmpty
+          ? 'Other'
+          : category[0].toUpperCase() + category.substring(1);
+    }
   }
 
   Widget _buildWardrobeItemCard(

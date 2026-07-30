@@ -55,6 +55,10 @@ class SocialImportPipelineService:
     def __init__(self, *, user_id: str, db):
         self.user_id = user_id
         self.db = db
+        # Set when upstream AI capacity is exhausted (Gemini free-tier quota +
+        # Agnes fallback both failed). Stops _run_queue from grinding through
+        # every remaining photo. Per-instance == per-job run.
+        self._capacity_exhausted = False
 
     @classmethod
     def _job_lock(cls, job_id: str) -> asyncio.Lock:
@@ -460,6 +464,11 @@ class SocialImportPipelineService:
 
         # Keep pumping until we are blocked on user review/auth or completed.
         while True:
+            if self._capacity_exhausted:
+                # Upstream AI capacity exhausted mid-run; don't claim more
+                # photos (each would just fail the same way).
+                await self._sync_job_counters(job_id)
+                return
             job = await SocialImportJobStore.get_job(
                 self.db, job_id=job_id, user_id=self.user_id
             )
@@ -848,6 +857,26 @@ class SocialImportPipelineService:
             await self._sync_job_counters(job_id)
 
         except Exception as e:
+            error_kind = getattr(e, "error_kind", None)
+            retry_after = getattr(e, "retry_after_seconds", None)
+            # Upstream capacity/quota exhaustion is the server's problem ("on
+            # us"), not the user's plan limit (which is raised pre-flight as
+            # PAUSED_RATE_LIMITED). Stop grinding the remaining photos and tag
+            # the event so the UI can say "try again shortly" - never an upgrade.
+            if error_kind == "upstream_quota":
+                self._capacity_exhausted = True
+                await self._publish_event(
+                    job_id,
+                    "capacity_exhausted",
+                    {
+                        "job_id": job_id,
+                        "photo_id": photo_id,
+                        "error": "AI service capacity exhausted; remaining photos will retry later",
+                        "code": "AI_SERVICE_ERROR",
+                        "error_kind": error_kind,
+                        "retry_after_seconds": retry_after,
+                    },
+                )
             await SocialImportJobStore.update_photo(
                 self.db,
                 job_id=job_id,
@@ -862,7 +891,14 @@ class SocialImportPipelineService:
             await self._publish_event(
                 job_id,
                 "photo_failed",
-                {"job_id": job_id, "photo_id": photo_id, "error": str(e)},
+                {
+                    "job_id": job_id,
+                    "photo_id": photo_id,
+                    "error": str(e),
+                    "code": "AI_SERVICE_ERROR",
+                    "error_kind": error_kind,
+                    "retry_after_seconds": retry_after,
+                },
             )
             await self._sync_job_counters(job_id)
 
@@ -885,6 +921,7 @@ class SocialImportPipelineService:
                 user_id=self.user_id,
             )
             saved_count = 0
+            saved_items: List[Dict[str, Any]] = []
             for item in items:
                 if item.get("status") in {
                     SocialImportItemStatus.FAILED.value,
@@ -917,6 +954,12 @@ class SocialImportPipelineService:
                     continue
                 if saved_item_id:
                     saved_count += 1
+                    saved_items.append(
+                        {
+                            "id": saved_item_id,
+                            "category": item.get("category"),
+                        }
+                    )
                     await SocialImportJobStore.update_item(
                         self.db,
                         job_id=job_id,
@@ -954,7 +997,7 @@ class SocialImportPipelineService:
             await self._sync_job_counters(job_id)
 
         await self.schedule_job(self, job_id)
-        return {"saved_count": saved_count}
+        return {"saved_count": saved_count, "saved_items": saved_items}
 
     async def reject_photo(self, job_id: str, photo_id: str) -> Dict[str, Any]:
         lock = self._job_lock(job_id)

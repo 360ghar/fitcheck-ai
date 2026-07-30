@@ -590,7 +590,11 @@ async def approve_social_photo(
         status="approved",
         message=f"Photo approved and saved ({result.get('saved_count', 0)} items)",
     )
-    return {"data": payload.model_dump(), "message": "Approved"}
+    data = payload.model_dump()
+    # Include the saved item ids/categories so the client can auto-create an outfit
+    # from this photo's items and kick off its render.
+    data["saved_items"] = result.get("saved_items", [])
+    return {"data": data, "message": "Approved"}
 
 
 @router.post(

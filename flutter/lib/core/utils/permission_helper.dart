@@ -16,7 +16,7 @@ class PermissionHelper {
       title: 'Camera Access',
       message:
           'FitCheck AI uses your camera to capture photos of your clothing '
-          'and outfits for AI try-on and wardrobe organization.',
+          'and outfits for AI try-on and closet organization.',
     );
   }
 
@@ -28,7 +28,7 @@ class PermissionHelper {
       title: 'Photo Access',
       message:
           'FitCheck AI needs access to your photos so you can select clothing '
-          'and outfit images for AI features and your wardrobe.',
+          'and outfit images for AI features and your closet.',
     );
   }
 

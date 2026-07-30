@@ -1056,3 +1056,71 @@ class TestHybridGeminiVisionLeg:
 
         close_mock.assert_awaited_once()
         assert service._native_vision_provider is None
+
+
+class TestMaxOutputTokensConfig:
+    """The old hardcoded max_tokens=4096 truncated large structured
+    extractions and surfaced to users as "finish_reason=length" errors.
+    These guard the raised default (32768) and the AI_MAX_OUTPUT_TOKENS env
+    override path, so the regression can't silently return."""
+
+    def test_config_field_default_is_raised_above_4096(self):
+        """ProviderConfig.max_tokens must default well above the old 4096."""
+        cfg = ProviderConfig(api_url="https://x/v1", api_key="k", model="m")
+        assert cfg.max_tokens >= 32768
+
+    def test_settings_default_is_32768(self):
+        """AI_MAX_OUTPUT_TOKENS ships at 32K (under both providers' >=64K caps)."""
+        from app.core.config import Settings
+
+        assert Settings.model_fields["AI_MAX_OUTPUT_TOKENS"].default == 32768
+
+    def test_from_settings_reads_ai_max_output_tokens_for_custom(self):
+        """ProviderConfig.from_settings(CUSTOM) must honor the env value,
+        not fall back to the hardcoded default."""
+        from types import SimpleNamespace
+
+        s = SimpleNamespace(
+            AI_CHAT_API_URL="https://apihub.agnes-ai.com/v1",
+            AI_CHAT_API_KEY="k",
+            AI_CHAT_MODEL="agnes-2.5-flash",
+            AI_VISION_API_URL=None,
+            AI_VISION_API_KEY=None,
+            AI_VISION_MODEL="gemini-3.6-flash",
+            AI_VISION_PROVIDER="gemini",
+            AI_GEMINI_API_KEY="gk",
+            AI_VISION_FALLBACK_API_URL=None,
+            AI_VISION_FALLBACK_API_KEY=None,
+            AI_VISION_FALLBACK_MODEL="agnes-2.5-flash",
+            AI_IMAGE_API_URL=None,
+            AI_IMAGE_API_KEY=None,
+            AI_IMAGE_MODEL="agnes-image-2.1-flash",
+            AI_IMAGE_API_STYLE="images",
+            AI_IMAGE_FALLBACK_API_URL=None,
+            AI_IMAGE_FALLBACK_API_KEY=None,
+            AI_IMAGE_FALLBACK_MODEL="agnes-image-2.0-flash",
+            AI_MAX_OUTPUT_TOKENS=16384,
+        )
+        cfg = ProviderConfig.from_settings(AIProvider.CUSTOM, s)
+        assert cfg.max_tokens == 16384
+
+    def test_from_user_dict_inherits_system_ceiling(self):
+        """BYOK configs get the same output ceiling as the system config."""
+        cfg = ProviderConfig.from_user_dict({"api_url": "https://x/v1"}, api_key="k")
+        from app.core.config import settings
+
+        assert cfg.max_tokens == settings.AI_MAX_OUTPUT_TOKENS
+
+    def test_hybrid_vision_gemini_config_inherits_parent_max_tokens(self):
+        """Regression: the internal GeminiConfig built for the hybrid vision
+        leg used to be constructed with max_tokens unset, pinning native
+        Gemini vision at 4096 even after the OpenAI leg was raised. It must
+        now inherit the parent ProviderConfig's value."""
+        config = _make_config()
+        config.max_tokens = 20480
+        config.vision_provider = AIProvider.GEMINI
+        config.vision_gemini_api_key = "gemini-key"
+        service = AIProviderService(config)
+
+        native = service._get_native_vision_provider()
+        assert native.config.max_tokens == 20480

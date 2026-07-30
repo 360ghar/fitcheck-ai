@@ -16,6 +16,7 @@ import {
 import { logger } from '@/lib/logger';
 import { isApiError, type ApiError } from '@/lib/errors';
 import { ENDPOINTS, LONG_RUNNING_PREFIXES } from '@/lib/endpoints';
+import { useUpgradePromptStore } from '@/stores/upgradePromptStore';
 
 // ============================================================================
 // AXIOS CONFIG TYPE EXTENSION
@@ -320,10 +321,26 @@ apiClient.interceptors.response.use(
       // Not explicitly skipped by the request
       !originalRequest._skipToast;
 
+    // The user hit THEIR OWN plan limit (backend RATE_LIMIT_EXCEEDED): this is
+    // the one place we show an upgrade prompt. Upstream AI capacity issues
+    // (errorKind) are "on us" and handled as a friendly retry below — never an
+    // upgrade.
+    if (!originalRequest._skipToast && apiError.code === 'RATE_LIMIT_EXCEEDED') {
+      useUpgradePromptStore.getState().open('rate_limit', apiError.message);
+      return Promise.reject(error);
+    }
+
     if (shouldShowToast) {
       if (!error.response) {
         // Network error - no response received
         showNetworkError();
+      } else if (apiError.errorKind) {
+        // Upstream AI capacity/provider failure ("on us"): friendly retry
+        // message, not the scary generic error and never an upgrade prompt.
+        showWarning(
+          'Our AI service is busy. Please try again in a few minutes.',
+          'AI busy'
+        );
       } else if (error.response.status === 429) {
         // Rate limit error - show as warning
         showWarning(apiError.message || 'Too many requests. Please slow down.', 'Rate Limited');
@@ -349,7 +366,7 @@ export function getApiError(error: unknown): ApiError {
   if (axios.isAxiosError(error)) {
     const status = error.response?.status;
     const data = error.response?.data as
-      | { error?: string; detail?: string; message?: string; code?: string; details?: unknown; correlation_id?: string }
+      | { error?: string; detail?: string; message?: string; code?: string; details?: unknown; correlation_id?: string; error_kind?: string; retry_after_seconds?: number }
       | undefined;
     const headers = error.response?.headers;
 
@@ -365,6 +382,8 @@ export function getApiError(error: unknown): ApiError {
       status,
       details: data?.details ?? data,
       correlationId,
+      errorKind: data?.error_kind,
+      retryAfterSeconds: data?.retry_after_seconds,
     };
 
     // Log the error with correlation ID for debugging (dev mode only)

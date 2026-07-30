@@ -330,8 +330,11 @@ async def lifespan(app: FastAPI):
     try:
         from app.core.config_health import validate_production_config
         for issue in validate_production_config():
+            # Put the key + message in the human-readable text too: Railway's
+            # plain-text log drain does not render the structured `extra` fields,
+            # so "Config issue at startup" alone gave no clue WHICH key was bad.
             getattr(logger, "error" if issue.severity == "error" else "warning")(
-                "Config issue at startup",
+                f"Config issue at startup: {issue.key} - {issue.message}",
                 extra={
                     "config_key": issue.key,
                     "config_severity": issue.severity,
