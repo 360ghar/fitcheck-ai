@@ -1,16 +1,32 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/config/env_config.dart';
 import '../../../core/utils/error_handler.dart';
-import '../repositories/subscription_repository.dart';
 import '../models/subscription_model.dart';
+import '../repositories/subscription_repository.dart';
+import '../services/iap_service.dart';
 import '../../../core/utils/frame_safe.dart';
 
-/// Controller for subscription and referral state
+/// Controller for subscription and referral state.
+///
+/// Purchase routing (App Store Guideline 3.1.1 compliance):
+/// - iOS / Android: purchases go through the store (StoreKit / Play Billing)
+///   and are verified by the backend. Stripe checkout is NEVER opened from a
+///   mobile build.
+/// - Web: Stripe checkout remains the purchase rail.
 class SubscriptionController extends GetxController {
-  final SubscriptionRepository _repository = SubscriptionRepository();
+  SubscriptionController({IapService? iapService, SubscriptionRepository? repository})
+      : iapService = iapService ?? IapService(),
+        _repository = repository ?? SubscriptionRepository();
+
+  final SubscriptionRepository _repository;
+  final IapService iapService;
 
   // Observable state
   final Rx<SubscriptionModel?> subscription = Rx<SubscriptionModel?>(null);
@@ -18,11 +34,16 @@ class SubscriptionController extends GetxController {
   final Rx<ReferralCodeModel?> referralCode = Rx<ReferralCodeModel?>(null);
   final Rx<ReferralStatsModel?> referralStats = Rx<ReferralStatsModel?>(null);
   final RxList<PlanDetailsModel> plans = <PlanDetailsModel>[].obs;
+  final Rx<StoreProductsModel> storeProducts = Rx<StoreProductsModel>(StoreProductsModel());
+  /// Store product details (localized prices) keyed by product ID.
+  final RxMap<String, ProductDetails> storeProductDetails = <String, ProductDetails>{}.obs;
   final RxBool isLoading = false.obs;
   final RxBool isCheckingOut = false.obs;
   final RxBool isLoadingReferral = false.obs;
   final RxString error = ''.obs;
   final RxString referralError = ''.obs;
+
+  StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
 
   // Computed properties
   bool get isPro {
@@ -33,6 +54,14 @@ class SubscriptionController extends GetxController {
     return plan != null && plan != PlanType.free;
   }
   bool get isCancelled => subscription.value?.cancelAtPeriodEnd ?? false;
+
+  /// Whether this subscription is billed through a store (App Store or Play)
+  /// rather than Stripe web checkout. Store-billed subscriptions are managed
+  /// in the store's subscription settings, not in-app.
+  bool get isStoreBilled {
+    final provider = subscription.value?.billingProvider;
+    return provider == 'apple' || provider == 'google';
+  }
 
   /// Whether a higher tier exists to upsell (Free and Plus users).
   ///
@@ -45,8 +74,9 @@ class SubscriptionController extends GetxController {
     return plan != PlanType.proMonthly && plan != PlanType.proYearly;
   }
 
-  /// Whether monetization CTAs (paywall, Stripe checkout, pricing) may render.
-  /// OFF on iOS for v1 (App Store Guideline 3.1.1 anti-steering).
+  /// Whether monetization CTAs (paywall, purchase flow) may render.
+  /// OFF only when the build is compiled with PAYWALL_ENABLED=false
+  /// (e.g. App Review builds that must not surface monetization).
   bool get showPaywall => EnvConfig.paywallEnabled;
 
   String get planName {
@@ -80,13 +110,41 @@ class SubscriptionController extends GetxController {
   bool get isNearLimit =>
       extractionsPercentage > 0.8 || generationsPercentage > 0.8;
 
+  /// Localized store price for a plan type ("plus_monthly", ...), or null
+  /// when the store product details have not loaded yet.
+  String? storePriceFor(String planType) => storeProductDetails[planType]?.price;
+
   @override
   void onInit() {
     super.onInit();
+    attachPurchaseListener();
     fetchSubscription();
     fetchReferralCode();
     fetchReferralStats();
     fetchPlans();
+  }
+
+  /// Start listening for store-purchase results.
+  ///
+  /// Idempotent and public so tests can attach the listener without running
+  /// the full onInit data fetch.
+  void attachPurchaseListener() {
+    if (_purchaseSubscription != null) return;
+    // Store-purchase results (purchased / pending / restored / error) arrive
+    // on this stream after buyNonConsumable / restorePurchases.
+    _purchaseSubscription = iapService.purchaseStream.listen(
+      (updates) {
+        for (final details in updates) {
+          _handlePurchaseUpdate(details);
+        }
+      },
+    );
+  }
+
+  @override
+  void onClose() {
+    _purchaseSubscription?.cancel();
+    super.onClose();
   }
 
   /// Fetch subscription and usage data
@@ -117,14 +175,40 @@ class SubscriptionController extends GetxController {
     }
   }
 
-  /// Fetch available plans
+  /// Fetch available plans + store product IDs
   Future<void> fetchPlans() async {
     try {
       final result = await _repository.getPlans();
-      plans.assignAll(result);
+      plans.assignAll(result.plans);
+      storeProducts.value = result.storeProducts;
+      // Kick off the store product query for localized prices (mobile only).
+      unawaited(refreshStoreProducts());
     } catch (e, stackTrace) {
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
+    }
+  }
+
+  /// Query the store for product details (localized prices) of all variants.
+  Future<void> refreshStoreProducts() async {
+    if (!iapService.isStoreBillingAvailable) return;
+    try {
+      final ids = <String>{};
+      for (final planType in const [
+        'plus_monthly', 'plus_yearly', 'pro_monthly', 'pro_yearly',
+      ]) {
+        final id = storeProducts.value.productIdFor(iapService.storeName, planType);
+        if (id != null) ids.add(id);
+      }
+      if (ids.isEmpty) return;
+      final details = await iapService.fetchProducts(ids);
+      storeProductDetails
+        ..clear()
+        ..addEntries(details.map((d) => MapEntry(d.id, d)));
+    } catch (e, stackTrace) {
+      // Prices fall back to the /plans response; a failed store query must
+      // not block the page.
+      ErrorHandler.reportError(e, 'Store product query failed', stackTrace: stackTrace);
     }
   }
 
@@ -155,34 +239,26 @@ class SubscriptionController extends GetxController {
     }
   }
 
-  /// Start checkout for a plan
+  // =========================================================================
+  // Purchasing
+  // =========================================================================
+
+  /// Start checkout for a plan type ("plus_monthly", "pro_yearly", ...).
+  ///
+  /// Mobile: store purchase via StoreKit / Play Billing (the backend
+  /// verifies the transaction before granting entitlement).
+  /// Web: Stripe checkout (unchanged).
   Future<void> startCheckout(String planType) async {
-    // Hard guard: never open external Stripe checkout when the paywall is
-    // disabled (e.g. iOS v1). Prevents a stray call during App Review.
+    // Hard guard: never surface a purchase flow when the paywall is disabled
+    // (e.g. App Review builds). Prevents a stray call during review.
     if (!showPaywall) return;
     isCheckingOut.value = true;
     error.value = '';
     try {
-      final session = await _repository.createCheckoutSession(
-        planType: planType,
-      );
-      if (session.updated) {
-        // Paid-plan changes are applied directly to the existing Stripe
-        // subscription. Refresh local entitlements instead of opening a
-        // checkout URL that the backend deliberately did not return.
-        await fetchSubscription();
-        return;
-      }
-      final checkoutUrl = session.checkoutUrl;
-      if (checkoutUrl == null || checkoutUrl.isEmpty) {
-        error.value = 'Checkout did not return a payment link';
-        return;
-      }
-      final url = Uri.parse(checkoutUrl);
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
+      if (kIsWeb) {
+        await _startStripeCheckout(planType);
       } else {
-        error.value = 'Could not open checkout page';
+        await _startStorePurchase(planType);
       }
     } catch (e, stackTrace) {
       error.value = ErrorHandler.extractMessage(e);
@@ -192,8 +268,175 @@ class SubscriptionController extends GetxController {
     }
   }
 
-  /// Cancel subscription
+  Future<void> _startStorePurchase(String planType) async {
+    if (!iapService.isStoreBillingAvailable) {
+      error.value = 'In-app purchases are not available on this device.';
+      return;
+    }
+    final productId = storeProducts.value.productIdFor(iapService.storeName, planType);
+    if (productId == null) {
+      error.value = 'This plan is not available for purchase yet.';
+      return;
+    }
+    final products = await iapService.fetchProducts({productId});
+    if (products.isEmpty) {
+      error.value = 'This plan is not available in the store yet.';
+      return;
+    }
+    final started = await iapService.startPurchase(products.first);
+    if (!started) {
+      error.value = 'The purchase could not be started. Please try again.';
+    }
+    // The purchase result arrives on the purchase stream.
+  }
+
+  Future<void> _startStripeCheckout(String planType) async {
+    final session = await _repository.createCheckoutSession(
+      planType: planType,
+    );
+    if (session.updated) {
+      // Paid-plan changes are applied directly to the existing Stripe
+      // subscription. Refresh local entitlements instead of opening a
+      // checkout URL that the backend deliberately did not return.
+      await fetchSubscription();
+      return;
+    }
+    final checkoutUrl = session.checkoutUrl;
+    if (checkoutUrl == null || checkoutUrl.isEmpty) {
+      error.value = 'Checkout did not return a payment link';
+      return;
+    }
+    final url = Uri.parse(checkoutUrl);
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      error.value = 'Could not open checkout page';
+    }
+  }
+
+  Future<void> _handlePurchaseUpdate(PurchaseDetails details) async {
+    switch (details.status) {
+      case PurchaseStatus.purchased:
+      case PurchaseStatus.restored:
+        await _registerStorePurchase(
+          details,
+          restored: details.status == PurchaseStatus.restored,
+        );
+      case PurchaseStatus.pending:
+        // Ask to Buy / parental approval. The user has not been charged yet.
+        ErrorHandler.showSuccess(
+          'Your purchase is pending approval. You\'ll get access as soon as it\'s approved.',
+          title: 'Purchase pending',
+        );
+      case PurchaseStatus.error:
+        error.value = details.error?.message ?? 'The purchase failed.';
+        ErrorHandler.showError(error.value, title: 'Purchase failed');
+      case PurchaseStatus.canceled:
+        break; // User dismissed the sheet; nothing to do.
+    }
+  }
+
+  Future<void> _registerStorePurchase(
+    PurchaseDetails details, {
+    required bool restored,
+  }) async {
+    final transactionId = iapService.transactionIdFor(details);
+    if (transactionId == null || transactionId.isEmpty) {
+      error.value = 'The purchase did not include a verifiable transaction ID.';
+      ErrorHandler.showError(error.value, title: 'Purchase error');
+      return;
+    }
+    try {
+      final sub = await _repository.registerIapTransaction(
+        store: iapService.storeName,
+        transactionId: transactionId,
+        productId: details.productID,
+      );
+      subscription.value = sub;
+      // Only complete (deliver) the purchase after the backend verified it;
+      // otherwise the store would consider it delivered despite no
+      // entitlement.
+      await iapService.complete(details);
+      await fetchUsage();
+      ErrorHandler.showSuccess(
+        restored
+            ? 'Your purchases have been restored.'
+            : 'Your subscription is active. Welcome!',
+        title: restored ? 'Restored' : 'Subscription active',
+      );
+    } catch (e, stackTrace) {
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
+      // Do NOT complete the purchase: the store keeps it pending and
+      // redelivers it (or the backend webhook reconciles it server-side).
+      ErrorHandler.showError(
+        'We couldn\'t verify your purchase with the store right now. '
+        'It will be picked up automatically; you won\'t be charged twice.',
+        title: 'Verification pending',
+      );
+    }
+  }
+
+  /// Restore purchases from the store (App Store / Play settings change or
+  /// reinstall). Restored transactions arrive on the purchase stream.
+  Future<void> restorePurchases() async {
+    if (!iapService.isStoreBillingAvailable) return;
+    isCheckingOut.value = true;
+    error.value = '';
+    try {
+      await iapService.restorePurchases();
+    } catch (e, stackTrace) {
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
+      ErrorHandler.showError('Could not restore purchases.', title: 'Restore failed');
+    } finally {
+      isCheckingOut.value = false;
+    }
+  }
+
+  /// Open the platform's subscription management surface.
+  ///
+  /// iOS: App Store subscriptions settings; Android: Play Store
+  /// subscriptions; web: Stripe billing portal.
+  Future<void> openManageSubscription() async {
+    if (kIsWeb) {
+      try {
+        final portalUrl = await _repository.createPortalSession();
+        if (portalUrl.isEmpty) {
+          error.value = 'Could not open billing management.';
+          return;
+        }
+        await _launchUrl(Uri.parse(portalUrl));
+      } catch (e, stackTrace) {
+        error.value = ErrorHandler.extractMessage(e);
+        ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
+      }
+      return;
+    }
+    final url = iapService.isApple
+        ? Uri.parse('https://apps.apple.com/account/subscriptions')
+        : Uri.parse('https://play.google.com/store/account/subscriptions');
+    await _launchUrl(url);
+  }
+
+  Future<void> _launchUrl(Uri url) async {
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      error.value = 'Could not open the link.';
+    }
+  }
+
+  /// Cancel subscription (Stripe-billed rows only; store-billed
+  /// subscriptions are managed in the store).
   Future<void> cancelSubscription() async {
+    if (isStoreBilled) {
+      ErrorHandler.showError(
+        'This subscription is billed through the store. Manage it in your store account settings.',
+        title: 'Manage in store',
+      );
+      return;
+    }
     isLoading.value = true;
     error.value = '';
     try {

@@ -120,11 +120,13 @@ class GeminiConfig:
 _TRANSIENT_CODES = frozenset({408, 429, 500, 502, 503, 504})
 
 
-def _parse_retry_delay_seconds(details: Any) -> Optional[int]:
+def _parse_retry_delay_seconds(details: Any) -> Optional[float]:
     """Extract the advised retry delay (seconds) from a Gemini APIError payload.
 
     RESOURCE_EXHAUSTED responses carry a google.rpc.RetryInfo whose retryDelay
-    looks like "56s". ``details`` is the raw response_json the SDK stored on the
+    is a Go duration string - protobuf Duration serializes to decimal seconds,
+    e.g. "56s" or the sub-second-precision form seen in real quota errors,
+    "30.857471809s". ``details`` is the raw response_json the SDK stored on the
     error; str() it and scan rather than recursing the nested dict shape, which
     varies across SDK versions.
     """
@@ -133,13 +135,15 @@ def _parse_retry_delay_seconds(details: Any) -> Optional[int]:
     except Exception:
         return None
     # Match either JSON ("retryDelay": "56s") or Python dict repr
-    # ('retryDelay': '56s') - the SDK stores the parsed dict, so str() yields
-    # single-quoted repr, but defend against a JSON string form too.
-    match = re.search(r"retryDelay[\"']?\s*:\s*[\"']?(\d+)\s*s", text)
-    return int(match.group(1)) if match else None
+    # ('retryDelay': '30.857471809s') - the SDK stores the parsed dict, so str()
+    # yields single-quoted repr, but defend against a JSON string form too.
+    # Decimal seconds are required, not optional: the live Gemini quota errors
+    # carry sub-second precision ("Please retry in 30.857471809s").
+    match = re.search(r"retryDelay[\"']?\s*:\s*[\"']?(\d+(?:\.\d+)?)\s*s", text)
+    return float(match.group(1)) if match else None
 
 
-def classify_gemini_error(e: Exception) -> Tuple[bool, Optional[str], Optional[int]]:
+def classify_gemini_error(e: Exception) -> Tuple[bool, Optional[str], Optional[float]]:
     """Bucket a google-genai APIError into (retryable, error_kind, retry_after_seconds).
 
     Why this exists: the SDK exposes code/status/message/details, but the old

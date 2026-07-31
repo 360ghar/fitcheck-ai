@@ -1,6 +1,6 @@
 # Frontend
 
-Last updated: 2026-07-22
+Last updated: 2026-08-01
 
 React + TypeScript web app under `frontend/`. Package-local agent entry: `frontend/CLAUDE.md` (thin pointer here). UI direction: `docs/DESIGN.md`.
 
@@ -93,6 +93,29 @@ stores must not import pages
 ### Image prep for AI
 
 - `lib/image-compress.ts` before upload when appropriate
+
+### Replayable previews (PostHog session recordings)
+
+- `lib/replayable-preview.ts` — `fileToReplayablePreview(file)` builds a
+  downscaled **data URL** (JPEG, ≤512px longest edge; small files pass through)
+  for any preview that will be visible during a recorded session.
+- Do **not** feed `URL.createObjectURL(file)` (`blob:`) directly into `<img>`
+  previews: rrweb serializes the DOM `src`, and blob URLs only exist in the
+  originating browser session, so recordings replay as blank images.
+- Uploads always use the `File` object (never the preview URL), so downscaling
+  previews never affects upload fidelity. Landing-page demos are still
+  blob-based (out of scope).
+
+### Error copy — never render raw backend bodies
+
+- Backends log the diagnostic detail (which DB RPC / migration is missing,
+  provider internals); the web UI must show **friendly copy only**.
+- `lib/batch-extraction-errors.ts` — `getBatchExtractionErrorMessage(error)`
+  maps the error's machine fields (`code` / `status` / `errorKind`) to stable
+  friendly messages (network / service / fallback) for the batch upload flow.
+- Do **not** render `getApiError(error).message` (or Axios's `error.message`)
+  directly: it can leak SQL function names, migration numbers, and provider
+  internals. Map to friendly copy instead.
 
 ## Environment
 

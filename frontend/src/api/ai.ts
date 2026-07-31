@@ -7,6 +7,7 @@
 import { apiClient } from './client';
 import { logger } from '../lib/logger';
 import { ENDPOINTS } from '@/lib/endpoints';
+import type { AxiosRequestConfig } from 'axios';
 
 // =============================================================================
 // TYPES
@@ -309,10 +310,14 @@ export async function extractItems(imageFile: File): Promise<ExtractItemsResult>
 
 /**
  * Generate an outfit visualization image.
+ *
+ * `config` lets callers pass `skipToast` when they render their own failure UI
+ * (e.g. the create flow's inline preview error) instead of the global toast.
  */
 export async function generateOutfit(
   items: OutfitItemInput[],
-  options: GenerateOutfitOptions = {}
+  options: GenerateOutfitOptions = {},
+  config?: AxiosRequestConfig
 ): Promise<GeneratedOutfit> {
   const response = await apiClient.post<{ data: GeneratedOutfit }>(ENDPOINTS.AI.GENERATE_OUTFIT, {
     items,
@@ -327,7 +332,7 @@ export async function generateOutfit(
     save_to_storage: options.save_to_storage ?? false,
     include_user_face: options.include_user_face ?? true,
     use_body_profile: options.use_body_profile ?? true,
-  });
+  }, config);
 
   return response.data.data;
 }
@@ -460,8 +465,8 @@ export async function generateTryOn(
 /**
  * Get AI settings for the current user.
  */
-export async function getAISettings(): Promise<AISettings> {
-  const response = await apiClient.get<{ data: AISettings }>(ENDPOINTS.AI.SETTINGS);
+export async function getAISettings(config?: AxiosRequestConfig): Promise<AISettings> {
+  const response = await apiClient.get<{ data: AISettings }>(ENDPOINTS.AI.SETTINGS, config);
   return response.data.data;
 }
 

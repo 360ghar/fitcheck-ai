@@ -28,7 +28,7 @@ function genId() {
 
 type ActionType = typeof actionTypes
 
-type Action =
+export type Action =
   | {
     type: ActionType["ADD_TOAST"]
     toast: ToasterToast
@@ -46,7 +46,7 @@ type Action =
     toastId?: ToasterToast["id"]
   }
 
-interface State {
+export interface State {
   toasts: ToasterToast[]
 }
 
@@ -70,11 +70,25 @@ const addToRemoveQueue = (toastId: string) => {
 
 export const reducer = (state: State, action: Action): State => {
   switch (action.type) {
-    case "ADD_TOAST":
+    case "ADD_TOAST": {
+      // One visible toast per distinct message. Retried requests re-enter the
+      // axios interceptor chain and other repeat paths can fire the same toast
+      // several times in quick succession; the first occurrence is already on
+      // screen, so stacking identical toasts only adds visual noise.
+      const isDuplicate = state.toasts.some(
+        (t) =>
+          t.open &&
+          t.title === action.toast.title &&
+          t.description === action.toast.description &&
+          t.variant === action.toast.variant
+      )
+      if (isDuplicate) return state
+
       return {
         ...state,
         toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
       }
+    }
 
     case "UPDATE_TOAST":
       return {

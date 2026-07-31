@@ -110,7 +110,9 @@ async def get_plans():
     """
     Get available subscription plans and pricing.
 
-    Returns plan details for display on pricing pages.
+    Returns plan details for display on pricing pages. Each paid plan also
+    carries the store product IDs used by the mobile apps (null when the
+    store billing rail is not configured server-side).
     """
     free_limits = {
         "monthly_extractions": settings.PLAN_FREE_MONTHLY_EXTRACTIONS,
@@ -130,6 +132,23 @@ async def get_plans():
 
     return {
         "data": {
+            # Per-variant store product IDs (null when the store rail is not
+            # configured). The mobile clients use these to query/purchase via
+            # StoreKit / Play Billing; values are never hardcoded client-side.
+            "store_products": {
+                "apple": {
+                    "plus_monthly": settings.APPLE_PLUS_MONTHLY_PRODUCT_ID,
+                    "plus_yearly": settings.APPLE_PLUS_YEARLY_PRODUCT_ID,
+                    "pro_monthly": settings.APPLE_PRO_MONTHLY_PRODUCT_ID,
+                    "pro_yearly": settings.APPLE_PRO_YEARLY_PRODUCT_ID,
+                },
+                "google": {
+                    "plus_monthly": settings.GOOGLE_PLUS_MONTHLY_PRODUCT_ID,
+                    "plus_yearly": settings.GOOGLE_PLUS_YEARLY_PRODUCT_ID,
+                    "pro_monthly": settings.GOOGLE_PRO_MONTHLY_PRODUCT_ID,
+                    "pro_yearly": settings.GOOGLE_PRO_YEARLY_PRODUCT_ID,
+                },
+            },
             "plans": [
             {
                 "id": "free",
@@ -246,12 +265,23 @@ async def create_checkout_session(
         # as a new checkout: it can create a second subscription for one user.
         sub_result = await asyncio.to_thread(
             db.table("subscriptions")
-            .select("stripe_customer_id,stripe_subscription_id,plan_type,status")
+            .select("stripe_customer_id,stripe_subscription_id,plan_type,status,billing_provider")
             .eq("user_id", user["id"])
             .maybe_single()
             .execute
         )
         sub_data = maybe_single_data(sub_result) or {}
+        billing_provider = sub_data.get("billing_provider", "stripe")
+        if billing_provider in ("apple", "google"):
+            # App Store Guideline 3.1.1 / Play policy: a store-billed account
+            # must not be steered to Stripe checkout from the mobile apps, and
+            # a web Stripe purchase would silently double-bill alongside the
+            # store subscription. Fail closed.
+            raise ServiceError(
+                "This account is billed through the "
+                f"{'App Store' if billing_provider == 'apple' else 'Play Store'}; "
+                "web checkout is not available for store-billed subscriptions."
+            )
         stored_plan = PlanType(sub_data.get("plan_type", "free"))
         existing_subscription_id = sub_data.get("stripe_subscription_id")
 

@@ -101,6 +101,19 @@ Configured in `app/core/config.py` / env:
   `config_health.py` flags it as an error otherwise, since it becomes dead config once the leg
   is redirected.
 
+- **Quota resilience** (native Gemini leg): the server's Gemini key is on Google's free tier
+  in prod (5 req/min, 20 req/day per model - too small for production concurrency, and the
+  cause of the 2026-07-29/30 429 storm). `classify_gemini_error()` in `gemini_provider.py`
+  splits the failure modes: daily free-tier quota → **not retryable** (forces the Agnes
+  fallback immediately instead of burning retries), per-minute quota → retryable after the
+  provider's `RetryInfo.retryDelay` (parsed as decimal seconds), 503/5xx → transient, 4xx →
+  hard. `AIServiceError` carries `error_kind` (`upstream_quota`/`transient`/`hard`) +
+  `retry_after_seconds`, serialized via `to_dict()` so clients show "try again shortly"
+  (never an upgrade CTA for server-key issues); `with_retry` honors the advised delay as a
+  floor. The OpenAI-compatible legs propagate `Retry-After` the same way, and batch/social
+  pipelines stop grinding remaining items via `capacity_exhausted` events. Full design:
+  `docs/exec-plans/active/quota-fallback-and-upgrade-propagation.md`.
+
 Typical custom stack:
 
 - Chat/vision: `gemini-3.6-flash` (primary) / `agnes-2.5-flash` (fallback after 1 retry) via `/v1/chat/completions`
@@ -203,6 +216,28 @@ A JSONL audit (`backend/logs/transparent_backfill.jsonl`) makes the run resumabl
 ### Rate limiting helper
 
 Subscription-aware AI limits live in `app.services.rate_limit` (`rate_limited_operation`), not `app.core` (core must not import services). IP-based demo limits remain in `app.core.ip_rate_limit`.
+
+### Quota reservation migrations (hosted Supabase)
+
+AI admission is enforced by atomic DB RPCs, not read-then-write counters: `reserve_ai_usage` / `release_ai_usage` for the daily AI quotas (`AISettingsService.reserve_usage`), `reserve_usage` for the monthly subscription quotas (`SubscriptionService.increment_usage`), and `reserve_daily_photoshoot_usage` for photoshoot. All three live in migrations **022** (`backend/db/supabase/migrations/022_wave_b_hardening.sql`), **024** (`024_atomic_daily_quota_reservations.sql`), and **026** (`026_harden_rpc_privileges.sql`, which revokes them from browser roles and grants to `service_role`). If the hosted DB is missing them, PostgREST answers every `rpc()` with `PGRST202` and admission fails closed.
+
+That failure mode hit production on 2026-07-31: every `POST /api/v1/ai/batch-extract-multipart` returned 500 ("Failed to reserve AI usage") and related quota paths 503 because the migrations had never been applied to the hosted project. The services now log the actionable detail — which function is missing and which migrations create it (via `is_pgrst202_missing_rpc` / `missing_rpc_log_hint` in `app/utils/db.py`) — and return a **friendly** 503 (`AI_SERVICE_ERROR`) to the client; raw DB/RPC text is never sent to users (regression-tested in `backend/tests/test_wave_b_hardening.py`). Apply the three migrations in order on the hosted DB whenever the backend is deployed past a124226.
+
+## Billing: subscriptions (Stripe web + store IAP)
+
+Three billing rails share one `subscriptions` row, identified by `billing_provider` (`stripe` | `apple` | `google`):
+
+- **Web** (`frontend/`): Stripe Checkout — `POST /api/v1/subscription/checkout`, portal, `cancel`, webhook (`/webhook`). Rails: `stripe_*` columns.
+- **iOS** (`flutter/`): Apple In-App Purchase. The app buys via StoreKit and calls `POST /api/v1/subscription/iap/transaction` with the StoreKit transaction ID; the backend verifies it with the App Store Server API (ES256 JWT signed with the App Store Connect API key) before granting entitlement. Renewals/expirations/refunds arrive as App Store Server Notifications V2 at `POST /api/v1/subscription/apple/notifications` (JWS verified against the Apple Root CA - G3 chain; `apple_iap_events` dedupes by `notificationId`). Rail columns: `apple_original_transaction_id`.
+- **Android** (`flutter/`): Play Billing. The app calls the same `/iap/transaction` with the Play purchase token; the backend verifies via the Play Developer API v3 (service-account JWT → OAuth token) and acknowledges the purchase. Play Real-time Developer Notifications arrive at `POST /api/v1/subscription/google/notifications` (Pub/Sub push, OIDC bearer verified against `GOOGLE_RTDN_AUDIENCE`; `google_rtdn_events` dedupes by `messageId`). Rail columns: `google_purchase_token`, `google_order_id`.
+
+Rules:
+
+- A purchase is only ever granted from provider-verified data (transaction lookup / JWS-verified webhook), never from the client payload alone; the client-reported `product_id` is cross-checked against the verified transaction.
+- `GET /api/v1/subscription/plans` returns `store_products` (per-variant product IDs per store) plus the display plans; product IDs are never hardcoded in the apps.
+- Rails are exclusive: store sync clears the other rails' identity columns, and Stripe checkout/cancel fail closed on store-billed rows (a store-billed account must not be steered to Stripe — App Store Guideline 3.1.1).
+- Webhook handlers return 500 on processing failure so the store retries; signature failures are acknowledged without processing.
+- Env: `APPLE_ISSUER_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` / `APPLE_*_PRODUCT_ID` / `APPLE_ENV`, `GOOGLE_SERVICE_ACCOUNT_JSON` / `GOOGLE_RTDN_AUDIENCE` / `GOOGLE_*_PRODUCT_ID` (see `backend/.env.example`). Requires migration `030_mobile_iap.sql` (columns + webhook ledgers).
 
 ## Route registration
 

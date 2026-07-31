@@ -40,6 +40,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
+import { skipToast } from "@/api/client";
 import {
   getAISettings,
   updateAISettings,
@@ -143,7 +144,9 @@ export function AISettingsPanel() {
   const loadSettings = async () => {
     setIsLoading(true);
     try {
-      const settings = await getAISettings();
+      // This panel owns the load-failure toast ("Failed to load AI settings"),
+      // so keep the global error interceptor silent for this request.
+      const settings = await getAISettings(skipToast);
       setDefaultProvider(settings.default_provider);
       setDisplayConfigs(settings.provider_configs);
       setUsage(settings.usage || null);

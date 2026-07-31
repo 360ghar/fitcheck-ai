@@ -15,7 +15,9 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$SubscriptionModel {
 
-@JsonKey(name: 'user_id') String get userId;@JsonKey(name: 'plan_type') PlanType get planType; SubscriptionStatus get status;@JsonKey(name: 'current_period_start') DateTime? get currentPeriodStart;@JsonKey(name: 'current_period_end') DateTime? get currentPeriodEnd;@JsonKey(name: 'cancel_at_period_end') bool get cancelAtPeriodEnd;@JsonKey(name: 'trial_end') DateTime? get trialEnd;@JsonKey(name: 'referral_credit_months') int get referralCreditMonths;
+@JsonKey(name: 'user_id') String get userId;@JsonKey(name: 'plan_type') PlanType get planType; SubscriptionStatus get status;@JsonKey(name: 'current_period_start') DateTime? get currentPeriodStart;@JsonKey(name: 'current_period_end') DateTime? get currentPeriodEnd;@JsonKey(name: 'cancel_at_period_end') bool get cancelAtPeriodEnd;@JsonKey(name: 'trial_end') DateTime? get trialEnd;@JsonKey(name: 'referral_credit_months') int get referralCreditMonths;/// Which billing rail owns this subscription: "stripe" (web checkout),
+/// "apple" (App Store IAP) or "google" (Play Billing IAP).
+@JsonKey(name: 'billing_provider') String get billingProvider;
 /// Create a copy of SubscriptionModel
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +30,16 @@ $SubscriptionModelCopyWith<SubscriptionModel> get copyWith => _$SubscriptionMode
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SubscriptionModel&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.planType, planType) || other.planType == planType)&&(identical(other.status, status) || other.status == status)&&(identical(other.currentPeriodStart, currentPeriodStart) || other.currentPeriodStart == currentPeriodStart)&&(identical(other.currentPeriodEnd, currentPeriodEnd) || other.currentPeriodEnd == currentPeriodEnd)&&(identical(other.cancelAtPeriodEnd, cancelAtPeriodEnd) || other.cancelAtPeriodEnd == cancelAtPeriodEnd)&&(identical(other.trialEnd, trialEnd) || other.trialEnd == trialEnd)&&(identical(other.referralCreditMonths, referralCreditMonths) || other.referralCreditMonths == referralCreditMonths));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SubscriptionModel&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.planType, planType) || other.planType == planType)&&(identical(other.status, status) || other.status == status)&&(identical(other.currentPeriodStart, currentPeriodStart) || other.currentPeriodStart == currentPeriodStart)&&(identical(other.currentPeriodEnd, currentPeriodEnd) || other.currentPeriodEnd == currentPeriodEnd)&&(identical(other.cancelAtPeriodEnd, cancelAtPeriodEnd) || other.cancelAtPeriodEnd == cancelAtPeriodEnd)&&(identical(other.trialEnd, trialEnd) || other.trialEnd == trialEnd)&&(identical(other.referralCreditMonths, referralCreditMonths) || other.referralCreditMonths == referralCreditMonths)&&(identical(other.billingProvider, billingProvider) || other.billingProvider == billingProvider));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,userId,planType,status,currentPeriodStart,currentPeriodEnd,cancelAtPeriodEnd,trialEnd,referralCreditMonths);
+int get hashCode => Object.hash(runtimeType,userId,planType,status,currentPeriodStart,currentPeriodEnd,cancelAtPeriodEnd,trialEnd,referralCreditMonths,billingProvider);
 
 @override
 String toString() {
-  return 'SubscriptionModel(userId: $userId, planType: $planType, status: $status, currentPeriodStart: $currentPeriodStart, currentPeriodEnd: $currentPeriodEnd, cancelAtPeriodEnd: $cancelAtPeriodEnd, trialEnd: $trialEnd, referralCreditMonths: $referralCreditMonths)';
+  return 'SubscriptionModel(userId: $userId, planType: $planType, status: $status, currentPeriodStart: $currentPeriodStart, currentPeriodEnd: $currentPeriodEnd, cancelAtPeriodEnd: $cancelAtPeriodEnd, trialEnd: $trialEnd, referralCreditMonths: $referralCreditMonths, billingProvider: $billingProvider)';
 }
 
 
@@ -48,7 +50,7 @@ abstract mixin class $SubscriptionModelCopyWith<$Res>  {
   factory $SubscriptionModelCopyWith(SubscriptionModel value, $Res Function(SubscriptionModel) _then) = _$SubscriptionModelCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: 'user_id') String userId,@JsonKey(name: 'plan_type') PlanType planType, SubscriptionStatus status,@JsonKey(name: 'current_period_start') DateTime? currentPeriodStart,@JsonKey(name: 'current_period_end') DateTime? currentPeriodEnd,@JsonKey(name: 'cancel_at_period_end') bool cancelAtPeriodEnd,@JsonKey(name: 'trial_end') DateTime? trialEnd,@JsonKey(name: 'referral_credit_months') int referralCreditMonths
+@JsonKey(name: 'user_id') String userId,@JsonKey(name: 'plan_type') PlanType planType, SubscriptionStatus status,@JsonKey(name: 'current_period_start') DateTime? currentPeriodStart,@JsonKey(name: 'current_period_end') DateTime? currentPeriodEnd,@JsonKey(name: 'cancel_at_period_end') bool cancelAtPeriodEnd,@JsonKey(name: 'trial_end') DateTime? trialEnd,@JsonKey(name: 'referral_credit_months') int referralCreditMonths,@JsonKey(name: 'billing_provider') String billingProvider
 });
 
 
@@ -65,7 +67,7 @@ class _$SubscriptionModelCopyWithImpl<$Res>
 
 /// Create a copy of SubscriptionModel
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? userId = null,Object? planType = null,Object? status = null,Object? currentPeriodStart = freezed,Object? currentPeriodEnd = freezed,Object? cancelAtPeriodEnd = null,Object? trialEnd = freezed,Object? referralCreditMonths = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? userId = null,Object? planType = null,Object? status = null,Object? currentPeriodStart = freezed,Object? currentPeriodEnd = freezed,Object? cancelAtPeriodEnd = null,Object? trialEnd = freezed,Object? referralCreditMonths = null,Object? billingProvider = null,}) {
   return _then(_self.copyWith(
 userId: null == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
 as String,planType: null == planType ? _self.planType : planType // ignore: cast_nullable_to_non_nullable
@@ -75,7 +77,8 @@ as DateTime?,currentPeriodEnd: freezed == currentPeriodEnd ? _self.currentPeriod
 as DateTime?,cancelAtPeriodEnd: null == cancelAtPeriodEnd ? _self.cancelAtPeriodEnd : cancelAtPeriodEnd // ignore: cast_nullable_to_non_nullable
 as bool,trialEnd: freezed == trialEnd ? _self.trialEnd : trialEnd // ignore: cast_nullable_to_non_nullable
 as DateTime?,referralCreditMonths: null == referralCreditMonths ? _self.referralCreditMonths : referralCreditMonths // ignore: cast_nullable_to_non_nullable
-as int,
+as int,billingProvider: null == billingProvider ? _self.billingProvider : billingProvider // ignore: cast_nullable_to_non_nullable
+as String,
   ));
 }
 
@@ -160,10 +163,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'user_id')  String userId, @JsonKey(name: 'plan_type')  PlanType planType,  SubscriptionStatus status, @JsonKey(name: 'current_period_start')  DateTime? currentPeriodStart, @JsonKey(name: 'current_period_end')  DateTime? currentPeriodEnd, @JsonKey(name: 'cancel_at_period_end')  bool cancelAtPeriodEnd, @JsonKey(name: 'trial_end')  DateTime? trialEnd, @JsonKey(name: 'referral_credit_months')  int referralCreditMonths)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'user_id')  String userId, @JsonKey(name: 'plan_type')  PlanType planType,  SubscriptionStatus status, @JsonKey(name: 'current_period_start')  DateTime? currentPeriodStart, @JsonKey(name: 'current_period_end')  DateTime? currentPeriodEnd, @JsonKey(name: 'cancel_at_period_end')  bool cancelAtPeriodEnd, @JsonKey(name: 'trial_end')  DateTime? trialEnd, @JsonKey(name: 'referral_credit_months')  int referralCreditMonths, @JsonKey(name: 'billing_provider')  String billingProvider)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _SubscriptionModel() when $default != null:
-return $default(_that.userId,_that.planType,_that.status,_that.currentPeriodStart,_that.currentPeriodEnd,_that.cancelAtPeriodEnd,_that.trialEnd,_that.referralCreditMonths);case _:
+return $default(_that.userId,_that.planType,_that.status,_that.currentPeriodStart,_that.currentPeriodEnd,_that.cancelAtPeriodEnd,_that.trialEnd,_that.referralCreditMonths,_that.billingProvider);case _:
   return orElse();
 
 }
@@ -181,10 +184,10 @@ return $default(_that.userId,_that.planType,_that.status,_that.currentPeriodStar
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'user_id')  String userId, @JsonKey(name: 'plan_type')  PlanType planType,  SubscriptionStatus status, @JsonKey(name: 'current_period_start')  DateTime? currentPeriodStart, @JsonKey(name: 'current_period_end')  DateTime? currentPeriodEnd, @JsonKey(name: 'cancel_at_period_end')  bool cancelAtPeriodEnd, @JsonKey(name: 'trial_end')  DateTime? trialEnd, @JsonKey(name: 'referral_credit_months')  int referralCreditMonths)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'user_id')  String userId, @JsonKey(name: 'plan_type')  PlanType planType,  SubscriptionStatus status, @JsonKey(name: 'current_period_start')  DateTime? currentPeriodStart, @JsonKey(name: 'current_period_end')  DateTime? currentPeriodEnd, @JsonKey(name: 'cancel_at_period_end')  bool cancelAtPeriodEnd, @JsonKey(name: 'trial_end')  DateTime? trialEnd, @JsonKey(name: 'referral_credit_months')  int referralCreditMonths, @JsonKey(name: 'billing_provider')  String billingProvider)  $default,) {final _that = this;
 switch (_that) {
 case _SubscriptionModel():
-return $default(_that.userId,_that.planType,_that.status,_that.currentPeriodStart,_that.currentPeriodEnd,_that.cancelAtPeriodEnd,_that.trialEnd,_that.referralCreditMonths);case _:
+return $default(_that.userId,_that.planType,_that.status,_that.currentPeriodStart,_that.currentPeriodEnd,_that.cancelAtPeriodEnd,_that.trialEnd,_that.referralCreditMonths,_that.billingProvider);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -201,10 +204,10 @@ return $default(_that.userId,_that.planType,_that.status,_that.currentPeriodStar
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'user_id')  String userId, @JsonKey(name: 'plan_type')  PlanType planType,  SubscriptionStatus status, @JsonKey(name: 'current_period_start')  DateTime? currentPeriodStart, @JsonKey(name: 'current_period_end')  DateTime? currentPeriodEnd, @JsonKey(name: 'cancel_at_period_end')  bool cancelAtPeriodEnd, @JsonKey(name: 'trial_end')  DateTime? trialEnd, @JsonKey(name: 'referral_credit_months')  int referralCreditMonths)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'user_id')  String userId, @JsonKey(name: 'plan_type')  PlanType planType,  SubscriptionStatus status, @JsonKey(name: 'current_period_start')  DateTime? currentPeriodStart, @JsonKey(name: 'current_period_end')  DateTime? currentPeriodEnd, @JsonKey(name: 'cancel_at_period_end')  bool cancelAtPeriodEnd, @JsonKey(name: 'trial_end')  DateTime? trialEnd, @JsonKey(name: 'referral_credit_months')  int referralCreditMonths, @JsonKey(name: 'billing_provider')  String billingProvider)?  $default,) {final _that = this;
 switch (_that) {
 case _SubscriptionModel() when $default != null:
-return $default(_that.userId,_that.planType,_that.status,_that.currentPeriodStart,_that.currentPeriodEnd,_that.cancelAtPeriodEnd,_that.trialEnd,_that.referralCreditMonths);case _:
+return $default(_that.userId,_that.planType,_that.status,_that.currentPeriodStart,_that.currentPeriodEnd,_that.cancelAtPeriodEnd,_that.trialEnd,_that.referralCreditMonths,_that.billingProvider);case _:
   return null;
 
 }
@@ -216,7 +219,7 @@ return $default(_that.userId,_that.planType,_that.status,_that.currentPeriodStar
 @JsonSerializable()
 
 class _SubscriptionModel implements SubscriptionModel {
-  const _SubscriptionModel({@JsonKey(name: 'user_id') required this.userId, @JsonKey(name: 'plan_type') this.planType = PlanType.free, this.status = SubscriptionStatus.active, @JsonKey(name: 'current_period_start') this.currentPeriodStart, @JsonKey(name: 'current_period_end') this.currentPeriodEnd, @JsonKey(name: 'cancel_at_period_end') this.cancelAtPeriodEnd = false, @JsonKey(name: 'trial_end') this.trialEnd, @JsonKey(name: 'referral_credit_months') this.referralCreditMonths = 0});
+  const _SubscriptionModel({@JsonKey(name: 'user_id') required this.userId, @JsonKey(name: 'plan_type') this.planType = PlanType.free, this.status = SubscriptionStatus.active, @JsonKey(name: 'current_period_start') this.currentPeriodStart, @JsonKey(name: 'current_period_end') this.currentPeriodEnd, @JsonKey(name: 'cancel_at_period_end') this.cancelAtPeriodEnd = false, @JsonKey(name: 'trial_end') this.trialEnd, @JsonKey(name: 'referral_credit_months') this.referralCreditMonths = 0, @JsonKey(name: 'billing_provider') this.billingProvider = 'stripe'});
   factory _SubscriptionModel.fromJson(Map<String, dynamic> json) => _$SubscriptionModelFromJson(json);
 
 @override@JsonKey(name: 'user_id') final  String userId;
@@ -227,6 +230,9 @@ class _SubscriptionModel implements SubscriptionModel {
 @override@JsonKey(name: 'cancel_at_period_end') final  bool cancelAtPeriodEnd;
 @override@JsonKey(name: 'trial_end') final  DateTime? trialEnd;
 @override@JsonKey(name: 'referral_credit_months') final  int referralCreditMonths;
+/// Which billing rail owns this subscription: "stripe" (web checkout),
+/// "apple" (App Store IAP) or "google" (Play Billing IAP).
+@override@JsonKey(name: 'billing_provider') final  String billingProvider;
 
 /// Create a copy of SubscriptionModel
 /// with the given fields replaced by the non-null parameter values.
@@ -241,16 +247,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SubscriptionModel&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.planType, planType) || other.planType == planType)&&(identical(other.status, status) || other.status == status)&&(identical(other.currentPeriodStart, currentPeriodStart) || other.currentPeriodStart == currentPeriodStart)&&(identical(other.currentPeriodEnd, currentPeriodEnd) || other.currentPeriodEnd == currentPeriodEnd)&&(identical(other.cancelAtPeriodEnd, cancelAtPeriodEnd) || other.cancelAtPeriodEnd == cancelAtPeriodEnd)&&(identical(other.trialEnd, trialEnd) || other.trialEnd == trialEnd)&&(identical(other.referralCreditMonths, referralCreditMonths) || other.referralCreditMonths == referralCreditMonths));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SubscriptionModel&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.planType, planType) || other.planType == planType)&&(identical(other.status, status) || other.status == status)&&(identical(other.currentPeriodStart, currentPeriodStart) || other.currentPeriodStart == currentPeriodStart)&&(identical(other.currentPeriodEnd, currentPeriodEnd) || other.currentPeriodEnd == currentPeriodEnd)&&(identical(other.cancelAtPeriodEnd, cancelAtPeriodEnd) || other.cancelAtPeriodEnd == cancelAtPeriodEnd)&&(identical(other.trialEnd, trialEnd) || other.trialEnd == trialEnd)&&(identical(other.referralCreditMonths, referralCreditMonths) || other.referralCreditMonths == referralCreditMonths)&&(identical(other.billingProvider, billingProvider) || other.billingProvider == billingProvider));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,userId,planType,status,currentPeriodStart,currentPeriodEnd,cancelAtPeriodEnd,trialEnd,referralCreditMonths);
+int get hashCode => Object.hash(runtimeType,userId,planType,status,currentPeriodStart,currentPeriodEnd,cancelAtPeriodEnd,trialEnd,referralCreditMonths,billingProvider);
 
 @override
 String toString() {
-  return 'SubscriptionModel(userId: $userId, planType: $planType, status: $status, currentPeriodStart: $currentPeriodStart, currentPeriodEnd: $currentPeriodEnd, cancelAtPeriodEnd: $cancelAtPeriodEnd, trialEnd: $trialEnd, referralCreditMonths: $referralCreditMonths)';
+  return 'SubscriptionModel(userId: $userId, planType: $planType, status: $status, currentPeriodStart: $currentPeriodStart, currentPeriodEnd: $currentPeriodEnd, cancelAtPeriodEnd: $cancelAtPeriodEnd, trialEnd: $trialEnd, referralCreditMonths: $referralCreditMonths, billingProvider: $billingProvider)';
 }
 
 
@@ -261,7 +267,7 @@ abstract mixin class _$SubscriptionModelCopyWith<$Res> implements $SubscriptionM
   factory _$SubscriptionModelCopyWith(_SubscriptionModel value, $Res Function(_SubscriptionModel) _then) = __$SubscriptionModelCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: 'user_id') String userId,@JsonKey(name: 'plan_type') PlanType planType, SubscriptionStatus status,@JsonKey(name: 'current_period_start') DateTime? currentPeriodStart,@JsonKey(name: 'current_period_end') DateTime? currentPeriodEnd,@JsonKey(name: 'cancel_at_period_end') bool cancelAtPeriodEnd,@JsonKey(name: 'trial_end') DateTime? trialEnd,@JsonKey(name: 'referral_credit_months') int referralCreditMonths
+@JsonKey(name: 'user_id') String userId,@JsonKey(name: 'plan_type') PlanType planType, SubscriptionStatus status,@JsonKey(name: 'current_period_start') DateTime? currentPeriodStart,@JsonKey(name: 'current_period_end') DateTime? currentPeriodEnd,@JsonKey(name: 'cancel_at_period_end') bool cancelAtPeriodEnd,@JsonKey(name: 'trial_end') DateTime? trialEnd,@JsonKey(name: 'referral_credit_months') int referralCreditMonths,@JsonKey(name: 'billing_provider') String billingProvider
 });
 
 
@@ -278,7 +284,7 @@ class __$SubscriptionModelCopyWithImpl<$Res>
 
 /// Create a copy of SubscriptionModel
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? userId = null,Object? planType = null,Object? status = null,Object? currentPeriodStart = freezed,Object? currentPeriodEnd = freezed,Object? cancelAtPeriodEnd = null,Object? trialEnd = freezed,Object? referralCreditMonths = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? userId = null,Object? planType = null,Object? status = null,Object? currentPeriodStart = freezed,Object? currentPeriodEnd = freezed,Object? cancelAtPeriodEnd = null,Object? trialEnd = freezed,Object? referralCreditMonths = null,Object? billingProvider = null,}) {
   return _then(_SubscriptionModel(
 userId: null == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
 as String,planType: null == planType ? _self.planType : planType // ignore: cast_nullable_to_non_nullable
@@ -288,7 +294,8 @@ as DateTime?,currentPeriodEnd: freezed == currentPeriodEnd ? _self.currentPeriod
 as DateTime?,cancelAtPeriodEnd: null == cancelAtPeriodEnd ? _self.cancelAtPeriodEnd : cancelAtPeriodEnd // ignore: cast_nullable_to_non_nullable
 as bool,trialEnd: freezed == trialEnd ? _self.trialEnd : trialEnd // ignore: cast_nullable_to_non_nullable
 as DateTime?,referralCreditMonths: null == referralCreditMonths ? _self.referralCreditMonths : referralCreditMonths // ignore: cast_nullable_to_non_nullable
-as int,
+as int,billingProvider: null == billingProvider ? _self.billingProvider : billingProvider // ignore: cast_nullable_to_non_nullable
+as String,
   ));
 }
 
@@ -1707,6 +1714,574 @@ as List<String>,
 }
 
 
+}
+
+
+/// @nodoc
+mixin _$StoreProductsModel {
+
+ Map<String, String?> get apple; Map<String, String?> get google;
+/// Create a copy of StoreProductsModel
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$StoreProductsModelCopyWith<StoreProductsModel> get copyWith => _$StoreProductsModelCopyWithImpl<StoreProductsModel>(this as StoreProductsModel, _$identity);
+
+  /// Serializes this StoreProductsModel to a JSON map.
+  Map<String, dynamic> toJson();
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is StoreProductsModel&&const DeepCollectionEquality().equals(other.apple, apple)&&const DeepCollectionEquality().equals(other.google, google));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(apple),const DeepCollectionEquality().hash(google));
+
+@override
+String toString() {
+  return 'StoreProductsModel(apple: $apple, google: $google)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $StoreProductsModelCopyWith<$Res>  {
+  factory $StoreProductsModelCopyWith(StoreProductsModel value, $Res Function(StoreProductsModel) _then) = _$StoreProductsModelCopyWithImpl;
+@useResult
+$Res call({
+ Map<String, String?> apple, Map<String, String?> google
+});
+
+
+
+
+}
+/// @nodoc
+class _$StoreProductsModelCopyWithImpl<$Res>
+    implements $StoreProductsModelCopyWith<$Res> {
+  _$StoreProductsModelCopyWithImpl(this._self, this._then);
+
+  final StoreProductsModel _self;
+  final $Res Function(StoreProductsModel) _then;
+
+/// Create a copy of StoreProductsModel
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? apple = null,Object? google = null,}) {
+  return _then(_self.copyWith(
+apple: null == apple ? _self.apple : apple // ignore: cast_nullable_to_non_nullable
+as Map<String, String?>,google: null == google ? _self.google : google // ignore: cast_nullable_to_non_nullable
+as Map<String, String?>,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [StoreProductsModel].
+extension StoreProductsModelPatterns on StoreProductsModel {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _StoreProductsModel value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _StoreProductsModel() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _StoreProductsModel value)  $default,){
+final _that = this;
+switch (_that) {
+case _StoreProductsModel():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _StoreProductsModel value)?  $default,){
+final _that = this;
+switch (_that) {
+case _StoreProductsModel() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( Map<String, String?> apple,  Map<String, String?> google)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _StoreProductsModel() when $default != null:
+return $default(_that.apple,_that.google);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( Map<String, String?> apple,  Map<String, String?> google)  $default,) {final _that = this;
+switch (_that) {
+case _StoreProductsModel():
+return $default(_that.apple,_that.google);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( Map<String, String?> apple,  Map<String, String?> google)?  $default,) {final _that = this;
+switch (_that) {
+case _StoreProductsModel() when $default != null:
+return $default(_that.apple,_that.google);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+@JsonSerializable()
+
+class _StoreProductsModel implements StoreProductsModel {
+  const _StoreProductsModel({final  Map<String, String?> apple = const {}, final  Map<String, String?> google = const {}}): _apple = apple,_google = google;
+  factory _StoreProductsModel.fromJson(Map<String, dynamic> json) => _$StoreProductsModelFromJson(json);
+
+ final  Map<String, String?> _apple;
+@override@JsonKey() Map<String, String?> get apple {
+  if (_apple is EqualUnmodifiableMapView) return _apple;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableMapView(_apple);
+}
+
+ final  Map<String, String?> _google;
+@override@JsonKey() Map<String, String?> get google {
+  if (_google is EqualUnmodifiableMapView) return _google;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableMapView(_google);
+}
+
+
+/// Create a copy of StoreProductsModel
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$StoreProductsModelCopyWith<_StoreProductsModel> get copyWith => __$StoreProductsModelCopyWithImpl<_StoreProductsModel>(this, _$identity);
+
+@override
+Map<String, dynamic> toJson() {
+  return _$StoreProductsModelToJson(this, );
+}
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _StoreProductsModel&&const DeepCollectionEquality().equals(other._apple, _apple)&&const DeepCollectionEquality().equals(other._google, _google));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_apple),const DeepCollectionEquality().hash(_google));
+
+@override
+String toString() {
+  return 'StoreProductsModel(apple: $apple, google: $google)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$StoreProductsModelCopyWith<$Res> implements $StoreProductsModelCopyWith<$Res> {
+  factory _$StoreProductsModelCopyWith(_StoreProductsModel value, $Res Function(_StoreProductsModel) _then) = __$StoreProductsModelCopyWithImpl;
+@override @useResult
+$Res call({
+ Map<String, String?> apple, Map<String, String?> google
+});
+
+
+
+
+}
+/// @nodoc
+class __$StoreProductsModelCopyWithImpl<$Res>
+    implements _$StoreProductsModelCopyWith<$Res> {
+  __$StoreProductsModelCopyWithImpl(this._self, this._then);
+
+  final _StoreProductsModel _self;
+  final $Res Function(_StoreProductsModel) _then;
+
+/// Create a copy of StoreProductsModel
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? apple = null,Object? google = null,}) {
+  return _then(_StoreProductsModel(
+apple: null == apple ? _self._apple : apple // ignore: cast_nullable_to_non_nullable
+as Map<String, String?>,google: null == google ? _self._google : google // ignore: cast_nullable_to_non_nullable
+as Map<String, String?>,
+  ));
+}
+
+
+}
+
+
+/// @nodoc
+mixin _$PlansResponse {
+
+ List<PlanDetailsModel> get plans;@JsonKey(name: 'store_products') StoreProductsModel get storeProducts;
+/// Create a copy of PlansResponse
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$PlansResponseCopyWith<PlansResponse> get copyWith => _$PlansResponseCopyWithImpl<PlansResponse>(this as PlansResponse, _$identity);
+
+  /// Serializes this PlansResponse to a JSON map.
+  Map<String, dynamic> toJson();
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is PlansResponse&&const DeepCollectionEquality().equals(other.plans, plans)&&(identical(other.storeProducts, storeProducts) || other.storeProducts == storeProducts));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(plans),storeProducts);
+
+@override
+String toString() {
+  return 'PlansResponse(plans: $plans, storeProducts: $storeProducts)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $PlansResponseCopyWith<$Res>  {
+  factory $PlansResponseCopyWith(PlansResponse value, $Res Function(PlansResponse) _then) = _$PlansResponseCopyWithImpl;
+@useResult
+$Res call({
+ List<PlanDetailsModel> plans,@JsonKey(name: 'store_products') StoreProductsModel storeProducts
+});
+
+
+$StoreProductsModelCopyWith<$Res> get storeProducts;
+
+}
+/// @nodoc
+class _$PlansResponseCopyWithImpl<$Res>
+    implements $PlansResponseCopyWith<$Res> {
+  _$PlansResponseCopyWithImpl(this._self, this._then);
+
+  final PlansResponse _self;
+  final $Res Function(PlansResponse) _then;
+
+/// Create a copy of PlansResponse
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? plans = null,Object? storeProducts = null,}) {
+  return _then(_self.copyWith(
+plans: null == plans ? _self.plans : plans // ignore: cast_nullable_to_non_nullable
+as List<PlanDetailsModel>,storeProducts: null == storeProducts ? _self.storeProducts : storeProducts // ignore: cast_nullable_to_non_nullable
+as StoreProductsModel,
+  ));
+}
+/// Create a copy of PlansResponse
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$StoreProductsModelCopyWith<$Res> get storeProducts {
+  
+  return $StoreProductsModelCopyWith<$Res>(_self.storeProducts, (value) {
+    return _then(_self.copyWith(storeProducts: value));
+  });
+}
+}
+
+
+/// Adds pattern-matching-related methods to [PlansResponse].
+extension PlansResponsePatterns on PlansResponse {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _PlansResponse value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _PlansResponse() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _PlansResponse value)  $default,){
+final _that = this;
+switch (_that) {
+case _PlansResponse():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _PlansResponse value)?  $default,){
+final _that = this;
+switch (_that) {
+case _PlansResponse() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<PlanDetailsModel> plans, @JsonKey(name: 'store_products')  StoreProductsModel storeProducts)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _PlansResponse() when $default != null:
+return $default(_that.plans,_that.storeProducts);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<PlanDetailsModel> plans, @JsonKey(name: 'store_products')  StoreProductsModel storeProducts)  $default,) {final _that = this;
+switch (_that) {
+case _PlansResponse():
+return $default(_that.plans,_that.storeProducts);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<PlanDetailsModel> plans, @JsonKey(name: 'store_products')  StoreProductsModel storeProducts)?  $default,) {final _that = this;
+switch (_that) {
+case _PlansResponse() when $default != null:
+return $default(_that.plans,_that.storeProducts);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+@JsonSerializable()
+
+class _PlansResponse implements PlansResponse {
+  const _PlansResponse({final  List<PlanDetailsModel> plans = const [], @JsonKey(name: 'store_products') this.storeProducts = const StoreProductsModel()}): _plans = plans;
+  factory _PlansResponse.fromJson(Map<String, dynamic> json) => _$PlansResponseFromJson(json);
+
+ final  List<PlanDetailsModel> _plans;
+@override@JsonKey() List<PlanDetailsModel> get plans {
+  if (_plans is EqualUnmodifiableListView) return _plans;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_plans);
+}
+
+@override@JsonKey(name: 'store_products') final  StoreProductsModel storeProducts;
+
+/// Create a copy of PlansResponse
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$PlansResponseCopyWith<_PlansResponse> get copyWith => __$PlansResponseCopyWithImpl<_PlansResponse>(this, _$identity);
+
+@override
+Map<String, dynamic> toJson() {
+  return _$PlansResponseToJson(this, );
+}
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PlansResponse&&const DeepCollectionEquality().equals(other._plans, _plans)&&(identical(other.storeProducts, storeProducts) || other.storeProducts == storeProducts));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_plans),storeProducts);
+
+@override
+String toString() {
+  return 'PlansResponse(plans: $plans, storeProducts: $storeProducts)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$PlansResponseCopyWith<$Res> implements $PlansResponseCopyWith<$Res> {
+  factory _$PlansResponseCopyWith(_PlansResponse value, $Res Function(_PlansResponse) _then) = __$PlansResponseCopyWithImpl;
+@override @useResult
+$Res call({
+ List<PlanDetailsModel> plans,@JsonKey(name: 'store_products') StoreProductsModel storeProducts
+});
+
+
+@override $StoreProductsModelCopyWith<$Res> get storeProducts;
+
+}
+/// @nodoc
+class __$PlansResponseCopyWithImpl<$Res>
+    implements _$PlansResponseCopyWith<$Res> {
+  __$PlansResponseCopyWithImpl(this._self, this._then);
+
+  final _PlansResponse _self;
+  final $Res Function(_PlansResponse) _then;
+
+/// Create a copy of PlansResponse
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? plans = null,Object? storeProducts = null,}) {
+  return _then(_PlansResponse(
+plans: null == plans ? _self._plans : plans // ignore: cast_nullable_to_non_nullable
+as List<PlanDetailsModel>,storeProducts: null == storeProducts ? _self.storeProducts : storeProducts // ignore: cast_nullable_to_non_nullable
+as StoreProductsModel,
+  ));
+}
+
+/// Create a copy of PlansResponse
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$StoreProductsModelCopyWith<$Res> get storeProducts {
+  
+  return $StoreProductsModelCopyWith<$Res>(_self.storeProducts, (value) {
+    return _then(_self.copyWith(storeProducts: value));
+  });
+}
 }
 
 

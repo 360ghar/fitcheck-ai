@@ -61,6 +61,9 @@ class SubscriptionResponse(BaseModel):
     cancel_at_period_end: bool = False
     trial_end: Optional[datetime] = None
     referral_credit_months: int = 0
+    # Which billing rail owns this row: "stripe" (web checkout), "apple"
+    # (App Store IAP) or "google" (Play Billing IAP).
+    billing_provider: str = "stripe"
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     is_pro: bool = False
@@ -120,6 +123,27 @@ class CheckoutSessionResponse(BaseModel):
 class PortalSessionResponse(BaseModel):
     """Response with Stripe customer portal URL."""
     portal_url: str
+
+
+# =============================================================================
+# Mobile In-App Purchase Models
+# =============================================================================
+
+
+class StoreType(str, Enum):
+    """Billing store for mobile in-app purchases."""
+    APPLE = "apple"
+    GOOGLE = "google"
+
+
+class RegisterIapTransactionRequest(BaseModel):
+    """Request to register a store-verified purchase."""
+    store: StoreType = Field(..., description="Billing store (apple or google)")
+    transaction_id: str = Field(..., description="App Store transaction ID or Play purchase token")
+    # Client-reported product ID, cross-checked against the verified one.
+    product_id: Optional[str] = Field(
+        None, description="Store product ID the client intended to purchase"
+    )
 
 
 # =============================================================================

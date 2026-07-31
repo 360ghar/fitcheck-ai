@@ -27,6 +27,7 @@ _SubscriptionModel _$SubscriptionModelFromJson(Map<String, dynamic> json) =>
           : DateTime.parse(json['trial_end'] as String),
       referralCreditMonths:
           (json['referral_credit_months'] as num?)?.toInt() ?? 0,
+      billingProvider: json['billing_provider'] as String? ?? 'stripe',
     );
 
 Map<String, dynamic> _$SubscriptionModelToJson(_SubscriptionModel instance) =>
@@ -39,6 +40,7 @@ Map<String, dynamic> _$SubscriptionModelToJson(_SubscriptionModel instance) =>
       'cancel_at_period_end': instance.cancelAtPeriodEnd,
       'trial_end': instance.trialEnd?.toIso8601String(),
       'referral_credit_months': instance.referralCreditMonths,
+      'billing_provider': instance.billingProvider,
     };
 
 const _$PlanTypeEnumMap = {
@@ -156,6 +158,43 @@ Map<String, dynamic> _$PlanDetailsModelToJson(_PlanDetailsModel instance) =>
       'monthly_extractions': instance.monthlyExtractions,
       'monthly_generations': instance.monthlyGenerations,
       'features': instance.features,
+    };
+
+_StoreProductsModel _$StoreProductsModelFromJson(Map<String, dynamic> json) =>
+    _StoreProductsModel(
+      apple:
+          (json['apple'] as Map<String, dynamic>?)?.map(
+            (k, e) => MapEntry(k, e as String?),
+          ) ??
+          const {},
+      google:
+          (json['google'] as Map<String, dynamic>?)?.map(
+            (k, e) => MapEntry(k, e as String?),
+          ) ??
+          const {},
+    );
+
+Map<String, dynamic> _$StoreProductsModelToJson(_StoreProductsModel instance) =>
+    <String, dynamic>{'apple': instance.apple, 'google': instance.google};
+
+_PlansResponse _$PlansResponseFromJson(Map<String, dynamic> json) =>
+    _PlansResponse(
+      plans:
+          (json['plans'] as List<dynamic>?)
+              ?.map((e) => PlanDetailsModel.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      storeProducts: json['store_products'] == null
+          ? const StoreProductsModel()
+          : StoreProductsModel.fromJson(
+              json['store_products'] as Map<String, dynamic>,
+            ),
+    );
+
+Map<String, dynamic> _$PlansResponseToJson(_PlansResponse instance) =>
+    <String, dynamic>{
+      'plans': instance.plans,
+      'store_products': instance.storeProducts,
     };
 
 _CheckoutSessionModel _$CheckoutSessionModelFromJson(

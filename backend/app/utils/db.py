@@ -60,3 +60,49 @@ def unwrap_rpc_bool(result: Any, function_name: str) -> bool:
             value = data.get("reserved")
         return bool(value)
     return bool(data)
+
+
+# ============================================================================
+# Missing-RPC (migration gap) detection — shared by quota admission paths
+#
+# PostgREST answers a missing rpc() with PGRST202 ("Could not find the
+# function ... in the schema cache") when the hosted-Supabase migration that
+# creates the function was never applied. Detection + log-hint text live here
+# so ai_settings_service and subscription_service agree on the case handling
+# and the wording. The detail is for OPERATORS ONLY: it names internal
+# functions and migration files and must never be sent to a client.
+# ============================================================================
+
+_MISSING_RPC_MARKERS = ("pgrst202", "could not find the function")
+
+# Client-facing copy for quota-admission failures. The raw RPC error / which
+# function is missing stays in server logs; users only ever see this friendly
+# 503 message (observed 2026-07-31: every batch-extract returned 500 because
+# migrations 022/024/026 had not been applied to the hosted DB).
+QUOTA_UNAVAILABLE_CLIENT_MESSAGE = (
+    "AI services are temporarily unavailable. Please try again in a few moments."
+)
+
+
+def is_pgrst202_missing_rpc(error: Exception) -> bool:
+    """True when a postgrest error means the RPC is absent (migration not applied).
+
+    Both markers are compared against the lowercased error text so the match is
+    case-insensitive on both sides (real PGRST202 bodies capitalise the phrase).
+    """
+    text = str(error).lower()
+    return any(marker in text for marker in _MISSING_RPC_MARKERS)
+
+
+def missing_rpc_log_hint(function_name: str) -> str:
+    """Operator-facing log hint naming the missing RPC and the migrations.
+
+    LOGS ONLY — never put this string in a client-facing error message.
+    """
+    return (
+        f"AI quota reservation is unavailable: the '{function_name}' database "
+        "function is missing (hosted Supabase migrations 022/024/026 not "
+        "applied). Apply backend/db/supabase/migrations/022_wave_b_hardening.sql, "
+        "024_atomic_daily_quota_reservations.sql and "
+        "026_harden_rpc_privileges.sql to restore AI admission."
+    )

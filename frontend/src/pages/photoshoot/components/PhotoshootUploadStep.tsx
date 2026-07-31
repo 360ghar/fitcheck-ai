@@ -2,39 +2,54 @@
  * Upload Step - Photo upload for photoshoot generation
  */
 
-import { useCallback, useMemo, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Camera, Lightbulb, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePhotoshoot } from '@/stores/photoshootStore';
+import { fileToReplayablePreview } from '@/lib/replayable-preview';
 import { cn } from '@/lib/utils';
 
 const MAX_PHOTOS = 4;
 
 export function PhotoshootUploadStep() {
   const { photos, addPhotos, removePhoto, setStep } = usePhotoshoot();
+  // Replay-safe previews: data URLs (downscaled), keyed by File so they
+  // survive PostHog session recordings. Blob URLs would only exist in the
+  // originating browser session and render blank at replay time.
+  const [previewUrls, setPreviewUrls] = useState<Map<File, string>>(new Map());
   const objectUrlsRef = useRef<Map<File, string>>(new Map());
 
-  // Create and cache object URLs for photos
-  const photoUrls = useMemo(() => {
-    const urls = new Map<File, string>();
-    photos.forEach((photo) => {
-      // Reuse existing URL if available
-      const existing = objectUrlsRef.current.get(photo);
-      if (existing) {
-        urls.set(photo, existing);
-      } else {
-        const newUrl = URL.createObjectURL(photo);
-        urls.set(photo, newUrl);
-      }
-    });
-    return urls;
-  }, [photos]);
+  // Convert any new photos to replayable previews (and cache them).
+  useEffect(() => {
+    let cancelled = false;
+    const pending = photos.filter((photo) => !previewUrls.has(photo));
+    if (pending.length === 0) return;
 
-  // Cleanup object URLs when photos change or component unmounts
+    Promise.all(
+      pending.map(async (photo) => {
+        const url = await fileToReplayablePreview(photo);
+        return [photo, url] as const;
+      })
+    ).then((entries) => {
+      if (cancelled) return;
+      setPreviewUrls((prev) => {
+        const next = new Map(prev);
+        entries.forEach(([photo, url]) => next.set(photo, url));
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [photos, previewUrls]);
+
+  // Cleanup blob URLs created by the fallback path when photos change or
+  // the component unmounts.
   useEffect(() => {
     const currentUrls = objectUrlsRef.current;
-    const newUrls = photoUrls;
+    const newUrls = previewUrls;
 
     // Revoke URLs for removed photos
     currentUrls.forEach((url, file) => {
@@ -53,7 +68,7 @@ export function PhotoshootUploadStep() {
       });
       objectUrlsRef.current.clear();
     };
-  }, [photoUrls]);
+  }, [previewUrls]);
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -87,11 +102,11 @@ export function PhotoshootUploadStep() {
         >
           {photos.map((photo, index) => (
             <div
-              key={photoUrls.get(photo)}
+              key={previewUrls.get(photo) || photo.name + index}
               className="aspect-square rounded-lg border border-muted relative overflow-hidden"
             >
               <img
-                src={photoUrls.get(photo) || ''}
+                src={previewUrls.get(photo) || ''}
                 alt={`Upload preview ${index + 1}`}
                 className="w-full h-full object-cover"
               />

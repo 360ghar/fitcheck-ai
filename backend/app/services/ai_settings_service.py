@@ -17,7 +17,7 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
-from app.core.exceptions import AIServiceError, DatabaseError
+from app.core.exceptions import AIServiceError
 from app.models.ai import HealthCheckResult
 from app.services.ai_provider_service import (
     AIProvider,
@@ -26,11 +26,30 @@ from app.services.ai_provider_service import (
 )
 from app.services.ai_provider_interface import AIProviderClient, get_provider_class
 from app.utils.crypto import derive_fernet_key, legacy_derive_fernet_key
-from app.utils.db import unwrap_rpc_bool, unwrap_rpc_result
+from app.utils.db import (
+    QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
+    is_pgrst202_missing_rpc,
+    missing_rpc_log_hint,
+    unwrap_rpc_bool,
+)
 
 logger = get_context_logger(__name__)
 
 _KEY_PURPOSE = b"fitcheck-ai-settings-api-key-v1"
+
+# Quota admission depends on hosted-Supabase RPCs created by migrations
+# 022/024/026. When those migrations were not applied, PostgREST answers every
+# rpc() call with PGRST202 ("Could not find the function ... in the schema
+# cache") and admission fails closed with a 503. The missing-RPC detail is
+# LOGGED (see app/utils/db.py missing_rpc_log_hint) so operators can diagnose
+# it; clients only ever see the friendly message, never the raw DB text.
+# Observed 2026-07-31: every batch-extract returned 500 for exactly this reason.
+
+# Friendly copy for a new-user FK race on user_ai_settings.user_id (profile
+# row not propagated yet). Raw FK detail stays in the logs.
+_ACCOUNT_NOT_READY_CLIENT_MESSAGE = (
+    "Your account is still being set up. Please try again in a few seconds."
+)
 
 
 # =============================================================================
@@ -407,8 +426,27 @@ class AISettingsService:
                 .execute
             )
         except Exception as e:
+            if "23503" in str(e) or "users_id_fkey" in str(e):
+                # user_ai_settings.user_id references public.users(id); a brand-
+                # new auth user whose profile row has not propagated yet hits
+                # this FK race (auth.py retries the same condition on login).
+                # The raw FK detail stays in the log (message + error field);
+                # clients get the friendly account-setup message.
+                logger.error(
+                    "AI settings provisioning FK race: user profile not ready "
+                    "(users_id_fkey 23503)",
+                    user_id=user_id,
+                    error=str(e),
+                )
+                raise AIServiceError(
+                    _ACCOUNT_NOT_READY_CLIENT_MESSAGE,
+                    retryable=True,
+                ) from e
             logger.error("Failed to ensure AI settings row", user_id=user_id, error=str(e))
-            raise AIServiceError(f"Failed to prepare AI settings: {str(e)}")
+            raise AIServiceError(
+                QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
+                retryable=True,
+            ) from e
 
     @staticmethod
     async def reserve_usage(
@@ -445,8 +483,23 @@ class AISettingsService:
                 ).execute
             )
         except Exception as error:
-            logger.error("Failed to reserve AI usage", user_id=user_id, error=str(error))
-            raise DatabaseError("Failed to reserve AI usage") from error
+            if is_pgrst202_missing_rpc(error):
+                # Migration gap, not a transient provider hiccup: log the
+                # actionable hint (function + migrations) for operators. The
+                # client-facing message stays friendly — never raw DB text.
+                logger.error(
+                    missing_rpc_log_hint("reserve_ai_usage"),
+                    user_id=user_id,
+                    function="reserve_ai_usage",
+                    migrations="022/024/026",
+                    rpc_error=str(error),
+                )
+            else:
+                logger.error("Failed to reserve AI usage", user_id=user_id, error=str(error))
+            raise AIServiceError(
+                QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
+                retryable=True,
+            ) from error
 
         # `reserve_ai_usage` returns a scalar BOOLEAN, so PostgREST keys the
         # result by the function name rather than a column name.
@@ -473,8 +526,24 @@ class AISettingsService:
                 ).execute
             )
         except Exception as error:
-            logger.error("Failed to release AI usage reservation", user_id=user_id, error=str(error))
-            raise DatabaseError("Failed to release AI usage reservation") from error
+            if is_pgrst202_missing_rpc(error):
+                logger.error(
+                    missing_rpc_log_hint("release_ai_usage"),
+                    user_id=user_id,
+                    function="release_ai_usage",
+                    migrations="022/024/026",
+                    rpc_error=str(error),
+                )
+            else:
+                logger.error(
+                    "Failed to release AI usage reservation",
+                    user_id=user_id,
+                    error=str(error),
+                )
+            raise AIServiceError(
+                QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
+                retryable=True,
+            ) from error
 
     @staticmethod
     async def get_usage_stats(user_id: str, db) -> Dict[str, Any]:

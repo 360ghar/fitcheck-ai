@@ -45,8 +45,8 @@ class SubscriptionRepository implements ReferralRedemptionService {
     }
   }
 
-  /// Get available plans
-  Future<List<PlanDetailsModel>> getPlans() async {
+  /// Get available plans (display + store product IDs)
+  Future<PlansResponse> getPlans() async {
     try {
       final response = await _apiClient.get(
         '${ApiConstants.subscription}/plans',
@@ -54,12 +54,50 @@ class SubscriptionRepository implements ReferralRedemptionService {
       final payload = response.data as Map<String, dynamic>;
       final data =
           payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
-      final plans =
-          (data['plans'] as List?)
-              ?.whereType<Map<String, dynamic>>()
-              .toList() ??
-          [];
-      return plans.map((p) => PlanDetailsModel.fromJson(p)).toList();
+      return PlansResponse.fromJson(data);
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    }
+  }
+
+  /// Register a store-verified purchase with the backend.
+  ///
+  /// [store] is "apple" or "google"; [transactionId] is the App Store
+  /// transaction ID or the Play purchase token; [productId] is the store
+  /// product the client intended to purchase (cross-checked server-side).
+  Future<SubscriptionModel> registerIapTransaction({
+    required String store,
+    required String transactionId,
+    required String productId,
+  }) async {
+    try {
+      final response = await _apiClient.post(
+        '${ApiConstants.subscription}/iap/transaction',
+        data: {
+          'store': store,
+          'transaction_id': transactionId,
+          'product_id': productId,
+        },
+      );
+      final payload = response.data as Map<String, dynamic>;
+      final data =
+          payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
+      return SubscriptionModel.fromJson(data);
+    } on DioException catch (e) {
+      throw handleDioException(e);
+    }
+  }
+
+  /// Create a Stripe billing portal session (web only).
+  Future<String> createPortalSession() async {
+    try {
+      final response = await _apiClient.post(
+        '${ApiConstants.subscription}/portal',
+      );
+      final payload = response.data as Map<String, dynamic>;
+      final data =
+          payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
+      return data['portal_url'] as String? ?? '';
     } on DioException catch (e) {
       throw handleDioException(e);
     }

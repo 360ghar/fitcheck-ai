@@ -22,6 +22,7 @@ import { logger } from '@/lib/logger';
 import { WizardSteps } from '@/components/ui/wizard-steps';
 import { useBatchExtraction, useSocialImportQueue } from '@/hooks';
 import { createItem, uploadItemImages } from '@/api/items';
+import { skipToast } from '@/api/client';
 import { parallelWithRetry } from '@/lib/retry';
 import {
   createOutfitsFromUploads,
@@ -571,7 +572,7 @@ export function BatchExtractionFlow({
         const formData = new FormData();
         formData.append('files', imageFile, imageFile.name);
 
-        const upload = await uploadItemImages(formData);
+        const upload = await uploadItemImages(formData, skipToast);
         const uploadedImage = upload.images?.[0];
 
         if (!uploadedImage?.image_url) {
@@ -601,7 +602,7 @@ export function BatchExtractionFlow({
           ],
         };
 
-        const savedItem = await createItem(itemData);
+        const savedItem = await createItem(itemData, skipToast);
         return savedItem;
       },
       {

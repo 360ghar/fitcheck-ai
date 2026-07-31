@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.core.logging_config import setup_session_logging
 from app.core.exceptions import FitCheckException
 from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, get_correlation_id
-from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, referral, feedback, photoshoot, social_import, blog
+from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog
 from app.db.connection import SupabaseDB
 from postgrest.exceptions import APIError as PostgrestAPIError
 
@@ -484,6 +484,9 @@ app.include_router(demo.router, prefix="/api/v1/demo", tags=["Demo"])
 
 # Subscription routes (requires auth, except webhook)
 app.include_router(subscription.router, prefix="/api/v1/subscription", tags=["Subscription"])
+# Mobile in-app purchase routes (register + store webhooks); mounted under
+# /api/v1/subscription via its own prefix.
+app.include_router(iap.router, prefix="/api/v1", tags=["Subscription", "IAP"])
 
 # Referral routes (requires auth, except validate)
 app.include_router(referral.router, prefix="/api/v1/referral", tags=["Referral"])

@@ -10,7 +10,7 @@ import httpx
 from supabase import Client
 
 from app.core.config import settings
-from app.core.exceptions import DatabaseError, RateLimitError
+from app.core.exceptions import AIServiceError, DatabaseError, RateLimitError
 from app.core.logging_config import get_context_logger
 from app.models.subscription import (
     PlanType,
@@ -22,7 +22,12 @@ from app.models.subscription import (
     UsageCheckResult,
 )
 from app.utils.datetime_util import utcnow, utcnow_iso
-from app.utils.db import unwrap_rpc_bool, unwrap_rpc_result
+from app.utils.db import (
+    QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
+    is_pgrst202_missing_rpc,
+    missing_rpc_log_hint,
+    unwrap_rpc_bool,
+)
 from app.utils import maybe_single_data
 
 logger = get_context_logger(__name__)
@@ -207,6 +212,7 @@ class SubscriptionService:
                 cancel_at_period_end=data.get("cancel_at_period_end", False),
                 trial_end=trial_end,
                 referral_credit_months=data.get("referral_credit_months", 0),
+                billing_provider=data.get("billing_provider", "stripe"),
                 created_at=SubscriptionService._parse_datetime(data.get("created_at")),
                 updated_at=SubscriptionService._parse_datetime(data.get("updated_at")),
                 is_pro=SubscriptionService.is_pro_plan(plan_type),
@@ -385,6 +391,140 @@ class SubscriptionService:
         )
         return await cls.get_subscription(user_id, db)
 
+    @classmethod
+    async def sync_iap_subscription(
+        cls,
+        user_id: str,
+        db: Client,
+        *,
+        provider: str,
+        plan_type: PlanType,
+        status: str,
+        current_period_start: Optional[str] = None,
+        current_period_end: Optional[str] = None,
+        cancel_at_period_end: bool = False,
+        product_id: Optional[str] = None,
+        apple_original_transaction_id: Optional[str] = None,
+        google_purchase_token: Optional[str] = None,
+        google_order_id: Optional[str] = None,
+        now: Optional[datetime] = None,
+    ) -> SubscriptionResponse:
+        """Synchronize the local subscription from a store-verified purchase.
+
+        ``provider`` must be "apple" or "google"; the row's billing_provider
+        becomes that store, and the other stores' identity columns are cleared
+        so a stale Stripe/other-store snapshot can never be applied on top.
+
+        ``status`` accepts the normalized store states: "active" (entitled),
+        "past_due" (payment problem, keep plan but flag), or "free" (expired /
+        refunded / revoked — downgrade to the free plan). Anything else fails
+        closed rather than inventing an entitlement.
+
+        Guards against regressions mirroring sync_stripe_subscription: an
+        incoming period end older than the row already records is stale and
+        must not overwrite a newer snapshot.
+        """
+        if provider not in ("apple", "google"):
+            raise DatabaseError(f"Unknown billing provider: {provider}")
+        if not SubscriptionService.is_paid_plan(plan_type):
+            raise DatabaseError(f"Store billing cannot map to plan {plan_type.value}")
+
+        check_at = now or utcnow()
+
+        # Store-verified "free" means the store refunded/expired the purchase.
+        # Downgrade to the free plan; there is no store identity to keep.
+        if status == "free":
+            await asyncio.to_thread(db.table("subscriptions").update({
+                "plan_type": "free",
+                "status": "active",
+                "billing_provider": provider,
+                "current_period_end": None,
+                "cancel_at_period_end": False,
+                "apple_original_transaction_id": None,
+                "google_purchase_token": None,
+                "google_order_id": None,
+                "billing_product_id": None,
+                "updated_at": check_at.isoformat(),
+            }).eq("user_id", user_id).execute)
+            logger.info(
+                "Store purchase expired/refunded; downgraded to free",
+                user_id=user_id,
+                provider=provider,
+                plan_type=plan_type.value,
+            )
+            return await cls.get_subscription(user_id, db)
+
+        status_map = {
+            "active": SubscriptionStatus.ACTIVE,
+            "past_due": SubscriptionStatus.PAST_DUE,
+        }
+        if status not in status_map:
+            raise DatabaseError(
+                f"Unknown store entitlement status '{status}'; refusing to grant"
+            )
+        stored_status = status_map[status]
+
+        existing_result = await asyncio.to_thread(
+            db.table("subscriptions")
+            .select("current_period_end,billing_provider")
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute
+        )
+        existing = maybe_single_data(existing_result)
+        if existing:
+            existing_period_end = cls._parse_datetime(existing.get("current_period_end"))
+            incoming_period_end = cls._parse_datetime(current_period_end) if current_period_end else None
+            if (
+                existing_period_end
+                and incoming_period_end
+                and existing_period_end > incoming_period_end
+                and existing.get("billing_provider") == provider
+            ):
+                logger.info(
+                    "Skipping stale store snapshot with older period end",
+                    user_id=user_id,
+                    provider=provider,
+                    existing_period_end=existing_period_end.isoformat(),
+                    incoming_period_end=incoming_period_end.isoformat(),
+                )
+                return await cls.get_subscription(user_id, db)
+
+        payload = {
+            "user_id": user_id,
+            "plan_type": plan_type.value,
+            "status": stored_status.value,
+            "billing_provider": provider,
+            "current_period_start": current_period_start or check_at.isoformat(),
+            "current_period_end": current_period_end,
+            "cancel_at_period_end": cancel_at_period_end,
+            "billing_product_id": product_id,
+            # Only the owning store's identity is kept; the others are
+            # cleared so a stale snapshot from a replaced rail cannot match.
+            "apple_original_transaction_id": (
+                apple_original_transaction_id if provider == "apple" else None
+            ),
+            "google_purchase_token": (
+                google_purchase_token if provider == "google" else None
+            ),
+            "google_order_id": google_order_id if provider == "google" else None,
+            "stripe_customer_id": None,
+            "stripe_subscription_id": None,
+            "updated_at": check_at.isoformat(),
+        }
+        await asyncio.to_thread(
+            db.table("subscriptions").upsert(payload, on_conflict="user_id").execute
+        )
+        logger.info(
+            "Synchronized store subscription",
+            user_id=user_id,
+            provider=provider,
+            plan_type=plan_type.value,
+            status=stored_status.value,
+            product_id=product_id,
+        )
+        return await cls.get_subscription(user_id, db)
+
     @staticmethod
     async def apply_referral_credit(user_id: str, months: int, db: Client) -> None:
         """Apply referral credit months to a user's subscription."""
@@ -444,6 +584,25 @@ class SubscriptionService:
     async def cancel_subscription(user_id: str, db: Client) -> SubscriptionResponse:
         """Cancel subscription at period end."""
         try:
+            # Store-billed subscriptions are managed in the App Store / Play
+            # Store settings, never by the Stripe cancellation path. Refuse so
+            # a stale client button cannot silently claim a store cancellation.
+            sub_result = await asyncio.to_thread(
+                db.table("subscriptions")
+                .select("billing_provider")
+                .eq("user_id", user_id)
+                .maybe_single()
+                .execute
+            )
+            sub_data = maybe_single_data(sub_result)
+            provider = (sub_data or {}).get("billing_provider", "stripe")
+            if provider in ("apple", "google"):
+                raise DatabaseError(
+                    "This subscription is billed through the "
+                    f"{'App Store' if provider == 'apple' else 'Play Store'}; "
+                    "manage it there instead."
+                )
+
             await asyncio.to_thread(db.table("subscriptions").update({
                 "cancel_at_period_end": True,
                 "updated_at": utcnow_iso(),
@@ -682,10 +841,28 @@ class SubscriptionService:
         except RateLimitError:
             raise
         except Exception as e:
-            logger.error(f"Error incrementing usage for user {user_id}: {e}")
-            # Fail closed if the reservation migration is unavailable. A
-            # best-effort counter is not safe for entitlement enforcement.
-            raise DatabaseError(f"Failed to reserve usage: {str(e)}")
+            if is_pgrst202_missing_rpc(e):
+                # Fail closed if the reservation migration is unavailable. A
+                # best-effort counter is not safe for entitlement enforcement.
+                # PostgREST answers a missing RPC with PGRST202 ("Could not
+                # find the function ... in the schema cache") - the migrations
+                # that create reserve_usage (022/024/026) were not applied to
+                # the hosted DB. Log the actionable hint for operators; the
+                # client-facing message stays friendly (observed 2026-07-31:
+                # every quota admission failed this way).
+                logger.error(
+                    missing_rpc_log_hint("reserve_usage"),
+                    user_id=user_id,
+                    function="reserve_usage",
+                    migrations="022/024/026",
+                    rpc_error=str(e),
+                )
+            else:
+                logger.error(f"Error incrementing usage for user {user_id}: {e}")
+            raise AIServiceError(
+                QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
+                retryable=True,
+            ) from e
 
     # ==========================================================================
     # Combined Methods

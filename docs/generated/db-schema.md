@@ -48,11 +48,13 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `027_stripe_webhook_processing_state.sql`
 - `028_configurable_social_import_limit.sql`
 - `029_pr9_hardening.sql`
+- `030_mobile_iap.sql`
 
 ## Tables (CREATE TABLE)
 
 | Table | Introduced in |
 |-------|---------------|
+| `apple_iap_events` | `030_mobile_iap.sql` |
 | `blog_posts` | `017_blog_posts.sql` |
 | `body_profiles` | `001_full_schema.sql` |
 | `calendar_connections` | `001_full_schema.sql` |
@@ -60,6 +62,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `challenge_participations` | `001_full_schema.sql` |
 | `challenges` | `001_full_schema.sql` |
 | `extraction_jobs` | `016_extraction_jobs.sql` |
+| `google_rtdn_events` | `030_mobile_iap.sql` |
 | `item_colors` | `001_full_schema.sql` |
 | `item_images` | `001_full_schema.sql` |
 | `items` | `001_full_schema.sql` |
@@ -101,6 +104,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `025_calendar_all_day_events.sql` | `calendar_events` | `is_all_day` |
 | `027_stripe_webhook_processing_state.sql` | `stripe_webhook_events` | `status` |
 | `027_stripe_webhook_processing_state.sql` | `stripe_webhook_events` | `attempts` |
+| `030_mobile_iap.sql` | `subscriptions` | `billing_provider` |
 
 These columns are added after their table's CREATE TABLE and are required (NOT NULL DEFAULT), so inserts rely on the default until a value is supplied.
 
@@ -178,6 +182,17 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `027_stripe_webhook_processing_state.sql` → `stripe_webhook_events`
 - `029_pr9_hardening.sql` → `extraction_jobs`
 - `029_pr9_hardening.sql` → `extraction_jobs`
+- `030_mobile_iap.sql` → `subscriptions`
+- `030_mobile_iap.sql` → `subscriptions`
+- `030_mobile_iap.sql` → `subscriptions`
+- `030_mobile_iap.sql` → `subscriptions`
+- `030_mobile_iap.sql` → `subscriptions`
+- `030_mobile_iap.sql` → `apple_iap_events`
+- `030_mobile_iap.sql` → `apple_iap_events`
+- `030_mobile_iap.sql` → `apple_iap_events`
+- `030_mobile_iap.sql` → `google_rtdn_events`
+- `030_mobile_iap.sql` → `google_rtdn_events`
+- `030_mobile_iap.sql` → `google_rtdn_events`
 
 ## Related
 

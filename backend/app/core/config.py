@@ -170,13 +170,49 @@ class Settings(BaseSettings):
     # Subscription Plan Configuration
     # ==========================================================================
 
-    # Stripe Configuration
+    # Stripe Configuration (web purchases only; mobile uses store billing)
     STRIPE_SECRET_KEY: Optional[str] = None
     STRIPE_WEBHOOK_SECRET: Optional[str] = None
     STRIPE_PLUS_MONTHLY_PRICE_ID: Optional[str] = None
     STRIPE_PLUS_YEARLY_PRICE_ID: Optional[str] = None
     STRIPE_PRO_MONTHLY_PRICE_ID: Optional[str] = None
     STRIPE_PRO_YEARLY_PRICE_ID: Optional[str] = None
+
+    # ==========================================================================
+    # Mobile In-App Purchase Configuration (Apple App Store + Google Play)
+    # ==========================================================================
+    #
+    # Apple App Store Server API (https://developer.apple.com/documentation/appstoreserverapi).
+    # APPLE_PRIVATE_KEY is the contents of the .p8 key downloaded from App Store
+    # Connect (In-App Purchase permission), used to sign the ES256 JWT that
+    # authenticates every server API call. APPLE_ENV selects the base URL:
+    # "sandbox" -> https://api.storekit-sandbox.itunes.apple.com, anything
+    # else -> https://api.storekit.itunes.apple.com. Production code should
+    # verify against the production API and fall back to sandbox on 404/401
+    # (TestFlight purchases do not exist in the production store).
+    APPLE_BUNDLE_ID: str = "com.fitcheckaiapp.fitcheckai"
+    APPLE_ISSUER_ID: Optional[str] = None
+    APPLE_KEY_ID: Optional[str] = None
+    APPLE_PRIVATE_KEY: Optional[str] = None
+    APPLE_ENV: str = "production"
+    APPLE_PLUS_MONTHLY_PRODUCT_ID: Optional[str] = None
+    APPLE_PLUS_YEARLY_PRODUCT_ID: Optional[str] = None
+    APPLE_PRO_MONTHLY_PRODUCT_ID: Optional[str] = None
+    APPLE_PRO_YEARLY_PRODUCT_ID: Optional[str] = None
+
+    # Google Play Developer API (service account). GOOGLE_SERVICE_ACCOUNT_JSON
+    # is the full contents of the service-account JSON key file downloaded from
+    # Google Cloud Console (Play Developer API enabled for the service account).
+    # GOOGLE_RTDN_AUDIENCE is the Pub/Sub topic resource name of the
+    # Real-time Developer Notifications push subscription (the OIDC token's
+    # audience); the notifications endpoint refuses pushes when it is unset.
+    GOOGLE_PACKAGE_NAME: str = "com.fitcheckaiapp.fitcheckai"
+    GOOGLE_SERVICE_ACCOUNT_JSON: Optional[str] = None
+    GOOGLE_RTDN_AUDIENCE: Optional[str] = None
+    GOOGLE_PLUS_MONTHLY_PRODUCT_ID: Optional[str] = None
+    GOOGLE_PLUS_YEARLY_PRODUCT_ID: Optional[str] = None
+    GOOGLE_PRO_MONTHLY_PRODUCT_ID: Optional[str] = None
+    GOOGLE_PRO_YEARLY_PRODUCT_ID: Optional[str] = None
 
     # Plan Limits (monthly)
     PLAN_FREE_MONTHLY_EXTRACTIONS: int = 25

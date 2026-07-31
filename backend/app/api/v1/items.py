@@ -19,6 +19,7 @@ from supabase import Client
 
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import (
+    AIServiceError,
     ItemNotFoundError,
     ImageNotFoundError,
     ValidationError,
@@ -1265,7 +1266,7 @@ async def check_duplicates(
             "message": f"Found {len(duplicates)} potential duplicate(s)" if has_duplicates else "No duplicates found"
         }
 
-    except (ValidationError, DatabaseError):
+    except (ValidationError, DatabaseError, AIServiceError):
         raise
     except Exception as e:
         logger.error(
@@ -1394,7 +1395,7 @@ async def find_similar_items(
             "message": f"Found {len(response_items)} similar item(s)"
         }
 
-    except (ItemNotFoundError, ValidationError, DatabaseError, RateLimitError):
+    except (ItemNotFoundError, ValidationError, DatabaseError, RateLimitError, AIServiceError):
         raise
     except Exception as e:
         logger.error(

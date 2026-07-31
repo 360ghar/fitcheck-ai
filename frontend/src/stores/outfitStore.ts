@@ -8,6 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { Outfit, OutfitImage, Style, Season, OutfitFilters as ApiOutfitFilters } from '../types';
 import * as outfitsApi from '../api/outfits';
 import { generateOutfit, type OutfitItemInput } from '../api/ai';
+import { skipToast } from '../api/client';
 import { getApiError, type ApiError } from '../lib/errors';
 import { withRetry } from '../lib/retry';
 import { logger } from '../lib/logger';
@@ -611,17 +612,23 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 
     // Same options as `startGenerationForNewOutfit`, so what the user approves
     // is what the old auto-generation would have produced. No `background`:
-    // the backend default owns that prompt fragment now.
+    // the backend default owns that prompt fragment now. `skipToast`: this
+    // flow surfaces its own inline `previewError`, so the global error toast
+    // is suppressed — otherwise each withRetry attempt would also toast.
     const aiResult = await withRetry(
       () =>
-        generateOutfit(promptItems, {
-          style: creationStyle || 'casual',
-          pose: 'standing front',
-          lighting: 'studio',
-          include_model: true,
-          include_user_face: true,
-          use_body_profile: true,
-        }),
+        generateOutfit(
+          promptItems,
+          {
+            style: creationStyle || 'casual',
+            pose: 'standing front',
+            lighting: 'studio',
+            include_model: true,
+            include_user_face: true,
+            use_body_profile: true,
+          },
+          skipToast
+        ),
       {
         maxRetries: 3,
         initialDelayMs: 2000,
@@ -713,7 +720,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         tags: creationTags,
         occasion: creationOccasion,
         is_favorite: false,
-      });
+      }, skipToast);
     } catch (error) {
       set({ error: getApiError(error), isLoading: false });
       throw error;

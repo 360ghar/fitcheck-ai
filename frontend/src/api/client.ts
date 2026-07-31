@@ -210,10 +210,93 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * True when an error is a transient, worth-retrying failure: a network error
+ * or a retryable HTTP status (408/429/5xx). A deterministic quota-exhausted
+ * 429 (the user's OWN plan limit, raised pre-flight by the backend) cannot
+ * clear within seconds and is treated as permanent — retrying it only
+ * multiplies duplicate requests and delays the upgrade prompt. 429s from
+ * upstream capacity issues (error_kind: upstream_quota / transient) stay
+ * retryable.
+ */
+function isTransientFailure(error: AxiosError): boolean {
+  const status = error.response?.status;
+  const isNetworkError = !error.response && !!error.request;
+  return (
+    !isRateLimitExhausted(error) &&
+    (isNetworkError || (status !== undefined && RETRYABLE_STATUS_CODES.has(status)))
+  );
+}
+
+/**
+ * Should the global toast fire for this error? Excludes auth-flow 401s
+ * (silently redirected + token refreshed), silent error codes, and requests
+ * that opted out with `skipToast`.
+ */
+function shouldShowApiToast(error: AxiosError, config: InternalAxiosRequestConfig | undefined): boolean {
+  const apiError = getApiError(error);
+  return (
+    error.response?.status !== 401 &&
+    !SILENT_ERROR_CODES.has(apiError.code || '') &&
+    !config?._skipToast
+  );
+}
+
+/**
+ * The generic message shown by the global error handler. RATE_LIMIT_EXCEEDED
+ * is never toasted here — the toast/401 interceptor opens the upgrade prompt
+ * for it instead.
+ */
+function notifyApiError(error: AxiosError) {
+  const apiError = getApiError(error);
+  if (apiError.code === RATE_LIMIT_EXCEEDED) {
+    return;
+  }
+  if (!error.response) {
+    // Network error - no response received
+    showNetworkError();
+  } else if (apiError.errorKind === 'upstream_quota' || apiError.errorKind === 'transient') {
+    // Upstream AI capacity/provider failure ("on us"): friendly retry
+    // message, not the scary generic error and never an upgrade prompt.
+    // "hard" errors (auth/content-policy/parse) are permanent — retrying
+    // cannot resolve them, so they fall through to showApiError.
+    showWarning(
+      'Our AI service is busy. Please try again in a few minutes.',
+      'AI busy'
+    );
+  } else if (error.response.status === 429) {
+    // Rate limit error - show as warning
+    showWarning(apiError.message || 'Too many requests. Please slow down.', 'Rate Limited');
+  } else {
+    // Other API errors - show with appropriate styling
+    showApiError(apiError);
+  }
+}
+
+/**
+ * Toast a transient failure exactly once, at the point the retry interceptor
+ * decides the request is terminal (auth endpoint, token-refresh retry, or
+ * retries exhausted).
+ *
+ * This is the heart of the one-toast-per-failure guarantee: a retryable
+ * failure is retried by re-issuing `apiClient(config)`, and a re-issued
+ * request runs the WHOLE interceptor chain again. If the toast logic lived
+ * only in the toast/401 interceptor below, the same rejection would be toasted
+ * once per chain level — empirically 3 identical toasts for 3 attempts. So
+ * the toast/401 interceptor skips transient failures and only this function
+ * surfaces them, and only for a request retries cannot recover.
+ */
+function notifyTerminalTransientError(error: AxiosError, config: InternalAxiosRequestConfig | undefined) {
+  if (isTransientFailure(error) && shouldShowApiToast(error, config)) {
+    notifyApiError(error);
+  }
+}
+
+/**
  * Retry transient failures (network errors + 408/429/5xx) with exponential
  * backoff: 1s, then 2s. Client errors (400/401/403/404/409/422) and auth
- * endpoints are never retried. Registered before the 401/toast interceptor so
- * a successful retry is transparent and toasts only fire once retries exhaust.
+ * endpoints are never retried. Registered before the 401/toast interceptor: a
+ * successful retry is transparent (no toast), and a terminal transient
+ * failure is toasted exactly once (see `notifyTerminalTransientError`).
  */
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
@@ -222,34 +305,34 @@ apiClient.interceptors.response.use(
 
     // No config means we cannot retry (e.g. request setup failed).
     if (!config) {
+      notifyTerminalTransientError(error, config);
       return Promise.reject(error);
     }
 
-    // Never double-handle a token-refresh retry.
+    // Never double-handle a token-refresh retry. A non-401 result is the
+    // terminal failure for this refreshed request.
     if (config._retry) {
+      notifyTerminalTransientError(error, config);
       return Promise.reject(error);
     }
 
-    // Never retry auth endpoints — a 401 there means bad credentials.
+    // Never retry auth endpoints — a 401 there means bad credentials. A 5xx
+    // from an auth endpoint is still terminal and still toastable.
     if (isAuthEndpoint(config.url)) {
+      notifyTerminalTransientError(error, config);
       return Promise.reject(error);
     }
 
-    const status = error.response?.status;
-    const isNetworkError = !error.response && !!error.request;
-    // A deterministic quota-exhausted response (the user's OWN plan limit,
-    // raised pre-flight by the backend) cannot clear within seconds, so
-    // retrying it only multiplies duplicate requests and delays the upgrade
-    // prompt in the interceptor below. 429s from upstream capacity issues
-    // (error_kind: upstream_quota / transient) are still retried.
-    const isRetryable = !isRateLimitExhausted(error) && (isNetworkError || (status !== undefined && RETRYABLE_STATUS_CODES.has(status)));
-
-    if (!isRetryable) {
+    if (!isTransientFailure(error)) {
+      // Permanent client errors are toasted exactly once by the toast/401
+      // interceptor registered below.
       return Promise.reject(error);
     }
 
     const retryCount = config._retryCount ?? 0;
     if (retryCount >= MAX_RETRIES) {
+      // All attempts exhausted — this is the terminal failure for the request.
+      notifyTerminalTransientError(error, config);
       return Promise.reject(error);
     }
 
@@ -259,7 +342,7 @@ apiClient.interceptors.response.use(
 
     if (import.meta.env.DEV) {
       logger.warn(
-        `[API Retry] ${config.method?.toUpperCase()} ${config.url} attempt ${config._retryCount}/${MAX_RETRIES} after ${backoff}ms (status=${status ?? 'network'})`
+        `[API Retry] ${config.method?.toUpperCase()} ${config.url} attempt ${config._retryCount}/${MAX_RETRIES} after ${backoff}ms (status=${error.response?.status ?? 'network'})`
       );
     }
 
@@ -317,15 +400,6 @@ apiClient.interceptors.response.use(
     // Extract the API error for analysis
     const apiError = getApiError(error);
 
-    // Determine if we should show a toast notification
-    const shouldShowToast =
-      // Not a 401 (handled by auth flow with redirect)
-      error.response?.status !== 401 &&
-      // Not in the silent error codes list
-      !SILENT_ERROR_CODES.has(apiError.code || '') &&
-      // Not explicitly skipped by the request
-      !originalRequest._skipToast;
-
     // The user hit THEIR OWN plan limit (backend RATE_LIMIT_EXCEEDED): this is
     // the one place we show an upgrade prompt. Upstream AI capacity issues
     // (errorKind) are "on us" and handled as a friendly retry below — never an
@@ -335,26 +409,14 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (shouldShowToast) {
-      if (!error.response) {
-        // Network error - no response received
-        showNetworkError();
-      } else if (apiError.errorKind === 'upstream_quota' || apiError.errorKind === 'transient') {
-        // Upstream AI capacity/provider failure ("on us"): friendly retry
-        // message, not the scary generic error and never an upgrade prompt.
-        // "hard" errors (auth/content-policy/parse) are permanent — retrying
-        // cannot resolve them, so they fall through to showApiError.
-        showWarning(
-          'Our AI service is busy. Please try again in a few minutes.',
-          'AI busy'
-        );
-      } else if (error.response.status === 429) {
-        // Rate limit error - show as warning
-        showWarning(apiError.message || 'Too many requests. Please slow down.', 'Rate Limited');
-      } else {
-        // Other API errors - show with appropriate styling
-        showApiError(apiError);
-      }
+    // Transient (retryable) failures are toasted exactly ONCE by the retry
+    // interceptor registered above, at the point it decides the request is
+    // terminal (auth endpoint, refresh retry, or retries exhausted). Re-issuing
+    // `apiClient(config)` re-runs this whole interceptor chain per attempt, so
+    // toasting transient failures here would fire once per attempt — the
+    // duplicate-toast bug. Only permanent failures (4xx, etc.) are toasted here.
+    if (shouldShowApiToast(error, originalRequest) && !isTransientFailure(error)) {
+      notifyApiError(error);
     }
 
     return Promise.reject(error);

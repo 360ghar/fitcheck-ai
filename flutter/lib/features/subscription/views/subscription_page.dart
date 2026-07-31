@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
@@ -66,9 +67,12 @@ class SubscriptionPage extends GetView<SubscriptionController> {
               _buildReferralSection(context, theme),
               const SizedBox(height: 24),
 
-              // Cancel section (for pro users)
+              // Cancel / manage section (paid users only). Store-billed
+              // subscriptions are managed in the store's settings.
               if (controller.isPro && !controller.isCancelled)
-                _buildCancelSection(context, theme),
+                controller.isStoreBilled
+                    ? _buildManageSection(context, theme)
+                    : _buildCancelSection(context, theme),
             ],
           ),
         );
@@ -310,13 +314,30 @@ class SubscriptionPage extends GetView<SubscriptionController> {
           fallbackGenerations: 1000,
           isRecommended: onPlus,
         ),
+        // Restore Purchases is required on both stores (Apple Guideline
+        // 3.1.1 / Play policy) so users can recover purchases after
+        // reinstalls or store-account changes.
+        if (!kIsWeb) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: controller.isCheckingOut.value
+                  ? null
+                  : controller.restorePurchases,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Restore Purchases'),
+            ),
+          ),
+        ],
       ],
     );
   }
 
   /// One paid tier: a monthly and a yearly card plus its limits summary.
-  /// Prices come from the backend `/plans` response, with the configured
-  /// defaults as a fallback when the request has not resolved yet.
+  /// Prices come from the store product details (localized) on mobile, or
+  /// the backend `/plans` response (with configured defaults as fallback)
+  /// until those resolve.
   Widget _buildTierRow(
     ThemeData theme, {
     required String planId,
@@ -334,6 +355,14 @@ class SubscriptionPage extends GetView<SubscriptionController> {
     final savings = (monthlyPrice * 12 - yearlyPrice).toStringAsFixed(0);
     final extractionsLimit = plan?.monthlyExtractions ?? fallbackExtractions;
     final generationsLimit = plan?.monthlyGenerations ?? fallbackGenerations;
+
+    // Mobile: prefer the localized store price for the exact variant.
+    final monthlyPriceText =
+        controller.storePriceFor('${planId}_monthly') ??
+        '\$${monthlyPrice.toStringAsFixed(0)}';
+    final yearlyPriceText =
+        controller.storePriceFor('${planId}_yearly') ??
+        '\$${yearlyPrice.toStringAsFixed(0)}';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -364,7 +393,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
             Expanded(
               child: PlanCard(
                 name: 'Monthly',
-                price: '\$${monthlyPrice.toStringAsFixed(0)}',
+                price: monthlyPriceText,
                 period: '/month',
                 onTap: () => controller.startCheckout('${planId}_monthly'),
                 isLoading: controller.isCheckingOut.value,
@@ -374,7 +403,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
             Expanded(
               child: PlanCard(
                 name: 'Yearly',
-                price: '\$${yearlyPrice.toStringAsFixed(0)}',
+                price: yearlyPriceText,
                 period: '/year',
                 badge: 'Save \$$savings',
                 onTap: () => controller.startCheckout('${planId}_yearly'),
@@ -406,6 +435,40 @@ class SubscriptionPage extends GetView<SubscriptionController> {
       onCopy: controller.copyReferralLink,
       // Tear-off passes sharePositionOrigin from the Share button (iPad popover).
       onShare: controller.shareReferralLink,
+    );
+  }
+
+  /// Store-billed subscriptions cannot be cancelled in-app (the store owns
+  /// billing); point the user at the store's subscription settings.
+  Widget _buildManageSection(BuildContext context, ThemeData theme) {
+    final storeName = controller.iapService.isApple ? 'App Store' : 'Play Store';
+    return AppGlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Manage Subscription',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'This subscription is billed through the $storeName. You can '
+            'cancel, change, or manage it in your $storeName account settings.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withAlpha(153),
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: controller.openManageSubscription,
+            icon: const Icon(Icons.open_in_new, size: 18),
+            label: const Text('Manage in Store'),
+          ),
+        ],
+      ),
     );
   }
 

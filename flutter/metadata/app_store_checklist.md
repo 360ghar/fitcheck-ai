@@ -48,7 +48,11 @@
 - [x] AI third-party processing consent before first AI use
 - [x] UGC report flow on shared outfits / generated images
 - [x] Hide shared outfit content on-device (Guideline 1.2)
-- [x] iOS free v1: paywall / Stripe CTAs gated off (`EnvConfig.paywallEnabled`)
+- [x] Subscriptions sold through Apple In-App Purchase only (`in_app_purchase` plugin; no Stripe/other purchase mechanism reachable from iOS)
+- [x] In-App Purchase entitlement (`com.apple.InAppPurchase`) in `Runner.entitlements`
+- [x] "Restore Purchases" button on the Subscription page
+- [x] Store-billed subscriptions show "Manage in Store" (no in-app cancellation of store billing)
+- [x] `PAYWALL_ENABLED=false` dart-define available to strip all monetization CTAs from a build (App Review fallback)
 - [x] No AI provider API keys in the client (backend-only)
 
 ### Legal web pages (deploy frontend to go live)
@@ -85,8 +89,19 @@
 - [ ] Age rating (UGC Yes, GenAI Yes — expect ~13+)
 - [ ] App icon 1024×1024 uploaded (`flutter/assets/icons/app_icon.png`)
 - [ ] Screenshots for iPhone 6.9" and iPad 13" (see `docs/store/app-store-screenshots.md`)
-- [ ] Pricing: Free
+- [ ] Pricing: Free with In-App Purchases
 - [ ] App Review contact + demo account credentials
+
+### In-App Purchase (monetization)
+
+- [ ] **In-App Purchase capability** enabled for the app ID in ASC (entitlement already in `Runner.entitlements`)
+- [ ] **4 auto-renewable subscription products** created in ASC > Monetization > Subscriptions, matching `APPLE_*_PRODUCT_ID` in backend env:
+  - `plus_monthly` / `plus_yearly` / `pro_monthly` / `pro_yearly` (choose the store-facing names; the IDs must match backend env exactly)
+- [ ] Prices set per territory; review the "Save X%" yearly badge against actual store prices
+- [ ] **App Store Server API key** created (ASC > Users and Access > Integrations > App Store Connect API, "In-App Purchase" permission) and its issuer ID / key ID / `.p8` contents set in backend env: `APPLE_ISSUER_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`
+- [ ] **Sandbox tester** created in ASC (Users and Access > Sandbox) for TestFlight sandbox purchases
+- [ ] TestFlight sandbox purchase verified end-to-end (buy → backend grants entitlement → renew/expire via App Store Server Notifications)
+- [ ] Backend migration `030_mobile_iap.sql` applied on hosted Supabase
 
 ### Auth / backend ops
 
@@ -127,7 +142,9 @@ HOW TO TEST
 5. Settings → Delete Account is available (use a throwaway user, not this demo).
 
 PRICING
-Free v1 — no in-app purchases or subscriptions on iOS.
+Free to download. Subscriptions (Plus / Pro, monthly and yearly) are sold
+through Apple In-App Purchase. Purchases are verified server-side; sandbox
+testers can buy at zero cost. See "Restore Purchases" on the Subscription page.
 
 CONTACT
 support@fitcheckaiapp.com
@@ -142,7 +159,8 @@ support@fitcheckaiapp.com
 | Missing privacy policy detail | Privacy names AI processors + deletion path |
 | Broken Support URL | Dedicated `/support` page |
 | Missing SIWA | Implemented + entitlement |
-| External payment steering | Paywall off on iOS |
+| External payment steering | Purchases go through Apple IAP only on iOS; Stripe is web-only and never launched from the app |
+| Subscriptions without restore | "Restore Purchases" button on the Subscription page |
 | Empty demo account | Seed script + checklist |
 | UGC without report | Report + hide + support email |
 | Missing usage descriptions | Info.plist camera/photos |

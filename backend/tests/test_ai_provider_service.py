@@ -283,6 +283,32 @@ async def test_generate_image_via_images_api_does_not_retry_http_status_error():
     assert exc_info.value.retryable is False
 
 
+@pytest.mark.asyncio
+async def test_generate_image_http_error_log_message_includes_status_and_model(caplog):
+    """Image-gen failures embed status + model in the log message line itself
+    (parity with chat) so message-only log views (Railway) can diagnose them -
+    the 2026-07-31 photoshoot 4xx storm was invisible in exactly such a view."""
+    from app.core.exceptions import AIServiceError
+
+    class _ForbiddenClient:
+        async def post(self, url, json=None, headers=None):
+            request = httpx.Request("POST", url)
+            response = httpx.Response(403, request=request, json={"error": {"message": "denied"}})
+            raise httpx.HTTPStatusError("Forbidden", request=request, response=response)
+
+    service = AIProviderService(_make_config())
+    fake_client = _ForbiddenClient()
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)):
+        with pytest.raises(AIServiceError):
+            await service._generate_image_via_images_api("a cat", model="image-model")
+
+    records = [r for r in caplog.records if "Image generation request failed" in r.getMessage()]
+    assert records, "expected an image-generation failure log record"
+    message = records[0].getMessage()
+    assert "(status=403, model=image-model)" in message
+    assert "denied" in message
+
+
 class _FlakyThenOk429Client:
     """Returns a 429 once (real httpx returns Response; raise_for_status is ours), then succeeds."""
 

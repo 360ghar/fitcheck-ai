@@ -57,11 +57,15 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 1000 * 60 * 5, // 5 minutes
       gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
-      retry: 1,
+      // Transport-level retries live in the axios error interceptor
+      // (network + 408/429/5xx, up to 3 attempts with backoff). Do NOT add a
+      // second retry layer here — a React Query retry re-runs the whole axios
+      // chain (and its toasts) for the same logical failure.
+      retry: 0,
       refetchOnWindowFocus: false,
     },
     mutations: {
-      retry: 1,
+      retry: 0,
     },
   },
 })

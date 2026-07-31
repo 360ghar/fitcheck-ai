@@ -12,7 +12,7 @@ import re
 import uuid
 from datetime import datetime, date, timedelta, timezone
 from app.utils.datetime_util import utcnow, utcnow_iso, utc_today
-from app.utils.db import unwrap_rpc_bool, unwrap_rpc_result
+from app.utils.db import unwrap_rpc_bool
 from app.utils.image_processing import to_data_url
 from typing import Any, List, Optional, Tuple
 

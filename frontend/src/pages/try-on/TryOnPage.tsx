@@ -12,6 +12,7 @@ import { useJobUiStore } from '@/stores/jobUiStore';
 import { generateTryOn, TryOnOptions, TryOnResult } from '@/api/ai';
 import { uploadAvatar } from '@/api/users';
 import { tryOnUsedKey } from '@/lib/activation';
+import { fileToReplayablePreview } from '@/lib/replayable-preview';
 import { useElapsedSeconds } from '@/hooks/useElapsedSeconds';
 
 import { Button } from '@/components/ui/button';
@@ -136,15 +137,20 @@ export default function TryOnPage() {
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
-    if (file) {
-      revokePreviewUrl();
-      const url = URL.createObjectURL(file);
+    if (!file) return;
+    // Preview must be a data URL (downscaled) so it survives PostHog session
+    // recordings — blob URLs only exist in the originating browser session.
+    // The upload itself always uses `clothingFileRef` (the File), never this
+    // preview, so fidelity is unaffected.
+    revokePreviewUrl();
+    clothingFileRef.current = file;
+    setError(null);
+    void fileToReplayablePreview(file).then((url) => {
+      if (clothingFileRef.current !== file) return; // superseded by another pick
       previewUrlRef.current = url;
-      clothingFileRef.current = file;
       setClothingPreview(url);
       setStep('options');
-      setError(null);
-    }
+    });
   }, [revokePreviewUrl]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

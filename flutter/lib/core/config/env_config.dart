@@ -1,6 +1,3 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Loads environment values from an asset `.env` file with
@@ -80,14 +77,15 @@ class EnvConfig {
         : (_fileValues['POSTHOG_HOST'] ?? '');
   }
 
-  /// Monetization CTAs (paywall, Stripe checkout, pricing). OFF on iOS for v1
-  /// (App Store Guideline 3.1.1 anti-steering). Override: --dart-define=PAYWALL_ENABLED=true
+  /// Monetization CTAs (paywall, purchase flow). ON everywhere by default:
+  /// iOS/Android purchase through the stores via in-app billing, web through
+  /// Stripe checkout. Override: --dart-define=PAYWALL_ENABLED=false (used for
+  /// App Review builds that must not surface monetization).
   static bool get paywallEnabled {
     if (_paywallEnabledEnv.isNotEmpty) {
       return _paywallEnabledEnv.toLowerCase() == 'true';
     }
-    if (kIsWeb) return true;
-    return !Platform.isIOS;
+    return true;
   }
 
   static String get sentryDsn {

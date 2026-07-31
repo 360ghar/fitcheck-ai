@@ -20,6 +20,12 @@ Comprehensive strategy for managing errors and providing a resilient user experi
   - **404:** Redirect to 404 page or show "Not found" toast
   - **429:** Show "Too many requests" warning
   - **500:** Show "Server error" toast
+- Global error toast fires **exactly once per logical HTTP request**: the
+  retry interceptor owns transient (retryable) failures and toasts only when
+  the request is terminal (auth endpoint, refresh retry, or retries
+  exhausted); the toast/401 interceptor toasts permanent failures only.
+  Requests that render their own failure UI pass `skipToast`
+  (`{ _skipToast: true }`) to opt out of the global toast.
 
 ### 3. Form Validation Errors
 - Uses Zod for schema validation

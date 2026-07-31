@@ -13,6 +13,7 @@ import {
 } from '@/api/photoshoot';
 import { getApiError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { fileToReplayablePreview } from '@/lib/replayable-preview';
 import { ensureSessionRecording, setPersonProperties, trackEvent } from '@/lib/analytics';
 import { useJobUiStore } from '@/stores/jobUiStore';
 
@@ -167,7 +168,9 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
       return null;
     }
 
-    // Build previews for the wait surface (revoke any prior ones)
+    // Build previews for the wait surface (revoke any prior ones). Previews
+    // are replay-safe data URLs (downscaled) so they survive PostHog session
+    // recordings — blob URLs would render blank at replay time.
     get().photoPreviewUrls.forEach((url) => {
       try {
         URL.revokeObjectURL(url);
@@ -175,7 +178,7 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
         // ignore
       }
     });
-    const photoPreviewUrls = photos.map((file) => URL.createObjectURL(file));
+    const photoPreviewUrls = await Promise.all(photos.map(fileToReplayablePreview));
 
     set({
       isGenerating: true,

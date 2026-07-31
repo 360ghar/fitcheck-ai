@@ -371,3 +371,149 @@ async def test_social_import_admission_converts_unique_active_job_race_to_429(mo
         )
 
     assert exc_info.value.status_code == 429
+
+
+# =============================================================================
+# Missing-RPC (migration gap) quota admission failures - observed 2026-07-31
+#
+# Every batch-extract admission returned 500 ("Failed to reserve AI usage")
+# because the hosted Supabase DB had never received migrations 022/024/026:
+# PostgREST answers rpc() with PGRST202 ("Could not find the function ... in
+# the schema cache") and the service failed closed with a bare DatabaseError.
+# These tests pin the fix: the failure must surface as a friendly 503 to the
+# client (never raw DB text), while the actionable detail (which function,
+# which migrations) is logged for operators.
+# =============================================================================
+
+
+class _PGRST202(Exception):
+    """Simulates postgrest-py's error when an RPC is missing from the schema cache."""
+
+    def __init__(self, function_name: str):
+        super().__init__(
+            f'PGRST202: Could not find the function public.{function_name} '
+            "(character varying, text, integer, integer) in the schema cache"
+        )
+
+
+FRIENDLY_QUOTA_503 = (
+    "AI services are temporarily unavailable. Please try again in a few moments."
+)
+
+
+@pytest.mark.asyncio
+async def test_daily_ai_reservation_missing_rpc_returns_friendly_503_and_logs_detail(caplog):
+    """Missing-RPC must be a friendly 503 to the client; the migration-gap
+    hint (function + migrations) must be in the server log, not the message."""
+    from app.core.exceptions import AIServiceError
+
+    db = Mock()
+    db.rpc.return_value.execute.side_effect = _PGRST202("reserve_ai_usage")
+
+    with pytest.raises(AIServiceError) as exc_info:
+        await AISettingsService.reserve_usage(
+            user_id="user-1",
+            operation_type="extraction",
+            db=db,
+            count=1,
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.retryable is True
+    assert exc_info.value.message == FRIENDLY_QUOTA_503
+    assert "reserve_ai_usage" not in exc_info.value.message
+    assert "022/024/026" not in exc_info.value.message
+
+    logged = " ".join(r.getMessage() for r in caplog.records)
+    assert "reserve_ai_usage" in logged
+    assert "022/024/026" in logged
+    assert "022_wave_b_hardening.sql" in logged
+
+
+@pytest.mark.asyncio
+async def test_daily_ai_release_missing_rpc_returns_friendly_503_and_logs_detail(caplog):
+    from app.core.exceptions import AIServiceError
+
+    db = Mock()
+    db.rpc.return_value.execute.side_effect = _PGRST202("release_ai_usage")
+
+    with pytest.raises(AIServiceError) as exc_info:
+        await AISettingsService.release_usage(
+            user_id="user-1",
+            operation_type="extraction",
+            db=db,
+            count=1,
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.retryable is True
+    assert exc_info.value.message == FRIENDLY_QUOTA_503
+    assert "release_ai_usage" not in exc_info.value.message
+
+    logged = " ".join(r.getMessage() for r in caplog.records)
+    assert "release_ai_usage" in logged
+    assert "022/024/026" in logged
+
+
+@pytest.mark.asyncio
+async def test_monthly_reservation_missing_rpc_returns_friendly_503_and_logs_detail(caplog):
+    from app.core.exceptions import AIServiceError
+
+    db = Mock()
+    db.rpc.return_value.execute.side_effect = _PGRST202("reserve_usage")
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(
+            SubscriptionService,
+            "get_subscription",
+            AsyncMock(return_value=Mock(plan_type=PlanType.FREE)),
+        )
+        monkeypatch.setattr(
+            SubscriptionService,
+            "get_plan_limits",
+            Mock(return_value={"monthly_extractions": 10}),
+        )
+        monkeypatch.setattr(
+            SubscriptionService,
+            "get_or_create_usage_record",
+            AsyncMock(return_value={"monthly_extractions": 0}),
+        )
+        with pytest.raises(AIServiceError) as exc_info:
+            await SubscriptionService.increment_usage("user-1", "extraction", db, count=1)
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.retryable is True
+    assert exc_info.value.message == FRIENDLY_QUOTA_503
+    assert "reserve_usage" not in exc_info.value.message
+    assert "022/024/026" not in exc_info.value.message
+
+    logged = " ".join(r.getMessage() for r in caplog.records)
+    assert "reserve_usage" in logged
+    assert "022/024/026" in logged
+
+
+@pytest.mark.asyncio
+async def test_ensure_ai_settings_row_fk_race_returns_friendly_503_and_logs_detail(caplog):
+    """A brand-new auth user whose public.users row has not propagated yet hits
+    a 23503 FK race on user_ai_settings.user_id. The client must get a friendly
+    'account still being set up' 503, never the raw FK constraint text."""
+    from app.core.exceptions import AIServiceError
+
+    db = Mock()
+    db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = None
+    db.table.return_value.upsert.side_effect = Exception(
+        'insert or update on table "user_ai_settings" violates foreign key '
+        'constraint "users_id_fkey" (SQLSTATE 23503)'
+    )
+
+    with pytest.raises(AIServiceError) as exc_info:
+        await AISettingsService.ensure_ai_settings_row("user-1", db)
+
+    assert exc_info.value.status_code == 503
+    assert "account is still being set up" in exc_info.value.message
+    assert "Retry in a few seconds" not in exc_info.value.message
+    assert "23503" not in exc_info.value.message
+    assert "users_id_fkey" not in exc_info.value.message
+
+    logged = " ".join(r.getMessage() for r in caplog.records)
+    assert "23503" in logged

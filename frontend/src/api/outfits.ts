@@ -3,6 +3,7 @@
  */
 
 import { apiClient, getApiError } from './client';
+import type { AxiosRequestConfig } from 'axios';
 import type {
   ApiEnvelope,
   Outfit,
@@ -19,11 +20,15 @@ import type {
 // ============================================================================
 
 /**
- * Create a new outfit
+ * Create a new outfit.
+ *
+ * `config` lets callers pass `skipToast`: the global error interceptor would
+ * otherwise toast every failure even when the caller owns the message (e.g.
+ * the create flow's "Could not save this outfit" toast).
  */
-export async function createOutfit(data: OutfitCreate): Promise<Outfit> {
+export async function createOutfit(data: OutfitCreate, config?: AxiosRequestConfig): Promise<Outfit> {
   try {
-    const response = await apiClient.post<ApiEnvelope<Outfit>>('/api/v1/outfits', data);
+    const response = await apiClient.post<ApiEnvelope<Outfit>>('/api/v1/outfits', data, config);
     return response.data.data;
   } catch (error) {
     throw getApiError(error);

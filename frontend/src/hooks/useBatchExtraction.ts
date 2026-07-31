@@ -12,7 +12,9 @@ import {
   getBatchJobStatus,
 } from '@/api/batch';
 import { compressImageFile } from '@/lib/image-compress';
+import { getBatchExtractionErrorMessage } from '@/lib/batch-extraction-errors';
 import { cropImageFromBoundingBox } from '@/lib/crop-from-bounding-box';
+import { fileToReplayablePreview } from '@/lib/replayable-preview';
 import { normalizeUseCases } from '@/lib/use-cases';
 import { useUpgradePromptStore } from '@/stores/upgradePromptStore';
 import type {
@@ -925,7 +927,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
     const newImages: BatchImageInput[] = files.map((file) => ({
       imageId: generateImageId(),
       file,
-      previewUrl: URL.createObjectURL(file),
+      previewUrl: '',
       status: 'pending' as const,
     }));
 
@@ -934,6 +936,24 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
       images: [...prev.images, ...newImages].slice(0, 50), // Max 50 images
       error: null,
     }));
+
+    // Convert previews to replay-safe data URLs so they survive PostHog
+    // session recordings (blob URLs render blank at replay time). The upload
+    // always uses `img.file`, never the preview, so fidelity is unaffected.
+    // Bounded concurrency: decoding 50 bitmaps at once would jank the UI.
+    void mapPool(newImages, 3, async (img) => ({
+      imageId: img.imageId,
+      previewUrl: await fileToReplayablePreview(img.file),
+    })).then((previews) => {
+      const byId = new Map(previews.map((p) => [p.imageId, p.previewUrl]));
+      setState((prev) => ({
+        ...prev,
+        images: prev.images.map((img) => {
+          const url = byId.get(img.imageId);
+          return url !== undefined ? { ...img, previewUrl: url } : img;
+        }),
+      }));
+    });
   }, []);
 
   /**
@@ -1020,7 +1040,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
       setState((prev) => ({
         ...prev,
         step: 'select',
-        error: error instanceof Error ? error.message : 'Failed to start extraction',
+        error: getBatchExtractionErrorMessage(error),
       }));
     }
   }, [state.images]);

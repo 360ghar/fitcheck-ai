@@ -4,6 +4,7 @@
 
 import { apiClient, getApiError } from './client';
 import { createPromiseQueue } from '@/utils/promiseQueue';
+import type { AxiosRequestConfig } from 'axios';
 import type {
   ApiEnvelope,
   Item,
@@ -19,10 +20,13 @@ import type {
 
 /**
  * Create a new item manually
+ *
+ * `config` lets callers pass `skipToast` when they render their own failure UI
+ * (e.g. the batch save flow's inline per-item errors and progress).
  */
-export async function createItem(data: ItemCreate): Promise<Item> {
+export async function createItem(data: ItemCreate, config?: AxiosRequestConfig): Promise<Item> {
   try {
-    const response = await apiClient.post<ApiEnvelope<Item>>('/api/v1/items', data);
+    const response = await apiClient.post<ApiEnvelope<Item>>('/api/v1/items', data, config);
     return response.data.data;
   } catch (error) {
     throw getApiError(error);
@@ -32,7 +36,7 @@ export async function createItem(data: ItemCreate): Promise<Item> {
 /**
  * Upload item images (for client-side AI extraction)
  */
-export async function uploadItemImages(formData: FormData): Promise<{
+export async function uploadItemImages(formData: FormData, config?: AxiosRequestConfig): Promise<{
   upload_id: string;
   status: string;
   uploaded_count: number;
@@ -60,6 +64,7 @@ export async function uploadItemImages(formData: FormData): Promise<{
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      ...config,
     });
     return response.data.data;
   } catch (error) {

@@ -47,6 +47,9 @@ abstract class SubscriptionModel with _$SubscriptionModel {
     @JsonKey(name: 'cancel_at_period_end') @Default(false) bool cancelAtPeriodEnd,
     @JsonKey(name: 'trial_end') DateTime? trialEnd,
     @JsonKey(name: 'referral_credit_months') @Default(0) int referralCreditMonths,
+    /// Which billing rail owns this subscription: "stripe" (web checkout),
+    /// "apple" (App Store IAP) or "google" (Play Billing IAP).
+    @JsonKey(name: 'billing_provider') @Default('stripe') String billingProvider,
   }) = _SubscriptionModel;
 
   factory SubscriptionModel.fromJson(Map<String, dynamic> json) =>
@@ -125,6 +128,46 @@ abstract class PlanDetailsModel with _$PlanDetailsModel {
 
   factory PlanDetailsModel.fromJson(Map<String, dynamic> json) =>
       _$PlanDetailsModelFromJson(json);
+}
+
+/// Per-variant store product IDs from the `/plans` endpoint.
+///
+/// Keys are plan types ("plus_monthly", "plus_yearly", "pro_monthly",
+/// "pro_yearly"); values are the store product IDs the mobile clients pass
+/// to StoreKit / Play Billing. Product IDs are never hardcoded in the app.
+@freezed
+abstract class StoreProductsModel with _$StoreProductsModel {
+  const factory StoreProductsModel({
+    @Default({}) Map<String, String?> apple,
+    @Default({}) Map<String, String?> google,
+  }) = _StoreProductsModel;
+
+  factory StoreProductsModel.fromJson(Map<String, dynamic> json) =>
+      _$StoreProductsModelFromJson(json);
+}
+
+extension StoreProductsModelX on StoreProductsModel {
+  /// The store product ID for a plan type on the given store
+  /// ("apple" | "google"). Falls back to the plan type itself only when the
+  /// backend published no store product map at all (dev environments).
+  String? productIdFor(String store, String planType) {
+    final map = store == 'google' ? google : apple;
+    final id = map[planType];
+    if (id != null) return id;
+    return map.isEmpty ? planType : null;
+  }
+}
+
+/// The `/plans` response: display plans plus store product ID maps.
+@freezed
+abstract class PlansResponse with _$PlansResponse {
+  const factory PlansResponse({
+    @Default([]) List<PlanDetailsModel> plans,
+    @JsonKey(name: 'store_products') @Default(StoreProductsModel()) StoreProductsModel storeProducts,
+  }) = _PlansResponse;
+
+  factory PlansResponse.fromJson(Map<String, dynamic> json) =>
+      _$PlansResponseFromJson(json);
 }
 
 /// Checkout session model

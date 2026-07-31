@@ -240,6 +240,26 @@ class TestFreeTierQuotaClassification:
         assert error_kind == "upstream_quota"
         assert retry_after == 56
 
+    def test_per_minute_quota_retry_delay_with_decimal_seconds_is_parsed(self):
+        """Live Gemini quota errors carry sub-second precision - the observed
+        prod payload said 'Please retry in 30.857471809s'. The parser must
+        handle decimal seconds, not just the integer '56s' form."""
+        err = genai_errors.APIError(429, {
+            "status": "RESOURCE_EXHAUSTED",
+            "message": (
+                "Quota exceeded for generativelanguage.googleapis.com/"
+                "generate_content_free_tier_requests, limit: 5. "
+                "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+            ),
+            "details": [
+                {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "30.857471809s"},
+            ],
+        })
+        retryable, error_kind, retry_after = classify_gemini_error(err)
+        assert retryable is True
+        assert error_kind == "upstream_quota"
+        assert retry_after == pytest.approx(30.857471809)
+
     def test_503_unavailable_is_transient_retryable(self):
         err = genai_errors.APIError(503, {
             "status": "UNAVAILABLE",

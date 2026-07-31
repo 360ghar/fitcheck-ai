@@ -1453,9 +1453,13 @@ class AIProviderService:
         except httpx.HTTPStatusError as e:
             error_detail = self._http_error_detail(e.response)
             status = e.response.status_code
+            # Status + model embedded in the message line itself (parity with
+            # chat()) so message-only log views (Railway) can diagnose
+            # image-gen failures without structured extras.
             logger.error(
-                "Image generation request failed with HTTP error",
+                f"Image generation request failed (status={status}, model={model}): {error_detail}",
                 status_code=status,
+                model=model,
                 error=error_detail,
                 retryable=self._is_transient_http_status(status),
                 exc_info=False,
