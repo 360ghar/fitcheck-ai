@@ -7,7 +7,7 @@
  * ThemeSelector which previously lived inline in ProfilePage.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Cpu, Sun, Moon, Monitor, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -73,8 +73,18 @@ export function AppSettingsPanel() {
   const [settings, setSettings] = useState<UserSettings | null>(null)
   const [locationValue, setLocationValue] = useState('')
   const [settingsDirty, setSettingsDirty] = useState(false)
+  // Bumped on every edit; lets the save handler detect edits made while a
+  // save request was in flight (those must not be silently overwritten).
+  const settingsEditVersionRef = useRef(0)
 
   useEffect(() => {
+    // A user switch must never show or save the previous user's data: clear
+    // stale state before the per-user load so a failed (or missing) load
+    // leaves nothing behind.
+    setSettings(null)
+    setLocationValue('')
+    setSettingsDirty(false)
+
     if (!user) return
 
     // Load settings once per session.
@@ -107,6 +117,7 @@ export function AppSettingsPanel() {
   }, [user?.id])
 
   const handleUpdateSettings = (patch: Partial<UserSettings>) => {
+    settingsEditVersionRef.current += 1
     setSettings((prev) => (prev ? { ...prev, ...patch } : prev))
     setSettingsDirty(true)
   }
@@ -114,18 +125,28 @@ export function AppSettingsPanel() {
   const handleSaveSettings = async () => {
     if (!settings) return
     setIsSavingSettings(true)
+    const versionAtSave = settingsEditVersionRef.current
     try {
       const updated = await updateUserSettings({
-        default_location: locationValue.trim() || undefined,
+        // Explicit null (not undefined) so the backend clears a stored value
+        // (backend applies exclude_unset; omitted fields keep their old value).
+        default_location: locationValue.trim() || null,
         timezone: settings.timezone || undefined,
         language: settings.language || undefined,
         measurement_units: settings.measurement_units,
         notifications_enabled: settings.notifications_enabled,
         email_marketing: settings.email_marketing,
       })
-      setSettings(updated)
-      setLocationValue(updated.default_location || '')
-      setSettingsDirty(false)
+      if (settingsEditVersionRef.current === versionAtSave) {
+        // No edits landed while saving: adopt the server snapshot.
+        setSettings(updated)
+        setLocationValue(updated.default_location || '')
+        setSettingsDirty(false)
+      } else {
+        // Newer local edits landed during the request: keep them on top of the
+        // server-confirmed values so they are not discarded; stay dirty.
+        setSettings((prev) => (prev ? { ...prev, ...updated } : updated))
+      }
       toast({ title: 'Settings saved' })
     } catch {
       // api/client interceptor already toasts the failure.

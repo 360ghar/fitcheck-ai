@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import '../../core/constants/app_core_colors.dart';
 
 /// App color scheme matching the web app
 class AppColors {
   AppColors._();
 
-  // Wardrobe Studio brand colors. These intentionally match frontend/DESIGN.md.
-  static const Color primary = Color(0xFFE60023);
+  // Wardrobe Studio brand colors. These intentionally match frontend/DESIGN.md
+  // (Brand Red moved to hsl(354 100% 44%) = #e00016 on 2026-07-31).
+  static const Color primary = Color(0xFFE00016);
   static const Color primaryLight = Color(0xFFFFDDE3);
   static const Color primaryDark = Color(0xFFCC001F);
   static const Color primaryContainer = Color(0xFFFFE8EC);
@@ -34,24 +36,26 @@ class AppColors {
   static const Color errorDarkMode = Color(0xFFFF9B9B);
 
   // Neutral Colors - Light Mode
-  static const Color backgroundLight = Color(0xFFFBFBF9);
-  static const Color surfaceLight = Color(0xFFFFFFFF);
+  // Aliased from AppCoreColors so core widgets and the app theme share one
+  // source of truth for the neutral palette.
+  static const Color backgroundLight = AppCoreColors.backgroundLight;
+  static const Color surfaceLight = AppCoreColors.surfaceLight;
   static const Color surfaceVariantLight = Color(0xFFF6F6F3);
   static const Color onBackgroundLight = Color(0xFF000000);
   static const Color onSurfaceLight = Color(0xFF000000);
   static const Color onSurfaceVariantLight = Color(0xFF62625B);
 
   // Neutral Colors - Dark Mode
-  static const Color backgroundDark = Color(0xFF1A1A17);
-  static const Color surfaceDark = Color(0xFF232320);
+  static const Color backgroundDark = AppCoreColors.backgroundDark;
+  static const Color surfaceDark = AppCoreColors.surfaceDark;
   static const Color surfaceVariantDark = Color(0xFF2C2C28);
   static const Color onBackgroundDark = Color(0xFFFBFBF9);
   static const Color onSurfaceDark = Color(0xFFFBFBF9);
   static const Color onSurfaceVariantDark = Color(0xFFC8C8C1);
 
   // Border Colors
-  static const Color borderLight = Color(0xFFDADAD3);
-  static const Color borderDark = Color(0xFF3A3A35);
+  static const Color borderLight = AppCoreColors.borderLight;
+  static const Color borderDark = AppCoreColors.borderDark;
 
   // Overlay Colors
   static const Color overlayLight = Color(0x80000000);

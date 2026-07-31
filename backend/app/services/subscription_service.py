@@ -82,11 +82,18 @@ class SubscriptionService:
 
     @staticmethod
     def stripe_price_plan_map() -> dict[str, PlanType]:
+        # Unset price IDs must not map: with several None keys the last one
+        # (PRO_YEARLY) would win and a missing price ID would silently
+        # classify as Pro instead of raising the unknown-price error.
         return {
-            settings.STRIPE_PLUS_MONTHLY_PRICE_ID: PlanType.PLUS_MONTHLY,
-            settings.STRIPE_PLUS_YEARLY_PRICE_ID: PlanType.PLUS_YEARLY,
-            settings.STRIPE_PRO_MONTHLY_PRICE_ID: PlanType.PRO_MONTHLY,
-            settings.STRIPE_PRO_YEARLY_PRICE_ID: PlanType.PRO_YEARLY,
+            price_id: plan_type
+            for price_id, plan_type in (
+                (settings.STRIPE_PLUS_MONTHLY_PRICE_ID, PlanType.PLUS_MONTHLY),
+                (settings.STRIPE_PLUS_YEARLY_PRICE_ID, PlanType.PLUS_YEARLY),
+                (settings.STRIPE_PRO_MONTHLY_PRICE_ID, PlanType.PRO_MONTHLY),
+                (settings.STRIPE_PRO_YEARLY_PRICE_ID, PlanType.PRO_YEARLY),
+            )
+            if price_id
         }
 
     @classmethod
@@ -292,7 +299,11 @@ class SubscriptionService:
         first_item = items[0] if items else None
         price = value(first_item, "price", {}) if first_item else {}
         price_id = price if isinstance(price, str) else value(price, "id")
-        plan_type = cls.stripe_price_plan_map().get(price_id) or plan_type_hint
+        # Stripe is authoritative: accept a plan only from the configured
+        # price map. A changed/stale price must fail closed (raise below)
+        # instead of granting a metadata-based entitlement. The minimal-payload
+        # path (upgrade_to_pro) does not pass a hint.
+        plan_type = cls.stripe_price_plan_map().get(price_id)
         if plan_type is None:
             raise DatabaseError(
                 f"Stripe subscription {value(stripe_subscription, 'id', 'unknown')} has an unknown price; billing sync requires a configured price ID"
@@ -311,6 +322,45 @@ class SubscriptionService:
         }
         status = status_map.get(stripe_status, SubscriptionStatus.PAST_DUE)
         now = utcnow()
+        incoming_id = value(stripe_subscription, "id")
+        incoming_period_end = cls._parse_datetime(
+            timestamp(value(stripe_subscription, "current_period_end"))
+        )
+
+        # Stripe retries deliveries and does not guarantee ordering, so a
+        # delayed snapshot can arrive after a newer one was already applied.
+        # Refuse to regress the local entitlement: a snapshot for a replaced
+        # Stripe subscription (different ID) or with an older period end than
+        # the row we already recorded is stale and must not overwrite it.
+        existing_result = await asyncio.to_thread(
+            db.table("subscriptions")
+            .select("stripe_subscription_id,current_period_end")
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute
+        )
+        existing = maybe_single_data(existing_result)
+        if existing:
+            existing_sub_id = existing.get("stripe_subscription_id")
+            if existing_sub_id and incoming_id and existing_sub_id != incoming_id:
+                logger.info(
+                    "Skipping Stripe snapshot for replaced subscription",
+                    user_id=user_id,
+                    incoming_subscription_id=incoming_id,
+                    existing_subscription_id=existing_sub_id,
+                )
+                return await cls.get_subscription(user_id, db)
+            existing_period_end = cls._parse_datetime(existing.get("current_period_end"))
+            if existing_period_end and incoming_period_end and existing_period_end > incoming_period_end:
+                logger.info(
+                    "Skipping stale Stripe snapshot with older period end",
+                    user_id=user_id,
+                    incoming_subscription_id=incoming_id,
+                    existing_period_end=existing_period_end.isoformat(),
+                    incoming_period_end=incoming_period_end.isoformat(),
+                )
+                return await cls.get_subscription(user_id, db)
+
         payload = {
             "user_id": user_id,
             "plan_type": plan_type.value,
@@ -548,7 +598,9 @@ class SubscriptionService:
                 if SubscriptionService.can_upgrade(subscription.plan_type):
                     message += " Upgrade to Pro for more!"
                 else:
-                    message += " Your limit resets at the start of the next billing period."
+                    # Counters reset on the calendar month
+                    # (_get_current_period_start), not on the billing date.
+                    message += " Your limit resets at the start of the next month."
 
             return UsageCheckResult(
                 allowed=allowed,

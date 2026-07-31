@@ -77,7 +77,10 @@ export function useItemEditor(
       // The api/client interceptor already toasts. Stay in edit mode so the
       // user's typing survives a failed save and can be retried.
     } finally {
-      setIsSaving(false)
+      // A newer selection's save may still be in flight; do not clear its flag.
+      if (currentItemIdRef.current === savedItemId) {
+        setIsSaving(false)
+      }
     }
   }, [form, isSaving, itemId, onSave])
 

@@ -39,8 +39,12 @@ export function PhotoshootConfigureStep() {
   };
 
   // Any paid plan (plus_* or pro_*) unlocks the same features - only the
-  // usage limits differ - so both count as entitled here.
-  const isPro = usage?.plan_type ? /^(plus|pro)[_-]?/i.test(usage.plan_type) : false;
+  // usage limits differ - so both count as entitled here. Still, the usage
+  // panel must show the REAL tier name and keep an Upgrade CTA for every
+  // non-Pro user (Free AND Plus can both upgrade to Pro).
+  const planType = usage?.plan_type ?? 'free';
+  const planLabel = /^plus/i.test(planType) ? 'Plus' : /^pro/i.test(planType) ? 'Pro' : 'Free';
+  const canUpgradeToPro = planLabel !== 'Pro';
   const remainingToday = usage?.remaining ?? 10;
   const isOutOfQuota = usage ? remainingToday <= 0 : false;
 
@@ -144,17 +148,17 @@ export function PhotoshootConfigureStep() {
       {/* Usage Info */}
       {usage && (
         <div className="flex items-center gap-2 p-3 bg-muted/30 rounded-lg text-sm">
-          {isPro ? (
+          {!canUpgradeToPro ? (
             <>
               <Star className="w-4 h-4 text-amber-500" />
               <span className="text-muted-foreground">
-                Pro: {usage.remaining} of {usage.limit_today} images remaining
+                {planLabel}: {usage.remaining} of {usage.limit_today} images remaining
               </span>
             </>
           ) : (
             <>
               <span className="text-muted-foreground">
-                Free: {usage.remaining} of {usage.limit_today} images remaining
+                {planLabel}: {usage.remaining} of {usage.limit_today} images remaining
               </span>
               <Button
                 variant="link"

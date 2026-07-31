@@ -146,9 +146,12 @@ class TryOnController extends GetxController {
     }
 
     if (images.isNotEmpty) {
-      // Clear previous selection
+      // Clear previous selection; a gallery selection supersedes any
+      // wardrobe-item selection (the one-item guard must not then block on
+      // stale multi-item state).
       clothingImages.clear();
       selectedWardrobeItem.value = null;
+      selectedWardrobeItems.clear();
 
       // Add all selected images
       for (final image in images) {
@@ -168,7 +171,7 @@ class TryOnController extends GetxController {
         currentImageIndex.value = 0;
       }
 
-      generatedImageUrl.value = ''; // Clear previous result
+      _clearGeneratedResult();
 
       ErrorHandler.showSuccess(
         '${clothingImages.length} clothing image(s) selected',
@@ -198,9 +201,13 @@ class TryOnController extends GetxController {
       final file = File(image.path);
       clothingImages.add(file);
       clothingImage.value = file;
-      selectedWardrobeItem.value = null; // Clear wardrobe selection
+      // A camera selection supersedes any wardrobe-item selection: clear both
+      // the single-item pointer and the multi-item list so the one-item guard
+      // cannot block on stale multi-item state.
+      selectedWardrobeItem.value = null;
+      selectedWardrobeItems.clear();
       currentImageIndex.value = clothingImages.length - 1;
-      generatedImageUrl.value = ''; // Clear previous result
+      _clearGeneratedResult();
 
       ErrorHandler.showSuccess(
         'Photo added (${clothingImages.length} total)',
@@ -215,7 +222,7 @@ class TryOnController extends GetxController {
       currentImageIndex.value =
           (currentImageIndex.value + 1) % clothingImages.length;
       clothingImage.value = clothingImages[currentImageIndex.value];
-      generatedImageUrl.value = ''; // Clear previous result when switching
+      _clearGeneratedResult(); // Clear previous result when switching
     }
   }
 
@@ -226,7 +233,7 @@ class TryOnController extends GetxController {
           (currentImageIndex.value - 1 + clothingImages.length) %
           clothingImages.length;
       clothingImage.value = clothingImages[currentImageIndex.value];
-      generatedImageUrl.value = ''; // Clear previous result when switching
+      _clearGeneratedResult(); // Clear previous result when switching
     }
   }
 
@@ -248,7 +255,7 @@ class TryOnController extends GetxController {
         }
         clothingImage.value = clothingImages[currentImageIndex.value];
       }
-      generatedImageUrl.value = '';
+      _clearGeneratedResult();
     }
   }
 
@@ -302,7 +309,7 @@ class TryOnController extends GetxController {
         selectedWardrobeItem.value = item;
       }
 
-      generatedImageUrl.value = ''; // Clear previous result
+      _clearGeneratedResult();
 
       // Don't close the dialog - let user select more items
       ErrorHandler.showSuccess(
@@ -355,7 +362,7 @@ class TryOnController extends GetxController {
         selectedWardrobeItem.value =
             selectedWardrobeItems[currentImageIndex.value];
       }
-      generatedImageUrl.value = '';
+      _clearGeneratedResult();
     }
   }
 
@@ -540,6 +547,14 @@ class TryOnController extends GetxController {
       'lighting': 'professional studio lighting',
       'save_to_storage': false,
     };
+  }
+
+  /// Any change to the input garment (pick, switch, remove) invalidates the
+  /// previously generated result so it can never be presented as matching the
+  /// current selection.
+  void _clearGeneratedResult() {
+    generatedImageUrl.value = '';
+    generatedImageBase64.value = '';
   }
 
   void reset() {

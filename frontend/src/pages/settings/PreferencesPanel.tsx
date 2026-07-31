@@ -89,8 +89,8 @@ export function PreferencesPanel() {
         preferred_occasions: preferredOccasions,
         liked_brands: likedBrands,
         disliked_patterns: dislikedPatterns,
-        color_temperature: colorTemperature || undefined,
-        style_personality: stylePersonality || undefined,
+        color_temperature: colorTemperature || null,
+        style_personality: stylePersonality || null,
       })
       setPreferences(updated)
       toast({ title: 'Preferences saved' })

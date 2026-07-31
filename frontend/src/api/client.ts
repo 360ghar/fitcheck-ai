@@ -14,7 +14,7 @@ import {
   setTokens,
 } from '@/lib/auth';
 import { logger } from '@/lib/logger';
-import { RATE_LIMIT_EXCEEDED, isApiError, isRateLimitExhausted, type ApiError } from '@/lib/errors';
+import { RATE_LIMIT_EXCEEDED, getApiError as getBaseApiError, isRateLimitExhausted, type ApiError } from '@/lib/errors';
 import { ENDPOINTS, LONG_RUNNING_PREFIXES } from '@/lib/endpoints';
 import { useUpgradePromptStore } from '@/stores/upgradePromptStore';
 
@@ -339,9 +339,11 @@ apiClient.interceptors.response.use(
       if (!error.response) {
         // Network error - no response received
         showNetworkError();
-      } else if (apiError.errorKind) {
+      } else if (apiError.errorKind === 'upstream_quota' || apiError.errorKind === 'transient') {
         // Upstream AI capacity/provider failure ("on us"): friendly retry
         // message, not the scary generic error and never an upgrade prompt.
+        // "hard" errors (auth/content-policy/parse) are permanent — retrying
+        // cannot resolve them, so they fall through to showApiError.
         showWarning(
           'Our AI service is busy. Please try again in a few minutes.',
           'AI busy'
@@ -365,56 +367,27 @@ apiClient.interceptors.response.use(
 
 /**
  * Extract a normalized API error from an Axios error or unknown error.
- * Logs the error with correlation ID for debugging.
+ * Logs the error with correlation ID for debugging (dev mode only).
+ *
+ * Field extraction lives in `lib/errors.ts` (single source of truth shared
+ * with stores); this wrapper only adds the client-specific DEV logging so
+ * metadata (code/status/correlationId/errorKind/retryAfterSeconds) can never
+ * drift between the two entry points.
  */
 export function getApiError(error: unknown): ApiError {
-  if (axios.isAxiosError(error)) {
-    const status = error.response?.status;
-    const data = error.response?.data as
-      | { error?: string; detail?: string; message?: string; code?: string; details?: unknown; correlation_id?: string; error_kind?: string; retry_after_seconds?: number }
-      | undefined;
-    const headers = error.response?.headers;
-
-    // Extract correlation ID from response headers or body
-    const correlationId =
-      headers?.['x-correlation-id'] ||
-      data?.correlation_id ||
-      undefined;
-
-    const apiError: ApiError = {
-      message: data?.error || data?.detail || data?.message || error.message || 'An error occurred',
-      code: data?.code,
-      status,
-      details: data?.details ?? data,
-      correlationId,
-      errorKind: data?.error_kind,
-      retryAfterSeconds: data?.retry_after_seconds,
-    };
-
-    // Log the error with correlation ID for debugging (dev mode only)
-    if (import.meta.env.DEV) {
-      logger.error('[API Error]', {
-        message: apiError.message,
-        code: apiError.code,
-        status: apiError.status,
-        correlationId: apiError.correlationId,
-        url: error.config?.url,
-        method: error.config?.method?.toUpperCase(),
-      });
-    }
-
-    return apiError;
+  const apiError = getBaseApiError(error);
+  if (import.meta.env.DEV) {
+    const axiosError = error as AxiosError;
+    logger.error('[API Error]', {
+      message: apiError.message,
+      code: apiError.code,
+      status: apiError.status,
+      correlationId: apiError.correlationId,
+      url: axiosError.config?.url,
+      method: axiosError.config?.method?.toUpperCase(),
+    });
   }
-
-  if (isApiError(error)) {
-    return error;
-  }
-
-  if (error instanceof Error) {
-    return { message: error.message };
-  }
-
-  return { message: 'An unknown error occurred' };
+  return apiError;
 }
 
 // ============================================================================

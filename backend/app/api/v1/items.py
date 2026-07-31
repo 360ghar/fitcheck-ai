@@ -9,6 +9,7 @@ stores items/images and maintains embeddings for recommendations.
 import asyncio
 import uuid
 from app.utils.datetime_util import utcnow_iso
+from datetime import date
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -48,13 +49,20 @@ logger = get_context_logger(__name__)
 router = APIRouter()
 
 
-async def _release_embedding_reservation(user_id: str, db: Client) -> None:
+async def _release_embedding_reservation(
+    user_id: str, db: Client, *, reserved_on: Optional[date] = None
+) -> None:
     """Best-effort return of an embedding reservation after a failed attempt.
 
     Embedding quotas are reserved before generation; a failure or an empty
     result must not silently consume the daily budget, but a failed release
-    must also not mask the operation's original outcome.
+    must also not mask the operation's original outcome. ``reserved_on`` is
+    the UTC calendar day the reservation was made: release_usage() decrements
+    whatever day's counter is current, so a release after the counter rolled
+    over must be skipped or it would remove a slot reserved on the new day.
     """
+    if reserved_on is not None and reserved_on != date.today():
+        return
     try:
         await AISettingsService.release_usage(
             user_id=user_id,
@@ -283,6 +291,9 @@ async def create_item(
         # Generate embedding + upsert to Pinecone (best-effort)
         reserved = False
         embedding_stored = False
+        # The day the slot was reserved: a release after midnight must not
+        # decrement the new day's counter.
+        reserved_on = date.today()
         try:
             reserved = await AISettingsService.reserve_usage(
                 user_id=user_id,
@@ -315,7 +326,7 @@ async def create_item(
             logger.warning("Embedding generation failed", item_id=item_id, error=str(e))
         finally:
             if reserved and not embedding_stored:
-                await _release_embedding_reservation(user_id, db)
+                await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
 
         # Return full item with images
         row["images"] = images
@@ -501,6 +512,9 @@ async def update_item(
         if any(k in update_dict for k in ("name", "category", "colors", "brand", "tags", "sub_category", "material")):
             reserved = False
             embedding_stored = False
+            # The day the slot was reserved: a release after midnight must
+            # not decrement the new day's counter.
+            reserved_on = date.today()
             try:
                 reserved = await AISettingsService.reserve_usage(
                     user_id=user_id,
@@ -533,7 +547,7 @@ async def update_item(
                 logger.warning("Embedding update failed", item_id=item_id_str, error=str(e))
             finally:
                 if reserved and not embedding_stored:
-                    await _release_embedding_reservation(user_id, db)
+                    await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
 
         return {"data": _normalize_item_images(item or {}), "message": "Updated"}
 
@@ -1130,6 +1144,9 @@ async def check_duplicates(
             operation_type=OperationType.EMBEDDING,
             db=db,
         )
+        # The day the slot was reserved: a release after midnight must not
+        # decrement the new day's counter.
+        reserved_on = date.today()
         if not reserved:
             logger.info(
                 "Embedding rate limit exceeded for duplicate check, using fallback",
@@ -1158,7 +1175,7 @@ async def check_duplicates(
                 user_id=user_id,
             )
             # Fallback: simple text-based duplicate check
-            await _release_embedding_reservation(user_id, db)
+            await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
             return await _fallback_duplicate_check(db, user_id, request, threshold, limit)
 
         # Search for similar items using vector service
@@ -1304,6 +1321,9 @@ async def find_similar_items(
             operation_type=OperationType.EMBEDDING,
             db=db,
         )
+        # The day the slot was reserved: a release after midnight must not
+        # decrement the new day's counter.
+        reserved_on = date.today()
         if not reserved:
             raise RateLimitError(
                 "Daily embedding limit exceeded. Requested 1 embedding."
@@ -1318,7 +1338,7 @@ async def find_similar_items(
                 error=str(e),
                 item_id=item_id_str,
             )
-            await _release_embedding_reservation(user_id, db)
+            await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
             return {
                 "data": {"items": [], "source_item_id": item_id_str},
                 "message": "Similarity search unavailable - AI service error"

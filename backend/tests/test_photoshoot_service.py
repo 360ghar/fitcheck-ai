@@ -4,7 +4,7 @@ Tests for photoshoot service with retry logic.
 
 import pytest
 from datetime import datetime, timezone, timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from app.services.photoshoot_service import PhotoshootService, USE_CASE_TEMPLATES, PhotoshootUseCase
 from app.services.photoshoot_job_service import PhotoshootJobService, PhotoshootJob
@@ -374,6 +374,7 @@ class TestPhotoshootUsageTracking:
         with patch.object(
             PhotoshootService,
             "reserve_daily_usage",
+            new_callable=AsyncMock,
             return_value=(True, Mock()),
         ) as reserve:
             await PhotoshootService.increment_usage("user-123", 3, mock_db)

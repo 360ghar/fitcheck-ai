@@ -170,7 +170,16 @@ class _DeleteDB:
             def delete(self):
                 return self
 
+            def select(self, *_args):
+                return self
+
             def eq(self, *_args):
+                return self
+
+            def in_(self, *_args):
+                return self
+
+            def maybe_single(self):
                 return self
 
             def execute(self):

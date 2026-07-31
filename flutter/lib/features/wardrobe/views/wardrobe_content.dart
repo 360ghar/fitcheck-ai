@@ -547,160 +547,182 @@ class _WardrobeContentState extends State<WardrobeContent> {
           ),
         ],
       ),
-      child: Stack(
-        children: [
-          // Item image using AppImage with BoxFit.contain
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppConstants.radius16 - 1),
-              child: hasImages
-                  ? AppImage(
-                      imageUrl: imageUrls.first,
-                      fit: BoxFit.contain,
-                      backgroundColor: tokens.isDarkMode
-                          ? Colors.black.withValues(alpha: 0.3)
-                          : Colors.grey.withValues(alpha: 0.1),
-                      enableZoom: controller.selectedIds.isEmpty,
-                      galleryUrls: imageUrls,
-                      memCacheWidth: 400,
-                      memCacheHeight: 600,
-                      errorIcon: _getCategoryIcon(item.category),
-                    )
-                  : _buildPlaceholder(item.category),
-            ),
-          ),
-
-          // Category badge
-          Positioned(
-            top: AppConstants.spacing8,
-            left: AppConstants.spacing8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.spacing8,
-                vertical: AppConstants.spacing4,
-              ),
-              decoration: BoxDecoration(
-                color: tokens.cardColor.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(AppConstants.radius8),
-                border: Border.all(color: tokens.cardBorderColor),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _getCategoryIcon(item.category),
-                    size: 12,
-                    color: tokens.textMuted,
+      // LayoutBuilder bounds the category badge: with the fixed 3-column
+      // grid a card is only ~88-101px wide on narrow phones, and an
+      // unconstrained icon+label row would RenderFlex-overflow (worse under
+      // accessibility font scaling).
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            children: [
+              // Item image using AppImage with BoxFit.contain
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(
+                    AppConstants.radius16 - 1,
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    item.category.displayName,
-                    style: TextStyle(
-                      color: tokens.textSecondary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
+                  child: hasImages
+                      ? AppImage(
+                          imageUrl: imageUrls.first,
+                          fit: BoxFit.contain,
+                          backgroundColor: tokens.isDarkMode
+                              ? Colors.black.withValues(alpha: 0.3)
+                              : Colors.grey.withValues(alpha: 0.1),
+                          enableZoom: controller.selectedIds.isEmpty,
+                          galleryUrls: imageUrls,
+                          memCacheWidth: 400,
+                          memCacheHeight: 600,
+                          errorIcon: _getCategoryIcon(item.category),
+                        )
+                      : _buildPlaceholder(item.category),
+                ),
+              ),
+
+              // Category badge
+              Positioned(
+                top: AppConstants.spacing8,
+                left: AppConstants.spacing8,
+                child: Container(
+                  width: constraints.maxWidth - AppConstants.spacing16,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.spacing8,
+                    vertical: AppConstants.spacing4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: tokens.cardColor.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(AppConstants.radius8),
+                    border: Border.all(color: tokens.cardBorderColor),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _getCategoryIcon(item.category),
+                        size: 12,
+                        color: tokens.textMuted,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          item.category.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: tokens.textSecondary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Favorite indicator
+              if (item.isFavorite)
+                Positioned(
+                  top: AppConstants.spacing8,
+                  right: AppConstants.spacing8,
+                  child: Container(
+                    padding: const EdgeInsets.all(AppConstants.spacing4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.secondary.withValues(alpha: 0.9),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.favorite,
+                      color: Colors.white,
+                      size: 14,
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
+                ),
 
-          // Favorite indicator
-          if (item.isFavorite)
-            Positioned(
-              top: AppConstants.spacing8,
-              right: AppConstants.spacing8,
-              child: Container(
-                padding: const EdgeInsets.all(AppConstants.spacing4),
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.secondary.withValues(alpha: 0.9),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
+              // Selection indicator
+              if (isSelected)
+                Positioned(
+                  top: AppConstants.spacing8,
+                  right: item.isFavorite
+                      ? AppConstants.spacing8 + 30
+                      : AppConstants.spacing8,
+                  child: Container(
+                    padding: const EdgeInsets.all(AppConstants.spacing4),
+                    decoration: BoxDecoration(
+                      color: tokens.brandColor,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.favorite,
-                  color: Colors.white,
-                  size: 14,
-                ),
-              ),
-            ),
-
-          // Selection indicator
-          if (isSelected)
-            Positioned(
-              top: AppConstants.spacing8,
-              right: item.isFavorite
-                  ? AppConstants.spacing8 + 30
-                  : AppConstants.spacing8,
-              child: Container(
-                padding: const EdgeInsets.all(AppConstants.spacing4),
-                decoration: BoxDecoration(
-                  color: tokens.brandColor,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
+                    child: const Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 14,
                     ),
-                  ],
-                ),
-                child: const Icon(Icons.check, color: Colors.white, size: 14),
-              ),
-            ),
-
-          // Item name (+ brand) on a clean panel — dense closet look, no heavy gradient
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.spacing8,
-                vertical: AppConstants.spacing4,
-              ),
-              decoration: BoxDecoration(
-                color: tokens.cardColor.withValues(alpha: 0.92),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(AppConstants.radius16),
-                  bottomRight: Radius.circular(AppConstants.radius16),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    item.name,
-                    style: TextStyle(
-                      color: tokens.textPrimary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                  if (item.brand != null && item.brand!.isNotEmpty)
-                    Text(
-                      item.brand!,
-                      style: TextStyle(color: tokens.textMuted, fontSize: 10),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                ),
+
+              // Item name (+ brand) on a clean panel — dense closet look, no heavy gradient
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.spacing8,
+                    vertical: AppConstants.spacing4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: tokens.cardColor.withValues(alpha: 0.92),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(AppConstants.radius16),
+                      bottomRight: Radius.circular(AppConstants.radius16),
                     ),
-                ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        item.name,
+                        style: TextStyle(
+                          color: tokens.textPrimary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (item.brand != null && item.brand!.isNotEmpty)
+                        Text(
+                          item.brand!,
+                          style: TextStyle(
+                            color: tokens.textMuted,
+                            fontSize: 10,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }

@@ -165,6 +165,10 @@ async def get_plans():
                     "Virtual try-on visualization",
                     "Advanced AI styling recommendations",
                     "Calendar planning",
+                    # Plus is feature-equivalent to Pro (only limits differ);
+                    # the /plans contract must advertise the same paid entries.
+                    "Priority support",
+                    "Early access to new features",
                 ],
             },
             {
@@ -272,6 +276,7 @@ async def create_checkout_session(
                 updated_subscription = stripe.Subscription.modify(
                     existing_subscription_id,
                     items=[{"id": item_id, "price": price_id}],
+                    cancel_at_period_end=False,
                     proration_behavior="create_prorations",
                     metadata={
                         "user_id": user["id"],
@@ -506,26 +511,36 @@ async def stripe_webhook(request: Request, db: Client = Depends(get_db)):
                 raise HTTPException(status_code=500, detail="Failed to record webhook event") from exc
 
         current_status = (event_row or {}).get("status", _WEBHOOK_STATUS_PENDING)
+        previous_started = (event_row or {}).get("processing_started_at")
         if current_status == _WEBHOOK_STATUS_PROCESSING:
-            started = (event_row or {}).get("processing_started_at")
+            started = previous_started
             started_at = parse_utc_datetime(started)
             if started_at and started_at > utcnow() - timedelta(minutes=15):
                 return {"received": True, "duplicate": True}
-            # A worker died while processing. Reclaim the stale row.
-            current_status = _WEBHOOK_STATUS_PROCESSING
+            # A worker died while processing. Reclaim the stale row below.
 
         previous_attempts = int((event_row or {}).get("attempts") or 0)
-        claim = await asyncio.to_thread(
+        # Claim with a compare-and-swap on the observed lease: two concurrent
+        # retries of the same stale `processing` row both match a bare
+        # status predicate (the value never changes), so both would claim and
+        # apply side effects twice. Predicating on `processing_started_at`
+        # makes the update atomic — the loser re-checks the predicate against
+        # the freshly claimed row and matches nothing.
+        claim_started = utcnow_iso()
+        claim_query = (
             db.table("stripe_webhook_events")
             .update({
                 "status": _WEBHOOK_STATUS_PROCESSING,
-                "processing_started_at": utcnow_iso(),
+                "processing_started_at": claim_started,
                 "attempts": previous_attempts + 1,
             })
             .eq("event_id", event_id)
-            .eq("status", current_status)
-            .execute
         )
+        if previous_started is not None:
+            claim_query = claim_query.eq("processing_started_at", previous_started)
+        else:
+            claim_query = claim_query.is_("processing_started_at", "null")
+        claim = await asyncio.to_thread(claim_query.execute)
         claim_data = getattr(claim, "data", None)
         if claim_data is not None and not claim_data:
             return {"received": True, "duplicate": True}
@@ -546,9 +561,11 @@ async def stripe_webhook(request: Request, db: Client = Depends(get_db)):
                 # ID. Hydrate the Stripe subscription so price, status, dates,
                 # and cancellation state are synchronized from Stripe. Keep a
                 # metadata-based fallback for minimal historical/test payloads
-                # that cannot provide subscription items.
+                # that cannot provide subscription items. Only a string ID
+                # needs retrieval: an already-expanded session.subscription
+                # (StripeObject) flows to the sync path unchanged.
                 expanded_subscription = session.get("subscription")
-                if stripe_subscription_id and not isinstance(stripe_subscription_id, dict):
+                if isinstance(stripe_subscription_id, str):
                     expanded_subscription = stripe.Subscription.retrieve(stripe_subscription_id)
                 if _has_expanded_subscription_items(expanded_subscription):
                     await SubscriptionService.sync_stripe_subscription(
@@ -649,6 +666,7 @@ async def stripe_webhook(request: Request, db: Client = Depends(get_db)):
                     db.table("stripe_webhook_events")
                     .update({"status": _WEBHOOK_STATUS_FAILED, "last_error": str(e)[:1000]})
                     .eq("event_id", event_id)
+                    .eq("processing_started_at", claim_started)
                     .execute
                 )
             except Exception:
@@ -663,6 +681,7 @@ async def stripe_webhook(request: Request, db: Client = Depends(get_db)):
             db.table("stripe_webhook_events")
             .update({"status": _WEBHOOK_STATUS_PROCESSED, "processed_at": utcnow_iso(), "last_error": None})
             .eq("event_id", event_id)
+            .eq("processing_started_at", claim_started)
             .execute
         )
     return {"received": True}

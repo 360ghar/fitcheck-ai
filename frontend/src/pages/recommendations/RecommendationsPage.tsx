@@ -47,7 +47,9 @@ export function getRecommendationsClosetState(
   error: unknown
 ): 'loading' | 'error' | 'empty' | 'ready' {
   if (isLoading) return 'loading'
-  if (error) return 'error'
+  // The closet store's error is set by ANY failed wardrobe action, not just
+  // the list fetch; when loaded items already exist, keep serving them.
+  if (error && itemCount === 0) return 'error'
   if (itemCount === 0) return 'empty'
   return 'ready'
 }

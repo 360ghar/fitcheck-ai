@@ -69,7 +69,7 @@ export function LandingFeatureSection({
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
                 to={primaryCta.to}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-primary px-8 py-4 text-lg font-semibold text-white transition-colors hover:bg-primary-pressed focus-visible:outline-none"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-primary px-8 py-4 text-lg font-semibold text-white transition-colors hover:bg-primary-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
               >
                 {primaryCta.text}
                 <ArrowRight className="w-5 h-5" />
@@ -77,7 +77,7 @@ export function LandingFeatureSection({
               {secondaryCta ? (
                 <Link
                   to={secondaryCta.to}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-8 py-4 text-lg font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-8 py-4 text-lg font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
                 >
                   {secondaryCta.text}
                 </Link>

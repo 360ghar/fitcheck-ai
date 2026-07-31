@@ -508,6 +508,12 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           const data = event.data as ImageExtractionFailedData;
           setState((prev) => ({
             ...prev,
+            // A failed image itself can carry the upstream-capacity bucket
+            // when the standalone capacity event was missed (SSE reconnect).
+            // Promote the flag so all_extractions_complete still avoids the
+            // misleading "No items found" message.
+            capacityExhausted:
+              prev.capacityExhausted || data.error_kind === 'upstream_quota',
             images: prev.images.map((img) =>
               img.imageId === data.image_id
                 ? {

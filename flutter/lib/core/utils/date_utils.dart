@@ -7,15 +7,20 @@ class AppDateUtils {
 
   /// Standard display format, e.g. "7/28/2026".
   static String formatDate(DateTime date) {
-    return '${date.month}/${date.day}/${date.year}';
+    // Model timestamps parse as UTC (DateTime.parse on ISO 'Z' values);
+    // normalize to the device's local zone or dates near midnight render
+    // on the wrong calendar day.
+    final local = date.toLocal();
+    return '${local.month}/${local.day}/${local.year}';
   }
 
   /// Display with time, e.g. "7/28/2026 2:30 PM".
   static String formatDateTime(DateTime date) {
-    final hour = date.hour > 12 ? date.hour - 12 : (date.hour == 0 ? 12 : date.hour);
-    final minute = date.minute.toString().padLeft(2, '0');
-    final amPm = date.hour >= 12 ? 'PM' : 'AM';
-    return '${formatDate(date)} $hour:$minute $amPm';
+    final local = date.toLocal();
+    final hour = local.hour > 12 ? local.hour - 12 : (local.hour == 0 ? 12 : local.hour);
+    final minute = local.minute.toString().padLeft(2, '0');
+    final amPm = local.hour >= 12 ? 'PM' : 'AM';
+    return '${formatDate(local)} $hour:$minute $amPm';
   }
 
   /// Relative time description, e.g. "Today", "Yesterday", "3 days ago",
@@ -53,11 +58,18 @@ class AppDateUtils {
 
   /// Format time only, e.g. "02:30".
   static String formatTimeOnly(DateTime time) {
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    final local = time.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
   }
 
   /// Check if two [DateTime]s fall on the same calendar day.
   static bool isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
+    // Compare in the local zone: UTC timestamps near midnight would otherwise
+    // disagree with locally-constructed dates for the same calendar day.
+    final localA = a.toLocal();
+    final localB = b.toLocal();
+    return localA.year == localB.year &&
+        localA.month == localB.month &&
+        localA.day == localB.day;
   }
 }

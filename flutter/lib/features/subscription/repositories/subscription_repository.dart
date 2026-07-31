@@ -2,10 +2,11 @@ import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/exceptions/app_exceptions.dart';
+import '../../../core/services/referral_redemption_service.dart';
 import '../models/subscription_model.dart';
 
 /// Subscription repository for API interactions
-class SubscriptionRepository {
+class SubscriptionRepository implements ReferralRedemptionService {
   final ApiClient _apiClient = ApiClient.instance;
 
   /// Get subscription with usage
@@ -13,7 +14,8 @@ class SubscriptionRepository {
     try {
       final response = await _apiClient.get(ApiConstants.subscription);
       final payload = response.data as Map<String, dynamic>;
-      final data = payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
+      final data =
+          payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
 
       final subscription = SubscriptionModel.fromJson(
         data['subscription'] as Map<String, dynamic>? ?? <String, dynamic>{},
@@ -31,9 +33,12 @@ class SubscriptionRepository {
   /// Get usage details
   Future<UsageLimitsModel> getUsage() async {
     try {
-      final response = await _apiClient.get('${ApiConstants.subscription}/usage');
+      final response = await _apiClient.get(
+        '${ApiConstants.subscription}/usage',
+      );
       final payload = response.data as Map<String, dynamic>;
-      final data = payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
+      final data =
+          payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
       return UsageLimitsModel.fromJson(data);
     } on DioException catch (e) {
       throw handleDioException(e);
@@ -43,10 +48,17 @@ class SubscriptionRepository {
   /// Get available plans
   Future<List<PlanDetailsModel>> getPlans() async {
     try {
-      final response = await _apiClient.get('${ApiConstants.subscription}/plans');
+      final response = await _apiClient.get(
+        '${ApiConstants.subscription}/plans',
+      );
       final payload = response.data as Map<String, dynamic>;
-      final data = payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
-      final plans = (data['plans'] as List?)?.whereType<Map<String, dynamic>>().toList() ?? [];
+      final data =
+          payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
+      final plans =
+          (data['plans'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .toList() ??
+          [];
       return plans.map((p) => PlanDetailsModel.fromJson(p)).toList();
     } on DioException catch (e) {
       throw handleDioException(e);
@@ -69,7 +81,8 @@ class SubscriptionRepository {
         },
       );
       final payload = response.data as Map<String, dynamic>;
-      final data = payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
+      final data =
+          payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
       return CheckoutSessionModel.fromJson(data);
     } on DioException catch (e) {
       throw handleDioException(e);
@@ -90,7 +103,8 @@ class SubscriptionRepository {
     try {
       final response = await _apiClient.get('${ApiConstants.referral}/code');
       final payload = response.data as Map<String, dynamic>;
-      final data = payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
+      final data =
+          payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
       return ReferralCodeModel.fromJson(data);
     } on DioException catch (e) {
       throw handleDioException(e);
@@ -102,7 +116,8 @@ class SubscriptionRepository {
     try {
       final response = await _apiClient.get('${ApiConstants.referral}/stats');
       final payload = response.data as Map<String, dynamic>;
-      final data = payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
+      final data =
+          payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
       return ReferralStatsModel.fromJson(data);
     } on DioException catch (e) {
       throw handleDioException(e);
@@ -117,14 +132,16 @@ class SubscriptionRepository {
         data: {'code': code},
       );
       final payload = response.data as Map<String, dynamic>;
-      final data = payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
+      final data =
+          payload['data'] as Map<String, dynamic>? ?? <String, dynamic>{};
       return ValidateReferralResponse.fromJson(data);
     } on DioException catch (e) {
       throw handleDioException(e);
     }
   }
 
-  /// Redeem a referral code
+  /// Redeem a referral code (implements [ReferralRedemptionService])
+  @override
   Future<void> redeemReferralCode(String code) async {
     try {
       await _apiClient.post(

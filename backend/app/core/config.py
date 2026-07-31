@@ -267,6 +267,23 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = "logs"
 
+    @field_validator("AI_GENERATION_CONCURRENCY", "AI_EXTRACTION_CONCURRENCY", mode="after")
+    @classmethod
+    def _cap_process_concurrency(cls, value: int) -> int:
+        """Clamp process-wide concurrency caps.
+
+        ``extraction_jobs.generation_batch_size`` (migration 023) is bounded
+        by a DB CHECK, and the API mirrors the configured cap into that
+        column; an uncapped config could therefore persist a value the
+        database rejects. 100 is a generous ceiling — the shared AI gateways
+        start failing well below it — and keeps config and DB in agreement.
+        Values below 1 floor at 1 (a zero-cap semaphore would deadlock), which
+        matches the historical behavior in app.core.concurrency.
+        """
+        if value < 1:
+            return 1
+        return min(value, 100)
+
     class Config:
         # Load env keys regardless of whether process is started from repo root
         # or from the backend folder.

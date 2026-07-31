@@ -71,11 +71,20 @@ AVOID: extra items, second garment, partial second item, wrong color,
 # but let the requested backdrop and shadow policy win.
 PRODUCT_CUSTOM_BACKGROUND_LOCK = """PRODUCT LOCK (highest priority):
 - Reproduce ONLY the single item described in the prompt, EXACTLY as it
-  appears in the reference image: preserve colors, print, pattern, silhouette,
-  material, texture, hardware, branding, and fit.
-- Ignore every other garment, accessory, prop, person, and source background.
+  appears in the reference image: same colors, print, graphic content,
+  pattern geometry, collar/neckline, sleeves, hem length and shape, pockets,
+  fabric weave and weight, surface texture, sheen, distress, hardware color
+  and finish, logo/branding placement and scale, and fit.
+- The dense description in the prompt identifies WHICH item to reproduce and
+  is the source of truth for those tokens.
+- Ignore EVERY other garment, footwear, accessory, prop, person, face, body,
+  and background visible in the reference photo. Output one item only.
 - Output one opaque product photograph on the requested background; do not
-  replace it with white, transparency, a gradient, or a different scene."""
+  replace it with white, transparency, or a different scene.
+
+AVOID: extra items, second garment, partial second item, wrong color,
+       different design, restyled cut, mannequin face, person, watermark,
+       text, beautification, fabric smoothing."""
 
 # The backdrop clause above is not cosmetic: app/utils/background_removal.py
 # cuts the alpha out of these images with a near-white threshold plus a

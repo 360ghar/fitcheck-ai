@@ -31,7 +31,13 @@ export function AvatarSection() {
     setIsUploadingAvatar(true)
     try {
       const { avatar_url } = await uploadAvatar(file)
-      setUser({ ...user, avatar_url })
+      // Merge against the store's CURRENT user, not the render-time snapshot:
+      // an upload completing after a concurrent profile edit or logout must
+      // not resurrect stale profile state.
+      const current = useAuthStore.getState().user
+      if (current) {
+        setUser({ ...current, avatar_url })
+      }
       toast({ title: 'Avatar updated' })
     } catch (err) {
       // api/client interceptor already toasts the failure for Axios errors.

@@ -367,6 +367,10 @@ class PhotoshootJobService:
                 job = cls._hydrate(row, db)
                 if job:
                     cls._jobs[job_id] = job
+                    # Hydrated jobs live in `_jobs` until cleanup evicts them;
+                    # make sure the eviction loop is running so two stale rows
+                    # can never permanently exhaust the concurrency limit.
+                    cls._ensure_cleanup_task()
                 return job
         return None
 

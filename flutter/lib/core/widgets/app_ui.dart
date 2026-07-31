@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../app/themes/app_colors.dart';
+import '../constants/app_core_colors.dart';
 import '../constants/app_constants.dart';
 
 // Export image widgets for convenience
@@ -24,7 +24,6 @@ class AppUiTokens {
     required this.cardColor,
     required this.cardBorderColor,
     required this.cardShadowColor,
-    required this.backgroundGradient,
     required this.navBackground,
     required this.navBorder,
     required this.brandColor,
@@ -37,7 +36,6 @@ class AppUiTokens {
   final Color cardColor;
   final Color cardBorderColor;
   final Color cardShadowColor;
-  final Gradient backgroundGradient;
   final Color navBackground;
   final Color navBorder;
   final Color brandColor;
@@ -50,16 +48,12 @@ class AppUiTokens {
     final textMuted = textSecondary.withValues(alpha: isDarkMode ? 0.7 : 0.65);
     final brandColor = theme.colorScheme.primary;
 
-    final background = isDarkMode
-        ? AppColors.backgroundDark
-        : AppColors.backgroundLight;
-    final backgroundGradient = LinearGradient(colors: [background, background]);
     final cardColor = isDarkMode
-        ? AppColors.surfaceDark
-        : AppColors.surfaceLight;
+        ? AppCoreColors.surfaceDark
+        : AppCoreColors.surfaceLight;
     final cardBorderColor = isDarkMode
-        ? AppColors.borderDark
-        : AppColors.borderLight;
+        ? AppCoreColors.borderDark
+        : AppCoreColors.borderLight;
     final cardShadowColor = Colors.transparent;
     final navBackground = cardColor;
     final navBorder = cardBorderColor;
@@ -72,7 +66,6 @@ class AppUiTokens {
       cardColor: cardColor,
       cardBorderColor: cardBorderColor,
       cardShadowColor: cardShadowColor,
-      backgroundGradient: backgroundGradient,
       navBackground: navBackground,
       navBorder: navBorder,
       brandColor: brandColor,
@@ -92,8 +85,8 @@ class AppPageBackground extends StatelessWidget {
 
     return Container(
       color: tokens.isDarkMode
-          ? AppColors.backgroundDark
-          : AppColors.backgroundLight,
+          ? AppCoreColors.backgroundDark
+          : AppCoreColors.backgroundLight,
       child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
     );
   }

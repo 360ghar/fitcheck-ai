@@ -99,7 +99,7 @@ export default function ResetPasswordPage() {
       <div className="mt-6 md:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="rounded-2xl border border-border bg-card py-6 px-4 sm:py-8 sm:px-10">
           {error && (
-            <div role="alert" aria-live="polite" className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start">
+            <div role="alert" className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start">
               <AlertCircle className="h-5 w-5 text-destructive mt-0.5 mr-2 flex-shrink-0" />
               <p className="text-sm text-destructive">{error}</p>
             </div>

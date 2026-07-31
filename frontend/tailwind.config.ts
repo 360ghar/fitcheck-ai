@@ -19,6 +19,9 @@ const config: Config = {
       inner: 'none',
     },
     borderRadius: {
+      // DEFAULT is required for the bare `rounded` utility: without it the
+      // class resolves to nothing and 15+ call sites silently lose radius.
+      DEFAULT: '4px',
       none: '0px',
       sm: '8px',
       md: '16px',
@@ -100,7 +103,8 @@ const config: Config = {
           donate: 'hsl(var(--condition-donate))',
           other: 'hsl(var(--condition-other))',
         },
-        'focus-outer': '#435ee5',
+        // Dead token: never referenced as a utility anywhere; the actual ring
+        // color is the red `--ring` var (focus-visible ring on buttons/links).
         'focus-inner': 'hsl(var(--focus-inner))',
         'accent-purple': 'hsl(var(--accent-purple))',
         // `DEFAULT` was missing, so `bg-success`, `text-success` and

@@ -4,6 +4,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/outfit_list_controller.dart';
+import '../models/outfit_model.dart';
 import '../repositories/outfit_repository.dart';
 import '../../../core/utils/error_handler.dart';
 
@@ -25,7 +26,6 @@ class OutfitCollectionsPage extends StatefulWidget {
 
 class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
   late final OutfitRepository _outfitRepository;
-  late final OutfitListController _outfitListController;
 
   final RxList<Map<String, dynamic>> collections = <Map<String, dynamic>>[].obs;
   final RxBool isLoading = true.obs;
@@ -36,8 +36,6 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
   void initState() {
     super.initState();
     _outfitRepository = widget.repository ?? OutfitRepository();
-    _outfitListController =
-        widget.outfitListController ?? Get.find<OutfitListController>();
     _loadCollections();
   }
 
@@ -225,7 +223,8 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
     final tokens = AppUiTokens.of(context);
     final name = collection['name'] as String? ?? 'Untitled';
     final isFavorite = collection['is_favorite'] as bool? ?? false;
-    final outfitCount = (collection['outfit_count'] as num?)?.toInt() ??
+    final outfitCount =
+        (collection['outfit_count'] as num?)?.toInt() ??
         (collection['outfit_ids'] as List?)?.length ??
         0;
 
@@ -576,15 +575,38 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
   }
 
   /// Show dialog to add outfits to collection
-  void _showAddOutfitsDialog(Map<String, dynamic> collection) {
+  Future<void> _showAddOutfitsDialog(Map<String, dynamic> collection) async {
     final name = collection['name'] as String? ?? 'Untitled';
     final collectionId = collection['id']?.toString() ?? '';
     final existingIds = (collection['outfit_ids'] as List? ?? [])
         .map((id) => id.toString())
         .toSet();
-    final availableOutfits = _outfitListController.outfits
-        .where((outfit) => !existingIds.contains(outfit.id))
-        .toList();
+
+    // Load ALL eligible outfits from the repository (paginating until the
+    // last page) instead of the list page's currently loaded/filtered
+    // subset, so outfits outside the visible page can still be added and
+    // "No unassigned outfits" is never a false negative.
+    final List<OutfitModel> availableOutfits;
+    try {
+      final allOutfits = <OutfitModel>[];
+      var page = 1;
+      OutfitsListResponse response;
+      do {
+        response = await _outfitRepository.getOutfits(page: page, limit: 100);
+        allOutfits.addAll(response.outfits);
+        page++;
+      } while (response.hasMore);
+      availableOutfits = allOutfits
+          .where((outfit) => !existingIds.contains(outfit.id))
+          .toList();
+    } catch (e) {
+      ErrorHandler.showError(
+        ErrorHandler.extractMessage(e),
+        title: 'Could not load outfits',
+      );
+      return;
+    }
+
     final selectedIds = <String>{};
 
     Get.dialog(
@@ -643,6 +665,10 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
                           ErrorHandler.extractMessage(e),
                           title: 'Could not add outfits',
                         );
+                        // A batch can partially succeed even when it reports
+                        // failure; refresh so the collection reflects any
+                        // outfits that were actually added.
+                        await _loadCollections();
                       }
                     },
               child: const Text('Add selected'),

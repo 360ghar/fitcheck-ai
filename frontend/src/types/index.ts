@@ -650,8 +650,9 @@ export interface BatchImageInput {
   error?: string;
   /** Backend AI-error bucket ("upstream_quota" | "transient" | "hard") when the
    * failure was an upstream capacity issue ("on us"). Drives a retry message
-   * instead of a generic failure. */
-  errorKind?: string;
+   * instead of a generic failure. Null when the failure carried no bucket
+   * (non-AIServiceError). */
+  errorKind?: string | null;
   /** Items detected from this image */
   detectedItems?: DetectedItem[];
 }
@@ -745,8 +746,9 @@ export interface ImageExtractionFailedData {
   code?: string;
   /** Backend AI-error bucket for upstream capacity issues that are "on us":
    * "upstream_quota" | "transient" | "hard". Drives a "try again shortly"
-   * message instead of a generic failure. */
-  error_kind?: string;
+   * message instead of a generic failure. Null when the failure carried no
+   * bucket (non-AIServiceError). */
+  error_kind?: string | null;
   /** Advised retry delay (seconds) when the provider offered one. */
   retry_after_seconds?: number | null;
   completed_count: number;

@@ -345,13 +345,15 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {activeTab === 'style' && (
+          {/* Keep panels mounted (hidden, not unmounted) so unsaved edits
+              survive tab switches instead of being discarded and refetched. */}
+          <div className={activeTab === 'style' ? '' : 'hidden'}>
             <PreferencesPanel />
-          )}
+          </div>
 
-          {activeTab === 'app' && (
+          <div className={activeTab === 'app' ? '' : 'hidden'}>
             <AppSettingsPanel />
-          )}
+          </div>
 
           {activeTab === 'plan' && (
             <SubscriptionPanel />

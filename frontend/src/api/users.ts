@@ -95,8 +95,8 @@ export async function updateUserPreferences(data: {
   liked_brands?: string[];
   disliked_patterns?: string[];
   preferred_occasions?: string[];
-  color_temperature?: string;
-  style_personality?: string;
+  color_temperature?: string | null;
+  style_personality?: string | null;
   data_points_collected?: number;
 }): Promise<UserPreferences> {
   try {
@@ -123,7 +123,7 @@ export async function getUserSettings(): Promise<UserSettings> {
  * Update user settings
  */
 export async function updateUserSettings(data: {
-  default_location?: string;
+  default_location?: string | null;
   timezone?: string;
   language?: string;
   measurement_units?: 'imperial' | 'metric';

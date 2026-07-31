@@ -1,6 +1,6 @@
 # Database schema (generated)
 
-Generated: 2026-07-31
+Generated: 2026-08-01
 
 Source: `backend/db/supabase/migrations/`.
 Regenerate: `python scripts/generate_db_schema_doc.py`.
@@ -47,6 +47,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `026_harden_rpc_privileges.sql`
 - `027_stripe_webhook_processing_state.sql`
 - `028_configurable_social_import_limit.sql`
+- `029_pr9_hardening.sql`
 
 ## Tables (CREATE TABLE)
 
@@ -99,6 +100,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `021_calendar_event_type.sql` | `calendar_events` | `event_type` |
 | `025_calendar_all_day_events.sql` | `calendar_events` | `is_all_day` |
 | `027_stripe_webhook_processing_state.sql` | `stripe_webhook_events` | `status` |
+| `027_stripe_webhook_processing_state.sql` | `stripe_webhook_events` | `attempts` |
 
 These columns are added after their table's CREATE TABLE and are required (NOT NULL DEFAULT), so inserts rely on the default until a value is supplied.
 
@@ -174,6 +176,8 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `027_stripe_webhook_processing_state.sql` → `stripe_webhook_events`
 - `027_stripe_webhook_processing_state.sql` → `stripe_webhook_events`
 - `027_stripe_webhook_processing_state.sql` → `stripe_webhook_events`
+- `029_pr9_hardening.sql` → `extraction_jobs`
+- `029_pr9_hardening.sql` → `extraction_jobs`
 
 ## Related
 

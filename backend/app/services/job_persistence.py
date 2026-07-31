@@ -226,12 +226,33 @@ class JobPersistenceStore:
 
     def _adopt_external_terminal(self, job: Any, db_status: Any) -> None:
         """Adopt a terminal status a second worker already persisted."""
+        db_status = self._normalize_adopted_status(job, db_status)
         job.status = db_status
         job._persisted_status = db_status
         job.persistence_dirty = False
         if self._cancelled_member is not None and db_status == self._cancelled_member:
             job.cancelled = True
             job.cancel_event.set()
+
+    def _normalize_adopted_status(self, job: Any, db_status: Any) -> Any:
+        """Convert a raw DB status string back to the job's status enum.
+
+        The durable row stores plain strings while job consumers access
+        ``job.status.value``; adopting the raw string directly would make
+        later status/SSE reads raise AttributeError. Terminal members are the
+        only values that reach this path, so the enum round-trip is safe.
+        """
+        if not isinstance(db_status, str):
+            return db_status
+        if hasattr(job.status, "value"):
+            try:
+                return type(job.status)(db_status)
+            except ValueError:
+                pass
+        for member in self._terminal_statuses:
+            if _status_value(member) == db_status:
+                return member
+        return db_status
 
 
 def _status_value(status: Any) -> str:

@@ -527,6 +527,10 @@ class BatchJobService:
                 job = cls._hydrate(row, db)
                 if job:
                     cls._jobs[job_id] = job
+                    # Hydrated jobs live in `_jobs` until cleanup evicts them;
+                    # make sure the eviction loop is running so stale rows can
+                    # never permanently exhaust the concurrency limit.
+                    cls._ensure_cleanup_task()
                 return job
         return None
 
@@ -565,6 +569,30 @@ class BatchJobService:
 
         logger.info("Cancelled batch job", extra={"job_id": job_id})
         return True
+
+    @classmethod
+    async def check_durable_cancel(cls, job: BatchJob) -> None:
+        """Adopt a CANCELLED status a non-owner worker persisted for this job.
+
+        Cancellation is a cross-process signal: a worker that only hydrates
+        the durable row (``cancel_job`` on a non-owner) can persist CANCELLED
+        but cannot set the owner's in-memory ``cancel_event``. Pipeline
+        checkpoints call this so a cancelled job stops promptly instead of
+        grinding through queued extraction/generation until its next flush.
+        """
+        if job.persistence_db is None or job.status in _TERMINAL_STATUSES:
+            return
+        if job.cancelled or job.cancel_event.is_set():
+            return
+        db_status = await _store._read_status(job)
+        if db_status is None:
+            return
+        if BatchJobStatus.CANCELLED.value == db_status:
+            job.cancelled = True
+            job.cancel_event.set()
+            job.status = BatchJobStatus.CANCELLED
+            job._persisted_status = BatchJobStatus.CANCELLED
+            job.persistence_dirty = False
 
     @classmethod
     async def update_status(cls, job_id: str, status: BatchJobStatus) -> None:

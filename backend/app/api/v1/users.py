@@ -29,9 +29,11 @@ from app.core.exceptions import (
     ValidationError,
 )
 from app.core.logging_config import get_context_logger
+from app.core.config import settings
 from app.core.security import get_current_user_id
 from app.core.uploads import read_upload_capped
 from app.db.connection import get_db
+from app.utils import maybe_single_data
 from app.models.user import (
     BodyProfile,
     BodyProfileCreate,
@@ -334,9 +336,33 @@ async def delete_current_user(
         owned = await StorageService.resolve_owned_storage_paths(db, user_id)
         storage_paths = owned["storage_paths"]
 
+        # The avatar is referenced only by URL on the user row; resolve it to
+        # its storage object so deletion does not orphan it in Storage.
+        avatar_bucket_path = None
+        avatar_result = await asyncio.to_thread(
+            db.table("users")
+            .select("avatar_url")
+            .eq("id", user_id)
+            .maybe_single()
+            .execute
+        )
+        avatar_row = maybe_single_data(avatar_result)
+        avatar_bucket_path = StorageService.url_to_storage_path(
+            (avatar_row or {}).get("avatar_url")
+        )
+        if avatar_bucket_path and avatar_bucket_path[0] == settings.SUPABASE_STORAGE_BUCKET:
+            storage_paths.append(avatar_bucket_path[1])
+            avatar_bucket_path = None
+
         async def _delete_storage() -> None:
             if storage_paths:
                 await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)
+            if avatar_bucket_path:
+                await StorageService.delete_multiple_images(
+                    db=db,
+                    storage_paths=[avatar_bucket_path[1]],
+                    bucket=avatar_bucket_path[0],
+                )
 
         async def _delete_vectors() -> None:
             if hasattr(db.table("items"), "select"):

@@ -46,21 +46,26 @@ export function UpgradePromptDialog() {
     <Dialog
       open={isOpen}
       onOpenChange={(open) => {
-        if (!open && !isCheckingOut) close();
+        if (!open && !isCheckingOut) {
+          // The dialog stays mounted; without this, a failed-checkout message
+          // survives dismissal and reappears on the next unrelated prompt.
+          setCheckoutError(null);
+          close();
+        }
       }}
     >
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isRateLimit ? "You've reached your daily limit" : 'AI service is busy'}
+            {isRateLimit ? "You've reached your plan limit" : 'AI service is busy'}
           </DialogTitle>
           <DialogDescription asChild>
             <div>
               {isRateLimit
                 ? !canUpgrade
-                  ? "You've used all your AI extractions for today. Your allowance resets tomorrow."
+                  ? "You've used all the AI extractions on your plan. Your limit resets at the start of the next billing period."
                   : (message ??
-                    "You've used all the AI extractions on your plan for today. Upgrade for much higher daily limits, or wait for tomorrow's reset.")
+                    "You've used all the AI extractions on your plan. Upgrade for higher limits, or your limit resets at the start of the next billing period.")
                 : message ??
                   "Our AI provider is experiencing heavy demand right now. Please try again in a few minutes. Your items aren't lost."}
             </div>

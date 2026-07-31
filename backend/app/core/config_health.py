@@ -167,7 +167,13 @@ def validate_production_config() -> List[ConfigIssue]:
     # working instead of surfacing a 429. The key resolves
     # AI_VISION_FALLBACK_API_KEY -> AI_VISION_API_KEY -> AI_CHAT_API_KEY; if all
     # are empty the fallback can't fire and every Gemini 429 fails the request.
-    if settings.AI_VISION_PROVIDER.lower() == "gemini":
+    if (
+        settings.AI_DEFAULT_PROVIDER.lower() == "custom"
+        and settings.AI_VISION_PROVIDER.lower() == "gemini"
+    ):
+        # Native-Gemini deployments (AI_DEFAULT_PROVIDER=gemini) never consult
+        # the fallback key fields, so this warning would be misleading there;
+        # it applies to the Custom provider's hybrid Gemini vision leg only.
         fallback_key = (
             (settings.AI_VISION_FALLBACK_API_KEY or "")
             or (settings.AI_VISION_API_KEY or "")

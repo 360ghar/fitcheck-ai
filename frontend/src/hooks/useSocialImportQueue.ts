@@ -365,7 +365,14 @@ export function useSocialImportQueue(): UseSocialImportQueue {
   const approveAwaiting = useCallback(async () => {
     if (!state.jobId || !state.awaitingPhotoId) return []
     const savedItems = await approveSocialImportPhoto(state.jobId, state.awaitingPhotoId)
-    await refreshStatus()
+    // Status refresh is best-effort: the approval itself already succeeded
+    // server-side, so a transient refresh failure must not lose the saved
+    // items (BatchExtractionFlow auto-creates an outfit from them).
+    try {
+      await refreshStatus()
+    } catch {
+      // Ignore; the item is saved and the caller can still proceed.
+    }
     return savedItems
   }, [refreshStatus, state.awaitingPhotoId, state.jobId])
 
@@ -402,6 +409,9 @@ export function useSocialImportQueue(): UseSocialImportQueue {
       reconnectTimerRef.current = null
     }
     lastEventIdRef.current = null
+    // A fresh job must be able to prompt once for its own paused period; the
+    // previous job's dedupe must not carry over across reset().
+    rateLimitPromptedRef.current = false
     setActiveJobId(null)
     setState(initialState)
   }, [disconnect, state.jobId, state.status])

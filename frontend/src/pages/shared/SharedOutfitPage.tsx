@@ -14,10 +14,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ZoomableImage } from '@/components/ui/zoomable-image'
 import { SEO, OutfitJsonLd } from '@/components/seo'
+import { useIsAuthenticated } from '@/stores/authStore'
 import { withAuthContext } from '@/pages/auth/authRedirect'
 
 export default function SharedOutfitPage() {
   const { id } = useParams()
+  const isAuthenticated = useIsAuthenticated()
   const [outfit, setOutfit] = useState<PublicOutfit | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -83,12 +85,15 @@ export default function SharedOutfitPage() {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <Button variant="outline" asChild className="w-full sm:w-auto">
               <Link to={id ? withAuthContext('/auth/login', undefined, `/outfits/${id}`) : '/auth/login'}>
-                Sign in
+                {isAuthenticated ? 'View in app' : 'Sign in'}
               </Link>
             </Button>
             {id && (
               <Button asChild className="w-full sm:w-auto">
-                <Link to={withAuthContext('/auth/login', undefined, `/outfits/${id}`)}>
+                {/* /auth/login sits behind PublicRoute, which bounces
+                    authenticated users to /dashboard and discards returnTo;
+                    link straight to the outfit when already signed in. */}
+                <Link to={isAuthenticated ? `/outfits/${id}` : withAuthContext('/auth/login', undefined, `/outfits/${id}`)}>
                   Open in app
                 </Link>
               </Button>

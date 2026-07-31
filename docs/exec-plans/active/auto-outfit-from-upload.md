@@ -29,12 +29,16 @@ item and the status refresh returns it, so the client can group those per photo 
 
 ### New helper — `frontend/src/lib/outfit-from-upload.ts`
 - `categoryDisplayName(category)` — title-cased label for outfit naming.
-- `buildOutfitName(ids, all)` — `"<Top> + <Bottom> look"` / `"<Top> look"` (dedup by
-  category, up to 2 pieces), fallback `"Uploaded look"`.
-- `createOutfitsFromUploads({ groups, generateId, max })` — for each non-empty group:
-  `useOutfitStore.getState().createOutfit()` (fire-and-forget; `generateId()` seeds the
-  optimistic generating-outfit entry). Wrapped in try/catch so a failed outfit never
-  breaks the item-save path.
+- `buildOutfitName(pieces)` — takes the photo's saved pieces (`UploadedOutfitPiece[]`);
+  `"<Top> + <Bottom> look"` / `"<Top> look"` (dedup by category, up to 2 pieces),
+  fallback `"Uploaded look"`.
+- `createOutfitsFromUploads(groups)` — single positional `groups` map
+  (source-image/photo id → saved pieces); for each non-empty group calls
+  `createOutfitFromSavedItems(pieces)`.
+- `createOutfitFromSavedItems(pieces)` — calls `outfitsApi.createOutfit()` directly
+  (fire-and-forget), marks the new outfit `pending` in `generatingOutfits`, then fires
+  `startGenerationForNewOutfit(outfit.id)` for the AI render. Wrapped in try/catch so a
+  failed outfit never breaks the item-save path.
 
 ### Batch flow — `BatchExtractionFlow.tsx`
 - After all items saved, build `savedTempIds` (tempId → real id), group by

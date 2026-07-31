@@ -864,9 +864,15 @@ async def add_collection_outfit(
             .execute
         )
         if not membership.data:
+            # Upsert (not insert): two concurrent add/retry requests can both
+            # pass the membership read above, and the junction PK conflict
+            # would otherwise 500 one of them. The upsert is idempotent.
             await asyncio.to_thread(
                 db.table("outfit_collection_items")
-                .insert({"collection_id": collection_id_str, "outfit_id": request.outfit_id})
+                .upsert(
+                    {"collection_id": collection_id_str, "outfit_id": request.outfit_id},
+                    on_conflict="collection_id,outfit_id",
+                )
                 .execute
             )
 

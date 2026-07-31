@@ -499,7 +499,11 @@ class StorageService:
                 continue
             if not can_query_rows:
                 continue
-            parent_query = db.table(parent_table).select("id").eq("user_id", user_id)
+            # Source photos are stored once per photo and referenced from the
+            # parent `items` row (not a child image table), so they must be
+            # collected from the parent query itself.
+            select_cols = "id,source_image_storage_path" if parent_table == "items" else "id"
+            parent_query = db.table(parent_table).select(select_cols).eq("user_id", user_id)
             if scoped_ids is not None:
                 parent_query = parent_query.in_("id", scoped_ids)
             parent_queries.append((parent_table, parent_query))
@@ -509,14 +513,22 @@ class StorageService:
         ) if parent_queries else []
 
         for (parent_table, _query), parent_rows in zip(parent_queries, parent_results):
+            rows = getattr(parent_rows, "data", None) or []
             owned_ids = [
                 str(row.get("id"))
-                for row in (getattr(parent_rows, "data", None) or [])
+                for row in rows
                 if row.get("id")
             ]
             if parent_table == "items":
                 owned_item_ids.extend(owned_ids)
                 child_table, fk_column = "item_images", "item_id"
+                # The item's source photo (the original upload it was
+                # extracted from) lives in Storage, not in item_images.
+                storage_paths.extend(
+                    str(row["source_image_storage_path"])
+                    for row in rows
+                    if row.get("source_image_storage_path")
+                )
             else:
                 owned_outfit_ids.extend(owned_ids)
                 child_table, fk_column = "outfit_images", "outfit_id"
@@ -863,6 +875,27 @@ class StorageService:
         if not parsed.path.startswith("/storage/v1/object/"):
             raise ValueError("storage image URL is not a Supabase object URL")
         return url
+
+    @staticmethod
+    def url_to_storage_path(url: Optional[str]) -> Optional[tuple]:
+        """Extract ``(bucket, storage_path)`` from a Supabase Storage URL.
+
+        Returns None for non-Supabase or malformed URLs. Used to resolve
+        objects that are referenced only by URL (e.g. user avatars) so
+        account deletion can remove them from Storage.
+        """
+        if not url:
+            return None
+        try:
+            StorageService._validate_storage_url(url)
+        except ValueError:
+            return None
+        parsed = urlparse(url)
+        parts = [part for part in parsed.path.split("/") if part]
+        # /storage/v1/object/public/<bucket>/<path...>
+        if len(parts) < 5 or parts[:4] != ["storage", "v1", "object", "public"]:
+            return None
+        return parts[4], "/".join(parts[5:])
 
     @staticmethod
     async def promote_temp_image_to_item(

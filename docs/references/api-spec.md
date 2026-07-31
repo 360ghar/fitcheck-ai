@@ -268,7 +268,7 @@ Send each item's `item_id`: the backend resolves that item's stored image
 server-side, scoped to the caller, and sends it to the model as a garment
 reference so the render reproduces the real garment. Omitting `item_id` still
 works and falls back to generating from the text attributes alone. Never send
-image URLs or base64 here. Max 30 items.
+image URLs or base64 here. Max 100 items (server-enforced `AI_MAX_OUTFIT_ITEMS`, default 100; configurable via `backend/.env`).
 
 **Request:**
 ```json

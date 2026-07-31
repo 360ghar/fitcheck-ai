@@ -34,8 +34,8 @@ single editorial secondary (purple) for AI-pick / recommendation badges.
 > section requires, and shifts the hex by one perceptual step. `scripts/check_theme_tokens.py`
 > enforces the floor, so this cannot silently regress.
 
-| Brand Red Pressed | `#cc001f` → `hsl(351 100% 43%)` | Pressed state for primary button |
-| Editorial Purple | `#7e238b` → `hsl(296 60% 34%)` | "AI pick" / recommendation badges only |
+| Brand Red Pressed | `#cc001f` → `hsl(351 100% 40%)` | Pressed state for primary button |
+| Editorial Purple | `#7e238b` → `hsl(292 60% 34%)` | "AI pick" / recommendation badges only |
 
 > Migration note: this replaces the legacy indigo `--primary: 238.7 83.5% 66.7%`.
 
@@ -84,9 +84,9 @@ repaints to `bg-surface-card`, so that pairing does not occur.
 | Success (`success`, `success-deep`) | `--success` | `#103c23` | In-product success messaging |
 | Success Pale (`success-pale`) | `--success-pale` | `#c7f0d7` | Pale success-pill background |
 | Editorial Purple (`accent-purple`) | `--accent-purple` | `#84238b` | "AI pick" badge fill; label is always `text-white` |
-| Focus Outer | *(hex, light-locked)* | `#435ee5` | 2px outer focus ring (paired with ink inner ring) |
+| Focus ring (`ring`) | `--ring` | `#e60023` | Focus outline (paired with `--focus-inner` gap) |
 
-> Every token in these tables except `stone` and `focus-outer` resolves through
+> Every token in these tables except `stone` resolves through
 > a CSS variable, so it inverts. A fixed hex in `tailwind.config.ts` has no
 > `.dark` counterpart in the emitted CSS — that is precisely how dark mode
 > broke. Add colors as a `:root` + `.dark` var pair, never as a literal.
@@ -224,7 +224,7 @@ Button copy is sentence-case, imperative ("Save outfit", "Add to wardrobe").
 ### Forms
 
 - **Inputs:** `rounded-16px`, `h-11` (44px), canvas bg, 1px ash border.
-- **Focus signal:** double ring — 2px ink inner border + 4px Focus Outer blue
+- **Focus signal:** double ring — `--focus-inner` inner gap + `--ring` outer
   outline. Never a single colored outline.
 
 ### Bottom nav (mobile)

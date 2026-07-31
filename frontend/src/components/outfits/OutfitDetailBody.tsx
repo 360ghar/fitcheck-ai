@@ -50,7 +50,10 @@ export function OutfitDetailBody({
   }, [outfit, wardrobeItems])
 
   const heroImage = outfit.images?.find((img) => img.is_primary) || outfit.images?.[0]
-  const heroSrc = generatedImageUrl || heroImage?.thumbnail_url || heroImage?.image_url || null
+  // The detail hero and zoom lightbox deserve the full-resolution image;
+  // thumbnails are for list/card surfaces. Fall back to the thumbnail only
+  // when no full image exists.
+  const heroSrc = generatedImageUrl || heroImage?.image_url || heroImage?.thumbnail_url || null
 
   // One line replaces the old row of four tinted badges.
   const metaLine = [outfit.occasion, outfit.season, outfit.style].filter(Boolean).join(' · ')

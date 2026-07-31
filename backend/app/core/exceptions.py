@@ -352,7 +352,7 @@ class AIServiceError(ServiceError):
         response["retryable"] = self.retryable
         if self.error_kind:
             response["error_kind"] = self.error_kind
-        if self.retry_after_seconds:
+        if self.retry_after_seconds is not None:
             response["retry_after_seconds"] = self.retry_after_seconds
         return response
 

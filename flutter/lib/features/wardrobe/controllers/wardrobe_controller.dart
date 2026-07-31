@@ -134,6 +134,11 @@ class WardrobeController extends GetxController {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
 
     if (!_networkService.isConnected.value) {
+      // Invalidate any in-flight fetch so stale results for the previous
+      // filters cannot populate the new filter state after reconnect.
+      _fetchGeneration++;
+      isLoading.value = false;
+      isLoadingMore.value = false;
       isOffline.value = true;
       error.value = 'You are offline. Reconnect to refresh your wardrobe.';
       return;

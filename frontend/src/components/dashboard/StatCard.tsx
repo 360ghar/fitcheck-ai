@@ -53,8 +53,11 @@ const toneConfig = {
     icon: 'bg-primary/10 text-primary',
   },
   cool: {
-    bar: 'bg-secondary',
-    icon: 'bg-secondary text-secondary-foreground',
+    // Distinct from `warm` (neutral secondary) so the two stat cards remain
+    // visually separable; reuses the established accent-purple pair from the
+    // "AI pick" badge and OutfitCard.
+    bar: 'bg-accent-purple',
+    icon: 'bg-accent-purple text-white',
   },
   warm: {
     bar: 'bg-secondary',

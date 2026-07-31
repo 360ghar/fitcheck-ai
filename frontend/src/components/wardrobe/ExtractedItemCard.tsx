@@ -188,7 +188,7 @@ export function ExtractedItemCard({
 
   return (
     <Card
-      className={`overflow-hidden transition-colors ${
+      className={`overflow-hidden transition-all ${
         hasFailed
           ? 'border-destructive/40 bg-destructive/5'
           : isLowConfidence

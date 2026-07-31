@@ -135,7 +135,7 @@ export function TryOnDemo() {
         {/* Step 2: Upload Outfit Photo */}
         {state === 'outfit' && (
           <div className="h-full flex flex-col">
-            <div className="flex items-center gap-3 mb-4 p-3 bg-success/10 rounded-lg">
+            <div className="flex items-center gap-3 mb-4 p-3 bg-success-pale rounded-lg">
               {personPreview && (
                 <img
                   src={personPreview}

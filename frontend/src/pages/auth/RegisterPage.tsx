@@ -168,6 +168,9 @@ export default function RegisterPage() {
       await signInWithGoogle()
       // User will be redirected to Google
     } catch {
+      // Drop the pending plan/referral so a later plain sign-in cannot be
+      // hijacked by stale intent from this aborted attempt.
+      localStorage.removeItem('pending_plan_type')
       setGoogleLoading(false)
     }
   }
@@ -190,7 +193,6 @@ export default function RegisterPage() {
           {error && (
             <div
               role="alert"
-              aria-live="polite"
               className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start"
             >
               <AlertCircle className="h-5 w-5 text-destructive mt-0.5 mr-2 flex-shrink-0" />

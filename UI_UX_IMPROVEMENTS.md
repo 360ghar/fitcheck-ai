@@ -92,9 +92,11 @@
 | Phase | Workstreams | Status |
 |---|---|---|
 | **P1** | A (rename), D (density), SEO | ✅ implemented (see §7) |
-| **P2** | B (single no-bg image), C (dense outfits grid + side panel/modal) | pending |
-| **P3** | E (builder revamp web + flutter) | pending |
-| **P4** | F (photo→outfit pipeline) | pending |
+| **P2** | B (single no-bg image) | ✅ implemented (see §8) |
+| **P3** | C (dense outfits grid + side panel/modal) | ✅ implemented (see §8) |
+| **P4** | E (builder revamp web + flutter) | ✅ implemented (see §8) |
+
+> F (photo→outfit pipeline): deferred — see header and the §8 Phase 2 note.
 
 Per-phase checks:
 ```bash

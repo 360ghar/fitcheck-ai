@@ -290,7 +290,11 @@ def downscale_base64_image(
 
             # Flatten transparency onto white so JPEG has no alpha channel.
             had_alpha = img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info
-            if img.mode in ("RGBA", "LA", "P"):
+            # had_alpha (not a mode whitelist): a palette+alpha (PA) image or
+            # a P-mode image with a transparency key must also flatten, or
+            # transparent pixels render with their source palette/L values
+            # instead of white.
+            if had_alpha:
                 background = Image.new("RGB", img.size, (255, 255, 255))
                 rgba = img.convert("RGBA")
                 background.paste(rgba, mask=rgba.getchannel("A"))

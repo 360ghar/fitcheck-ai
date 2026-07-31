@@ -399,9 +399,10 @@ def main() -> int:
 
     # Validate the selected email transport before any live grant write. A
     # missing Resend key must never leave a partially granted campaign behind.
+    # Dry runs never send email, so they must not require the key.
     resend_key = None
     from_email = None
-    if not skip_email and email_transport == "resend":
+    if not dry_run and not skip_email and email_transport == "resend":
         resend_key = _env("RESEND_API_KEY", required=True)
         from_email = _env("FROM_EMAIL", "FitCheck AI <team@fitcheckaiapp.com>")
 

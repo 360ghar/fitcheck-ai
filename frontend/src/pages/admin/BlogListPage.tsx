@@ -2,7 +2,7 @@
  * Blog List Page - Admin interface for managing blog posts
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
@@ -120,7 +120,14 @@ export default function BlogListPage() {
     },
   });
 
+  // Reset to page 1 only when a filter CHANGES, not on mount: a direct link
+  // to ?page=N must not be reset to page 1 before the data loads.
+  const hasMountedRef = useRef(false);
   useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
     setPage(1);
   }, [search, category, status]);
 

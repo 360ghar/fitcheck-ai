@@ -216,6 +216,31 @@ class BatchExtractionService:
         # pin tens of MB of RAM until the job TTL expires.
         await BatchJobService.release_image_payloads(job.job_id)
 
+    async def _skip_due_to_capacity(self, job: BatchJob, image_id: str) -> bool:
+        """Mark an image skipped when upstream AI capacity is exhausted.
+
+        Shared by the semaphore-entry check and the pre-call re-check: tasks
+        admitted concurrently can all pass the entry check before the flag is
+        set by the first failure, so the re-check guarantees only truly
+        in-flight calls reach the provider.
+        """
+        if not self._extraction_capacity_exhausted:
+            return False
+        skip_msg = "Skipped: AI service capacity exhausted"
+        await BatchJobService.mark_extraction_failed(job.job_id, image_id, skip_msg)
+        await BatchJobService.broadcast_event(job.job_id, "image_extraction_failed", {
+            "job_id": job.job_id,
+            "image_id": image_id,
+            "error": skip_msg,
+            "code": "AI_SERVICE_ERROR",
+            "error_kind": "upstream_quota",
+            "completed_count": len(job.extraction_completed),
+            "failed_count": len(job.extraction_failed),
+            "total_images": job.total_images,
+            "timestamp": utcnow_iso(),
+        })
+        return True
+
     async def _extract_single_image(
         self,
         job: BatchJob,
@@ -227,6 +252,10 @@ class BatchExtractionService:
         on_items_ready: OnItemsReady = None,
     ) -> List[Dict[str, Any]]:
         """Extract items from a single image with semaphore and retry."""
+        # Adopt a durable CANCELLED state persisted by a non-owner worker so
+        # queued extractions stop promptly instead of waiting for the next
+        # status flush.
+        await BatchJobService.check_durable_cancel(job)
         if job.is_cancelled():
             return []
         if consumer_task is not None and consumer_task.done():
@@ -237,24 +266,17 @@ class BatchExtractionService:
         async with EXTRACTION_SEMAPHORE:
             if job.is_cancelled():
                 return []
-            if self._extraction_capacity_exhausted:
-                # A prior image already exhausted the upstream AI capacity
-                # (Gemini free-tier quota + Agnes fallback both failed). Don't
-                # burn another guaranteed-to-fail VLM call; mark this image
-                # skipped and move on.
-                skip_msg = "Skipped: AI service capacity exhausted"
-                await BatchJobService.mark_extraction_failed(job.job_id, image_id, skip_msg)
-                await BatchJobService.broadcast_event(job.job_id, "image_extraction_failed", {
-                    "job_id": job.job_id,
-                    "image_id": image_id,
-                    "error": skip_msg,
-                    "code": "AI_SERVICE_ERROR",
-                    "error_kind": "upstream_quota",
-                    "completed_count": len(job.extraction_completed),
-                    "failed_count": len(job.extraction_failed),
-                    "total_images": job.total_images,
-                    "timestamp": utcnow_iso(),
-                })
+            if await self._skip_due_to_capacity(job, image_id):
+                return []
+
+            # A prior image already exhausted the upstream AI capacity
+            # (Gemini free-tier quota + Agnes fallback both failed). Don't
+            # burn another guaranteed-to-fail VLM call; mark this image
+            # skipped and move on. Checked here too (not only at semaphore
+            # entry): tasks admitted concurrently can all pass the first
+            # check before the flag is set, so only truly in-flight calls
+            # proceed past this point.
+            if await self._skip_due_to_capacity(job, image_id):
                 return []
 
             # Persist the source photo to Supabase Storage BEFORE the vision
@@ -489,6 +511,9 @@ class BatchExtractionService:
 
         try:
             while True:
+                # Adopt a durable CANCELLED state persisted by a non-owner
+                # worker between batches.
+                await BatchJobService.check_durable_cancel(job)
                 if job.is_cancelled():
                     # Drop remaining queue without generating; still wait in-flight below.
                     break

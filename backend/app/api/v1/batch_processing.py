@@ -128,13 +128,14 @@ class BatchExtractionRequest(BaseModel):
         description="Automatically start generation after extraction",
     )
     generation_batch_size: int = Field(
-        settings.AI_GENERATION_CONCURRENCY,
+        min(settings.AI_GENERATION_CONCURRENCY, 50),
         ge=1,
-        le=settings.AI_GENERATION_CONCURRENCY,
+        le=min(settings.AI_GENERATION_CONCURRENCY, 50),
         description=(
             "Max concurrent product-image generations for this job "
-            f"(1-{settings.AI_GENERATION_CONCURRENCY}). The process-wide "
-            "GENERATION_SEMAPHORE (same cap) is the hard ceiling regardless."
+            f"(1-{min(settings.AI_GENERATION_CONCURRENCY, 50)}). The process-wide "
+            "GENERATION_SEMAPHORE (same cap) is the hard ceiling regardless. "
+            "Capped at 50 to match the DB CHECK valid_batch_size."
         ),
     )
 
@@ -282,8 +283,15 @@ async def _start_batch_job(
     images_data: List[Dict[str, Any]],
     auto_generate: bool,
     generation_batch_size: int,
+    reservations: Optional[Dict[str, int]] = None,
 ) -> BatchJobResponse:
-    """Rate-limit, create job, kick off pipeline, return 202 payload."""
+    """Rate-limit, create job, kick off pipeline, return 202 payload.
+
+    ``reservations`` carries quota already reserved by the caller (the
+    multipart route reserves before buffering uploads so over-quota requests
+    fail fast). When omitted, the reservation is made here so JSON callers
+    keep the single-reservation contract.
+    """
     # Production uses the hosted Supabase client. Keeping the guard here also
     # preserves direct-call tests and non-HTTP callers that use a sentinel DB
     # object; those paths remain explicitly in-memory rather than failing
@@ -301,12 +309,13 @@ async def _start_batch_job(
             detail=f"Maximum {_MAX_BATCH_IMAGES} images per batch",
         )
 
-    reservations = await _check_batch_rate_limits(
-        user_id=user_id,
-        db=db,
-        total_images=total_images,
-        auto_generate=auto_generate,
-    ) or {}
+    if reservations is None:
+        reservations = await _check_batch_rate_limits(
+            user_id=user_id,
+            db=db,
+            total_images=total_images,
+            auto_generate=auto_generate,
+        ) or {}
 
     try:
         job = await BatchJobService.create_job(
@@ -408,9 +417,9 @@ async def start_batch_extraction_multipart(
     ),
     auto_generate: bool = Form(True),
     generation_batch_size: int = Form(
-        settings.AI_GENERATION_CONCURRENCY,
+        min(settings.AI_GENERATION_CONCURRENCY, 50),
         ge=1,
-        le=settings.AI_GENERATION_CONCURRENCY,
+        le=min(settings.AI_GENERATION_CONCURRENCY, 50),
     ),
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
@@ -462,7 +471,7 @@ async def start_batch_extraction_multipart(
                 )
 
         # Reject rate-limited / over-quota requests BEFORE buffering payloads.
-        await _check_batch_rate_limits(
+        reservations = await _check_batch_rate_limits(
             user_id=user_id,
             db=db,
             total_images=len(files),
@@ -470,37 +479,51 @@ async def start_batch_extraction_multipart(
         )
 
         images_data: List[Dict[str, Any]] = []
-        for index, upload in enumerate(files):
-            content_type = (upload.content_type or "").lower()
-            if not content_type.startswith("image/"):
-                raise UnsupportedMediaTypeError(
-                    message=(
-                        f"Unsupported content type at index {index}: "
-                        f"{content_type or '(missing)'}"
+        try:
+            for index, upload in enumerate(files):
+                content_type = (upload.content_type or "").lower()
+                if not content_type.startswith("image/"):
+                    raise UnsupportedMediaTypeError(
+                        message=(
+                            f"Unsupported content type at index {index}: "
+                            f"{content_type or '(missing)'}"
+                        )
                     )
-                )
-            content = await read_upload_capped(upload, _MAX_BATCH_IMAGE_BYTES)
-            if not content:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Empty file at index {index}",
-                )
-            try:
-                validate_image_bytes(content, max_bytes=_MAX_BATCH_IMAGE_BYTES)
-            except ValueError as error:
-                raise UnsupportedMediaTypeError(
-                    allowed_types=["image/jpeg", "image/png", "image/webp", "image/gif"],
-                    message=f"Invalid image at index {index}: {error}",
-                ) from error
+                content = await read_upload_capped(upload, _MAX_BATCH_IMAGE_BYTES)
+                if not content:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Empty file at index {index}",
+                    )
+                try:
+                    validate_image_bytes(content, max_bytes=_MAX_BATCH_IMAGE_BYTES)
+                except ValueError as error:
+                    raise UnsupportedMediaTypeError(
+                        allowed_types=["image/jpeg", "image/png", "image/webp", "image/gif"],
+                        message=f"Invalid image at index {index}: {error}",
+                    ) from error
 
-            image_id = ids[index] if ids else f"img-{uuid4().hex[:12]}"
-            images_data.append(
-                {
-                    "image_id": image_id,
-                    "image_base64": base64.b64encode(content).decode("utf-8"),
-                    "filename": upload.filename,
-                }
-            )
+                image_id = ids[index] if ids else f"img-{uuid4().hex[:12]}"
+                images_data.append(
+                    {
+                        "image_id": image_id,
+                        "image_base64": base64.b64encode(content).decode("utf-8"),
+                        "filename": upload.filename,
+                    }
+                )
+        except Exception:
+            # Validation/buffering failed after the pre-buffer reservation, so
+            # no job will consume it. Release now to avoid leaking quota.
+            await asyncio.gather(*[
+                _release_usage_best_effort(
+                    user_id=user_id,
+                    operation_type=operation_type,
+                    db=db,
+                    count=count,
+                )
+                for operation_type, count in reservations.items()
+            ])
+            raise
 
         return await _start_batch_job(
             user_id=user_id,
@@ -508,6 +531,7 @@ async def start_batch_extraction_multipart(
             images_data=images_data,
             auto_generate=auto_generate,
             generation_batch_size=generation_batch_size,
+            reservations=reservations,
         )
     except FitCheckException:
         raise
@@ -598,8 +622,16 @@ async def batch_job_events(
             if job.recovered_from_persistence:
                 status_data = await BatchJobService.get_job_status(job_id)
                 if status_data:
+                    # Recovered jobs are pollable but never resumed by a
+                    # worker, so a client-unsupported `job_recovered` event
+                    # would leave clients polling an unchanged snapshot.
+                    # Emit the terminal event clients understand.
+                    status_data["error"] = (
+                        "This job was interrupted by a server restart and cannot resume. "
+                        "Please start a new batch."
+                    )
                     yield {
-                        "event": "job_recovered",
+                        "event": "job_failed",
                         "data": json.dumps(status_data),
                     }
                 return

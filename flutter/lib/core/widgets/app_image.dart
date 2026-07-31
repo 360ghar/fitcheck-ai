@@ -130,11 +130,13 @@ class AppImage extends StatelessWidget {
         ),
       );
     } else {
-      imageWidget = Semantics(
-        image: true,
-        label: semanticLabel ?? 'Image',
-        child: imageWidget,
-      );
+      // No callsite currently passes a semanticLabel, so labeling every
+      // thumbnail "Image" would just spam screen-reader navigation. Only add
+      // image semantics when a meaningful label exists; otherwise exclude the
+      // unlabeled image from the semantics tree entirely.
+      imageWidget = semanticLabel == null
+          ? ExcludeSemantics(child: imageWidget)
+          : Semantics(image: true, label: semanticLabel, child: imageWidget);
     }
 
     return Container(

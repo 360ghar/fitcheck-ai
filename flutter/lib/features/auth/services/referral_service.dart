@@ -23,18 +23,16 @@ class ReferralService extends GetxService {
     await _persistence.setString(_pendingReferralKey, code);
   }
 
-  /// Retrieve and clear the pending referral code.
-  Future<String?> getAndClearPendingReferralCode() async {
-    final code = await _persistence.getString(_pendingReferralKey);
-    if (code != null) {
-      await _persistence.remove(_pendingReferralKey);
-    }
-    return code;
+  /// Retrieve the pending referral code without removing it. The code is
+  /// only cleared once redemption succeeds (see [handleOAuthCallback]), so a
+  /// transient redemption failure does not permanently lose it.
+  Future<String?> getPendingReferralCode() async {
+    return _persistence.getString(_pendingReferralKey);
   }
 
-  /// Redeem a referral code after registration, swallowing errors.
-  Future<void> redeemReferralCode(String code) async {
-    await _userInitService.redeemReferralCode(code);
+  /// Redeem a referral code after registration, reporting success.
+  Future<bool> redeemReferralCode(String code) async {
+    return _userInitService.redeemReferralCode(code);
   }
 
   /// Handle OAuth callback: sync profile and redeem any pending referral code.
@@ -42,10 +40,14 @@ class ReferralService extends GetxService {
     // Sync user profile with backend
     await _userInitService.syncOAuthProfile();
 
-    // Check for pending referral code from before OAuth redirect
-    final pendingCode = await getAndClearPendingReferralCode();
+    // Check for pending referral code from before OAuth redirect; clear it
+    // only after redemption succeeds so a failure can retry later.
+    final pendingCode = await getPendingReferralCode();
     if (pendingCode != null && pendingCode.isNotEmpty) {
-      await redeemReferralCode(pendingCode);
+      final redeemed = await redeemReferralCode(pendingCode);
+      if (redeemed) {
+        await _persistence.remove(_pendingReferralKey);
+      }
     }
   }
 }

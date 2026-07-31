@@ -138,6 +138,13 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
 
       if (session.updated) {
         await get().fetchSubscription();
+        // fetchSubscription swallows its own failure into store `error`;
+        // surface it so the caller (upgrade prompt) does not silently
+        // resolve with stale subscription state.
+        const fetchError = get().error;
+        if (fetchError) {
+          throw new Error(fetchError);
+        }
         set({ isCheckingOut: false });
         return;
       }
@@ -233,13 +240,24 @@ export const selectIsPro = (state: SubscriptionState) =>
   state.subscription?.plan_type === 'pro_yearly';
 
 /**
+ * True only for the top Pro tier. Distinct from `selectIsPro` (paid
+ * entitlement): a Plus user has paid features but can still upgrade to Pro.
+ */
+export const selectIsProTier = (state: SubscriptionState) =>
+  state.subscription?.plan_type === 'pro_monthly' ||
+  state.subscription?.plan_type === 'pro_yearly';
+
+/**
  * True when a higher tier exists to upsell (Free and Plus users).
  * Distinct from `selectIsPro`: a Plus user HAS paid features but can still
  * upgrade to Pro, so gating an upgrade CTA on `!isPro` would strand them.
+ * An unknown subscription (still null) is NOT upgradeable — the backend
+ * auto-creates a `free` row, so a real Free user still gets true here.
  */
 export const selectCanUpgrade = (state: SubscriptionState) =>
-  state.subscription?.plan_type !== 'pro_monthly' &&
-  state.subscription?.plan_type !== 'pro_yearly';
+  state.subscription != null &&
+  state.subscription.plan_type !== 'pro_monthly' &&
+  state.subscription.plan_type !== 'pro_yearly';
 
 // ============================================================================
 // HOOKS
@@ -264,6 +282,14 @@ export function useUsage() {
  */
 export function useIsPro() {
   return useSubscriptionStore(selectIsPro);
+}
+
+/**
+ * Hook to check whether the user is on the top Pro tier (badges/CTA gating).
+ * A Plus user is paid (selectIsPro) but is not Pro-tier.
+ */
+export function useIsProTier() {
+  return useSubscriptionStore(selectIsProTier);
 }
 
 /**

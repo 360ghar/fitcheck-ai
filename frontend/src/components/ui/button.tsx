@@ -31,7 +31,8 @@ const buttonVariants = cva(
         sm: "h-11 px-3 text-xs",
         lg: "h-11 px-6",
         icon: "h-11 w-11 rounded-full px-0",
-        "icon-sm": "h-11 w-11 rounded-full px-0",
+        // Compact icon variant, distinct from `icon` (h-11 w-11).
+        "icon-sm": "h-10 w-10 rounded-full px-0",
       },
     },
     defaultVariants: {

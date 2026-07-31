@@ -169,8 +169,14 @@ interface EventBadgeProps {
 }
 
 function EventBadge({ event, onClick }: EventBadgeProps) {
-  const markerClass =
-    EVENT_TYPE_MARKER[event.event_type || 'other'] ?? EVENT_TYPE_MARKER.other
+  // The create flow defaults every event to 'other' and offers no type picker,
+  // so a fallback marker + "Event type: other" announcement would be
+  // fabricated. Only differentiate when the API returned a typed event.
+  const eventType =
+    event.event_type && event.event_type !== 'other' ? event.event_type : null
+  const markerClass = eventType
+    ? EVENT_TYPE_MARKER[eventType] ?? EVENT_TYPE_MARKER.other
+    : null
 
   return (
     <button
@@ -182,10 +188,12 @@ function EventBadge({ event, onClick }: EventBadgeProps) {
       {/* Rounded caps: a bare square-capped hairline used as ornament is its own
           tell. This one carries meaning — it is the type — so it is drawn as a
           deliberate mark, not a divider. */}
-      <span
-        className={`h-3.5 w-[3px] shrink-0 rounded-full ${markerClass}`}
-        aria-hidden="true"
-      />
+      {markerClass && (
+        <span
+          className={`h-3.5 w-[3px] shrink-0 rounded-full ${markerClass}`}
+          aria-hidden="true"
+        />
+      )}
       {event.outfit_image_url && (
         <img
           src={event.outfit_image_url}
@@ -196,7 +204,9 @@ function EventBadge({ event, onClick }: EventBadgeProps) {
       <span className="flex-1 truncate">{event.title}</span>
       {/* The type is not decoration, so it is also available to a screen reader
           and to anyone who cannot separate the hues. */}
-      <span className="sr-only">Event type: {event.event_type || 'other'}</span>
+      {eventType && (
+        <span className="sr-only">Event type: {eventType}</span>
+      )}
     </button>
   )
 }

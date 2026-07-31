@@ -46,7 +46,9 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = AppBottomNavigationBar.getIndexForRoute(Get.currentRoute);
+    final currentIndex = AppBottomNavigationBar.getIndexForRoute(
+      Get.currentRoute,
+    );
 
     return Scaffold(
       body: AppPageBackground(
@@ -86,17 +88,14 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
       floating: true,
       elevation: 0,
       title: Text(
-        'Wardrobe Stats',
+        'Closet Stats',
         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: tokens.textPrimary,
-            ),
+          fontWeight: FontWeight.w700,
+          color: tokens.textPrimary,
+        ),
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.refresh),
-          onPressed: _loadStats,
-        ),
+        IconButton(icon: const Icon(Icons.refresh), onPressed: _loadStats),
       ],
     );
   }
@@ -123,25 +122,21 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.error_outline,
-                size: 64,
-                color: tokens.textMuted,
-              ),
+              Icon(Icons.error_outline, size: 64, color: tokens.textMuted),
               const SizedBox(height: AppConstants.spacing16),
               Text(
                 'Failed to load stats',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: tokens.textPrimary,
-                    ),
+                  fontWeight: FontWeight.w700,
+                  color: tokens.textPrimary,
+                ),
               ),
               const SizedBox(height: AppConstants.spacing8),
               Text(
                 error.value,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: tokens.textMuted,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppConstants.spacing24),
@@ -159,13 +154,18 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
 
   Widget _buildStatsContent() {
     final Map<String, dynamic> statistics = stats;
-    final itemsByCategory = statistics['items_by_category'] as Map<String, dynamic>? ?? {};
+    final itemsByCategory =
+        statistics['items_by_category'] as Map<String, dynamic>? ?? {};
     final totalValue = (statistics['total_value'] as num?)?.toDouble() ?? 0.0;
     final mostWorn = statistics['most_worn_items'] as List? ?? [];
     final leastWorn = statistics['least_worn_items'] as List? ?? [];
     // Use server-derived total for consistency with itemsByCategory
-    final totalItems = (statistics['total_items'] as int?) ??
-        itemsByCategory.values.fold<int>(0, (sum, count) => sum + ((count as int?) ?? 0));
+    final totalItems =
+        (statistics['total_items'] as int?) ??
+        itemsByCategory.values.fold<int>(
+          0,
+          (sum, count) => sum + ((count as int?) ?? 0),
+        );
 
     return SliverList(
       delegate: SliverChildListDelegate([
@@ -185,19 +185,24 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
         const SizedBox(height: AppConstants.spacing12),
 
         // Most Worn Items
-        if (mostWorn.isNotEmpty) _buildItemsList('Most Worn', mostWorn, Icons.trending_up),
+        if (mostWorn.isNotEmpty)
+          _buildItemsList('Most Worn', mostWorn, Icons.trending_up),
 
         const SizedBox(height: AppConstants.spacing12),
 
         // Least Worn Items
-        if (leastWorn.isNotEmpty) _buildItemsList('Least Worn', leastWorn, Icons.trending_down),
+        if (leastWorn.isNotEmpty)
+          _buildItemsList('Least Worn', leastWorn, Icons.trending_down),
 
         const SizedBox(height: AppConstants.spacing64), // Bottom padding
       ]),
     );
   }
 
-  Widget _buildTotalItemsCard(int totalItems, Map<String, dynamic> itemsByCategory) {
+  Widget _buildTotalItemsCard(
+    int totalItems,
+    Map<String, dynamic> itemsByCategory,
+  ) {
     final tokens = AppUiTokens.of(context);
 
     return AppGlassCard(
@@ -211,9 +216,9 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
               Text(
                 'Total Items',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textSecondary,
-                    ),
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textSecondary,
+                ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -264,18 +269,11 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            _getCategoryIcon(category),
-            size: 16,
-            color: tokens.textMuted,
-          ),
+          Icon(_getCategoryIcon(category), size: 16, color: tokens.textMuted),
           const SizedBox(width: AppConstants.spacing6),
           Text(
             category.displayName,
-            style: TextStyle(
-              color: tokens.textSecondary,
-              fontSize: 12,
-            ),
+            style: TextStyle(color: tokens.textSecondary, fontSize: 12),
           ),
           const SizedBox(width: AppConstants.spacing4),
           Text(
@@ -304,11 +302,7 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
               color: Colors.green.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(AppConstants.radius12),
             ),
-            child: Icon(
-              Icons.attach_money,
-              color: Colors.green,
-              size: 28,
-            ),
+            child: Icon(Icons.attach_money, color: Colors.green, size: 28),
           ),
           const SizedBox(width: AppConstants.spacing16),
           Expanded(
@@ -317,10 +311,7 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
               children: [
                 Text(
                   'Total Value',
-                  style: TextStyle(
-                    color: tokens.textSecondary,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: tokens.textSecondary, fontSize: 14),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -339,7 +330,10 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
     );
   }
 
-  Widget _buildCategoryBreakdown(Map<String, dynamic> itemsByCategory, int totalItems) {
+  Widget _buildCategoryBreakdown(
+    Map<String, dynamic> itemsByCategory,
+    int totalItems,
+  ) {
     final tokens = AppUiTokens.of(context);
 
     return AppGlassCard(
@@ -350,9 +344,9 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
           Text(
             'Category Breakdown',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+            ),
           ),
           const SizedBox(height: AppConstants.spacing16),
           ...Category.values.map((category) {
@@ -365,7 +359,12 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
     );
   }
 
-  Widget _buildCategoryBar(Category category, int count, int total, AppUiTokens tokens) {
+  Widget _buildCategoryBar(
+    Category category,
+    int count,
+    int total,
+    AppUiTokens tokens,
+  ) {
     final percentage = total > 0 ? count / total : 0.0;
 
     return Padding(
@@ -386,10 +385,7 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
                   const SizedBox(width: AppConstants.spacing8),
                   Text(
                     category.displayName,
-                    style: TextStyle(
-                      color: tokens.textSecondary,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: tokens.textSecondary, fontSize: 14),
                   ),
                 ],
               ),
@@ -433,9 +429,9 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
               Text(
                 title,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                    ),
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
               ),
             ],
           ),

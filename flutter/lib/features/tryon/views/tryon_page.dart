@@ -113,18 +113,25 @@ class TryOnPage extends StatelessWidget {
                   ),
                 ),
 
-                if (controller.generatedImageUrl.value.isNotEmpty ||
-                    controller.generatedImageBase64.value.isNotEmpty) ...[
-                  const SizedBox(height: AppConstants.spacing16),
-                  OutlinedButton.icon(
-                    onPressed: controller.downloadResult,
-                    icon: const Icon(Icons.download),
-                    label: const Text('Download'),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                    ),
-                  ),
-                ],
+                Obx(() {
+                  if (controller.generatedImageUrl.value.isNotEmpty ||
+                      controller.generatedImageBase64.value.isNotEmpty) {
+                    return Column(
+                      children: [
+                        const SizedBox(height: AppConstants.spacing16),
+                        OutlinedButton.icon(
+                          onPressed: controller.downloadResult,
+                          icon: const Icon(Icons.download),
+                          label: const Text('Download'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  return const SizedBox.shrink();
+                }),
               ],
             ),
           ),

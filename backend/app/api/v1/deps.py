@@ -17,8 +17,13 @@ logger = logging.getLogger(__name__)
 
 
 def _is_missing_profile_error(error: Exception) -> bool:
-    """Return whether PostgREST reported the expected no-row condition."""
-    return getattr(error, "code", None) == "PGRST116" or "PGRST116" in str(error)
+    """Return whether PostgREST reported the expected no-row condition.
+
+    Only the structured code field counts: a timeout/permission error whose
+    message text merely contains "PGRST116" must not trigger OAuth
+    auto-provisioning.
+    """
+    return getattr(error, "code", None) == "PGRST116"
 
 
 async def get_current_user(

@@ -940,12 +940,14 @@ async def similar_items(
 
     # Vector search best-effort
     results: List[Dict[str, Any]] = []
+    reserved = False
     try:
-        if await AISettingsService.reserve_usage(
+        reserved = await AISettingsService.reserve_usage(
             user_id=user_id,
             operation_type=OperationType.EMBEDDING,
             db=db,
-        ):
+        )
+        if reserved:
             embedding = await AIService.generate_item_embedding(source.data)
             if embedding:
                 vector_service = get_vector_service()
@@ -980,6 +982,24 @@ async def similar_items(
             error=str(ve)
         )
         results = []
+    finally:
+        # An empty result or a raised vector path never consumed the slot via
+        # a stored embedding: give it back so the daily embedding budget is
+        # not burned on a failed attempt (mirrors items.py behavior).
+        if reserved and not results:
+            try:
+                await AISettingsService.release_usage(
+                    user_id=user_id,
+                    operation_type=OperationType.EMBEDDING,
+                    db=db,
+                )
+            except Exception as release_err:
+                logger.warning(
+                    "Failed to release embedding reservation",
+                    user_id=user_id,
+                    item_id=item_id,
+                    error=str(release_err),
+                )
 
     # Fallback: same category + color overlap
     if not results:

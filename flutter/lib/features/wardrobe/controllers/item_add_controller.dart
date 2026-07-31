@@ -584,13 +584,15 @@ class ItemAddController extends GetxController {
     // the SSE "capacity exhausted" text. None of these appear in the user-plan
     // rate-limit message, so there's no overlap with isRateLimit.
     final String lower = errorMsg.toLowerCase();
+    // NB: deliberately NOT matching generic "try again" text — validation and
+    // detection failures ("No items detected. Please try again.") must keep
+    // their dedicated dialogs below, not be routed to the capacity dialog.
     final bool isCapacity = lower.contains('capacity') ||
         lower.contains('unavailable') ||
         lower.contains('quota') ||
         lower.contains('resource_exhausted') ||
         lower.contains('high demand') ||
-        lower.contains('service is busy') ||
-        lower.contains('try again');
+        lower.contains('service is busy');
 
     // Categorize error and show actionable dialog
     if (errorMsg.contains('timeout') || errorMsg.contains('connection')) {

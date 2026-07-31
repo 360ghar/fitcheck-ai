@@ -1101,14 +1101,13 @@ class AIProviderService:
             return False
 
         text = (error_detail or "").lower()
+        # Only an error that specifically names the response_format / json_schema
+        # field justifies a duplicate request without it; generic wording
+        # ("unsupported", "unknown field", ...) may be unrelated and retrying
+        # would waste latency and provider quota.
         indicators = (
             "response_format",
             "json_schema",
-            "unsupported",
-            "unknown field",
-            "invalid field",
-            "unrecognized field",
-            "not support",
         )
         return any(indicator in text for indicator in indicators)
 

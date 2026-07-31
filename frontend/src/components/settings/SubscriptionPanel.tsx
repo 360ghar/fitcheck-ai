@@ -45,25 +45,40 @@ import {
   useSubscriptionStore,
   usePlanName,
   useIsPro,
+  useIsProTier,
   useCanUpgrade,
   useIsNearLimit,
 } from "@/stores/subscriptionStore";
-import { PLAN_LIMITS, PLAN_PRICES, yearlySavings } from "@/lib/plan-limits";
-import type { PlanType } from "@/types";
+import { PLAN_LIMITS, PLAN_PRICES } from "@/lib/plan-limits";
+import type { PlanType, PlansResponse } from "@/types";
 
 // Upgrade options offered to users without a paid plan. Plus and Pro unlock
 // the same features - only the limits differ - so both tiers are rendered
-// from one shared shape instead of hand-copied blocks.
-const UPGRADE_TIERS = (["plus", "pro"] as const).map((tier) => ({
-  tier,
-  name: tier === "plus" ? "Plus" : "Pro",
-  recommended: tier === "plus",
-  limits: PLAN_LIMITS[tier],
-  prices: PLAN_PRICES[tier],
-  savings: yearlySavings(tier),
-  monthlyPlanType: `${tier}_monthly` as PlanType,
-  yearlyPlanType: `${tier}_yearly` as PlanType,
-}));
+// from one shared shape instead of hand-copied blocks. Prices come from the
+// live /plans response (env-overridable on the backend) so the panel never
+// shows stale compiled prices; PLAN_PRICES is only a loading fallback.
+const offeredTiersFor = (
+  plans: PlansResponse | null | undefined,
+  currentPlan: string
+) =>
+  (["plus", "pro"] as const)
+    .filter((tier) => !currentPlan.startsWith(tier))
+    .map((tier) => {
+      const fromApi = plans?.plans?.find((p) => p.id === tier);
+      const prices = fromApi
+        ? { monthly: fromApi.price_monthly, yearly: fromApi.price_yearly }
+        : PLAN_PRICES[tier];
+      return {
+        tier,
+        name: tier === "plus" ? "Plus" : "Pro",
+        recommended: tier === "plus",
+        limits: PLAN_LIMITS[tier],
+        prices,
+        savings: prices.monthly * 12 - prices.yearly,
+        monthlyPlanType: `${tier}_monthly` as PlanType,
+        yearlyPlanType: `${tier}_yearly` as PlanType,
+      };
+    });
 
 // ============================================================================
 // COMPONENT
@@ -97,13 +112,13 @@ export function SubscriptionPanel() {
 
   const planName = usePlanName();
   const isPro = useIsPro();
+  // The PRO badge is a top-tier claim: a Plus user is paid but not Pro-tier.
+  const isProTier = useIsProTier();
   const canUpgrade = useCanUpgrade();
   // Never offer the tier the user is already on: a Plus subscriber sees Pro
   // only, a free user sees both.
   const currentPlan = subscription?.plan_type ?? "free";
-  const offeredTiers = UPGRADE_TIERS.filter(
-    (t) => !currentPlan.startsWith(t.tier)
-  );
+  const offeredTiers = offeredTiersFor(plans, currentPlan);
   const nearLimit = useIsNearLimit();
 
   // Load data on mount
@@ -118,7 +133,9 @@ export function SubscriptionPanel() {
     if (!requestedPlan) return;
     const target = document.getElementById(`plan-${requestedPlan.split("_")[0]}`);
     target?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [requestedPlan, offeredTiers.length]);
+    // plans?.plans gates the upgrade cards' render: for a free user the tier
+    // list is empty until /plans resolves, so the scroll must re-fire then.
+  }, [requestedPlan, offeredTiers.length, plans?.plans]);
 
   // Handle copy referral link
   const handleCopyLink = async () => {
@@ -225,7 +242,7 @@ export function SubscriptionPanel() {
                 <span className="text-2xl font-bold text-gray-900 dark:text-white">
                   {planName}
                 </span>
-                {isPro && (
+                {isProTier && (
                   <Badge className="bg-amber-500 text-white">PRO</Badge>
                 )}
               </div>
@@ -442,7 +459,7 @@ export function SubscriptionPanel() {
               />
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {usage.monthly_extractions_remaining} remaining this month
-                {nearLimit.extractions && !isPro && (
+                {nearLimit.extractions && canUpgrade && (
                   <span className="text-amber-600 dark:text-amber-400 ml-2">
                     - Consider upgrading!
                   </span>
@@ -464,7 +481,7 @@ export function SubscriptionPanel() {
               />
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {usage.monthly_generations_remaining} remaining this month
-                {nearLimit.generations && !isPro && (
+                {nearLimit.generations && canUpgrade && (
                   <span className="text-amber-600 dark:text-amber-400 ml-2">
                     - Consider upgrading!
                   </span>

@@ -384,14 +384,14 @@ class AISettingsService:
 
         Daily-counter resets happen atomically inside ``reserve_ai_usage``
         (migration 024) under a row lock, so reservations only need the row to
-        exist for the RPC's UPDATE to match. Selects ``id`` only - the full-row
-        ``get_user_settings`` read (which also returns encrypted provider keys)
-        is for read paths, not admission.
+        exist for the RPC's UPDATE to match. Selects ``user_id`` (the table's
+        primary key) only - the full-row ``get_user_settings`` read (which also
+        returns encrypted provider keys) is for read paths, not admission.
         """
         try:
             result = await asyncio.to_thread(
                 db.table("user_ai_settings")
-                .select("id")
+                .select("user_id")
                 .eq("user_id", user_id)
                 .maybe_single()
                 .execute

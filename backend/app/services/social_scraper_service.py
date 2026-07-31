@@ -17,14 +17,81 @@ import socket
 import time
 from dataclasses import dataclass
 from html import unescape
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from urllib.parse import quote, urlencode, urljoin, urlparse
 
+import httpcore
 import httpx
 
 from app.core.config import settings
 from app.core.exceptions import SocialImportError
 from app.models.social_import import DiscoverPhotosResult, ScrapedPhotoRef, SocialPlatform
+
+
+class _PinnedAddressNetworkBackend(httpcore.AsyncNetworkBackend):
+    """httpcore backend that connects to a pre-validated IP address.
+
+    httpcore performs the TLS handshake itself using the original request
+    hostname (SNI + certificate verification), so pinning the connect address
+    here closes the DNS-rebinding window between SSRF validation and the
+    actual connection without breaking HTTPS.
+    """
+
+    def __init__(self, hostname: str, address: str) -> None:
+        self._hostname = hostname
+        self._address = address
+        self._delegate = httpcore.AnyIOBackend()
+
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: Optional[float] = None,
+        local_address: Optional[str] = None,
+        socket_options=None,
+    ):
+        target = self._address if host == self._hostname else host
+        return await self._delegate.connect_tcp(
+            target,
+            port,
+            timeout=timeout,
+            local_address=local_address,
+            socket_options=socket_options,
+        )
+
+    async def connect_unix_socket(self, path: str, timeout: Optional[float] = None, socket_options=None):
+        return await self._delegate.connect_unix_socket(
+            path, timeout=timeout, socket_options=socket_options
+        )
+
+    async def sleep(self, seconds: float) -> None:
+        return await self._delegate.sleep(seconds)
+
+
+class _PinnedAddressHTTPTransport(httpx.AsyncHTTPTransport):
+    """AsyncHTTPTransport connecting to a validated IP, keeping the hostname.
+
+    Rebuilds the httpcore connection pool with a network backend that
+    substitutes the pre-validated address at connect time. All other pool
+    configuration (SSL context, limits, HTTP versions) is preserved.
+    """
+
+    def __init__(self, hostname: str, address: str, **kwargs) -> None:
+        super().__init__(**kwargs)
+        pool = self._pool
+        self._pool = httpcore.AsyncConnectionPool(
+            ssl_context=pool._ssl_context,
+            max_connections=pool._max_connections,
+            max_keepalive_connections=pool._max_keepalive_connections,
+            keepalive_expiry=pool._keepalive_expiry,
+            http1=pool._http1,
+            http2=pool._http2,
+            retries=pool._retries,
+            local_address=pool._local_address,
+            uds=pool._uds,
+            socket_options=pool._socket_options,
+            network_backend=_PinnedAddressNetworkBackend(hostname, address),
+        )
 
 
 @dataclass
@@ -70,8 +137,17 @@ class SocialScraperService:
     _MAX_IMAGE_REDIRECTS = 3
 
     @classmethod
-    async def _validate_remote_image_url(cls, image_url: str) -> str:
-        """Reject non-HTTP URLs and hosts that resolve to private addresses."""
+    async def _resolve_remote_image_endpoint(cls, image_url: str) -> Tuple[str, str]:
+        """Resolve an HTTP(S) image URL to a validated connect endpoint.
+
+        Returns ``(hostname, ip)`` after rejecting non-HTTP URLs, embedded
+        credentials, unresolvable hosts, and any host that resolves to an
+        address that is not globally routable. ``not ip.is_global`` is the
+        complete guard: it covers private, loopback, link-local, multicast,
+        reserved, unspecified, documentation, and RFC 6598 shared-address
+        space (``100.64.0.0/10``), which a denylist of individual flags
+        misses.
+        """
         parsed = urlparse(image_url)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             raise SocialImportError("Imported image URL must use HTTP or HTTPS")
@@ -88,18 +164,14 @@ class SocialScraperService:
         except (OSError, ValueError) as exc:
             raise SocialImportError("Imported image host could not be resolved") from exc
 
+        if not addresses:
+            raise SocialImportError("Imported image host could not be resolved")
+
         for address in addresses:
             ip = ipaddress.ip_address(address[4][0])
-            if (
-                ip.is_private
-                or ip.is_loopback
-                or ip.is_link_local
-                or ip.is_reserved
-                or ip.is_multicast
-                or ip.is_unspecified
-            ):
+            if not ip.is_global:
                 raise SocialImportError("Imported image host is private or blocked")
-        return image_url
+        return parsed.hostname, addresses[0][4][0]
 
     @classmethod
     async def _instagram_login(
@@ -1239,17 +1311,25 @@ class SocialScraperService:
         """Download an imported image with SSRF, redirect, and size guards."""
         encoded_url = quote(photo_url, safe=":/?&=#%") if " " in photo_url else photo_url
         current_url = encoded_url
-        await SocialScraperService._validate_remote_image_url(current_url)
 
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
-            for redirect_count in range(SocialScraperService._MAX_IMAGE_REDIRECTS + 1):
+        for redirect_count in range(SocialScraperService._MAX_IMAGE_REDIRECTS + 1):
+            # Validate + resolve before every hop and pin the validated
+            # address in the transport, so a DNS rebinding between this check
+            # and the connection cannot redirect the request to a private
+            # host.
+            hostname, address = await SocialScraperService._resolve_remote_image_endpoint(current_url)
+            transport = _PinnedAddressHTTPTransport(hostname, address)
+            async with httpx.AsyncClient(
+                timeout=30.0,
+                follow_redirects=False,
+                transport=transport,
+            ) as client:
                 async with client.stream("GET", current_url) as response:
                     if response.status_code in {301, 302, 303, 307, 308}:
                         location = response.headers.get("location")
-                        if not location or redirect_count >= SocialScraperService._MAX_IMAGE_REDIRECTS:
+                        if not location:
                             raise SocialImportError("Imported image redirect chain is invalid or too long")
                         current_url = urljoin(current_url, location)
-                        await SocialScraperService._validate_remote_image_url(current_url)
                         continue
 
                     response.raise_for_status()

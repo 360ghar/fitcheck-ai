@@ -35,9 +35,14 @@ def parse_utc_datetime(value: Any) -> Optional[datetime]:
     hand-rolling the same ``str(value).replace("Z", "+00:00")`` dance.
     """
     if isinstance(value, datetime):
-        if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value
+        # Always normalize to UTC, not just to "aware": an aware input in
+        # another zone must be converted, or callers silently compare mixed
+        # zones.
+        return (
+            value.replace(tzinfo=timezone.utc)
+            if value.tzinfo is None
+            else value.astimezone(timezone.utc)
+        )
     if not value:
         return None
     try:
@@ -45,5 +50,5 @@ def parse_utc_datetime(value: Any) -> Optional[datetime]:
     except (TypeError, ValueError):
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)

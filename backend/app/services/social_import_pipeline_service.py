@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import httpx
 import uuid
 from app.utils.datetime_util import utcnow_iso
 from typing import Any, Dict, List, Optional
@@ -51,6 +52,10 @@ class SocialImportPipelineService:
     MAX_DISCOVERY_PHOTOS = 2000     # Hard limit on photos per job
     DISCOVERY_RETRY_ATTEMPTS = 3
     DISCOVERY_RETRY_BASE_DELAY_SECONDS = 1.0
+    # Delay between automatic re-attempts after upstream AI capacity
+    # exhaustion. One probe per delay keeps the job from grinding while still
+    # resuming on its own once the provider recovers.
+    CAPACITY_RETRY_DELAY_SECONDS = 300
 
     def __init__(self, *, user_id: str, db):
         self.user_id = user_id
@@ -85,6 +90,19 @@ class SocialImportPipelineService:
             if task and not task.done():
                 task.cancel()
 
+    async def _schedule_capacity_retry(self, job_id: str) -> None:
+        """Re-run a capacity-exhausted job after a bounded delay.
+
+        Provider 429/5xx capacity is transient; a fixed backoff keeps retry
+        intensity bounded while still letting the job resume automatically
+        instead of sitting in ``processing`` forever.
+        """
+        try:
+            await asyncio.sleep(self.CAPACITY_RETRY_DELAY_SECONDS)
+        except asyncio.CancelledError:
+            return
+        await self.schedule_job(self, job_id)
+
     @classmethod
     async def _cleanup_job_resources(cls, job_id: str) -> None:
         """Clean up task and lock resources for a job."""
@@ -113,6 +131,9 @@ class SocialImportPipelineService:
         )
 
     async def run(self, job_id: str) -> None:
+        # Each run is a fresh attempt: a retry scheduled after capacity
+        # exhaustion must not inherit the previous run's exhausted flag.
+        self._capacity_exhausted = False
         logger.info(
             "Social import job started",
             job_id=job_id,
@@ -265,6 +286,21 @@ class SocialImportPipelineService:
                 )
                 if discovered is None:
                     raise RuntimeError("Photo discovery returned no result")
+                discovery_metadata = discovered.metadata or {}
+                if (
+                    discovery_metadata.get("error_type")
+                    in {"discovery_failure", "fetch_failure"}
+                    or discovery_metadata.get("error")
+                ):
+                    # Transient network/HTTP failures are returned as a result
+                    # by the scraper, not raised; surface them as exceptions
+                    # so with_retry applies DISCOVERY_RETRY_ATTEMPTS instead
+                    # of entering the FAILED path immediately.
+                    raise RuntimeError(
+                        discovery_metadata.get("message")
+                        or discovery_metadata.get("error")
+                        or "Photo discovery failed"
+                    )
                 return discovered
 
             def _log_discovery_retry(attempt: int, error: Exception, delay: float) -> None:
@@ -498,8 +534,11 @@ class SocialImportPipelineService:
         while True:
             if self._capacity_exhausted:
                 # Upstream AI capacity exhausted mid-run; don't claim more
-                # photos (each would just fail the same way).
+                # photos (each would just fail the same way). Leaving the job
+                # in `processing` with queued photos and no retry would strand
+                # it indefinitely, so schedule a bounded automatic retry.
                 await self._sync_job_counters(job_id)
+                asyncio.create_task(self._schedule_capacity_retry(job_id))
                 return
             job = await SocialImportJobStore.get_job(
                 self.db, job_id=job_id, user_id=self.user_id
@@ -633,6 +672,11 @@ class SocialImportPipelineService:
 
     async def _process_single_photo(self, job_id: str, photo: Dict[str, Any]) -> None:
         photo_id = photo["id"]
+        # Set before the try so the except handler can safely test them: the
+        # extraction reservation is only released when it was made but never
+        # consumed by an actual provider call.
+        extraction_reserved = False
+        extraction_attempted = False
         await self._publish_event(
             job_id,
             "photo_processing_started",
@@ -653,6 +697,12 @@ class SocialImportPipelineService:
                     updates={"status": SocialImportPhotoStatus.QUEUED.value},
                 )
                 return
+            # The reservation above is only consumed by an actual provider
+            # call. If the pre-extraction fetch/setup fails, the outer handler
+            # releases it again so the daily slot is not burned on a photo
+            # that never reached the VLM.
+            extraction_reserved = True
+            extraction_attempted = False
 
             image_base64 = await SocialScraperService.fetch_photo_as_base64(
                 photo["source_photo_url"]
@@ -660,6 +710,7 @@ class SocialImportPipelineService:
             extraction_agent = await get_item_extraction_agent(
                 user_id=self.user_id, db=self.db
             )
+            extraction_attempted = True
             extraction_result = await extraction_agent.extract_multiple_items(
                 image_base64=image_base64
             )
@@ -761,7 +812,10 @@ class SocialImportPipelineService:
                 if src_url and src_url not in source_photo_cache:
                     try:
                         source_photo_cache[src_url] = await SocialScraperService.fetch_photo_as_base64(src_url)
-                    except SocialImportError:
+                    except (SocialImportError, httpx.HTTPStatusError, httpx.RequestError):
+                        # A failed optional reference download (4xx/5xx,
+                        # timeout, network error) degrades to text-only
+                        # generation; it must not fail the whole photo.
                         source_photo_cache[src_url] = None
                 reference_image_base64: Optional[str] = (
                     source_photo_cache.get(src_url) if src_url else None
@@ -822,6 +876,27 @@ class SocialImportPipelineService:
                         )
                     )
                 except Exception as generation_error:
+                    # A provider quota failure on one item must stop the queue
+                    # grinding every remaining photo through the same doomed
+                    # generation call: set the capacity flag and emit the
+                    # event (the outer handler only sees non-item failures).
+                    if (
+                        getattr(generation_error, "error_kind", None) == "upstream_quota"
+                        and not self._capacity_exhausted
+                    ):
+                        self._capacity_exhausted = True
+                        await self._publish_event(
+                            job_id,
+                            "capacity_exhausted",
+                            {
+                                "job_id": job_id,
+                                "photo_id": photo_id,
+                                "error": "AI service capacity exhausted; remaining photos will retry later",
+                                "code": "AI_SERVICE_ERROR",
+                                "error_kind": "upstream_quota",
+                                "retry_after_seconds": getattr(generation_error, "retry_after_seconds", None),
+                            },
+                        )
                     processed_items.append(
                         self._build_item_dict(
                             item,
@@ -899,6 +974,27 @@ class SocialImportPipelineService:
                         "retry_after_seconds": retry_after,
                     },
                 )
+            # The extraction reservation was never consumed by a provider
+            # call (fetch/setup failed before the VLM ran): give the slot back
+            # so the failure cannot silently consume the daily extraction
+            # budget. Best-effort: a failed release must not mask the original
+            # error.
+            if extraction_reserved and not extraction_attempted:
+                try:
+                    await AISettingsService.release_usage(
+                        user_id=self.user_id,
+                        operation_type=OperationType.EXTRACTION,
+                        db=self.db,
+                    )
+                except Exception as release_err:
+                    logger.warning(
+                        "Failed to release un-consumed extraction reservation",
+                        extra={
+                            "job_id": job_id,
+                            "photo_id": photo_id,
+                            "error": str(release_err),
+                        },
+                    )
             await SocialImportJobStore.update_photo(
                 self.db,
                 job_id=job_id,

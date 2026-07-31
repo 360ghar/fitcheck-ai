@@ -104,6 +104,10 @@ async def test_existing_subscription_is_modified_in_place_with_proration():
     modify.assert_called_once_with(
         "sub_existing",
         items=[{"id": "si_existing", "price": "price_pro_yearly"}],
+        # A plan switch after scheduling cancellation at period end must
+        # resume the subscription, or the user loses access when the period
+        # ends despite having paid for the new plan.
+        cancel_at_period_end=False,
         proration_behavior="create_prorations",
         metadata={"user_id": "user-1", "plan_type": "pro_yearly"},
     )

@@ -142,7 +142,7 @@ class _CalendarPageState extends State<CalendarPage> {
             },
           ),
           Text(
-            _formatMonth(focusedMonth),
+            AppDateUtils.formatMonthYear(focusedMonth),
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -927,14 +927,6 @@ class _CalendarPageState extends State<CalendarPage> {
       ),
       isScrollControlled: true,
     );
-  }
-
-  String _formatMonth(DateTime date) {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return '${months[date.month - 1]} ${date.year}';
   }
 
   String _formatTime(DateTime start, DateTime end) {

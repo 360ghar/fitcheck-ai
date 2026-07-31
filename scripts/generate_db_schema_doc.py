@@ -29,11 +29,20 @@ ALTER_TABLE_RE = re.compile(
     r"ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z0-9_\.\"]+)",
     re.IGNORECASE,
 )
-# ALTER TABLE ... ADD COLUMN [IF NOT EXISTS] <name> <rest-of-statement-until-;>
-# Captures the column definition so contract-critical additions (NOT NULL
-# DEFAULT) can be flagged generically instead of per-migration.
-ALTER_ADD_COLUMN_RE = re.compile(
-    r"ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z0-9_\.\"]+)\s+ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+([a-zA-Z0-9_\"]+)([^;]*)",
+# ALTER TABLE ... ; — whole-statement match so every comma-separated
+# ADD COLUMN clause is parsed instead of only the first column of a
+# multi-column statement (e.g. 027_stripe_webhook_processing_state.sql
+# adds 5 columns in one ALTER).
+ALTER_STATEMENT_RE = re.compile(
+    r"ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z0-9_\.\"]+)\s+(.*?);",
+    re.IGNORECASE | re.DOTALL,
+)
+# One ADD COLUMN clause inside an ALTER TABLE body: name + definition up
+# to the next comma or end of statement. Definitions in the repo's
+# migrations contain no embedded commas (e.g. `JSONB DEFAULT '[]'::jsonb`),
+# so splitting clauses on top-level commas is safe.
+ADD_COLUMN_CLAUSE_RE = re.compile(
+    r"ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_\"]+)([^,;]*)",
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -55,10 +64,12 @@ def main() -> None:
             tables.setdefault(t, []).append(path.name)
         for m in ALTER_TABLE_RE.finditer(text):
             alters.append((path.name, clean_name(m.group(1))))
-        for m in ALTER_ADD_COLUMN_RE.finditer(text):
-            added_columns.append(
-                (path.name, clean_name(m.group(1)), m.group(2).replace('"', ""), m.group(3))
-            )
+        for m in ALTER_STATEMENT_RE.finditer(text):
+            table = clean_name(m.group(1))
+            for c in ADD_COLUMN_CLAUSE_RE.finditer(m.group(2)):
+                added_columns.append(
+                    (path.name, table, c.group(1).replace('"', ""), c.group(2))
+                )
 
     lines = [
         "# Database schema (generated)",

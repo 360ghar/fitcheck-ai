@@ -6,6 +6,7 @@ and usage tracking for daily limits.
 """
 
 import asyncio
+import base64
 import json
 import re
 import uuid
@@ -321,6 +322,40 @@ class PhotoshootService:
         reserved = unwrap_rpc_bool(result, "reserve_daily_photoshoot_usage")
         usage = await PhotoshootService.get_usage(user_id, db)
         return reserved is True, usage
+
+    @staticmethod
+    async def release_daily_usage(
+        user_id: str,
+        num_images: int,
+        db: Client,
+    ) -> None:
+        """Return unused daily photoshoot quota after a partial run.
+
+        The reservation claims the full requested count up front; failures and
+        cancellations must hand the unused share back so users can retry the
+        images that never produced output. Best-effort: a failed release must
+        not mask the pipeline outcome.
+        """
+        if num_images <= 0:
+            return
+        try:
+            period_start = SubscriptionService._get_current_period_start()
+            await asyncio.to_thread(
+                db.rpc(
+                    "release_daily_photoshoot_usage",
+                    {
+                        "p_user_id": user_id,
+                        "p_period_start": period_start.isoformat(),
+                        "p_count": num_images,
+                    },
+                ).execute
+            )
+        except Exception as error:
+            logger.error(
+                "Failed to release unused photoshoot usage",
+                user_id=user_id,
+                error=str(error),
+            )
 
     @staticmethod
     async def increment_usage(
@@ -929,6 +964,7 @@ RULES:
 
         start_time = time.time()
         session_id = f"ps_{uuid.uuid4().hex[:12]}"
+        reservation_made = False
 
         try:
             # Validate custom prompt requirement
@@ -942,6 +978,7 @@ RULES:
                     message=f"Daily limit exceeded. You have {usage.remaining} images remaining today.",
                     retry_after=int((usage.resets_at - utcnow()).total_seconds()) if usage.resets_at else 86400,
                 )
+            reservation_made = True
 
             # Generate prompts
             prompts = await PhotoshootService.generate_prompts(
@@ -958,6 +995,13 @@ RULES:
                 user_id=user_id,
                 db=db,
             )
+
+            # Reconcile the reservation with what was actually produced:
+            # failed images must not consume daily quota so the user can
+            # retry them.
+            unused = num_images - len(images)
+            if unused > 0:
+                await PhotoshootService.release_daily_usage(user_id, unused, db)
 
             # The reservation RPC already reflects today's usage; reuse the
             # usage object returned by reserve_daily_usage instead of paying a
@@ -979,6 +1023,11 @@ RULES:
             )
 
         except (ValidationError, RateLimitError, ServiceError, DatabaseError):
+            # A failure after the reservation (e.g. prompt generation) must
+            # hand the full quota back; RateLimitError from a failed admission
+            # never reserved anything.
+            if reservation_made:
+                await PhotoshootService.release_daily_usage(user_id, num_images, db)
             raise
         except Exception as e:
             logger.exception(
@@ -990,6 +1039,10 @@ RULES:
                 elapsed_seconds=round(time.time() - start_time, 2),
                 error=str(e)[:300],
             )
+            # The reservation was made before generation; hand it back so a
+            # failed run never burns the user's daily photoshoot quota.
+            if reservation_made:
+                await PhotoshootService.release_daily_usage(user_id, num_images, db)
             raise ServiceError("Photoshoot generation failed", service_name="photoshoot")
 
 
@@ -1022,6 +1075,7 @@ class PhotoshootStreamingService:
             PhotoshootJobStatus,
         )
 
+        reservation_made = False
         try:
             await PhotoshootJobService.update_status(job.job_id, PhotoshootJobStatus.PROCESSING)
 
@@ -1034,6 +1088,7 @@ class PhotoshootStreamingService:
                     message=f"Daily limit exceeded. You have {usage.remaining} images remaining today.",
                     retry_after=86400,
                 )
+            reservation_made = True
 
             # Broadcast generation started
             await PhotoshootJobService.broadcast_event(job.job_id, "generation_started", {
@@ -1056,6 +1111,13 @@ class PhotoshootStreamingService:
 
             # Reference photos are no longer needed after generation
             await PhotoshootJobService.release_reference_photos(job.job_id)
+
+            # Reconcile the reservation with what was actually produced:
+            # failed and cancelled images must not consume daily quota so the
+            # user can retry them.
+            unused = job.num_images - job.generated_count
+            if unused > 0:
+                await PhotoshootService.release_daily_usage(self.user_id, unused, self.db)
 
             # Check cancellation
             if job.is_cancelled():
@@ -1100,6 +1162,10 @@ class PhotoshootStreamingService:
         except Exception as e:
             from app.services.photoshoot_job_service import PhotoshootJobService
             logger.exception(f"Photoshoot pipeline failed: {e}")
+            # The whole run failed after reserving; hand the full reservation
+            # back so the user can retry.
+            if reservation_made:
+                await PhotoshootService.release_daily_usage(self.user_id, job.num_images, self.db)
             await PhotoshootJobService.set_error(job.job_id, str(e))
             await PhotoshootJobService.broadcast_event(job.job_id, "job_failed", {
                 "job_id": job.job_id,
@@ -1229,12 +1295,40 @@ class PhotoshootStreamingService:
             image_id = f"img_{uuid.uuid4().hex[:8]}"
             image_base64 = response.images[0]
 
+            # Persist a durable URL when the job has a persistence DB so a
+            # recovered job can still return generated images (base64 payloads
+            # are never serialized to the durable row). Best-effort: a failed
+            # upload degrades to base64-only delivery, not a failed image.
+            image_url = None
+            if getattr(job, "persistence_db", None) is not None:
+                try:
+                    from app.services.storage_service import StorageService
+
+                    raw = image_base64.split("base64,", 1)[-1] if "base64," in image_base64 else image_base64
+                    upload = await StorageService.upload_temp_generated_image(
+                        db=job.persistence_db,
+                        user_id=job.user_id,
+                        file_data=base64.b64decode(raw),
+                        source="photoshoot",
+                    )
+                    image_url = upload.get("image_url")
+                except Exception as upload_error:
+                    logger.warning(
+                        "Failed to persist photoshoot image URL; continuing base64-only",
+                        extra={
+                            "job_id": job.job_id,
+                            "image_id": image_id,
+                            "error": str(upload_error),
+                        },
+                    )
+
             # Add to job
             await PhotoshootJobService.add_generated_image(
                 job.job_id,
                 image_id,
                 prompt.index,
                 image_base64=image_base64,
+                image_url=image_url,
             )
 
             # Get updated job state for accurate counts
@@ -1247,7 +1341,7 @@ class PhotoshootStreamingService:
                 "id": image_id,
                 "index": prompt.index,
                 "image_base64": image_base64,
-                "image_url": None,
+                "image_url": image_url,
                 "generated_count": generated_count,
                 "total_count": job.num_images,
                 "timestamp": utcnow_iso(),

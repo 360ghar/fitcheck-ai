@@ -417,10 +417,11 @@ async def list_all_posts(
 
         if search:
             # The term is interpolated into postgrest's .or_() filter syntax;
-            # strip characters that would inject extra filter clauses (`,`,
-            # `(`, `)`, and the `*` wildcard) while keeping % and _ as the
-            # intended ilike wildcards.
-            safe_term = re.sub(r"[(),*]", "", search)
+            # strip characters that would inject extra filter clauses (`,` ,
+            # `(`, `)`, the `*` wildcard) or break the ilike value (`.` and
+            # `:` are PostgREST-reserved separators) while keeping % and _ as
+            # the intended ilike wildcards.
+            safe_term = re.sub(r"[(),*.:]", "", search)
             search_term = f"%{safe_term}%"
             query = query.or_(
                 f"title.ilike.{search_term},excerpt.ilike.{search_term},author.ilike.{search_term}"
