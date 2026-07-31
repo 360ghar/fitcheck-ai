@@ -15,7 +15,11 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
         outline: "border-hairline bg-background text-foreground",
-        "ai-pick": "border-transparent bg-accent-purple text-primary-foreground",
+        // `text-white` is explicit, not lazy: --primary-foreground inverts to
+        // near-black on dark (white fails on the lightened red), which would
+        // make this label unreadable on the purple. White holds 8.1:1 light
+        // and 5.3:1 dark against --accent-purple.
+        "ai-pick": "border-transparent bg-accent-purple text-white",
         success: "border-transparent bg-success-pale text-success-deep",
       },
     },

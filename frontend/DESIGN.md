@@ -26,7 +26,14 @@ single editorial secondary (purple) for AI-pick / recommendation badges.
 
 | Token | Hex | Use |
 |-------|-----|-----|
-| `--primary` (Brand Red) | `#e60023` → `hsl(354 100% 45%)` | Primary CTA, brand marks, active-tab indicator |
+| `--primary` (Brand Red) | `#e00016` → `hsl(354 100% 44%)` | Primary CTA, brand marks, active-tab indicator |
+
+> Brand Red moved from `hsl(354 100% 45%)` (`#e60023`) to `44%` on 2026-07-31. At 45% it
+> measured **4.46:1** against `--card`, so `text-primary` on any card panel failed AA by
+> 0.04. 44% measures 4.63:1 on card and 5.01:1 on canvas, keeps the 100% saturation this
+> section requires, and shifts the hex by one perceptual step. `scripts/check_theme_tokens.py`
+> enforces the floor, so this cannot silently regress.
+
 | Brand Red Pressed | `#cc001f` → `hsl(351 100% 43%)` | Pressed state for primary button |
 | Editorial Purple | `#7e238b` → `hsl(296 60% 34%)` | "AI pick" / recommendation badges only |
 
@@ -34,41 +41,123 @@ single editorial secondary (purple) for AI-pick / recommendation badges.
 
 ### Surfaces (warm neutral, light)
 
-| Token | Hex | HSL channels | Use |
-|-------|-----|--------------|-----|
-| Canvas | `#ffffff` | `0 0% 100%` | Page background, cards, modals |
-| Soft Surface | `#fbfbf9` | `60 20% 98%` | Faintly cream-tinted page wash |
-| Surface Card | `#f6f6f3` | `60 14% 96%` | Pin/item tile background, search-bar fill |
-| Secondary BG | `#e5e5e0` | `60 9% 89%` | Secondary button fill |
-| Surface Dark | `#262622` | `60 6% 14%` | Warm near-black for rare dark CTA strips |
-| Hairline | `#dadad3` | `60 12% 84%` | 1px row dividers, column rules |
+| Token | Var | Hex | HSL channels | Use |
+|-------|-----|-----|--------------|-----|
+| Canvas | `--background` | `#ffffff` | `0 0% 100%` | Page background, modals |
+| Soft Surface (`surface-soft`) | `--surface-soft` | `#fbfbf9` | `60 20% 98%` | Faintly cream-tinted page wash |
+| Surface Card (`surface-card`) | `--card` | `#f6f6f3` | `60 14% 96%` | Pin/item tile background, search-bar fill |
+| Secondary BG | `--secondary` | `#e5e5e0` | `60 9% 89%` | Secondary button fill |
+| Hairline (`hairline`) | `--border` | `#dbdbd1` | `60 12% 84%` | 1px row dividers, column rules |
+
+There is no dark-CTA-strip surface token. A rare dark strip uses `bg-ink`, whose
+label is `text-on-dark` — and both invert, so the strip stays a strip in dark.
 
 ### Text
 
-| Token | Hex | Use |
-|-------|-----|-----|
-| Ink | `#000000` | Headlines, button-on-primary text, primary nav links |
-| Ink Soft | `#211922` | Inline-link color in body prose |
-| Body | `#33332e` | Default paragraph text |
-| Mute | `#62625b` | Metadata, secondary captions, footer links |
-| Ash | `#91918c` | Disabled text, placeholders |
-| Stone | `#c8c8c1` | Least-emphasis utility text, disabled borders |
+| Token | Var | HSL channels | Hex | vs `--background` | vs `--card` | Use |
+|-------|-----|--------------|-----|---|---|-----|
+| Ink (`ink`) | `--foreground` | `0 0% 0%` | `#000000` | 21.00 | 19.44 | Headlines, primary nav links |
+| Body (`body`) | `--body` | `60 6% 19%` | `#33332e` | 12.64 | 11.70 | Default paragraph text |
+| Mute (`mute`) | `--muted-foreground` | `60 3% 37%` | `#61615c` | 6.21 | 5.75 | Metadata, secondary captions, footer links |
+| Ash (`ash`) ‡ | `--ash` | `60 3% 43%` | `#71716a` | 4.92 | 4.55 | Disabled text, placeholders |
+| Stone | *(hex, light-locked)* | — | `#c8c8c1` | 1.68 | 1.56 | Least-emphasis utility text, disabled borders (never text) |
+
+‡ Ash was `60 3% 56%` (`#92928b`), which measured **3.12:1** on `--background`
+and 2.89:1 on `--card` — a straight AA failure on every placeholder and every
+disabled label in light mode, and placeholder text is content. `43%` is the
+*lightest* value that clears 4.5:1 on both of ash's real backdrops (a focused
+input is `--background`; a resting search pill and a disabled button are
+`--card`), so it holds the widest Ash/Mute gap the constraint allows: 6
+lightness points, 1.26:1 between the two tiers. They are never adjacent on
+screen — ash sits inside a control, mute sits in body copy — so the step reads
+as a tier rather than a near-miss. Do not lighten past 43%: `46%` reaches only
+4.39 / 4.07. Ash on `--secondary` measures 3.91 and is out of contract; a
+secondary button's label is `text-secondary-foreground` and a disabled button
+repaints to `bg-surface-card`, so that pairing does not occur.
 
 ### Semantic
 
-| Token | Hex | Use |
-|-------|-----|-----|
-| Error | `#9e0a0a` | Validation messages |
-| Success Deep | `#103c25` | In-product success messaging |
-| Success Pale | `#c7f0da` | Pale success-pill background |
-| Focus Outer | `#435ee5` | 2px outer focus ring (paired with ink inner ring) |
+| Token | Var | Hex | Use |
+|-------|-----|-----|-----|
+| Error (`error`) | `--error` | `#9e0a0a` | Validation messages |
+| Error Pale (`error-pale`) | `--error-pale` | `#f9e7e7` | Pale error-pill background |
+| Success (`success`, `success-deep`) | `--success` | `#103c23` | In-product success messaging |
+| Success Pale (`success-pale`) | `--success-pale` | `#c7f0d7` | Pale success-pill background |
+| Editorial Purple (`accent-purple`) | `--accent-purple` | `#84238b` | "AI pick" badge fill; label is always `text-white` |
+| Focus Outer | *(hex, light-locked)* | `#435ee5` | 2px outer focus ring (paired with ink inner ring) |
+
+> Every token in these tables except `stone` and `focus-outer` resolves through
+> a CSS variable, so it inverts. A fixed hex in `tailwind.config.ts` has no
+> `.dark` counterpart in the emitted CSS — that is precisely how dark mode
+> broke. Add colors as a `:root` + `.dark` var pair, never as a literal.
 
 ### Dark mode
 
-Dark surface set is warm near-black, not neutral zinc: background `#1a1a17`,
-surface `#232320`, raised `#2c2c28`, hairline `#3a3a35`. Brand red and ink/ash
-text inverts to `#fbfbf9` / `#62625b`. Keep red accent at full saturation so
-primary actions stay loud against dark.
+Warm near-black at **hue 60**, never a cool slate or blue-charcoal base. Every
+token below is a real `.dark` entry in `src/index.css`; `src/index.css` is the
+source of truth and this table is derived from it.
+
+**The three tokens with no separate name.** `hairline`, `ink` and `surface-card`
+are not independent colors — they *are* `--border`, `--foreground` and `--card`.
+`text-ink` emits `hsl(var(--foreground))`, `border-hairline` emits
+`hsl(var(--border))`, `bg-surface-card` emits `hsl(var(--card))`. Do not add a
+second variable for any of them.
+
+Surfaces:
+
+| Role | Var | `.dark` HSL | Hex |
+|---|---|---|---|
+| Canvas | `--background` | `60 5% 10%` | `#1b1b18` |
+| Surface card (`surface-card`) | `--card` | `60 5% 13%` | `#23231f` |
+| Soft surface (`surface-soft`) | `--surface-soft` | `60 5% 16%` | `#2b2b27` |
+| Secondary / raised | `--secondary` | `60 5% 17%` | `#2e2e29` |
+| Hairline (`hairline`) | `--border` | `60 5% 22%` | `#3b3b35` |
+
+Text and accent, with measured WCAG ratios against `--background` / `--card` /
+`--secondary`:
+
+| Role | Var | `.dark` HSL | Hex | bg | card | secondary |
+|---|---|---|---|---|---|---|
+| Ink (`ink`) | `--foreground` | `60 20% 98%` | `#fbfbf9` | 16.68 | 15.24 | 13.24 |
+| Body (`body`) | `--body` | `60 10% 88%` | `#e3e3dd` | 13.48 | 12.31 | 10.70 |
+| Mute (`mute`) | `--muted-foreground` | `60 6% 62%` | `#a4a498` | 6.87 | 6.27 | 5.45 |
+| Brand red (`text-primary`) | `--primary` | `354 100% 62%` | `#ff3d51` | 4.98 | 4.54 | 3.95 † |
+| Error | `--error` | `0 85% 68%` | `#f36868` | 5.75 | 5.25 | 4.57 |
+| Ash (`ash`) ‡ | `--ash` | `60 5% 52%` | `#8b8b7e` | 5.00 | 4.57 | 3.97 |
+
+† `text-primary` never sits on `bg-secondary` (a secondary button carries
+`text-secondary-foreground`). Light mode measures 3.83 on the same pair — this
+is the brand red's inherent limit, not a dark-mode defect.
+‡ Ash is the placeholder / disabled tier only. Its real backdrops are
+`--background` (inputs) and `--card` (disabled buttons), both ≥4.5.
+
+Paired fills, where the label sits on its own surface rather than the page:
+
+| Pair | `.dark` | Ratio |
+|---|---|---|
+| `--primary-foreground` on `--primary` | `#161613` on `#ff3d51` | 5.23 |
+| `--success` on `--success-pale` | `#c7f0d7` on `#103c23` | 9.89 |
+| `--error` on `--error-pale` | `#f36868` on `#431919` | 5.02 |
+| white on `--accent-purple` | `#fff` on `#ad35b6` | 5.30 |
+| `on-dark` on `ink` (active filter chip) | `#000` on `#fbfbf9` | 20.25 |
+
+Two inversions look wrong and are deliberate:
+
+- **`--primary-foreground` goes near-black** (`60 6% 8%`). White on the
+  lightened red is only 3.5:1; near-black is 5.23:1. Anything that puts a label
+  on `bg-accent-purple` must therefore say `text-white` explicitly.
+- **`--success` / `--success-pale` swap.** `--success` is the *text* role,
+  `--success-pale` the *fill* role. On dark the text goes pale and the fill goes
+  deep. Do not "un-invert" them.
+
+**`on-image` is identical in both themes.** `--on-image` / `--on-image-foreground`
+are white / black in `:root` *and* `.dark`, because they clothe chrome floating
+over a garment photograph (the `pill-on-image` button, the select disc, the
+favourite disc, the pin overlay pill). Their backdrop is the image, not the
+page. This is what `pill-on-image: bg canvas + text ink` means below: canvas
+*white*, not "whatever the page background happens to be".
+
+Keep the red at full saturation so primary actions stay loud against dark.
 
 ---
 
@@ -223,6 +312,13 @@ honest progress, never fake completion animations.
 ## 09 — Accessibility
 
 - **WCAG AA** contrast on all text (Ink/Body/Mute over canvas; white/ink over red).
+- **Every `.dark` foreground must clear 4.5:1 against `--background`, `--card`
+  *and* `--secondary`.** All three are real page surfaces, so measuring against
+  only the darkest one hides failures. Placeholder/disabled (`ash`) and
+  fill-paired labels (`--primary-foreground`, `--success`, `--error`, `on-dark`,
+  `on-image-foreground`) are measured against their own fill instead — see the
+  dark-mode tables in §01. A token that is byte-identical in `:root` and `.dark`
+  is a bug unless it is `--on-image*`.
 - **Touch targets:** 44px minimum (`touch-target` utility). Buttons 40px with
   inline padding extend to ~44px tappable.
 - **Focus-visible:** the double-ring signal on every interactive element.

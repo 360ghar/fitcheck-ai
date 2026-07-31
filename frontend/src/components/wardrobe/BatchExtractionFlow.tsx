@@ -39,6 +39,7 @@ import { SocialImportAuthPrompt } from './SocialImportAuthPrompt';
 import { SocialImportQueueReview } from './SocialImportQueueReview';
 import { SocialImportProgress } from './SocialImportProgress';
 import type { BatchJobUiStatus, DetectedItem, ItemCreate } from '@/types';
+import { FEATURES } from '@/lib/feature-flags';
 
 const BATCH_WIZARD_STEPS = [
   { id: 'select', label: 'Select' },
@@ -173,7 +174,15 @@ function generateItemName(item: DetectedItem): string {
   return parts.join(' ') || 'New Item';
 }
 
-function dataURLtoFile(dataUrl: string, filename: string): File {
+/**
+ * Turn a data URL into an upload-ready `File`.
+ *
+ * Takes a base NAME, not a full filename, and appends the extension itself:
+ * the mime is already parsed out of the data URL here, and the backend now
+ * returns matted cutouts as WebP, so a hardcoded `.png` at the call site would
+ * mislabel every one of them. One place decides the format.
+ */
+function dataURLtoFile(dataUrl: string, basename: string): File {
   const arr = dataUrl.split(',');
   const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
   const bstr = atob(arr[1]);
@@ -182,7 +191,11 @@ function dataURLtoFile(dataUrl: string, filename: string): File {
   while (n--) {
     u8arr[n] = bstr.charCodeAt(n);
   }
-  return new File([u8arr], filename, { type: mime });
+  // `image/jpeg` is the one subtype whose conventional extension is not just
+  // the subtype itself; `image/svg+xml` would otherwise keep its `+xml`.
+  const subtype = mime.split('/')[1]?.split('+')[0]?.toLowerCase() || 'png';
+  const extension = subtype === 'jpeg' ? 'jpg' : subtype;
+  return new File([u8arr], `${basename}.${extension}`, { type: mime });
 }
 
 // ============================================================================
@@ -218,7 +231,7 @@ export function BatchExtractionFlow({
   // not when the user deliberately closes an already-open review dialog.
   const prevStepRef = useRef(state.step);
   const socialImport = useSocialImportQueue();
-  const socialImportEnabled = import.meta.env.VITE_ENABLE_SOCIAL_IMPORT === 'true';
+  const socialImportEnabled = FEATURES.socialImport;
   const [inputMode, setInputMode] = useState<'upload' | 'social'>('upload');
 
   // Local state for saving
@@ -547,7 +560,7 @@ export function BatchExtractionFlow({
       async (item) => {
         // Studio photo if ready, otherwise the uploaded source photo.
         const imageFile = item.generatedImageUrl
-          ? dataURLtoFile(item.generatedImageUrl, `${item.tempId}.png`)
+          ? dataURLtoFile(item.generatedImageUrl, item.tempId)
           : sourceFileFor(item);
 
         if (!imageFile) {
@@ -776,7 +789,7 @@ export function BatchExtractionFlow({
                     type="button"
                     className={`rounded px-3 py-1.5 text-sm ${
                       inputMode === 'upload'
-                        ? 'bg-background text-foreground shadow-sm'
+                        ? 'bg-background text-foreground'
                         : 'text-muted-foreground'
                     }`}
                     onClick={() => setInputMode('upload')}
@@ -787,7 +800,7 @@ export function BatchExtractionFlow({
                     type="button"
                     className={`rounded px-3 py-1.5 text-sm ${
                       inputMode === 'social'
-                        ? 'bg-background text-foreground shadow-sm'
+                        ? 'bg-background text-foreground'
                         : 'text-muted-foreground'
                     }`}
                     onClick={() => setInputMode('social')}

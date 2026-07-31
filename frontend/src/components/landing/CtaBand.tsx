@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight } from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
 import { ACCENT_CLASSES, type AccentColor, type CTAButton } from './accentColors'
 
@@ -40,13 +40,22 @@ export function CtaBand({
           </h2>
           <p className={`text-xl ${accent.text100} mb-10 max-w-2xl mx-auto`}>{subtext}</p>
 
+          {/* Both pills sit on a fixed dark / brand-red band that does NOT follow
+              the page theme, so their colours must not either. The light pill
+              carries the theme-invariant `on-image` pair (white fill, black
+              label in BOTH themes) — it previously said `text-ink
+              hover:bg-surface-card`, and once `ink` started resolving through
+              `--foreground` that painted near-white text on a white pill in
+              dark mode. The ghost pill's white/N literals are already
+              theme-invariant for the same reason; do not "tokenise" them to
+              page-theme vars. */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
               to={primaryCta.to}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-white px-8 py-4 text-lg font-semibold text-ink transition-colors hover:bg-surface-card focus-visible:outline-none"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-on-image px-8 py-4 text-lg font-semibold text-on-image-foreground transition-colors hover:bg-on-image/90 focus-visible:outline-none"
             >
               {primaryCta.text}
-              <ArrowRight className="w-5 h-5" />
+              <ArrowUpRight className="w-5 h-5" />
             </Link>
             {secondaryCta ? (
               <Link

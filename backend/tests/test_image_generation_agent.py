@@ -314,3 +314,182 @@ def test_generate_default_description_no_longer_short_stub():
     assert len(description.split()) >= 6
     assert "t-shirt" in description
     assert "white" in description
+
+
+# =============================================================================
+# Background matte wiring (app/utils/background_removal.py)
+# =============================================================================
+# The matte is wired at EXACTLY TWO sites: the generate_product_image return and
+# generate_outfit's flat-lay branch. The avatar branch, the generic-model branch
+# and generate_try_on must stay OPAQUE - a Pillow threshold matte cannot cut
+# hair, and the guards would not catch it (a full-body figure lands ~0.70-0.80
+# transparent, under MAX_TRANSPARENT_FRACTION), so bad hair would ship.
+
+
+def _product_shot_b64() -> str:
+    """A dark item on a flat white field - the matte's happy path."""
+    import base64
+    import io
+
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGB", (256, 256), (255, 255, 255))
+    ImageDraw.Draw(img).rounded_rectangle((70, 50, 186, 206), radius=12, fill=(34, 40, 58))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=92)
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def _agent_returning(image_b64: str) -> ImageGenerationAgent:
+    agent = _make_agent()
+    agent.ai_service.generate_image = AsyncMock(return_value=_FakeImageResponse(image_b64))
+    agent.ai_service.chat = AsyncMock(return_value=_FakeImageResponse(image_b64))
+    return agent
+
+
+def _is_transparent_webp(image_b64: str) -> bool:
+    import base64
+    import io
+
+    from PIL import Image
+
+    with Image.open(io.BytesIO(base64.b64decode(image_b64))) as img:
+        return img.format == "WEBP" and img.mode == "RGBA"
+
+
+@pytest.mark.asyncio
+async def test_product_image_is_matted():
+    source = _product_shot_b64()
+    agent = _agent_returning(source)
+
+    result = await agent.generate_product_image(
+        item_description="black crew-neck t-shirt", category="tops"
+    )
+
+    assert result.image_base64 != source
+    assert _is_transparent_webp(result.image_base64)
+
+
+@pytest.mark.asyncio
+async def test_flat_lay_outfit_is_matted():
+    source = _product_shot_b64()
+    agent = _agent_returning(source)
+
+    result = await agent.generate_outfit(
+        items=[_item("tee", "tops")], include_model=False
+    )
+
+    assert result.image_base64 != source
+    assert _is_transparent_webp(result.image_base64)
+
+
+@pytest.mark.asyncio
+async def test_avatar_outfit_is_not_matted():
+    source = _product_shot_b64()
+    agent = _agent_returning(source)
+
+    result = await agent.generate_outfit(
+        items=[_item("tee", "tops")], user_avatar_base64="ZmFrZQ=="
+    )
+
+    assert result.image_base64 == source
+
+
+@pytest.mark.asyncio
+async def test_generic_model_outfit_is_not_matted():
+    source = _product_shot_b64()
+    agent = _agent_returning(source)
+
+    result = await agent.generate_outfit(items=[_item("tee", "tops")])
+
+    assert result.image_base64 == source
+
+
+@pytest.mark.asyncio
+async def test_try_on_is_not_matted():
+    source = _product_shot_b64()
+    agent = _agent_returning(source)
+
+    result = await agent.generate_try_on(
+        user_avatar_base64="ZmFrZQ==", clothing_image_base64="ZmFrZQ=="
+    )
+
+    assert result.image_base64 == source
+
+
+@pytest.mark.asyncio
+async def test_matte_failure_returns_the_original_image_untouched():
+    """The matte is best-effort: undecodable bytes must pass straight through."""
+    agent = _agent_returning("ZmFrZQ==")
+
+    result = await agent.generate_product_image(
+        item_description="black crew-neck t-shirt", category="tops"
+    )
+
+    assert result.image_base64 == "ZmFrZQ=="
+
+
+# =============================================================================
+# Background prompt strings
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_outfit_default_background_is_flat_white_not_a_gradient_invite():
+    """"seamless clean light background" invited the soft gradient sweep that a
+    threshold matte cannot cut. Every white token must resolve to flat #FFFFFF."""
+    agent = _agent_returning(_product_shot_b64())
+
+    await agent.generate_outfit(items=[_item("tee", "tops")], include_model=False)
+    prompt = agent.ai_service.generate_image.call_args.args[0]
+
+    assert "seamless clean light background" not in prompt
+    assert "pure flat #FFFFFF white background" in prompt
+    assert "no gradient" in prompt and "no cast shadow" in prompt
+    # Flat lay has no person in frame, so it may demand an isolated silhouette.
+    assert "crisp clean silhouette edge" in prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("token", ["white", "transparent", "studio white", ""])
+async def test_every_white_token_resolves_to_the_same_flat_white(token):
+    agent = _agent_returning(_product_shot_b64())
+
+    await agent.generate_product_image(
+        item_description="tee", category="tops", background=token
+    )
+    prompt = agent.ai_service.generate_image.call_args.args[0]
+
+    assert "pure flat #FFFFFF white background" in prompt
+
+
+@pytest.mark.asyncio
+async def test_gray_background_stays_honest():
+    """A caller that explicitly asks for gray gets gray; the matte's G1 guard
+    then finds no white backdrop and keeps the opaque original."""
+    agent = _agent_returning(_product_shot_b64())
+
+    await agent.generate_product_image(
+        item_description="tee", category="tops", background="gray"
+    )
+    prompt = agent.ai_service.generate_image.call_args.args[0]
+
+    assert "light gray seamless studio background" in prompt
+    assert "pure flat #FFFFFF" not in prompt
+
+
+@pytest.mark.asyncio
+async def test_model_outfit_prompt_drops_the_shadow_request():
+    """Shadows orphan into detached grey blobs and make the corpus un-mattable
+    if a real segmenter is ever added."""
+    agent = _agent_returning(_product_shot_b64())
+
+    await agent.generate_outfit(items=[_item("tee", "tops")], user_avatar_base64="ZmFrZQ==")
+    content = _captured_chat_content(agent)
+    prompt = content[-1]["text"]
+
+    assert "realistic draping" in prompt
+    assert "draping and shadows" not in prompt
+    # The model branch gets flat white WITHOUT the garment-isolation clause.
+    assert "pure flat #FFFFFF white background" in prompt
+    assert "crisp clean silhouette edge" not in prompt

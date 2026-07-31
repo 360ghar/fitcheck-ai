@@ -4,7 +4,13 @@
  */
 
 import { create } from 'zustand';
-import type { Item, Category, Condition, ItemFilters as ApiItemFilters } from '../types';
+import type {
+  Item,
+  Category,
+  Condition,
+  ItemFilters as ApiItemFilters,
+  ItemFormData,
+} from '../types';
 import * as itemsApi from '../api/items';
 import { getApiError, type ApiError } from '../lib/errors';
 
@@ -31,6 +37,12 @@ interface ClosetState {
 
   // UI state
   isLoading: boolean;
+  /**
+   * Detail-pane fetch, deliberately separate from `isLoading`.
+   * `isLoading` swaps the whole grid for a skeleton; a deep link to
+   * /wardrobe/:id must not blank the list it is being shown beside.
+   */
+  isDetailLoading: boolean;
   isGridView: boolean;
   viewMode: 'all' | 'favorites' | 'recent';
   sortBy: 'name' | 'category' | 'date_added' | 'times_worn' | 'cost_per_wear';
@@ -58,6 +70,9 @@ interface ClosetState {
   setSortOrder: (order: 'asc' | 'desc') => void;
   setGridView: (isGrid: boolean) => void;
   toggleItemFavorite: (itemId: string) => Promise<{ id: string; is_favorite: boolean }>;
+  /** Rejects on failure so an inline edit form can stay open for a retry. */
+  updateItem: (itemId: string, data: Partial<ItemFormData>) => Promise<Item>;
+  markItemAsWorn: (itemId: string) => Promise<Item>;
   deleteItem: (itemId: string) => Promise<void>;
   deleteSelectedItems: () => Promise<void>;
   setPage: (page: number) => void;
@@ -176,6 +191,7 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
   selectedItems: new Set(),
   filters: initialFilters,
   isLoading: false,
+  isDetailLoading: false,
   isGridView: true,
   viewMode: 'all',
   sortBy: 'date_added',
@@ -236,7 +252,8 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
 
   // Fetch single item by ID
   fetchItemById: async (id: string) => {
-    set({ isLoading: true, error: null });
+    // isDetailLoading, not isLoading: see the field comment.
+    set({ isDetailLoading: true, error: null });
     try {
       const item = await itemsApi.getItem(id);
       const state = get();
@@ -251,12 +268,12 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
       set({
         items: newItems,
         selectedItem: item,
-        isLoading: false,
+        isDetailLoading: false,
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
       });
     } catch (error) {
       const apiError = getApiError(error);
-      set({ error: apiError, isLoading: false });
+      set({ error: apiError, isDetailLoading: false });
     }
   },
 
@@ -345,6 +362,65 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
             : state.selectedItem,
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
       });
+      return updated;
+    } catch (error) {
+      const apiError = getApiError(error);
+      set({ error: apiError });
+      throw error;
+    }
+  },
+
+  // Update item (single API call; patches every collection in place)
+  //
+  // Lives in the store rather than the page because the detail pane now reads
+  // from the store and stays mounted: a page-local `apiUpdateItem()` + a
+  // `fetchItems(true)` repair would leave the pane showing stale data for the
+  // whole round-trip. Rejects on failure so an inline edit form can stay open.
+  updateItem: async (itemId: string, data: Partial<ItemFormData>) => {
+    try {
+      const updated = await itemsApi.updateItem(itemId, data);
+      // Re-read after await so concurrent list updates are not overwritten.
+      const state = get();
+      const newItems = state.items.map((item) => (item.id === itemId ? updated : item));
+      set({
+        items: newItems,
+        selectedItem: state.selectedItem?.id === itemId ? updated : state.selectedItem,
+        filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
+      });
+      return updated;
+    } catch (error) {
+      const apiError = getApiError(error);
+      set({ error: apiError });
+      throw error;
+    }
+  },
+
+  // Mark item as worn
+  //
+  // The endpoint returns only `{ id, usage_times_worn }`; `usage_last_worn` is
+  // mirrored to now because that is exactly what the server just recorded.
+  // `cost_per_wear` is deliberately NOT recomputed here — the detail pane derives
+  // the figure it shows from `price / usage_times_worn`, so there is one
+  // definition of that arithmetic in the app rather than two.
+  markItemAsWorn: async (itemId: string) => {
+    try {
+      const result = await itemsApi.markItemAsWorn(itemId);
+      const state = get();
+      const wornAt = new Date().toISOString();
+      const patch = (item: Item): Item => ({
+        ...item,
+        usage_times_worn: result.usage_times_worn,
+        usage_last_worn: wornAt,
+      });
+      const newItems = state.items.map((item) => (item.id === itemId ? patch(item) : item));
+      const updated = newItems.find((item) => item.id === itemId);
+      set({
+        items: newItems,
+        selectedItem:
+          state.selectedItem?.id === itemId ? patch(state.selectedItem) : state.selectedItem,
+        filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
+      });
+      if (!updated) throw new Error('Item is no longer in the closet');
       return updated;
     } catch (error) {
       const apiError = getApiError(error);

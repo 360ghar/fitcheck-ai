@@ -1,22 +1,19 @@
 /**
  * Wardrobe Page
  *
- * View and manage all items in the wardrobe.
+ * Browse and manage all items in the closet.
  *
- * Features:
- * - Grid/list view toggle
- * - Advanced filtering and search
- * - Item selection for batch operations
- * - Add new items with AI extraction
- * - View item details
- * - Mark items as worn
- * - Toggle favorites
+ * The detail surface is an in-window split pane at `md`+ (never a modal over the
+ * list), and the URL — `/wardrobe/:id` — is the single source of truth for what is
+ * selected. Selection deliberately lives in the PATH, not the query string: the
+ * effect below keyed on `searchParams` refetches the whole closet, so a
+ * query-param selection would re-fetch on every card click.
  *
  * @see https://docs.fitcheck.ai/features/wardrobe
  */
 
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom'
 import { useClosetStore } from '../../stores/wardrobeStore'
 import {
   Shirt,
@@ -39,16 +36,15 @@ import {
 import { LoadingGrid } from '@/components/ui/loading-grid'
 import { FilterPanel, type ItemFilters, type SortOptions } from '@/components/wardrobe/FilterPanel'
 import { BatchExtractionFlow, type ItemUploadResult } from '@/components/wardrobe/BatchExtractionFlow'
-import { ItemDetailModal } from '@/components/wardrobe/ItemDetailModal'
+import { ItemDetailPanel } from '@/components/wardrobe/ItemDetailPanel'
+import { ItemDetailActions } from '@/components/wardrobe/ItemDetailActions'
+import { useItemEditor } from '@/components/wardrobe/useItemEditor'
 import { ItemCard } from '@/components/wardrobe/ItemCard'
+import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout'
 import { useToast } from '@/components/ui/use-toast'
-import {
-  markItemAsWorn as apiMarkAsWorn,
-  deleteItem as apiDeleteItem,
-  updateItem as apiUpdateItem,
-} from '@/api/items'
 import type { BatchJobUiStatus, Category, Item } from '@/types'
 import { useJobUiStore } from '@/stores/jobUiStore'
+import { useIsSplitViewport, useIsWideViewport } from '@/hooks/useMediaQuery'
 import { EmptyState } from '@/components/ui/empty-state'
 import { FilterChip } from '@/components/ui/filter-chip'
 import { PinGrid } from '@/components/wardrobe/pin-grid'
@@ -66,22 +62,36 @@ const CATEGORY_CHIPS: { value: Category | 'all'; label: string }[] = [
   { value: 'other', label: 'Other' },
 ]
 
+const LIST_PATH = '/wardrobe'
+// With the pane taking its share of a 1280px cap, the masonry gives up columns
+// rather than the page giving up width (DESIGN.md 05).
+const SPLIT_COLUMNS = 'lg:columns-2 xl:columns-3 2xl:columns-4'
+
 export default function WardrobePage() {
   const { id } = useParams()
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const location = useLocation()
 
   // Store state
+  const items = useClosetStore((state) => state.items)
   const filteredItems = useClosetStore((state) => state.filteredItems)
   const isLoading = useClosetStore((state) => state.isLoading)
+  const isDetailLoading = useClosetStore((state) => state.isDetailLoading)
   const error = useClosetStore((state) => state.error)
   // Subscribe so multi-select checkboxes re-render when selection changes
   const selectedItems = useClosetStore((state) => state.selectedItems)
+  const storeSelectedItem = useClosetStore((state) => state.selectedItem)
 
   // Store actions
   const fetchItems = useClosetStore((state) => state.fetchItems)
   const fetchItemById = useClosetStore((state) => state.fetchItemById)
   const toggleItemFavorite = useClosetStore((state) => state.toggleItemFavorite)
+  const updateItem = useClosetStore((state) => state.updateItem)
+  const markItemAsWorn = useClosetStore((state) => state.markItemAsWorn)
+  const deleteItem = useClosetStore((state) => state.deleteItem)
   const setFilter = useClosetStore((state) => state.setFilter)
+  const setSelectedItem = useClosetStore((state) => state.setSelectedItem)
   const toggleItemSelected = useClosetStore((state) => state.toggleItemSelected)
   const clearSelectedItems = useClosetStore((state) => state.clearSelectedItems)
   const deleteSelectedItems = useClosetStore((state) => state.deleteSelectedItems)
@@ -92,12 +102,11 @@ export default function WardrobePage() {
   const setJob = useJobUiStore((s) => s.setJob)
   const clearJob = useJobUiStore((s) => s.clearJob)
   const lastBatchStatusRef = useRef<BatchJobUiStatus | null>(null)
-  const [selectedItemDetail, setSelectedItemDetail] = useState<Item | null>(null)
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const favoritingIdsRef = useRef<Set<string>>(new Set())
   const [itemPendingDelete, setItemPendingDelete] = useState<Item | null>(null)
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isManaging, setIsManaging] = useState(false)
 
   // Filters and sort
   const [filters, setFilters] = useState<ItemFilters>({
@@ -158,6 +167,38 @@ export default function WardrobePage() {
   )
 
   // ============================================================================
+  // SELECTION (URL is the source of truth)
+  // ============================================================================
+
+  const selectedId = id || null
+
+  // Resolve from `items` (not `filteredItems`) so a selection that the current
+  // filters exclude still resolves; the store's `selectedItem` is the fallback for
+  // a deep link that is not in the list yet.
+  const selectedItemDetail: Item | null = useMemo(() => {
+    if (!selectedId) return null
+    return (
+      items.find((i) => i.id === selectedId) ||
+      (storeSelectedItem?.id === selectedId ? storeSelectedItem : null)
+    )
+  }, [selectedId, items, storeSelectedItem])
+
+  useEffect(() => {
+    if (selectedId) {
+      if (selectedItemDetail && storeSelectedItem?.id !== selectedItemDetail.id) {
+        setSelectedItem(selectedItemDetail)
+      }
+    } else if (storeSelectedItem) {
+      setSelectedItem(null)
+    }
+  }, [selectedId, selectedItemDetail, storeSelectedItem, setSelectedItem])
+
+  const isDetailOpen = Boolean(selectedId)
+  const hasItemInStore = useClosetStore((state) =>
+    selectedId ? state.items.some((i) => i.id === selectedId) : false
+  )
+
+  // ============================================================================
   // EFFECTS
   // ============================================================================
 
@@ -181,35 +222,14 @@ export default function WardrobePage() {
     fetchItems(true)
   }, [fetchItems, searchParams, setFilter])
 
+  // Deep link only. Deps are the id and a boolean — NOT `filteredItems`, whose
+  // identity changes on every fetch, which made this re-run constantly.
   useEffect(() => {
-    if (!id) return
-
-    // Prefer already-loaded list data, then fetch by id for deep links
-    const item = filteredItems.find((i) => i.id === id)
-    if (item) {
-      setSelectedItemDetail(item)
-      setIsDetailModalOpen(true)
-      return
-    }
-
-    let cancelled = false
-    fetchItemById(id)
-      .then(() => {
-        if (cancelled) return
-        const loaded = useClosetStore.getState().selectedItem
-        if (loaded?.id === id) {
-          setSelectedItemDetail(loaded)
-          setIsDetailModalOpen(true)
-        }
-      })
-      .catch(() => {
-        // Store sets error; leave modal closed
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [id, filteredItems, fetchItemById])
+    if (!selectedId || hasItemInStore) return
+    fetchItemById(selectedId).catch(() => {
+      // Store records the error; the pane shows its own unavailable line.
+    })
+  }, [selectedId, hasItemInStore, fetchItemById])
 
   // ============================================================================
   // HANDLERS
@@ -253,24 +273,33 @@ export default function WardrobePage() {
     void useClosetStore.getState().fetchItems(true)
   }, [])
 
-  const handleItemClick = (item: Item) => {
-    setSelectedItemDetail(item)
-    setIsDetailModalOpen(true)
+  const handleCardClick = (item: Item) => {
+    // Deliberate behaviour change: while a bulk selection is live, a card-body tap
+    // extends that selection instead of opening the pane. A bulk operation and a
+    // detail pane otherwise fight for the same screen.
+    if (selectedItems.size > 0) {
+      toggleItemSelected(item.id)
+      return
+    }
+    navigate({ pathname: `${LIST_PATH}/${item.id}`, search: location.search })
+  }
+
+  const closeDetail = () => {
+    // Pushed, not replaced, so Back walks the selection — and the id is genuinely
+    // cleared, which is the fix for "the same card cannot be reopened".
+    navigate({ pathname: LIST_PATH, search: location.search })
   }
 
   const handleToggleFavorite = async (itemId: string) => {
     if (favoritingIdsRef.current.has(itemId)) return
     favoritingIdsRef.current.add(itemId)
     try {
-      // Single store path → single API call (avoids double-toggle race)
+      // Single store path → single API call (avoids double-toggle race).
+      // The store patches items/filteredItems/selectedItem, so the pane follows.
       const updated = await toggleItemFavorite(itemId)
       toast({
         title: updated.is_favorite ? 'Added to favorites' : 'Removed from favorites',
       })
-      // Update local detail modal state if open
-      if (selectedItemDetail?.id === itemId) {
-        setSelectedItemDetail({ ...selectedItemDetail, is_favorite: updated.is_favorite })
-      }
     } catch {
       // api/client interceptor already toasts the failure.
     } finally {
@@ -279,16 +308,18 @@ export default function WardrobePage() {
   }
 
   const handleMarkAsWorn = async (itemId: string) => {
+    setIsManaging(true)
     try {
-      await apiMarkAsWorn(itemId)
+      await markItemAsWorn(itemId)
       toast({
         title: 'Marked as worn',
-        description: 'Item has been added to your wear history',
+        description: 'Added to your wear history',
       })
-      setIsDetailModalOpen(false)
-      fetchItems(true)
+      // The pane stays open: the wear ledger it shows is exactly what changed.
     } catch {
       // api/client interceptor already toasts the failure.
+    } finally {
+      setIsManaging(false)
     }
   }
 
@@ -296,22 +327,27 @@ export default function WardrobePage() {
     const item =
       selectedItemDetail?.id === itemId
         ? selectedItemDetail
-        : filteredItems.find((i) => i.id === itemId) || null
-    setItemPendingDelete(item ?? { id: itemId, name: 'this item' } as Item)
+        : items.find((i) => i.id === itemId) || null
+    setItemPendingDelete(item ?? ({ id: itemId, name: 'this item' } as Item))
   }
 
   const confirmDeleteItem = async () => {
     if (!itemPendingDelete) return
+    const deletedId = itemPendingDelete.id
     setIsDeleting(true)
     try {
-      await apiDeleteItem(itemPendingDelete.id)
+      // Store action patches every collection in place — no refetch, so the list
+      // beside the pane does not blink.
+      await deleteItem(deletedId)
       toast({
         title: 'Item deleted',
-        description: 'The item has been removed from your wardrobe',
+        description: 'The item has been removed from your closet',
       })
-      setIsDetailModalOpen(false)
       setItemPendingDelete(null)
-      fetchItems(true)
+      if (selectedId === deletedId) {
+        // replace, so Back cannot land on a deleted id.
+        navigate({ pathname: LIST_PATH, search: location.search }, { replace: true })
+      }
     } catch {
       // api/client interceptor already toasts the failure.
     } finally {
@@ -337,34 +373,35 @@ export default function WardrobePage() {
     }
   }
 
-  // Rejects on failure so the detail modal can keep edit mode open.
+  // Rejects on failure so the inline edit form can stay open for a retry.
   // The api/client interceptor already toasts, so no catch here.
-  const handleEditItem = async (updatedItem: Item) => {
-    const savedItem = await apiUpdateItem(updatedItem.id, {
-      name: updatedItem.name,
-      category: updatedItem.category,
-      sub_category: updatedItem.sub_category,
-      brand: updatedItem.brand,
-      colors: updatedItem.colors,
-      occasion_tags: updatedItem.occasion_tags,
-      size: updatedItem.size,
-      price: updatedItem.price,
-      purchase_date: updatedItem.purchase_date,
-      purchase_location: updatedItem.purchase_location,
-      tags: updatedItem.tags,
-      notes: updatedItem.notes,
-      condition: updatedItem.condition,
-      is_favorite: updatedItem.is_favorite,
-    })
+  const handleEditItem = useCallback(
+    async (updatedItem: Item) => {
+      await updateItem(updatedItem.id, {
+        name: updatedItem.name,
+        category: updatedItem.category,
+        sub_category: updatedItem.sub_category,
+        brand: updatedItem.brand,
+        colors: updatedItem.colors,
+        occasion_tags: updatedItem.occasion_tags,
+        size: updatedItem.size,
+        price: updatedItem.price,
+        purchase_date: updatedItem.purchase_date,
+        purchase_location: updatedItem.purchase_location,
+        tags: updatedItem.tags,
+        notes: updatedItem.notes,
+        condition: updatedItem.condition,
+        is_favorite: updatedItem.is_favorite,
+      })
+      toast({
+        title: 'Item updated',
+        description: 'Your changes have been saved',
+      })
+    },
+    [updateItem, toast]
+  )
 
-    toast({
-      title: 'Item updated',
-      description: 'Your changes have been saved',
-    })
-    setSelectedItemDetail(savedItem)
-    // Keep modal open so user can review; edit mode exits via modal on success
-    fetchItems(true)
-  }
+  const editor = useItemEditor(selectedItemDetail, handleEditItem)
 
   const handleUploadComplete = (results: ItemUploadResult[]) => {
     const successCount = results.filter((r) => r.success).length
@@ -397,6 +434,76 @@ export default function WardrobePage() {
   // ============================================================================
   // RENDER
   // ============================================================================
+
+  const isSplitViewport = useIsSplitViewport()
+  const isWideViewport = useIsWideViewport()
+  // At exactly `md` the sidebar is expanded and a 44% pane leaves ~270px of list —
+  // one cramped masonry column. Compact rows read better in that band.
+  const forceListRows = isDetailOpen && isSplitViewport && !isWideViewport
+  const showMasonry = sort.isGridView && !forceListRows
+
+  const selectionHiddenByFilters =
+    isDetailOpen &&
+    Boolean(selectedItemDetail) &&
+    !filteredItems.some((i) => i.id === selectedId)
+
+  const renderCard = (item: Item, variant: 'default' | 'list') => {
+    const isMultiSelected = selectedItems.has(item.id)
+    const isOpenInPane = item.id === selectedId
+    return (
+      <div key={item.id} aria-current={isOpenInPane ? 'true' : undefined}>
+        <ItemCard
+          item={item}
+          variant={variant}
+          isSelected={isMultiSelected}
+          className={isOpenInPane ? 'border-ink' : undefined}
+          onClick={() => handleCardClick(item)}
+          onToggleFavorite={(e) => {
+            e.stopPropagation()
+            handleToggleFavorite(item.id)
+          }}
+          onSelect={(e) => {
+            e.stopPropagation()
+            toggleItemSelected(item.id)
+          }}
+        />
+      </div>
+    )
+  }
+
+  const listContent = isLoading ? (
+    <LoadingGrid
+      count={14}
+      variant={showMasonry ? 'masonry' : 'list'}
+      className={showMasonry && isDetailOpen ? SPLIT_COLUMNS : undefined}
+    />
+  ) : filteredItems.length === 0 ? (
+    hasActiveFilters ? (
+      <EmptyState
+        icon={Shirt}
+        title="No items match"
+        description="Try adjusting your filters or search query"
+        actionLabel="Clear filters"
+        onAction={handleResetFilters}
+      />
+    ) : (
+      <EmptyState
+        icon={Shirt}
+        title="Your closet is empty"
+        description="Upload photos and AI finds each item, so you can build outfits the same day."
+        actionLabel="Upload photos"
+        onAction={() => setIsUploadModalOpen(true)}
+      />
+    )
+  ) : showMasonry ? (
+    <PinGrid className={isDetailOpen ? SPLIT_COLUMNS : undefined}>
+      {filteredItems.map((item) => renderCard(item, 'default'))}
+    </PinGrid>
+  ) : (
+    <div className="grid grid-cols-1 gap-2">
+      {filteredItems.map((item) => renderCard(item, 'list'))}
+    </div>
+  )
 
   return (
     <div className="app-page max-w-7xl">
@@ -439,7 +546,8 @@ export default function WardrobePage() {
         </div>
       )}
 
-      {/* Filters */}
+      {/* Filters, category chips and the bulk bar stay full width ABOVE the split —
+          the list shrinks, the page does not change. */}
       <FilterPanel
         filters={filters}
         sort={sort}
@@ -475,7 +583,12 @@ export default function WardrobePage() {
       {/* Bulk selection bar */}
       {selectedItems.size > 0 && (
         <div
-          className="sticky top-2 z-30 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card/95 backdrop-blur-sm px-3 py-2.5 shadow-sm md:top-4"
+          // Solid surface, not glass: at bg-card/95 the backdrop-blur was doing
+          // nothing but costing a compositor layer, while still letting cards
+          // ghost through the bar. A sticky toolbar should be an honest surface.
+          // rounded-md (16px) per DESIGN.md 06 — rounded-xl aliases to 32px here,
+          // which turned a 44px toolbar into most of a pill.
+          className="sticky top-2 z-30 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2.5 md:top-4"
           role="toolbar"
           aria-label="Selected items actions"
         >
@@ -486,7 +599,7 @@ export default function WardrobePage() {
             selected
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => clearSelectedItems()}>
+            <Button variant="tertiary" size="sm" onClick={() => clearSelectedItems()}>
               <X className="h-4 w-4 mr-1.5" />
               Clear
             </Button>
@@ -502,80 +615,42 @@ export default function WardrobePage() {
         </div>
       )}
 
-      {/* Items grid/list */}
-      {isLoading ? (
-        <LoadingGrid count={14} variant={sort.isGridView ? 'masonry' : 'list'} />
-      ) : filteredItems.length === 0 ? (
-        hasActiveFilters ? (
-          <EmptyState
-            icon={Shirt}
-            title="No items match"
-            description="Try adjusting your filters or search query"
-            actionLabel="Clear filters"
-            onAction={handleResetFilters}
+      <MasterDetailLayout
+        isDetailOpen={isDetailOpen}
+        onCloseDetail={closeDetail}
+        detailTitle={selectedItemDetail?.name || 'Item'}
+        list={listContent}
+        detail={
+          <ItemDetailPanel
+            item={selectedItemDetail}
+            isDetailLoading={isDetailLoading}
+            editor={editor}
+            notice={selectionHiddenByFilters ? 'Hidden by the current filters.' : null}
           />
-        ) : (
-          <EmptyState
-            icon={Shirt}
-            title="Your closet is empty"
-            description="Upload photos and AI finds each item, so you can build outfits the same day."
-            actionLabel="Upload photos"
-            onAction={() => setIsUploadModalOpen(true)}
-          />
-        )
-      ) : (
-        sort.isGridView ? (
-          <PinGrid>
-            {filteredItems.map((item) => {
-            const isSelected = selectedItems.has(item.id)
-            return (
-              <ItemCard
-                key={item.id}
-                item={item}
-                variant="default"
-                isSelected={isSelected}
-                onClick={() => handleItemClick(item)}
-                onToggleFavorite={(e) => {
-                  e.stopPropagation()
-                  handleToggleFavorite(item.id)
-                }}
-                onSelect={(e) => {
-                  e.stopPropagation()
-                  toggleItemSelected(item.id)
-                }}
-              />
-            )
-            })}
-          </PinGrid>
-        ) : (
-          <div className="grid grid-cols-1 gap-2">
-            {filteredItems.map((item) => {
-              const isSelected = selectedItems.has(item.id)
-              return <ItemCard key={item.id} item={item} variant="list" isSelected={isSelected} onClick={() => handleItemClick(item)} onToggleFavorite={(e) => { e.stopPropagation(); handleToggleFavorite(item.id) }} onSelect={(e) => { e.stopPropagation(); toggleItemSelected(item.id) }} />
-            })}
-          </div>
-        )
-      )}
+        }
+        detailFooter={
+          selectedItemDetail ? (
+            <ItemDetailActions
+              item={selectedItemDetail}
+              editor={editor}
+              isBusy={isManaging}
+              onMarkWorn={() => void handleMarkAsWorn(selectedItemDetail.id)}
+              onToggleFavorite={() => void handleToggleFavorite(selectedItemDetail.id)}
+              onDelete={() => handleDeleteItem(selectedItemDetail.id)}
+            />
+          ) : undefined
+        }
+      />
 
       {/* Mobile primary add action is the BottomNav center FAB — avoid dual FABs */}
 
-      {/* Modals */}
+      {/* Modals — destructive confirms and the upload flow only */}
       <BatchExtractionFlow
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         onUploadComplete={handleUploadComplete}
         onRequestOpen={() => setIsUploadModalOpen(true)}
         onJobStatusChange={(status) => publishBatchJob(status, isUploadModalOpen)}
-      />
-
-      <ItemDetailModal
-        item={selectedItemDetail}
-        isOpen={isDetailModalOpen}
-        onClose={() => setIsDetailModalOpen(false)}
-        onEdit={handleEditItem}
-        onDelete={handleDeleteItem}
-        onToggleFavorite={handleToggleFavorite}
-        onMarkAsWorn={handleMarkAsWorn}
       />
 
       {/* Single item delete confirmation */}

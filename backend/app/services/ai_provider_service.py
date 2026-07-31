@@ -24,7 +24,6 @@ Sample request format (Agnes chat/vision):
       }'
 """
 
-import asyncio
 import base64
 import random
 import time
@@ -38,6 +37,7 @@ from app.core.config import settings
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
 from app.models.ai import HealthCheckResult
+from app.utils.image_processing import to_data_url
 from app.utils.retry import with_retry
 from app.services.ai_provider_health_service import _is_non_openai_host
 from app.services.ai_provider_interface import (
@@ -1222,12 +1222,11 @@ class AIProviderService:
 
         # Build message content
         if reference_image:
-            # Image-to-image: include reference image with the prompt
-            if not reference_image.startswith("data:"):
-                reference_image = f"data:image/jpeg;base64,{reference_image}"
-
+            # Image-to-image: include reference image with the prompt. The mime
+            # type is sniffed, not assumed - a hardcoded image/jpeg prefix
+            # propagates a wrong mime_type into Gemini's Part.from_bytes.
             content: List[Dict[str, Any]] = [
-                {"type": "image_url", "image_url": {"url": reference_image}},
+                {"type": "image_url", "image_url": {"url": to_data_url(reference_image)}},
                 {"type": "text", "text": prompt},
             ]
             messages = [ChatMessage(role="user", content=content)]
@@ -1291,10 +1290,9 @@ class AIProviderService:
             "extra_body": {"response_format": "b64_json"},
         }
         if reference_images:
-            payload["extra_body"]["image"] = [
-                img if img.startswith("data:") else f"data:image/jpeg;base64,{img}"
-                for img in reference_images
-            ]
+            # Sniffed mime per image; see to_data_url. A PNG/WebP reference
+            # announced as JPEG is a lie the provider may act on.
+            payload["extra_body"]["image"] = [to_data_url(img) for img in reference_images]
 
         logger.info(
             "AI image generation request started",

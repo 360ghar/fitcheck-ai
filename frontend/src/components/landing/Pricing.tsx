@@ -112,7 +112,7 @@ function PricingCard({
 
       <Button
         className={cn(
-          'w-full h-12 text-base font-medium shadow-none',
+          'w-full h-12 text-base font-medium',
           highlighted
             ? 'bg-primary hover:bg-primary-pressed text-white'
             : 'border-stone-300 dark:border-stone-700'

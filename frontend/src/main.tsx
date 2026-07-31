@@ -96,7 +96,11 @@ createRoot(document.getElementById('root')!).render(
     >
       <HelmetProvider>
         <ErrorBoundary>
-          <ThemeProvider defaultTheme="light">
+          {/* Must match the pre-hydration script in index.html, which resolves
+              `system`. A `light` default here repainted over the script's dark
+              class on mount — the dark→light flash, and the reason a
+              system-dark user never got dark mode. */}
+          <ThemeProvider defaultTheme="system">
             <QueryClientProvider client={queryClient}>
               <BrowserRouter>
                 <TooltipProvider delayDuration={0}>

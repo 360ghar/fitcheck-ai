@@ -95,8 +95,10 @@ export const StatCard = React.forwardRef<HTMLDivElement, StatCardProps>(
         ref={ref}
         className={cn(
           'relative bg-card rounded-xl overflow-hidden',
-          'transition-[border-color,transform] duration-300',
-          'hover:shadow-elevated hover:-translate-y-0.5',
+          // No hover lift. `hover:-translate-y-0.5` moved the card against
+          // nothing (every boxShadow token resolves to `none`), so it read as a
+          // bare jump. A tonal edge shift is grounded and legible in both themes.
+          'border border-transparent transition-colors duration-200 hover:border-border',
           'group',
           className
         )}
@@ -111,7 +113,7 @@ export const StatCard = React.forwardRef<HTMLDivElement, StatCardProps>(
               className={cn(
                 'shrink-0 p-2 md:p-2.5 rounded-lg',
                 config.icon,
-                'shadow-lg',
+                '',
                 config.shadow
               )}
             >

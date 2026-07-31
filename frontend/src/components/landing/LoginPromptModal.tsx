@@ -55,7 +55,7 @@ export function LoginPromptModal({ isOpen, onClose, feature }: LoginPromptModalP
 
           <div className="flex flex-col gap-2">
             <Button
-              className="w-full bg-primary hover:bg-primary-pressed text-white shadow-none"
+              className="w-full bg-primary hover:bg-primary-pressed text-white"
               asChild
             >
               <Link to="/auth/register">

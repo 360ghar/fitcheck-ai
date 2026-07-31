@@ -3,7 +3,7 @@
  * Displays wardrobe item images with fallback states
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Shirt, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Skeleton } from './skeleton'
@@ -87,16 +87,72 @@ function getCategoryIcon() {
 
 /**
  * ItemImage - Displays item image with loading skeleton and error fallback
+ *
+ * Surface convention, and the divergence is deliberate:
+ * - The image WRAPPERS carry `bg-card`, because item photos are matted WebP
+ *   with a real alpha channel. The tile is the surface the cutout sits on, so
+ *   it must be a known surface rather than whatever the caller happens to
+ *   provide underneath. Paired with `object-contain` — these are fixed
+ *   40/64/96px squares, so `cover` would centre-crop a portrait silhouette.
+ * - The no-image and error FALLBACKS keep `bg-muted`, because those genuinely
+ *   are placeholders, which is what that token should mean.
+ * The `<Skeleton>` needs no surface of its own: it only renders inside
+ * `{isLoading && …}` and unmounts on `onLoad`.
  */
 export function ItemImage({ item, size = 'sm', className, enableZoom = false }: ItemImageProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [hasError, setHasError] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
 
   // For zoom, use full-size image instead of thumbnail
   const imageUrl = getImageUrl(item, !enableZoom && size === 'sm')
   const sizeClass = SIZE_CLASSES[size]
   const iconSize = ICON_SIZES[size]
   const CategoryIcon = getCategoryIcon()
+
+  // Settle the skeleton from the element's OWN state, not only from `onLoad`.
+  // `onLoad` is not dependable here: a cached image can finish before React
+  // attaches the handler, and with `loading="lazy"` Chrome was observed holding
+  // `complete === false` on an image that already reported
+  // `naturalWidth === 700`, with no load event ever dispatched. This effect also
+  // resets the flags when the source changes, which nothing did before.
+  // `ZoomableImage` does not forward a ref, hence reading the img through the
+  // wrapper. The <img> is never hidden while this is pending — see below.
+  useEffect(() => {
+    const img = wrapperRef.current?.querySelector('img')
+    if (!img) return
+    // Intrinsic width is the honest "has paintable pixels" signal.
+    if (img.naturalWidth > 0) {
+      setIsLoading(false)
+      setHasError(false)
+      return
+    }
+    if (img.complete) {
+      // Finished with no intrinsic size: the fetch resolved to nothing.
+      setIsLoading(false)
+      setHasError(true)
+      return
+    }
+    setIsLoading(true)
+    setHasError(false)
+    // Still in flight. `decode()` is a promise, so unlike the `load` event it
+    // cannot be missed by arriving before the handler was attached — which is
+    // what left the skeleton pulsing forever under a `loading="lazy"` image
+    // whose load event never fired.
+    let cancelled = false
+    img
+      .decode()
+      .then(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+      .catch(() => {
+        // Aborted (source swapped mid-flight) or genuinely broken. `onError`
+        // owns the error state; do not flag a failure from a cancelled decode.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [imageUrl])
 
   // No image available
   if (!imageUrl) {
@@ -135,17 +191,18 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
   // Use ZoomableImage when zoom is enabled
   if (enableZoom) {
     return (
-      <div className={cn(sizeClass, 'relative rounded-lg overflow-hidden', className)}>
+      <div ref={wrapperRef} className={cn(sizeClass, 'relative overflow-hidden rounded-lg bg-card', className)}>
         {isLoading && (
           <Skeleton className="absolute inset-0" />
         )}
+        {/* NEVER `opacity-0` while loading. The skeleton sits BEHIND the image,
+            so an image with no pixels yet simply lets it show through, and one
+            that has pixels paints over it. Hiding the img until a load callback
+            fired is what made every cached thumbnail render as an empty box. */}
         <ZoomableImage
           src={imageUrl}
           alt={item.name}
-          className={cn(
-            'h-full w-full object-cover',
-            isLoading && 'opacity-0'
-          )}
+          className="h-full w-full object-contain"
           onLoad={() => setIsLoading(false)}
           onError={() => {
             setIsLoading(false)
@@ -157,17 +214,15 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
   }
 
   return (
-    <div className={cn(sizeClass, 'relative rounded-lg overflow-hidden', className)}>
+    <div ref={wrapperRef} className={cn(sizeClass, 'relative overflow-hidden rounded-lg bg-card', className)}>
       {isLoading && (
         <Skeleton className="absolute inset-0" />
       )}
+      {/* Not `opacity-0` while loading — see the note in the zoom branch. */}
       <img
         src={imageUrl}
         alt={item.name}
-        className={cn(
-          'h-full w-full object-cover',
-          isLoading && 'opacity-0'
-        )}
+        className="h-full w-full object-contain"
         loading="lazy"
         decoding="async"
         onLoad={() => setIsLoading(false)}
@@ -196,6 +251,12 @@ export function ItemImageSimple({
   const iconSize = ICON_SIZES[size]
   const CategoryIcon = getCategoryIcon()
 
+  // Clear a stale error when the item (and so the source) changes. No loading
+  // flag here, so this variant never had the invisible-image failure above.
+  useEffect(() => {
+    setHasError(false)
+  }, [imageUrl])
+
   if (!imageUrl || hasError) {
     return (
       <div
@@ -216,7 +277,7 @@ export function ItemImageSimple({
     <img
       src={imageUrl}
       alt={item.name}
-      className={cn(sizeClass, 'rounded-lg object-cover', className)}
+      className={cn(sizeClass, 'rounded-lg bg-card object-contain', className)}
       loading="lazy"
       decoding="async"
       onError={() => setHasError(true)}

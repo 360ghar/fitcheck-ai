@@ -765,7 +765,9 @@ class SocialImportPipelineService:
                         sub_category=item.get("sub_category"),
                         colors=item.get("colors") or [],
                         material=item.get("material"),
-                        background="white",
+                        # "transparent" -> flat white prompt + server-side
+                        # matte (app/utils/background_removal.py).
+                        background="transparent",
                         view_angle="front",
                         include_shadows=False,
                         reference_image=reference_image_base64,

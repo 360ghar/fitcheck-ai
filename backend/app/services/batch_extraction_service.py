@@ -650,7 +650,9 @@ class BatchExtractionService:
                         sub_category=item.sub_category,
                         colors=item.colors,
                         material=item.material,
-                        background="white",
+                        # "transparent" -> flat white prompt + server-side
+                        # matte (app/utils/background_removal.py).
+                        background="transparent",
                         view_angle="front",
                         include_shadows=False,
                         reference_image=reference_image_base64,

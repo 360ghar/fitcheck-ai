@@ -57,7 +57,7 @@ export default function CTASection() {
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Button
                       size="lg"
-                      className="bg-primary hover:bg-primary-pressed text-white h-12 px-6 shadow-none"
+                      className="bg-primary hover:bg-primary-pressed text-white h-12 px-6"
                       asChild
                     >
                       <Link to="/auth/register">
@@ -68,7 +68,7 @@ export default function CTASection() {
                     <Button
                       size="lg"
                       variant="outline"
-                      className="h-12 px-6 border-stone-600 text-stone-100 hover:bg-stone-800 hover:text-white shadow-none"
+                      className="h-12 px-6 border-stone-600 text-stone-100 hover:bg-stone-800 hover:text-white"
                       asChild
                     >
                       <a
@@ -144,7 +144,7 @@ export default function CTASection() {
                     <Button
                       type="submit"
                       disabled={isSubmitting || !email}
-                      className="w-full h-11 bg-white text-stone-900 hover:bg-stone-100 font-medium shadow-none"
+                      className="w-full h-11 bg-white text-stone-900 hover:bg-stone-100 font-medium"
                     >
                       {isSubmitting ? (
                         <>

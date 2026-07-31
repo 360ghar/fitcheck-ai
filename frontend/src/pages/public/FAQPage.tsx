@@ -154,7 +154,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
         <span className="font-medium text-gray-900 dark:text-white pr-4">{question}</span>
         <ChevronDown
           className={cn(
-            'w-5 h-5 text-gray-500 transition-transform shrink-0',
+            'w-5 h-5 text-muted-foreground transition-transform shrink-0',
             isOpen && 'rotate-180'
           )}
         />
@@ -253,7 +253,7 @@ export default function FAQPage() {
               </p>
               <Link
                 to="/auth/register"
-                className="inline-flex min-h-11 items-center gap-2 bg-white text-primary px-8 py-4 rounded-full font-semibold text-lg hover:bg-stone-100 transition-colors"
+                className="inline-flex min-h-11 items-center gap-2 bg-on-image text-on-image-foreground px-8 py-4 rounded-full font-semibold text-lg transition-colors hover:bg-on-image/90"
               >
                 Get Started Free
               </Link>

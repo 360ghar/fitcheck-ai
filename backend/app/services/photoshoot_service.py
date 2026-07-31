@@ -11,6 +11,7 @@ import re
 import uuid
 from datetime import datetime, date, timedelta, timezone
 from app.utils.datetime_util import utcnow, utcnow_iso, utc_today
+from app.utils.image_processing import to_data_url
 from typing import Any, List, Optional, Tuple
 
 from supabase import Client
@@ -433,7 +434,7 @@ RULES:
             if "," in photo and photo.strip().lower().startswith("data:"):
                 photo = photo.split(",", 1)[1]
             photo = downscale_base64_image(photo)
-            ref_url = f"data:image/jpeg;base64,{photo}" if not photo.startswith("data:") else photo
+            ref_url = to_data_url(photo)
             return [
                 {"type": "image_url", "image_url": {"url": ref_url}},
                 {"type": "text", "text": _user_text(strict_json)},
@@ -809,7 +810,7 @@ RULES:
 
                 # Add reference images
                 for ref_photo in normalized_refs:
-                    ref_url = f"data:image/jpeg;base64,{ref_photo}" if not ref_photo.startswith("data:") else ref_photo
+                    ref_url = to_data_url(ref_photo)
                     content.append({
                         "type": "image_url",
                         "image_url": {"url": ref_url}
@@ -1199,7 +1200,7 @@ class PhotoshootStreamingService:
             # Build multi-image content
             content = []
             for ref_photo in normalized_refs:
-                ref_url = f"data:image/jpeg;base64,{ref_photo}" if not ref_photo.startswith("data:") else ref_photo
+                ref_url = to_data_url(ref_photo)
                 content.append({
                     "type": "image_url",
                     "image_url": {"url": ref_url}

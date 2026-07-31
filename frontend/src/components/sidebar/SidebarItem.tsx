@@ -41,7 +41,7 @@ export function SidebarItem({
       onClick={handleClick}
       className={cn(
         'group flex min-h-11 items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition-colors',
-        'hover:bg-surface-card hover:text-ink',
+        'hover:bg-accent hover:text-accent-foreground',
         isActive
           ? 'bg-primary text-primary-foreground'
           : 'text-muted-foreground',
@@ -54,7 +54,7 @@ export function SidebarItem({
           'h-5 w-5 shrink-0 transition-colors',
           isActive
             ? 'text-primary-foreground'
-            : 'text-muted-foreground group-hover:text-ink'
+            : 'text-muted-foreground group-hover:text-accent-foreground'
         )}
       />
       <span

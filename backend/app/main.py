@@ -33,15 +33,13 @@ REQUIRED_TABLES = (
     "outfit_collections",
     "outfit_collection_items",
     "body_profiles",
-    # Planning + gamification + generation tracking (docs-aligned MVP)
+    # Planning + generation tracking (docs-aligned MVP)
     "outfit_generations",
     "calendar_connections",
     "calendar_events",
     # Sharing + feedback
     "shared_outfits",
     "share_feedback",
-    "user_streaks",
-    "user_achievements",
     # Subscription + referral
     "subscriptions",
     "subscription_usage",
@@ -49,6 +47,15 @@ REQUIRED_TABLES = (
     "referral_redemptions",
     # Support tickets
     "support_tickets",
+)
+
+# Only required when ENABLE_GAMIFICATION is on. With the flag off the handlers
+# never touch these tables (they return a neutral zeroed payload before any
+# query), so demanding them would make /ready fail-closed over a feature that
+# is deliberately dark.
+GAMIFICATION_TABLES = (
+    "user_streaks",
+    "user_achievements",
 )
 
 SOCIAL_IMPORT_TABLES = (
@@ -119,6 +126,8 @@ def _column_exists(db, table: str, column: str) -> bool:
 def _schema_missing(db) -> list[str]:
     missing: list[str] = []
     required_tables = list(REQUIRED_TABLES)
+    if settings.ENABLE_GAMIFICATION:
+        required_tables.extend(GAMIFICATION_TABLES)
     if settings.ENABLE_SOCIAL_IMPORT:
         required_tables.extend(SOCIAL_IMPORT_TABLES)
 
@@ -446,7 +455,25 @@ app.include_router(calendar.router, prefix="/api/v1/calendar", tags=["Calendar"]
 # Weather integration routes (requires auth)
 app.include_router(weather.router, prefix="/api/v1/weather", tags=["Weather"])
 
-# Gamification routes (requires auth)
+# Gamification routes (requires auth).
+#
+# DO NOT WRAP THIS IN `if settings.ENABLE_GAMIFICATION:`. This is deliberately
+# NOT the social-import pattern used below, and "making it consistent" will
+# break the shipped Flutter app on its home screen.
+#
+# flutter/lib/features/dashboard/controllers/dashboard_controller.dart:60-67
+# runs an UNGUARDED `Future.wait([fetchDashboard(), fetchStreak()])` under a
+# single catch. fetchStreak() hits /api/v1/gamification/streak and
+# dashboard_repository.dart rethrows a 404 as NotFoundException. A 404 there
+# rejects the whole wait, so `dashboard.value` is never assigned even though
+# fetchDashboard() succeeded -- while `isLoading` still goes false. Then
+# dashboard_content.dart:48-63 skips the shimmer and renders a permanent error
+# banner plus a toast against null data, on every launch, forever.
+#
+# So the router stays mounted and the FLAG IS ENFORCED INSIDE THE HANDLERS
+# (app/api/v1/gamification.py), which return 200 with a neutral zeroed payload.
+# Unmounting this only becomes safe once that Future.wait is made per-future
+# fault-tolerant (tracked as TD-034 in docs/exec-plans/tech-debt-tracker.md).
 app.include_router(gamification.router, prefix="/api/v1/gamification", tags=["Gamification"])
 
 # Waitlist routes (public, no auth required)

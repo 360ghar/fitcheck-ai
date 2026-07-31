@@ -10,6 +10,7 @@ Features:
 - Generate variations
 """
 
+import asyncio
 import base64
 import re
 import uuid
@@ -28,9 +29,86 @@ from app.core.concurrency import GENERATION_SEMAPHORE
 from app.services.ai_provider_service import AIProviderService, ChatMessage
 from app.services.ai_settings_service import AISettingsService
 from app.services.storage_service import StorageService
+from app.utils.background_removal import (
+    STATUS_MATTED,
+    MatteResult,
+    remove_white_background,
+)
+from app.utils.image_processing import (
+    EXTENSION_BY_MIME,
+    sniff_image_mime,
+    to_data_url,
+)
 from app.utils.parallel import parallel_with_retry
 
 logger = get_context_logger(__name__)
+
+
+# =============================================================================
+# BACKGROUND PROMPT FRAGMENTS
+# =============================================================================
+# No provider we use can return an alpha channel: `_generate_image_via_images_
+# api` sends a fixed payload with no output_format, and gemini_provider discards
+# the response mime entirely. So `background="transparent"` does NOT mean "ask
+# the model for transparency" - it means "render on a matte-optimal flat white,
+# then cut the alpha out server-side" (app/utils/background_removal.py).
+#
+# THESE STRINGS ARE PART OF THE MATTE'S CONTRACT. The guard thresholds
+# (MIN/MAX_TRANSPARENT_FRACTION, WHITE_MIN_CHANNEL) are tuned against the
+# backdrop these strings actually produce. Any edit here must be re-validated
+# against a batch of fresh generations, not just eyeballed.
+_FLAT_WHITE_BACKDROP = (
+    "pure flat #FFFFFF white background, completely uniform - no gradient, "
+    "no vignette, no gray falloff, no floor plane, no cast shadow, no "
+    "reflection, no surface texture"
+)
+
+# The product / flat-lay variant. Adds the silhouette requirement, which only
+# makes sense when there is no person in frame.
+_MATTE_READY_BACKGROUND = (
+    f"{_FLAT_WHITE_BACKDROP}; the garment is fully isolated with a "
+    "crisp clean silhouette edge"
+)
+
+# Short tokens clients and services actually send. Every one of these means
+# "white studio backdrop", and the web client still hardcodes 'studio white' in
+# api/ai.ts while Flutter hardcodes 'white' - so they have to be aliases here
+# rather than a client-side change.
+_WHITE_BACKGROUND_KEYS = frozenset(
+    {
+        "",
+        "white",
+        "transparent",
+        "studio white",
+        "pure white",
+        "clean white background",
+        "seamless clean light background",
+    }
+)
+
+# Deliberately left HONEST: a caller that explicitly asks for gray gets gray,
+# the matte's G1 guard then finds no white backdrop and keeps the opaque
+# original. That is the correct outcome, not a bug.
+_NON_WHITE_BACKGROUNDS = {
+    "gray": "light gray seamless studio background",
+    "grey": "light gray seamless studio background",
+    "gradient": "subtle gray-to-white gradient background",
+}
+
+
+def _resolve_background(background: Optional[str], *, matte_ready: bool) -> str:
+    """Turn a caller's short background token into a prompt fragment.
+
+    `matte_ready=True` for the no-person paths (product shot, flat lay), which
+    additionally demand an isolated silhouette. Unknown values pass through
+    verbatim so a caller can still describe a real scene.
+    """
+    key = (background or "").strip().lower()
+    if key in _WHITE_BACKGROUND_KEYS:
+        return _MATTE_READY_BACKGROUND if matte_ready else _FLAT_WHITE_BACKDROP
+    if key in _NON_WHITE_BACKGROUNDS:
+        return _NON_WHITE_BACKGROUNDS[key]
+    return background or _FLAT_WHITE_BACKDROP
 
 
 # =============================================================================
@@ -90,10 +168,71 @@ class ImageGenerationAgent:
 
     @staticmethod
     def _as_data_url(image_base64: str) -> str:
-        """Normalize bare base64 to the data URL the content parts expect."""
-        if image_base64.startswith("data:"):
-            return image_base64
-        return f"data:image/jpeg;base64,{image_base64}"
+        """Normalize bare base64 to the data URL the content parts expect.
+
+        The mime type is SNIFFED, not assumed. This used to hardcode
+        `image/jpeg` for every reference image, and
+        `GeminiProvider._decode_image_part` parses that header straight into
+        `Part.from_bytes(mime_type=...)` - so a PNG or WebP reference reached the
+        model labelled as a JPEG.
+        """
+        return to_data_url(image_base64)
+
+    @staticmethod
+    async def _matte(generated: "GeneratedImage", *, context: str) -> "GeneratedImage":
+        """Cut the white backdrop out of a freshly generated image.
+
+        Wired at EXACTLY TWO call sites - the `generate_product_image` return and
+        `generate_outfit`'s flat-lay branch. Deliberately NOT applied inside
+        `_generate_image` / `_generate_with_references`, because the avatar
+        branch, the generic-model branch and `generate_try_on` all route through
+        those and must stay opaque: a Pillow threshold matte cannot cut hair, and
+        the guards would NOT catch it (a full-body figure lands ~0.70-0.80
+        transparent, under MAX_TRANSPARENT_FRACTION, so bad hair would ship).
+
+        Runs on a worker thread: the matte is ~110ms of GIL-held C work and must
+        not sit on the event loop while a batch SSE stream is being served.
+        Never raises - on any failure the original image is returned untouched.
+        """
+        def _run() -> tuple[str, MatteResult]:
+            result = remove_white_background(base64.b64decode(generated.image_base64))
+            if result.status != STATUS_MATTED:
+                return generated.image_base64, result
+            return base64.b64encode(result.image_bytes).decode("utf-8"), result
+
+        try:
+            image_base64, result = await asyncio.to_thread(_run)
+        except Exception as e:
+            logger.warning(
+                "Background matte failed",
+                context=context,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            return generated
+
+        logger.info(
+            "Background matte finished",
+            context=context,
+            status=result.status,
+            transparent_fraction=round(result.transparent_fraction, 4),
+            center_opacity=round(result.center_opacity, 4),
+            content_type=result.content_type,
+            base64_len_before=len(generated.image_base64),
+            base64_len_after=len(image_base64),
+        )
+
+        if result.status != STATUS_MATTED:
+            return generated
+
+        return GeneratedImage(
+            image_base64=image_base64,
+            prompt=generated.prompt,
+            model=generated.model,
+            provider=generated.provider,
+            image_url=generated.image_url,
+            storage_path=generated.storage_path,
+        )
 
     @staticmethod
     def _tidy_prompt(prompt: str) -> str:
@@ -225,7 +364,11 @@ class ImageGenerationAgent:
         self,
         items: List[Dict[str, Any]],
         style: str = "casual",
-        background: str = "seamless clean light background",
+        # Was "seamless clean light background", the worst possible string for
+        # matting: "seamless" and "light" both invite a soft gradient sweep, and
+        # a smooth 200-250 ramp half-passes the matte's thresholds and yields a
+        # ragged partial cut. See _resolve_background.
+        background: str = "transparent",
         pose: str = "standing front",
         lighting: str = "professional studio lighting",
         view_angle: str = "full body",
@@ -270,6 +413,12 @@ class ImageGenerationAgent:
         )
 
         wants_flat_lay = not include_model or "flat lay" in pose.lower()
+        # Flat lay has no person in frame, so it may demand an isolated
+        # silhouette; the model/avatar branches get flat white without that
+        # clause. Both end up on a flat white backdrop, which keeps model shots
+        # visually consistent with the now-transparent item shots and leaves the
+        # corpus matte-ready if a real segmenter is ever added.
+        background = _resolve_background(background, matte_ready=wants_flat_lay)
 
         # Build item descriptions
         item_descriptions = []
@@ -345,8 +494,15 @@ Composition: ONE single flat lay photograph of these garments arranged together 
 
 {f"Additional instructions: {custom_prompt}" if custom_prompt else ""}"""
 
-            return await self._generate_with_references(
-                self._tidy_prompt(prompt), garment_images, context="outfit flat lay"
+            # MATTE SITE 1 of 2. Flat lay is the same optical regime as a product
+            # shot - no subject, no hair - so the same algorithm and guards apply.
+            # This also covers generate_flat_lay() and any include_model=False
+            # request.
+            return await self._matte(
+                await self._generate_with_references(
+                    self._tidy_prompt(prompt), garment_images, context="outfit flat lay"
+                ),
+                context="outfit flat lay",
             )
 
         elif user_avatar_base64:
@@ -374,7 +530,7 @@ SCENE (change only these):
 - Pose: {pose} (face clearly visible; front or slight 3/4; no sunglasses)
 - View angle: {view_angle}
 - Lighting: {lighting} (even face light; no beauty-filter look)
-- Clothing fits naturally with realistic draping and shadows
+- Clothing fits naturally with realistic draping
 
 {f"Additional instructions: {custom_prompt}" if custom_prompt else ""}"""
 
@@ -419,7 +575,10 @@ Composition: ONE single photograph of the model wearing this outfit{no_collage}.
         sub_category: Optional[str] = None,
         colors: Optional[List[str]] = None,
         material: Optional[str] = None,
-        background: str = "white",
+        # "transparent" and "white" resolve to the same prompt string (see
+        # _resolve_background) - a matte-friendly white is a strictly better
+        # white. The token exists so intent is greppable at the call sites.
+        background: str = "transparent",
         view_angle: str = "front",
         include_shadows: bool = False,
         reference_image: Optional[str] = None,
@@ -451,12 +610,20 @@ Composition: ONE single photograph of the model wearing this outfit{no_collage}.
             has_reference=reference_image is not None,
         )
 
-        background_map = {
-            "white": "pure white studio background",
-            "gray": "light gray seamless studio background",
-            "gradient": "subtle gray-to-white gradient background",
-            "transparent": "clean white background",
-        }
+        # A product shot is always matted, so it always asks for the isolated
+        # silhouette variant.
+        background_desc = _resolve_background(background, matte_ready=True)
+
+        if include_shadows:
+            # A cast shadow is border-connected near-white's worst enemy: it
+            # survives the matte as a detached grey blob. The request is still
+            # honoured (the caller asked for it explicitly) but it is a
+            # self-inflicted matte degradation, so make it visible in the logs.
+            logger.warning(
+                "include_shadows=True on a matted product path; the cast shadow "
+                "will degrade the background matte",
+                category=category,
+            )
 
         view_map = {
             "front": "front view, straight-on angle",
@@ -498,7 +665,7 @@ IDENTIFY the item to reproduce from this dense description (NOT any other item i
 Item: {tokens}.
 
 Output:
-- {background_map.get(background, background_map["white"])}
+- {background_desc}
 - {view_map.get(view_angle, view_map["front"])}
 - {"Subtle natural drop shadow" if include_shadows else "No shadows; fully isolated"}
 - Soft studio light, sharp focus, catalog quality
@@ -510,7 +677,7 @@ Output:
 {item_description}
 
 Specs:
-- {background_map.get(background, background_map["white"])}
+- {background_desc}
 - {view_map.get(view_angle, view_map["front"])}
 - {"Subtle natural drop shadow" if include_shadows else "No shadows; fully isolated"}
 - Accurate colors{f": {color_desc}" if color_desc else ""}, realistic fabric{f" ({material})" if material else ""}
@@ -519,13 +686,21 @@ Specs:
 
 {SHORT_NEGATIVES}""".strip()
 
-        return await self._generate_image(prompt, reference_image=reference_image)
+        # MATTE SITE 2 of 2. A product shot has no subject and no hair, and the
+        # prompt above pins the backdrop to flat white, so the threshold matte
+        # applies cleanly. include_shadows must never be True on this path - a
+        # cast shadow is border-connected near-white's worst enemy and survives
+        # as a detached grey blob.
+        return await self._matte(
+            await self._generate_image(prompt, reference_image=reference_image),
+            context="product image",
+        )
 
     async def generate_flat_lay(
         self,
         items: List[Dict[str, Any]],
         style: str = "casual",
-        background: str = "white",
+        background: str = "transparent",
         lighting: str = "soft natural light",
     ) -> GeneratedImage:
         """
@@ -852,15 +1027,21 @@ async def save_generated_image(
         # Decode base64 image
         image_data = base64.b64decode(generated.image_base64)
 
+        # Sniffed, not assumed: a matted image is WebP, an unmatted one is
+        # whatever the provider returned. Hardcoding .png/image/png here served
+        # every generated object with the wrong content type.
+        content_type = sniff_image_mime(image_data)
+        extension = EXTENSION_BY_MIME.get(content_type, ".png")
+
         # Generate unique filename
-        filename = f"{user_id}/generated/{image_type}/{uuid.uuid4().hex}.png"
+        filename = f"{user_id}/generated/{image_type}/{uuid.uuid4().hex}{extension}"
 
         # Upload to storage
         storage = StorageService()
         result = await storage.upload_file(
             file_data=image_data,
             file_path=filename,
-            content_type="image/png",
+            content_type=content_type,
             db=db,
         )
 

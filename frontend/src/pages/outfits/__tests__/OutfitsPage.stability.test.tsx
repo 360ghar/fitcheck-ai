@@ -37,6 +37,7 @@ describe('OutfitsPage store stability', () => {
       outfits: [],
       selectedOutfit: null,
       isLoading: false,
+      isDetailLoading: false,
       error: null,
       filters: { style: 'all', season: 'all', search: '', isFavorite: false },
       sortBy: 'date_added',
@@ -62,18 +63,21 @@ describe('OutfitsPage store stability', () => {
     })
   })
 
+  // NOTE: `window.matchMedia` is deliberately left undefined here. That is the
+  // jsdom case the guard in `src/hooks/useMediaQuery.ts` exists for — without it
+  // the throw is swallowed by FeatureErrorBoundary and the assertion below on the
+  // boundary's absence fails.
   it('mounts without the feature boundary and fetches once', async () => {
+    const page = (
+      <FeatureErrorBoundary featureName="Outfits">
+        <OutfitsPage />
+      </FeatureErrorBoundary>
+    )
     render(
       <MemoryRouter initialEntries={['/outfits']}>
         <Routes>
-          <Route
-            path="/outfits"
-            element={
-              <FeatureErrorBoundary featureName="Outfits">
-                <OutfitsPage />
-              </FeatureErrorBoundary>
-            }
-          />
+          <Route path="/outfits" element={page} />
+          <Route path="/outfits/:id" element={page} />
         </Routes>
       </MemoryRouter>
     )

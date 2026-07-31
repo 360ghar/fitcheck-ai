@@ -312,9 +312,9 @@ export function PhotoshootDemo() {
                   type="button"
                   onClick={() => handleDownload(getImageSrc(img), idx)}
                   aria-label={`Download image ${idx + 1}`}
-                  className="absolute bottom-2 right-2 p-2 bg-white/90 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute bottom-2 right-2 p-2 bg-on-image/90 rounded-full opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                 >
-                  <Download className="w-4 h-4 text-gray-700" />
+                  <Download className="w-4 h-4 text-on-image-foreground" />
                 </button>
               </div>
             ))}

@@ -158,7 +158,7 @@ POST /api/v1/items
 - For each item: category/sub-category, colors, material, pattern, brand, bounding box, detailed description, confidence, person labels when relevant
 
 **Step 2: Product Image Generation (overlapped)**
-- For each detected item, generates a studio product photo (white background, isolated item)
+- For each detected item, generates a studio product photo (flat white background, isolated item), then **cuts the background out server-side** so the item ships as a transparent WebP cutout (see "Image transparency" below)
 - Continuous concurrent pool (up to `generation_batch_size`, max 5) — not a hard barrier after all extracts
 - SSE events: `item_generation_complete` / `item_generation_failed` as each finishes
 
@@ -192,6 +192,17 @@ POST /api/v1/items
 - Low confidence (&lt;70%): review badge
 - Image generation fails: mark failed, allow retry; originals may still save
 - All generations fail: still allow save with source photos when available
+
+#### Image transparency (scope, stated plainly)
+
+**Item images and flat-lay outfit looks are transparent. Model/avatar looks are opaque on flat white.**
+
+- No AI provider we use can return an alpha channel, so the backdrop is removed **after** generation by `app/utils/background_removal.py` (Pillow only: a near-white channel test at full resolution plus a border-seeded flood fill at 256px for connectivity). Output is **WebP q85 with alpha**, roughly half the bytes of the opaque JPEG it replaces.
+- Matting is wired at exactly two places in `app/agents/image_generation_agent.py`: the `generate_product_image` return and `generate_outfit`'s flat-lay branch. `generate_flat_lay` and any `include_model=False` request inherit it.
+- **Transparency for person shots is deliberately out of scope.** A hard-threshold matte cannot cut hair — wisps and the hairline are a sub-pixel alpha problem — and the guards would not catch the failure, because a full-body figure lands around 0.70–0.80 transparent, under `MAX_TRANSPARENT_FRACTION`. That needs a real segmentation model.
+- Model/avatar looks are still forced onto **flat white** so they read consistently beside the transparent item tiles, and so the corpus is matte-ready if a segmenter is ever added.
+- Three guards make the failure mode **"some white items keep their white background", never "some white items are destroyed"**: no white backdrop found → the original is kept; the matte ate the subject → the original is kept; the centre of the frame went transparent → the original is kept.
+- Known-bad cases: flat/off-white items under soft light (guards fire, the tile keeps its white backdrop), semi-transparent fabrics (chiffon, mesh) where the white *through* the fabric is border-connected, glass/acrylic, and residual contact shadows surviving as detached grey blobs (mitigated by prompt, not algorithm).
 
 ---
 

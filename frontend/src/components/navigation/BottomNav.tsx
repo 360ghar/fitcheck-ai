@@ -51,7 +51,7 @@ export function BottomNav() {
       return { action: '/wardrobe?action=add', label: 'Add Item' }
     }
     if (location.pathname.startsWith('/outfits')) {
-      return { action: '/outfits?action=create', label: 'Create Outfit' }
+      return { action: '/outfits/new', label: 'Create Outfit' }
     }
     return { action: '/wardrobe?action=add', label: 'Add' }
   }
@@ -99,7 +99,9 @@ export function BottomNav() {
             )}
             aria-label={fabAction.label}
           >
-            <Plus className="h-6 w-6 text-white" strokeWidth={2.5} />
+            {/* Pairs with bg-primary in both themes; a hardcoded white drops
+                to 3.5:1 on the lightened dark --primary. */}
+            <Plus className="h-6 w-6 text-primary-foreground" strokeWidth={2.5} />
           </button>
         </div>
 

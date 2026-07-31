@@ -8,7 +8,6 @@ Supports JSON (base64) for Flutter and multipart/form-data for web.
 import asyncio
 import base64
 import json
-from datetime import datetime
 from app.utils.datetime_util import utcnow, utcnow_iso
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -601,7 +600,6 @@ async def start_single_extraction(
     via SSE as items are detected and product images are generated.
     """
     try:
-        from datetime import datetime
         from app.services.extraction_cache_service import ExtractionCacheService
 
         # Check cache first (unless skip_cache is True)

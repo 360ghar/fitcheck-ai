@@ -4,10 +4,22 @@ Full-resolution phone photos blow up the payload sent inline to the vision
 model (token cost + latency). Shrinking the longest edge to ~1568px and
 re-encoding as JPEG keeps far more detail than the model tiles on while
 cutting bytes ~10x.
+
+CONTRACT, and it is deliberately the INVERSE of
+`app/utils/background_removal.py`: everything in this module produces opaque
+JPEG bytes destined for an AI MODEL, never for a user's screen. Alpha is
+flattened onto white on the way in (see `downscale_base64_image`). Do not
+"unify" the two modules and do not teach these functions to preserve
+transparency - see the long note on `downscale_base64_image` for why.
+
+Also home to the shared image format/MIME sniffers (`sniff_image_mime`,
+`to_data_url`), which are pure format detection and belong to neither
+direction of the pipeline.
 """
 
 import base64
 import io
+import os
 from typing import Any, Dict, Optional, Tuple
 
 from PIL import Image, ImageOps
@@ -27,17 +39,164 @@ DEFAULT_CROP_PADDING_RATIO = 0.20
 DEFAULT_CROP_PADDING_FLOOR = 4.0
 
 
+# =============================================================================
+# FORMAT / MIME DETECTION
+# =============================================================================
+# Two independent bugs made this shared: (1) every storage3 `upload()` call
+# without explicit `file_options` inherits DEFAULT_FILE_OPTIONS'
+# `content-type: text/plain;charset=UTF-8`, so images were served as text;
+# (2) every data URL in the codebase hardcoded `data:image/jpeg;base64,` even
+# for PNG/WebP bytes, and GeminiProvider._decode_image_part parses that header
+# straight into `Part.from_bytes(mime_type=...)`, so the lie reached the model.
+# Filenames are NOT trusted: the batch client names its upload
+# `${tempId}.png` regardless of what the bytes actually are.
+
+FALLBACK_MIME = "application/octet-stream"
+
+# Magic-byte prefixes, so a MIME can be resolved from ~32 bytes with no
+# decode and no Pillow call. Order matters only in that ISO-BMFF (`ftyp`)
+# checks look at bytes 4-12 rather than 0.
+MIME_BY_PIL_FORMAT = {
+    "JPEG": "image/jpeg",
+    "PNG": "image/png",
+    "WEBP": "image/webp",
+    "GIF": "image/gif",
+    "BMP": "image/bmp",
+    "TIFF": "image/tiff",
+    "AVIF": "image/avif",
+    "HEIF": "image/heif",
+}
+
+MIME_BY_EXTENSION = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".bmp": "image/bmp",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+    ".avif": "image/avif",
+    ".heic": "image/heif",
+    ".heif": "image/heif",
+}
+
+EXTENSION_BY_MIME = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "image/bmp": ".bmp",
+    "image/tiff": ".tiff",
+    "image/avif": ".avif",
+    "image/heif": ".heic",
+}
+
+
+def sniff_image_mime_from_magic(head: bytes) -> Optional[str]:
+    """MIME from a file's leading bytes, or None if unrecognised.
+
+    Needs only the first ~32 bytes, does no decoding, and never raises.
+    """
+    if not head:
+        return None
+    if head.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "image/webp"
+    if head[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if head[:2] == b"BM":
+        return "image/bmp"
+    if head[:4] in (b"II*\x00", b"MM\x00*"):
+        return "image/tiff"
+    brand = head[4:12]
+    if brand == b"ftypavif":
+        return "image/avif"
+    if brand in (b"ftypheic", b"ftypheix", b"ftypmif1", b"ftypmsf1"):
+        return "image/heif"
+    return None
+
+
+def sniff_image_mime(file_data: bytes, filename: Optional[str] = None) -> str:
+    """Best-effort content type for raw image bytes. Never raises.
+
+    Resolution order: magic bytes -> Pillow's decoded format -> the filename's
+    extension -> `application/octet-stream`. The filename is the LAST resort on
+    purpose; callers routinely supply a made-up name (`${tempId}.png`).
+    """
+    magic = sniff_image_mime_from_magic(file_data[:32])
+    if magic:
+        return magic
+
+    try:
+        with Image.open(io.BytesIO(file_data)) as img:
+            fmt = (img.format or "").upper()
+        if fmt:
+            return MIME_BY_PIL_FORMAT.get(fmt) or f"image/{fmt.lower()}"
+    except Exception:
+        pass
+
+    if filename:
+        # `os.path.splitext(".png")` yields ('.png', '') - a bare extension is a
+        # hidden filename to posixpath - so fall back to the whole string, since
+        # callers legitimately pass just ".png".
+        ext = os.path.splitext(filename)[1].lower() or filename.strip().lower()
+        mime = MIME_BY_EXTENSION.get(ext)
+        if mime:
+            return mime
+
+    return FALLBACK_MIME
+
+
+def to_data_url(image_base64: str) -> str:
+    """Wrap bare base64 image bytes in a data URL carrying the REAL mime type.
+
+    Pass-through when the input is already a data URL. Only the first 96 base64
+    characters are decoded (72 bytes - plenty for any magic signature), so this
+    is cheap enough to call per reference image. Falls back to `image/jpeg`
+    when the bytes are unrecognisable: that is the historical value every
+    caller hardcoded, so an unknown blob behaves exactly as it did before
+    rather than newly breaking a provider that dislikes octet-stream.
+    """
+    if image_base64.startswith("data:"):
+        return image_base64
+    mime = None
+    try:
+        head = base64.b64decode(image_base64[:96], validate=False)
+        mime = sniff_image_mime_from_magic(head)
+    except Exception:
+        mime = None
+    return f"data:{mime or 'image/jpeg'};base64,{image_base64}"
+
+
 def downscale_base64_image(
     image_base64: str,
     max_edge: int = DEFAULT_MAX_EDGE,
     quality: int = DEFAULT_QUALITY,
 ) -> str:
-    """Return a downsized JPEG (base64) for a base64 image.
+    """Return a downsized, OPAQUE JPEG (base64) for a base64 image.
 
     Best-effort: on ANY failure (not an image, unsupported format, decode
     error) the input is returned unchanged so the vision call still works.
     Never upscales - images already <= max_edge pass through re-encoded only
     if that actually shrinks them.
+
+    THE ALPHA FLATTEN BELOW IS LOAD-BEARING - DO NOT "FIX" IT.
+    This function's output goes to an AI model, never to a user's screen:
+      - JPEG cannot carry an alpha channel at all, and the providers we use
+        cannot consume one meaningfully (`_generate_image_via_images_api` sends
+        a fixed payload with no output_format; GeminiProvider discards it).
+      - Since `app/utils/background_removal.py` landed, item images in storage
+        are transparent WebP cutouts. `item_reference_service` downloads those
+        as garment references and they arrive here - flattening them onto white
+        produces exactly the "clean isolated garment on white" that
+        GARMENT_REFERENCE_LOCK and PRODUCT_REFERENCE_LOCK ask for. That is a
+        feature, not a leak.
+    `background_removal.py` is the inverse operation and the only place alpha
+    is ever created. Keep the two apart.
     """
     try:
         raw = base64.b64decode(image_base64)
@@ -47,6 +206,7 @@ def downscale_base64_image(
             img = ImageOps.exif_transpose(img)  # honour phone orientation
 
             # Flatten transparency onto white so JPEG has no alpha channel.
+            had_alpha = img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info
             if img.mode in ("RGBA", "LA", "P"):
                 background = Image.new("RGB", img.size, (255, 255, 255))
                 rgba = img.convert("RGBA")
@@ -67,7 +227,14 @@ def downscale_base64_image(
             img.save(buf, format="JPEG", quality=quality, optimize=True)
             result = base64.b64encode(buf.getvalue()).decode("utf-8")
 
-        # ponytail: if re-encoding somehow made it bigger, keep the original.
+        # ponytail: if re-encoding somehow made it bigger, keep the original -
+        # UNLESS the source carried alpha. A lossy WebP cutout from
+        # background_removal.py is routinely SMALLER than its flattened JPEG
+        # (measured 10KB vs 27KB), so without this exemption the size check
+        # would hand the model back the transparent original and quietly undo
+        # the flatten this function exists to guarantee.
+        if had_alpha:
+            return result
         return result if len(result) < len(image_base64) else image_base64
     except Exception:
         # ponytail: best-effort - vision call works with the raw bytes.

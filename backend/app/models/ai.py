@@ -129,7 +129,11 @@ class GenerateOutfitRequest(BaseModel):
     # single photo, and a wardrobe flat-lay can legitimately produce dozens.
     items: List[OutfitItemInput] = Field(..., min_length=1, max_length=60)
     style: str = "casual"
-    background: str = "studio white"
+    # A short token, resolved to a prompt fragment by _resolve_background in
+    # app/agents/image_generation_agent.py. Was "studio white"; the agent's own
+    # default was the far worse "seamless clean light background", which invites
+    # a gradient sweep the flat-lay matte cannot cut cleanly.
+    background: str = "transparent"
     pose: str = "standing front"
     lighting: str = "professional studio lighting"
     view_angle: str = "full body"
@@ -158,7 +162,10 @@ class GenerateProductImageRequest(BaseModel):
     sub_category: Optional[str] = None
     colors: List[str] = Field(default_factory=list)
     material: Optional[str] = None
-    background: str = "white"
+    # "transparent" == "render on matte-optimal flat white, then cut the alpha
+    # server-side". Resolves to the same prompt fragment as "white" (which every
+    # existing client still sends); see _resolve_background.
+    background: str = "transparent"
     view_angle: str = "front"
     include_shadows: bool = False
     save_to_storage: bool = False

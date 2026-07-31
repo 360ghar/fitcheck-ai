@@ -8,12 +8,12 @@ const cardVariants = cva(
   {
     variants: {
       variant: {
-        default: "border border-hairline bg-card",
-        elevated: "border border-hairline bg-background",
-        glass: "border border-hairline bg-surface-soft",
-        gradient: "relative overflow-hidden border border-hairline bg-card",
-        image: "relative overflow-hidden border border-hairline bg-card",
-        interactive: "cursor-pointer border border-transparent bg-card hover:border-hairline focus-within:border-hairline",
+        default: "border border-border bg-card",
+        elevated: "border border-border bg-background",
+        glass: "border border-border bg-surface-soft",
+        gradient: "relative overflow-hidden border border-border bg-card",
+        image: "relative overflow-hidden border border-border bg-card",
+        interactive: "cursor-pointer border border-transparent bg-card hover:border-border focus-within:border-border",
       },
     },
     defaultVariants: {

@@ -96,7 +96,7 @@ export default function Navbar() {
           <div className="hidden lg:flex items-center gap-3">
             <ThemeToggle />
             {isAuthenticated ? (
-              <Button asChild className="bg-primary hover:bg-primary-pressed text-white shadow-none">
+              <Button asChild className="bg-primary hover:bg-primary-pressed text-white">
                 <Link to="/dashboard">Dashboard</Link>
               </Button>
             ) : (
@@ -104,7 +104,7 @@ export default function Navbar() {
                 <Button variant="ghost" asChild className="text-stone-700 dark:text-stone-300">
                   <Link to="/auth/login">Log in</Link>
                 </Button>
-                <Button asChild className="bg-primary hover:bg-primary-pressed text-white shadow-none">
+                <Button asChild className="bg-primary hover:bg-primary-pressed text-white">
                   <Link to="/auth/register">Start free</Link>
                 </Button>
               </>
@@ -142,7 +142,7 @@ export default function Navbar() {
                   )
                 )}
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-stone-500">Theme</span>
+                  <span className="text-sm text-muted-foreground">Theme</span>
                   <ThemeToggle />
                 </div>
                 <hr className="border-stone-200 dark:border-stone-800" />

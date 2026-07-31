@@ -163,7 +163,7 @@ export default function GamificationPage() {
                     if (earned.length === 0 && locked.length === 0) {
                       return (
                         <EmptyState
-                          className="border-0 shadow-none py-6"
+                          className="border-0 py-6"
                           icon={Trophy}
                           title="No achievements yet"
                           description="Wear outfits and build your wardrobe to unlock rewards."

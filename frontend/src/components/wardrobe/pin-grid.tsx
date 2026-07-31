@@ -23,7 +23,9 @@ export function PinGrid({ className, ...props }: PinGridProps) {
 export interface PinOverlayPillProps extends React.HTMLAttributes<HTMLSpanElement> {}
 
 export function PinOverlayPill({ className, ...props }: PinOverlayPillProps) {
-  return <span className={cn('rounded-full bg-background px-3 py-2 text-xs font-bold leading-none text-ink', className)} {...props} />
+  // Floats over garment imagery, so it uses the theme-invariant on-image pair
+  // rather than the page surface — see the note in src/index.css.
+  return <span className={cn('rounded-full bg-on-image px-3 py-2 text-xs font-bold leading-none text-on-image-foreground', className)} {...props} />
 }
 
 export interface PinCreatorProps {
@@ -33,8 +35,8 @@ export interface PinCreatorProps {
 
 export function PinCreator({ name, avatarUrl }: PinCreatorProps) {
   return (
-    <span className="flex min-w-0 items-center gap-2 bg-background/95 px-2 py-1.5 text-xs font-bold text-ink">
-      {avatarUrl ? <img src={avatarUrl} alt="" width={32} height={32} className="h-8 w-8 rounded-full object-cover" /> : <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-card">{name.slice(0, 1)}</span>}
+    <span className="flex min-w-0 items-center gap-2 bg-on-image/95 px-2 py-1.5 text-xs font-bold text-on-image-foreground">
+      {avatarUrl ? <img src={avatarUrl} alt="" width={32} height={32} className="h-8 w-8 rounded-full object-cover" /> : <span className="flex h-8 w-8 items-center justify-center rounded-full bg-on-image-foreground/10">{name.slice(0, 1)}</span>}
       <span className="truncate">{name}</span>
     </span>
   )

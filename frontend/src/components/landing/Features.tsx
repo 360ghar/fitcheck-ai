@@ -152,9 +152,9 @@ export default function Features() {
             <li>
               <a
                 href="#also-in-app"
-                className="inline-flex min-h-11 items-center text-stone-500 hover:text-primary transition-colors"
+                className="inline-flex min-h-11 items-center text-muted-foreground hover:text-primary transition-colors"
               >
-                Plus packing, streaks, sharing, import, and more in the app
+                Plus packing, sharing, import, and more in the app
               </a>
             </li>
           </ul>

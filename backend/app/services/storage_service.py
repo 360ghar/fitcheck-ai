@@ -7,7 +7,7 @@ import asyncio
 import base64
 import os
 import uuid
-from typing import Optional, List, Tuple
+from typing import Optional, List
 from datetime import datetime
 
 import httpx
@@ -19,6 +19,7 @@ from app.core.exceptions import (
     FileTooLargeError,
     UnsupportedMediaTypeError,
 )
+from app.utils.image_processing import EXTENSION_BY_MIME, sniff_image_mime
 
 logger = get_context_logger(__name__)
 
@@ -33,6 +34,12 @@ BUCKET_FEEDBACK = "feedback"
 # Allowed file extensions
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+# Browser/CDN cache lifetime stamped on every upload, in seconds. storage3 turns
+# a bare value into `cache-control: max-age=<v>` (see _upload_or_update in
+# storage3/_sync/file_api.py). Matches storage3's own default; kept explicit
+# because passing ANY file_options replaces the defaults wholesale.
+DEFAULT_CACHE_CONTROL = "3600"
 
 
 class StorageService:
@@ -61,6 +68,40 @@ class StorageService:
         if prefix:
             return f"{user_id}/{timestamp}/{prefix}_{unique_id}{ext}"
         return f"{user_id}/{timestamp}/{unique_id}{ext}"
+
+    @staticmethod
+    def _sniff_content_type(file_data: bytes, filename: str = "") -> str:
+        """Resolve the real content type of image bytes. Never raises.
+
+        THIS IS NOT COSMETIC. storage3's `DEFAULT_FILE_OPTIONS` stamps
+        `content-type: text/plain;charset=UTF-8` on any upload that passes no
+        `file_options`, which is how every item, outfit and avatar object in the
+        bucket ended up being served as text/plain.
+
+        The bytes decide, not the filename: the batch web client names its
+        upload `${tempId}.png` regardless of what the generator actually
+        returned, and since `background_removal.py` landed that is frequently a
+        WebP. The extension is only consulted when the bytes are unreadable.
+
+        A consequence, and it is fine: the storage KEY may end in `.png` while
+        holding WebP bytes. Supabase serves by stored content type, and browsers
+        and Flutter's `Image.network` honour that over the suffix - so do not
+        "fix" this by renaming keys, which would churn every stored URL.
+        """
+        return sniff_image_mime(file_data, filename)
+
+    @staticmethod
+    def _upload_options(file_data: bytes, filename: str = "") -> dict:
+        """`file_options` for `storage.upload()` with a correct content type.
+
+        A FRESH dict every call: storage3 mutates what it is handed (it pops
+        cache-control and upsert out of it), so a shared constant would be
+        emptied after the first upload.
+        """
+        return {
+            "content-type": StorageService._sniff_content_type(file_data, filename),
+            "cache-control": DEFAULT_CACHE_CONTROL,
+        }
 
     @staticmethod
     def _validate_image(file_data: bytes, filename: str) -> None:
@@ -133,7 +174,12 @@ class StorageService:
             # Upload to Supabase Storage
             bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_ITEMS
             storage = db.storage.from_(bucket)
-            await asyncio.to_thread(storage.upload, path=storage_path, file=file_data)
+            await asyncio.to_thread(
+                storage.upload,
+                path=storage_path,
+                file=file_data,
+                file_options=StorageService._upload_options(file_data, filename),
+            )
 
             # Get public URL
             image_url = storage.get_public_url(storage_path)
@@ -202,7 +248,12 @@ class StorageService:
         try:
             bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_OUTFITS
             storage = db.storage.from_(bucket)
-            await asyncio.to_thread(storage.upload, path=storage_path, file=file_data)
+            await asyncio.to_thread(
+                storage.upload,
+                path=storage_path,
+                file=file_data,
+                file_options=StorageService._upload_options(file_data, filename),
+            )
 
             image_url = storage.get_public_url(storage_path)
 
@@ -269,7 +320,12 @@ class StorageService:
         try:
             bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_AVATARS
             storage = db.storage.from_(bucket)
-            await asyncio.to_thread(storage.upload, path=storage_path, file=file_data)
+            await asyncio.to_thread(
+                storage.upload,
+                path=storage_path,
+                file=file_data,
+                file_options=StorageService._upload_options(file_data, filename),
+            )
 
             logger.info(
                 "Uploaded avatar",
@@ -401,6 +457,13 @@ class StorageService:
     ) -> bool:
         """Move an image within a bucket.
 
+        Because Supabase has no server-side move, this downloads and re-uploads,
+        which means the content type has to be RE-SNIFFED from the downloaded
+        bytes. Without that this path (used by `promote_temp_image_to_item`, i.e.
+        social-import approve) silently discards the correct type that
+        `upload_temp_generated_image` set and lands the object back on
+        storage3's `text/plain;charset=UTF-8` default.
+
         Args:
             db: Supabase client
             old_path: Current path
@@ -420,7 +483,12 @@ class StorageService:
             # Download and re-upload (Supabase doesn't have direct move)
             storage = db.storage.from_(bucket)
             file_data = await asyncio.to_thread(storage.download, old_path)
-            await asyncio.to_thread(storage.upload, path=new_path, file=file_data)
+            await asyncio.to_thread(
+                storage.upload,
+                path=new_path,
+                file=file_data,
+                file_options=StorageService._upload_options(file_data, new_path),
+            )
             await asyncio.to_thread(storage.remove, [old_path])
 
             logger.info(
@@ -472,7 +540,12 @@ class StorageService:
         try:
             bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_FEEDBACK
             storage = db.storage.from_(bucket)
-            await asyncio.to_thread(storage.upload, path=storage_path, file=file_data)
+            await asyncio.to_thread(
+                storage.upload,
+                path=storage_path,
+                file=file_data,
+                file_options=StorageService._upload_options(file_data, filename),
+            )
 
             image_url = storage.get_public_url(storage_path)
 
@@ -506,8 +579,15 @@ class StorageService:
         content_type: str = "application/octet-stream",
         bucket: Optional[str] = None,
         upsert: bool = False,
+        cache_control: Optional[str] = None,
     ) -> dict:
-        """Upload raw bytes to Supabase Storage with an explicit destination path."""
+        """Upload raw bytes to Supabase Storage with an explicit destination path.
+
+        `cache_control` is seconds as a string; storage3 turns it into
+        `cache-control: max-age=<v>`. Defaults to DEFAULT_CACHE_CONTROL. Pass a
+        short value (e.g. "60") when overwriting an existing key so a CDN cannot
+        keep serving the old bytes for an hour.
+        """
         if bucket is None:
             bucket = settings.SUPABASE_STORAGE_BUCKET
 
@@ -517,7 +597,11 @@ class StorageService:
                 storage.upload,
                 path=file_path,
                 file=file_data,
-                file_options={"content-type": content_type, "upsert": str(upsert).lower()},
+                file_options={
+                    "content-type": content_type,
+                    "cache-control": cache_control or DEFAULT_CACHE_CONTROL,
+                    "upsert": str(upsert).lower(),
+                },
             )
             return {
                 "public_url": storage.get_public_url(file_path),
@@ -541,14 +625,22 @@ class StorageService:
         source: str = "social-import",
         extension: str = ".png",
     ) -> dict:
-        """Upload temporary AI-generated image for review workflows."""
+        """Upload temporary AI-generated image for review workflows.
+
+        `extension` is only a hint: the real format is sniffed from the bytes,
+        because generated images are no longer always PNG (matted product shots
+        come back as WebP) and a mislabelled object is served with the wrong
+        content type for as long as it lives.
+        """
         ext = extension if extension.startswith(".") else f".{extension}"
+        content_type = StorageService._sniff_content_type(file_data, ext)
+        ext = EXTENSION_BY_MIME.get(content_type, ext)
         temp_name = f"{user_id}/tmp/{source}/{uuid.uuid4().hex}{ext}"
         upload = await StorageService.upload_file(
             db=db,
             file_data=file_data,
             file_path=temp_name,
-            content_type="image/png",
+            content_type=content_type,
         )
         return {
             "image_url": upload["public_url"],
@@ -573,10 +665,10 @@ class StorageService:
         Returns {image_url, storage_path} under {user_id}/sources/.
         """
         ext = extension if extension.startswith(".") else f".{extension}"
-        # .jpg / .jpeg -> image/jpeg, everything else -> image/png (covers .png
-        # screenshots, .webp uploads, etc.). Source photos in practice are JPEGs
-        # from phone cameras / social platforms.
-        content_type = "image/jpeg" if ext.lower() in (".jpg", ".jpeg") else "image/png"
+        # Sniffed from the bytes, with the caller's extension only as a fallback:
+        # the previous ext-based mapping labelled every non-.jpg source photo
+        # `image/png`, so a .webp upload was served as PNG.
+        content_type = StorageService._sniff_content_type(file_data, ext)
         path = f"{user_id}/sources/source_{uuid.uuid4().hex}{ext}"
         upload = await StorageService.upload_file(
             db=db,
@@ -658,64 +750,3 @@ class StorageService:
                 error=str(e),
             )
             return 0
-
-
-# ============================================================================
-# IMAGE PROCESSING UTILITIES
-# ============================================================================
-
-
-class ImageProcessingService:
-    """Utilities for processing images (thumbnails, resizing, etc.).
-
-    For MVP, this is a placeholder. In production, you'd use:
-    - Pillow for image processing
-    - Background tasks for async processing
-    - CDN integration for delivery
-    """
-
-    @staticmethod
-    async def generate_thumbnail(
-        file_data: bytes,
-        size: Tuple[int, int] = (300, 300)
-    ) -> bytes:
-        """Generate a thumbnail from an image.
-
-        Args:
-            file_data: Original image bytes
-            size: Target size (width, height)
-
-        Returns:
-            Thumbnail image bytes
-        """
-        # MVP: Return original data
-        # Production: Use Pillow to resize
-        return file_data
-
-    @staticmethod
-    async def get_image_dimensions(file_data: bytes) -> Tuple[int, int]:
-        """Get image dimensions.
-
-        Args:
-            file_data: Image bytes
-
-        Returns:
-            Tuple of (width, height)
-        """
-        # MVP: Return None values
-        # Production: Use Pillow to get dimensions
-        return (None, None)
-
-    @staticmethod
-    def optimize_for_web(file_data: bytes) -> bytes:
-        """Optimize image for web delivery.
-
-        Args:
-            file_data: Original image bytes
-
-        Returns:
-            Optimized image bytes
-        """
-        # MVP: Return original
-        # Production: Compress, convert to WebP, etc.
-        return file_data

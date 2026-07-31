@@ -70,7 +70,7 @@ export function AvatarSection() {
             type="button"
             onClick={handleAvatarClick}
             disabled={isUploadingAvatar}
-            className="absolute bottom-0 right-0 p-2 md:p-2.5 bg-primary rounded-full text-primary-foreground hover:bg-primary/90 disabled:opacity-60 touch-target shadow-md"
+            className="absolute bottom-0 right-0 p-2 md:p-2.5 bg-primary rounded-full text-primary-foreground hover:bg-primary/90 disabled:opacity-60 touch-target"
             aria-label="Change avatar"
             title="Change avatar"
           >

@@ -21,7 +21,9 @@ const buttonVariants = cva(
         tertiary: "bg-transparent hover:bg-surface-card",
         ghost: "bg-transparent hover:bg-surface-card",
         link: "text-primary underline-offset-4 hover:underline",
-        "pill-on-image": "rounded-full bg-background text-ink hover:bg-surface-card",
+        // Rides over photography, so it keeps the theme-invariant on-image pair
+        // in both themes (DESIGN.md 03 "bg canvas + text ink" = canvas white).
+        "pill-on-image": "rounded-full bg-on-image text-on-image-foreground hover:bg-on-image/85",
         "icon-circular": "rounded-full bg-surface-card text-ink hover:bg-secondary",
       },
       size: {

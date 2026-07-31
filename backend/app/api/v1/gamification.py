@@ -6,6 +6,14 @@ provides a minimal MVP backed by Supabase tables when available.
 
 When the Supabase schema for gamification is finalized, these handlers can be
 backed by tables like user_streaks, user_achievements, challenges, etc.
+
+Feature flag: ``settings.ENABLE_GAMIFICATION`` (default False). The flag is
+enforced HERE, per handler, and never by unmounting the router in main.py --
+see the long comment at main.py's ``include_router(gamification.router, ...)``
+call for the Flutter dashboard reason. With the flag off every handler returns
+200 with the same neutral payload its own ``except`` branch already returns,
+and performs zero database work (which also kills the write-on-GET at
+``get_streak``).
 """
 
 import asyncio
@@ -15,6 +23,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends
 from supabase import Client
 
+from app.core.config import settings
 from app.core.exceptions import DatabaseError
 from app.core.logging_config import get_context_logger
 from app.core.security import get_current_user_id
@@ -74,11 +83,65 @@ def _display_name(profile: Dict[str, Any]) -> str:
     return "User"
 
 
+def _achievement_catalog() -> List[Dict[str, Any]]:
+    """The static achievement catalog.
+
+    Module-level so the disabled payload and the live handler cannot drift.
+    Returns a fresh list each call because callers mutate the enriched copies.
+    """
+    return [
+        {"id": "first_upload", "name": "First Upload", "description": "Add your first wardrobe item", "xp_reward": 50},
+        {"id": "first_outfit", "name": "First Outfit", "description": "Create your first outfit", "xp_reward": 50},
+        {"id": "streak_7", "name": "7-day Streak", "description": "Plan outfits 7 days in a row", "xp_reward": 100},
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Neutral ("nothing to show") payloads.
+#
+# ONE definition each, used by BOTH the ENABLE_GAMIFICATION=False guard and the
+# handlers' own ``except`` fallbacks. Two copies of "neutral" would drift, and a
+# drifted shape is what breaks a mobile client that cannot be redeployed.
+# These are 200 responses on purpose -- never 404. See main.py.
+# ---------------------------------------------------------------------------
+
+
+def _disabled_streak_payload() -> Dict[str, Any]:
+    return {
+        "data": {
+            "current_streak": 0,
+            "longest_streak": 0,
+            "last_planned": None,
+            "streak_freezes_remaining": 3,
+            "streak_skips_remaining": 1,
+            "next_milestone": _compute_next_milestone(0),
+        },
+        "message": "OK",
+    }
+
+
+def _disabled_achievements_payload() -> Dict[str, Any]:
+    return {"data": {"earned": [], "available": _achievement_catalog()}, "message": "OK"}
+
+
+def _disabled_leaderboard_payload() -> Dict[str, Any]:
+    # ``user_rank`` is present-and-null, not omitted: the success path below
+    # always includes the key and frontend/src/api/gamification.ts reads
+    # ``data.user_rank``, so dropping it made the two shapes disagree.
+    return {"data": {"entries": [], "user_rank": None}, "message": "OK"}
+
+
 @router.get("/streak", response_model=Dict[str, Any])
 async def get_streak(
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
 ):
+    # Flag off -> 200 with zeros, NOT 404. A 404 here rejects the Flutter
+    # dashboard's unguarded Future.wait (dashboard_controller.dart:60-67) and
+    # leaves the home screen permanently broken. See main.py.
+    if not settings.ENABLE_GAMIFICATION:
+        return _disabled_streak_payload()
+
     try:
         result = await asyncio.to_thread(db.table("user_streaks").select("*").eq("user_id", user_id).maybe_single().execute)
         row = result.data if result else None
@@ -129,17 +192,7 @@ async def get_streak(
             error=str(e),
             exc_info=False
         )
-        return {
-            "data": {
-                "current_streak": 0,
-                "longest_streak": 0,
-                "last_planned": None,
-                "streak_freezes_remaining": 3,
-                "streak_skips_remaining": 1,
-                "next_milestone": _compute_next_milestone(0),
-            },
-            "message": "OK",
-        }
+        return _disabled_streak_payload()
 
 
 @router.get("/achievements", response_model=Dict[str, Any])
@@ -147,11 +200,12 @@ async def get_achievements(
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
 ):
-    catalog = [
-        {"id": "first_upload", "name": "First Upload", "description": "Add your first wardrobe item", "xp_reward": 50},
-        {"id": "first_outfit", "name": "First Outfit", "description": "Create your first outfit", "xp_reward": 50},
-        {"id": "streak_7", "name": "7-day Streak", "description": "Plan outfits 7 days in a row", "xp_reward": 100},
-    ]
+    # Flag off -> 200 with an empty earned list, NOT 404. See main.py and the
+    # Flutter Future.wait note on get_streak above.
+    if not settings.ENABLE_GAMIFICATION:
+        return _disabled_achievements_payload()
+
+    catalog = _achievement_catalog()
     catalog_by_id = {row["id"]: row for row in catalog}
 
     def enrich_earned(rows: list) -> list:
@@ -187,7 +241,7 @@ async def get_achievements(
             error=str(e),
             exc_info=False
         )
-        return {"data": {"earned": [], "available": catalog}, "message": "OK"}
+        return _disabled_achievements_payload()
 
 
 @router.get("/leaderboard", response_model=Dict[str, Any])
@@ -195,6 +249,11 @@ async def get_leaderboard(
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
 ):
+    # Flag off -> 200 with no entries, NOT 404. See main.py and the Flutter
+    # Future.wait note on get_streak above.
+    if not settings.ENABLE_GAMIFICATION:
+        return _disabled_leaderboard_payload()
+
     try:
         # Minimal leaderboard by current streak
         streaks_result = await asyncio.to_thread(
@@ -281,4 +340,4 @@ async def get_leaderboard(
             error=str(e),
             exc_info=False
         )
-        return {"data": {"entries": []}, "message": "OK"}
+        return _disabled_leaderboard_payload()

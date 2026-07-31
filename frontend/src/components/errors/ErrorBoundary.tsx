@@ -80,7 +80,7 @@ class ErrorBoundary extends Component<Props, State> {
 
       return (
         <div className="min-h-screen bg-background flex items-center justify-center p-4">
-          <div className="max-w-lg w-full bg-card rounded-2xl shadow-lg border border-border p-8">
+          <div className="max-w-lg w-full bg-card rounded-2xl border border-border p-8">
             {/* Error Icon */}
             <div className="flex justify-center mb-6">
               <div className="w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center">

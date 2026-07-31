@@ -48,16 +48,22 @@ function getStatusIndicator(item: DetectedItem) {
           </div>
         </div>
       );
+    // Solid disc rather than a `drop-shadow-lg` bloom — see the matching note in
+    // BatchExtractionProgress. Legible over any garment photo, no all-around glow.
     case 'generated':
       return (
         <div className="absolute top-1.5 right-1.5">
-          <CheckCircle2 className="h-4 w-4 text-green-500 drop-shadow-lg" />
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-success-pale text-success">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+          </span>
         </div>
       );
     case 'failed':
       return (
-        <div className="absolute inset-0 flex items-center justify-center bg-red-500/30">
-          <XCircle className="h-6 w-6 text-red-500 drop-shadow-lg" />
+        <div className="absolute inset-0 flex items-center justify-center bg-destructive/30">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-destructive text-destructive-foreground">
+            <XCircle className="h-5 w-5" />
+          </span>
         </div>
       );
     default:

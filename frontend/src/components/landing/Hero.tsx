@@ -71,7 +71,11 @@ export default function Hero() {
                     Navy overshirt, ecru tee, stone chinos
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex h-7 items-center rounded-full bg-primary px-3 text-xs font-medium">
+                    {/* Explicit label colour: this span inherited `text-white`
+                        from the panel, which is only 3.5:1 on the lightened
+                        dark --primary. --primary-foreground pairs correctly in
+                        both themes (4.8:1 light, 5.2:1 dark). */}
+                    <span className="inline-flex h-7 items-center rounded-full bg-primary px-3 text-xs font-medium text-primary-foreground">
                       Recommended
                     </span>
                     <span className="text-xs text-stone-400">Weather-aware pick</span>

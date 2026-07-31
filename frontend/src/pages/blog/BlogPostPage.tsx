@@ -146,7 +146,7 @@ export default function BlogPostPage() {
         <section className="pb-12 md:pb-16">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
-              <div className="aspect-[21/9] bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-xl overflow-hidden relative">
+              <div className="aspect-[21/9] bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center overflow-hidden relative">
                 {post.featured_image_url ? (
                   <img
                     src={post.featured_image_url}
@@ -286,7 +286,7 @@ export default function BlogPostPage() {
                       to={`/blog/${relatedPost.slug}`}
                       className="group block"
                     >
-                      <article className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                      <article className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden transition-shadow">
                         <div className="aspect-video bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center overflow-hidden relative">
                           {relatedPost.featured_image_url ? (
                             <img

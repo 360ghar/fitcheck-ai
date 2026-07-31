@@ -150,7 +150,7 @@ export function FilterPanel({
   }
 
   return (
-    <div className="mb-4 rounded-md border border-hairline bg-surface-soft p-3 md:mb-6 md:p-4">
+    <div className="mb-4 rounded-md border border-border bg-surface-soft p-3 md:mb-6 md:p-4">
       {/* Always visible: Search + Filter toggle (mobile) */}
       <div className="flex gap-2 md:gap-4">
         {/* Search */}

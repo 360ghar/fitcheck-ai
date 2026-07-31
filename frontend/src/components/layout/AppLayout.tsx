@@ -29,12 +29,12 @@ function AppLayoutContent() {
       <Sidebar className="hidden md:flex" />
 
       {/* Mobile header - simplified since we have bottom nav */}
-      <header className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center justify-center border-b border-hairline bg-background safe-area-top md:hidden pl-[var(--safe-area-left)] pr-[var(--safe-area-right)]">
+      <header className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center justify-center border-b border-border bg-background safe-area-top md:hidden pl-[var(--safe-area-left)] pr-[var(--safe-area-right)]">
         <div className="absolute left-[calc(var(--safe-area-left)+0.5rem)]">
           <SidebarMobileTrigger />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold text-ink">FitCheck</span>
+          <span className="text-lg font-bold text-foreground">FitCheck</span>
           <span className="text-lg font-semibold text-primary">AI</span>
         </div>
         <Button asChild size="icon" className="absolute right-[calc(var(--safe-area-right)+0.5rem)]" aria-label="Add to wardrobe">

@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Protocol, Type, Union, runtime_che
 
 from app.core.exceptions import AIServiceError
 from app.models.ai import HealthCheckResult
+from app.utils.image_processing import to_data_url
 
 
 class AIProvider(str, Enum):
@@ -47,14 +48,14 @@ def build_user_multimodal_messages(prompt: str, images: List[str]) -> List[ChatM
     """Build a single user message holding a text prompt plus images, in the
     OpenAI-style multimodal shape every provider consumes (a list of
     {"type": "text"|"image_url", ...} dicts). Bare base64 strings are wrapped
-    as data: URLs; ``GeminiProvider._decode_image_part`` strips the prefix back
-    out, so this one builder serves both the OpenAI-compatible HTTP path and
-    the native Gemini path without a per-provider copy."""
+    as data: URLs carrying their SNIFFED mime type (this used to hardcode
+    image/jpeg, and ``GeminiProvider._decode_image_part`` reads that header
+    straight into ``Part.from_bytes(mime_type=...)``), so this one builder
+    serves both the OpenAI-compatible HTTP path and the native Gemini path
+    without a per-provider copy."""
     content: List[Dict[str, Any]] = [{"type": "text", "text": prompt}]
     for img in images:
-        if not img.startswith("data:"):
-            img = f"data:image/jpeg;base64,{img}"
-        content.append({"type": "image_url", "image_url": {"url": img}})
+        content.append({"type": "image_url", "image_url": {"url": to_data_url(img)}})
     return [ChatMessage(role="user", content=content)]
 
 

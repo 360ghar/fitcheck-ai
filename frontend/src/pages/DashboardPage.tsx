@@ -251,7 +251,7 @@ export default function DashboardPage() {
       name: 'Create Outfit',
       description: 'Combine items into a wearable look',
       icon: Layers,
-      link: '/outfits?action=create',
+      link: '/outfits/new',
     },
     {
       name: 'What to wear',
@@ -311,7 +311,7 @@ export default function DashboardPage() {
           <ActivationChecklist
             input={activationInput}
             onAddItems={() => setIsUploadModalOpen(true)}
-            onCreateOutfit={() => navigate('/outfits?action=create')}
+            onCreateOutfit={() => navigate('/outfits/new')}
             onAddAvatar={() => navigate('/profile?tab=account')}
             onTryOn={() => navigate('/try-on')}
             onDismiss={handleDismissActivation}
@@ -450,7 +450,7 @@ export default function DashboardPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => navigate('/outfits?action=create')}
+                  onClick={() => navigate('/outfits/new')}
                 >
                   Create outfit
                 </Button>

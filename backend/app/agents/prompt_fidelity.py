@@ -55,11 +55,21 @@ PRODUCT_REFERENCE_LOCK = """PRODUCT LOCK (highest priority):
   is the source of truth for those tokens.
 - Ignore EVERY other garment, footwear, accessory, prop, person, face, body,
   and background visible in the reference photo. Output one item only.
-- Single isolated product shot only.
+- Single isolated product shot only: the item sits alone on a pure flat #FFFFFF
+  field with a crisp, clean silhouette edge and nothing touching it - no cast
+  shadow, no contact shadow, no reflection, no floor or table plane, no
+  gradient, no vignette.
 
 AVOID: extra items, second garment, partial second item, wrong color,
        different design, restyled cut, mannequin face, person, watermark,
-       text, beautification, fabric smoothing."""
+       text, beautification, fabric smoothing, drop shadow, cast shadow,
+       reflection, gradient background, vignette, gray backdrop, floor plane."""
+
+# The backdrop clause above is not cosmetic: app/utils/background_removal.py
+# cuts the alpha out of these images with a near-white threshold plus a
+# border-connected flood fill, so a gradient, a vignette or a cast shadow
+# directly degrades the cut (a contact shadow in particular survives as a
+# detached grey blob). Never pass include_shadows=True on a matted path.
 
 # Garment references for outfit generation. Unlike the busy multi-item source
 # photos that broke single-item product extraction (see

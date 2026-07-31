@@ -224,6 +224,19 @@ class Settings(BaseSettings):
     # more pixels than a garment does.
     AI_OUTFIT_ITEM_REFERENCE_MAX_EDGE: int = 768
 
+    # Gamification
+    #
+    # Deliberately defaults to the OPPOSITE of ENABLE_SOCIAL_IMPORT below.
+    # Nothing in this backend ever WRITES user_streaks or user_achievements --
+    # the only insert is the zeroed row at gamification.py:96 -- so every user
+    # sees a permanent 0-day streak and an all-zero leaderboard. Shipping that
+    # is worse than not shipping it, hence off by default.
+    #
+    # NOTE: when this is False the gamification router stays MOUNTED (see the
+    # comment at main.py's include_router call); only the handler bodies are
+    # short-circuited to a neutral zeroed 200. Never turn this into a 404.
+    ENABLE_GAMIFICATION: bool = False
+
     # Social Import
     ENABLE_SOCIAL_IMPORT: bool = True
     SOCIAL_IMPORT_MAX_CONCURRENT_JOBS: int = 1

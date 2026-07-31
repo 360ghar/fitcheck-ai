@@ -46,7 +46,8 @@ Domain modules: `src/api/*.ts` (auth, items, outfits, ai, batch, etc.).
 
 - Public: `/`, `/about`, `/terms`, `/privacy`
 - Auth: `/auth/login`, `/auth/register`, forgot/reset password
-- Protected: dashboard, wardrobe, outfits, calendar, recommendations, try-on, gamification, profile
+- Protected: dashboard, wardrobe, outfits, calendar, recommendations, try-on, photoshoot, profile
+- Protected + flag-gated: `/gamification` (only registered when `FEATURES.gamification` is true — see Feature flags below; with the flag off a bookmarked `/gamification` falls through to the catch-all redirect to `/dashboard`)
 - Share: `/shared/outfits/:id`
 
 ### Component layout
@@ -100,7 +101,26 @@ stores must not import pages
 - `VITE_API_URL` or `VITE_API_BASE_URL` (default `http://localhost:8000`)
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY` / publishable key variants
-- Feature flags e.g. `VITE_ENABLE_SOCIAL_IMPORT`
+
+### Feature flags
+
+Read flags through `frontend/src/lib/feature-flags.ts` (`FEATURES`), never with an
+inline `import.meta.env` check. Vite inlines these at build time, so a disabled
+feature can be dropped from the bundle as well as the UI. Declare new vars in
+`frontend/src/vite-env.d.ts`.
+
+| Var | Default | Gates | Backend counterpart |
+|-----|---------|-------|---------------------|
+| `VITE_ENABLE_SOCIAL_IMPORT` | `true` | Instagram import panes in `BatchExtractionFlow` | `ENABLE_SOCIAL_IMPORT` (router unmounted when off) |
+| `VITE_ENABLE_GAMIFICATION` | `false` | `/gamification` route, sidebar nav entry, and the lazy import of `GamificationPage` | `ENABLE_GAMIFICATION` (router stays **mounted**, handlers return zeroed 200s) |
+
+There is no `/config` endpoint, so each pair must be kept in step by hand.
+Gamification defaults off because nothing on the backend writes `user_streaks`
+or `user_achievements`, so the page can only ever render zeros.
+
+Gating the `<Route>` alone is not enough to remove the code: the
+`lazy(() => import(...))` binding must be gated too, or Rollup still emits the
+page chunk. `App.tsx` does both.
 
 ## References
 

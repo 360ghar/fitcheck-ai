@@ -335,7 +335,7 @@ export function SubscriptionPanel() {
                     className={
                       recommended
                         ? "relative flex h-full flex-col rounded-lg border-2 border-indigo-500 p-4"
-                        : "relative flex h-full flex-col rounded-lg border p-4 transition-colors dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700"
+                        : "relative flex h-full flex-col rounded-lg border p-4 transition-colors hover:border-indigo-300 dark:hover:border-indigo-700"
                     }
                   >
                     {recommended && (
@@ -347,9 +347,9 @@ export function SubscriptionPanel() {
                       <h3 className="font-semibold text-lg">{name}</h3>
                       <p className="text-3xl font-bold mt-1">
                         ${prices.monthly}
-                        <span className="text-base font-normal text-gray-500">/mo</span>
+                        <span className="text-base font-normal text-muted-foreground">/mo</span>
                       </p>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-muted-foreground">
                         or ${prices.yearly}/yr — saves ${savings}
                       </p>
                     </div>

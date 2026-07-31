@@ -91,7 +91,7 @@ export default function FeaturesIndexPage() {
               <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
                 <Button
                   size="lg"
-                  className="bg-primary hover:bg-primary-pressed text-white h-12 px-6 shadow-none"
+                  className="bg-primary hover:bg-primary-pressed text-white h-12 px-6"
                   asChild
                 >
                   <Link to="/auth/register">

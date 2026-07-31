@@ -72,7 +72,7 @@ const BottomSheetContent = React.forwardRef<
           'fixed z-50 inset-x-0 bottom-0',
           'flex flex-col',
           'bg-background',
-          'rounded-t-3xl shadow-elevated-lg',
+          'rounded-t-3xl',
           // Safe area padding
           'pb-[var(--safe-area-bottom)]',
           // Animation

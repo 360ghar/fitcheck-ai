@@ -10,6 +10,9 @@ python3 scripts/check_architecture.py
 echo "== docs structure =="
 python3 scripts/check_docs_structure.py
 
+echo "== theme tokens =="
+python3 scripts/check_theme_tokens.py
+
 if [[ -x "$ROOT/backend/.venv/bin/pytest" ]]; then
   echo "== backend pytest =="
   (

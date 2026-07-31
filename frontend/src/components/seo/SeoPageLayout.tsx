@@ -96,7 +96,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
                 <Button
                   size="lg"
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white h-12 px-6 shadow-none"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white h-12 px-6"
                   asChild
                 >
                   <Link to={primary.href}>
@@ -221,7 +221,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
             <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
               <Button
                 size="lg"
-                className="bg-white text-indigo-700 hover:bg-stone-100 h-12 px-6 shadow-none"
+                className="bg-white text-indigo-700 hover:bg-stone-100 h-12 px-6"
                 asChild
               >
                 <Link to="/auth/register">

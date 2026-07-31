@@ -98,12 +98,27 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ]
 
-const EVENT_TYPE_COLORS: Record<string, string> = {
-  work: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-  social: 'bg-pink-100 dark:bg-pink-900/30 text-pink-800 dark:text-pink-300 border-pink-200 dark:border-pink-800',
-  casual: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800',
-  formal: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-800',
-  other: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-600',
+/**
+ * Event-type index.
+ *
+ * This used to flood the whole row with a tinted pill per type — five saturated
+ * chips, five hues, in a product whose palette is one red accent. That is both
+ * the "labels as tinted pill chips" tell and a straight break of DESIGN.md 01's
+ * one-accent rule, and at a month-grid's 12px it made the calendar read as a
+ * bag of highlighter pens rather than a schedule.
+ *
+ * A calendar does genuinely need to tell its types apart, so the differentiation
+ * stays — it just gets demoted to a small marker in a desaturated family (one
+ * saturation band, one lightness band, defined in index.css). The row itself is
+ * an ordinary card surface with ordinary text, so the TITLE is what you read and
+ * the colour is a quiet index you consult.
+ */
+const EVENT_TYPE_MARKER: Record<string, string> = {
+  work: 'bg-event-work',
+  social: 'bg-event-social',
+  casual: 'bg-event-casual',
+  formal: 'bg-event-formal',
+  other: 'bg-event-other',
 }
 
 const EMPTY_EVENTS: CalendarEvent[] = []
@@ -154,23 +169,34 @@ interface EventBadgeProps {
 }
 
 function EventBadge({ event, onClick }: EventBadgeProps) {
-  const colorClass = EVENT_TYPE_COLORS[event.event_type || 'other']
+  const markerClass =
+    EVENT_TYPE_MARKER[event.event_type || 'other'] ?? EVENT_TYPE_MARKER.other
 
   return (
     <button
       type="button"
       onClick={() => onClick(event)}
-      className={`w-full text-left px-2 py-1 rounded text-xs border truncate flex items-center gap-1 hover:opacity-80 transition-opacity ${colorClass}`}
+      className="flex w-full items-center gap-1.5 truncate rounded border border-border bg-card px-2 py-1 text-left text-xs text-foreground transition-colors hover:bg-accent"
       title={event.title}
     >
+      {/* Rounded caps: a bare square-capped hairline used as ornament is its own
+          tell. This one carries meaning — it is the type — so it is drawn as a
+          deliberate mark, not a divider. */}
+      <span
+        className={`h-3.5 w-[3px] shrink-0 rounded-full ${markerClass}`}
+        aria-hidden="true"
+      />
       {event.outfit_image_url && (
         <img
           src={event.outfit_image_url}
           alt=""
-          className="w-4 h-4 rounded-full object-cover"
+          className="h-4 w-4 shrink-0 rounded-full object-cover"
         />
       )}
-      <span className="truncate flex-1">{event.title}</span>
+      <span className="flex-1 truncate">{event.title}</span>
+      {/* The type is not decoration, so it is also available to a screen reader
+          and to anyone who cannot separate the hues. */}
+      <span className="sr-only">{event.event_type || 'other'}</span>
     </button>
   )
 }

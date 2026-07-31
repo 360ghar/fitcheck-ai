@@ -505,7 +505,7 @@ export default function RecommendationsPage() {
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button asChild variant="outline" size="sm">
-                          <Link to="/outfits?action=create">Save as outfit</Link>
+                          <Link to={`/outfits/new?items=${weatherSuggestedItems.map((i) => i.id).join(',')}`}>Save as outfit</Link>
                         </Button>
                         <Button asChild variant="outline" size="sm">
                           <Link to="/try-on">Try on</Link>

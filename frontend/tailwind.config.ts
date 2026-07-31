@@ -66,24 +66,52 @@ const config: Config = {
           foreground: "hsl(var(--primary-foreground))",
           pressed: 'hsl(var(--primary-pressed))',
         },
-        ink: '#000000',
-        body: '#33332e',
-        charcoal: '#211922',
-        mute: '#62625b',
-        ash: '#91918c',
+        // Wardrobe Studio semantic tokens. These MUST stay var-backed: a fixed
+        // hex here has no `.dark` counterpart in the emitted CSS, which is how
+        // dark mode broke (white search bars, white filter pills, white card
+        // outlines, invisible black ghost-button labels). Values live in
+        // src/index.css `:root` / `.dark`.
+        ink: 'hsl(var(--foreground))',
+        body: 'hsl(var(--body))',
+        mute: 'hsl(var(--muted-foreground))',
+        ash: 'hsl(var(--ash))',
         stone: { ...colors.stone, DEFAULT: '#c8c8c1' },
-        hairline: '#dadad3',
-        'hairline-soft': '#ecece7',
-        'surface-soft': '#fbfbf9',
-        'surface-card': '#f6f6f3',
+        hairline: 'hsl(var(--border))',
+        'surface-soft': 'hsl(var(--surface-soft))',
+        'surface-card': 'hsl(var(--card))',
         'surface-elevated': 'hsl(var(--surface-elevated))',
-        'surface-dark': '#262622',
-        'on-dark': '#fbfbf9',
+        'on-dark': 'hsl(var(--on-dark))',
+        // Chrome over photography — same in both themes by design.
+        'on-image': 'hsl(var(--on-image))',
+        'on-image-foreground': 'hsl(var(--on-image-foreground))',
+        // Calendar event-type index -- a quiet tonal family, not five accents.
+        event: {
+          work: 'hsl(var(--event-work))',
+          social: 'hsl(var(--event-social))',
+          casual: 'hsl(var(--event-casual))',
+          formal: 'hsl(var(--event-formal))',
+          other: 'hsl(var(--event-other))',
+        },
+        // Garment condition index -- same tonal family discipline.
+        condition: {
+          dirty: 'hsl(var(--condition-dirty))',
+          laundry: 'hsl(var(--condition-laundry))',
+          repair: 'hsl(var(--condition-repair))',
+          donate: 'hsl(var(--condition-donate))',
+          other: 'hsl(var(--condition-other))',
+        },
         'focus-outer': '#435ee5',
-        'focus-inner': '#000000',
-        'accent-purple': '#7e238b',
-        success: { deep: '#103c25', pale: '#c7f0da' },
-        error: { DEFAULT: '#9e0a0a', pale: '#f9e5e5' },
+        'focus-inner': 'hsl(var(--focus-inner))',
+        'accent-purple': 'hsl(var(--accent-purple))',
+        // `DEFAULT` was missing, so `bg-success`, `text-success` and
+        // `bg-success/10` were never emitted and 11 call sites silently
+        // rendered nothing. `deep` and `pale` are aliases of the same pair.
+        success: {
+          DEFAULT: 'hsl(var(--success))',
+          deep: 'hsl(var(--success))',
+          pale: 'hsl(var(--success-pale))',
+        },
+        error: { DEFAULT: 'hsl(var(--error))', pale: 'hsl(var(--error-pale))' },
         // Compatibility mappings migrate pre-existing utility usage to the
         // approved red/purple/warm-neutral system during the full route sweep.
         indigo: {
@@ -142,11 +170,13 @@ const config: Config = {
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+        // Brand red is deliberately hex-locked (DESIGN.md 01) — it does not invert.
         'gradient-primary': 'linear-gradient(135deg, #e60023, #cc001f)',
         'gradient-accent': 'linear-gradient(135deg, #e60023, #cc001f)',
-        'gradient-cool': 'linear-gradient(135deg, #f6f6f3, #ffffff)',
-        'gradient-warm': 'linear-gradient(135deg, #f6f6f3, #ffffff)',
-        'gradient-success': 'linear-gradient(135deg, #c7f0da, #103c25)',
+        // Neutral surface gradients follow the theme.
+        'gradient-cool': 'linear-gradient(135deg, hsl(var(--card)), hsl(var(--background)))',
+        'gradient-warm': 'linear-gradient(135deg, hsl(var(--card)), hsl(var(--background)))',
+        'gradient-success': 'linear-gradient(135deg, hsl(var(--success-pale)), hsl(var(--success)))',
       },
       boxShadow: { glow: 'none', 'glow-sm': 'none', elevated: 'none', 'elevated-lg': 'none', 'card-hover': 'none' },
       animation: {

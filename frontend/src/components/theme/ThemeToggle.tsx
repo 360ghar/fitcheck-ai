@@ -1,4 +1,4 @@
-import { Sun, Moon, Monitor } from 'lucide-react';
+import { Sun, Moon, Monitor, Check } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import {
   DropdownMenu,
@@ -31,7 +31,10 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
         <button
           type="button"
           className={cn(
-            'p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-800',
+            // inline-flex + centering is load-bearing: `touch-target` only sets
+            // min-h/min-w, so without it the 20px icon sits top-left of the
+            // 44px box instead of dead-centre.
+            'inline-flex items-center justify-center p-2 touch-target text-muted-foreground hover:text-foreground rounded-md hover:bg-accent transition-colors',
             className
           )}
           title="Toggle theme"
@@ -47,11 +50,15 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
             onClick={() => setTheme(value)}
             className={cn(
               'flex items-center gap-2 cursor-pointer',
-              theme === value && 'bg-accent'
+              // `bg-accent` alone is the same fill as the hover state, so the
+              // selected row was indistinguishable. Weight + a trailing check
+              // carry the state instead.
+              theme === value && 'bg-accent font-semibold text-foreground'
             )}
           >
             <Icon className="h-4 w-4" />
             <span>{label}</span>
+            {theme === value && <Check className="ml-auto h-4 w-4" />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

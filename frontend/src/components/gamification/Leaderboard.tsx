@@ -72,7 +72,7 @@ interface LeaderboardProps {
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) {
     return (
-      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center shadow-lg">
+      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center">
         <Crown className="h-5 w-5 text-white" />
       </div>
     )
@@ -80,7 +80,7 @@ function RankBadge({ rank }: { rank: number }) {
 
   if (rank === 2) {
     return (
-      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center shadow-lg">
+      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center">
         <Medal className="h-5 w-5 text-white" />
       </div>
     )
@@ -88,7 +88,7 @@ function RankBadge({ rank }: { rank: number }) {
 
   if (rank === 3) {
     return (
-      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center shadow-lg">
+      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center">
         <Medal className="h-5 w-5 text-white" />
       </div>
     )
@@ -149,7 +149,7 @@ function Podium({ entries }: { entries: LeaderboardEntry[] }) {
         </div>
         <p className="text-sm font-semibold mt-2 max-w-24 truncate text-gray-900 dark:text-white">{first.username}</p>
         <p className="text-xs text-gray-500 dark:text-gray-400">{first.total_points.toLocaleString()} pts</p>
-        <div className="w-24 h-32 bg-gradient-to-t from-yellow-500 to-yellow-400 rounded-t-lg mt-2 flex items-end justify-center pb-2 shadow-lg">
+        <div className="w-24 h-32 bg-gradient-to-t from-yellow-500 to-yellow-400 rounded-t-lg mt-2 flex items-end justify-center pb-2">
           <span className="text-3xl font-bold text-white">1</span>
         </div>
       </div>
