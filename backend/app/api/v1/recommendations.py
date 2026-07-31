@@ -10,6 +10,7 @@ from datetime import date, datetime, time as dt_time
 import asyncio
 import functools
 import re
+from app.utils.datetime_util import utc_today
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 from uuid import UUID
 
@@ -941,6 +942,11 @@ async def similar_items(
     # Vector search best-effort
     results: List[Dict[str, Any]] = []
     reserved = False
+    # UTC day the slot was reserved: the release RPC decrements whatever
+    # day's counter is current (migration 024 keys on CURRENT_DATE), so after
+    # the day rolls over a release would remove a slot reserved on the new day.
+    # Mirror items.py's day-boundary guard.
+    reserved_on = utc_today()
     try:
         reserved = await AISettingsService.reserve_usage(
             user_id=user_id,
@@ -985,8 +991,9 @@ async def similar_items(
     finally:
         # An empty result or a raised vector path never consumed the slot via
         # a stored embedding: give it back so the daily embedding budget is
-        # not burned on a failed attempt (mirrors items.py behavior).
-        if reserved and not results:
+        # not burned on a failed attempt (mirrors items.py behavior). Skip
+        # once the UTC day rolled over (see reserved_on above).
+        if reserved and not results and reserved_on == utc_today():
             try:
                 await AISettingsService.release_usage(
                     user_id=user_id,

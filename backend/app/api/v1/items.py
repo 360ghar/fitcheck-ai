@@ -8,7 +8,7 @@ stores items/images and maintains embeddings for recommendations.
 
 import asyncio
 import uuid
-from app.utils.datetime_util import utcnow_iso
+from app.utils.datetime_util import utc_today, utcnow_iso
 from datetime import date
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -58,10 +58,13 @@ async def _release_embedding_reservation(
     result must not silently consume the daily budget, but a failed release
     must also not mask the operation's original outcome. ``reserved_on`` is
     the UTC calendar day the reservation was made: release_usage() decrements
-    whatever day's counter is current, so a release after the counter rolled
-    over must be skipped or it would remove a slot reserved on the new day.
+    whatever day's counter is current (the RPCs in migration 024 key on
+    ``CURRENT_DATE``, i.e. UTC on hosted Supabase), so a release after the
+    counter rolled over must be skipped or it would remove a slot reserved on
+    the new day. Compared in UTC: server-local ``date.today()`` would disagree
+    with the DB for hours around midnight on non-UTC hosts.
     """
-    if reserved_on is not None and reserved_on != date.today():
+    if reserved_on is not None and reserved_on != utc_today():
         return
     try:
         await AISettingsService.release_usage(
@@ -293,7 +296,7 @@ async def create_item(
         embedding_stored = False
         # The day the slot was reserved: a release after midnight must not
         # decrement the new day's counter.
-        reserved_on = date.today()
+        reserved_on = utc_today()
         try:
             reserved = await AISettingsService.reserve_usage(
                 user_id=user_id,
@@ -514,7 +517,7 @@ async def update_item(
             embedding_stored = False
             # The day the slot was reserved: a release after midnight must
             # not decrement the new day's counter.
-            reserved_on = date.today()
+            reserved_on = utc_today()
             try:
                 reserved = await AISettingsService.reserve_usage(
                     user_id=user_id,
@@ -1146,7 +1149,7 @@ async def check_duplicates(
         )
         # The day the slot was reserved: a release after midnight must not
         # decrement the new day's counter.
-        reserved_on = date.today()
+        reserved_on = utc_today()
         if not reserved:
             logger.info(
                 "Embedding rate limit exceeded for duplicate check, using fallback",
@@ -1323,7 +1326,7 @@ async def find_similar_items(
         )
         # The day the slot was reserved: a release after midnight must not
         # decrement the new day's counter.
-        reserved_on = date.today()
+        reserved_on = utc_today()
         if not reserved:
             raise RateLimitError(
                 "Daily embedding limit exceeded. Requested 1 embedding."
