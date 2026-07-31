@@ -12,6 +12,8 @@ export interface ZoomableImageProps extends React.ImgHTMLAttributes<HTMLImageEle
    * Alt text for the image (also used in lightbox)
    */
   alt?: string;
+  /** Optional higher-resolution source used only inside the lightbox. */
+  lightboxSrc?: string;
 }
 
 /**
@@ -23,7 +25,13 @@ export function ZoomableImage({
   className,
   src,
   alt,
+  lightboxSrc,
   onClick,
+  onKeyDown,
+  role: _role,
+  tabIndex: _tabIndex,
+  decoding: _decoding,
+  ['aria-label']: _ariaLabel,
   ...imgProps
 }: ZoomableImageProps) {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -41,30 +49,31 @@ export function ZoomableImage({
   return (
     <>
       <img
+        {...imgProps}
         src={src}
         alt={alt}
         className={cn(
           className,
-          isZoomable && 'cursor-zoom-in'
+          isZoomable && 'cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
         )}
         onClick={handleClick}
         role={isZoomable ? 'button' : undefined}
         tabIndex={isZoomable ? 0 : undefined}
-        onKeyDown={
-          isZoomable
-            ? (e) => {
+        onKeyDown={(e) => {
+          if (isZoomable) {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   setIsOpen(true);
                 }
-              }
-            : undefined
-        }
-        {...imgProps}
+          }
+          onKeyDown?.(e)
+        }}
+        aria-label={isZoomable ? `Open image preview: ${alt || 'image'}` : undefined}
+        decoding="async"
       />
       {enableZoom && src && (
         <ImageLightbox
-          src={src}
+          src={lightboxSrc || src}
           alt={alt}
           open={isOpen}
           onClose={() => setIsOpen(false)}

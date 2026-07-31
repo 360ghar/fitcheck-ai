@@ -1,5 +1,36 @@
 # Feature: Gamification
 
+> **STATUS: DISABLED as of 2026-07-31.** Everything below is the intended spec,
+> not shipped behaviour.
+>
+> - **Off behind two flags:** `ENABLE_GAMIFICATION=false` (backend) and
+>   `VITE_ENABLE_GAMIFICATION=false` (web). Both default off.
+> - **Why:** the MVP shipped three **read** endpoints (`/streak`,
+>   `/achievements`, `/leaderboard`) and **no writer**. Nothing in the backend
+>   ever updates `user_streaks` or `user_achievements` — the only write was a
+>   zeroed-row insert on `GET /streak`, which the flag now suppresses. So every
+>   user saw a permanent 0-day streak, zero achievements, and an all-zero
+>   leaderboard.
+> - **`challenges` does not exist at all** — no table, no endpoint, no service.
+>   The 512-line web `ChallengeCard` written against it was deleted (it could
+>   never mount). Treat §"Challenges" below as unstarted design.
+> - **Backend when off:** the router stays **mounted** and each handler returns
+>   `200` with a zeroed payload. It must **not** 404 — the Flutter dashboard's
+>   unguarded `Future.wait` would blank the home screen. See the flagged-routes
+>   table in `docs/BACKEND.md` and TD-034 in `docs/exec-plans/tech-debt-tracker.md`.
+> - **Web when off:** the `/gamification` route is not registered, the sidebar
+>   entry is filtered out, and the page chunk is dropped from the bundle. A
+>   bookmarked URL redirects to `/dashboard`. Landing copy no longer advertises
+>   streaks.
+> - **Re-enabling requires,** in order: (1) a writer — a service that advances
+>   `user_streaks` when an outfit is planned, plus achievement award logic;
+>   (2) applying/verifying the `user_streaks` + `user_achievements` schema
+>   (they gate `/ready` once the flag is on, via `GAMIFICATION_TABLES`);
+>   (3) fixing the `/leaderboard` privacy leak — it currently returns other
+>   users' `full_name` and `avatar_url` to any authenticated caller;
+>   (4) rebuilding the deleted achievement/streak UI components; (5) flipping
+>   both flags and restoring the landing copy.
+
 ## Overview
 
 Gamification features add engagement and motivation through streaks, achievements, statistics, and sustainability goals. These features encourage consistent usage and help users get more value from their wardrobe.

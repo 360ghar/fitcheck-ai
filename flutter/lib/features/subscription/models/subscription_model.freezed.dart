@@ -1713,7 +1713,7 @@ as List<String>,
 /// @nodoc
 mixin _$CheckoutSessionModel {
 
-@JsonKey(name: 'checkout_url') String get checkoutUrl;@JsonKey(name: 'session_id') String get sessionId;
+@JsonKey(name: 'checkout_url') String? get checkoutUrl;@JsonKey(name: 'session_id') String? get sessionId; bool get updated;
 /// Create a copy of CheckoutSessionModel
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1726,16 +1726,16 @@ $CheckoutSessionModelCopyWith<CheckoutSessionModel> get copyWith => _$CheckoutSe
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is CheckoutSessionModel&&(identical(other.checkoutUrl, checkoutUrl) || other.checkoutUrl == checkoutUrl)&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is CheckoutSessionModel&&(identical(other.checkoutUrl, checkoutUrl) || other.checkoutUrl == checkoutUrl)&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.updated, updated) || other.updated == updated));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,checkoutUrl,sessionId);
+int get hashCode => Object.hash(runtimeType,checkoutUrl,sessionId,updated);
 
 @override
 String toString() {
-  return 'CheckoutSessionModel(checkoutUrl: $checkoutUrl, sessionId: $sessionId)';
+  return 'CheckoutSessionModel(checkoutUrl: $checkoutUrl, sessionId: $sessionId, updated: $updated)';
 }
 
 
@@ -1746,7 +1746,7 @@ abstract mixin class $CheckoutSessionModelCopyWith<$Res>  {
   factory $CheckoutSessionModelCopyWith(CheckoutSessionModel value, $Res Function(CheckoutSessionModel) _then) = _$CheckoutSessionModelCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: 'checkout_url') String checkoutUrl,@JsonKey(name: 'session_id') String sessionId
+@JsonKey(name: 'checkout_url') String? checkoutUrl,@JsonKey(name: 'session_id') String? sessionId, bool updated
 });
 
 
@@ -1763,11 +1763,12 @@ class _$CheckoutSessionModelCopyWithImpl<$Res>
 
 /// Create a copy of CheckoutSessionModel
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? checkoutUrl = null,Object? sessionId = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? checkoutUrl = freezed,Object? sessionId = freezed,Object? updated = null,}) {
   return _then(_self.copyWith(
-checkoutUrl: null == checkoutUrl ? _self.checkoutUrl : checkoutUrl // ignore: cast_nullable_to_non_nullable
-as String,sessionId: null == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
-as String,
+checkoutUrl: freezed == checkoutUrl ? _self.checkoutUrl : checkoutUrl // ignore: cast_nullable_to_non_nullable
+as String?,sessionId: freezed == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
+as String?,updated: null == updated ? _self.updated : updated // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -1852,10 +1853,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'checkout_url')  String checkoutUrl, @JsonKey(name: 'session_id')  String sessionId)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'checkout_url')  String? checkoutUrl, @JsonKey(name: 'session_id')  String? sessionId,  bool updated)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _CheckoutSessionModel() when $default != null:
-return $default(_that.checkoutUrl,_that.sessionId);case _:
+return $default(_that.checkoutUrl,_that.sessionId,_that.updated);case _:
   return orElse();
 
 }
@@ -1873,10 +1874,10 @@ return $default(_that.checkoutUrl,_that.sessionId);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'checkout_url')  String checkoutUrl, @JsonKey(name: 'session_id')  String sessionId)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'checkout_url')  String? checkoutUrl, @JsonKey(name: 'session_id')  String? sessionId,  bool updated)  $default,) {final _that = this;
 switch (_that) {
 case _CheckoutSessionModel():
-return $default(_that.checkoutUrl,_that.sessionId);case _:
+return $default(_that.checkoutUrl,_that.sessionId,_that.updated);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1893,10 +1894,10 @@ return $default(_that.checkoutUrl,_that.sessionId);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'checkout_url')  String checkoutUrl, @JsonKey(name: 'session_id')  String sessionId)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'checkout_url')  String? checkoutUrl, @JsonKey(name: 'session_id')  String? sessionId,  bool updated)?  $default,) {final _that = this;
 switch (_that) {
 case _CheckoutSessionModel() when $default != null:
-return $default(_that.checkoutUrl,_that.sessionId);case _:
+return $default(_that.checkoutUrl,_that.sessionId,_that.updated);case _:
   return null;
 
 }
@@ -1908,11 +1909,12 @@ return $default(_that.checkoutUrl,_that.sessionId);case _:
 @JsonSerializable()
 
 class _CheckoutSessionModel implements CheckoutSessionModel {
-  const _CheckoutSessionModel({@JsonKey(name: 'checkout_url') required this.checkoutUrl, @JsonKey(name: 'session_id') required this.sessionId});
+  const _CheckoutSessionModel({@JsonKey(name: 'checkout_url') this.checkoutUrl, @JsonKey(name: 'session_id') this.sessionId, this.updated = false});
   factory _CheckoutSessionModel.fromJson(Map<String, dynamic> json) => _$CheckoutSessionModelFromJson(json);
 
-@override@JsonKey(name: 'checkout_url') final  String checkoutUrl;
-@override@JsonKey(name: 'session_id') final  String sessionId;
+@override@JsonKey(name: 'checkout_url') final  String? checkoutUrl;
+@override@JsonKey(name: 'session_id') final  String? sessionId;
+@override@JsonKey() final  bool updated;
 
 /// Create a copy of CheckoutSessionModel
 /// with the given fields replaced by the non-null parameter values.
@@ -1927,16 +1929,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CheckoutSessionModel&&(identical(other.checkoutUrl, checkoutUrl) || other.checkoutUrl == checkoutUrl)&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CheckoutSessionModel&&(identical(other.checkoutUrl, checkoutUrl) || other.checkoutUrl == checkoutUrl)&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.updated, updated) || other.updated == updated));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,checkoutUrl,sessionId);
+int get hashCode => Object.hash(runtimeType,checkoutUrl,sessionId,updated);
 
 @override
 String toString() {
-  return 'CheckoutSessionModel(checkoutUrl: $checkoutUrl, sessionId: $sessionId)';
+  return 'CheckoutSessionModel(checkoutUrl: $checkoutUrl, sessionId: $sessionId, updated: $updated)';
 }
 
 
@@ -1947,7 +1949,7 @@ abstract mixin class _$CheckoutSessionModelCopyWith<$Res> implements $CheckoutSe
   factory _$CheckoutSessionModelCopyWith(_CheckoutSessionModel value, $Res Function(_CheckoutSessionModel) _then) = __$CheckoutSessionModelCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: 'checkout_url') String checkoutUrl,@JsonKey(name: 'session_id') String sessionId
+@JsonKey(name: 'checkout_url') String? checkoutUrl,@JsonKey(name: 'session_id') String? sessionId, bool updated
 });
 
 
@@ -1964,11 +1966,12 @@ class __$CheckoutSessionModelCopyWithImpl<$Res>
 
 /// Create a copy of CheckoutSessionModel
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? checkoutUrl = null,Object? sessionId = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? checkoutUrl = freezed,Object? sessionId = freezed,Object? updated = null,}) {
   return _then(_CheckoutSessionModel(
-checkoutUrl: null == checkoutUrl ? _self.checkoutUrl : checkoutUrl // ignore: cast_nullable_to_non_nullable
-as String,sessionId: null == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
-as String,
+checkoutUrl: freezed == checkoutUrl ? _self.checkoutUrl : checkoutUrl // ignore: cast_nullable_to_non_nullable
+as String?,sessionId: freezed == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
+as String?,updated: null == updated ? _self.updated : updated // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

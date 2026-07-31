@@ -22,7 +22,7 @@ import { getWeatherRecommendations } from '@/api/recommendations'
 import { getUserSettings, updateUserSettings } from '@/api/users'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { useOutfitStore } from '@/stores/outfitStore'
-import { getApiError } from '@/api/client'
+import { getApiError } from '@/lib/errors'
 import { ErrorState } from '@/components/ui/error-state'
 
 function formatDateOnly(date: Date): string {
@@ -39,6 +39,13 @@ function toDateTimeLocalValue(date: Date): string {
   const hh = String(date.getHours()).padStart(2, '0')
   const mm = String(date.getMinutes()).padStart(2, '0')
   return `${y}-${m}-${d}T${hh}:${mm}`
+}
+
+export function isValidCalendarRange(start: string, end: string): boolean {
+  if (!start || !end) return false
+  const startTime = new Date(start).getTime()
+  const endTime = new Date(end).getTime()
+  return Number.isFinite(startTime) && Number.isFinite(endTime) && endTime > startTime
 }
 
 export default function CalendarPage() {
@@ -186,6 +193,7 @@ export default function CalendarPage() {
             end_time: e.end_time,
             location: e.location || undefined,
             outfit_id: e.outfit_id || undefined,
+            event_type: e.event_type || 'other',
             is_all_day: false,
           }))
         )
@@ -250,6 +258,14 @@ export default function CalendarPage() {
       toast({ title: 'Start and end time are required', variant: 'destructive' })
       return
     }
+    if (!isValidCalendarRange(createStart, createEnd)) {
+      toast({
+        title: 'End time must be after start time',
+        description: 'Choose a later end time for this event.',
+        variant: 'destructive',
+      })
+      return
+    }
 
     setIsCreating(true)
     try {
@@ -259,6 +275,7 @@ export default function CalendarPage() {
         location: createLocation.trim() || undefined,
         start_time: new Date(createStart).toISOString(),
         end_time: new Date(createEnd).toISOString(),
+        event_type: 'other',
       })
 
       setEvents((prev) => [
@@ -271,6 +288,7 @@ export default function CalendarPage() {
           end_time: created.end_time,
           location: created.location || undefined,
           outfit_id: created.outfit_id || undefined,
+          event_type: created.event_type || 'other',
           is_all_day: false,
         },
       ])
@@ -367,7 +385,7 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-8 space-y-4 md:space-y-6">
+    <div className="app-page max-w-7xl space-y-4 md:space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-foreground flex items-center gap-2">
@@ -433,7 +451,7 @@ export default function CalendarPage() {
         <CardHeader className="flex-row items-center justify-between space-y-0 px-4 py-3 md:px-6 md:py-4">
           <CardTitle className="text-base md:text-lg">Events</CardTitle>
           {isLoadingEvents && (
-            <div className="text-sm text-muted-foreground flex items-center gap-2">
+            <div className="text-sm text-muted-foreground flex items-center gap-2" role="status" aria-live="polite">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span className="hidden md:inline">Loading…</span>
             </div>

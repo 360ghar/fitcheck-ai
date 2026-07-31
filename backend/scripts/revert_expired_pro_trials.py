@@ -1,0 +1,266 @@
+#!/usr/bin/env python3
+"""
+Revert expired Pro trials from a grant_free_pro_month.py campaign.
+
+There is no auto-expiry in the app today (`is_pro_plan()` checks only
+`plan_type`), so without this script gifted Pro stays forever. This script
+reads the campaign audit file (written by grant_free_pro_month.py) and, for
+each user whose `trial_end` has passed AND who has no live Stripe
+subscription, downgrades them back to free.
+
+Safe to run multiple times - once a row is reverted it's reset to
+plan_type='free', so subsequent runs are no-ops for it.
+
+Usage:
+    cd backend
+    export SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+    export SUPABASE_SECRET_KEY=eyJ...        # service-role key
+
+    # preview:
+    DRY_RUN=1 python scripts/revert_expired_pro_trials.py
+
+    # run for real:
+    python scripts/revert_expired_pro_trials.py
+
+Optional env:
+    AUDIT_FILE=backend/logs/pro_grant.jsonl   # must match the grant run
+    INCLUDE_PAID=0                            # 1 = also revert externally-cancelled users
+    STRIPE_CANCEL_CONFIRMED=0                 # required with INCLUDE_PAID=1
+
+Recommended: schedule daily (Railway cron / system cron) until the campaign
+window is fully reverted, then retire. Not wired automatically.
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+from supabase import create_client
+
+# The import is cheap and safe: app/utils/datetime_util.py is pure stdlib.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app.utils.datetime_util import parse_utc_datetime  # noqa: E402
+
+
+def _env(name: str, default: str | None = None, *, required: bool = False) -> str:
+    value = os.environ.get(name, default)
+    if required and not value:
+        print(f"ERROR: missing required env var {name}", file=sys.stderr)
+        sys.exit(1)
+    return value or ""
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    return os.environ.get(name, "1" if default else "0").strip() in {"1", "true", "yes", "on"}
+
+
+def _parse_instant(value: Any) -> Optional[datetime]:
+    """Parse a trial_end value into an aware UTC datetime, or None.
+
+    Accepts ISO strings with or without a timezone suffix: PostgREST renders
+    a timestamptz column in the DATABASE SESSION timezone, so the string form
+    can legitimately differ (offset AND wall clock) from the audit file's
+    Python ``isoformat()`` output while denoting the same instant. Naive
+    values are assumed to be UTC (the grant script writes aware strings, but
+    tolerate legacy naive rows).
+    """
+    return parse_utc_datetime(value)
+
+
+def _same_instant(db_value: Any, audited_value: Any) -> bool:
+    """True when two trial_end representations denote the same instant."""
+    left = _parse_instant(db_value)
+    right = _parse_instant(audited_value)
+    return left is not None and left == right
+
+
+def _load_campaign(path: Path) -> dict[str, str]:
+    """Return {user_id: trial_end_iso} for granted rows in the audit file."""
+    out: dict[str, str] = {}
+    if not path.exists():
+        print(f"ERROR: audit file not found: {path}", file=sys.stderr)
+        sys.exit(1)
+    with path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if rec.get("action") == "granted" and rec.get("user_id") and rec.get("trial_end"):
+                out[rec["user_id"]] = rec["trial_end"]
+    return out
+
+
+def main() -> int:
+    supabase_url = _env("SUPABASE_URL", required=True).rstrip("/")
+    supabase_key = _env("SUPABASE_SECRET_KEY", required=True)
+    audit_path = Path(_env("AUDIT_FILE", "backend/logs/pro_grant.jsonl"))
+    include_paid = _env_bool("INCLUDE_PAID", False)
+    dry_run = _env_bool("DRY_RUN", False)
+
+    # INCLUDE_PAID=1 is dangerous: it strips paying users without cancelling
+    # their Stripe subscription, leaving paid users with no app access.
+    # Require an explicit second env var to confirm.
+    if include_paid and not _env_bool("STRIPE_CANCEL_CONFIRMED", False):
+        print(
+            "ERROR: INCLUDE_PAID=1 also requires STRIPE_CANCEL_CONFIRMED=1 "
+            "to confirm Stripe subscriptions have been cancelled externally.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    now = datetime.now(timezone.utc)
+    mode = "DRY-RUN" if dry_run else "LIVE"
+    print(f"[{mode}] revert expired Free Pro Month trials")
+    print(f"  now         = {now.isoformat()}")
+    print(f"  audit_file  = {audit_path}")
+    print(f"  include_paid= {include_paid}")
+    print()
+
+    campaign = _load_campaign(audit_path)
+    print(f"campaign users in audit: {len(campaign)}")
+    if not campaign:
+        print("nothing to do.")
+        return 0
+
+    # Which ones are past trial_end?
+    expired_ids: list[str] = []
+    malformed_timestamps = 0
+    for uid, trial_end in campaign.items():
+        try:
+            parsed_trial_end = datetime.fromisoformat(
+                str(trial_end).replace("Z", "+00:00")
+            )
+            if parsed_trial_end.tzinfo is None:
+                parsed_trial_end = parsed_trial_end.replace(tzinfo=timezone.utc)
+        except (AttributeError, TypeError, ValueError):
+            malformed_timestamps += 1
+            continue
+        if parsed_trial_end < now:
+            expired_ids.append(uid)
+    print(f"expired (trial_end < now): {len(expired_ids)}")
+    print(f"skipped (malformed trial_end): {malformed_timestamps}")
+    if not expired_ids:
+        print("no expired trials yet; nothing to revert.")
+        return 0
+
+    db = create_client(supabase_url, supabase_key)
+
+    # Fetch current subscription rows in pages to filter out paying users
+    # and confirm the row is still on a pro/trial state worth reverting.
+    # Only rows whose trial_end matches the audited value (and are
+    # pro_monthly trial) are considered revertable — this prevents unrelated
+    # subscriptions (e.g. pro_yearly, a later upgraded state) from being
+    # accidentally downgraded.
+    # Chunk at 200 ids: keeps the querystring well under PostgREST's URL
+    # length ceiling (see _ID_CHUNK in backfill_transparent_backgrounds.py).
+    page = 200
+    to_revert: list[str] = []
+    skipped_paid = 0
+    skipped_already_free = 0
+    skipped_trial_mismatch = 0
+    for i in range(0, len(expired_ids), page):
+        chunk = expired_ids[i : i + page]
+        res = db.table("subscriptions").select(
+            "user_id,plan_type,status,stripe_subscription_id,trial_end"
+        ).in_("user_id", chunk).execute()
+        for row in (res.data or []):
+            uid = row["user_id"]
+            has_stripe = bool(row.get("stripe_subscription_id"))
+            if has_stripe and not include_paid:
+                skipped_paid += 1
+                continue
+            # Only revert campaign-originated pro_monthly trials, not
+            # pro_yearly or other states the grant script never creates.
+            if row.get("plan_type") != "pro_monthly":
+                skipped_already_free += 1
+                continue
+            if row.get("status") != "trial":
+                skipped_already_free += 1
+                continue
+            # Confirm the row's trial_end matches the audited campaign value.
+            # Compare parsed instants, never byte-equal strings: PostgREST
+            # renders timestamptz in the database session timezone, so a
+            # byte-for-byte comparison breaks on any non-UTC session timezone
+            # and silently no-ops the whole campaign.
+            if not _same_instant(row.get("trial_end"), campaign.get(uid)):
+                skipped_trial_mismatch += 1
+                continue
+            to_revert.append(uid)
+
+    print(f"skipped (now paying): {skipped_paid}")
+    print(f"skipped (already free/cancelled): {skipped_already_free}")
+    print(f"skipped (trial_end mismatch): {skipped_trial_mismatch}")
+    print(f"to revert: {len(to_revert)}")
+
+    if dry_run:
+        print()
+        print("DRY-RUN: no writes. Would downgrade these user_ids to free:")
+        for uid in to_revert[:20]:
+            print(f"  - {uid}")
+        if len(to_revert) > 20:
+            print(f"  ... and {len(to_revert) - 20} more")
+        return 0
+
+    reverted = 0
+    failed_count = 0
+    for uid in to_revert:
+        try:
+            # Atomic update: only revert if the row still matches the campaign
+            # state (pro_monthly trial, no Stripe subscription). This prevents
+            # a TOCTOU race where a user completes a paid checkout between the
+            # scan above and this update.
+            update_payload = {
+                "plan_type": "free",
+                "status": "active",
+                "trial_end": None,
+                "current_period_end": None,
+                "cancel_at_period_end": False,
+            }
+            if include_paid:
+                # INCLUDE_PAID is only permitted after the operator has
+                # confirmed those Stripe subscriptions were cancelled
+                # externally. Clear the stale IDs so the account cannot be
+                # treated as having a live paid subscription afterwards.
+                update_payload.update({
+                    "stripe_subscription_id": None,
+                    "stripe_customer_id": None,
+                })
+            query = db.table("subscriptions").update(update_payload).eq(
+                "user_id", uid
+            ).eq("plan_type", "pro_monthly").eq("status", "trial").eq(
+                # Re-serialize the audited instant to a canonical aware ISO
+                # string so Postgres compares instants regardless of the
+                # database session timezone.
+                "trial_end", _parse_instant(campaign.get(uid)).isoformat()
+            )
+            if not include_paid:
+                query = query.is_("stripe_subscription_id", "null")
+            result = query.execute()
+            # If no row matched the filter, the subscription changed state
+            # since the scan (e.g. user became paid) — skip silently.
+            if not (result.data and len(result.data) > 0):
+                continue
+        except Exception as e:
+            print(f"  ERROR reverting {uid}: {e}", file=sys.stderr)
+            failed_count += 1
+            continue
+        reverted += 1
+        if reverted % 25 == 0:
+            print(f"  reverted {reverted}/{len(to_revert)}")
+
+    print()
+    print(f"DONE. reverted={reverted}/{len(to_revert)} failed={failed_count}")
+    return 1 if failed_count > 0 else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

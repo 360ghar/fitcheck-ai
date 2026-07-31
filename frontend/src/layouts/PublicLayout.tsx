@@ -4,9 +4,12 @@ import Footer from '../components/landing/Footer'
 
 export default function PublicLayout() {
   return (
-    <div className="min-h-screen flex flex-col bg-stone-50 dark:bg-stone-950">
+    <div className="landing-surface flex min-h-screen flex-col">
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
       <Navbar />
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <Outlet />
       </main>
       <Footer />

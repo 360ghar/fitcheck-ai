@@ -2,7 +2,17 @@
 
 ## Overview
 
-This document provides a complete specification for all FastAPI endpoints, including request/response examples, error codes, and authentication requirements.
+This is a curated API reference for representative endpoints, request/response
+examples, error codes, and authentication requirements. The running FastAPI
+OpenAPI document (`/api/v1/openapi.json`, exposed by the app's docs route) is
+canonical; this file is not a generated or complete contract.
+
+Known reconciliation points: `/items/upload` is currently synchronous despite
+its 202 declaration (TD-023); SSE terminal event names differ between streams
+(TD-020); feature flags alter route behavior; Stripe price IDs are environment
+configuration; and outfit garment references are capped at 12 by default while
+provider image-count behavior remains unverified (TD-033). Compare the live
+OpenAPI output before making a client contract claim.
 
 ## Base URL
 
@@ -250,27 +260,56 @@ file: <image>
 
 ### POST /ai/generate-outfit
 
-Generate a realistic outfit visualization image.
+Generate a realistic outfit visualization image. Synchronous: the image comes
+back in the response body. (The `generation_id` bookkeeping record is a separate
+endpoint, `POST /outfits/{outfit_id}/generate`.)
+
+Send each item's `item_id`: the backend resolves that item's stored image
+server-side, scoped to the caller, and sends it to the model as a garment
+reference so the render reproduces the real garment. Omitting `item_id` still
+works and falls back to generating from the text attributes alone. Never send
+image URLs or base64 here. Max 100 items (server-enforced `AI_MAX_OUTFIT_ITEMS`, default 100; configurable via `backend/.env`).
 
 **Request:**
 ```json
 {
-  "outfit_id": "outfit_uuid",
-  "body_profile_id": "body_profile_uuid",
-  "pose": "front",
-  "lighting": "natural",
-  "variations": 1
+  "items": [
+    {
+      "item_id": "item_uuid",
+      "name": "Cream ribbed knit sweater",
+      "category": "tops",
+      "colors": ["cream"],
+      "brand": "Uniqlo",
+      "material": "merino wool",
+      "pattern": "ribbed"
+    }
+  ],
+  "style": "casual",
+  "background": "studio white",
+  "pose": "standing front",
+  "lighting": "professional studio lighting",
+  "view_angle": "full body",
+  "include_model": true,
+  "model_gender": "female",
+  "custom_prompt": null,
+  "save_to_storage": false,
+  "include_user_face": true,
+  "use_body_profile": true
 }
 ```
 
-**Response (202):**
+**Response (200):**
 ```json
 {
   "data": {
-    "generation_id": "gen_uuid",
-    "status": "processing",
-    "estimated_time": 30
-  }
+    "image_base64": "...",
+    "image_url": null,
+    "storage_path": null,
+    "prompt": "REFERENCE IMAGES (in order): ...",
+    "model": "agnes-image-2.1-flash",
+    "provider": "custom"
+  },
+  "message": "Outfit generated successfully"
 }
 ```
 

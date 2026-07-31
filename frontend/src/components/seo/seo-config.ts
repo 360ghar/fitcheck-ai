@@ -8,10 +8,10 @@ export const SEO_CONFIG = {
     'AI virtual closet app: photograph clothes, get weather-aware outfit ideas, virtual try-on, and AI photoshoots. Free digital wardrobe on web and Android.',
   defaultOgImage: 'https://fitcheckaiapp.com/og-default.jpg',
   locale: 'en_US',
-  themeColor: '#4f46e5',
+  themeColor: '#e60023',
   twitterHandle: '@FitCheckAI',
   positioning:
-    'FitCheck AI is an AI wardrobe and outfit app that turns photos of your clothes into a digital closet, daily outfit recommendations, virtual try-on, and AI photoshoots — on web, iOS, and Android.',
+    'FitCheck AI is an AI wardrobe and outfit app that turns photos of your clothes into a digital closet, daily outfit recommendations, virtual try-on, and AI photoshoots — on web and Android, with iOS on the waitlist.',
 }
 
 export const PAGE_SEO = {
@@ -64,7 +64,7 @@ export const PAGE_SEO = {
   aiWardrobeExtraction: {
     title: 'AI Wardrobe Extraction | Digitize Your Closet in Minutes',
     description:
-      'Upload photos of your clothes. AI detects items, colors, and categories so you build a digital wardrobe without manual tagging.',
+      'Upload photos of your clothes, review detected items, colors, and categories, and build a digital wardrobe.',
     path: '/features/ai-wardrobe-extraction',
   },
   virtualTryOn: {
@@ -82,7 +82,7 @@ export const PAGE_SEO = {
   outfitRecommendations: {
     title: 'AI Outfit Recommendations | What to Wear Today',
     description:
-      'Get daily outfit ideas from clothes you already own. Weather-aware, occasion-ready recommendations in seconds.',
+      'Get daily outfit ideas from clothes you already own with weather and occasion context.',
     path: '/features/outfit-recommendations',
   },
   wardrobeAnalytics: {
@@ -99,7 +99,7 @@ export const PAGE_SEO = {
   register: {
     title: 'Create Free Account | FitCheck AI',
     description:
-      'Create a free FitCheck AI account. Digitize your wardrobe and get AI outfit ideas in minutes.',
+      'Create a free FitCheck AI account, digitize your wardrobe, and get AI outfit ideas from clothes you own.',
     path: '/auth/register',
   },
   dashboard: {
@@ -107,8 +107,9 @@ export const PAGE_SEO = {
     description: 'Your FitCheck AI dashboard — wardrobe, outfits, and recommendations.',
   },
   wardrobe: {
-    title: 'My Wardrobe | FitCheck AI',
-    description: 'Manage your digital wardrobe with FitCheck AI.',
+    title: 'My Closet — Digital Wardrobe Organizer | FitCheck AI',
+    description:
+      'Your closet, organized. Manage your digital wardrobe and virtual closet with FitCheck AI — photograph clothes, catalog every item, and build outfits.',
   },
   outfits: {
     title: 'My Outfits | FitCheck AI',
@@ -159,7 +160,7 @@ export const STATIC_PUBLIC_ROUTES: Array<{
   { path: '/for/content-creators', title: 'AI Wardrobe & Try-On for Content Creators | FitCheck AI', description: 'Plan looks, visualize outfits, and generate photoshoot-style images for content calendars — from clothes you already own.', priority: 0.85, changefreq: 'monthly' },
   { path: '/for/festive-and-wedding-outfits', title: 'Festive & Wedding Guest Outfit Planner | FitCheck AI', description: 'Plan festive, wedding guest, and occasion looks from your wardrobe. Digitize ethnic and formal wear, then mix outfits with AI.', priority: 0.85, changefreq: 'monthly' },
   { path: '/guides/how-to-digitize-your-wardrobe', title: 'How to Digitize Your Wardrobe (Step-by-Step) | FitCheck AI', description: 'A practical guide to photographing and cataloging your clothes into a digital closet — faster with AI extraction.', priority: 0.85, changefreq: 'monthly' },
-  { path: '/guides/what-to-wear-today', title: 'What to Wear Today: A Simple System | FitCheck AI', description: 'Stop staring at a full closet. Use weather, occasion, and your real clothes to decide what to wear in minutes.', priority: 0.85, changefreq: 'monthly' },
+  { path: '/guides/what-to-wear-today', title: 'What to Wear Today: A Simple System | FitCheck AI', description: 'Stop staring at a full closet. Use weather, occasion, and your real clothes to decide what to wear.', priority: 0.85, changefreq: 'monthly' },
   { path: '/guides/cost-per-wear-calculator-explained', title: 'Cost Per Wear Explained (+ How to Track It) | FitCheck AI', description: 'What cost-per-wear means, how to calculate it, and how wardrobe analytics help you buy less and wear more.', priority: 0.8, changefreq: 'monthly' },
   { path: '/guides/how-to-reduce-clothing-returns-with-virtual-try-on', title: 'Reduce Clothing Returns with Virtual Try-On | FitCheck AI', description: 'How AI virtual try-on helps you visualize purchases with clothes you own — and cut return-prone shopping mistakes.', priority: 0.8, changefreq: 'monthly' },
 ]

@@ -10,7 +10,7 @@ import { escapeHtml, sanitizeMarkdownUrl } from '@/lib/utils'
 export default function BlogPostPage() {
   const { slug } = useParams<{ slug: string }>()
 
-  const { data: post, isLoading, error } = useBlogPost(slug)
+  const { data: post, isLoading, error, refetch } = useBlogPost(slug)
 
   // Fetch related posts (same category, excluding current)
   const { data: relatedPostsData } = useBlogPosts(
@@ -27,28 +27,42 @@ export default function BlogPostPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen pt-32 flex justify-center">
+      <div className="min-h-screen pt-32 flex justify-center" role="status" aria-live="polite">
         <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />
       </div>
     )
   }
 
   if (error || !post) {
+    const errorStatus = (error as (Error & { status?: number }) | null | undefined)?.status
+    const isNotFound = !error || errorStatus === 404
     return (
-      <div className="min-h-screen pt-32 px-4 text-center">
+      <div className="min-h-screen pt-32 px-4 text-center" role="alert">
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-50 mb-2">
-          Post not found
+          {isNotFound ? 'Post not found' : 'Unable to load article'}
         </h1>
         <p className="text-stone-600 dark:text-stone-400 mb-6">
-          This article may have been moved or removed.
+          {isNotFound
+            ? 'This article may have been moved or removed.'
+            : 'We could not load this article right now. Please try again.'}
         </p>
-        <Link
-          to="/blog"
-          className="inline-flex items-center text-indigo-600 hover:underline font-medium"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to blog
-        </Link>
+        {isNotFound ? (
+          <Link
+            to="/blog"
+            className="inline-flex items-center text-indigo-600 hover:underline font-medium"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to blog
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            Try again
+          </button>
+        )}
       </div>
     )
   }
@@ -146,11 +160,13 @@ export default function BlogPostPage() {
         <section className="pb-12 md:pb-16">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
-              <div className="aspect-[21/9] bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-xl overflow-hidden relative">
+              <div className="aspect-[21/9] bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center overflow-hidden relative">
                 {post.featured_image_url ? (
                   <img
                     src={post.featured_image_url}
                     alt={post.title}
+                    width={1280}
+                    height={548}
                     className="absolute inset-0 w-full h-full object-cover"
                   />
                 ) : (
@@ -176,12 +192,12 @@ export default function BlogPostPage() {
                   // Handle headers
                   if (trimmed.startsWith('# ')) {
                     return (
-                      <h1
+                      <h2
                         key={index}
                         className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mt-12 mb-6"
                       >
                         {trimmed.replace('# ', '')}
-                      </h1>
+                      </h2>
                     )
                   }
                   if (trimmed.startsWith('## ')) {
@@ -286,12 +302,15 @@ export default function BlogPostPage() {
                       to={`/blog/${relatedPost.slug}`}
                       className="group block"
                     >
-                      <article className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                      <article className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden transition-shadow">
                         <div className="aspect-video bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center overflow-hidden relative">
                           {relatedPost.featured_image_url ? (
                             <img
                               src={relatedPost.featured_image_url}
                               alt={relatedPost.title}
+                              width={640}
+                              height={360}
+                              loading="lazy"
                               className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                             />
                           ) : (

@@ -17,10 +17,10 @@ export default function SupportPage() {
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center mb-12">
-                <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
+                <h1 className="landing-display text-4xl md:text-5xl font-semibold text-stone-900 dark:text-stone-50 mb-4">
                   Support
                 </h1>
-                <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+                <p className="text-stone-600 dark:text-stone-400 max-w-2xl mx-auto">
                   Get help with FitCheck AI, report a problem, or contact us about
                   privacy and account requests.
                 </p>
@@ -29,87 +29,86 @@ export default function SupportPage() {
           </div>
         </section>
 
-        <section className="py-16 bg-white dark:bg-gray-950">
+        <section className="py-16 bg-white dark:bg-stone-950">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
             <AnimatedSection>
               <div className="grid gap-6 md:grid-cols-2">
                 <a
                   href="mailto:support@fitcheckaiapp.com"
-                  className="rounded-2xl border border-gray-200 dark:border-gray-800 p-6 hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors"
+                  className="rounded-2xl border border-stone-200 dark:border-stone-800 p-6 hover:border-primary/40 transition-colors"
                 >
-                  <Mail className="h-8 w-8 text-indigo-600 mb-4" />
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                  <Mail className="h-8 w-8 text-primary mb-4" />
+                  <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-50 mb-2">
                     Email support
                   </h2>
-                  <p className="text-gray-600 dark:text-gray-300 mb-3">
+                  <p className="text-stone-600 dark:text-stone-400 mb-3">
                     Product questions, account help, and technical issues.
                   </p>
-                  <p className="font-medium text-indigo-600">
+                  <p className="font-medium text-primary">
                     support@fitcheckaiapp.com
                   </p>
                 </a>
 
                 <a
                   href="mailto:support@fitcheckaiapp.com?subject=Content%20report%20%2F%20abuse"
-                  className="rounded-2xl border border-gray-200 dark:border-gray-800 p-6 hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors"
+                  className="rounded-2xl border border-stone-200 dark:border-stone-800 p-6 hover:border-primary/40 transition-colors"
                 >
-                  <Flag className="h-8 w-8 text-indigo-600 mb-4" />
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                  <Flag className="h-8 w-8 text-primary mb-4" />
+                  <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-50 mb-2">
                     Report content or abuse
                   </h2>
-                  <p className="text-gray-600 dark:text-gray-300 mb-3">
-                    Report objectionable shared outfits or other content. We aim
-                    to review reports within 24 hours.
+                  <p className="text-stone-600 dark:text-stone-400 mb-3">
+                    Report objectionable shared outfits or other content. Include enough detail for our team to investigate.
                   </p>
-                  <p className="font-medium text-indigo-600">
+                  <p className="font-medium text-primary">
                     Email with subject &quot;Content report / abuse&quot;
                   </p>
                 </a>
 
                 <a
                   href="mailto:privacy@fitcheckaiapp.com"
-                  className="rounded-2xl border border-gray-200 dark:border-gray-800 p-6 hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors"
+                  className="rounded-2xl border border-stone-200 dark:border-stone-800 p-6 hover:border-primary/40 transition-colors"
                 >
-                  <Shield className="h-8 w-8 text-indigo-600 mb-4" />
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                  <Shield className="h-8 w-8 text-primary mb-4" />
+                  <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-50 mb-2">
                     Privacy &amp; data requests
                   </h2>
-                  <p className="text-gray-600 dark:text-gray-300 mb-3">
+                  <p className="text-stone-600 dark:text-stone-400 mb-3">
                     Account deletion is available in-app under Settings → Delete
                     Account. Contact us for other privacy requests.
                   </p>
-                  <p className="font-medium text-indigo-600">
+                  <p className="font-medium text-primary">
                     privacy@fitcheckaiapp.com
                   </p>
                 </a>
 
                 <Link
                   to="/faq"
-                  className="rounded-2xl border border-gray-200 dark:border-gray-800 p-6 hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors"
+                  className="rounded-2xl border border-stone-200 dark:border-stone-800 p-6 hover:border-primary/40 transition-colors"
                 >
-                  <HelpCircle className="h-8 w-8 text-indigo-600 mb-4" />
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                  <HelpCircle className="h-8 w-8 text-primary mb-4" />
+                  <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-50 mb-2">
                     FAQ
                   </h2>
-                  <p className="text-gray-600 dark:text-gray-300 mb-3">
+                  <p className="text-stone-600 dark:text-stone-400 mb-3">
                     Answers about wardrobe extraction, try-on, photoshoots, and
                     how FitCheck AI works.
                   </p>
-                  <p className="font-medium text-indigo-600">View FAQ →</p>
+                  <p className="font-medium text-primary">View FAQ →</p>
                 </Link>
               </div>
             </AnimatedSection>
 
             <AnimatedSection>
-              <div className="rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+              <div className="rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 p-6">
+                <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-50 mb-3">
                   Legal
                 </h2>
-                <ul className="space-y-2 text-gray-600 dark:text-gray-300">
+                <ul className="space-y-2 text-stone-600 dark:text-stone-400">
                   <li>
                     <Link
                       to="/privacy"
-                      className="text-indigo-600 hover:text-indigo-500"
+                      className="text-primary hover:text-primary-pressed"
                     >
                       Privacy Policy
                     </Link>
@@ -120,7 +119,7 @@ export default function SupportPage() {
                   <li>
                     <Link
                       to="/terms"
-                      className="text-indigo-600 hover:text-indigo-500"
+                      className="text-primary hover:text-primary-pressed"
                     >
                       Terms of Service
                     </Link>

@@ -5,26 +5,83 @@
 /* shadcn/ui CSS variables */
 @layer base {
   :root {
+    /* The app theme, not the OS preference, owns UA-painted chrome: search
+       fields, scrollbars, date pickers, autofill. Without this a light app
+       theme on a dark OS painted the closet search bar mid-grey. */
+    color-scheme: light;
+
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --foreground: 0 0% 0%;
+    --card: 60 14% 96%;
+    --card-foreground: 0 0% 0%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 238.7 83.5% 66.7%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 238.7 83.5% 66.7%;
-    --radius: 0.5rem;
+    --popover-foreground: 0 0% 0%;
+    --primary: 354 100% 44%;
+    --primary-foreground: 0 0% 100%;
+    --primary-pressed: 351 100% 40%;
+    --secondary: 60 9% 89%;
+    --secondary-foreground: 0 0% 0%;
+    --muted: 60 14% 96%;
+    --muted-foreground: 60 3% 37%;
+    --accent: 60 12% 90%;
+
+    /* Calendar event-type index. Five hues, ONE saturation band, ONE lightness
+       band, so they read as a family rather than five competing accents. They
+       are a quiet index carried by a small marker, never a tinted pill flooding
+       a row -- that is the "labels as tinted chips" tell, and five saturated
+       chips also break the one-accent rule (DESIGN.md 01). */
+    --event-work: 215 30% 45%;
+    --event-social: 340 32% 50%;
+    --event-casual: 150 28% 38%;
+    --event-formal: 280 25% 48%;
+    --event-other: 60 5% 55%;
+
+    /* Garment condition index. Same discipline as the event index above: one
+       saturation band, one lightness band, read as a dot rather than a flooded
+       pill. `clean` has no marker at all -- it is the default state, and saying
+       so on every tile is noise. */
+    --condition-dirty: 35 42% 42%;
+    --condition-laundry: 205 32% 44%;
+    --condition-repair: 8 45% 46%;
+    --condition-donate: 280 25% 48%;
+    --condition-other: 60 5% 45%;
+    --accent-foreground: 0 0% 0%;
+    --destructive: 0 88% 33%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 60 12% 84%;
+    --input: 60 3% 56%;
+    --ring: 354 100% 45%;
+    --focus-inner: 0 0% 0%;
+    --error: 0 88% 33%;
+    --error-pale: 0 60% 94%;
+    --success: 145 58% 15%;
+    --success-pale: 143 57% 86%;
+    --surface-elevated: 0 0% 100%;
+    --surface-soft: 60 20% 98%;
+    --accent-purple: 296 60% 34%;
+
+    /* Text roles from DESIGN.md 01. `body` is the default paragraph ink,
+       `ash` the placeholder / disabled tier, `on-dark` the label that sits on
+       an ink fill (bg-ink). Every one of these must have a .dark counterpart —
+       hardcoding them in tailwind.config.ts is what broke dark mode. */
+    --body: 60 6% 19%;
+    /* 43% is the LIGHTEST ash that clears AA on both of its real backdrops:
+       4.92:1 on --background (a focused input) and 4.55:1 on --card (a resting
+       search pill, a disabled button). 56% measured 3.12 / 2.89 — placeholder
+       text is content, so that was a straight AA failure. 46% still only
+       reaches 4.39 / 4.07; do not lighten past 43%. */
+    --ash: 60 3% 43%;
+    --on-dark: 60 20% 98%;
+
+    /* Chrome floating over a garment photograph. DELIBERATELY IDENTICAL in
+       :root and .dark — a Save pill or a select disc over a photo must stay
+       light-with-dark-text in both themes, because the backdrop is the image,
+       not the page. This is what DESIGN.md 03 `pill-on-image: bg canvas` means:
+       canvas white, not "whatever the page background happens to be". */
+    --on-image: 0 0% 100%;
+    --on-image-foreground: 0 0% 0%;
+
+    --radius: 1rem;
 
     /* Sidebar */
     --sidebar-width: 240px;
@@ -32,7 +89,7 @@
 
     /* Mobile navigation */
     --bottom-nav-height: 64px;
-    --mobile-header-height: 56px;
+    --mobile-header-height: 64px;
 
     /* Safe area insets for notched devices */
     --safe-area-top: env(safe-area-inset-top, 0px);
@@ -41,26 +98,74 @@
     --safe-area-right: env(safe-area-inset-right, 0px);
   }
 
+  /* Warm near-black, hue 60. Never a cool slate/blue-charcoal base.
+     Surfaces: --background #1b1b18, --card #23231f, --secondary #2e2e29.
+     Every foreground below is measured against all three; see DESIGN.md 09. */
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 238.7 83.5% 66.7%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 238.7 83.5% 66.7%;
+    color-scheme: dark;
+
+    --background: 60 5% 10%;
+    --foreground: 60 20% 98%;
+    --card: 60 5% 13%;
+    --card-foreground: 60 20% 98%;
+    --popover: 60 5% 13%;
+    --popover-foreground: 60 20% 98%;
+    /* Brand red lightened so `text-primary` clears AA on background AND card.
+       At the light-mode 45% it measured 3.59:1 — the second headline defect.
+       Saturation stays 100%: DESIGN.md 01 wants the accent loud on dark. */
+    --primary: 354 100% 62%;
+    /* Inverts to near-black: white on the lightened red is only 3.5:1. */
+    --primary-foreground: 60 6% 8%;
+    --primary-pressed: 354 100% 50%;
+    --secondary: 60 5% 17%;
+    --secondary-foreground: 60 20% 98%;
+    --muted: 60 5% 13%;
+    /* Was byte-identical to :root (60 3% 37% = 2.78:1) — the single worst
+       dark-mode defect, on the most-used text token in the app. */
+    --muted-foreground: 60 6% 62%;
+    --accent: 60 5% 17%;
+
+    /* Same family, lifted into the dark band so each marker keeps its identity
+       against `--card` without any of them turning into a saturated pop. */
+    --event-work: 215 35% 62%;
+    --event-social: 340 38% 66%;
+    --event-casual: 150 32% 55%;
+    --event-formal: 280 30% 66%;
+    --event-other: 60 6% 58%;
+
+    --condition-dirty: 35 48% 62%;
+    --condition-laundry: 205 40% 64%;
+    --condition-repair: 8 52% 66%;
+    --condition-donate: 280 30% 66%;
+    --condition-other: 60 6% 58%;
+    --accent-foreground: 60 20% 98%;
+    --destructive: 0 85% 68%;
+    --destructive-foreground: 60 6% 8%;
+    --border: 60 5% 22%;
+    --input: 60 5% 22%;
+    --ring: 354 100% 62%;
+    --focus-inner: 60 20% 98%;
+    /* Error is a TEXT role (validation copy); error-pale is its fill. Both
+       invert. The old 0 88% 43% measured 2.41:1 against --secondary. */
+    --error: 0 85% 68%;
+    --error-pale: 0 45% 18%;
+    /* Deliberately swapped: --success is the text role, --success-pale the
+       fill role. Do not "un-invert" these. */
+    --success: 143 57% 86%;
+    --success-pale: 145 58% 15%;
+    --surface-elevated: 60 5% 17%;
+    --surface-soft: 60 5% 16%;
+    --accent-purple: 296 55% 46%;
+
+    --body: 60 10% 88%;
+    --ash: 60 5% 52%;
+    /* on-dark rides an ink fill, and ink IS --foreground — so on dark it is a
+       near-white pill with black text (the active filter chip). */
+    --on-dark: 0 0% 0%;
+
+    /* Identical to :root on purpose — see the note there. */
+    --on-image: 0 0% 100%;
+    --on-image-foreground: 0 0% 0%;
   }
 
   * {
@@ -69,8 +174,7 @@
 
   body {
     @apply bg-background text-foreground overflow-x-hidden w-full max-w-[100vw];
-    font-family: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, sans-serif;
-    font-feature-settings: 'ss01' on, 'cv11' on;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     min-height: 100svh;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -82,7 +186,19 @@
 
   /* Focus styles */
   *:focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2;
+    outline: 4px solid hsl(var(--ring));
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px hsl(var(--focus-inner));
+  }
+
+  .skip-link {
+    @apply fixed left-4 top-4 z-[200] rounded-md bg-primary px-4 py-3 font-semibold text-primary-foreground shadow-lg;
+    transform: translateY(-150%);
+    transition: transform 160ms ease-out;
+  }
+
+  .skip-link:focus-visible {
+    transform: translateY(0);
   }
 }
 
@@ -97,36 +213,69 @@
     container-type: normal;
   }
 
-  /* Glass morphism (legacy; landing prefers solid panels) */
-  .glass {
-    @apply bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/20 dark:border-gray-700/30;
-  }
-
-  .glass-card {
-    @apply bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 shadow-sm;
-  }
-
   /* Solid brand accent (landing) */
   .text-gradient {
-    @apply text-indigo-600 dark:text-indigo-400;
+    @apply text-primary;
   }
 
-  /* Landing surface helpers */
+  /* Landing surface helpers.
+     `.glass`, `.glass-card` and `.landing-surface-raised` were deleted: zero
+     call sites each, and a glass alias is a trap in a flat-panel system (07).
+
+     `.landing-surface` was `dark:bg-stone-950` (#0c0a09) -- a COOL blue-black,
+     and darker than the app's own `--background` (#1b1b18), so marketing and
+     app disagreed at every boundary. It now shares the app surface. */
   .landing-surface {
-    @apply bg-stone-50 dark:bg-stone-950;
+    @apply bg-background;
   }
 
-  .landing-surface-raised {
-    @apply bg-white dark:bg-stone-900;
+  .landing-surface a:focus-visible,
+  .landing-surface button:focus-visible,
+  .landing-surface [role="button"]:focus-visible {
+    outline: 3px solid hsl(var(--ring));
+    outline-offset: 3px;
   }
 
+  /* The border literal is dropped: the global `* { @apply border-border }`
+     reset already supplies the hairline, and it inverts. rounded-2xl (32px)
+     is the documented large-card radius (06), so geometry is unchanged. */
   .landing-panel {
-    @apply rounded-2xl border border-stone-200/90 bg-white dark:border-stone-800 dark:bg-stone-900;
+    @apply rounded-2xl border bg-card;
   }
 
   .landing-display {
     @apply font-display tracking-tight;
+    letter-spacing: -1.2px;
   }
+
+  .type-display-xl { @apply font-display text-[70px] font-semibold leading-[1.1]; letter-spacing: -1.2px; }
+  .type-display-lg { @apply font-display text-[44px] font-bold leading-[1.15]; letter-spacing: -1.2px; }
+  .type-heading-xl { @apply font-display text-[28px] font-bold leading-[1.2]; letter-spacing: -1.2px; }
+  .type-heading-lg { @apply text-[22px] font-semibold leading-[1.25]; }
+  .type-heading-md { @apply text-lg font-semibold leading-[1.3]; }
+  .type-body-md { @apply text-base font-normal leading-[1.4]; }
+  .type-body-sm { @apply text-sm font-normal leading-[1.4]; }
+  .type-caption-md { @apply text-xs font-medium leading-[1.5]; }
+  .type-button-md { @apply text-sm font-bold leading-none; }
+
+  /* Shared compact rhythm for signed-in product routes. Public and editorial
+     layouts opt out by not using this class. */
+  /* A list row that adapts to ITS OWN width, not the viewport's.
+     Load-bearing for the md split: at 768px the list column is 253px with the
+     sidebar expanded but 351px with it collapsed, and a viewport query cannot
+     tell those apart. At 253px an un-adapted row truncated garment names to
+     three characters ("Oxf...") and collided the condition badge with the
+     brand line. Native CSS container queries, no plugin. */
+  .row-cq { container-type: inline-size; }
+
+  @container (max-width: 20rem) {
+    /* Secondary affordances step aside so the NAME -- the only thing that
+       identifies the garment -- gets the width back. Both are still reachable
+       from the detail pane the row opens. */
+    .row-cq-secondary:not(.row-cq-favorite) { display: none; }
+  }
+
+  .app-page { @apply w-full mx-auto px-4 md:px-6 py-3 md:py-4; }
 
   .line-clamp-2 {
     display: -webkit-box;
@@ -193,10 +342,18 @@
     *,
     *::before,
     *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
+      animation: none !important;
+      transition: none !important;
       scroll-behavior: auto !important;
+    }
+
+    /* A reduced-motion user still needs to see live job/error state. */
+    [role='status'],
+    [role='alert'],
+    [aria-live='polite'],
+    [aria-live='assertive'] {
+      opacity: 1 !important;
+      visibility: visible !important;
     }
   }
 }
@@ -207,7 +364,7 @@
 }
 
 .prose h2 {
-  @apply text-2xl font-bold text-foreground mt-8 mb-4;
+  @apply scroll-mt-24 text-2xl font-bold text-foreground mt-8 mb-4;
 }
 
 .prose h3 {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/persistence_service.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../core/widgets/report_content_sheet.dart';
 import '../../outfits/models/outfit_model.dart';
@@ -15,18 +15,23 @@ class HiddenSharedContentStore {
 
   static const _prefsKey = 'hidden_shared_outfit_ids';
 
+  static PersistenceService get _persistence =>
+      Get.isRegistered<PersistenceService>()
+          ? Get.find<PersistenceService>()
+          : PersistenceService();
+
   static Future<bool> isHidden(String shareId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList(_prefsKey) ?? const [];
+    final list = (await _persistence.getStringList(_prefsKey)) ?? const [];
     return list.contains(shareId);
   }
 
   static Future<void> hide(String shareId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final list = List<String>.from(prefs.getStringList(_prefsKey) ?? const []);
+    final list = List<String>.from(
+      (await _persistence.getStringList(_prefsKey)) ?? const [],
+    );
     if (!list.contains(shareId)) {
       list.add(shareId);
-      await prefs.setStringList(_prefsKey, list);
+      await _persistence.setStringList(_prefsKey, list);
     }
   }
 }

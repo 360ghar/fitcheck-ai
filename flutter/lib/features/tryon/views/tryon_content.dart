@@ -191,7 +191,8 @@ class TryOnContent extends StatelessWidget {
               ),
 
               Obx(() {
-                if (controller.generatedImageUrl.value.isNotEmpty) {
+                if (controller.generatedImageUrl.value.isNotEmpty ||
+                    controller.generatedImageBase64.value.isNotEmpty) {
                   return Column(
                     children: [
                       const SizedBox(height: AppConstants.spacing16),
@@ -369,7 +370,7 @@ class TryOnContent extends StatelessWidget {
                   _buildUploadOption(
                     context: context,
                     icon: Icons.checkroom_rounded,
-                    label: 'From Wardrobe',
+                    label: 'From Closet',
                     onTap: () => _showWardrobePicker(context, controller),
                     tokens: tokens,
                     isFullWidth: true,
@@ -922,7 +923,7 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Select from Wardrobe',
+                        'Select from Closet',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -1115,7 +1116,7 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
                       const SizedBox(height: AppConstants.spacing16),
                       Text(
                         searchQuery.value.isEmpty
-                            ? 'No items in your wardrobe'
+                            ? 'No items in your closet'
                             : 'No items found',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: tokens.textMuted,

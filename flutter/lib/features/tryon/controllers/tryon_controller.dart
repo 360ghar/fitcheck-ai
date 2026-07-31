@@ -3,7 +3,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:dio/dio.dart' as dio show FormData, MultipartFile;
+import 'package:dio/dio.dart'
+    as dio
+    show FormData, MultipartFile, Options, ResponseType;
+import 'package:gal/gal.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/services/ai_consent_service.dart';
@@ -16,6 +19,24 @@ import '../../../core/utils/error_handler.dart';
 class TryOnController extends GetxController {
   final ApiClient _apiClient = ApiClient.instance;
   final ImagePicker _imagePicker = ImagePicker();
+  final Future<void> Function(Uint8List bytes, String name) _imageSaver;
+  final Future<List<int>> Function(String url) _imageDownloader;
+
+  TryOnController({
+    Future<void> Function(Uint8List bytes, String name)? imageSaver,
+    Future<List<int>> Function(String url)? imageDownloader,
+  }) : _imageSaver =
+           imageSaver ??
+           ((bytes, name) => Gal.putImageBytes(bytes, name: name)),
+       _imageDownloader =
+           imageDownloader ??
+           ((url) async {
+             final response = await ApiClient.instance.dio.get<List<int>>(
+               url,
+               options: dio.Options(responseType: dio.ResponseType.bytes),
+             );
+             return response.data ?? const <int>[];
+           });
 
   // Reactive state
   final Rx<File?> clothingImage = Rx<File?>(null);
@@ -125,9 +146,12 @@ class TryOnController extends GetxController {
     }
 
     if (images.isNotEmpty) {
-      // Clear previous selection
+      // Clear previous selection; a gallery selection supersedes any
+      // wardrobe-item selection (the one-item guard must not then block on
+      // stale multi-item state).
       clothingImages.clear();
       selectedWardrobeItem.value = null;
+      selectedWardrobeItems.clear();
 
       // Add all selected images
       for (final image in images) {
@@ -147,9 +171,12 @@ class TryOnController extends GetxController {
         currentImageIndex.value = 0;
       }
 
-      generatedImageUrl.value = ''; // Clear previous result
+      _clearGeneratedResult();
 
-      ErrorHandler.showSuccess('${clothingImages.length} clothing image(s) selected', title: 'Images Added');
+      ErrorHandler.showSuccess(
+        '${clothingImages.length} clothing image(s) selected',
+        title: 'Images Added',
+      );
     }
   }
 
@@ -174,11 +201,18 @@ class TryOnController extends GetxController {
       final file = File(image.path);
       clothingImages.add(file);
       clothingImage.value = file;
-      selectedWardrobeItem.value = null; // Clear wardrobe selection
+      // A camera selection supersedes any wardrobe-item selection: clear both
+      // the single-item pointer and the multi-item list so the one-item guard
+      // cannot block on stale multi-item state.
+      selectedWardrobeItem.value = null;
+      selectedWardrobeItems.clear();
       currentImageIndex.value = clothingImages.length - 1;
-      generatedImageUrl.value = ''; // Clear previous result
+      _clearGeneratedResult();
 
-      ErrorHandler.showSuccess('Photo added (${clothingImages.length} total)', title: 'Photo Added');
+      ErrorHandler.showSuccess(
+        'Photo added (${clothingImages.length} total)',
+        title: 'Photo Added',
+      );
     }
   }
 
@@ -188,7 +222,7 @@ class TryOnController extends GetxController {
       currentImageIndex.value =
           (currentImageIndex.value + 1) % clothingImages.length;
       clothingImage.value = clothingImages[currentImageIndex.value];
-      generatedImageUrl.value = ''; // Clear previous result when switching
+      _clearGeneratedResult(); // Clear previous result when switching
     }
   }
 
@@ -199,7 +233,7 @@ class TryOnController extends GetxController {
           (currentImageIndex.value - 1 + clothingImages.length) %
           clothingImages.length;
       clothingImage.value = clothingImages[currentImageIndex.value];
-      generatedImageUrl.value = ''; // Clear previous result when switching
+      _clearGeneratedResult(); // Clear previous result when switching
     }
   }
 
@@ -221,7 +255,7 @@ class TryOnController extends GetxController {
         }
         clothingImage.value = clothingImages[currentImageIndex.value];
       }
-      generatedImageUrl.value = '';
+      _clearGeneratedResult();
     }
   }
 
@@ -230,13 +264,19 @@ class TryOnController extends GetxController {
     try {
       // Check if already selected
       if (selectedWardrobeItems.any((i) => i.id == item.id)) {
-        ErrorHandler.showInfo('${item.name} is already in your selection', title: 'Already Selected');
+        ErrorHandler.showInfo(
+          '${item.name} is already in your selection',
+          title: 'Already Selected',
+        );
         return;
       }
 
       // Get the primary image or first image from the item
       if (item.itemImages == null || item.itemImages!.isEmpty) {
-        ErrorHandler.showValidation('This item has no images', title: 'No Image');
+        ErrorHandler.showValidation(
+          'This item has no images',
+          title: 'No Image',
+        );
         return;
       }
 
@@ -269,10 +309,13 @@ class TryOnController extends GetxController {
         selectedWardrobeItem.value = item;
       }
 
-      generatedImageUrl.value = ''; // Clear previous result
+      _clearGeneratedResult();
 
       // Don't close the dialog - let user select more items
-      ErrorHandler.showSuccess('${item.name} added (${selectedWardrobeItems.length} total)', title: 'Added');
+      ErrorHandler.showSuccess(
+        '${item.name} added (${selectedWardrobeItems.length} total)',
+        title: 'Added',
+      );
     } catch (e) {
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.showError('Failed to load item image', title: 'Error');
@@ -319,7 +362,7 @@ class TryOnController extends GetxController {
         selectedWardrobeItem.value =
             selectedWardrobeItems[currentImageIndex.value];
       }
-      generatedImageUrl.value = '';
+      _clearGeneratedResult();
     }
   }
 
@@ -369,7 +412,10 @@ class TryOnController extends GetxController {
         ErrorHandler.showSuccess('Profile photo updated', title: 'Success');
       } catch (e) {
         error.value = ErrorHandler.extractMessage(e);
-        ErrorHandler.showError('Server is taking too long to respond. Please try again later or use a smaller image.', title: 'Upload Failed');
+        ErrorHandler.showError(
+          'Server is taking too long to respond. Please try again later or use a smaller image.',
+          title: 'Upload Failed',
+        );
       } finally {
         isUploadingAvatar.value = false;
       }
@@ -386,17 +432,37 @@ class TryOnController extends GetxController {
     }
 
     if (clothingImage.value == null) {
-      ErrorHandler.showValidation('Please select a clothing image first', title: 'Error');
+      ErrorHandler.showValidation(
+        'Please select a clothing image first',
+        title: 'Error',
+      );
+      return;
+    }
+
+    // The current backend contract accepts one `clothing_image`. Do not let
+    // the multi-select UI silently discard garments; require an explicit
+    // single-garment selection until the API supports a list/composite input.
+    if (clothingImages.length > 1 || selectedWardrobeItems.length > 1) {
+      ErrorHandler.showValidation(
+        'Try-on currently supports one clothing item at a time. Remove the extra items and try again.',
+        title: 'One item at a time',
+      );
       return;
     }
 
     if (userAvatarUrl.value.isEmpty) {
-      ErrorHandler.showValidation('Please upload a photo of yourself first', title: 'Avatar Required');
+      ErrorHandler.showValidation(
+        'Please upload a photo of yourself first',
+        title: 'Avatar Required',
+      );
       return;
     }
 
     if (!isAvatarReady.value) {
-      ErrorHandler.showValidation('Please wait for your profile photo to finish uploading', title: 'Avatar Uploading');
+      ErrorHandler.showValidation(
+        'Please wait for your profile photo to finish uploading',
+        title: 'Avatar Uploading',
+      );
       return;
     }
 
@@ -409,14 +475,12 @@ class TryOnController extends GetxController {
 
       final response = await _apiClient.postWithExtendedTimeout(
         '${ApiConstants.ai}/try-on',
-        data: {
-          'clothing_image': clothingBase64,
-          'style': selectedStyle.value,
-          'background': selectedBackground.value,
-          'pose': selectedPose.value,
-          'lighting': 'professional studio lighting',
-          'save_to_storage': false,
-        },
+        data: buildTryOnPayload(
+          [clothingBase64],
+          style: selectedStyle.value,
+          background: selectedBackground.value,
+          pose: selectedPose.value,
+        ),
       );
 
       final result = _extractDataMap(response.data);
@@ -430,7 +494,10 @@ class TryOnController extends GetxController {
         throw Exception('No image returned from server');
       }
 
-      ErrorHandler.showSuccess('Try-on generated successfully', title: 'Success');
+      ErrorHandler.showSuccess(
+        'Try-on generated successfully',
+        title: 'Success',
+      );
     } catch (e) {
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.showError(error.value, title: 'Error');
@@ -439,10 +506,55 @@ class TryOnController extends GetxController {
     }
   }
 
-  void downloadResult() {
-    if (generatedImageUrl.value.isEmpty) return;
-    // Would trigger download of the generated image
-    ErrorHandler.showInfo('Image saved to gallery', title: 'Download');
+  Future<void> downloadResult() async {
+    final imageUrl = generatedImageUrl.value;
+    final imageBase64 = generatedImageBase64.value;
+    if (imageUrl.isEmpty && imageBase64.isEmpty) return;
+
+    try {
+      final bytes = imageBase64.isNotEmpty
+          ? Uint8List.fromList(base64Decode(imageBase64.split(',').last))
+          : Uint8List.fromList(await _imageDownloader(imageUrl));
+      if (bytes.isEmpty) throw Exception('The generated image was empty.');
+
+      await _imageSaver(
+        bytes,
+        'tryon_${DateTime.now().millisecondsSinceEpoch}',
+      );
+      ErrorHandler.showSuccess('Image saved to gallery', title: 'Saved');
+    } catch (e) {
+      error.value = ErrorHandler.extractMessage(e);
+      ErrorHandler.showError(error.value, title: 'Download failed');
+    }
+  }
+
+  /// Build the request accepted by the current singular try-on API contract.
+  @visibleForTesting
+  static Map<String, dynamic> buildTryOnPayload(
+    List<String> clothingImages, {
+    required String style,
+    required String background,
+    required String pose,
+  }) {
+    if (clothingImages.length != 1) {
+      throw ArgumentError('Try-on requires exactly one clothing image.');
+    }
+    return {
+      'clothing_image': clothingImages.single,
+      'style': style,
+      'background': background,
+      'pose': pose,
+      'lighting': 'professional studio lighting',
+      'save_to_storage': false,
+    };
+  }
+
+  /// Any change to the input garment (pick, switch, remove) invalidates the
+  /// previously generated result so it can never be presented as matching the
+  /// current selection.
+  void _clearGeneratedResult() {
+    generatedImageUrl.value = '';
+    generatedImageBase64.value = '';
   }
 
   void reset() {

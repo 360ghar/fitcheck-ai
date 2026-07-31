@@ -43,6 +43,8 @@ Map<String, dynamic> _$SubscriptionModelToJson(_SubscriptionModel instance) =>
 
 const _$PlanTypeEnumMap = {
   PlanType.free: 'free',
+  PlanType.plusMonthly: 'plus_monthly',
+  PlanType.plusYearly: 'plus_yearly',
   PlanType.proMonthly: 'pro_monthly',
   PlanType.proYearly: 'pro_yearly',
 };
@@ -159,8 +161,9 @@ Map<String, dynamic> _$PlanDetailsModelToJson(_PlanDetailsModel instance) =>
 _CheckoutSessionModel _$CheckoutSessionModelFromJson(
   Map<String, dynamic> json,
 ) => _CheckoutSessionModel(
-  checkoutUrl: json['checkout_url'] as String,
-  sessionId: json['session_id'] as String,
+  checkoutUrl: json['checkout_url'] as String?,
+  sessionId: json['session_id'] as String?,
+  updated: json['updated'] as bool? ?? false,
 );
 
 Map<String, dynamic> _$CheckoutSessionModelToJson(
@@ -168,6 +171,7 @@ Map<String, dynamic> _$CheckoutSessionModelToJson(
 ) => <String, dynamic>{
   'checkout_url': instance.checkoutUrl,
   'session_id': instance.sessionId,
+  'updated': instance.updated,
 };
 
 _ValidateReferralResponse _$ValidateReferralResponseFromJson(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/feedback_controller.dart';
 import '../models/feedback_model.dart';
@@ -14,10 +15,7 @@ class FeedbackPage extends GetView<FeedbackController> {
     final tokens = AppUiTokens.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Submit Feedback'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Submit Feedback'), elevation: 0),
       body: AppPageBackground(
         child: SafeArea(
           child: RefreshIndicator(
@@ -28,85 +26,89 @@ class FeedbackPage extends GetView<FeedbackController> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                // Success message
-                Obx(() {
-                  if (!controller.showSuccess.value) return const SizedBox.shrink();
-                  return Container(
-                    padding: const EdgeInsets.all(AppConstants.spacing16),
-                    margin: const EdgeInsets.only(bottom: AppConstants.spacing16),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.check_circle, color: Colors.green),
-                        const SizedBox(width: AppConstants.spacing12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Thank you for your feedback!',
-                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                      color: Colors.green.shade700,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                              ),
-                              Text(
-                                "We'll review it and get back to you if needed.",
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Colors.green.shade600,
-                                    ),
-                              ),
-                            ],
-                          ),
+                  // Success message
+                  Obx(() {
+                    if (!controller.showSuccess.value) {
+                      return const SizedBox.shrink();
+                    }
+                    return Container(
+                      padding: const EdgeInsets.all(AppConstants.spacing16),
+                      margin: const EdgeInsets.only(
+                        bottom: AppConstants.spacing16,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.green.withValues(alpha: 0.3),
                         ),
-                      ],
-                    ),
-                  );
-                }),
-
-                // Form card
-                AppGlassCard(
-                  padding: const EdgeInsets.all(AppConstants.spacing16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                      ),
+                      child: Row(
                         children: [
-                          Icon(
-                            Icons.feedback_outlined,
-                            color: tokens.brandColor,
-                          ),
+                          const Icon(Icons.check_circle, color: Colors.green),
                           const SizedBox(width: AppConstants.spacing12),
-                          Text(
-                            'Submit Feedback',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.w700,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Thank you for your feedback!',
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(
+                                        color: Colors.green.shade700,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                 ),
+                                Text(
+                                  "We'll review it and get back to you if needed.",
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(color: Colors.green.shade600),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: AppConstants.spacing8),
-                      Text(
-                        'We value your input and read every submission',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: tokens.textMuted,
-                            ),
-                      ),
-                      const SizedBox(height: AppConstants.spacing24),
+                    );
+                  }),
 
-                      // Category dropdown
-                      Text(
-                        'Category *',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
+                  // Form card
+                  AppGlassCard(
+                    padding: const EdgeInsets.all(AppConstants.spacing16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.feedback_outlined,
+                              color: tokens.brandColor,
                             ),
-                      ),
-                      const SizedBox(height: AppConstants.spacing8),
-                      Obx(() => DropdownButtonFormField<TicketCategory>(
+                            const SizedBox(width: AppConstants.spacing12),
+                            Text(
+                              'Submit Feedback',
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppConstants.spacing8),
+                        Text(
+                          'We value your input and read every submission',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: tokens.textMuted),
+                        ),
+                        const SizedBox(height: AppConstants.spacing24),
+
+                        // Category dropdown
+                        Text(
+                          'Category *',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: AppConstants.spacing8),
+                        Obx(
+                          () => DropdownButtonFormField<TicketCategory>(
                             initialValue: controller.category.value,
                             decoration: InputDecoration(
                               border: OutlineInputBorder(
@@ -122,7 +124,11 @@ class FeedbackPage extends GetView<FeedbackController> {
                                 value: TicketCategory.bugReport,
                                 child: Row(
                                   children: [
-                                    Icon(Icons.bug_report, color: Colors.red, size: 20),
+                                    Icon(
+                                      Icons.bug_report,
+                                      color: Colors.red,
+                                      size: 20,
+                                    ),
                                     SizedBox(width: 12),
                                     Text('Bug Report'),
                                   ],
@@ -132,7 +138,11 @@ class FeedbackPage extends GetView<FeedbackController> {
                                 value: TicketCategory.featureRequest,
                                 child: Row(
                                   children: [
-                                    Icon(Icons.lightbulb_outline, color: Colors.amber, size: 20),
+                                    Icon(
+                                      Icons.lightbulb_outline,
+                                      color: Colors.amber,
+                                      size: 20,
+                                    ),
                                     SizedBox(width: 12),
                                     Text('Feature Request'),
                                   ],
@@ -142,7 +152,11 @@ class FeedbackPage extends GetView<FeedbackController> {
                                 value: TicketCategory.generalFeedback,
                                 child: Row(
                                   children: [
-                                    Icon(Icons.chat_bubble_outline, color: Colors.blue, size: 20),
+                                    Icon(
+                                      Icons.chat_bubble_outline,
+                                      color: Colors.blue,
+                                      size: 20,
+                                    ),
                                     SizedBox(width: 12),
                                     Text('General Feedback'),
                                   ],
@@ -152,7 +166,11 @@ class FeedbackPage extends GetView<FeedbackController> {
                                 value: TicketCategory.supportRequest,
                                 child: Row(
                                   children: [
-                                    Icon(Icons.help_outline, color: Colors.green, size: 20),
+                                    Icon(
+                                      Icons.help_outline,
+                                      color: Colors.green,
+                                      size: 20,
+                                    ),
                                     SizedBox(width: 12),
                                     Text('Support Request'),
                                   ],
@@ -164,105 +182,111 @@ class FeedbackPage extends GetView<FeedbackController> {
                                 controller.category.value = value;
                               }
                             },
-                          )),
-
-                      const SizedBox(height: AppConstants.spacing16),
-
-                      Form(
-                        key: controller.formKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                      // Subject field
-                      Text(
-                        'Subject *',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                      const SizedBox(height: AppConstants.spacing8),
-                      TextFormField(
-                        controller: controller.subjectController,
-                        decoration: InputDecoration(
-                          hintText: 'Brief summary of your feedback',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: AppConstants.spacing16,
-                            vertical: AppConstants.spacing12,
                           ),
                         ),
-                        maxLength: 200,
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Subject is required';
-                          }
-                          return null;
-                        },
-                      ),
 
-                      const SizedBox(height: AppConstants.spacing16),
+                        const SizedBox(height: AppConstants.spacing16),
 
-                      // Description field
-                      Text(
-                        'Description *',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                      const SizedBox(height: AppConstants.spacing8),
-                      Obx(() {
-                        String hint;
-                        switch (controller.category.value) {
-                          case TicketCategory.bugReport:
-                            hint = 'Describe the bug: What happened? What did you expect? Steps to reproduce?';
-                            break;
-                          case TicketCategory.featureRequest:
-                            hint = "Describe the feature you'd like and how it would help you";
-                            break;
-                          default:
-                            hint = 'Share your thoughts, suggestions, or questions';
-                        }
-                        // Stable TextEditingController keeps typed text when category changes
-                        return TextFormField(
-                          controller: controller.descriptionController,
-                          decoration: InputDecoration(
-                            hintText: hint,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            contentPadding: const EdgeInsets.all(AppConstants.spacing16),
+                        Form(
+                          key: controller.formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Subject field
+                              Text(
+                                'Subject *',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: AppConstants.spacing8),
+                              TextFormField(
+                                controller: controller.subjectController,
+                                decoration: InputDecoration(
+                                  hintText: 'Brief summary of your feedback',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: AppConstants.spacing16,
+                                    vertical: AppConstants.spacing12,
+                                  ),
+                                ),
+                                maxLength: 200,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Subject is required';
+                                  }
+                                  return null;
+                                },
+                              ),
+
+                              const SizedBox(height: AppConstants.spacing16),
+
+                              // Description field
+                              Text(
+                                'Description *',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: AppConstants.spacing8),
+                              Obx(() {
+                                String hint;
+                                switch (controller.category.value) {
+                                  case TicketCategory.bugReport:
+                                    hint =
+                                        'Describe the bug: What happened? What did you expect? Steps to reproduce?';
+                                    break;
+                                  case TicketCategory.featureRequest:
+                                    hint =
+                                        "Describe the feature you'd like and how it would help you";
+                                    break;
+                                  default:
+                                    hint =
+                                        'Share your thoughts, suggestions, or questions';
+                                }
+                                // Stable TextEditingController keeps typed text when category changes
+                                return TextFormField(
+                                  controller: controller.descriptionController,
+                                  decoration: InputDecoration(
+                                    hintText: hint,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    contentPadding: const EdgeInsets.all(
+                                      AppConstants.spacing16,
+                                    ),
+                                  ),
+                                  maxLines: 5,
+                                  maxLength: 5000,
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return 'Description is required';
+                                    }
+                                    return null;
+                                  },
+                                );
+                              }),
+                            ],
                           ),
-                          maxLines: 5,
-                          maxLength: 5000,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Description is required';
-                            }
-                            return null;
-                          },
-                        );
-                      }),
-                          ],
                         ),
-                      ),
 
-                      const SizedBox(height: AppConstants.spacing16),
+                        const SizedBox(height: AppConstants.spacing16),
 
-                      // Attachments
-                      Text(
-                        'Attachments (optional)',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                      const SizedBox(height: AppConstants.spacing8),
-                      Obx(() => Wrap(
+                        // Attachments
+                        Text(
+                          'Attachments (optional)',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: AppConstants.spacing8),
+                        Obx(
+                          () => Wrap(
                             spacing: AppConstants.spacing8,
                             runSpacing: AppConstants.spacing8,
                             children: [
-                              ...controller.attachments.asMap().entries.map((entry) {
+                              ...controller.attachments.asMap().entries.map((
+                                entry,
+                              ) {
                                 final index = entry.key;
                                 final file = entry.value;
                                 return Stack(
@@ -282,17 +306,23 @@ class FeedbackPage extends GetView<FeedbackController> {
                                       top: 0,
                                       right: 0,
                                       child: GestureDetector(
-                                        onTap: () => controller.removeAttachment(index),
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: const BoxDecoration(
-                                            color: Colors.red,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(
-                                            Icons.close,
-                                            color: Colors.white,
-                                            size: 14,
+                                        onTap: () =>
+                                            controller.removeAttachment(index),
+                                        child: Semantics(
+                                          button: true,
+                                          label:
+                                              'Remove attachment ${index + 1}',
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: const BoxDecoration(
+                                              color: Colors.red,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                              Icons.close,
+                                              color: Colors.white,
+                                              size: 14,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -303,71 +333,143 @@ class FeedbackPage extends GetView<FeedbackController> {
                               if (controller.attachments.length < 5)
                                 GestureDetector(
                                   onTap: () => _showAttachmentOptions(context),
-                                  child: Container(
-                                    width: 80,
-                                    height: 80,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: tokens.cardBorderColor,
-                                        width: 2,
+                                  child: Semantics(
+                                    button: true,
+                                    label: 'Add attachment',
+                                    child: Container(
+                                      width: 80,
+                                      height: 80,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: tokens.cardBorderColor,
+                                          width: 2,
+                                        ),
                                       ),
-                                    ),
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.add_a_photo,
-                                          color: tokens.textMuted,
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Add',
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                color: tokens.textMuted,
-                                              ),
-                                        ),
-                                      ],
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.add_a_photo,
+                                            color: tokens.textMuted,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Add',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: tokens.textMuted,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
                             ],
-                          )),
-                      Text(
-                        'Up to 5 images, max 5MB each',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: tokens.textMuted,
-                            ),
-                      ),
+                          ),
+                        ),
+                        Text(
+                          'Up to 5 images, max 5MB each',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: tokens.textMuted),
+                        ),
 
-                      const SizedBox(height: AppConstants.spacing24),
+                        const SizedBox(height: AppConstants.spacing24),
 
-                      // Submit button
-                      Obx(() => SizedBox(
+                        // Submit button
+                        Obx(
+                          () => SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
-                              onPressed: controller.isSubmitting.value ? null : controller.submit,
+                              onPressed: controller.isSubmitting.value
+                                  ? null
+                                  : controller.submit,
                               icon: controller.isSubmitting.value
                                   ? const SizedBox(
                                       width: 20,
                                       height: 20,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     )
                                   : const Icon(Icons.send),
                               label: Text(
-                                controller.isSubmitting.value ? 'Submitting...' : 'Submit Feedback',
+                                controller.isSubmitting.value
+                                    ? 'Submitting...'
+                                    : 'Submit Feedback',
                               ),
                             ),
-                          )),
-                    ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
 
-                const SizedBox(height: AppConstants.spacing24),
+                  const SizedBox(height: AppConstants.spacing24),
 
-                // Ticket history
-                Obx(() {
-                  if (controller.isLoadingTickets.value && controller.tickets.isEmpty) {
+                  // Ticket history
+                  Obx(() {
+                    if (controller.isLoadingTickets.value &&
+                        controller.tickets.isEmpty) {
+                      return AppGlassCard(
+                        padding: const EdgeInsets.all(AppConstants.spacing16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.history, color: tokens.brandColor),
+                                const SizedBox(width: AppConstants.spacing12),
+                                Text(
+                                  'Your Submissions',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppConstants.spacing16),
+                            const ShimmerListTile(
+                              hasLeading: true,
+                              hasSubtitle: true,
+                            ),
+                            const SizedBox(height: AppConstants.spacing8),
+                            const ShimmerListTile(
+                              hasLeading: true,
+                              hasSubtitle: true,
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    if (controller.error.value.isNotEmpty &&
+                        controller.tickets.isEmpty) {
+                      return AppGlassCard(
+                        padding: const EdgeInsets.all(AppConstants.spacing16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Your submissions are temporarily unavailable.',
+                            ),
+                            const SizedBox(height: AppConstants.spacing8),
+                            Text(controller.error.value),
+                            const SizedBox(height: AppConstants.spacing12),
+                            TextButton.icon(
+                              onPressed: controller.fetchTickets,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    if (controller.tickets.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
                     return AppGlassCard(
                       padding: const EdgeInsets.all(AppConstants.spacing16),
                       child: Column(
@@ -379,44 +481,20 @@ class FeedbackPage extends GetView<FeedbackController> {
                               const SizedBox(width: AppConstants.spacing12),
                               Text(
                                 'Your Submissions',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
                               ),
                             ],
                           ),
                           const SizedBox(height: AppConstants.spacing16),
-                          const ShimmerListTile(hasLeading: true, hasSubtitle: true),
-                          const SizedBox(height: AppConstants.spacing8),
-                          const ShimmerListTile(hasLeading: true, hasSubtitle: true),
+                          ...controller.tickets.map(
+                            (ticket) =>
+                                _buildTicketItem(context, ticket, tokens),
+                          ),
                         ],
                       ),
                     );
-                  }
-                  if (controller.tickets.isEmpty) return const SizedBox.shrink();
-                  return AppGlassCard(
-                    padding: const EdgeInsets.all(AppConstants.spacing16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.history, color: tokens.brandColor),
-                            const SizedBox(width: AppConstants.spacing12),
-                            Text(
-                              'Your Submissions',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppConstants.spacing16),
-                        ...controller.tickets.map((ticket) => _buildTicketItem(context, ticket, tokens)),
-                      ],
-                    ),
-                  );
-                }),
+                  }),
                 ],
               ),
             ),
@@ -455,7 +533,11 @@ class FeedbackPage extends GetView<FeedbackController> {
     );
   }
 
-  Widget _buildTicketItem(BuildContext context, TicketListItem ticket, AppUiTokens tokens) {
+  Widget _buildTicketItem(
+    BuildContext context,
+    TicketListItem ticket,
+    AppUiTokens tokens,
+  ) {
     IconData icon;
     Color color;
     switch (ticket.category) {
@@ -515,17 +597,17 @@ class FeedbackPage extends GetView<FeedbackController> {
               children: [
                 Text(
                   ticket.subject,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  _formatDate(ticket.createdAt),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  AppDateUtils.formatDate(ticket.createdAt),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
                 ),
               ],
             ),
@@ -539,17 +621,13 @@ class FeedbackPage extends GetView<FeedbackController> {
             child: Text(
               statusLabel,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: statusColor,
-                    fontWeight: FontWeight.w500,
-                  ),
+                color: statusColor,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
       ),
     );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.month}/${date.day}/${date.year}';
   }
 }

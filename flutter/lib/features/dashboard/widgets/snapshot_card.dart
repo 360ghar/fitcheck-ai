@@ -30,7 +30,7 @@ class SnapshotCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AppSectionHeader(
-              title: 'Wardrobe Snapshot',
+              title: 'Closet Snapshot',
               subtitle: 'This month at a glance',
               trailing: controller.isLoading.value
                   ? const SizedBox(

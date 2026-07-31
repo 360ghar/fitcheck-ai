@@ -17,6 +17,7 @@ import asyncio
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
+from app.utils.datetime_util import utcnow
 from typing import Dict, List
 
 from fastapi import Request
@@ -91,7 +92,7 @@ async def check_ip_rate_limit(
         Dict with allowed, current_count, limit, remaining
     """
     limit = DEMO_RATE_LIMITS.get(operation_type, 3)
-    cutoff = datetime.utcnow() - RATE_LIMIT_WINDOW
+    cutoff = utcnow() - RATE_LIMIT_WINDOW
 
     async with _lock:
         # Clean old entries
@@ -112,7 +113,7 @@ async def check_ip_rate_limit(
 async def increment_ip_usage(ip_address: str, operation_type: str) -> None:
     """Record a usage for rate limiting."""
     async with _lock:
-        _ip_usage[ip_address][operation_type].append(datetime.utcnow())
+        _ip_usage[ip_address][operation_type].append(utcnow())
 
 
 @asynccontextmanager
@@ -174,7 +175,7 @@ async def get_ip_usage_stats(ip_address: str) -> dict:
     Useful for displaying remaining quota to users.
     """
     stats = {}
-    cutoff = datetime.utcnow() - RATE_LIMIT_WINDOW
+    cutoff = utcnow() - RATE_LIMIT_WINDOW
 
     async with _lock:
         for operation_type, limit in DEMO_RATE_LIMITS.items():
@@ -207,7 +208,7 @@ async def check_auth_rate_limit(
         Dict with allowed, current_count, limit, remaining
     """
     limit = AUTH_RATE_LIMITS.get(operation_type, 10)
-    cutoff = datetime.utcnow() - AUTH_RATE_LIMIT_WINDOW
+    cutoff = utcnow() - AUTH_RATE_LIMIT_WINDOW
 
     async with _lock:
         # Use auth-specific key to avoid collision with demo limits
@@ -230,7 +231,7 @@ async def increment_auth_usage(ip_address: str, operation_type: str) -> None:
     """Record an auth attempt for rate limiting."""
     async with _lock:
         auth_key = f"auth_{operation_type}"
-        _ip_usage[ip_address][auth_key].append(datetime.utcnow())
+        _ip_usage[ip_address][auth_key].append(utcnow())
 
 
 @asynccontextmanager

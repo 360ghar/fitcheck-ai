@@ -1,14 +1,19 @@
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/dashboard_models.dart';
 import '../repositories/dashboard_repository.dart';
+import '../../../core/services/persistence_service.dart';
 import '../../../core/utils/frame_safe.dart';
 import '../../../core/utils/error_handler.dart';
 
 class DashboardController extends GetxController {
-  final DashboardRepository _repository = DashboardRepository();
+  final DashboardRepository _repository;
+  PersistenceService get _persistence => Get.isRegistered<PersistenceService>()
+      ? Get.find<PersistenceService>()
+      : PersistenceService();
 
-  static const String _referralBannerDismissedKey = 'referral_banner_dismissed_at';
+  static const String _referralBannerDismissedKey =
+      'referral_banner_dismissed_at';
   static const int _weekInMs = 7 * 24 * 60 * 60 * 1000;
 
   final Rxn<DashboardData> dashboard = Rxn<DashboardData>();
@@ -16,6 +21,9 @@ class DashboardController extends GetxController {
   final RxBool isLoading = false.obs;
   final RxString error = ''.obs;
   final RxBool referralBannerDismissed = false.obs;
+
+  DashboardController({DashboardRepository? repository})
+    : _repository = repository ?? DashboardRepository();
 
   @override
   void onInit() {
@@ -26,24 +34,27 @@ class DashboardController extends GetxController {
 
   Future<void> _loadBannerDismissalState() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final dismissedAt = prefs.getInt(_referralBannerDismissedKey);
+      final dismissedAt = await _persistence.getInt(
+        _referralBannerDismissedKey,
+      );
       if (dismissedAt != null) {
         final weekAgo = DateTime.now().millisecondsSinceEpoch - _weekInMs;
         referralBannerDismissed.value = dismissedAt > weekAgo;
       }
     } catch (e) {
-      // Ignore errors loading dismissal state
+      debugPrint('Failed to load banner dismissal state: $e');
     }
   }
 
   Future<void> dismissReferralBanner() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(_referralBannerDismissedKey, DateTime.now().millisecondsSinceEpoch);
+      await _persistence.setInt(
+        _referralBannerDismissedKey,
+        DateTime.now().millisecondsSinceEpoch,
+      );
       referralBannerDismissed.value = true;
     } catch (e) {
-      // Ignore errors saving dismissal state
+      debugPrint('Failed to save banner dismissal state: $e');
     }
   }
 
@@ -55,12 +66,28 @@ class DashboardController extends GetxController {
     error.value = '';
 
     try {
-      final results = await Future.wait([
-        _repository.fetchDashboard(),
-        _repository.fetchStreak(),
-      ]);
-      dashboard.value = results[0] as DashboardData;
-      streak.value = results[1] as StreakData;
+      // The dashboard is the primary surface; streak is optional enrichment.
+      // Start both requests concurrently (latency is the max of the two, not
+      // the sum) and attach the streak error handler immediately so an early
+      // gamification failure is never reported as an unhandled async error.
+      final dashboardFuture = _repository.fetchDashboard();
+      final streakFuture = _repository.fetchStreak().then<StreakData?>(
+        (data) => data,
+        onError: (Object e) {
+          debugPrint('Failed to load optional dashboard streak: $e');
+          return null;
+        },
+      );
+
+      try {
+        dashboard.value = await dashboardFuture;
+      } catch (e) {
+        error.value = ErrorHandler.extractMessage(e);
+        ErrorHandler.showError(error.value, title: 'Error');
+        return;
+      }
+
+      streak.value = await streakFuture;
     } catch (e) {
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.showError(error.value, title: 'Error');

@@ -50,7 +50,7 @@ export default function WhoItsFor() {
                   <h3 className="text-xl font-semibold text-stone-900 dark:text-stone-50 tracking-tight">
                     {persona.title}
                   </h3>
-                  <ArrowUpRight className="h-4 w-4 shrink-0 text-stone-400 transition group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />
+                  <ArrowUpRight className="h-4 w-4 shrink-0 text-stone-400 transition group-hover:text-primary" />
                 </div>
                 <p className="mt-3 text-sm md:text-[15px] text-stone-600 dark:text-stone-400 leading-relaxed">
                   {persona.body}

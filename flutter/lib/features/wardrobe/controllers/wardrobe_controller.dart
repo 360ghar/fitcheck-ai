@@ -13,20 +13,22 @@ import '../../../core/utils/error_handler.dart';
 /// Wardrobe controller
 class WardrobeController extends GetxController {
   final ItemRepository _itemRepository;
-  final NetworkService _networkService = Get.find<NetworkService>();
+  final NetworkService _networkService;
 
-  /// [itemRepository] is injectable to allow unit tests to exercise the
-  /// controller's error-handling paths without hitting the real API / Supabase
-  /// stack. Defaults to a live [ItemRepository] in production.
-  WardrobeController({ItemRepository? itemRepository})
-    : _itemRepository = itemRepository ?? ItemRepository();
+  /// Both [itemRepository] and [networkService] are injectable for unit tests.
+  /// Default to live implementations in production.
+  WardrobeController({
+    ItemRepository? itemRepository,
+    NetworkService? networkService,
+  }) : _itemRepository = itemRepository ?? ItemRepository(),
+       _networkService = networkService ?? Get.find<NetworkService>();
 
   // Workers for cleanup
   final List<Worker> _workers = [];
+  int _fetchGeneration = 0;
 
   // Reactive state
   final RxList<ItemModel> items = <ItemModel>[].obs;
-  final RxList<ItemModel> filteredItems = <ItemModel>[].obs;
   final RxBool isLoading = false.obs;
   final RxBool isLoadingMore = false.obs;
   final RxString error = ''.obs;
@@ -53,6 +55,10 @@ class WardrobeController extends GetxController {
   bool get isSelectionActive => selectedIds.isNotEmpty;
   int get selectedCount => selectedIds.length;
 
+  /// The list shown to the user. Filtering is server-side, so this is the
+  /// single item list — kept as a named getter for view compatibility.
+  List<ItemModel> get filteredItems => items;
+
   // Action-specific loading states (per-item)
   final RxMap<String, bool> isDeletingMap = <String, bool>{}.obs;
   final RxMap<String, bool> isFavoritingMap = <String, bool>{}.obs;
@@ -74,6 +80,7 @@ class WardrobeController extends GetxController {
 
   @override
   void onClose() {
+    _fetchGeneration++;
     // Clean up all workers to prevent memory leaks
     for (final worker in _workers) {
       worker.dispose();
@@ -125,13 +132,43 @@ class WardrobeController extends GetxController {
   /// Fetch items from server with filters
   Future<void> fetchItems({bool refresh = false}) async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
+
+    if (!_networkService.isConnected.value) {
+      // Invalidate any in-flight fetch so stale results for the previous
+      // filters cannot populate the new filter state after reconnect.
+      _fetchGeneration++;
+      isLoading.value = false;
+      isLoadingMore.value = false;
+      isOffline.value = true;
+      error.value = 'You are offline. Reconnect to refresh your wardrobe.';
+      return;
+    }
+
     if (refresh) {
+      _fetchGeneration++;
       currentPage.value = 1;
       hasMore.value = true;
       items.clear();
+    } else {
+      if (isLoadingMore.value) return;
+      _fetchGeneration++;
     }
-
-    if (isLoadingMore.value) return;
+    final requestGeneration = _fetchGeneration;
+    final requestPage = currentPage.value;
+    final requestSearch = searchQuery.value.isEmpty ? null : searchQuery.value;
+    final requestCategories = selectedCategories.isEmpty
+        ? null
+        : selectedCategories.map((c) => c.name.toLowerCase()).toList();
+    final requestColors = selectedColors.isEmpty
+        ? null
+        : selectedColors.toList();
+    final requestOccasion = selectedOccasion.value.isEmpty
+        ? null
+        : UseCases.normalize(selectedOccasion.value);
+    final requestConditions = selectedConditions.isEmpty
+        ? null
+        : selectedConditions.map((c) => c.name.toLowerCase()).toList();
+    final requestSortType = sortType.value;
 
     try {
       if (refresh) {
@@ -144,24 +181,20 @@ class WardrobeController extends GetxController {
       // Build filter parameters for server-side filtering
       final response = await RetryHelper.execute(
         operation: () => _itemRepository.getItems(
-          page: currentPage.value,
+          page: requestPage,
           limit: 20,
-          search: searchQuery.value.isEmpty ? null : searchQuery.value,
-          categories: selectedCategories.isEmpty
-              ? null
-              : selectedCategories.map((c) => c.name.toLowerCase()).toList(),
-          colors: selectedColors.isEmpty ? null : selectedColors.toList(),
-          occasion: selectedOccasion.value.isEmpty
-              ? null
-              : UseCases.normalize(selectedOccasion.value),
-          conditions: selectedConditions.isEmpty
-              ? null
-              : selectedConditions.map((c) => c.name.toLowerCase()).toList(),
-          sortBy: _mapSortTypeToApi(sortType.value),
-          sortOrder: _getSortOrder(sortType.value),
+          search: requestSearch,
+          categories: requestCategories,
+          colors: requestColors,
+          occasion: requestOccasion,
+          conditions: requestConditions,
+          sortBy: _mapSortTypeToApi(requestSortType),
+          sortOrder: _getSortOrder(requestSortType),
         ),
         maxAttempts: 3,
       );
+
+      if (requestGeneration != _fetchGeneration || isClosed) return;
 
       if (refresh) {
         items.clear();
@@ -171,15 +204,15 @@ class WardrobeController extends GetxController {
       totalItems.value = response.total;
       hasMore.value = response.hasMore;
       currentPage.value++;
-
-      // Server-side filtering - no client-side filtering needed
-      filteredItems.value = items.toList();
     } catch (e) {
+      if (requestGeneration != _fetchGeneration || isClosed) return;
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.showError(error.value, title: 'Error');
     } finally {
-      isLoading.value = false;
-      isLoadingMore.value = false;
+      if (requestGeneration == _fetchGeneration) {
+        isLoading.value = false;
+        isLoadingMore.value = false;
+      }
     }
   }
 
@@ -301,26 +334,21 @@ class WardrobeController extends GetxController {
     try {
       final updatedItem = await _itemRepository.toggleFavorite(itemId);
 
-      // Update in lists
+      // Update in list
       final index = items.indexWhere((item) => item.id == itemId);
       if (index != -1) {
         items[index] = updatedItem;
-      }
-
-      final filteredIndex = filteredItems.indexWhere(
-        (item) => item.id == itemId,
-      );
-      if (filteredIndex != -1) {
-        filteredItems[filteredIndex] = updatedItem;
       }
 
       if (selectedItem.value?.id == itemId) {
         selectedItem.value = updatedItem;
       }
 
-      ErrorHandler.showInfo(updatedItem.isFavorite
+      ErrorHandler.showInfo(
+        updatedItem.isFavorite
             ? 'Added to Favorites'
-            : 'Removed from Favorites');
+            : 'Removed from Favorites',
+      );
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
@@ -335,17 +363,10 @@ class WardrobeController extends GetxController {
     try {
       final updatedItem = await _itemRepository.markAsWorn(itemId);
 
-      // Update in lists
+      // Update in list
       final index = items.indexWhere((item) => item.id == itemId);
       if (index != -1) {
         items[index] = updatedItem;
-      }
-
-      final filteredIndex = filteredItems.indexWhere(
-        (item) => item.id == itemId,
-      );
-      if (filteredIndex != -1) {
-        filteredItems[filteredIndex] = updatedItem;
       }
 
       if (selectedItem.value?.id == itemId) {
@@ -418,7 +439,6 @@ class WardrobeController extends GetxController {
   /// Called by ItemAddController, BatchExtractionController after creating items
   void addItem(ItemModel item) {
     items.insert(0, item);
-    filteredItems.insert(0, item);
     totalItems.value++;
   }
 
@@ -427,7 +447,6 @@ class WardrobeController extends GetxController {
   void addItems(List<ItemModel> newItems) {
     if (newItems.isEmpty) return;
     items.insertAll(0, newItems);
-    filteredItems.insertAll(0, newItems);
     totalItems.value += newItems.length;
   }
 
@@ -439,13 +458,6 @@ class WardrobeController extends GetxController {
       items[index] = updatedItem;
     }
 
-    final filteredIndex = filteredItems.indexWhere(
-      (item) => item.id == updatedItem.id,
-    );
-    if (filteredIndex != -1) {
-      filteredItems[filteredIndex] = updatedItem;
-    }
-
     if (selectedItem.value?.id == updatedItem.id) {
       selectedItem.value = updatedItem;
     }
@@ -455,7 +467,6 @@ class WardrobeController extends GetxController {
   /// Used for immediate UI update when item is deleted elsewhere
   void removeItemFromState(String itemId) {
     items.removeWhere((item) => item.id == itemId);
-    filteredItems.removeWhere((item) => item.id == itemId);
     selectedIds.remove(itemId);
     if (selectedItem.value?.id == itemId) {
       selectedItem.value = null;

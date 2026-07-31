@@ -178,11 +178,19 @@ async def test_provider_config(
             provider=provider,
         )
 
+        # test_provider_config returns a HealthCheckResult model (or a dict-shaped
+        # envelope from older code paths/tests). Normalize via to_api_dict when the
+        # typed model is returned; fall back to dict .get() for raw envelopes.
+        if hasattr(result, "to_api_dict"):
+            envelope = result.to_api_dict()
+        else:
+            envelope = result
+
         response = TestProviderResponse(
-            success=result.get("success", False),
-            message=result.get("message", "Unknown error"),
-            model=result.get("model"),
-            response=result.get("response"),
+            success=envelope.get("success", False),
+            message=envelope.get("message", "Unknown error"),
+            model=envelope.get("model"),
+            response=envelope.get("response"),
         )
 
         return {

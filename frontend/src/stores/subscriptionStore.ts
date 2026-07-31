@@ -13,7 +13,8 @@ import type {
   PlansResponse,
 } from '../types';
 import * as subscriptionApi from '../api/subscription';
-import { getApiError } from '../api/client';
+import { logger } from '../lib/logger';
+import { getApiError } from '../lib/errors';
 
 // ============================================================================
 // SUBSCRIPTION STATE INTERFACE
@@ -88,7 +89,7 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
       const usage = await subscriptionApi.getUsage();
       set({ usage });
     } catch (error) {
-      console.error('Failed to fetch usage:', error);
+      logger.error('Failed to fetch usage:', error);
     }
   },
 
@@ -98,7 +99,7 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
       const plans = await subscriptionApi.getPlans();
       set({ plans });
     } catch (error) {
-      console.error('Failed to fetch plans:', error);
+      logger.error('Failed to fetch plans:', error);
     }
   },
 
@@ -108,7 +109,7 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
       const referralCode = await subscriptionApi.getReferralCode();
       set({ referralCode });
     } catch (error) {
-      console.error('Failed to fetch referral code:', error);
+      logger.error('Failed to fetch referral code:', error);
     }
   },
 
@@ -118,7 +119,7 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
       const referralStats = await subscriptionApi.getReferralStats();
       set({ referralStats });
     } catch (error) {
-      console.error('Failed to fetch referral stats:', error);
+      logger.error('Failed to fetch referral stats:', error);
     }
   },
 
@@ -135,7 +136,23 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
         cancelUrl
       );
 
-      // Redirect to Stripe Checkout
+      if (session.updated) {
+        await get().fetchSubscription();
+        // fetchSubscription swallows its own failure into store `error`;
+        // surface it so the caller (upgrade prompt) does not silently
+        // resolve with stale subscription state.
+        const fetchError = get().error;
+        if (fetchError) {
+          throw new Error(fetchError);
+        }
+        set({ isCheckingOut: false });
+        return;
+      }
+
+      if (!session.checkout_url) {
+        throw new Error('Checkout did not return a redirect URL');
+      }
+      // Redirect to Stripe Checkout for a new subscription.
       window.location.href = session.checkout_url;
     } catch (error) {
       const message = getApiError(error).message || 'Failed to start checkout';
@@ -211,9 +228,36 @@ export const selectUsage = (state: SubscriptionState) => state.usage;
 export const selectReferralCode = (state: SubscriptionState) => state.referralCode;
 export const selectIsLoading = (state: SubscriptionState) => state.isLoading;
 export const selectError = (state: SubscriptionState) => state.error;
+/**
+ * True for any paid plan. Plus unlocks the same features as Pro (only the
+ * usage limits differ), so it counts as entitled here — matching the
+ * backend's SubscriptionService.is_paid_plan.
+ */
 export const selectIsPro = (state: SubscriptionState) =>
+  state.subscription?.plan_type === 'plus_monthly' ||
+  state.subscription?.plan_type === 'plus_yearly' ||
   state.subscription?.plan_type === 'pro_monthly' ||
   state.subscription?.plan_type === 'pro_yearly';
+
+/**
+ * True only for the top Pro tier. Distinct from `selectIsPro` (paid
+ * entitlement): a Plus user has paid features but can still upgrade to Pro.
+ */
+export const selectIsProTier = (state: SubscriptionState) =>
+  state.subscription?.plan_type === 'pro_monthly' ||
+  state.subscription?.plan_type === 'pro_yearly';
+
+/**
+ * True when a higher tier exists to upsell (Free and Plus users).
+ * Distinct from `selectIsPro`: a Plus user HAS paid features but can still
+ * upgrade to Pro, so gating an upgrade CTA on `!isPro` would strand them.
+ * An unknown subscription (still null) is NOT upgradeable — the backend
+ * auto-creates a `free` row, so a real Free user still gets true here.
+ */
+export const selectCanUpgrade = (state: SubscriptionState) =>
+  state.subscription != null &&
+  state.subscription.plan_type !== 'pro_monthly' &&
+  state.subscription.plan_type !== 'pro_yearly';
 
 // ============================================================================
 // HOOKS
@@ -241,6 +285,21 @@ export function useIsPro() {
 }
 
 /**
+ * Hook to check whether the user is on the top Pro tier (badges/CTA gating).
+ * A Plus user is paid (selectIsPro) but is not Pro-tier.
+ */
+export function useIsProTier() {
+  return useSubscriptionStore(selectIsProTier);
+}
+
+/**
+ * Hook to check whether a higher tier is available to upsell
+ */
+export function useCanUpgrade() {
+  return useSubscriptionStore(selectCanUpgrade);
+}
+
+/**
  * Hook to get referral code
  */
 export function useReferralCode() {
@@ -254,6 +313,10 @@ export function usePlanName(): string {
   const subscription = useSubscription();
   if (!subscription) return 'Free';
   switch (subscription.plan_type) {
+    case 'plus_monthly':
+      return 'Plus (Monthly)';
+    case 'plus_yearly':
+      return 'Plus (Yearly)';
     case 'pro_monthly':
       return 'Pro (Monthly)';
     case 'pro_yearly':

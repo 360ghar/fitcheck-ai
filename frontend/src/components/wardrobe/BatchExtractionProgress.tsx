@@ -39,16 +39,25 @@ function getStatusIndicator(status: BatchImageInput['status']) {
           <Loader2 className="h-6 w-6 text-white animate-spin" />
         </div>
       );
+    // A solid disc, not a drop-shadow. `drop-shadow-lg` is a filter, so unlike
+    // the `shadow-*` classes it really rendered — as a fat all-around bloom, and
+    // it still could not make a green tick read against an arbitrary garment
+    // photo. A filled disc in a paired token is legible over anything, and both
+    // pairs inverse correctly (`--success`/`--success-pale` swap roles in dark).
     case 'completed':
       return (
         <div className="absolute top-2 right-2">
-          <CheckCircle2 className="h-5 w-5 text-green-500 drop-shadow-lg" />
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-success-pale text-success">
+            <CheckCircle2 className="h-4 w-4" />
+          </span>
         </div>
       );
     case 'failed':
       return (
-        <div className="absolute inset-0 flex items-center justify-center bg-red-500/30">
-          <XCircle className="h-6 w-6 text-red-500 drop-shadow-lg" />
+        <div className="absolute inset-0 flex items-center justify-center bg-destructive/30">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-destructive text-destructive-foreground">
+            <XCircle className="h-5 w-5" />
+          </span>
         </div>
       );
     default:
@@ -151,7 +160,7 @@ export function BatchExtractionProgress({
             <div
               key={image.imageId}
               className={cn(
-                'group relative aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 transition-all duration-300',
+                'group relative aspect-square overflow-hidden rounded-lg bg-gray-100 transition-colors duration-300 dark:bg-gray-800',
                 getBorderStyle(image.status)
               )}
             >

@@ -16,35 +16,47 @@ import {
 } from '@/components/sidebar'
 import { BottomNav } from '@/components/navigation/BottomNav'
 import { JobPill } from '@/components/jobs'
+import { Button } from '@/components/ui/button'
+import { Link } from 'react-router-dom'
+import { Plus } from 'lucide-react'
 
 function AppLayoutContent() {
   const { isCollapsed } = useSidebar()
 
   return (
-    <div className="flex min-h-[100svh] md:min-h-screen bg-background">
+    <>
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
+      <div className="flex min-h-[100svh] md:min-h-screen bg-background">
       {/* Desktop sidebar */}
       <Sidebar className="hidden md:flex" />
 
       {/* Mobile header - simplified since we have bottom nav */}
-      <header className="fixed left-0 right-0 top-0 z-40 flex h-14 items-center justify-center border-b border-border bg-background/95 backdrop-blur-sm safe-area-top md:hidden pl-[var(--safe-area-left)] pr-[var(--safe-area-right)]">
+      <header className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center justify-center border-b border-border bg-background safe-area-top md:hidden pl-[var(--safe-area-left)] pr-[var(--safe-area-right)]">
         <div className="absolute left-[calc(var(--safe-area-left)+0.5rem)]">
           <SidebarMobileTrigger />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold text-primary">FitCheck</span>
-          <span className="text-lg font-light text-muted-foreground">AI</span>
+          <span className="text-lg font-bold text-foreground">FitCheck</span>
+          <span className="text-lg font-semibold text-primary">AI</span>
         </div>
+        <Button asChild size="icon" className="absolute right-[calc(var(--safe-area-right)+0.5rem)]" aria-label="Add to wardrobe">
+          <Link to="/wardrobe?action=add"><Plus className="h-4 w-4" /></Link>
+        </Button>
       </header>
 
       {/* Main content */}
       <main
+        id="main-content"
+        tabIndex={-1}
         className={cn(
-          'flex-1 transition-all duration-200',
+          'flex-1 transition-[margin] duration-200',
           isCollapsed ? 'md:ml-16' : 'md:ml-60'
         )}
       >
         {/* Content wrapper with padding for mobile header and bottom nav */}
-        <div className="min-h-[100svh] md:min-h-screen pt-[calc(var(--mobile-header-height)+var(--safe-area-top))] pb-[calc(var(--bottom-nav-height)+var(--safe-area-bottom))] md:pt-0 md:pb-0">
+        <div className="min-h-[100svh] md:min-h-screen pt-[calc(4rem+var(--safe-area-top))] pb-[calc(var(--bottom-nav-height)+var(--safe-area-bottom))] md:pt-0 md:pb-0">
           <Outlet />
         </div>
 
@@ -59,7 +71,8 @@ function AppLayoutContent() {
       {/* Bottom navigation for mobile */}
       <SidebarMobile />
       <BottomNav />
-    </div>
+      </div>
+    </>
   )
 }
 

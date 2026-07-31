@@ -8,6 +8,8 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from datetime import datetime, timezone
+
 import app.main as main_module
 
 
@@ -26,7 +28,7 @@ def test_health_does_not_touch_schema_status():
 
 def test_ready_uses_schema_cache():
     main_module._SCHEMA_STATUS_CACHE["missing"] = []
-    main_module._SCHEMA_STATUS_CACHE["checked_at"] = main_module.datetime.utcnow()
+    main_module._SCHEMA_STATUS_CACHE["checked_at"] = datetime.now(timezone.utc)
 
     client = TestClient(main_module.app)
     response = client.get("/ready")

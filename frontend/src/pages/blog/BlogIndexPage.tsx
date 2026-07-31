@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
@@ -9,25 +10,28 @@ export default function BlogIndexPage() {
   const { category } = useParams<{ category: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
   const page = parseInt(searchParams.get('page') || '1', 10)
+  const searchQuery = searchParams.get('search')?.trim() || ''
   const pageSize = 12
+  const [searchValue, setSearchValue] = useState(searchQuery)
 
-  // Format category for API (e.g., "style-guide" -> "Style Guide")
-  // API expects the actual category name, not the slug
-  // So we need to map the slug back to a category name if possible, or pass it through
-  // For now, let's try to capitalize the slug
+  useEffect(() => {
+    setSearchValue(searchQuery)
+  }, [searchQuery])
+
+  const { data: categories, isLoading: isLoadingCategories, error: categoriesError } = useBlogCategories()
   const categoryFilter = category
-    ? category
-      .split('-')
-      .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ')
+    ? categories?.find((candidate) => slugifyCategory(candidate) === category)
     : undefined
+  const categoryIsResolving = Boolean(category && isLoadingCategories)
+  const categoryIsInvalid = Boolean(category && !isLoadingCategories && (categoriesError || !categoryFilter))
 
   const { data: postsData, isLoading: isLoadingPosts, error: postsError } = useBlogPosts(
     page,
     pageSize,
-    categoryFilter
+    categoryFilter,
+    searchQuery,
+    { enabled: !categoryIsResolving && !categoryIsInvalid }
   )
-  const { data: categories, isLoading: isLoadingCategories } = useBlogCategories()
 
   const posts = postsData?.posts || []
   const totalPages = postsData?.total_pages || 1
@@ -40,13 +44,35 @@ export default function BlogIndexPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      const trimmed = searchValue.trim()
+      if (trimmed) next.set('search', trimmed)
+      else next.delete('search')
+      next.delete('page')
+      return next
+    })
+  }
+
+  const handleClearSearch = () => {
+    setSearchValue('')
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('search')
+      next.delete('page')
+      return next
+    })
+  }
+
   return (
     <>
       <SEO
-        title={category ? `${categoryFilter} | FitCheck AI Blog` : 'Style & Wardrobe Blog | FitCheck AI'}
+        title={category ? `${categoryFilter || category} | FitCheck AI Blog` : 'Style & Wardrobe Blog | FitCheck AI'}
         description={
           category
-            ? `${categoryFilter} articles on digital closets, AI outfit planning, and style from FitCheck AI.`
+            ? `${categoryFilter || category} articles on digital closets, AI outfit planning, and style from FitCheck AI.`
             : 'Guides on digital closets, AI outfit planning, virtual try-on, cost-per-wear, and getting more from clothes you own.'
         }
         canonicalUrl={`https://fitcheckaiapp.com/blog${category ? `/category/${category}` : ''}`}
@@ -60,16 +86,38 @@ export default function BlogIndexPage() {
             <AnimatedSection>
               <div className="text-center max-w-3xl mx-auto">
                 <Badge className="mb-4 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border-0">
-                  {category ? categoryFilter : 'Blog'}
+                  {category ? categoryFilter || category : 'Blog'}
                 </Badge>
                 <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-6">
-                  {category ? `${categoryFilter} Articles` : 'Fashion, AI & Style Tips'}
+                  {category ? `${categoryFilter || category} Articles` : 'Fashion, AI & Style Tips'}
                 </h1>
                 <p className="text-lg md:text-xl text-gray-600 dark:text-gray-300 mb-8">
                   {category
-                    ? `Explore our latest articles on ${categoryFilter}`
+                    ? `Explore our latest articles on ${categoryFilter || category}`
                     : 'Discover how AI is transforming wardrobe management and get expert style advice'}
                 </p>
+
+                <form onSubmit={handleSearchSubmit} className="mx-auto flex max-w-xl gap-2" role="search">
+                  <label htmlFor="blog-search" className="sr-only">Search blog posts</label>
+                  <input
+                    id="blog-search"
+                    name="search"
+                    autoComplete="off"
+                    type="search"
+                    value={searchValue}
+                    onChange={(event) => setSearchValue(event.target.value)}
+                    placeholder="Search articles…"
+                    className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                  />
+                  <button type="submit" className="rounded-lg bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-700">
+                    Search
+                  </button>
+                  {searchQuery && (
+                    <button type="button" onClick={handleClearSearch} className="rounded-lg border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">
+                      Clear
+                    </button>
+                  )}
+                </form>
 
                 {/* Category Pills */}
                 {!isLoadingCategories && categories && categories.length > 0 && (
@@ -84,7 +132,7 @@ export default function BlogIndexPage() {
                       All
                     </Link>
                     {categories.map((cat) => {
-                      const catSlug = cat.toLowerCase().replace(/\s+/g, '-')
+                      const catSlug = slugifyCategory(cat)
                       const isActive = category === catSlug
                       return (
                         <Link
@@ -109,8 +157,8 @@ export default function BlogIndexPage() {
         {/* Blog Posts Grid */}
         <section className="py-16 md:py-24 bg-white dark:bg-gray-950">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            {isLoadingPosts ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+            {categoryIsResolving || isLoadingPosts ? (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12" role="status" aria-live="polite" aria-busy="true">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div
                     key={i}
@@ -125,8 +173,17 @@ export default function BlogIndexPage() {
                   </div>
                 ))}
               </div>
+            ) : categoryIsInvalid ? (
+              <div className="text-center py-20 space-y-4" role="alert">
+                <p className="text-stone-600 dark:text-stone-400">
+                  {categoriesError ? 'Unable to load blog categories.' : 'That blog category was not found.'}
+                </p>
+                <Link to="/blog" className="text-indigo-600 hover:underline inline-block">
+                  View all posts
+                </Link>
+              </div>
             ) : postsError ? (
-              <div className="text-center py-20 space-y-4">
+              <div className="text-center py-20 space-y-4" role="alert">
                 <p className="text-stone-600 dark:text-stone-400">
                   Failed to load blog posts. Please try again.
                 </p>
@@ -141,7 +198,7 @@ export default function BlogIndexPage() {
             ) : posts.length === 0 ? (
               <div className="text-center py-20">
                 <p className="text-stone-600 dark:text-stone-400">
-                  No blog posts found{category ? ` in ${categoryFilter}` : ''}. Check back soon!
+                  No blog posts found{category ? ` in ${categoryFilter || category}` : ''}{searchQuery ? ` matching “${searchQuery}”` : ''}. Check back soon!
                 </p>
                 {category && (
                   <Link to="/blog" className="text-indigo-600 hover:underline mt-4 inline-block">
@@ -155,13 +212,16 @@ export default function BlogIndexPage() {
                   {posts.map((post, index) => (
                     <AnimatedSection key={post.slug} delay={index * 100}>
                       <Link to={`/blog/${post.slug}`} className="group block h-full">
-                        <article className="bg-gray-50 dark:bg-gray-900 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 h-full flex flex-col border border-gray-100 dark:border-gray-800">
+                        <article className="flex h-full flex-col overflow-hidden rounded-lg border border-gray-100 bg-gray-50 transition-[border-color] duration-300 dark:border-gray-800 dark:bg-gray-900">
                           {/* Image Placeholder */}
                           <div className="aspect-[16/9] bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center relative overflow-hidden">
                             {post.featured_image_url ? (
                               <img
                                 src={post.featured_image_url}
                                 alt={post.title}
+                                width={640}
+                                height={360}
+                                loading="lazy"
                                 className="absolute inset-0 w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
                               />
                             ) : (
@@ -278,4 +338,12 @@ function formatDate(dateString: string): string {
     day: 'numeric',
     year: 'numeric',
   })
+}
+
+export function slugifyCategory(category: string): string {
+  return category
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }

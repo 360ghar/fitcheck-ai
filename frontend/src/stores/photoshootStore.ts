@@ -11,7 +11,8 @@ import {
   PhotoshootUseCase,
   GeneratedImage,
 } from '@/api/photoshoot';
-import { getApiError } from '@/api/client';
+import { getApiError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { ensureSessionRecording, setPersonProperties, trackEvent } from '@/lib/analytics';
 import { useJobUiStore } from '@/stores/jobUiStore';
 
@@ -132,11 +133,14 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
         set({ numImages: Math.max(1, Math.min(10, usage.remaining)) });
       }
     } catch (error) {
-      // Log the error for debugging, but don't block the user
-      console.warn('Failed to fetch photoshoot usage, using defaults:', error);
-      set({ isLoadingUsage: false });
-      // Default to free limits
-      set({ usage: { used_today: 0, limit_today: 10, remaining: 10, plan_type: 'free' } });
+      logger.warn('Failed to fetch photoshoot usage:', error);
+      // Never invent a free-plan entitlement when the usage service is down.
+      // Generation must wait until the server confirms the user's allowance.
+      set({
+        isLoadingUsage: false,
+        usage: null,
+        error: 'We could not confirm your photoshoot allowance. Try again before generating.',
+      });
     }
   },
 
@@ -150,6 +154,11 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
 
     if (useCase === 'custom' && !customPrompt.trim()) {
       set({ error: 'Please enter a custom prompt' });
+      return null;
+    }
+
+    if (!usage) {
+      set({ error: 'We could not confirm your photoshoot allowance. Try again before generating.' });
       return null;
     }
 
@@ -361,7 +370,8 @@ export const selectCanGenerate = (state: PhotoshootState) => {
   const { photos, useCase, customPrompt, numImages, usage } = state;
   if (photos.length === 0) return false;
   if (useCase === 'custom' && !customPrompt.trim()) return false;
-  if (usage && numImages > usage.remaining) return false;
+  if (!usage) return false;
+  if (numImages > usage.remaining) return false;
   return true;
 };
 

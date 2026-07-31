@@ -10,13 +10,15 @@ import hmac
 import json
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
+from app.utils.datetime_util import utcnow
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode, urlparse, urlunparse
 
 import httpx
 
 from app.core.config import settings
+from app.core.logging_config import get_context_logger
 from app.core.exceptions import (
     SocialImportOAuthConfigError,
     SocialImportOAuthExchangeError,
@@ -24,6 +26,9 @@ from app.core.exceptions import (
 )
 from app.models.social_import import SocialPlatform
 from app.utils.crypto import derive_key
+
+
+logger = get_context_logger(__name__)
 
 
 @dataclass
@@ -119,7 +124,7 @@ class SocialOAuthService:
         opener_origin: Optional[str] = None,
         mobile_redirect_uri: Optional[str] = None,
     ) -> str:
-        exp = int((datetime.now(timezone.utc) + timedelta(seconds=cls._STATE_TTL_SECONDS)).timestamp())
+        exp = int((utcnow() + timedelta(seconds=cls._STATE_TTL_SECONDS)).timestamp())
         payload = {
             "uid": user_id,
             "jid": job_id,
@@ -163,7 +168,7 @@ class SocialOAuthService:
         except Exception as exc:
             raise SocialImportOAuthStateError("Invalid OAuth state payload") from exc
 
-        now_ts = int(datetime.now(timezone.utc).timestamp())
+        now_ts = int(utcnow().timestamp())
         if exp < now_ts:
             raise SocialImportOAuthStateError("OAuth state expired, please retry")
 
@@ -265,13 +270,13 @@ class SocialOAuthService:
                     if ll_data.get("access_token"):
                         access_token = ll_data["access_token"]
                         expires_in = int(ll_data.get("expires_in") or expires_in)
-            except Exception:
+            except (httpx.RequestError, httpx.HTTPStatusError, KeyError, ValueError, TypeError):
                 # Non-fatal: continue with the short-lived token.
-                pass
+                logger.debug("Long-lived token exchange failed, using short-lived token")
 
         expires_at = None
         if expires_in > 0:
-            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+            expires_at = utcnow() + timedelta(seconds=expires_in)
 
         return {
             "provider_access_token": access_token,
@@ -350,7 +355,7 @@ class SocialOAuthService:
     def _parse_graph_response(response: httpx.Response, default_error_message: str) -> Dict[str, Any]:
         try:
             payload = response.json()
-        except Exception:
+        except (ValueError, TypeError):
             payload = {}
 
         if response.is_success:

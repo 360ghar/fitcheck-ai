@@ -3,7 +3,8 @@ FitCheck AI - Main Application Entry Point
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
+from app.utils.datetime_util import utcnow
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -32,15 +33,13 @@ REQUIRED_TABLES = (
     "outfit_collections",
     "outfit_collection_items",
     "body_profiles",
-    # Planning + gamification + generation tracking (docs-aligned MVP)
+    # Planning + generation tracking (docs-aligned MVP)
     "outfit_generations",
     "calendar_connections",
     "calendar_events",
     # Sharing + feedback
     "shared_outfits",
     "share_feedback",
-    "user_streaks",
-    "user_achievements",
     # Subscription + referral
     "subscriptions",
     "subscription_usage",
@@ -48,6 +47,15 @@ REQUIRED_TABLES = (
     "referral_redemptions",
     # Support tickets
     "support_tickets",
+)
+
+# Only required when ENABLE_GAMIFICATION is on. With the flag off the handlers
+# never touch these tables (they return a neutral zeroed payload before any
+# query), so demanding them would make /ready fail-closed over a feature that
+# is deliberately dark.
+GAMIFICATION_TABLES = (
+    "user_streaks",
+    "user_achievements",
 )
 
 SOCIAL_IMPORT_TABLES = (
@@ -118,6 +126,8 @@ def _column_exists(db, table: str, column: str) -> bool:
 def _schema_missing(db) -> list[str]:
     missing: list[str] = []
     required_tables = list(REQUIRED_TABLES)
+    if settings.ENABLE_GAMIFICATION:
+        required_tables.extend(GAMIFICATION_TABLES)
     if settings.ENABLE_SOCIAL_IMPORT:
         required_tables.extend(SOCIAL_IMPORT_TABLES)
 
@@ -179,7 +189,7 @@ def _get_cached_schema_status() -> tuple[bool, list[str]]:
     not call this. Cache avoids re-running ~30-40 sequential table/column
     existence queries on every readiness poll.
     """
-    now = datetime.utcnow()
+    now = utcnow()
     cached_at = _SCHEMA_STATUS_CACHE["checked_at"]
     if cached_at is not None and now - cached_at < _SCHEMA_STATUS_TTL:
         missing = _SCHEMA_STATUS_CACHE["missing"]
@@ -220,7 +230,7 @@ async def _seed_schema_status_in_thread() -> None:
     try:
         missing = await asyncio.to_thread(_check)
         _SCHEMA_STATUS_CACHE["missing"] = missing
-        _SCHEMA_STATUS_CACHE["checked_at"] = datetime.utcnow()
+        _SCHEMA_STATUS_CACHE["checked_at"] = utcnow()
         log = logging.getLogger(__name__)
         if missing:
             log.warning(
@@ -329,8 +339,11 @@ async def lifespan(app: FastAPI):
     try:
         from app.core.config_health import validate_production_config
         for issue in validate_production_config():
+            # Put the key + message in the human-readable text too: Railway's
+            # plain-text log drain does not render the structured `extra` fields,
+            # so "Config issue at startup" alone gave no clue WHICH key was bad.
             getattr(logger, "error" if issue.severity == "error" else "warning")(
-                "Config issue at startup",
+                f"Config issue at startup: {issue.key} - {issue.message}",
                 extra={
                     "config_key": issue.key,
                     "config_severity": issue.severity,
@@ -442,7 +455,25 @@ app.include_router(calendar.router, prefix="/api/v1/calendar", tags=["Calendar"]
 # Weather integration routes (requires auth)
 app.include_router(weather.router, prefix="/api/v1/weather", tags=["Weather"])
 
-# Gamification routes (requires auth)
+# Gamification routes (requires auth).
+#
+# DO NOT WRAP THIS IN `if settings.ENABLE_GAMIFICATION:`. This is deliberately
+# NOT the social-import pattern used below, and "making it consistent" will
+# break the shipped Flutter app on its home screen.
+#
+# flutter/lib/features/dashboard/controllers/dashboard_controller.dart:60-67
+# runs an UNGUARDED `Future.wait([fetchDashboard(), fetchStreak()])` under a
+# single catch. fetchStreak() hits /api/v1/gamification/streak and
+# dashboard_repository.dart rethrows a 404 as NotFoundException. A 404 there
+# rejects the whole wait, so `dashboard.value` is never assigned even though
+# fetchDashboard() succeeded -- while `isLoading` still goes false. Then
+# dashboard_content.dart:48-63 skips the shimmer and renders a permanent error
+# banner plus a toast against null data, on every launch, forever.
+#
+# So the router stays mounted and the FLAG IS ENFORCED INSIDE THE HANDLERS
+# (app/api/v1/gamification.py), which return 200 with a neutral zeroed payload.
+# Unmounting this only becomes safe once that Future.wait is made per-future
+# fault-tolerant (tracked as TD-034 in docs/exec-plans/tech-debt-tracker.md).
 app.include_router(gamification.router, prefix="/api/v1/gamification", tags=["Gamification"])
 
 # Waitlist routes (public, no auth required)

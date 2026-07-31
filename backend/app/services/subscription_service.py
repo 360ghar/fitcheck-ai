@@ -2,7 +2,7 @@
 Subscription service for managing user subscriptions and usage tracking.
 """
 from datetime import datetime, date, timedelta
-from typing import Optional
+from typing import Optional, Union
 from dateutil.relativedelta import relativedelta
 
 import asyncio
@@ -10,16 +10,19 @@ import httpx
 from supabase import Client
 
 from app.core.config import settings
-from app.core.exceptions import DatabaseError
+from app.core.exceptions import DatabaseError, RateLimitError
 from app.core.logging_config import get_context_logger
 from app.models.subscription import (
     PlanType,
+    OperationType,
     SubscriptionStatus,
     SubscriptionResponse,
     UsageLimits,
     SubscriptionWithUsage,
     UsageCheckResult,
 )
+from app.utils.datetime_util import utcnow, utcnow_iso
+from app.utils.db import unwrap_rpc_bool, unwrap_rpc_result
 from app.utils import maybe_single_data
 
 logger = get_context_logger(__name__)
@@ -49,17 +52,106 @@ class SubscriptionService:
                 "monthly_generations": settings.PLAN_PRO_MONTHLY_GENERATIONS,
                 "monthly_embeddings": settings.PLAN_PRO_MONTHLY_EMBEDDINGS,
             }
-        else:
+        if plan_type in (PlanType.PLUS_MONTHLY, PlanType.PLUS_YEARLY):
             return {
-                "monthly_extractions": settings.PLAN_FREE_MONTHLY_EXTRACTIONS,
-                "monthly_generations": settings.PLAN_FREE_MONTHLY_GENERATIONS,
-                "monthly_embeddings": settings.PLAN_FREE_MONTHLY_EMBEDDINGS,
+                "monthly_extractions": settings.PLAN_PLUS_MONTHLY_EXTRACTIONS,
+                "monthly_generations": settings.PLAN_PLUS_MONTHLY_GENERATIONS,
+                "monthly_embeddings": settings.PLAN_PLUS_MONTHLY_EMBEDDINGS,
             }
+        return {
+            "monthly_extractions": settings.PLAN_FREE_MONTHLY_EXTRACTIONS,
+            "monthly_generations": settings.PLAN_FREE_MONTHLY_GENERATIONS,
+            "monthly_embeddings": settings.PLAN_FREE_MONTHLY_EMBEDDINGS,
+        }
+
+    # All plans that unlock Pro-level features. Plus has lower usage limits
+    # than Pro (see get_plan_limits) but the SAME feature entitlement, so it
+    # is treated as a paid/entitled plan everywhere features are gated.
+    PAID_PLAN_TYPES = (
+        PlanType.PLUS_MONTHLY,
+        PlanType.PLUS_YEARLY,
+        PlanType.PRO_MONTHLY,
+        PlanType.PRO_YEARLY,
+    )
+
+    # Highest tier — nothing left to upsell. Distinct from PAID_PLAN_TYPES:
+    # "has paid features" and "is on the top tier" are different questions now
+    # that a middle tier exists, and conflating them either hides an upsell
+    # from Plus users or offers Pro users an upgrade to the plan they're on.
+    TOP_TIER_PLAN_TYPES = (PlanType.PRO_MONTHLY, PlanType.PRO_YEARLY)
+
+    @staticmethod
+    def stripe_price_plan_map() -> dict[str, PlanType]:
+        # Unset price IDs must not map: with several None keys the last one
+        # (PRO_YEARLY) would win and a missing price ID would silently
+        # classify as Pro instead of raising the unknown-price error.
+        return {
+            price_id: plan_type
+            for price_id, plan_type in (
+                (settings.STRIPE_PLUS_MONTHLY_PRICE_ID, PlanType.PLUS_MONTHLY),
+                (settings.STRIPE_PLUS_YEARLY_PRICE_ID, PlanType.PLUS_YEARLY),
+                (settings.STRIPE_PRO_MONTHLY_PRICE_ID, PlanType.PRO_MONTHLY),
+                (settings.STRIPE_PRO_YEARLY_PRICE_ID, PlanType.PRO_YEARLY),
+            )
+            if price_id
+        }
+
+    @classmethod
+    def effective_plan_type(
+        cls,
+        plan_type: PlanType,
+        status: SubscriptionStatus,
+        current_period_end: Optional[datetime],
+        trial_end: Optional[datetime],
+        now: Optional[datetime] = None,
+    ) -> PlanType:
+        """Return the plan whose entitlements are currently valid."""
+        if not cls.is_paid_plan(plan_type):
+            return PlanType.FREE
+
+        check_at = now or utcnow()
+        if status == SubscriptionStatus.TRIAL:
+            entitled_until = trial_end
+        elif status == SubscriptionStatus.ACTIVE:
+            entitled_until = current_period_end
+        else:
+            return PlanType.FREE
+
+        if entitled_until is None:
+            return PlanType.FREE
+        if entitled_until.tzinfo is None:
+            entitled_until = entitled_until.replace(tzinfo=check_at.tzinfo)
+        return plan_type if entitled_until > check_at else PlanType.FREE
+
+    @staticmethod
+    def is_paid_plan(plan_type: PlanType) -> bool:
+        """True for any paid plan (Plus or Pro) — Pro-level features unlocked."""
+        return plan_type in SubscriptionService.PAID_PLAN_TYPES
+
+    @staticmethod
+    def can_upgrade(plan_type: PlanType) -> bool:
+        """True when a higher tier exists to upsell (Free and Plus)."""
+        return plan_type not in SubscriptionService.TOP_TIER_PLAN_TYPES
 
     @staticmethod
     def is_pro_plan(plan_type: PlanType) -> bool:
-        """Check if the plan type is a Pro plan."""
-        return plan_type in (PlanType.PRO_MONTHLY, PlanType.PRO_YEARLY)
+        """Backward-compatible entitlement check.
+
+        Plus unlocks the same features as Pro (only the usage limits differ),
+        so it counts as entitled here. ``SubscriptionResponse.is_pro`` is
+        derived from this and means "paid / Pro-feature-entitled".
+        """
+        return SubscriptionService.is_paid_plan(plan_type)
+
+    @staticmethod
+    def plan_display_name(plan_type: PlanType) -> str:
+        """Human-readable plan name for messages/UI ("Free" / "Plus" / "Pro")."""
+        value = plan_type.value if isinstance(plan_type, PlanType) else str(plan_type)
+        if value.startswith("plus"):
+            return "Plus"
+        if value.startswith("pro"):
+            return "Pro"
+        return "Free"
 
     # ==========================================================================
     # Subscription CRUD
@@ -94,17 +186,26 @@ class SubscriptionService:
             if not data:
                 raise DatabaseError("Subscription record could not be loaded after creation")
 
-            plan_type = PlanType(data.get("plan_type", "free"))
+            stored_plan_type = PlanType(data.get("plan_type", "free"))
+            status = SubscriptionStatus(data.get("status", "active"))
+            current_period_end = SubscriptionService._parse_datetime(data.get("current_period_end"))
+            trial_end = SubscriptionService._parse_datetime(data.get("trial_end"))
+            plan_type = SubscriptionService.effective_plan_type(
+                stored_plan_type,
+                status,
+                current_period_end,
+                trial_end,
+            )
 
             return SubscriptionResponse(
                 id=data["id"],
                 user_id=data["user_id"],
                 plan_type=plan_type,
-                status=SubscriptionStatus(data.get("status", "active")),
-                current_period_start=SubscriptionService._parse_datetime(data.get("current_period_start")) or datetime.utcnow(),
-                current_period_end=SubscriptionService._parse_datetime(data.get("current_period_end")),
+                status=status,
+                current_period_start=SubscriptionService._parse_datetime(data.get("current_period_start")) or utcnow(),
+                current_period_end=current_period_end,
                 cancel_at_period_end=data.get("cancel_at_period_end", False),
-                trial_end=SubscriptionService._parse_datetime(data.get("trial_end")),
+                trial_end=trial_end,
                 referral_credit_months=data.get("referral_credit_months", 0),
                 created_at=SubscriptionService._parse_datetime(data.get("created_at")),
                 updated_at=SubscriptionService._parse_datetime(data.get("updated_at")),
@@ -122,7 +223,7 @@ class SubscriptionService:
                 "user_id": user_id,
                 "plan_type": "free",
                 "status": "active",
-                "current_period_start": datetime.utcnow().isoformat(),
+                "current_period_start": utcnow_iso(),
             }, on_conflict="user_id").execute)
         except Exception as e:
             logger.error(f"Error creating default subscription for user {user_id}: {e}")
@@ -138,10 +239,10 @@ class SubscriptionService:
     ) -> SubscriptionResponse:
         """Upgrade user to Pro plan after successful Stripe payment."""
         try:
-            now = datetime.utcnow()
+            now = utcnow()
 
-            # Calculate period end based on plan type
-            if plan_type == PlanType.PRO_YEARLY:
+            # Calculate period end based on plan type (any *_yearly plan = 1 year)
+            if plan_type.value.endswith("_yearly"):
                 period_end = now + relativedelta(years=1)
             else:
                 period_end = now + relativedelta(months=1)
@@ -164,6 +265,125 @@ class SubscriptionService:
         except Exception as e:
             logger.error(f"Error upgrading subscription for user {user_id}: {e}")
             raise DatabaseError(f"Failed to upgrade subscription: {str(e)}")
+
+    @classmethod
+    async def sync_stripe_subscription(
+        cls,
+        user_id: str,
+        stripe_subscription: object,
+        db: Client,
+        *,
+        plan_type_hint: Optional[PlanType] = None,
+    ) -> SubscriptionResponse:
+        """Synchronize the local subscription from one Stripe subscription.
+
+        Stripe is the source of truth for the price, status, period dates, and
+        cancellation flag. Webhooks can deliver either StripeObject instances
+        or plain dictionaries, so this deliberately uses the common mapping /
+        attribute surface.
+        """
+        def value(obj: object, key: str, default=None):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+
+        def timestamp(value_to_parse) -> Optional[str]:
+            if value_to_parse is None:
+                return None
+            try:
+                return datetime.fromtimestamp(float(value_to_parse), tz=utcnow().tzinfo).isoformat()
+            except (TypeError, ValueError, OSError):
+                return None
+
+        items = value(value(stripe_subscription, "items", {}), "data", []) or []
+        first_item = items[0] if items else None
+        price = value(first_item, "price", {}) if first_item else {}
+        price_id = price if isinstance(price, str) else value(price, "id")
+        # Stripe is authoritative: accept a plan only from the configured
+        # price map. A changed/stale price must fail closed (raise below)
+        # instead of granting a metadata-based entitlement. The minimal-payload
+        # path (upgrade_to_pro) does not pass a hint.
+        plan_type = cls.stripe_price_plan_map().get(price_id)
+        if plan_type is None:
+            raise DatabaseError(
+                f"Stripe subscription {value(stripe_subscription, 'id', 'unknown')} has an unknown price; billing sync requires a configured price ID"
+            )
+
+        stripe_status = str(value(stripe_subscription, "status", "active")).lower()
+        status_map = {
+            "active": SubscriptionStatus.ACTIVE,
+            "trialing": SubscriptionStatus.TRIAL,
+            "past_due": SubscriptionStatus.PAST_DUE,
+            "canceled": SubscriptionStatus.CANCELLED,
+            "cancelled": SubscriptionStatus.CANCELLED,
+            "unpaid": SubscriptionStatus.PAST_DUE,
+            "incomplete": SubscriptionStatus.PAST_DUE,
+            "incomplete_expired": SubscriptionStatus.CANCELLED,
+        }
+        status = status_map.get(stripe_status, SubscriptionStatus.PAST_DUE)
+        now = utcnow()
+        incoming_id = value(stripe_subscription, "id")
+        incoming_period_end = cls._parse_datetime(
+            timestamp(value(stripe_subscription, "current_period_end"))
+        )
+
+        # Stripe retries deliveries and does not guarantee ordering, so a
+        # delayed snapshot can arrive after a newer one was already applied.
+        # Refuse to regress the local entitlement: a snapshot for a replaced
+        # Stripe subscription (different ID) or with an older period end than
+        # the row we already recorded is stale and must not overwrite it.
+        existing_result = await asyncio.to_thread(
+            db.table("subscriptions")
+            .select("stripe_subscription_id,current_period_end")
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute
+        )
+        existing = maybe_single_data(existing_result)
+        if existing:
+            existing_sub_id = existing.get("stripe_subscription_id")
+            if existing_sub_id and incoming_id and existing_sub_id != incoming_id:
+                logger.info(
+                    "Skipping Stripe snapshot for replaced subscription",
+                    user_id=user_id,
+                    incoming_subscription_id=incoming_id,
+                    existing_subscription_id=existing_sub_id,
+                )
+                return await cls.get_subscription(user_id, db)
+            existing_period_end = cls._parse_datetime(existing.get("current_period_end"))
+            if existing_period_end and incoming_period_end and existing_period_end > incoming_period_end:
+                logger.info(
+                    "Skipping stale Stripe snapshot with older period end",
+                    user_id=user_id,
+                    incoming_subscription_id=incoming_id,
+                    existing_period_end=existing_period_end.isoformat(),
+                    incoming_period_end=incoming_period_end.isoformat(),
+                )
+                return await cls.get_subscription(user_id, db)
+
+        payload = {
+            "user_id": user_id,
+            "plan_type": plan_type.value,
+            "status": status.value,
+            "stripe_customer_id": value(stripe_subscription, "customer"),
+            "stripe_subscription_id": value(stripe_subscription, "id"),
+            "current_period_start": timestamp(value(stripe_subscription, "current_period_start")) or now.isoformat(),
+            "current_period_end": timestamp(value(stripe_subscription, "current_period_end")),
+            "trial_end": timestamp(value(stripe_subscription, "trial_end")),
+            "cancel_at_period_end": bool(value(stripe_subscription, "cancel_at_period_end", False)),
+            "updated_at": now.isoformat(),
+        }
+        await asyncio.to_thread(
+            db.table("subscriptions").upsert(payload, on_conflict="user_id").execute
+        )
+        logger.info(
+            "Synchronized Stripe subscription",
+            user_id=user_id,
+            stripe_subscription_id=payload["stripe_subscription_id"],
+            plan_type=plan_type.value,
+            status=status.value,
+        )
+        return await cls.get_subscription(user_id, db)
 
     @staticmethod
     async def apply_referral_credit(user_id: str, months: int, db: Client) -> None:
@@ -197,7 +417,7 @@ class SubscriptionService:
 
             # If user is on free plan, upgrade them to trial Pro
             if current_data.get("plan_type") == "free":
-                now = datetime.utcnow()
+                now = utcnow()
                 trial_end = now + relativedelta(months=months)
 
                 await asyncio.to_thread(db.table("subscriptions").update({
@@ -211,7 +431,7 @@ class SubscriptionService:
                 # Just add to their credit balance
                 await asyncio.to_thread(db.table("subscriptions").update({
                     "referral_credit_months": current_credits + months,
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "updated_at": utcnow_iso(),
                 }).eq("user_id", user_id).execute)
 
             logger.info(f"Applied {months} referral credit months to user {user_id}")
@@ -226,7 +446,7 @@ class SubscriptionService:
         try:
             await asyncio.to_thread(db.table("subscriptions").update({
                 "cancel_at_period_end": True,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": utcnow_iso(),
             }).eq("user_id", user_id).execute)
 
             logger.info(f"Subscription cancelled for user {user_id}")
@@ -324,30 +544,42 @@ class SubscriptionService:
             raise DatabaseError(f"Failed to get usage: {str(e)}")
 
     @staticmethod
+    def _coerce_operation_type(operation_type: Union[OperationType, str]) -> OperationType:
+        """Normalize an operation type to OperationType.
+
+        Strings and OperationType members are both accepted at the boundary so
+        existing callers (which pass bare literals like "extraction") keep
+        working. Unknown values raise ValueError instead of silently branching
+        into a fallback.
+        """
+        try:
+            return OperationType(operation_type)
+        except ValueError as exc:
+            raise ValueError(f"Unknown operation type: {operation_type}") from exc
+
+    @staticmethod
     async def check_limit(
         user_id: str,
-        operation_type: str,
+        operation_type: Union[OperationType, str],
         db: Client,
         count: int = 1,
         _retry: bool = True,
     ) -> UsageCheckResult:
         """Check if user can perform an operation based on their plan limits."""
         try:
+            op = SubscriptionService._coerce_operation_type(operation_type)
             subscription = await SubscriptionService.get_subscription(user_id, db)
             limits = SubscriptionService.get_plan_limits(subscription.plan_type)
             usage_record = await SubscriptionService.get_or_create_usage_record(user_id, db)
 
             # Map operation type to usage field
             field_map = {
-                "extraction": ("monthly_extractions", "monthly_extractions"),
-                "generation": ("monthly_generations", "monthly_generations"),
-                "embedding": ("monthly_embeddings", "monthly_embeddings"),
+                OperationType.EXTRACTION: ("monthly_extractions", "monthly_extractions"),
+                OperationType.GENERATION: ("monthly_generations", "monthly_generations"),
+                OperationType.EMBEDDING: ("monthly_embeddings", "monthly_embeddings"),
             }
 
-            if operation_type not in field_map:
-                raise ValueError(f"Unknown operation type: {operation_type}")
-
-            usage_field, limit_field = field_map[operation_type]
+            usage_field, limit_field = field_map[op]
             current_count = usage_record.get(usage_field, 0)
             limit = limits.get(limit_field, 0)
             remaining = max(0, limit - current_count)
@@ -356,8 +588,19 @@ class SubscriptionService:
 
             message = None
             if not allowed:
-                plan_name = "Pro" if subscription.is_pro else "Free"
-                message = f"You've reached your monthly {operation_type} limit ({limit}) on the {plan_name} plan. Upgrade to Pro for more!"
+                plan_name = SubscriptionService.plan_display_name(subscription.plan_type)
+                message = (
+                    f"You've reached your monthly {op.value} limit ({limit}) "
+                    f"on the {plan_name} plan."
+                )
+                # Only upsell when a higher tier actually exists - a Pro user
+                # at their cap must not be told to "upgrade to Pro".
+                if SubscriptionService.can_upgrade(subscription.plan_type):
+                    message += " Upgrade to Pro for more!"
+                else:
+                    # Counters reset on the calendar month
+                    # (_get_current_period_start), not on the billing date.
+                    message += " Your limit resets at the start of the next month."
 
             return UsageCheckResult(
                 allowed=allowed,
@@ -388,42 +631,61 @@ class SubscriptionService:
     @staticmethod
     async def increment_usage(
         user_id: str,
-        operation_type: str,
+        operation_type: Union[OperationType, str],
         db: Client,
         count: int = 1,
     ) -> None:
-        """Increment usage counter for an operation."""
+        """Atomically reserve usage for an operation.
+
+        The previous check-then-increment sequence allowed concurrent
+        requests to pass the same preflight check and overshoot a plan limit.
+        The hosted Supabase RPC performs the conditional increment while the
+        usage row is locked.
+        """
         try:
+            op = SubscriptionService._coerce_operation_type(operation_type)
             period_start = SubscriptionService._get_current_period_start()
 
             # Ensure usage record exists
             await SubscriptionService.get_or_create_usage_record(user_id, db)
 
+            subscription = await SubscriptionService.get_subscription(user_id, db)
+            limits = SubscriptionService.get_plan_limits(subscription.plan_type)
+
             # Map operation type to column
             column_map = {
-                "extraction": "monthly_extractions",
-                "generation": "monthly_generations",
-                "embedding": "monthly_embeddings",
+                OperationType.EXTRACTION: "monthly_extractions",
+                OperationType.GENERATION: "monthly_generations",
+                OperationType.EMBEDDING: "monthly_embeddings",
             }
 
-            if operation_type not in column_map:
-                raise ValueError(f"Unknown operation type: {operation_type}")
+            column = column_map[op]
 
-            column = column_map[operation_type]
-
-            # Use atomic increment via RPC to prevent race conditions
-            await asyncio.to_thread(db.rpc("increment_usage", {
+            result = await asyncio.to_thread(db.rpc("reserve_usage", {
                 "p_user_id": user_id,
                 "p_period_start": period_start.isoformat(),
                 "p_field": column,
                 "p_count": count,
+                "p_limit": limits[column],
             }).execute)
 
-            logger.debug(f"Incremented {operation_type} usage for user {user_id} by {count}")
+            # `reserve_usage` returns a scalar BOOLEAN, so PostgREST keys the
+            # result by the function name rather than a column name.
+            reserved = unwrap_rpc_bool(result, "reserve_usage")
+            if reserved is not True:
+                raise RateLimitError(
+                    f"You've reached your monthly {op.value} limit ({limits[column]})."
+                )
 
+            logger.debug(f"Incremented {op.value} usage for user {user_id} by {count}")
+
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.error(f"Error incrementing usage for user {user_id}: {e}")
-            # Don't raise - usage tracking failure shouldn't block the operation
+            # Fail closed if the reservation migration is unavailable. A
+            # best-effort counter is not safe for entitlement enforcement.
+            raise DatabaseError(f"Failed to reserve usage: {str(e)}")
 
     # ==========================================================================
     # Combined Methods

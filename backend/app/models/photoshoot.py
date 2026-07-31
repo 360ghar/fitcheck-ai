@@ -8,6 +8,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.utils.image_processing import decode_and_validate_base64_image
+
 
 class PhotoshootUseCase(str, Enum):
     """Predefined use cases for photoshoot generation."""
@@ -86,12 +88,16 @@ class StartPhotoshootRequest(BaseModel):
     @field_validator("photos")
     @classmethod
     def validate_photo_sizes(cls, v: List[str]) -> List[str]:
-        """Validate that each photo is within size limits."""
+        """Validate size, base64 encoding, and decoded image bytes."""
         for i, photo in enumerate(v):
             if len(photo) > MAX_PHOTO_SIZE:
                 raise ValueError(
                     f"Photo {i + 1} exceeds maximum size of 10MB"
                 )
+            try:
+                decode_and_validate_base64_image(photo, max_bytes=MAX_PHOTO_SIZE)
+            except ValueError as error:
+                raise ValueError(f"Photo {i + 1} is invalid: {error}") from error
         return v
 
     @field_validator("aspect_ratio")
@@ -116,6 +122,15 @@ class DemoPhotoshootRequest(BaseModel):
         default=PhotoshootUseCase.AESTHETIC,
         description="The use case for the photoshoot (no custom allowed)",
     )
+
+    @field_validator("photo")
+    @classmethod
+    def validate_photo_content(cls, value: str) -> str:
+        try:
+            decode_and_validate_base64_image(value, max_bytes=MAX_PHOTO_SIZE)
+        except ValueError as error:
+            raise ValueError(f"Photo is invalid: {error}") from error
+        return value
 
 
 # =============================================================================

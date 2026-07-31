@@ -47,6 +47,19 @@ def _jwks_url() -> str:
     return f"{base}/auth/v1/.well-known/jwks.json"
 
 
+def _expected_issuer() -> str:
+    """Return the issuer for this Supabase project.
+
+    Supabase exposes the issuer at the project URL's ``/auth/v1`` endpoint.
+    Keep this derived from the existing required setting so no new environment
+    variable or deployment change is needed.
+    """
+    configured = getattr(settings, "SUPABASE_JWT_ISSUER", None)
+    if configured:
+        return configured.rstrip("/")
+    return f"{(settings.SUPABASE_URL or '').rstrip('/')}/auth/v1"
+
+
 def _get_jwks_client() -> PyJWKClient:
     """Return a process-wide PyJWKClient with key caching."""
     global _jwks_client
@@ -97,6 +110,7 @@ def _decode_payload(token: str) -> Dict[str, Any]:
         settings.SUPABASE_JWT_SECRET,
         algorithms=["HS256"],
         audience="authenticated",
+        issuer=_expected_issuer(),
     )
 
 
@@ -110,6 +124,7 @@ def _decode_asymmetric(token: str, *, alg: str, kid: Optional[str]) -> Dict[str,
             signing_key.key,
             algorithms=list(_ASYMMETRIC_ALGS),
             audience="authenticated",
+            issuer=_expected_issuer(),
         )
     except Exception as first_error:
         # Unknown kid or stale cache: force one JWKS re-fetch, then retry once.
@@ -127,6 +142,7 @@ def _decode_asymmetric(token: str, *, alg: str, kid: Optional[str]) -> Dict[str,
             signing_key.key,
             algorithms=list(_ASYMMETRIC_ALGS),
             audience="authenticated",
+            issuer=_expected_issuer(),
         )
 
 

@@ -51,9 +51,9 @@ class _WardrobeContentState extends State<WardrobeContent> {
                       if (controller.isLoading.value &&
                           controller.items.isEmpty) {
                         return const ShimmerGridLoader(
-                          crossAxisCount: 2,
-                          itemCount: 6,
-                          childAspectRatio: 0.75,
+                          crossAxisCount: 3,
+                          itemCount: 9,
+                          childAspectRatio: 0.78,
                         );
                       }
 
@@ -90,7 +90,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
       elevation: 0,
       automaticallyImplyLeading: false,
       title: Text(
-        'Wardrobe',
+        'Closet',
         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
           fontWeight: FontWeight.w700,
           color: tokens.textPrimary,
@@ -105,10 +105,10 @@ class _WardrobeContentState extends State<WardrobeContent> {
                   onPressed: () => _showDeleteConfirmation(),
                 )
               : Semantics(
-                  label: 'Search wardrobe',
+                  label: 'Search closet',
                   button: true,
                   child: IconButton(
-                    tooltip: 'Search wardrobe',
+                    tooltip: 'Search closet',
                     icon: const Icon(Icons.search),
                     onPressed: () => _showSearchDialog(),
                   ),
@@ -171,7 +171,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                 children: [
                   Icon(Icons.insights_outlined),
                   SizedBox(width: AppConstants.spacing8),
-                  Text('Wardrobe Stats'),
+                  Text('Closet Stats'),
                 ],
               ),
             ),
@@ -322,10 +322,10 @@ class _WardrobeContentState extends State<WardrobeContent> {
   Widget _buildItemsGrid() {
     return SliverGrid(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
+        crossAxisCount: 3,
         mainAxisSpacing: AppConstants.spacing12,
         crossAxisSpacing: AppConstants.spacing12,
-        childAspectRatio: 0.75,
+        childAspectRatio: 0.78,
       ),
       delegate: SliverChildBuilderDelegate((context, index) {
         final item = controller.filteredItems[index];
@@ -344,7 +344,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
             _showItemOptions(item);
           },
           child: Semantics(
-            label: 'Wardrobe item: ${item.name}',
+            label: 'Closet item: ${item.name}',
             child: _buildItemCard(item, isSelected),
           ),
         );
@@ -371,7 +371,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
             _showItemOptions(item);
           },
           child: Semantics(
-            label: 'Wardrobe item: ${item.name}',
+            label: 'Closet item: ${item.name}',
             child: _buildListItemCard(item, isSelected),
           ),
         );
@@ -547,151 +547,182 @@ class _WardrobeContentState extends State<WardrobeContent> {
           ),
         ],
       ),
-      child: Stack(
-        children: [
-          // Item image using AppImage with BoxFit.contain
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppConstants.radius16 - 1),
-              child: hasImages
-                  ? AppImage(
-                      imageUrl: imageUrls.first,
-                      fit: BoxFit.contain,
-                      backgroundColor: tokens.isDarkMode
-                          ? Colors.black.withValues(alpha: 0.3)
-                          : Colors.grey.withValues(alpha: 0.1),
-                      enableZoom: controller.selectedIds.isEmpty,
-                      galleryUrls: imageUrls,
-                      memCacheWidth: 400,
-                      memCacheHeight: 600,
-                      errorIcon: _getCategoryIcon(item.category),
-                    )
-                  : _buildPlaceholder(item.category),
-            ),
-          ),
-
-          // Category badge
-          Positioned(
-            top: AppConstants.spacing8,
-            left: AppConstants.spacing8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.spacing8,
-                vertical: AppConstants.spacing4,
-              ),
-              decoration: BoxDecoration(
-                color: tokens.cardColor.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(AppConstants.radius8),
-                border: Border.all(color: tokens.cardBorderColor),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _getCategoryIcon(item.category),
-                    size: 12,
-                    color: tokens.textMuted,
+      // LayoutBuilder bounds the category badge: with the fixed 3-column
+      // grid a card is only ~88-101px wide on narrow phones, and an
+      // unconstrained icon+label row would RenderFlex-overflow (worse under
+      // accessibility font scaling).
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            children: [
+              // Item image using AppImage with BoxFit.contain
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(
+                    AppConstants.radius16 - 1,
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    item.category.displayName,
-                    style: TextStyle(
-                      color: tokens.textSecondary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
+                  child: hasImages
+                      ? AppImage(
+                          imageUrl: imageUrls.first,
+                          fit: BoxFit.contain,
+                          backgroundColor: tokens.isDarkMode
+                              ? Colors.black.withValues(alpha: 0.3)
+                              : Colors.grey.withValues(alpha: 0.1),
+                          enableZoom: controller.selectedIds.isEmpty,
+                          galleryUrls: imageUrls,
+                          memCacheWidth: 400,
+                          memCacheHeight: 600,
+                          errorIcon: _getCategoryIcon(item.category),
+                        )
+                      : _buildPlaceholder(item.category),
+                ),
+              ),
+
+              // Category badge
+              Positioned(
+                top: AppConstants.spacing8,
+                left: AppConstants.spacing8,
+                child: Container(
+                  width: constraints.maxWidth - AppConstants.spacing16,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.spacing8,
+                    vertical: AppConstants.spacing4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: tokens.cardColor.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(AppConstants.radius8),
+                    border: Border.all(color: tokens.cardBorderColor),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _getCategoryIcon(item.category),
+                        size: 12,
+                        color: tokens.textMuted,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          item.category.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: tokens.textSecondary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Favorite indicator
+              if (item.isFavorite)
+                Positioned(
+                  top: AppConstants.spacing8,
+                  right: AppConstants.spacing8,
+                  child: Container(
+                    padding: const EdgeInsets.all(AppConstants.spacing4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.secondary.withValues(alpha: 0.9),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.favorite,
+                      color: Colors.white,
+                      size: 14,
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
+                ),
 
-          // Favorite indicator
-          if (item.isFavorite)
-            Positioned(
-              top: AppConstants.spacing8,
-              right: AppConstants.spacing8,
-              child: Container(
-                padding: const EdgeInsets.all(AppConstants.spacing4),
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.secondary.withValues(alpha: 0.9),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
+              // Selection indicator
+              if (isSelected)
+                Positioned(
+                  top: AppConstants.spacing8,
+                  right: item.isFavorite
+                      ? AppConstants.spacing8 + 30
+                      : AppConstants.spacing8,
+                  child: Container(
+                    padding: const EdgeInsets.all(AppConstants.spacing4),
+                    decoration: BoxDecoration(
+                      color: tokens.brandColor,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.favorite,
-                  color: Colors.white,
-                  size: 14,
-                ),
-              ),
-            ),
-
-          // Selection indicator
-          if (isSelected)
-            Positioned(
-              top: AppConstants.spacing8,
-              right: item.isFavorite
-                  ? AppConstants.spacing8 + 30
-                  : AppConstants.spacing8,
-              child: Container(
-                padding: const EdgeInsets.all(AppConstants.spacing4),
-                decoration: BoxDecoration(
-                  color: tokens.brandColor,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
+                    child: const Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 14,
                     ),
-                  ],
+                  ),
                 ),
-                child: const Icon(Icons.check, color: Colors.white, size: 14),
-              ),
-            ),
 
-          // Item name at bottom with gradient overlay
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.spacing12,
-                vertical: AppConstants.spacing8,
-              ),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)],
+              // Item name (+ brand) on a clean panel — dense closet look, no heavy gradient
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.spacing8,
+                    vertical: AppConstants.spacing4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: tokens.cardColor.withValues(alpha: 0.92),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(AppConstants.radius16),
+                      bottomRight: Radius.circular(AppConstants.radius16),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        item.name,
+                        style: TextStyle(
+                          color: tokens.textPrimary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (item.brand != null && item.brand!.isNotEmpty)
+                        Text(
+                          item.brand!,
+                          style: TextStyle(
+                            color: tokens.textMuted,
+                            fontSize: 10,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
                 ),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(AppConstants.radius16),
-                  bottomRight: Radius.circular(AppConstants.radius16),
-                ),
               ),
-              child: Text(
-                item.name,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -739,7 +770,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                 ),
                 const SizedBox(height: AppConstants.spacing24),
                 Text(
-                  'Your wardrobe is empty',
+                  'Your closet is empty',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: tokens.textPrimary,
@@ -757,7 +788,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                 ),
                 const SizedBox(height: AppConstants.spacing24),
                 Semantics(
-                  label: 'Add your first wardrobe item',
+                  label: 'Add your first closet item',
                   button: true,
                   child: ElevatedButton.icon(
                     onPressed: () => _showAddItemOptions(),
@@ -988,7 +1019,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
   void _showSearchDialog() {
     Get.dialog(
       AlertDialog(
-        title: const Text('Search Wardrobe'),
+        title: const Text('Search Closet'),
         content: TextField(
           decoration: const InputDecoration(
             hintText: 'Search by name or brand...',
@@ -1065,8 +1096,8 @@ class _WardrobeContentState extends State<WardrobeContent> {
         title: const Text('Delete Items?'),
         content: Text(
           itemId == null
-              ? 'Delete ${controller.selectedCount} items from your wardrobe?'
-              : 'Delete this item from your wardrobe?',
+              ? 'Delete ${controller.selectedCount} items from your closet?'
+              : 'Delete this item from your closet?',
         ),
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),

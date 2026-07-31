@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/subscription_controller.dart';
 import 'widgets/plan_card.dart';
@@ -52,9 +53,11 @@ class SubscriptionPage extends GetView<SubscriptionController> {
               _buildUsageSection(context, theme),
               const SizedBox(height: 24),
 
-              // Upgrade section (for free users).
+              // Upgrade section - shown to anyone with a higher tier available
+              // (Free AND Plus), not just free users, so a Plus subscriber can
+              // still reach Pro.
               // Hidden when the paywall is disabled (iOS v1, Guideline 3.1.1).
-              if (!controller.isPro && controller.showPaywall) ...[
+              if (controller.canUpgrade && controller.showPaywall) ...[
                 _buildUpgradeSection(context, theme),
                 const SizedBox(height: 24),
               ],
@@ -150,7 +153,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Subscription ends on ${_formatDate(sub!.currentPeriodEnd!)}',
+                      'Subscription ends on ${AppDateUtils.formatDate(sub!.currentPeriodEnd!)}',
                       style: TextStyle(
                         color: Colors.orange.shade800,
                         fontSize: 13,
@@ -222,7 +225,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
             max: usage.monthlyGenerationsLimit,
             icon: Icons.auto_awesome,
           ),
-          if (controller.isNearLimit && !controller.isPro) ...[
+          if (controller.isNearLimit && controller.canUpgrade) ...[
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
@@ -259,27 +262,103 @@ class SubscriptionPage extends GetView<SubscriptionController> {
   }
 
   Widget _buildUpgradeSection(BuildContext context, ThemeData theme) {
-    // Get pro plan details from controller (backend returns single "pro" plan with both prices)
-    final proPlan = controller.plans.firstWhereOrNull((p) => p.id == 'pro');
-
-    final monthlyPrice = proPlan?.priceMonthly ?? 20.0;
-    final yearlyPrice = proPlan?.priceYearly ?? 200.0;
-    final savings = (monthlyPrice * 12 - yearlyPrice).toStringAsFixed(0);
-
-    // Get limits from pro plan
-    final extractionsLimit = proPlan?.monthlyExtractions ?? 200;
-    final generationsLimit = proPlan?.monthlyGenerations ?? 1000;
+    // A Plus subscriber is only offered Pro; a free user sees both tiers.
+    // isPro means "on a paid plan" and canUpgrade means "a higher tier
+    // exists", so both together identify the middle tier.
+    final onPlus = controller.isPro && controller.canUpgrade;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Upgrade to Pro',
+          onPlus ? 'Upgrade your plan' : 'Choose a plan',
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 4),
+        Text(
+          onPlus
+              ? 'Same features, higher limits.'
+              : 'Plus and Pro unlock the same features — pick the limits you need.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurface.withAlpha(153),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Plus is the recommended entry point, so it renders first.
+        if (!onPlus) ...[
+          _buildTierRow(
+            theme,
+            planId: 'plus',
+            label: 'Plus',
+            fallbackMonthly: 10.0,
+            fallbackYearly: 100.0,
+            fallbackExtractions: 100,
+            fallbackGenerations: 350,
+            isRecommended: true,
+          ),
+          const SizedBox(height: 20),
+        ],
+        _buildTierRow(
+          theme,
+          planId: 'pro',
+          label: 'Pro',
+          fallbackMonthly: 20.0,
+          fallbackYearly: 200.0,
+          fallbackExtractions: 200,
+          fallbackGenerations: 1000,
+          isRecommended: onPlus,
+        ),
+      ],
+    );
+  }
+
+  /// One paid tier: a monthly and a yearly card plus its limits summary.
+  /// Prices come from the backend `/plans` response, with the configured
+  /// defaults as a fallback when the request has not resolved yet.
+  Widget _buildTierRow(
+    ThemeData theme, {
+    required String planId,
+    required String label,
+    required double fallbackMonthly,
+    required double fallbackYearly,
+    required int fallbackExtractions,
+    required int fallbackGenerations,
+    required bool isRecommended,
+  }) {
+    final plan = controller.plans.firstWhereOrNull((p) => p.id == planId);
+
+    final monthlyPrice = plan?.priceMonthly ?? fallbackMonthly;
+    final yearlyPrice = plan?.priceYearly ?? fallbackYearly;
+    final savings = (monthlyPrice * 12 - yearlyPrice).toStringAsFixed(0);
+    final extractionsLimit = plan?.monthlyExtractions ?? fallbackExtractions;
+    final generationsLimit = plan?.monthlyGenerations ?? fallbackGenerations;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              label,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            if (isRecommended) ...[
+              const SizedBox(width: 8),
+              Text(
+                'Most popular',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
@@ -287,7 +366,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
                 name: 'Monthly',
                 price: '\$${monthlyPrice.toStringAsFixed(0)}',
                 period: '/month',
-                onTap: () => controller.startCheckout('pro_monthly'),
+                onTap: () => controller.startCheckout('${planId}_monthly'),
                 isLoading: controller.isCheckingOut.value,
               ),
             ),
@@ -298,16 +377,16 @@ class SubscriptionPage extends GetView<SubscriptionController> {
                 price: '\$${yearlyPrice.toStringAsFixed(0)}',
                 period: '/year',
                 badge: 'Save \$$savings',
-                onTap: () => controller.startCheckout('pro_yearly'),
+                onTap: () => controller.startCheckout('${planId}_yearly'),
                 isLoading: controller.isCheckingOut.value,
-                isHighlighted: true,
+                isHighlighted: isRecommended,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Text(
-          'Pro includes: $extractionsLimit extractions, $generationsLimit visualizations, virtual try-on, priority support',
+          '$extractionsLimit extractions, $generationsLimit visualizations, virtual try-on, priority support',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurface.withAlpha(153),
           ),
@@ -389,7 +468,4 @@ class SubscriptionPage extends GetView<SubscriptionController> {
     );
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.month}/${date.day}/${date.year}';
-  }
 }

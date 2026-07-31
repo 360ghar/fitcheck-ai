@@ -20,6 +20,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { logger } from '@/lib/logger'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -131,7 +132,7 @@ export function ExtractedItemCard({
         setDuplicates(result.duplicates)
       } catch (error) {
         if (!controller.signal.aborted) {
-          console.error('Duplicate check failed:', error)
+          logger.error('Duplicate check failed:', error)
         }
       } finally {
         setIsCheckingDuplicates(false)
@@ -189,20 +190,26 @@ export function ExtractedItemCard({
     <Card
       className={`overflow-hidden transition-all ${
         hasFailed
-          ? 'border-red-300 dark:border-red-800 bg-red-50/50 dark:bg-red-900/20'
+          ? 'border-destructive/40 bg-destructive/5'
           : isLowConfidence
-          ? 'border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-900/20'
+          ? 'border-border bg-secondary/40'
           : 'border-gray-200 dark:border-gray-700'
       } ${!isIncluded ? 'opacity-70' : ''}`}
     >
       <CardContent className="p-0">
-        {/* Image Section */}
-        <div className="relative aspect-square bg-gray-100 dark:bg-gray-700">
+        {/* Image Section — this batch-review grid is the FIRST place a user ever
+            sees a fresh cutout, so it matters most here. `bg-card` is the real
+            card surface the transparent margins should reveal; the old
+            `bg-gray-100 dark:bg-gray-700` was a cool grey from outside the
+            warm hue-60 palette and would read as an obviously wrong box behind
+            a matted garment. `object-contain` + padding because the tile is a
+            fixed `aspect-square` and `cover` cropped portrait silhouettes. */}
+        <div className="relative aspect-square bg-card">
           {imageSrc ? (
             <img
               src={imageSrc}
               alt={item.sub_category || item.category}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain p-2"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
@@ -241,7 +248,7 @@ export function ExtractedItemCard({
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Badge variant="outline" className="bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-700 cursor-help">
+                    <Badge variant="outline" className="border-border bg-background/90 text-foreground cursor-help">
                       <Copy className="h-3 w-3 mr-1" />
                       {duplicates.length} similar
                     </Badge>
@@ -260,13 +267,13 @@ export function ExtractedItemCard({
               </TooltipProvider>
             )}
             {isCheckingDuplicates && (
-              <Badge variant="outline" className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700">
+              <Badge variant="outline" className="border-border bg-background/90 text-foreground">
                 <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
                 Checking...
               </Badge>
             )}
             {isLowConfidence && !hasFailed && (
-              <Badge variant="outline" className="bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700">
+              <Badge variant="outline" className="border-border bg-background/90 text-foreground">
                 <AlertTriangle className="h-3 w-3 mr-1" />
                 Review
               </Badge>
@@ -277,7 +284,7 @@ export function ExtractedItemCard({
               </Badge>
             )}
             {!isIncluded && (
-              <Badge variant="outline" className="bg-gray-100 dark:bg-gray-800/80 text-gray-600 dark:text-gray-300">
+              <Badge variant="outline" className="border-border bg-background/90 text-foreground text-muted-foreground">
                 Excluded
               </Badge>
             )}
@@ -288,7 +295,7 @@ export function ExtractedItemCard({
             <Button
               variant="secondary"
               size="icon"
-              className="h-7 w-7 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-700"
+              className="h-7 w-7 border border-border bg-background/90 hover:bg-accent"
               onClick={() => onRegenerate(item.tempId)}
               disabled={isRegenerating}
               aria-label="Regenerate item"
@@ -298,7 +305,7 @@ export function ExtractedItemCard({
             <Button
               variant="secondary"
               size="icon"
-              className="h-7 w-7 bg-white/90 dark:bg-gray-800/90 hover:bg-red-100 dark:hover:bg-red-900/30"
+              className="h-7 w-7 border border-border bg-background/90 text-muted-foreground hover:bg-accent hover:text-destructive"
               onClick={() => setShowConfirmDelete(true)}
               aria-label="Delete item"
             >
@@ -308,15 +315,12 @@ export function ExtractedItemCard({
 
           {/* Confidence indicator */}
           <div className="absolute bottom-2 right-2">
+            {/* The number IS the signal; colour-coding it as well was a third
+                tinted-pill family on one card. Same chip as every other state
+                here, tabular figures so the digits do not jitter. */}
             <Badge
-              variant="secondary"
-              className={`text-xs ${
-                item.confidence >= 0.85
-                  ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
-                  : item.confidence >= 0.7
-                  ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                  : 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300'
-              }`}
+              variant="outline"
+              className="border-border bg-background/90 text-xs tabular-nums text-foreground"
             >
               {Math.round(item.confidence * 100)}%
             </Badge>

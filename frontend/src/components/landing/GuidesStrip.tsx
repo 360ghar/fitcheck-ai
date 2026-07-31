@@ -37,7 +37,7 @@ export default function GuidesStrip() {
             </div>
             <Link
               to="/blog"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors shrink-0"
+              className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary hover:text-primary-pressed transition-colors shrink-0"
             >
               Read the blog
               <ArrowUpRight className="h-4 w-4" />
@@ -51,10 +51,10 @@ export default function GuidesStrip() {
               <li>
                 <Link
                   to={link.href}
-                  className="group flex items-center justify-between gap-4 py-4 text-stone-900 dark:text-stone-50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  className="group flex min-h-11 items-center justify-between gap-4 py-4 text-stone-900 dark:text-stone-50 hover:text-primary transition-colors"
                 >
                   <span className="text-[15px] md:text-base font-medium">{link.title}</span>
-                  <ArrowUpRight className="h-4 w-4 shrink-0 text-stone-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />
+                  <ArrowUpRight className="h-4 w-4 shrink-0 text-stone-400 group-hover:text-primary" />
                 </Link>
               </li>
             </AnimatedSection>

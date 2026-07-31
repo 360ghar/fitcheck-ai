@@ -48,7 +48,7 @@ export default function AboutPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center max-w-3xl mx-auto">
-                <Badge className="mb-6 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border-0">
+                <Badge className="mb-6 border-0 bg-secondary text-primary">
                   About us
                 </Badge>
                 <h1 className="landing-display text-4xl sm:text-5xl font-semibold text-stone-900 dark:text-stone-50 mb-6">
@@ -68,7 +68,7 @@ export default function AboutPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <AnimatedSection>
-                <Badge className="mb-4 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border-0">
+                <Badge className="mb-4 border-0 bg-secondary text-primary">
                   Our story
                 </Badge>
                 <h2 className="landing-display text-3xl font-semibold text-stone-900 dark:text-stone-50 mb-6">
@@ -114,9 +114,9 @@ export default function AboutPage() {
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {values.map((value, i) => (
                 <AnimatedSection key={value.title} delay={i * 80}>
-                  <Card className="h-full border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-none">
+                  <Card className="h-full border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900">
                     <CardContent className="p-6">
-                      <div className="w-11 h-11 rounded-xl bg-indigo-600 flex items-center justify-center mb-4">
+                      <div className="w-11 h-11 rounded-xl bg-primary flex items-center justify-center mb-4">
                         <value.icon className="w-5 h-5 text-white" />
                       </div>
                       <h3 className="font-semibold text-stone-900 dark:text-stone-50 mb-2">
@@ -139,7 +139,7 @@ export default function AboutPage() {
             <p className="text-stone-400 mb-8">
               Create an account on the web or get the Android app on Google Play.
             </p>
-            <Button asChild size="lg" className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-none">
+            <Button asChild size="lg" className="bg-primary hover:bg-primary-pressed text-white">
               <Link to="/auth/register">
                 Start free
                 <ArrowRight className="ml-2 h-4 w-4" />

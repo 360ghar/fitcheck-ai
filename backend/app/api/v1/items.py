@@ -8,7 +8,8 @@ stores items/images and maintains embeddings for recommendations.
 
 import asyncio
 import uuid
-from datetime import datetime
+from app.utils.datetime_util import utc_today, utcnow_iso
+from datetime import date
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -29,6 +30,7 @@ from app.core.exceptions import (
 from app.core.security import get_current_user_id
 from app.core.uploads import MAX_UPLOAD_FILES, read_upload_capped
 from app.db.connection import get_db
+from app.models.subscription import OperationType
 from app.models.item import (
     ItemCreate,
     ItemUpdate,
@@ -47,6 +49,37 @@ logger = get_context_logger(__name__)
 router = APIRouter()
 
 
+async def _release_embedding_reservation(
+    user_id: str, db: Client, *, reserved_on: Optional[date] = None
+) -> None:
+    """Best-effort return of an embedding reservation after a failed attempt.
+
+    Embedding quotas are reserved before generation; a failure or an empty
+    result must not silently consume the daily budget, but a failed release
+    must also not mask the operation's original outcome. ``reserved_on`` is
+    the UTC calendar day the reservation was made: release_usage() decrements
+    whatever day's counter is current (the RPCs in migration 024 key on
+    ``CURRENT_DATE``, i.e. UTC on hosted Supabase), so a release after the
+    counter rolled over must be skipped or it would remove a slot reserved on
+    the new day. Compared in UTC: server-local ``date.today()`` would disagree
+    with the DB for hours around midnight on non-UTC hosts.
+    """
+    if reserved_on is not None and reserved_on != utc_today():
+        return
+    try:
+        await AISettingsService.release_usage(
+            user_id=user_id,
+            operation_type=OperationType.EMBEDDING,
+            db=db,
+        )
+    except Exception as error:
+        logger.warning(
+            "Failed to release embedding reservation",
+            user_id=user_id,
+            error=str(error),
+        )
+
+
 class BatchDeleteItemsRequest(BaseModel):
     item_ids: List[str] = Field(default_factory=list, min_length=1)
 
@@ -62,7 +95,7 @@ class UpdateItemCategoriesRequest(BaseModel):
 
 
 def _now() -> str:
-    return datetime.utcnow().isoformat()
+    return utcnow_iso()
 
 def _normalize_item_images(item: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize nested images field to the public API contract.
@@ -259,28 +292,26 @@ async def create_item(
             images = image_rows
 
         # Generate embedding + upsert to Pinecone (best-effort)
+        reserved = False
+        embedding_stored = False
+        # The day the slot was reserved: a release after midnight must not
+        # decrement the new day's counter.
+        reserved_on = utc_today()
         try:
-            rate_check = await AISettingsService.check_rate_limit(
+            reserved = await AISettingsService.reserve_usage(
                 user_id=user_id,
-                operation_type="embedding",
+                operation_type=OperationType.EMBEDDING,
                 db=db,
             )
-            if not rate_check["allowed"]:
+            if not reserved:
                 logger.info(
                     "Embedding rate limit exceeded for item create, skipping vector upsert",
                     user_id=user_id,
                     item_id=item_id,
-                    remaining=rate_check["remaining"],
-                    limit=rate_check["limit"],
                 )
             else:
                 embedding = await AIService.generate_item_embedding({**item_data, "images": images})
                 if embedding:
-                    await AISettingsService.increment_usage(
-                        user_id=user_id,
-                        operation_type="embedding",
-                        db=db,
-                    )
                     vector_service = get_vector_service()
                     await vector_service.upsert_item(
                         item_id=item_id,
@@ -293,8 +324,12 @@ async def create_item(
                             "name": item.name,
                         },
                     )
+                    embedding_stored = True
         except Exception as e:
             logger.warning("Embedding generation failed", item_id=item_id, error=str(e))
+        finally:
+            if reserved and not embedding_stored:
+                await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
 
         # Return full item with images
         row["images"] = images
@@ -478,28 +513,26 @@ async def update_item(
 
         # Update embedding (best-effort) if relevant fields changed
         if any(k in update_dict for k in ("name", "category", "colors", "brand", "tags", "sub_category", "material")):
+            reserved = False
+            embedding_stored = False
+            # The day the slot was reserved: a release after midnight must
+            # not decrement the new day's counter.
+            reserved_on = utc_today()
             try:
-                rate_check = await AISettingsService.check_rate_limit(
+                reserved = await AISettingsService.reserve_usage(
                     user_id=user_id,
-                    operation_type="embedding",
+                    operation_type=OperationType.EMBEDDING,
                     db=db,
                 )
-                if not rate_check["allowed"]:
+                if not reserved:
                     logger.info(
                         "Embedding rate limit exceeded for item update, skipping vector upsert",
                         user_id=user_id,
                         item_id=item_id_str,
-                        remaining=rate_check["remaining"],
-                        limit=rate_check["limit"],
                     )
                 else:
                     embedding = await AIService.generate_item_embedding(item)
                     if embedding:
-                        await AISettingsService.increment_usage(
-                            user_id=user_id,
-                            operation_type="embedding",
-                            db=db,
-                        )
                         vector_service = get_vector_service()
                         await vector_service.upsert_item(
                             item_id=item_id_str,
@@ -512,8 +545,12 @@ async def update_item(
                                 "name": item.get("name"),
                             },
                         )
+                        embedding_stored = True
             except Exception as e:
                 logger.warning("Embedding update failed", item_id=item_id_str, error=str(e))
+            finally:
+                if reserved and not embedding_stored:
+                    await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
 
         return {"data": _normalize_item_images(item or {}), "message": "Updated"}
 
@@ -736,26 +773,34 @@ async def batch_delete_items(
         raise ValidationError("item_ids is required", details={"field": "item_ids"})
 
     try:
-        # Fetch storage paths for cleanup
-        imgs_res = await asyncio.to_thread(
-            db.table("item_images")
-            .select("id, item_id, storage_path")
-            .in_("item_id", item_ids)
-            .execute
+        # Resolve the parent rows under the caller's ownership before reading
+        # child image paths. The service-role client bypasses RLS, so the
+        # child query cannot be authorized by item_id alone.
+        owned = await StorageService.resolve_owned_storage_paths(
+            db, user_id, item_ids=item_ids
         )
-        storage_paths = [row.get("storage_path") for row in (imgs_res.data or []) if row.get("storage_path")]
-        if storage_paths:
-            try:
-                await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)
-            except Exception as e:
-                logger.warning("Failed to delete images from storage", count=len(storage_paths), error=str(e))
+        owned_item_ids = owned["item_ids"]
+        storage_paths = owned["storage_paths"]
 
-        # Best-effort delete embeddings
-        try:
-            vector_service = get_vector_service()
-            await vector_service.batch_delete(item_ids)
-        except Exception as e:
-            logger.warning("Failed to delete item embeddings", item_count=len(item_ids), error=str(e))
+        async def _delete_storage() -> None:
+            if storage_paths:
+                try:
+                    await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)
+                except Exception as e:
+                    logger.warning("Failed to delete images from storage", count=len(storage_paths), error=str(e))
+
+        async def _delete_embeddings() -> None:
+            # The request may contain IDs from another user. The database
+            # ownership query above is the authorization boundary; never pass
+            # the unfiltered request list to the external vector index.
+            try:
+                vector_service = get_vector_service()
+                await vector_service.batch_delete(owned_item_ids)
+            except Exception as e:
+                logger.warning("Failed to delete item embeddings", item_count=len(item_ids), error=str(e))
+
+        # Storage and vector cleanup are independent; both are best-effort.
+        await asyncio.gather(_delete_storage(), _delete_embeddings())
 
         # Delete items (FK cascade removes item_images)
         delete_res = await asyncio.to_thread(db.table("items").delete().eq("user_id", user_id).in_("id", item_ids).execute)
@@ -1097,17 +1142,18 @@ async def check_duplicates(
             }
 
         # If embedding quota is exhausted, fall back to text-based matching
-        rate_check = await AISettingsService.check_rate_limit(
+        reserved = await AISettingsService.reserve_usage(
             user_id=user_id,
-            operation_type="embedding",
+            operation_type=OperationType.EMBEDDING,
             db=db,
         )
-        if not rate_check["allowed"]:
+        # The day the slot was reserved: a release after midnight must not
+        # decrement the new day's counter.
+        reserved_on = utc_today()
+        if not reserved:
             logger.info(
                 "Embedding rate limit exceeded for duplicate check, using fallback",
                 user_id=user_id,
-                remaining=rate_check["remaining"],
-                limit=rate_check["limit"],
             )
             return await _fallback_duplicate_check(db, user_id, request, threshold, limit)
 
@@ -1125,11 +1171,6 @@ async def check_duplicates(
         # Generate embedding for the new item
         try:
             embedding = await AIService.generate_item_embedding(item_data)
-            await AISettingsService.increment_usage(
-                user_id=user_id,
-                operation_type="embedding",
-                db=db,
-            )
         except Exception as e:
             logger.warning(
                 "Failed to generate embedding for duplicate check, falling back to text search",
@@ -1137,6 +1178,7 @@ async def check_duplicates(
                 user_id=user_id,
             )
             # Fallback: simple text-based duplicate check
+            await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
             return await _fallback_duplicate_check(db, user_id, request, threshold, limit)
 
         # Search for similar items using vector service
@@ -1277,31 +1319,29 @@ async def find_similar_items(
         source_item = item_result.data
 
         # Check rate limit before generating the source embedding
-        rate_check = await AISettingsService.check_rate_limit(
+        reserved = await AISettingsService.reserve_usage(
             user_id=user_id,
-            operation_type="embedding",
+            operation_type=OperationType.EMBEDDING,
             db=db,
         )
-        if not rate_check["allowed"]:
+        # The day the slot was reserved: a release after midnight must not
+        # decrement the new day's counter.
+        reserved_on = utc_today()
+        if not reserved:
             raise RateLimitError(
-                f"Daily embedding limit ({rate_check['limit']}) exceeded. "
-                f"Requested 1 embedding with {rate_check['remaining']} remaining."
+                "Daily embedding limit exceeded. Requested 1 embedding."
             )
 
         # Generate embedding for source item
         try:
             embedding = await AIService.generate_item_embedding(source_item)
-            await AISettingsService.increment_usage(
-                user_id=user_id,
-                operation_type="embedding",
-                db=db,
-            )
         except Exception as e:
             logger.warning(
                 "Failed to generate embedding for similar items search",
                 error=str(e),
                 item_id=item_id_str,
             )
+            await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
             return {
                 "data": {"items": [], "source_item_id": item_id_str},
                 "message": "Similarity search unavailable - AI service error"

@@ -17,7 +17,8 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
-from app.core.exceptions import AIServiceError
+from app.core.exceptions import AIServiceError, DatabaseError
+from app.models.ai import HealthCheckResult
 from app.services.ai_provider_service import (
     AIProvider,
     get_system_provider_config,
@@ -25,6 +26,7 @@ from app.services.ai_provider_service import (
 )
 from app.services.ai_provider_interface import AIProviderClient, get_provider_class
 from app.utils.crypto import derive_fernet_key, legacy_derive_fernet_key
+from app.utils.db import unwrap_rpc_bool, unwrap_rpc_result
 
 logger = get_context_logger(__name__)
 
@@ -57,7 +59,8 @@ def _get_legacy_encryption_key() -> Optional[bytes]:
         return None
     try:
         return legacy_derive_fernet_key(key)
-    except Exception:
+    except (ValueError, TypeError, ImportError):
+        logger.error("Failed to derive encryption key", exc_info=True)
         return None
 
 
@@ -133,6 +136,23 @@ def decrypt_api_key(encrypted_key: str) -> Optional[str]:
 # =============================================================================
 
 
+def _default_settings_row(user_id: str) -> Dict[str, Any]:
+    """Default user_ai_settings row, shared by read-path provisioning and the
+    lightweight reservation pre-check."""
+    return {
+        "user_id": user_id,
+        "provider_configs": {},
+        "default_provider": get_default_provider().value,
+        "daily_extraction_count": 0,
+        "daily_generation_count": 0,
+        "daily_embedding_count": 0,
+        "last_reset_date": date.today().isoformat(),
+        "total_extractions": 0,
+        "total_generations": 0,
+        "total_embeddings": 0,
+    }
+
+
 class AISettingsService:
     """Service for managing user AI settings."""
 
@@ -174,18 +194,7 @@ class AISettingsService:
                 return settings_row
 
             # Create default settings if not exists
-            default_settings = {
-                "user_id": user_id,
-                "provider_configs": {},
-                "default_provider": get_default_provider().value,
-                "daily_extraction_count": 0,
-                "daily_generation_count": 0,
-                "daily_embedding_count": 0,
-                "last_reset_date": date.today().isoformat(),
-                "total_extractions": 0,
-                "total_generations": 0,
-                "total_embeddings": 0,
-            }
+            default_settings = _default_settings_row(user_id)
 
             await asyncio.to_thread(db.table("user_ai_settings").insert(default_settings).execute)
             return default_settings
@@ -370,46 +379,102 @@ class AISettingsService:
         }
 
     @staticmethod
-    async def increment_usage(
+    async def ensure_ai_settings_row(user_id: str, db) -> None:
+        """Ensure a ``user_ai_settings`` row exists before an RPC reservation.
+
+        Daily-counter resets happen atomically inside ``reserve_ai_usage``
+        (migration 024) under a row lock, so reservations only need the row to
+        exist for the RPC's UPDATE to match. Selects ``user_id`` (the table's
+        primary key) only - the full-row ``get_user_settings`` read (which also
+        returns encrypted provider keys) is for read paths, not admission.
+        """
+        try:
+            result = await asyncio.to_thread(
+                db.table("user_ai_settings")
+                .select("user_id")
+                .eq("user_id", user_id)
+                .maybe_single()
+                .execute
+            )
+            if result and result.data:
+                return
+            # Upsert on the PK: extraction + generation reservations run
+            # concurrently, so a user's very first admission can race two
+            # select-misses into a duplicate-key insert.
+            await asyncio.to_thread(
+                db.table("user_ai_settings")
+                .upsert(_default_settings_row(user_id), on_conflict="user_id")
+                .execute
+            )
+        except Exception as e:
+            logger.error("Failed to ensure AI settings row", user_id=user_id, error=str(e))
+            raise AIServiceError(f"Failed to prepare AI settings: {str(e)}")
+
+    @staticmethod
+    async def reserve_usage(
+        user_id: str,
+        operation_type: str,
+        db,
+        count: int = 1,
+    ) -> bool:
+        """Atomically reserve a daily AI quota before starting provider work."""
+        operation = getattr(operation_type, "value", operation_type)
+        if count <= 0:
+            raise ValueError("count must be positive")
+        limits = {
+            "extraction": settings.AI_DAILY_EXTRACTION_LIMIT,
+            "generation": settings.AI_DAILY_GENERATION_LIMIT,
+            "embedding": settings.AI_DAILY_EMBEDDING_LIMIT,
+        }
+        if operation not in limits:
+            raise ValueError(f"Unknown AI operation type: {operation_type}")
+
+        # Ensure the row exists before the RPC; the function intentionally
+        # fails closed when the hosted migration or row is unavailable.
+        await AISettingsService.ensure_ai_settings_row(user_id, db)
+        try:
+            result = await asyncio.to_thread(
+                db.rpc(
+                    "reserve_ai_usage",
+                    {
+                        "p_user_id": user_id,
+                        "p_operation": operation,
+                        "p_count": count,
+                        "p_limit": limits[operation],
+                    },
+                ).execute
+            )
+        except Exception as error:
+            logger.error("Failed to reserve AI usage", user_id=user_id, error=str(error))
+            raise DatabaseError("Failed to reserve AI usage") from error
+
+        # `reserve_ai_usage` returns a scalar BOOLEAN, so PostgREST keys the
+        # result by the function name rather than a column name.
+        return unwrap_rpc_bool(result, "reserve_ai_usage")
+
+    @staticmethod
+    async def release_usage(
         user_id: str,
         operation_type: str,
         db,
         count: int = 1,
     ) -> None:
-        """
-        Increment usage counter for a user.
-
-        Args:
-            user_id: The user's ID
-            operation_type: "extraction", "generation", or "embedding"
-            db: Supabase client
-            count: Number of operations to increment by (default: 1)
-        """
+        """Compensate a reservation when a multi-quota admission fails."""
+        operation = getattr(operation_type, "value", operation_type)
         try:
-            # Get current settings
-            user_settings = await AISettingsService.get_user_settings(user_id, db)
-
-            if operation_type == "extraction":
-                updates = {
-                    "daily_extraction_count": user_settings.get("daily_extraction_count", 0) + count,
-                    "total_extractions": user_settings.get("total_extractions", 0) + count,
-                }
-            elif operation_type == "embedding":
-                updates = {
-                    "daily_embedding_count": user_settings.get("daily_embedding_count", 0) + count,
-                    "total_embeddings": user_settings.get("total_embeddings", 0) + count,
-                }
-            else:  # generation
-                updates = {
-                    "daily_generation_count": user_settings.get("daily_generation_count", 0) + count,
-                    "total_generations": user_settings.get("total_generations", 0) + count,
-                }
-
-            await asyncio.to_thread(db.table("user_ai_settings").update(updates).eq("user_id", user_id).execute)
-
-        except Exception as e:
-            logger.error("Failed to increment usage", user_id=user_id, error=str(e))
-            # Don't raise - this shouldn't block the operation
+            await asyncio.to_thread(
+                db.rpc(
+                    "release_ai_usage",
+                    {
+                        "p_user_id": user_id,
+                        "p_operation": operation,
+                        "p_count": count,
+                    },
+                ).execute
+            )
+        except Exception as error:
+            logger.error("Failed to release AI usage reservation", user_id=user_id, error=str(error))
+            raise DatabaseError("Failed to release AI usage reservation") from error
 
     @staticmethod
     async def get_usage_stats(user_id: str, db) -> Dict[str, Any]:
@@ -482,7 +547,7 @@ class AISettingsService:
         model: str,
         api_url: Optional[str] = None,
         provider: AIProvider = AIProvider.CUSTOM,
-    ) -> Dict[str, Any]:
+    ) -> HealthCheckResult:
         """
         Test a provider configuration.
 

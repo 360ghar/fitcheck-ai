@@ -8,12 +8,13 @@ Regression coverage for two bugs fixed alongside this test:
    checking for a bare-None result (zero rows), same class of bug fixed
    elsewhere in this file (see app/utils/db.py).
 """
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi import HTTPException
 
 from app.api.v1.subscription import stripe_webhook
+from app.models.subscription import PlanType
 
 
 def _fake_request(body: bytes = b"{}") -> Mock:
@@ -33,6 +34,7 @@ def _async_return(value):
 async def test_webhook_activates_subscription_on_checkout_completed():
     db = Mock()
     event = {
+        "id": "evt_checkout_123",
         "type": "checkout.session.completed",
         "data": {
             "object": {
@@ -50,10 +52,43 @@ async def test_webhook_activates_subscription_on_checkout_completed():
         mock_settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
         mock_stripe.Webhook.construct_event.return_value = event
         mock_service.upgrade_to_pro = _async_noop()
+        db.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value = Mock(
+            data=[{"event_id": event["id"]}]
+        )
 
         result = await stripe_webhook(_fake_request(), db)
 
     assert result == {"received": True}
+    assert db.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.called
+
+
+@pytest.mark.asyncio
+async def test_webhook_activates_plus_plan_with_correct_plan_type():
+    """A plus_monthly checkout must activate as Plus, not fall back to Pro."""
+    db = Mock()
+    event = {
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "metadata": {"user_id": "user-1", "plan_type": "plus_monthly"},
+                "customer": "cus_plus",
+                "subscription": "sub_plus",
+            }
+        },
+    }
+
+    with patch("app.api.v1.subscription.settings") as mock_settings, \
+         patch("app.api.v1.subscription.stripe") as mock_stripe, \
+         patch("app.api.v1.subscription.SubscriptionService") as mock_service:
+        mock_settings.STRIPE_SECRET_KEY = "sk_test"
+        mock_settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
+        mock_stripe.Webhook.construct_event.return_value = event
+        mock_service.upgrade_to_pro = AsyncMock(return_value=None)
+
+        result = await stripe_webhook(_fake_request(), db)
+
+        assert result == {"received": True}
+        assert mock_service.upgrade_to_pro.await_args.kwargs["plan_type"] == PlanType.PLUS_MONTHLY
 
 
 @pytest.mark.asyncio
@@ -79,6 +114,30 @@ async def test_webhook_marks_past_due_when_subscription_row_missing():
 
     assert result == {"received": True}
     db.table.return_value.update.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_deleted_webhook_looks_up_user_when_metadata_is_missing():
+    db = Mock()
+    lookup = Mock(data={"user_id": "user-1"})
+    db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = lookup
+
+    event = {
+        "type": "customer.subscription.deleted",
+        "data": {"object": {"id": "sub_without_metadata", "metadata": {}}},
+    }
+
+    with patch("app.api.v1.subscription.settings") as mock_settings, \
+         patch("app.api.v1.subscription.stripe") as mock_stripe:
+        mock_settings.STRIPE_SECRET_KEY = "sk_test"
+        mock_settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
+        mock_stripe.Webhook.construct_event.return_value = event
+
+        result = await stripe_webhook(_fake_request(), db)
+
+    assert result == {"received": True}
+    db.table.return_value.update.assert_called_once()
+    assert db.table.return_value.update.call_args.args[0]["plan_type"] == "free"
 
 
 @pytest.mark.asyncio

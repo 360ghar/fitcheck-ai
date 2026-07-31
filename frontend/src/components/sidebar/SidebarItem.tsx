@@ -40,11 +40,10 @@ export function SidebarItem({
       to={href}
       onClick={handleClick}
       className={cn(
-        'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+        'group flex min-h-11 items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition-colors',
         'hover:bg-accent hover:text-accent-foreground',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         isActive
-          ? 'bg-primary/10 text-primary dark:bg-primary/20'
+          ? 'bg-primary text-primary-foreground'
           : 'text-muted-foreground',
         isCollapsed && 'justify-center px-2'
       )}
@@ -54,13 +53,13 @@ export function SidebarItem({
         className={cn(
           'h-5 w-5 shrink-0 transition-colors',
           isActive
-            ? 'text-primary'
+            ? 'text-primary-foreground'
             : 'text-muted-foreground group-hover:text-accent-foreground'
         )}
       />
       <span
         className={cn(
-          'truncate transition-all duration-200',
+          'truncate transition-[width,opacity] duration-200',
           isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
         )}
       >

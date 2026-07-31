@@ -7,7 +7,7 @@ were detected in the same source photo.
 
 import base64
 import io
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -30,7 +30,7 @@ def _make_job(items) -> BatchJob:
         job_id=str(uuid4()),
         user_id="user-1",
         status=BatchJobStatus.GENERATING,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         detected_items=items,
     )
 

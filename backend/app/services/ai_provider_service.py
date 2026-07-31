@@ -24,12 +24,11 @@ Sample request format (Agnes chat/vision):
       }'
 """
 
-import asyncio
 import base64
 import random
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from urllib.parse import urlparse
 
 import httpx
@@ -37,6 +36,8 @@ import httpx
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
+from app.models.ai import HealthCheckResult
+from app.utils.image_processing import to_data_url
 from app.utils.retry import with_retry
 from app.services.ai_provider_health_service import _is_non_openai_host
 from app.services.ai_provider_interface import (
@@ -56,6 +57,12 @@ from app.services.ai_provider_interface import (
 from app.services.gemini_provider import GeminiConfig, GeminiProvider
 
 logger = get_context_logger(__name__)
+
+
+# Default ceiling for AI output. Kept as a constant (not settings.AI_MAX_OUTPUT_TOKENS
+# inline) so callers below default to the same value in one place, while
+# from_settings() still reads the env-configured value for the system config.
+DEFAULT_MAX_OUTPUT_TOKENS = settings.AI_MAX_OUTPUT_TOKENS
 
 
 # =============================================================================
@@ -111,7 +118,7 @@ class ProviderConfig:
     image_fallback_api_key: Optional[str] = None
     image_fallback_model: Optional[str] = None
 
-    max_tokens: int = 4096
+    max_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
 
     # Optimized timeout configuration (separate connect vs read)
     connect_timeout: float = 5.0     # 5s for connection establishment
@@ -191,6 +198,7 @@ class ProviderConfig:
                 model=getattr(s, 'AI_OPENAI_CHAT_MODEL', 'gpt-4o'),
                 vision_model=getattr(s, 'AI_OPENAI_VISION_MODEL', 'gpt-4o'),
                 image_gen_model=getattr(s, 'AI_OPENAI_IMAGE_MODEL', 'dall-e-3'),
+                max_tokens=getattr(s, "AI_MAX_OUTPUT_TOKENS", DEFAULT_MAX_OUTPUT_TOKENS),
             )
         elif provider == AIProvider.CUSTOM:
             return cls(
@@ -216,6 +224,7 @@ class ProviderConfig:
                 image_fallback_api_url=s.AI_IMAGE_FALLBACK_API_URL,
                 image_fallback_api_key=s.AI_IMAGE_FALLBACK_API_KEY,
                 image_fallback_model=s.AI_IMAGE_FALLBACK_MODEL,
+                max_tokens=getattr(s, "AI_MAX_OUTPUT_TOKENS", DEFAULT_MAX_OUTPUT_TOKENS),
             )
         return None
 
@@ -243,6 +252,8 @@ class ProviderConfig:
             image_fallback_model=raw.get("image_fallback_model"),
             image_fallback_api_url=raw.get("image_fallback_api_url"),
             image_fallback_api_key=raw.get("image_fallback_api_key"),
+            # BYOK configs inherit the same output ceiling as the system config.
+            max_tokens=raw.get("max_tokens", settings.AI_MAX_OUTPUT_TOKENS),
         )
 
     @classmethod
@@ -423,6 +434,19 @@ class AIProviderService:
         permanent 4xx (auth/policy) as transient.
         """
 
+        def __init__(self, message: str, retry_after_seconds: Optional[float] = None):
+            super().__init__(message)
+            self.retry_after_seconds = retry_after_seconds
+
+    class _TransientChatAPIOverload(Exception):
+        """Marks transient gateway HTTP status from /chat/completions as
+        retry-worthy (408/429/500/502/503/504). Same pattern as
+        _TransientImageAPIOverload but for the chat transport leg."""
+
+        def __init__(self, message: str, retry_after_seconds: Optional[float] = None):
+            super().__init__(message)
+            self.retry_after_seconds = retry_after_seconds
+
     _TRANSIENT_TRANSPORT_ERRORS = (
         httpx.ReadError,
         httpx.ConnectError,
@@ -465,7 +489,8 @@ class AIProviderService:
         cls, response: httpx.Response, attempt: int
     ) -> float:
         """Prefer Retry-After when the provider sends it; else exponential backoff."""
-        retry_after = response.headers.get("Retry-After")
+        headers = getattr(response, "headers", {}) or {}
+        retry_after = headers.get("Retry-After")
         if retry_after:
             try:
                 return min(float(retry_after), 30.0)
@@ -486,8 +511,152 @@ class AIProviderService:
                     return str(err)[:500]
                 return str(error_data)[:500]
             return str(error_data)[:500]
-        except Exception:
+        except (KeyError, ValueError, TypeError):
             return (response.text or "")[:500]
+
+    async def _execute_chat_attempt(
+        self, attempt: Dict[str, Any]
+    ) -> Tuple[Dict[str, Any], int]:
+        """Single HTTP chat attempt.
+
+        Raises raw transport/transient exceptions so with_retry can retry; a
+        permanent HTTP status propagates as httpx.HTTPStatusError; a transient
+        gateway status is signalled via _TransientChatAPIOverload so with_retry
+        can re-POST without treating permanent 4xx as retryable.
+        """
+        client = attempt["client"]
+        req_payload = attempt["req_payload"]
+        url = attempt["url"]
+        api_key = attempt["api_key"]
+        base_url = attempt["base_url"]
+
+        try:
+            response = await client.post(
+                url,
+                json=req_payload,
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+        except httpx.ConnectError:
+            # Connection refused - mark provider as unhealthy before re-raise
+            # so with_retry's retry attempt sees a cleared cache.
+            from app.services.ai_provider_health_service import get_health_service
+            get_health_service().clear_cache(base_url)
+            raise
+        except self._PROTOCOL_TRANSPORT_ERRORS:
+            # Pooled connection is poisoned (peer GOAWAY / local framing error).
+            # Drop it so the next retry gets a fresh client.
+            await self.close()
+            attempt["client"] = await self._get_client()
+            raise
+        except self._TRANSIENT_TRANSPORT_ERRORS:
+            raise
+
+        if self._is_transient_http_status(response.status_code):
+            headers = getattr(response, "headers", {}) or {}
+            raise self._TransientChatAPIOverload(
+                f"status={response.status_code}: {self._http_error_detail(response)}",
+                retry_after_seconds=(
+                    self._http_retry_delay_seconds(response, 0)
+                    if headers.get("Retry-After")
+                    else None
+                ),
+            )
+        response.raise_for_status()
+        return response.json(), response.status_code
+
+    async def _call_with_retry_and_fallback(
+        self,
+        attempts: Sequence[Dict[str, Any]],
+    ) -> Tuple[Dict[str, Any], int]:
+        """Loop attempts; each attempt uses with_retry internally.
+
+        Behavior parity with the previous inline loop:
+        - max_retries=1 (2 total attempts) per attempt
+        - jitter=False (deterministic delay profile)
+        - transient HTTP statuses and transient transport errors retry
+        - permanent HTTP statuses propagate as AIServiceError(retryable=False)
+        - exhausted transient failures fall through to the next attempt if any
+        """
+        last_exc: Optional[AIServiceError] = None
+
+        for index, attempt in enumerate(attempts):
+            try:
+                return await with_retry(
+                    lambda a=attempt: self._execute_chat_attempt(a),
+                    max_retries=1,
+                    initial_delay=0.5,
+                    backoff_factor=1.5,
+                    max_delay=5.0,
+                    jitter=False,
+                    retryable_exceptions=self._TRANSIENT_TRANSPORT_ERRORS + (
+                        self._TransientChatAPIOverload,
+                    ),
+                    on_retry=lambda n, exc, delay: logger.warning(
+                        "AI chat retry",
+                        attempt=n,
+                        max_retries=1,
+                        delay_seconds=round(delay, 2),
+                        error=self._format_exception_message(exc),
+                        error_type=type(exc).__name__,
+                    ),
+                )
+            except AIServiceError:
+                raise
+            except self._TransientChatAPIOverload as e:
+                error_message = str(e)
+                last_exc = AIServiceError(
+                    f"AI chat request failed after retries: {error_message}",
+                    retryable=True,
+                    retry_after_seconds=e.retry_after_seconds,
+                )
+                logger.warning(
+                    "AI chat attempt exhausted transient HTTP retries",
+                    attempt_index=index,
+                    total_attempts=len(attempts),
+                    error=error_message,
+                    exc_info=False,
+                )
+                if index < len(attempts) - 1:
+                    continue
+                raise last_exc
+            except httpx.HTTPStatusError as e:
+                error_detail = self._http_error_detail(e.response)
+                status = e.response.status_code
+                retryable = self._is_transient_http_status(status)
+                last_exc = AIServiceError(
+                    f"AI request failed ({status}): {error_detail}",
+                    retryable=retryable,
+                    provider_status=status,
+                    provider_error_detail=error_detail,
+                )
+                if not retryable or index == len(attempts) - 1:
+                    raise last_exc
+                continue
+            except self._TRANSIENT_TRANSPORT_ERRORS as e:
+                error_message = self._format_exception_message(e)
+                last_exc = AIServiceError(
+                    f"AI transport request failed after retries: {error_message}",
+                    retryable=True,
+                )
+                logger.warning(
+                    "AI chat attempt exhausted transport retries",
+                    attempt_index=index,
+                    total_attempts=len(attempts),
+                    error=error_message,
+                    error_type=type(e).__name__,
+                    exc_info=False,
+                )
+                if index < len(attempts) - 1:
+                    continue
+                raise last_exc
+            except (httpx.RequestError, httpx.HTTPStatusError, ValueError, KeyError, TypeError) as e:
+                error_message = self._format_exception_message(e)
+                raise AIServiceError(
+                    f"AI request failed: {error_message}",
+                    retryable=False,
+                )
+
+        raise last_exc or AIServiceError("All AI chat attempts failed")
 
     async def chat(
         self,
@@ -646,112 +815,19 @@ class AIProviderService:
             )
             raise AIServiceError(error_msg, retryable=True)
 
-        async def _post_chat(req_payload: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
-            nonlocal client
-            # ponytail: one internal retry only (Retry-After-aware); the call
-            # site's with_retry adds one more round. More here multiplies into
-            # the outer loop (was 3x3=up to 12 gateway POSTs per stuck call).
-            max_retries = 1  # 2 total attempts (initial + 1 retry)
-            attempt = 0
-
-            while True:
-                try:
-                    response = await client.post(
-                        url,
-                        json=req_payload,
-                        headers={"Authorization": f"Bearer {active_api_key}"},
-                    )
-                    response.raise_for_status()
-                    return response.json(), response.status_code
-
-                except httpx.HTTPStatusError as http_err:
-                    # Retry transient gateway errors inside chat(); permanent 4xx
-                    # bubble so response_format fallback / caller can decide.
-                    status = http_err.response.status_code
-                    if (
-                        not self._is_transient_http_status(status)
-                        or attempt >= max_retries
-                    ):
-                        raise
-
-                    delay = self._http_retry_delay_seconds(http_err.response, attempt)
-                    detail = self._http_error_detail(http_err.response)
-                    logger.warning(
-                        f"Transient AI HTTP error (status={status}), retrying",
-                        attempt=attempt + 1,
-                        max_retries=max_retries,
-                        delay_seconds=round(delay, 2),
-                        status_code=status,
-                        error=detail,
-                    )
-                    attempt += 1
-                    await asyncio.sleep(delay)
-
-                except httpx.ConnectError as transport_error:
-                    # Connection refused - mark provider as unhealthy
-                    health_service.clear_cache(active_base_url)
-
-                    if attempt >= max_retries:
-                        logger.error(
-                            f"Cannot connect to AI provider after retries: {active_base_url}",
-                            provider_url=active_base_url,
-                            attempts=attempt + 1,
-                            exc_info=False,
-                        )
-                        raise AIServiceError(
-                            f"Cannot connect to AI provider at {active_base_url}. "
-                            "Please ensure the service is running or configure an alternative provider.",
-                            retryable=True,
-                        )
-
-                    delay = self._retry_delay_seconds(attempt)
-                    logger.warning(
-                        "Connection refused, retrying",
-                        attempt=attempt + 1,
-                        max_retries=max_retries,
-                        delay_seconds=round(delay, 2),
-                        error=self._format_exception_message(transport_error),
-                    )
-                    attempt += 1
-                    await asyncio.sleep(delay)
-
-                except Exception as transport_error:
-                    if not self._is_transient_transport_error(transport_error):
-                        raise
-
-                    if attempt >= max_retries:
-                        error_message = self._format_exception_message(transport_error)
-                        logger.error(
-                            f"Chat transport error after retries: {error_message}",
-                            timeout=self.config.read_timeout,
-                            error=error_message,
-                            exc_info=False,
-                        )
-                        raise AIServiceError(
-                            f"AI transport request failed after retries: {error_message}",
-                            retryable=True,
-                        )
-
-                    delay = self._retry_delay_seconds(attempt)
-                    logger.warning(
-                        "Transient AI transport error, retrying",
-                        attempt=attempt + 1,
-                        max_retries=max_retries,
-                        delay_seconds=round(delay, 2),
-                        error=self._format_exception_message(transport_error),
-                        error_type=type(transport_error).__name__,
-                    )
-                    if isinstance(transport_error, self._PROTOCOL_TRANSPORT_ERRORS):
-                        # Pooled connection is poisoned (peer GOAWAY / local framing
-                        # error). Retrying on the same client fails again - rebuild.
-                        await self.close()
-                        client = await self._get_client()
-                    attempt += 1
-                    await asyncio.sleep(delay)
-
         started_at = time.monotonic()
+        chat_attempts: List[Dict[str, Any]] = [
+            {
+                "req_payload": payload,
+                "url": url,
+                "api_key": active_api_key,
+                "client": client,
+                "base_url": active_base_url,
+            }
+        ]
+
         try:
-            data, status_code = await _post_chat(payload)
+            data, status_code = await self._call_with_retry_and_fallback(chat_attempts)
 
             logger.info(
                 "AI chat response received",
@@ -791,8 +867,17 @@ class AIProviderService:
 
                 fallback_payload = dict(payload)
                 fallback_payload.pop("response_format", None)
+                fallback_attempts: List[Dict[str, Any]] = [
+                    {
+                        "req_payload": fallback_payload,
+                        "url": url,
+                        "api_key": active_api_key,
+                        "client": client,
+                        "base_url": active_base_url,
+                    }
+                ]
                 try:
-                    data, status_code = await _post_chat(fallback_payload)
+                    data, status_code = await self._call_with_retry_and_fallback(fallback_attempts)
                     logger.info(
                         "AI chat response received after response_format fallback",
                         status_code=status_code,
@@ -819,19 +904,47 @@ class AIProviderService:
             raise AIServiceError(
                 f"AI request failed ({status}): {error_detail}",
                 retryable=retryable,
+                provider_status=status,
+                provider_error_detail=error_detail,
             )
 
-        except AIServiceError:
+        except AIServiceError as provider_error:
+            # _call_with_retry_and_fallback converts permanent provider HTTP
+            # failures into AIServiceError. Preserve the status/detail on that
+            # exception so structured-output callers can still retry once
+            # without response_format when the provider rejects that feature.
+            if response_format and provider_error.provider_status is not None:
+                if self._should_retry_without_response_format(
+                    status_code=provider_error.provider_status,
+                    error_detail=provider_error.provider_error_detail or str(provider_error),
+                ):
+                    logger.warning(
+                        f"Provider rejected response_format (status={provider_error.provider_status}), retrying without it",
+                        error=provider_error.provider_error_detail,
+                    )
+                    fallback_payload = dict(payload)
+                    fallback_payload.pop("response_format", None)
+                    fallback_attempts: List[Dict[str, Any]] = [{
+                        "req_payload": fallback_payload,
+                        "url": url,
+                        "api_key": active_api_key,
+                        "client": client,
+                        "base_url": active_base_url,
+                    }]
+                    data, status_code = await self._call_with_retry_and_fallback(
+                        fallback_attempts
+                    )
+                    return self._parse_chat_response(data, use_model, active_base_url)
             raise
 
-        except Exception as e:
+        except (httpx.RequestError, httpx.TimeoutException, ValueError, KeyError, TypeError) as e:
             if self._is_transient_transport_error(e):
                 error_message = self._format_exception_message(e)
                 logger.error(
                     f"Chat transport error after retries: {error_message}",
                     timeout=self.config.timeout,
                     error=error_message,
-                    exc_info=False,
+                    exc_info=True,
                 )
                 raise AIServiceError(
                     f"AI transport request failed after retries: {error_message}",
@@ -843,7 +956,7 @@ class AIProviderService:
                 f"Chat request error: {error_message}",
                 error=error_message,
                 error_type=type(e).__name__,
-                exc_info=False,
+                exc_info=True,
             )
             raise AIServiceError(f"AI request failed: {error_message}", retryable=False)
 
@@ -851,11 +964,29 @@ class AIProviderService:
         self, data: Dict[str, Any], model: str, provider_url: Optional[str] = None
     ) -> AIResponse:
         """Parse the chat completion response."""
+        def malformed(detail: str) -> None:
+            raise AIServiceError(
+                f"AI provider returned a malformed chat response: {detail}",
+                retryable=False,
+                error_kind="hard",
+            )
+
+        if not isinstance(data, dict):
+            raise AIServiceError(
+                "AI provider returned a malformed response object",
+                retryable=False,
+                error_kind="hard",
+            )
+
         text = None
         images = []
 
         # Extract from choices
         choices = data.get("choices", [])
+        if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+            malformed("choices is missing or invalid")
+        if not isinstance(choices[0].get("message"), dict):
+            malformed("message is missing or invalid")
         logger.debug(
             "Parsing chat response - choices",
             choices_count=len(choices),
@@ -876,44 +1007,72 @@ class AIProviderService:
             elif isinstance(content, list):
                 # Multimodal response (text + images)
                 for part in content:
-                    if isinstance(part, dict):
-                        if part.get("type") == "text":
-                            text = part.get("text", "")
-                        elif part.get("type") == "image_url":
-                            image_url = part.get("image_url", {})
-                            url = image_url.get("url", "")
-                            # Extract base64 from data URL if present
-                            if url.startswith("data:"):
-                                # Format: data:image/png;base64,<data>
-                                if ";base64," in url:
-                                    images.append(url.split(";base64,")[1])
-                                else:
-                                    images.append(url)
+                    if not isinstance(part, dict):
+                        malformed("content part is invalid")
+                    if part.get("type") == "text":
+                        part_text = part.get("text", "")
+                        if not isinstance(part_text, str):
+                            malformed("text content is invalid")
+                        text = part_text
+                    elif part.get("type") == "image_url":
+                        image_url = part.get("image_url", {})
+                        if not isinstance(image_url, dict):
+                            malformed("image_url content is invalid")
+                        url = image_url.get("url", "")
+                        if not isinstance(url, str):
+                            malformed("image URL is invalid")
+                        # Extract base64 from data URL if present
+                        if url.startswith("data:"):
+                            # Format: data:image/png;base64,<data>
+                            if ";base64," in url:
+                                images.append(url.split(";base64,", 1)[1])
                             else:
                                 images.append(url)
-                        elif part.get("type") == "image":
-                            # Alternative format with inline_data
-                            inline_data = part.get("inline_data", {})
-                            if inline_data.get("data"):
-                                images.append(inline_data["data"])
+                        else:
+                            images.append(url)
+                    elif part.get("type") == "image":
+                        # Alternative format with inline_data
+                        inline_data = part.get("inline_data", {})
+                        if not isinstance(inline_data, dict):
+                            malformed("inline image data is invalid")
+                        inline_value = inline_data.get("data")
+                        if inline_value is not None and not isinstance(inline_value, str):
+                            malformed("inline image data is invalid")
+                        if inline_value:
+                            images.append(inline_value)
+            elif content is not None:
+                malformed("message content is invalid")
 
             # Check for images array in message (custom provider format)
             message_images = message.get("images", [])
+            if not isinstance(message_images, list):
+                malformed("images is invalid")
             for img in message_images:
+                if not isinstance(img, dict):
+                    malformed("image entry is invalid")
                 if img.get("type") == "image_url":
                     image_url = img.get("image_url", {})
+                    if not isinstance(image_url, dict):
+                        malformed("image_url image entry is invalid")
                     url = image_url.get("url", "")
+                    if not isinstance(url, str):
+                        malformed("image URL is invalid")
                     if url.startswith("data:"):
                         if ";base64," in url:
-                            images.append(url.split(";base64,")[1])
+                            images.append(url.split(";base64,", 1)[1])
                         else:
                             images.append(url)
                     else:
                         images.append(url)
 
+            if content is None and not message_images:
+                malformed("message has no content or images")
+
         # Extract usage if present
         usage = None
         if "usage" in data:
+            if not isinstance(data["usage"], dict):
+                malformed("usage is invalid")
             usage = {
                 "prompt_tokens": data["usage"].get("prompt_tokens", 0),
                 "completion_tokens": data["usage"].get("completion_tokens", 0),
@@ -942,14 +1101,13 @@ class AIProviderService:
             return False
 
         text = (error_detail or "").lower()
+        # Only an error that specifically names the response_format / json_schema
+        # field justifies a duplicate request without it; generic wording
+        # ("unsupported", "unknown field", ...) may be unrelated and retrying
+        # would waste latency and provider quota.
         indicators = (
             "response_format",
             "json_schema",
-            "unsupported",
-            "unknown field",
-            "invalid field",
-            "unrecognized field",
-            "not support",
         )
         return any(indicator in text for indicator in indicators)
 
@@ -1042,7 +1200,14 @@ class AIProviderService:
         matching GeminiProvider's own not-shared-across-callers client policy."""
         if self._native_vision_provider is None:
             self._native_vision_provider = GeminiProvider(
-                GeminiConfig(api_key=self.config.vision_gemini_api_key)
+                # Inherit the parent config's output ceiling instead of falling
+                # back to GeminiConfig's own default, which previously left the
+                # native Gemini vision leg pinned at 4096 while the OpenAI leg
+                # had already been raised.
+                GeminiConfig(
+                    api_key=self.config.vision_gemini_api_key,
+                    max_tokens=self.config.max_tokens,
+                )
             )
         return self._native_vision_provider
 
@@ -1085,23 +1250,47 @@ class AIProviderService:
                 max_tokens=max_tokens,
                 response_format=response_format,
             )
-        except AIServiceError as e:
+        except AIServiceError as primary_err:
             if not fallback_model or fallback_model == primary_model:
                 raise
             logger.warning(
                 "Native Gemini vision call failed, falling back to Agnes",
                 primary_model=primary_model,
                 fallback_model=fallback_model,
-                error=str(e)[:200],
+                error_kind=primary_err.error_kind,
+                error=str(primary_err)[:200],
             )
-            return await self.chat(
-                messages=messages,
-                model=fallback_model,
-                max_tokens=max_tokens,
-                response_format=response_format,
-                api_url=self.config.get_vision_fallback_api_url(),
-                api_key=self.config.get_vision_fallback_api_key(),
+            try:
+                result = await self.chat(
+                    messages=messages,
+                    model=fallback_model,
+                    max_tokens=max_tokens,
+                    response_format=response_format,
+                    api_url=self.config.get_vision_fallback_api_url(),
+                    api_key=self.config.get_vision_fallback_api_key(),
+                )
+            except AIServiceError as fallback_err:
+                # Both legs failed: this is a capacity/provider problem ("on us"),
+                # not the user's own plan limit. Tag it so the UI can show
+                # "try again shortly" instead of a generic failure, and preserve
+                # whichever retry hint was offered.
+                raise AIServiceError(
+                    "AI vision unavailable: primary and fallback providers both failed",
+                    retryable=bool(fallback_err.retryable or primary_err.retryable),
+                    error_kind=(
+                        primary_err.error_kind or fallback_err.error_kind or "transient"
+                    ),
+                    retry_after_seconds=(
+                        fallback_err.retry_after_seconds or primary_err.retry_after_seconds
+                    ),
+                ) from fallback_err
+            logger.info(
+                "Vision fallback to Agnes succeeded after Gemini failure",
+                primary_model=primary_model,
+                fallback_model=fallback_model,
+                primary_error_kind=primary_err.error_kind,
             )
+            return result
 
     async def generate_image(
         self,
@@ -1124,12 +1313,11 @@ class AIProviderService:
 
         # Build message content
         if reference_image:
-            # Image-to-image: include reference image with the prompt
-            if not reference_image.startswith("data:"):
-                reference_image = f"data:image/jpeg;base64,{reference_image}"
-
+            # Image-to-image: include reference image with the prompt. The mime
+            # type is sniffed, not assumed - a hardcoded image/jpeg prefix
+            # propagates a wrong mime_type into Gemini's Part.from_bytes.
             content: List[Dict[str, Any]] = [
-                {"type": "image_url", "image_url": {"url": reference_image}},
+                {"type": "image_url", "image_url": {"url": to_data_url(reference_image)}},
                 {"type": "text", "text": prompt},
             ]
             messages = [ChatMessage(role="user", content=content)]
@@ -1193,12 +1381,19 @@ class AIProviderService:
             "extra_body": {"response_format": "b64_json"},
         }
         if reference_images:
-            payload["extra_body"]["image"] = [
-                img if img.startswith("data:") else f"data:image/jpeg;base64,{img}"
-                for img in reference_images
-            ]
+            # Sniffed mime per image; see to_data_url. A PNG/WebP reference
+            # announced as JPEG is a lie the provider may act on.
+            payload["extra_body"]["image"] = [to_data_url(img) for img in reference_images]
 
-        logger.info("AI image generation request started", provider_host=urlparse(url).netloc, model=model)
+        logger.info(
+            "AI image generation request started",
+            provider_host=urlparse(url).netloc,
+            model=model,
+            # Outfit generation can send an avatar plus one reference per item;
+            # log the count so a provider that silently honours only the first
+            # is diagnosable from the payload side.
+            reference_images=len(reference_images or []),
+        )
 
         async def _post_image_request() -> httpx.Response:
             nonlocal client
@@ -1219,8 +1414,14 @@ class AIProviderService:
                 # memory overloaded) is common under concurrent image gen —
                 # same transient set as chat(). Permanent 4xx fail via
                 # raise_for_status without entering with_retry.
+                headers = getattr(response, "headers", {}) or {}
                 raise self._TransientImageAPIOverload(
-                    f"status={response.status_code}: {self._http_error_detail(response)}"
+                    f"status={response.status_code}: {self._http_error_detail(response)}",
+                    retry_after_seconds=(
+                        self._http_retry_delay_seconds(response, 0)
+                        if headers.get("Retry-After")
+                        else None
+                    ),
                 )
             response.raise_for_status()
             return response
@@ -1247,6 +1448,7 @@ class AIProviderService:
             raise AIServiceError(
                 f"AI image provider overloaded after retries: {e}",
                 retryable=True,
+                retry_after_seconds=e.retry_after_seconds,
             )
         except httpx.HTTPStatusError as e:
             error_detail = self._http_error_detail(e.response)
@@ -1262,6 +1464,8 @@ class AIProviderService:
             raise AIServiceError(
                 f"AI image request failed ({status}): {error_detail}",
                 retryable=self._is_transient_http_status(status),
+                provider_status=status,
+                provider_error_detail=error_detail,
             )
         except self._TRANSIENT_TRANSPORT_ERRORS as e:
             # Timeout/connection error that exhausted with_retry's internal
@@ -1275,13 +1479,13 @@ class AIProviderService:
                 exc_info=False,
             )
             raise AIServiceError(f"AI image request failed: {error_msg}", retryable=True)
-        except Exception as e:
+        except (httpx.RequestError, httpx.HTTPStatusError, ValueError, KeyError, TypeError) as e:
             error_msg = self._format_exception_message(e)
             logger.error(
                 "Image generation request failed with unexpected error",
                 error=error_msg,
                 error_type=type(e).__name__,
-                exc_info=False,
+                exc_info=True,
             )
             # e.g. response.json() parse failure - the primary call may have
             # already generated (and billed) an image server-side, so this is
@@ -1300,9 +1504,13 @@ class AIProviderService:
                     async with httpx.AsyncClient(timeout=30.0) as asset_client:
                         image_response = await asset_client.get(item["url"])
                         image_response.raise_for_status()
-                except Exception as e:
+                except (httpx.RequestError, httpx.HTTPStatusError, httpx.TimeoutException, httpx.HTTPError) as e:
                     # Not retryable: generation already succeeded server-side,
                     # so retrying against the fallback model would double-bill.
+                    logger.exception(
+                        "Failed to fetch generated image asset after generation succeeded",
+                        asset_url=item.get("url"),
+                    )
                     raise AIServiceError(
                         f"Failed to fetch generated image asset: {self._format_exception_message(e)}"
                     )
@@ -1324,33 +1532,44 @@ class AIProviderService:
             raw_response=data,
         )
 
-    async def test_connection(self) -> Dict[str, Any]:
+    async def test_connection(self) -> HealthCheckResult:
         """
         Test the connection to the AI provider.
 
         Returns:
-            Dict with success status and message
+            HealthCheckResult with available flag, message, model and response.
         """
+        started_at = time.monotonic()
         try:
             messages = [ChatMessage(role="user", content="Hello, respond with 'OK' only.")]
             response = await self.chat(messages=messages, max_tokens=10)
 
-            return {
-                "success": True,
-                "message": "Connection successful",
-                "model": response.model,
-                "response": response.text,
-            }
-        except AIServiceError as e:
-            return {
-                "success": False,
-                "message": str(e),
-            }
+            return HealthCheckResult(
+                available=True,
+                message="Connection successful",
+                model=response.model,
+                response=response.text,
+                latency_ms=round((time.monotonic() - started_at) * 1000, 2),
+            )
+        except AIServiceError:
+            raise
+        except (httpx.RequestError, httpx.HTTPStatusError, ValueError, KeyError, TypeError) as e:
+            return HealthCheckResult(
+                available=False,
+                message=f"Unexpected error: {str(e)}",
+                error_type=e.__class__.__name__,
+                latency_ms=round((time.monotonic() - started_at) * 1000, 2),
+            )
         except Exception as e:
-            return {
-                "success": False,
-                "message": f"Unexpected error: {str(e)}",
-            }
+            # Catch any remaining unexpected exceptions (asyncio.TimeoutError,
+            # MemoryError, AttributeError, etc.) so the health-check route
+            # returns a graceful failure envelope instead of crashing.
+            return HealthCheckResult(
+                available=False,
+                message=f"Unexpected error: {str(e)}",
+                error_type=e.__class__.__name__,
+                latency_ms=round((time.monotonic() - started_at) * 1000, 2),
+            )
 
 
 # =============================================================================

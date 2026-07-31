@@ -24,7 +24,7 @@ export function ActionStatusLabel({
 }) {
   if (!loading) return <>{idleText}</>
   return (
-    <span className="inline-flex items-center gap-2">
+    <span className="inline-flex items-center gap-2" role="status" aria-live="polite">
       <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
       {elapsedSeconds > 3 ? `Processing… (${elapsedSeconds}s elapsed)` : phaseText}
     </span>

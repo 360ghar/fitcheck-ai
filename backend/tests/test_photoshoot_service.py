@@ -3,8 +3,8 @@ Tests for photoshoot service with retry logic.
 """
 
 import pytest
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch
+from datetime import datetime, timezone, timedelta
+from unittest.mock import AsyncMock, Mock, patch
 
 from app.services.photoshoot_service import PhotoshootService, USE_CASE_TEMPLATES, PhotoshootUseCase
 from app.services.photoshoot_job_service import PhotoshootJobService, PhotoshootJob
@@ -62,7 +62,7 @@ class TestPhotoshootRetryLogic:
             job_id="test-job-123",
             user_id="user-456",
             status=PhotoshootJobStatus.PENDING,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             photos=["base64photo1"],
             use_case="LINKEDIN",
             num_images=4,
@@ -314,7 +314,7 @@ class TestPhotoshootJobLifecycle:
             job_id="old-job",
             user_id="user-123",
             status=PhotoshootJobStatus.COMPLETE,
-            created_at=datetime.utcnow() - timedelta(hours=2),  # Expired
+            created_at=datetime.now(timezone.utc) - timedelta(hours=2),  # Expired
             photos=["photo1"],
             use_case="LINKEDIN",
             num_images=4,
@@ -370,16 +370,13 @@ class TestPhotoshootUsageTracking:
 
     @pytest.mark.asyncio
     async def test_usage_increment(self, mock_db):
-        """Test that usage is incremented via the SQL-update fallback when the
-        atomic increment_usage RPC isn't available (e.g. migration not applied)."""
-        mock_db.rpc.return_value.execute.side_effect = Exception("RPC not available")
-
-        with patch.object(mock_db.table.return_value, 'update') as mock_update:
-            mock_update.return_value = mock_update
-            mock_update.eq = Mock(return_value=mock_update)
-            mock_update.eq.return_value = mock_update
-            mock_update.execute = Mock()
-
+        """The compatibility wrapper delegates to the atomic reservation path."""
+        with patch.object(
+            PhotoshootService,
+            "reserve_daily_usage",
+            new_callable=AsyncMock,
+            return_value=(True, Mock()),
+        ) as reserve:
             await PhotoshootService.increment_usage("user-123", 3, mock_db)
 
-            mock_update.execute.assert_called_once()
+        reserve.assert_awaited_once_with("user-123", 3, mock_db)

@@ -51,7 +51,9 @@ Forbidden: services/models/core importing `app.api`. See `scripts/check_architec
 - Generated overview: `docs/generated/db-schema.md`.
 - Model notes: `docs/references/data-models.md`.
 
-Key tables (non-exhaustive): `users`, `user_preferences`, `user_settings`, `user_ai_settings`, `items`, `item_images`, `outfits`, `outfit_images`, `calendar_events`, `user_streaks`, `shared_outfits`, subscription/referral tables, photoshoot + social import tables.
+Key tables (non-exhaustive): `users`, `user_preferences`, `user_settings`, `user_ai_settings`, `items`, `item_images`, `outfits`, `outfit_images`, `calendar_events`, `shared_outfits`, subscription/referral tables, photoshoot + social import tables.
+
+`user_streaks` / `user_achievements` exist in the schema but are **read-only in practice** — no code path writes them. They are required by the `/ready` schema check only when `ENABLE_GAMIFICATION=true` (`GAMIFICATION_TABLES` in `app/main.py`), which is off by default.
 
 ## Auth
 
@@ -127,7 +129,7 @@ Pipeline: `batch_processing.py` + `batch_extraction_service.py` + `batch_job_ser
    - Flutter / legacy: `POST /api/v1/ai/batch-extract` (JSON base64)
 3. Backend returns `202` with `job_id` + `sse_url`; work continues in the background.
 4. **Extract:** images processed in parallel; each completion emits SSE `image_extraction_complete`.
-5. **Generate (optional `auto_generate`):** as items appear, product-image generation is enqueued and **overlaps** remaining extracts (capped by `AI_GENERATION_CONCURRENCY`, default 30; see "Batch concurrency caps" below). Reference-image strategy per item (`resolve_product_reference_image` in `app/utils/image_processing.py`): a single-item source photo is sent as-is; a multi-item photo crops to the item's bbox when it's confident and not near-full-frame, otherwise the reference is dropped entirely and generation falls back to text-only from the dense description — the full uncropped multi-item photo is never sent, since that reliably caused the model to bleed in other garments or pass the photo through unchanged.
+5. **Generate (optional `auto_generate`):** as items appear, product-image generation is enqueued and **overlaps** remaining extracts (capped by `AI_GENERATION_CONCURRENCY`, default 30; see "Batch concurrency caps" below). Reference-image strategy per item (`resolve_product_reference_image` in `app/utils/image_processing.py`): a single-item source photo is sent as-is; a multi-item photo crops to the item's bbox when it's confident and not near-full-frame, otherwise the reference is dropped entirely and generation falls back to text-only from the dense description — the full uncropped multi-item photo is never sent, since that reliably caused the model to bleed in other garments or pass the photo through unchanged. Each generated product image is then **matted** (`app/utils/background_removal.py`) and returned as a transparent WebP; see "Generated image transparency" below.
 6. **Client review:** UI may open review as soon as items exist; studio images fill in via SSE. User can save mid-generation using original photos when studio images are not ready.
 7. **Persist:** client uploads chosen images via `POST /api/v1/items/upload` and creates items via `POST /api/v1/items`.
 8. Optional embeddings/vector indexing after item create.
@@ -143,14 +145,53 @@ The pipeline enforces two **process-wide** `asyncio.Semaphore` ceilings (singlet
 | `AI_EXTRACTION_CONCURRENCY` | 30 | concurrent per-image vision extraction calls |
 | `AI_GENERATION_CONCURRENCY` | 30 | concurrent per-item product-image generations (also gates `generate_variations`) |
 
+Each matte adds ~110ms of GIL-held C work per generated image, run via `asyncio.to_thread` so it never sits on the event loop serving the SSE stream (a full-resolution flood fill would have been ~562ms and, at 30-wide, ~17s of serialized CPU).
+
 These are NOT per-job: two simultaneous batch jobs draw from the same pool. A per-job `generation_batch_size` (route default = `AI_GENERATION_CONCURRENCY`) can only tighten below the global ceiling, never exceed it. Raise cautiously: each in-flight request holds a multi-MB base64 buffer, and shared AI gateways can 429/503 under high parallelism. Floors at 1 so a misconfigured 0/negative value cannot deadlock the pipeline.
 
 ### Outfit generation
 
-1. Client submits selected items and generation options.
-2. Backend calls AI provider for image generation (respect rate limits via `app.services.rate_limit`).
-3. Backend stores generated images and updates outfit records.
-4. Client receives image URLs and render metadata.
+1. Client submits selected items (each with its wardrobe `item_id`) and generation options to `POST /api/v1/ai/generate-outfit`.
+2. **Resolve garment references** (`resolve_outfit_item_references` in `app/services/item_reference_service.py`): one batched, **user-scoped** query over `items` + `item_images` for the submitted ids, then download + downscale (`AI_OUTFIT_ITEM_REFERENCE_MAX_EDGE`, default 768) with process-wide bounded concurrency. Up to `AI_MAX_OUTFIT_ITEMS` text items are accepted (default 100), but only the first `AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES` stored image references (default 12) are resolved. This cap is current behavior; the active no-cap acceptance criterion is not verified. Ownership is enforced by `.eq("user_id", …)` on the parent `items` row, since `item_images` has no `user_id` of its own; another user's id resolves to nothing. Any failure (missing image, dead URL, DB error) degrades that item to text-only rather than failing the request. Runs inside the rate limit (one generation charge regardless of reference count) but outside `with_retry`.
+3. `image_generation_agent.generate_outfit` builds one inline image list — avatar first when used, then garments in item order — and a prompt that binds `IMAGE n` → `Item n` (`_build_reference_map` in `app/agents/image_generation_agent.py`, `GARMENT_REFERENCE_LOCK` in `app/agents/prompt_fidelity.py`). Items with no image are explicitly told to render from their description. `IDENTITY_LOCK` stays ahead of the garment block so the avatar remains the sole source for face/body/hair/skin. Multi-image has to go through `chat(..., response_modalities=["TEXT","IMAGE"])`, since `generate_image()` takes a single `reference_image`; with zero images the pre-existing text-to-image path is used unchanged.
+4. Backend stores generated images and updates outfit records.
+5. Client receives image URLs and render metadata.
+
+Sending no `item_id` is still valid and produces the previous text-only prompt byte-for-byte. Grep `Outfit item references resolved` and `AI image generation request started` (`reference_images=`) to see how many references a generation actually carried.
+
+### Generated image transparency
+
+No provider we use can return an alpha channel (`_generate_image_via_images_api` sends a fixed payload with no `output_format`; `gemini_provider` discards the response mime), so the backdrop is cut **after** generation by `app/utils/background_removal.py` — Pillow only, no `rembg`, no `onnxruntime`, no hosted API. Output is **WebP q85 with alpha** (`MATTE_FORMAT`), measured at roughly half the bytes of the opaque JPEG it replaces, so the in-memory batch job and its SSE payloads shrink.
+
+| Path | Matted? |
+|------|---------|
+| `generate_product_image` | yes |
+| `generate_outfit` flat-lay branch (incl. `generate_flat_lay`, `include_model=False`) | yes |
+| `generate_outfit` avatar branch, generic-model branch, `generate_try_on` | **no** — a threshold matte cannot cut hair, and the guards do not catch it (a full-body figure lands ~0.70–0.80 transparent, under `MAX_TRANSPARENT_FRACTION`) |
+
+- `background="transparent"` means "render on a matte-optimal flat white, then cut the alpha server-side". It resolves to the **same** prompt fragment as `"white"` / `"studio white"` via `_resolve_background`, which is why no client change was needed. `"gray"` / `"gradient"` stay honest: they fail the matte's first guard and keep their opaque original.
+- Three guards; any failure returns the **original bytes unmodified**: no white backdrop found (`skipped_no_background`), matte ate the subject (`rejected_ate_subject`), centre of frame went transparent (`rejected_center_transparent`). Grep `Background matte finished` for `status` / `transparent_fraction` / `center_opacity`.
+- `app/utils/image_processing.py` is the deliberate **inverse** and must stay that way: it flattens alpha onto white and encodes JPEG for the MODEL. A matted item image downloaded back as a garment reference is flattened there, which is exactly the "clean isolated garment on white" the reference prompts ask for.
+- Object content types are now sniffed from the bytes at every upload site (`StorageService._sniff_content_type`). Before this, any `storage.upload()` without explicit `file_options` inherited storage3's `content-type: text/plain;charset=UTF-8` default, so every item/outfit/avatar object was served as text/plain.
+
+#### Backfilling the existing corpus
+
+Images generated before the matte landed are still opaque JPEGs on white. `backend/scripts/backfill_transparent_backgrounds.py` re-mattes them **in place** — same storage key, `upsert=true`, `content-type: image/webp` — so `image_url` and `thumbnail_url` never change and no denormalised copy or shared link goes stale. Read the module docstring before running it; the extension deliberately ends up disagreeing with the bytes, and that is not a defect to "fix".
+
+Targets `item_images` and `outfit_images WHERE generation_type='ai'` only. Never `items.source_image_url` (the original photo has a real background), never `social_import_items` (temporary review-queue objects), never `outfit_generations.image_urls` (denormalised copies that stay valid for free).
+
+Run it in this order — step 2 is the real visual check, bounded to one account before anyone else's wardrobe is touched:
+
+```bash
+cd backend && source .venv/bin/activate
+DRY_RUN=1 python scripts/backfill_transparent_backgrounds.py                  # writes nothing; prints the guard distribution + projected storage delta
+ONLY_USER_ID=<your-uuid> LIMIT=20 python scripts/backfill_transparent_backgrounds.py
+LIMIT=200 CONCURRENCY=4 python scripts/backfill_transparent_backgrounds.py
+CONCURRENCY=8 python scripts/backfill_transparent_backgrounds.py
+TABLES=outfit_images python scripts/backfill_transparent_backgrounds.py       # expect most to be skipped by G1: they are model shots
+```
+
+A JSONL audit (`backend/logs/transparent_backfill.jsonl`) makes the run resumable — rows with a terminal action are skipped, `error` rows stay retryable. A rejected or skipped matte writes **nothing**: no upload, no DB patch. If more than 10% of decoded images are rejected the script says so loudly and names `WHITE_MIN_CHANNEL` — that is the signal the generation prompts drifted from what the algorithm assumes, and it is worth stopping for.
 
 ### Recommendations
 
@@ -165,7 +206,24 @@ Subscription-aware AI limits live in `app.services.rate_limit` (`rate_limited_op
 
 ## Route registration
 
-Modules wired from `main.py` include: auth, users, items, outfits, shared_outfits, recommendations, calendar, weather, gamification, ai, ai_settings, batch_processing, photoshoot, feedback, waitlist, demo, subscription, referral, social_import (flagged), blog.
+Modules wired from `main.py` include: auth, users, items, outfits, shared_outfits, recommendations, calendar, weather, gamification (flagged), ai, ai_settings, batch_processing, photoshoot, feedback, waitlist, demo, subscription, referral, social_import (flagged), blog.
+
+### Flagged routes — two different shapes
+
+| Flag | Default | Shape when off |
+|------|---------|----------------|
+| `ENABLE_SOCIAL_IMPORT` | `true` | **Router not mounted.** The paths 404 and vanish from OpenAPI. |
+| `ENABLE_GAMIFICATION` | `false` | **Router stays mounted.** Handlers return `200` with a neutral zeroed payload. |
+
+The gamification asymmetry is deliberate and must not be "made consistent".
+`flutter/lib/features/dashboard/controllers/dashboard_controller.dart:60-67` runs an
+unguarded `Future.wait([fetchDashboard(), fetchStreak()])` under one `catch`, so a
+404 on `/api/v1/gamification/streak` rejects the whole wait, leaves `dashboard.value`
+unassigned, and renders a permanent error banner on the mobile home screen. The flag
+is therefore enforced per handler in `app/api/v1/gamification.py` (which also kills
+the write-on-GET that inserted a zeroed `user_streaks` row). Unmounting the router
+only becomes safe after the Flutter side is fixed — see TD-034 in
+`docs/exec-plans/tech-debt-tracker.md`. Guarded by `backend/tests/test_gamification_flag.py`.
 
 ## Adding an endpoint
 
@@ -179,9 +237,9 @@ Modules wired from `main.py` include: auth, users, items, outfits, shared_outfit
 
 Required: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_SECRET`  
 
-AI: `AI_DEFAULT_PROVIDER`, `AI_GEMINI_*` (embeddings), `AI_CHAT_*`/`AI_VISION_*`/`AI_IMAGE_*` (per-leg, see `.env.example`)
+AI: `AI_DEFAULT_PROVIDER`, `AI_GEMINI_*` (embeddings), `AI_CHAT_*`/`AI_VISION_*`/`AI_IMAGE_*` (per-leg, see `.env.example`), `AI_OUTFIT_ITEM_REFERENCE_MAX_EDGE` (garment reference size, default 768), `AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES` (default 12), `AI_OUTFIT_ITEM_REFERENCE_DOWNLOAD_CONCURRENCY` (default 8), and `AI_MAX_OUTFIT_ITEMS` (default 100)
 
-Optional: `PINECONE_*`, `STRIPE_*`, `WEATHER_API_KEY`, social import flags, `AI_ENCRYPTION_KEY`  
+Optional: `PINECONE_*`, `STRIPE_*`, `WEATHER_API_KEY`, social import flags, `ENABLE_GAMIFICATION` (default `false`), `AI_ENCRYPTION_KEY`  
 
 Full templates: `backend/.env.example`. Backend also loads repo root `.env`.
 

@@ -10,6 +10,7 @@ from datetime import date, datetime, time as dt_time
 import asyncio
 import functools
 import re
+from app.utils.datetime_util import utc_today
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 from uuid import UUID
 
@@ -26,6 +27,7 @@ from app.core.exceptions import (
 from app.core.logging_config import get_context_logger
 from app.core.security import get_current_user_id
 from app.db.connection import get_db
+from app.models.subscription import OperationType
 from app.services.ai_service import AIService
 from app.services.ai_settings_service import AISettingsService
 from app.services.astrology_service import get_astrology_service
@@ -939,20 +941,21 @@ async def similar_items(
 
     # Vector search best-effort
     results: List[Dict[str, Any]] = []
+    reserved = False
+    # UTC day the slot was reserved: the release RPC decrements whatever
+    # day's counter is current (migration 024 keys on CURRENT_DATE), so after
+    # the day rolls over a release would remove a slot reserved on the new day.
+    # Mirror items.py's day-boundary guard.
+    reserved_on = utc_today()
     try:
-        rate_check = await AISettingsService.check_rate_limit(
+        reserved = await AISettingsService.reserve_usage(
             user_id=user_id,
-            operation_type="embedding",
+            operation_type=OperationType.EMBEDDING,
             db=db,
         )
-        if rate_check["allowed"]:
+        if reserved:
             embedding = await AIService.generate_item_embedding(source.data)
             if embedding:
-                await AISettingsService.increment_usage(
-                    user_id=user_id,
-                    operation_type="embedding",
-                    db=db,
-                )
                 vector_service = get_vector_service()
                 matches = await vector_service.find_similar(
                     embedding=embedding,
@@ -976,8 +979,6 @@ async def similar_items(
                 "Embedding rate limit exceeded for recommendations similar, using fallback",
                 user_id=user_id,
                 item_id=item_id,
-                remaining=rate_check["remaining"],
-                limit=rate_check["limit"],
             )
     except Exception as ve:
         logger.debug(
@@ -987,6 +988,25 @@ async def similar_items(
             error=str(ve)
         )
         results = []
+    finally:
+        # An empty result or a raised vector path never consumed the slot via
+        # a stored embedding: give it back so the daily embedding budget is
+        # not burned on a failed attempt (mirrors items.py behavior). Skip
+        # once the UTC day rolled over (see reserved_on above).
+        if reserved and not results and reserved_on == utc_today():
+            try:
+                await AISettingsService.release_usage(
+                    user_id=user_id,
+                    operation_type=OperationType.EMBEDDING,
+                    db=db,
+                )
+            except Exception as release_err:
+                logger.warning(
+                    "Failed to release embedding reservation",
+                    user_id=user_id,
+                    item_id=item_id,
+                    error=str(release_err),
+                )
 
     # Fallback: same category + color overlap
     if not results:

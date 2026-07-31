@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 import json
 from html import escape
-from datetime import datetime, timezone
+from app.utils.datetime_util import utcnow_iso
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -227,24 +227,31 @@ async def create_social_import_job(
         raise HTTPException(status_code=404, detail="Social import is disabled")
 
     max_concurrent_jobs = max(1, int(settings.SOCIAL_IMPORT_MAX_CONCURRENT_JOBS or 1))
-    active_jobs = await SocialImportJobStore.count_active_jobs(db, user_id=user_id)
-    if active_jobs >= max_concurrent_jobs:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                "You already have the maximum number of active social imports. "
-                "Please finish or cancel an existing job before starting a new one."
-            ),
-        )
-
     normalized = SocialURLService.normalize_profile_url(body.source_url)
-    job = await SocialImportJobStore.create_job(
-        db,
-        user_id=user_id,
-        platform=normalized.platform.value,
-        source_url=normalized.source_url,
-        normalized_url=normalized.normalized_url,
-    )
+    try:
+        job = await SocialImportJobStore.create_job(
+            db,
+            user_id=user_id,
+            platform=normalized.platform.value,
+            source_url=normalized.source_url,
+            normalized_url=normalized.normalized_url,
+            max_concurrent_jobs=max_concurrent_jobs,
+        )
+    except Exception as exc:
+        # The RPC serializes admission per user and rejects only when the
+        # configured limit is reached. A duplicate-key race (two concurrent
+        # creates for the same user) is the same user-facing condition - an
+        # active job already exists - so surface both as 429, never 500.
+        message = str(exc).lower()
+        if "concurrency limit reached" in message or "duplicate key value violates" in message:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(
+                    "You already have the maximum number of active social imports. "
+                    "Please finish or cancel an existing job before starting a new one."
+                ),
+            ) from exc
+        raise
 
     service = _service(user_id, db)
     await SocialImportPipelineService.schedule_job(service, job["id"])
@@ -298,7 +305,7 @@ async def social_import_events(
             connected_payload = {
                 "job_id": job_id,
                 "status": status_payload["status"],
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utcnow_iso(),
             }
             yield {"event": "connected", "data": json.dumps(connected_payload)}
 
@@ -339,7 +346,7 @@ async def social_import_events(
                     status_payload = await _service(user_id, db).get_status(job_id)
                     heartbeat = {
                         "job_id": job_id,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": utcnow_iso(),
                         "last_event_id": max_replayed_id,
                         "status": status_payload.get("status"),
                     }
@@ -358,7 +365,7 @@ async def social_import_events(
                 "event": "job_failed",
                 "data": json.dumps({
                     "error": "Internal error while streaming import events",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utcnow_iso(),
                 }),
             }
         finally:
@@ -590,7 +597,11 @@ async def approve_social_photo(
         status="approved",
         message=f"Photo approved and saved ({result.get('saved_count', 0)} items)",
     )
-    return {"data": payload.model_dump(), "message": "Approved"}
+    data = payload.model_dump()
+    # Include the saved item ids/categories so the client can auto-create an outfit
+    # from this photo's items and kick off its render.
+    data["saved_items"] = result.get("saved_items", [])
+    return {"data": data, "message": "Approved"}
 
 
 @router.post(

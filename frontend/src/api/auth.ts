@@ -3,6 +3,8 @@
  */
 
 import { apiClient, getTokens, setTokens, clearTokens, getApiError } from './client';
+import { logger } from '@/lib/logger';
+import { ENDPOINTS } from '@/lib/endpoints';
 import type { ApiEnvelope, AuthTokens, LoginRequest, RegisterRequest, AuthResponse, User } from '../types';
 
 // ============================================================================
@@ -14,7 +16,7 @@ import type { ApiEnvelope, AuthTokens, LoginRequest, RegisterRequest, AuthRespon
  */
 export async function register(data: RegisterRequest): Promise<AuthResponse> {
   try {
-    const response = await apiClient.post<ApiEnvelope<AuthResponse>>('/api/v1/auth/register', data);
+    const response = await apiClient.post<ApiEnvelope<AuthResponse>>(ENDPOINTS.AUTH.REGISTER, data);
     const payload = response.data.data;
     if (payload.access_token && payload.refresh_token) {
       setTokens({
@@ -35,7 +37,7 @@ export async function register(data: RegisterRequest): Promise<AuthResponse> {
  */
 export async function login(data: LoginRequest): Promise<AuthResponse> {
   try {
-    const response = await apiClient.post<ApiEnvelope<AuthResponse>>('/api/v1/auth/login', data);
+    const response = await apiClient.post<ApiEnvelope<AuthResponse>>(ENDPOINTS.AUTH.LOGIN, data);
     const payload = response.data.data;
     if (payload.access_token && payload.refresh_token) {
       setTokens({
@@ -56,9 +58,9 @@ export async function login(data: LoginRequest): Promise<AuthResponse> {
  */
 export async function logout(): Promise<void> {
   try {
-    await apiClient.post('/api/v1/auth/logout');
+    await apiClient.post(ENDPOINTS.AUTH.LOGOUT);
   } catch (error) {
-    console.warn('Logout request failed:', getApiError(error));
+    logger.warn('Logout request failed:', getApiError(error));
   } finally {
     clearTokens();
   }
@@ -70,7 +72,7 @@ export async function logout(): Promise<void> {
 export async function refreshAccessToken(refreshToken: string): Promise<AuthTokens> {
   try {
     const response = await apiClient.post<ApiEnvelope<{ access_token: string; refresh_token: string }>>(
-      '/api/v1/auth/refresh',
+      ENDPOINTS.AUTH.REFRESH,
       { refresh_token: refreshToken }
     );
 
@@ -92,7 +94,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<AuthToke
  */
 export async function requestPasswordReset(email: string): Promise<{ message: string }> {
   try {
-    const response = await apiClient.post<{ message: string }>('/api/v1/auth/reset-password', { email });
+    const response = await apiClient.post<{ message: string }>(ENDPOINTS.AUTH.RESET_PASSWORD, { email });
     return response.data;
   } catch (error) {
     throw getApiError(error);
@@ -109,7 +111,7 @@ export async function confirmPasswordReset(data: {
   new_password: string;
 }): Promise<{ message: string }> {
   try {
-    const response = await apiClient.post<{ message: string }>('/api/v1/auth/confirm-reset-password', data);
+    const response = await apiClient.post<{ message: string }>(ENDPOINTS.AUTH.CONFIRM_RESET_PASSWORD, data);
     return response.data;
   } catch (error) {
     throw getApiError(error);
@@ -160,7 +162,7 @@ export async function syncOAuthProfile(accessToken: string, referralCode?: strin
       credit_months: number;
     };
   }>>(
-    '/api/v1/auth/oauth/sync',
+    ENDPOINTS.AUTH.OAUTH_SYNC,
     { referral_code: referralCode },
     {
       headers: {

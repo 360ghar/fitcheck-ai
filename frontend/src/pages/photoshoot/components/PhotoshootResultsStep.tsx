@@ -35,9 +35,9 @@ export function PhotoshootResultsStep() {
     return null
   }
 
-  const downloadImage = async (index: number, showToast = true) => {
+  const downloadImage = async (index: number, showToast = true): Promise<boolean> => {
     const src = getImageSrc(index)
-    if (!src) return
+    if (!src) return false
 
     try {
       // Convert base64 to blob
@@ -57,24 +57,35 @@ export function PhotoshootResultsStep() {
       if (showToast) {
         toast({ title: 'Downloaded', description: 'Image saved successfully' });
       }
+      return true
     } catch (error) {
       if (showToast) {
         toast({ title: 'Error', description: 'Failed to download image', variant: 'destructive' });
       }
+      return false
     }
   };
 
   const downloadAll = async () => {
-    // Download all without individual toasts
+    const failedDownloads: number[] = [];
     for (let i = 0; i < generatedImages.length; i++) {
-      await downloadImage(i, false);
+      const downloaded = await downloadImage(i, false);
+      if (!downloaded) failedDownloads.push(i + 1);
       // Small delay between downloads
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
-    // Show single summary toast
+    if (failedDownloads.length === 0) {
+      toast({
+        title: 'Downloaded',
+        description: `${generatedImages.length} images saved successfully`,
+      });
+      return;
+    }
+
     toast({
-      title: 'Downloaded',
-      description: `${generatedImages.length} images saved successfully`,
+      title: 'Some downloads failed',
+      description: `${generatedImages.length - failedDownloads.length} saved; retry images ${failedDownloads.join(', ')}.`,
+      variant: 'destructive',
     });
   };
 
@@ -107,23 +118,22 @@ export function PhotoshootResultsStep() {
         {generatedImages.map((image, index) => (
           <div
             key={image.id}
-            className="relative aspect-[3/4] rounded-lg overflow-hidden bg-muted cursor-pointer group"
-            onClick={() => setPreviewIndex(index)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.target !== e.currentTarget) return;
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setPreviewIndex(index);
-              }
-            }}
+            className="relative aspect-[3/4] rounded-lg overflow-hidden bg-muted group"
           >
-            <img
-              src={getImageSrc(index) || PLACEHOLDER_IMAGE}
-              alt={`Generated ${index + 1}`}
-              className="w-full h-full object-cover"
-            />
+            <button
+              type="button"
+              className="absolute inset-0 h-full w-full cursor-pointer"
+              onClick={() => setPreviewIndex(index)}
+              aria-label={`Preview generated image ${index + 1}`}
+            >
+              <img
+                src={getImageSrc(index) || PLACEHOLDER_IMAGE}
+                alt={`Generated ${index + 1}`}
+                width={768}
+                height={1024}
+                className="w-full h-full object-cover"
+              />
+            </button>
 
             {/* Index Badge */}
             <div className="absolute top-2 left-2 px-2 py-1 bg-black/50 rounded-full">
@@ -138,7 +148,7 @@ export function PhotoshootResultsStep() {
                 e.stopPropagation();
                 downloadImage(index, true);
               }}
-              className="absolute bottom-2 right-2 p-2.5 min-h-11 min-w-11 flex items-center justify-center bg-primary rounded-full text-white opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+              className="absolute bottom-2 right-2 p-2.5 min-h-11 min-w-11 flex items-center justify-center bg-primary rounded-full text-primary-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
             >
               <Download className="w-4 h-4" />
             </button>
@@ -154,7 +164,7 @@ export function PhotoshootResultsStep() {
               <div className="mb-2 inline-flex rounded-full bg-amber-100 dark:bg-amber-900/60 px-2 py-1 text-xs font-medium text-amber-800 dark:text-amber-100">
                 Failed slot #{failedIndex + 1}
               </div>
-              <p className="text-xs text-amber-800 dark:text-amber-100">Generation failed for this slot. Retry to fill it.</p>
+              <p className="text-xs text-amber-800 dark:text-amber-100" role="status" aria-live="polite">Generation failed for this slot. Retry to fill it.</p>
             </div>
             <Button
               size="sm"
@@ -164,7 +174,7 @@ export function PhotoshootResultsStep() {
               onClick={() => void retryFailedSlot(failedIndex)}
             >
               <RotateCcw className="w-4 h-4 mr-2" />
-              {retryingFailedIndex === failedIndex ? 'Retrying...' : 'Retry'}
+              {retryingFailedIndex === failedIndex ? 'Retrying…' : 'Retry'}
             </Button>
           </div>
         ))}
@@ -189,6 +199,8 @@ export function PhotoshootResultsStep() {
               <img
                 src={getImageSrc(previewIndex) || PLACEHOLDER_IMAGE}
                 alt={`Preview ${previewIndex + 1}`}
+                width={1536}
+                height={2048}
                 className="w-full h-auto max-h-[80vh] object-contain"
               />
               <button

@@ -56,7 +56,6 @@ interface ShareOutfitDialogProps {
 export interface ShareOptions {
   isPublic: boolean
   allowFeedback: boolean
-  allowComments: boolean
   caption?: string
   tags?: string[]
 }
@@ -78,7 +77,6 @@ export function ShareOutfitDialog({
   const [shareOptions, setShareOptions] = useState<ShareOptions>({
     isPublic: true,
     allowFeedback: true,
-    allowComments: true,
     caption: '',
     tags: [],
   })
@@ -327,9 +325,11 @@ export function ShareOutfitDialog({
             <TabsContent value="link" className="space-y-4">
               <Card>
                 <CardContent className="pt-6">
-                  <Label>Shareable Link</Label>
+                  <Label htmlFor="shareable-outfit-link">Shareable Link</Label>
                   <div className="flex gap-2 mt-2">
                     <Input
+                      id="shareable-outfit-link"
+                      name="shareable_link"
                       value={shareUrl}
                       readOnly
                       className="flex-1 font-mono text-sm"
@@ -385,21 +385,6 @@ export function ShareOutfitDialog({
                     checked={shareOptions.allowFeedback}
                     onCheckedChange={(checked) =>
                       setShareOptions((prev) => ({ ...prev, allowFeedback: checked }))
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-gray-900 dark:text-white">Allow Comments</Label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Enable comments on your shared outfit
-                    </p>
-                  </div>
-                  <Switch
-                    checked={shareOptions.allowComments}
-                    onCheckedChange={(checked) =>
-                      setShareOptions((prev) => ({ ...prev, allowComments: checked }))
                     }
                   />
                 </div>

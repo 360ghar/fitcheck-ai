@@ -4,15 +4,21 @@
  */
 
 import { create } from 'zustand';
-import type { Item, Category, Condition, ItemFilters as ApiItemFilters } from '../types';
+import type {
+  Item,
+  Category,
+  Condition,
+  ItemFilters as ApiItemFilters,
+  ItemFormData,
+} from '../types';
 import * as itemsApi from '../api/items';
-import { getApiError, ApiError } from '../api/client';
+import { getApiError, type ApiError } from '../lib/errors';
 
 // ============================================================================
 // WARDROBE STATE INTERFACE
 // ============================================================================
 
-interface WardrobeState {
+interface ClosetState {
   // Items data
   items: Item[];
   filteredItems: Item[];
@@ -31,6 +37,12 @@ interface WardrobeState {
 
   // UI state
   isLoading: boolean;
+  /**
+   * Detail-pane fetch, deliberately separate from `isLoading`.
+   * `isLoading` swaps the whole grid for a skeleton; a deep link to
+   * /wardrobe/:id must not blank the list it is being shown beside.
+   */
+  isDetailLoading: boolean;
   isGridView: boolean;
   viewMode: 'all' | 'favorites' | 'recent';
   sortBy: 'name' | 'category' | 'date_added' | 'times_worn' | 'cost_per_wear';
@@ -51,13 +63,16 @@ interface WardrobeState {
   setSelectedItem: (item: Item | null) => void;
   toggleItemSelected: (itemId: string) => void;
   clearSelectedItems: () => void;
-  setFilter: <K extends keyof WardrobeState['filters']>(filter: K, value: WardrobeState['filters'][K]) => void;
+  setFilter: <K extends keyof ClosetState['filters']>(filter: K, value: ClosetState['filters'][K]) => void;
   resetFilters: () => void;
   setViewMode: (mode: 'all' | 'favorites' | 'recent') => void;
-  setSortBy: (sortBy: WardrobeState['sortBy']) => void;
+  setSortBy: (sortBy: ClosetState['sortBy']) => void;
   setSortOrder: (order: 'asc' | 'desc') => void;
   setGridView: (isGrid: boolean) => void;
   toggleItemFavorite: (itemId: string) => Promise<{ id: string; is_favorite: boolean }>;
+  /** Rejects on failure so an inline edit form can stay open for a retry. */
+  updateItem: (itemId: string, data: Partial<ItemFormData>) => Promise<Item>;
+  markItemAsWorn: (itemId: string) => Promise<Item>;
   deleteItem: (itemId: string) => Promise<void>;
   deleteSelectedItems: () => Promise<void>;
   setPage: (page: number) => void;
@@ -68,7 +83,7 @@ interface WardrobeState {
 // INITIAL FILTERS STATE
 // ============================================================================
 
-const initialFilters: WardrobeState['filters'] = {
+const initialFilters: ClosetState['filters'] = {
   category: 'all',
   color: 'all',
   occasion: '',
@@ -83,9 +98,9 @@ const initialFilters: WardrobeState['filters'] = {
 
 function applyFiltersAndSort(
   items: Item[],
-  filters: WardrobeState['filters'],
-  sortBy: WardrobeState['sortBy'],
-  sortOrder: WardrobeState['sortOrder']
+  filters: ClosetState['filters'],
+  sortBy: ClosetState['sortBy'],
+  sortOrder: ClosetState['sortOrder']
 ): Item[] {
   let filtered = [...items];
 
@@ -168,7 +183,7 @@ function applyFiltersAndSort(
 // WARDROBE STORE
 // ============================================================================
 
-export const useWardrobeStore = create<WardrobeState>((set, get) => ({
+export const useClosetStore = create<ClosetState>((set, get) => ({
   // Initial state
   items: [],
   filteredItems: [],
@@ -176,6 +191,7 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
   selectedItems: new Set(),
   filters: initialFilters,
   isLoading: false,
+  isDetailLoading: false,
   isGridView: true,
   viewMode: 'all',
   sortBy: 'date_added',
@@ -236,7 +252,8 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
 
   // Fetch single item by ID
   fetchItemById: async (id: string) => {
-    set({ isLoading: true, error: null });
+    // isDetailLoading, not isLoading: see the field comment.
+    set({ isDetailLoading: true, error: null });
     try {
       const item = await itemsApi.getItem(id);
       const state = get();
@@ -251,12 +268,12 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
       set({
         items: newItems,
         selectedItem: item,
-        isLoading: false,
+        isDetailLoading: false,
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
       });
     } catch (error) {
       const apiError = getApiError(error);
-      set({ error: apiError, isLoading: false });
+      set({ error: apiError, isDetailLoading: false });
     }
   },
 
@@ -283,7 +300,7 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
   },
 
   // Set filter
-  setFilter: <K extends keyof WardrobeState['filters']>(filter: K, value: WardrobeState['filters'][K]) => {
+  setFilter: <K extends keyof ClosetState['filters']>(filter: K, value: ClosetState['filters'][K]) => {
     set({ filters: { ...get().filters, [filter]: value }, page: 1 });
     const state = get();
     set({
@@ -306,7 +323,7 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
   },
 
   // Set sort by
-  setSortBy: (sortBy: WardrobeState['sortBy']) => {
+  setSortBy: (sortBy: ClosetState['sortBy']) => {
     set({ sortBy });
     const state = get();
     set({
@@ -345,6 +362,65 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
             : state.selectedItem,
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
       });
+      return updated;
+    } catch (error) {
+      const apiError = getApiError(error);
+      set({ error: apiError });
+      throw error;
+    }
+  },
+
+  // Update item (single API call; patches every collection in place)
+  //
+  // Lives in the store rather than the page because the detail pane now reads
+  // from the store and stays mounted: a page-local `apiUpdateItem()` + a
+  // `fetchItems(true)` repair would leave the pane showing stale data for the
+  // whole round-trip. Rejects on failure so an inline edit form can stay open.
+  updateItem: async (itemId: string, data: Partial<ItemFormData>) => {
+    try {
+      const updated = await itemsApi.updateItem(itemId, data);
+      // Re-read after await so concurrent list updates are not overwritten.
+      const state = get();
+      const newItems = state.items.map((item) => (item.id === itemId ? updated : item));
+      set({
+        items: newItems,
+        selectedItem: state.selectedItem?.id === itemId ? updated : state.selectedItem,
+        filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
+      });
+      return updated;
+    } catch (error) {
+      const apiError = getApiError(error);
+      set({ error: apiError });
+      throw error;
+    }
+  },
+
+  // Mark item as worn
+  //
+  // The endpoint returns only `{ id, usage_times_worn }`; `usage_last_worn` is
+  // mirrored to now because that is exactly what the server just recorded.
+  // `cost_per_wear` is deliberately NOT recomputed here — the detail pane derives
+  // the figure it shows from `price / usage_times_worn`, so there is one
+  // definition of that arithmetic in the app rather than two.
+  markItemAsWorn: async (itemId: string) => {
+    try {
+      const result = await itemsApi.markItemAsWorn(itemId);
+      const state = get();
+      const wornAt = new Date().toISOString();
+      const patch = (item: Item): Item => ({
+        ...item,
+        usage_times_worn: result.usage_times_worn,
+        usage_last_worn: wornAt,
+      });
+      const newItems = state.items.map((item) => (item.id === itemId ? patch(item) : item));
+      const updated = newItems.find((item) => item.id === itemId);
+      set({
+        items: newItems,
+        selectedItem:
+          state.selectedItem?.id === itemId ? patch(state.selectedItem) : state.selectedItem,
+        filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
+      });
+      if (!updated) throw new Error('Item is no longer in the closet');
       return updated;
     } catch (error) {
       const apiError = getApiError(error);
@@ -409,14 +485,14 @@ export const useWardrobeStore = create<WardrobeState>((set, get) => ({
 // SELECTORS
 // ============================================================================
 
-export const selectItems = (state: WardrobeState) => state.items;
-export const selectFilteredItems = (state: WardrobeState) => state.filteredItems;
-export const selectSelectedItem = (state: WardrobeState) => state.selectedItem;
-export const selectSelectedItems = (state: WardrobeState) => state.selectedItems;
-export const selectFilters = (state: WardrobeState) => state.filters;
-export const selectIsLoading = (state: WardrobeState) => state.isLoading;
-export const selectError = (state: WardrobeState) => state.error;
-export const selectHasMore = (state: WardrobeState) => state.hasMore;
+export const selectItems = (state: ClosetState) => state.items;
+export const selectFilteredItems = (state: ClosetState) => state.filteredItems;
+export const selectSelectedItem = (state: ClosetState) => state.selectedItem;
+export const selectSelectedItems = (state: ClosetState) => state.selectedItems;
+export const selectFilters = (state: ClosetState) => state.filters;
+export const selectIsLoading = (state: ClosetState) => state.isLoading;
+export const selectError = (state: ClosetState) => state.error;
+export const selectHasMore = (state: ClosetState) => state.hasMore;
 
 // ============================================================================
 // HOOKS
@@ -426,33 +502,33 @@ export const selectHasMore = (state: WardrobeState) => state.hasMore;
  * Hook to get all items
  */
 export function useItems(): Item[] {
-  return useWardrobeStore(selectItems);
+  return useClosetStore(selectItems);
 }
 
 /**
  * Hook to get filtered items
  */
 export function useFilteredItems(): Item[] {
-  return useWardrobeStore(selectFilteredItems);
+  return useClosetStore(selectFilteredItems);
 }
 
 /**
  * Hook to get selected item
  */
 export function useSelectedItem(): Item | null {
-  return useWardrobeStore(selectSelectedItem);
+  return useClosetStore(selectSelectedItem);
 }
 
 /**
  * Hook to get selected items count
  */
 export function useSelectedItemsCount(): number {
-  return useWardrobeStore((state) => state.selectedItems.size);
+  return useClosetStore((state) => state.selectedItems.size);
 }
 
 /**
  * Hook to check if item is selected
  */
 export function useIsItemSelected(itemId: string): boolean {
-  return useWardrobeStore((state) => state.selectedItems.has(itemId));
+  return useClosetStore((state) => state.selectedItems.has(itemId));
 }

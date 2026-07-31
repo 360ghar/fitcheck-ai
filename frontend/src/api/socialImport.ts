@@ -112,9 +112,20 @@ export async function patchSocialImportItem(
   }
 }
 
-export async function approveSocialImportPhoto(jobId: string, photoId: string): Promise<void> {
+export interface ApprovedSavedItem {
+  id: string
+  category?: string | null
+}
+
+export async function approveSocialImportPhoto(
+  jobId: string,
+  photoId: string
+): Promise<ApprovedSavedItem[]> {
   try {
-    await apiClient.post(`/api/v1/ai/social-import/jobs/${jobId}/photos/${photoId}/approve`)
+    const response = await apiClient.post<ApiEnvelope<{ saved_items?: ApprovedSavedItem[] }>>(
+      `/api/v1/ai/social-import/jobs/${jobId}/photos/${photoId}/approve`
+    )
+    return response.data.data?.saved_items ?? []
   } catch (error) {
     throw getApiError(error)
   }

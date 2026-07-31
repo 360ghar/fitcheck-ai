@@ -63,9 +63,9 @@ class MainShellPage extends StatelessWidget {
 
   Widget _buildFloatingActionButton(int currentIndex) {
     switch (currentIndex) {
-      case 2: // Wardrobe
+      case 2: // Closet
         return Semantics(
-          label: 'Add wardrobe item',
+          label: 'Add closet item',
           button: true,
           child: FloatingActionButton.extended(
             onPressed: () => Get.toNamed(Routes.wardrobeAdd),

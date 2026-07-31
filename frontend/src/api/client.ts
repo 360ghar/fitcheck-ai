@@ -4,6 +4,19 @@
 
 import axios, { AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { showApiError, showWarning, showNetworkError } from '@/lib/toast-utils';
+import {
+  AuthTokens,
+  forceLogout,
+  getAccessToken,
+  getTokens,
+  hasForcedLogout,
+  isTokenExpired,
+  setTokens,
+} from '@/lib/auth';
+import { logger } from '@/lib/logger';
+import { RATE_LIMIT_EXCEEDED, getApiError as getBaseApiError, isRateLimitExhausted, type ApiError } from '@/lib/errors';
+import { ENDPOINTS, LONG_RUNNING_PREFIXES } from '@/lib/endpoints';
+import { useUpgradePromptStore } from '@/stores/upgradePromptStore';
 
 // ============================================================================
 // AXIOS CONFIG TYPE EXTENSION
@@ -55,16 +68,10 @@ const LONG_RUNNING_TIMEOUT_MS = 600_000; // 10 minutes
  * URL prefixes that map to long-running AI/batch operations. Requests matching
  * one of these get the extended timeout automatically so individual call sites
  * do not each have to remember to pass it.
+ *
+ * Defined centrally in `@/lib/endpoints` to keep call sites and the timeout
+ * logic from drifting apart.
  */
-const LONG_RUNNING_PREFIXES = [
-  '/api/v1/ai/extract-items',
-  '/api/v1/ai/extract-single-item',
-  '/api/v1/ai/generate-outfit',
-  '/api/v1/ai/generate-product-image',
-  '/api/v1/ai/try-on',
-  '/api/v1/ai/batch-extract-multipart',
-];
-
 function isLongRunningRequest(url: string | undefined): boolean {
   if (!url) return false;
   return LONG_RUNNING_PREFIXES.some((prefix) => url.includes(prefix));
@@ -93,98 +100,28 @@ export const apiClient = axios.create({
 });
 
 // ============================================================================
-// TOKEN STORAGE
-// ============================================================================
-
-const TOKEN_STORAGE_KEY = 'fitcheck_auth_tokens';
-const AUTH_STORAGE_KEY = 'fitcheck-auth-storage';
-const USER_STORAGE_KEY = 'fitcheck_user';
-
-// ============================================================================
 // AUTH ENDPOINTS - Skip 401 handling for these (they return 401 for invalid credentials)
 // ============================================================================
 
+// Auth endpoints that return 401 for invalid credentials (not expired tokens).
+// Kept in sync with the centralized AUTH routes in `@/lib/endpoints`; only the
+// credential-validation subset is excluded from refresh/retry handling so
+// runtime behavior is unchanged.
 const AUTH_ENDPOINTS = [
-  '/api/v1/auth/login',
-  '/api/v1/auth/register',
-  '/api/v1/auth/refresh',
-  '/api/v1/auth/reset-password',
-  '/api/v1/auth/confirm-reset-password',
-];
+  ENDPOINTS.AUTH.LOGIN,
+  ENDPOINTS.AUTH.REGISTER,
+  ENDPOINTS.AUTH.REFRESH,
+  ENDPOINTS.AUTH.RESET_PASSWORD,
+  ENDPOINTS.AUTH.CONFIRM_RESET_PASSWORD,
+] as const;
 
 function isAuthEndpoint(url: string | undefined): boolean {
   if (!url) return false;
-  return AUTH_ENDPOINTS.some(endpoint => url.includes(endpoint));
+  return AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint));
 }
 
-export interface AuthTokens {
-  access_token: string;
-  refresh_token: string;
-}
-
-export function getTokens(): AuthTokens | null {
-  try {
-    const stored = localStorage.getItem(TOKEN_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : null;
-  } catch {
-    return null;
-  }
-}
-
-export function setTokens(tokens: AuthTokens): void {
-  localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokens));
-}
-
-export function clearTokens(): void {
-  localStorage.removeItem(TOKEN_STORAGE_KEY);
-}
-
-function clearAuthStorage(): void {
-  clearTokens();
-  localStorage.removeItem(AUTH_STORAGE_KEY);
-  localStorage.removeItem(USER_STORAGE_KEY);
-}
-
-let hasForcedLogout = false;
-
-function forceLogout(): void {
-  if (hasForcedLogout) return;
-  hasForcedLogout = true;
-  clearAuthStorage();
-  if (typeof window !== 'undefined') {
-    window.location.href = '/auth/login';
-  }
-}
-
-/**
- * Reset the forced logout flag. Call this after successful login.
- */
-export function resetForcedLogoutFlag(): void {
-  hasForcedLogout = false;
-}
-
-export function getAccessToken(): string | null {
-  return getTokens()?.access_token || null;
-}
-
-// ============================================================================
-// TOKEN EXPIRY CHECK + SINGLE-FLIGHT REFRESH
-// ============================================================================
-
-/** Decode the JWT exp claim; true if expired or expiring within 30s. */
-function isTokenExpired(jwt: string): boolean {
-  try {
-    // JWT payloads are base64url-encoded; atob only accepts base64, so
-    // translate -_ and pad. Without this, any payload containing '-' or '_'
-    // (very common) threw, the catch returned false, and proactive refresh
-    // silently never fired for that token.
-    const b64 = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    const padded = b64.padEnd(b64.length + ((4 - (b64.length % 4)) % 4), '=');
-    const payload = JSON.parse(atob(padded));
-    return typeof payload.exp === 'number' && payload.exp * 1000 < Date.now() + 30_000;
-  } catch {
-    return false; // can't decode → let the server decide
-  }
+export function isAuthenticated(): boolean {
+  return Boolean(getAccessToken());
 }
 
 /** Single-flight refresh: concurrent callers share one in-flight request. */
@@ -205,11 +142,8 @@ async function ensureFreshToken(): Promise<void> {
         access_token?: string;
         refresh_token?: string;
       }>(
-        `${API_BASE_URL}/api/v1/auth/refresh`,
+        `${API_BASE_URL}${ENDPOINTS.AUTH.REFRESH}`,
         { refresh_token: tokens.refresh_token },
-        // ponytail: explicit timeout — the global axios instance has none and
-        // this call sits on the hot request path (proactive refresh). A hung
-        // /auth/refresh must fail fast, not freeze every API call app-wide.
         { timeout: 15_000 }
       );
 
@@ -224,23 +158,6 @@ async function ensureFreshToken(): Promise<void> {
       };
 
       setTokens(newTokens);
-
-      // Keep Zustand persist in sync so rehydrate does not restore stale tokens
-      try {
-        const raw = localStorage.getItem(AUTH_STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as {
-            state?: { tokens?: AuthTokens; isAuthenticated?: boolean };
-          };
-          if (parsed?.state) {
-            parsed.state.tokens = newTokens;
-            parsed.state.isAuthenticated = true;
-            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(parsed));
-          }
-        }
-      } catch {
-        // Non-fatal: request-path tokens are already updated via setTokens
-      }
     } finally {
       refreshPromise = null;
     }
@@ -320,7 +237,12 @@ apiClient.interceptors.response.use(
 
     const status = error.response?.status;
     const isNetworkError = !error.response && !!error.request;
-    const isRetryable = isNetworkError || (status !== undefined && RETRYABLE_STATUS_CODES.has(status));
+    // A deterministic quota-exhausted response (the user's OWN plan limit,
+    // raised pre-flight by the backend) cannot clear within seconds, so
+    // retrying it only multiplies duplicate requests and delays the upgrade
+    // prompt in the interceptor below. 429s from upstream capacity issues
+    // (error_kind: upstream_quota / transient) are still retried.
+    const isRetryable = !isRateLimitExhausted(error) && (isNetworkError || (status !== undefined && RETRYABLE_STATUS_CODES.has(status)));
 
     if (!isRetryable) {
       return Promise.reject(error);
@@ -336,7 +258,7 @@ apiClient.interceptors.response.use(
     const backoff = 1000 * config._retryCount;
 
     if (import.meta.env.DEV) {
-      console.warn(
+      logger.warn(
         `[API Retry] ${config.method?.toUpperCase()} ${config.url} attempt ${config._retryCount}/${MAX_RETRIES} after ${backoff}ms (status=${status ?? 'network'})`
       );
     }
@@ -404,10 +326,28 @@ apiClient.interceptors.response.use(
       // Not explicitly skipped by the request
       !originalRequest._skipToast;
 
+    // The user hit THEIR OWN plan limit (backend RATE_LIMIT_EXCEEDED): this is
+    // the one place we show an upgrade prompt. Upstream AI capacity issues
+    // (errorKind) are "on us" and handled as a friendly retry below — never an
+    // upgrade.
+    if (!originalRequest._skipToast && apiError.code === RATE_LIMIT_EXCEEDED) {
+      useUpgradePromptStore.getState().open('rate_limit', apiError.message);
+      return Promise.reject(error);
+    }
+
     if (shouldShowToast) {
       if (!error.response) {
         // Network error - no response received
         showNetworkError();
+      } else if (apiError.errorKind === 'upstream_quota' || apiError.errorKind === 'transient') {
+        // Upstream AI capacity/provider failure ("on us"): friendly retry
+        // message, not the scary generic error and never an upgrade prompt.
+        // "hard" errors (auth/content-policy/parse) are permanent — retrying
+        // cannot resolve them, so they fall through to showApiError.
+        showWarning(
+          'Our AI service is busy. Please try again in a few minutes.',
+          'AI busy'
+        );
       } else if (error.response.status === 429) {
         // Rate limit error - show as warning
         showWarning(apiError.message || 'Too many requests. Please slow down.', 'Rate Limited');
@@ -425,73 +365,29 @@ apiClient.interceptors.response.use(
 // API ERROR TYPES
 // ============================================================================
 
-export interface ApiError {
-  message: string;
-  code?: string;
-  status?: number;
-  details?: unknown;
-  correlationId?: string;
-}
-
-export function isApiError(error: unknown): error is ApiError {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'message' in error &&
-    typeof (error as ApiError).message === 'string'
-  );
-}
-
 /**
  * Extract a normalized API error from an Axios error or unknown error.
- * Logs the error with correlation ID for debugging.
+ * Logs the error with correlation ID for debugging (dev mode only).
+ *
+ * Field extraction lives in `lib/errors.ts` (single source of truth shared
+ * with stores); this wrapper only adds the client-specific DEV logging so
+ * metadata (code/status/correlationId/errorKind/retryAfterSeconds) can never
+ * drift between the two entry points.
  */
 export function getApiError(error: unknown): ApiError {
-  if (axios.isAxiosError(error)) {
-    const status = error.response?.status;
-    const data = error.response?.data as
-      | { error?: string; detail?: string; message?: string; code?: string; details?: unknown; correlation_id?: string }
-      | undefined;
-    const headers = error.response?.headers;
-
-    // Extract correlation ID from response headers or body
-    const correlationId =
-      headers?.['x-correlation-id'] ||
-      data?.correlation_id ||
-      undefined;
-
-    const apiError: ApiError = {
-      message: data?.error || data?.detail || data?.message || error.message || 'An error occurred',
-      code: data?.code,
-      status,
-      details: data?.details ?? data,
-      correlationId,
-    };
-
-    // Log the error with correlation ID for debugging (dev mode only)
-    if (import.meta.env.DEV) {
-      console.error('[API Error]', {
-        message: apiError.message,
-        code: apiError.code,
-        status: apiError.status,
-        correlationId: apiError.correlationId,
-        url: error.config?.url,
-        method: error.config?.method?.toUpperCase(),
-      });
-    }
-
-    return apiError;
+  const apiError = getBaseApiError(error);
+  if (import.meta.env.DEV) {
+    const axiosError = error as AxiosError;
+    logger.error('[API Error]', {
+      message: apiError.message,
+      code: apiError.code,
+      status: apiError.status,
+      correlationId: apiError.correlationId,
+      url: axiosError.config?.url,
+      method: axiosError.config?.method?.toUpperCase(),
+    });
   }
-
-  if (isApiError(error)) {
-    return error;
-  }
-
-  if (error instanceof Error) {
-    return { message: error.message };
-  }
-
-  return { message: 'An unknown error occurred' };
+  return apiError;
 }
 
 // ============================================================================
@@ -503,3 +399,10 @@ export function getApiError(error: unknown): ApiError {
  * Usage: apiClient.get('/endpoint', skipToast)
  */
 export const skipToast = { _skipToast: true };
+
+// ============================================================================
+// RE-EXPORTS (convenience for consumers importing from @/api/client)
+// ============================================================================
+
+export { clearTokens, getAccessToken, getTokens, resetForcedLogoutFlag, setTokens } from '@/lib/auth';
+export { isApiError, type ApiError } from '@/lib/errors';

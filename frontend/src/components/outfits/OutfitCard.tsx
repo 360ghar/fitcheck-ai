@@ -76,14 +76,24 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
         ? primaryImage.thumbnail_url || primaryImage.image_url
         : null
 
+    // True only when a real photograph is actually painted in the tile. Drives
+    // both the legibility scrim and the ink of the bottom overlay: white text
+    // is correct over a photo and invisible over the flat waiting / failed /
+    // empty surfaces, which is what it used to render as in light mode.
+    const onPhoto = !!imageSrc && !isGenerating && !generationFailed
+
     if (variant === 'list') {
       return (
         <div
           ref={ref}
           className={cn(
-            'flex items-center gap-3 p-3 bg-card rounded-xl',
-            'border border-border/50',
-            'hover:bg-accent/50 transition-colors cursor-pointer',
+            'flex items-center gap-3 rounded-md border border-border bg-card p-3',
+            // Queries its OWN width (see `.row-cq` in index.css). Mirrors ItemCard.
+            'row-cq',
+            // Not `hover:bg-accent`: `--accent` is byte-identical to `--card`
+            // in `:root`, which would erase the light-mode hover. See ItemCard.
+            'hover:bg-surface-soft transition-colors cursor-pointer',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
             'touch-target',
             className
           )}
@@ -98,8 +108,10 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
             }
           }}
         >
-          {/* Image */}
-          <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0">
+          {/* Image. `bg-card` matches ItemCard (a no-op swap off `--muted`, which
+              is byte-identical today) so a flat-lay look with alpha lands on a
+              real surface. `object-cover` stays: see the note on the grid tile. */}
+          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-card">
             {imageSrc ? (
               <img
                 src={imageSrc}
@@ -131,7 +143,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
           {/* Actions */}
           <div className="flex items-center gap-2">
             {hasAiImage && (
-              <Badge className="bg-violet-500/90 text-white text-[10px]">
+              <Badge className="row-cq-secondary bg-accent-purple text-white text-[10px]">
                 <Sparkles className="h-3 w-3 mr-1" />
                 AI
               </Badge>
@@ -141,10 +153,13 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
                 type="button"
                 aria-label={outfit.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
                 className={cn(
-                  'p-2 rounded-full touch-target',
+                  'row-cq-secondary row-cq-favorite p-2 rounded-full touch-target',
+                  // The list row sits on `bg-card`, not on a photo, so this one
+                  // is page chrome and follows the page palette: brand red, not
+                  // an off-system pink.
                   outfit.is_favorite
-                    ? 'text-pink-500'
-                    : 'text-muted-foreground hover:text-pink-500'
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-primary'
                 )}
                 onClick={(e) => {
                   e.stopPropagation()
@@ -163,11 +178,12 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
       <div
         ref={ref}
         className={cn(
-          'group relative rounded-xl overflow-hidden bg-muted',
+          'group relative overflow-hidden rounded-md bg-card',
           'cursor-pointer',
-          'transition-all duration-300',
-          'hover:shadow-card-hover hover:-translate-y-1',
-          variant === 'compact' ? 'aspect-square' : 'aspect-[4/3]',
+          'border border-transparent transition-colors hover:border-border',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+          variant === 'compact' && 'aspect-square',
+          (!imageSrc || isGenerating || generationFailed) && 'aspect-[3/4] min-h-36',
           className
         )}
         onClick={onClick}
@@ -183,7 +199,10 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
       >
         {/* Image/Content */}
         {isGenerating ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-primary/10 to-violet-500/10">
+          // Flat `bg-card`, not a red-to-violet wash. The gradient was pure
+          // ornament on a waiting state: two hues that belong to no system,
+          // and the spinner already carries the "working" signal.
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-card">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="text-xs text-muted-foreground mt-2">
               Generating AI image…{showElapsed ? ` (${elapsedSeconds}s elapsed)` : ''}
@@ -198,19 +217,29 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
             </p>
           </div>
         ) : imageSrc ? (
+          // DELIBERATE ASYMMETRY WITH ItemCard — do not "unify" these.
+          // ItemCard's compact tile is `object-contain` because a wardrobe item
+          // is a matted cutout with a real alpha channel, and `cover` crops its
+          // hem. An outfit LOOK is an opaque photograph: only flat-lay looks get
+          // matted and the model shot is the common case, so `contain` would
+          // letterbox a hero photo against the card surface. `cover` is correct
+          // here for exactly as long as that stays true.
           <img
             src={imageSrc}
             alt={outfit.name}
             className={cn(
-              'absolute inset-0 w-full h-full object-cover',
-              'transition-transform duration-300',
-              'group-hover:scale-105'
+              variant === 'compact' ? 'absolute inset-0 h-full w-full object-cover' : 'relative block h-auto w-full object-contain',
             )}
             loading="lazy"
+            width={primaryImage?.width}
+            height={primaryImage?.height}
             onError={() => setImageError(true)}
           />
         ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-gradient-to-br from-primary/5 to-muted">
+          // Flat `bg-secondary`, not a red-to-neutral wash. This is the empty
+          // "no look yet" tile; it reads as a raised, actionable surface off
+          // `bg-card` on tone alone, which is what the gradient was faking.
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-secondary">
             <Sparkles className="h-8 w-8 text-primary/40 mb-2" />
             <p className="text-xs font-medium text-foreground">Generate look</p>
             <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -219,8 +248,13 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
           </div>
         )}
 
-        {/* Gradient Overlay */}
-        {(imageSrc || isGenerating) && (
+        {/* Scrim. KEEP this one — it is legibility for white text over
+            photography, not ornament. But it is now gated on `onPhoto` rather
+            than `imageSrc || isGenerating`: with no photo underneath there is
+            nothing to darken for, and laying a black gradient over the flat
+            waiting tile just muddied it and dragged the status copy down to
+            unreadable contrast. */}
+        {onPhoto && (
           <div
             className={cn(
               'absolute inset-0',
@@ -235,8 +269,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
           <Badge
             className={cn(
               'absolute top-2.5 left-2.5 z-10',
-              'bg-violet-500/90 text-white text-[10px]',
-              'shadow-sm'
+              'bg-accent-purple text-white text-[10px]'
             )}
           >
             <Sparkles className="h-3 w-3 mr-1" />
@@ -252,11 +285,18 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
               'absolute top-2.5 right-2.5 z-10',
               'w-9 h-9 rounded-full',
               'flex items-center justify-center',
-              'transition-all duration-200',
+              'transition-colors duration-200',
               'touch-target',
+              // Mirrors ItemCard's disc. This floats over the look photograph,
+              // so it is on-image chrome: theme-invariant, no `dark:` pair. The
+              // old `bg-white/90 dark:bg-gray-800/90` flipped the disc dark in
+              // dark mode even though its backdrop is a photo, and the pink was
+              // a hue outside the red / purple / warm-neutral system.
               outfit.is_favorite
-                ? 'bg-pink-500 text-white shadow-lg shadow-pink-500/30'
-                : 'bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm text-muted-foreground hover:text-pink-500'
+                ? 'bg-primary text-primary-foreground'
+                : onPhoto
+                  ? 'bg-on-image text-on-image-foreground/60 hover:text-primary'
+                  : 'bg-card text-muted-foreground hover:text-primary'
             )}
             onClick={(e) => {
               e.stopPropagation()
@@ -268,20 +308,38 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
           </button>
         )}
 
-        {/* Bottom Info Overlay */}
+        {/* Bottom Info Overlay.
+            The ink follows the backdrop. Over a photograph (with the scrim
+            above) it is white. On the generating / failed / empty tiles there is
+            NO photo and NO scrim, so white here painted white-on-light — the
+            outfit name and its meta row were simply invisible in light mode.
+            Those states use the page ink instead. */}
         <div className="absolute bottom-0 left-0 right-0 p-3 z-10">
-          <h3 className="font-semibold text-sm text-white truncate drop-shadow-sm">
+          <h3
+            className={cn(
+              'font-semibold text-sm truncate',
+              onPhoto ? 'text-white' : 'text-foreground'
+            )}
+          >
             {outfit.name}
           </h3>
 
           <div className="flex items-center justify-between mt-1">
-            <span className="text-[10px] text-white/80">
+            <span
+              className={cn(
+                'text-[10px]',
+                onPhoto ? 'text-white/80' : 'text-muted-foreground'
+              )}
+            >
               {outfit.item_ids.length} {outfit.item_ids.length === 1 ? 'item' : 'items'}
             </span>
             {outfit.style && (
               <Badge
                 variant="secondary"
-                className="text-[10px] bg-white/20 text-white border-0 capitalize"
+                className={cn(
+                  'text-[10px] border-0 capitalize',
+                  onPhoto && 'bg-white/20 text-white'
+                )}
               >
                 {outfit.style}
               </Badge>
@@ -292,12 +350,22 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
           {variant !== 'compact' && (
             <div className="hidden md:flex items-center gap-2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
               {outfit.worn_count > 0 && (
-                <span className="text-[10px] text-white/70">
+                <span
+                  className={cn(
+                    'text-[10px]',
+                    onPhoto ? 'text-white/70' : 'text-muted-foreground'
+                  )}
+                >
                   Worn {outfit.worn_count}x
                 </span>
               )}
               {outfit.description && (
-                <span className="text-[10px] text-white/70 truncate">
+                <span
+                  className={cn(
+                    'text-[10px] truncate',
+                    onPhoto ? 'text-white/70' : 'text-muted-foreground'
+                  )}
+                >
                   {outfit.description}
                 </span>
               )}

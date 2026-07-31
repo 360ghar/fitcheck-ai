@@ -6,10 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/services/ai_consent_service.dart';
+import '../../../core/services/persistence_service.dart';
+import '../services/wardrobe_sync_service.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../../core/utils/permission_helper.dart';
@@ -21,7 +22,6 @@ import '../models/social_import_models.dart';
 import '../repositories/batch_extraction_repository.dart';
 import '../repositories/item_repository.dart';
 import '../repositories/social_import_repository.dart';
-import 'wardrobe_controller.dart';
 
 enum BatchInputMode { upload, social }
 
@@ -38,6 +38,13 @@ class BatchExtractionController extends GetxController {
   final SocialImportRepository _socialRepo = SocialImportRepository();
   final ImagePicker _imagePicker = ImagePicker();
   final AppLinks _appLinks = AppLinks();
+  PersistenceService get _persistence => Get.isRegistered<PersistenceService>()
+      ? Get.find<PersistenceService>()
+      : PersistenceService();
+  WardrobeSyncService get _wardrobeSync =>
+      Get.isRegistered<WardrobeSyncService>()
+      ? Get.find<WardrobeSyncService>()
+      : WardrobeSyncService();
 
   /// [batchRepository] is injectable so unit tests can drive the fallback
   /// polling loop without hitting the real API. Defaults to a live repository.
@@ -128,6 +135,7 @@ class BatchExtractionController extends GetxController {
   bool get isExtracting => jobStatus.value == BatchJobStatus.extracting;
   bool get isGenerating => jobStatus.value == BatchJobStatus.generating;
   bool get isComplete => jobStatus.value == BatchJobStatus.complete;
+
   /// One-shot guard so progress UI doesn't schedule navigation on every rebuild
   bool hasNavigatedToReview = false;
   bool get isFailed => jobStatus.value == BatchJobStatus.failed;
@@ -431,7 +439,10 @@ class BatchExtractionController extends GetxController {
         throw Exception('Unable to open social login. Please try again.');
       }
 
-      ErrorHandler.showInfo('Complete login in your browser, then return to FitCheck.', title: 'Connect social account');
+      ErrorHandler.showInfo(
+        'Complete login in your browser, then return to FitCheck.',
+        title: 'Connect social account',
+      );
     } catch (e) {
       socialError.value = 'Failed to connect social account: $e';
     } finally {
@@ -520,9 +531,7 @@ class BatchExtractionController extends GetxController {
       socialError.value = '';
       await _socialRepo.approvePhoto(socialJobId.value, currentPhoto.id);
       await refreshSocialStatus();
-      if (Get.isRegistered<WardrobeController>()) {
-        await Get.find<WardrobeController>().fetchItems(refresh: true);
-      }
+      await _wardrobeSync.fetchItems(refresh: true);
       if (socialJob.value != null && !socialJob.value!.isTerminal) {
         _subscribeToSocialEvents(
           socialJobId.value,
@@ -705,7 +714,9 @@ class BatchExtractionController extends GetxController {
         } catch (e) {
           lastError = e;
           if (kDebugMode) {
-            print('Social import status poll error (attempt ${attempt + 1}): $e');
+            print(
+              'Social import status poll error (attempt ${attempt + 1}): $e',
+            );
           }
         }
         await Future.delayed(const Duration(seconds: 2));
@@ -785,16 +796,15 @@ class BatchExtractionController extends GetxController {
 
   Future<void> _restoreSocialImportState() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final persistedJobId = (prefs.getString(_socialPersistedJobIdKey) ?? '')
-          .trim();
+      final persistedJobId =
+          (await _persistence.getString(_socialPersistedJobIdKey) ?? '').trim();
       if (persistedJobId.isEmpty || socialJobId.value.isNotEmpty) {
         return;
       }
 
       socialJobId.value = persistedJobId;
       socialLastEventId.value =
-          prefs.getInt(_socialPersistedLastEventIdKey) ?? -1;
+          (await _persistence.getInt(_socialPersistedLastEventIdKey)) ?? -1;
 
       await refreshSocialStatus();
       final job = socialJob.value;
@@ -830,21 +840,21 @@ class BatchExtractionController extends GetxController {
   }
 
   Future<void> _writeSocialImportState(String jobId, int? lastEventId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_socialPersistedJobIdKey, jobId);
+    await _persistence.setString(_socialPersistedJobIdKey, jobId);
     if (lastEventId != null) {
-      await prefs.setInt(_socialPersistedLastEventIdKey, lastEventId);
+      await _persistence.setInt(_socialPersistedLastEventIdKey, lastEventId);
     } else {
-      await prefs.remove(_socialPersistedLastEventIdKey);
+      await _persistence.remove(_socialPersistedLastEventIdKey);
     }
   }
 
   void _clearPersistedSocialImportState() {
-    unawaited(() async {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_socialPersistedJobIdKey);
-      await prefs.remove(_socialPersistedLastEventIdKey);
-    }());
+    unawaited(_doClearPersistedSocialImportState());
+  }
+
+  Future<void> _doClearPersistedSocialImportState() async {
+    await _persistence.remove(_socialPersistedJobIdKey);
+    await _persistence.remove(_socialPersistedLastEventIdKey);
   }
 
   /// Start the batch extraction process
@@ -918,6 +928,9 @@ class BatchExtractionController extends GetxController {
   }
 
   /// Subscribe to SSE events for the job
+  @visibleForTesting
+  void subscribeToEventsForTesting(String id) => _subscribeToEvents(id);
+
   void _subscribeToEvents(String id) {
     _sseSubscription?.cancel();
     _sseSubscription = _batchRepo
@@ -934,6 +947,16 @@ class BatchExtractionController extends GetxController {
           onDone: () {
             if (kDebugMode) {
               print('SSE stream completed');
+            }
+            // A clean close is not necessarily a terminal job event (common
+            // with proxy/request timeouts). Reconcile the server state just as
+            // we do for an error, while respecting the single-flight guard.
+            if (!_isClosed &&
+                id == jobId.value &&
+                !isComplete &&
+                !isFailed &&
+                !isCancelled) {
+              pollJobStatus(id);
             }
           },
         );
@@ -1422,8 +1445,8 @@ class BatchExtractionController extends GetxController {
     }
 
     // Notify WardrobeController for immediate UI update
-    if (savedItems.isNotEmpty && Get.isRegistered<WardrobeController>()) {
-      Get.find<WardrobeController>().addItems(savedItems);
+    if (savedItems.isNotEmpty) {
+      _wardrobeSync.addItems(savedItems);
     }
 
     return savedItems;

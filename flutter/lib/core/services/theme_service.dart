@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/settings/models/user_preferences_model.dart';
+import 'persistence_service.dart';
 
 /// Theme service - handles theme persistence with local storage
 /// Loads immediately on app start, syncs with backend when online
 class ThemeService extends GetxController {
   static const String _themeStorageKey = 'fitcheck_theme_mode';
   static const AppThemeMode _defaultTheme = AppThemeMode.light;
+
+  PersistenceService get _persistence => Get.find<PersistenceService>();
 
   final Rx<AppThemeMode> _themeMode = _defaultTheme.obs;
 
@@ -33,8 +35,7 @@ class ThemeService extends GetxController {
   /// Load theme from local storage immediately on app start
   Future<void> _loadCachedTheme() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final storedValue = prefs.getString(_themeStorageKey);
+      final storedValue = await _persistence.getString(_themeStorageKey);
 
       if (storedValue != null) {
         final mode = AppThemeMode.values.firstWhere(
@@ -61,8 +62,7 @@ class ThemeService extends GetxController {
   /// Save theme to local storage
   Future<void> _saveToLocalStorage(AppThemeMode mode) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_themeStorageKey, mode.name);
+      await _persistence.setString(_themeStorageKey, mode.name);
     } catch (e) {
       debugPrint('Failed to save theme to local storage: $e');
     }

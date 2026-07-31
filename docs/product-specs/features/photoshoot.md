@@ -17,6 +17,7 @@ The AI Photoshoot Generator creates professional-style images of users based on 
 |------|-------------|-------|
 | Demo (Anonymous) | 2 images | Landing page trial, IP-based rate limiting |
 | Free | 10 images/day | Resets at midnight UTC |
+| Plus | 30 images/day | Resets at midnight UTC |
 | Pro | 50 images/day | Resets at midnight UTC |
 
 ## Functional Requirements

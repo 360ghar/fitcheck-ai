@@ -6,7 +6,7 @@ Previously had zero test coverage despite directly controlling revenue-path
 correctness (see architecture review, section 16).
 """
 from unittest.mock import Mock, patch
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 import httpx
 import pytest
@@ -24,13 +24,13 @@ def _subscription_row(**overrides):
         "user_id": USER_ID,
         "plan_type": "free",
         "status": "active",
-        "current_period_start": datetime.utcnow().isoformat(),
+        "current_period_start": datetime.now(timezone.utc).isoformat(),
         "current_period_end": None,
         "cancel_at_period_end": False,
         "trial_end": None,
         "referral_credit_months": 0,
-        "created_at": datetime.utcnow().isoformat(),
-        "updated_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     row.update(overrides)
     return row
@@ -47,7 +47,11 @@ def _mock_maybe_single(db, row_or_none):
 @pytest.mark.asyncio
 async def test_get_subscription_returns_existing_row():
     db = Mock()
-    _mock_maybe_single(db, _subscription_row(plan_type="pro_monthly", status="active"))
+    _mock_maybe_single(db, _subscription_row(
+        plan_type="pro_monthly",
+        status="active",
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+    ))
 
     result = await SubscriptionService.get_subscription(USER_ID, db)
 
@@ -69,6 +73,10 @@ async def test_get_subscription_creates_default_when_none_exists():
 
     assert result.plan_type == PlanType.FREE
     db.table.return_value.upsert.assert_called_once()
+    upsert_call = db.table.return_value.upsert.call_args
+    assert upsert_call.args[0]["user_id"] == USER_ID
+    assert upsert_call.args[0]["plan_type"] == "free"
+    assert upsert_call.args[0]["status"] == "active"
 
 
 @pytest.mark.asyncio
@@ -84,7 +92,11 @@ async def test_get_subscription_raises_if_still_missing_after_creation():
 @pytest.mark.asyncio
 async def test_upgrade_to_pro_upserts_and_returns_pro_subscription():
     db = Mock()
-    _mock_maybe_single(db, _subscription_row(plan_type="pro_yearly", status="active"))
+    _mock_maybe_single(db, _subscription_row(
+        plan_type="pro_yearly",
+        status="active",
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+    ))
 
     result = await SubscriptionService.upgrade_to_pro(
         user_id=USER_ID,
@@ -98,6 +110,124 @@ async def test_upgrade_to_pro_upserts_and_returns_pro_subscription():
     upsert_call = db.table.return_value.upsert.call_args
     assert upsert_call.args[0]["stripe_customer_id"] == "cus_123"
     assert upsert_call.args[0]["stripe_subscription_id"] == "sub_123"
+
+
+@pytest.mark.asyncio
+async def test_upgrade_to_plus_yearly_sets_one_year_period_end():
+    """A *_yearly plan must get a 1-year period, not the monthly fallback.
+
+    The period math previously special-cased PRO_YEARLY only, so a Plus yearly
+    subscriber would have been billed for a year but granted one month.
+    """
+    db = Mock()
+    _mock_maybe_single(db, _subscription_row(
+        plan_type="plus_yearly",
+        status="active",
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+    ))
+
+    result = await SubscriptionService.upgrade_to_pro(
+        user_id=USER_ID,
+        plan_type=PlanType.PLUS_YEARLY,
+        stripe_customer_id="cus_plus",
+        stripe_subscription_id="sub_plus",
+        db=db,
+    )
+
+    assert result.plan_type == PlanType.PLUS_YEARLY
+    payload = db.table.return_value.upsert.call_args.args[0]
+    assert payload["plan_type"] == "plus_yearly"
+    start = datetime.fromisoformat(payload["current_period_start"])
+    end = datetime.fromisoformat(payload["current_period_end"])
+    assert (end - start).days >= 365
+
+
+@pytest.mark.parametrize(
+    "plan_type,expected",
+    [
+        (PlanType.FREE, False),
+        (PlanType.PLUS_MONTHLY, True),
+        (PlanType.PLUS_YEARLY, True),
+        (PlanType.PRO_MONTHLY, True),
+        (PlanType.PRO_YEARLY, True),
+    ],
+)
+def test_is_paid_plan_treats_plus_as_entitled(plan_type, expected):
+    """Plus unlocks the same features as Pro; only usage limits differ."""
+    assert SubscriptionService.is_paid_plan(plan_type) is expected
+    # is_pro_plan is the legacy alias feeding SubscriptionResponse.is_pro
+    assert SubscriptionService.is_pro_plan(plan_type) is expected
+
+
+@pytest.mark.parametrize(
+    "status,end_field,expected",
+    [
+        ("active", "current_period_end", PlanType.PRO_MONTHLY),
+        ("active", "current_period_end", PlanType.FREE),
+        ("past_due", "current_period_end", PlanType.FREE),
+        ("cancelled", "current_period_end", PlanType.FREE),
+        ("trial", "trial_end", PlanType.PRO_MONTHLY),
+        ("trial", "trial_end", PlanType.FREE),
+    ],
+)
+def test_effective_plan_requires_valid_status_and_expiry(status, end_field, expected):
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    end = now + timedelta(days=7) if expected != PlanType.FREE else now - timedelta(seconds=1)
+    current_end = end if end_field == "current_period_end" else None
+    trial_end = end if end_field == "trial_end" else None
+    assert SubscriptionService.effective_plan_type(
+        PlanType.PRO_MONTHLY,
+        status,
+        current_end,
+        trial_end,
+        now=now,
+    ) == expected
+
+
+@pytest.mark.parametrize(
+    "plan_type,expected",
+    [
+        (PlanType.FREE, True),
+        (PlanType.PLUS_MONTHLY, True),
+        (PlanType.PLUS_YEARLY, True),
+        (PlanType.PRO_MONTHLY, False),
+        (PlanType.PRO_YEARLY, False),
+    ],
+)
+def test_can_upgrade_offers_pro_to_plus_users(plan_type, expected):
+    """Plus is paid but NOT the top tier - it must still get an upsell.
+
+    Gating upgrade CTAs on is_paid_plan would strand Plus subscribers with no
+    route to Pro; gating them on `not is_paid_plan` is the same bug.
+    """
+    assert SubscriptionService.can_upgrade(plan_type) is expected
+
+
+@pytest.mark.parametrize(
+    "plan_type,expected",
+    [
+        (PlanType.FREE, "Free"),
+        (PlanType.PLUS_MONTHLY, "Plus"),
+        (PlanType.PLUS_YEARLY, "Plus"),
+        (PlanType.PRO_MONTHLY, "Pro"),
+        (PlanType.PRO_YEARLY, "Pro"),
+    ],
+)
+def test_plan_display_name(plan_type, expected):
+    assert SubscriptionService.plan_display_name(plan_type) == expected
+
+
+def test_get_plan_limits_returns_distinct_tier_for_plus():
+    """Plus limits must sit strictly between Free and Pro."""
+    free = SubscriptionService.get_plan_limits(PlanType.FREE)
+    plus = SubscriptionService.get_plan_limits(PlanType.PLUS_MONTHLY)
+    pro = SubscriptionService.get_plan_limits(PlanType.PRO_MONTHLY)
+
+    assert plus == SubscriptionService.get_plan_limits(PlanType.PLUS_YEARLY)
+    for field in ("monthly_extractions", "monthly_generations", "monthly_embeddings"):
+        assert free[field] < plus[field] < pro[field], field
 
 
 @pytest.mark.asyncio

@@ -5,12 +5,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { HelmetProvider } from 'react-helmet-async'
 import { PostHogProvider } from 'posthog-js/react'
 import * as Sentry from '@sentry/react'
+import { logger } from './lib/logger'
 import App from './App'
 import { Toaster } from './components/ui/toaster'
 import { TooltipProvider } from './components/ui/tooltip'
+import { UpgradePromptDialog } from './components/common/UpgradePromptDialog'
 import ErrorBoundary from './components/errors/ErrorBoundary'
 import { ThemeProvider } from './components/theme/ThemeProvider'
-import '@fontsource-variable/plus-jakarta-sans'
+import '@fontsource-variable/inter'
+import '@fontsource-variable/manrope'
 import './index.css'
 
 // Sentry error tracking — only initializes when a DSN is configured.
@@ -31,7 +34,7 @@ if (sentryDsn) {
 // Sentry when a DSN is configured; always logs for local debugging.
 
 window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
-  console.error('[Unhandled Rejection]', event.reason)
+  logger.error('[Unhandled Rejection]', event.reason)
   if (sentryDsn) {
     Sentry.captureException(
       event.reason instanceof Error
@@ -42,7 +45,7 @@ window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => 
 })
 
 window.addEventListener('error', (event: ErrorEvent) => {
-  console.error('[Global Error]', event.error ?? event.message)
+  logger.error('[Global Error]', event.error ?? event.message)
   if (sentryDsn && event.error) {
     Sentry.captureException(event.error)
   }
@@ -93,12 +96,17 @@ createRoot(document.getElementById('root')!).render(
     >
       <HelmetProvider>
         <ErrorBoundary>
-          <ThemeProvider defaultTheme="light">
+          {/* Must match the pre-hydration script in index.html, which resolves
+              `system`. A `light` default here repainted over the script's dark
+              class on mount — the dark→light flash, and the reason a
+              system-dark user never got dark mode. */}
+          <ThemeProvider defaultTheme="system">
             <QueryClientProvider client={queryClient}>
               <BrowserRouter>
                 <TooltipProvider delayDuration={0}>
                   <App />
                   <Toaster />
+                  <UpgradePromptDialog />
                 </TooltipProvider>
               </BrowserRouter>
             </QueryClientProvider>
@@ -108,4 +116,3 @@ createRoot(document.getElementById('root')!).render(
     </PostHogProvider>
   </StrictMode>,
 )
-

@@ -211,6 +211,7 @@ class OutfitBuilderController extends GetxController {
       final visibleItems = selectedItems
           .where((oi) => oi.isVisible)
           .map((oi) => AIOutfitItem(
+                itemId: oi.item.id,
                 name: oi.item.name,
                 category: oi.item.category.name,
                 colors: oi.item.colors,
@@ -349,6 +350,11 @@ class OutfitBuilderItem {
 
 /// AI outfit item for generation request
 class AIOutfitItem {
+  /// Wardrobe item id. The backend resolves this item's stored image
+  /// server-side and sends it to the image model as a garment reference, so the
+  /// generated outfit reproduces the real garment instead of inventing a
+  /// lookalike from the text attributes below.
+  final String itemId;
   final String name;
   final String category;
   final List<String>? colors;
@@ -357,6 +363,7 @@ class AIOutfitItem {
   final String? pattern;
 
   AIOutfitItem({
+    required this.itemId,
     required this.name,
     required this.category,
     this.colors,
@@ -367,9 +374,12 @@ class AIOutfitItem {
 
   Map<String, dynamic> toJson() {
     return {
+      'item_id': itemId,
       'name': name,
       'category': category,
-      'colors': colors,
+      // Omit rather than send null: OutfitItemInput.colors is List[str] with a
+      // default factory, so an explicit null would 422.
+      if (colors != null) 'colors': colors,
       'brand': brand,
       'material': material,
       'pattern': pattern,

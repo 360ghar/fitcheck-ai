@@ -8,6 +8,10 @@ import { PostHogIdentify } from './components/analytics/PostHogIdentify'
 // Error boundaries
 import FeatureErrorBoundary from './components/errors/FeatureErrorBoundary'
 
+// Build-time feature flags (Vite inlines these, so disabled branches are
+// dead-code eliminated along with the pages they mount).
+import { FEATURES } from './lib/feature-flags'
+
 // Layouts
 import AppLayout from './components/layout/AppLayout'
 import AuthLayout from './components/layout/AuthLayout'
@@ -40,11 +44,20 @@ const AuthCallbackPage = lazy(() => import('./pages/auth/AuthCallbackPage'))
 
 const WardrobePage = lazy(() => import('./pages/wardrobe/WardrobePage'))
 const OutfitsPage = lazy(() => import('./pages/outfits/OutfitsPage'))
+const OutfitCreatePage = lazy(() => import('./pages/outfits/OutfitCreatePage'))
 const RecommendationsPage = lazy(() => import('./pages/recommendations/RecommendationsPage'))
 const ProfilePage = lazy(() => import('./pages/settings/ProfilePage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage'))
-const GamificationPage = lazy(() => import('./pages/gamification/GamificationPage'))
+// Gamification is flag-gated. The ternary is not belt-and-braces — it is what
+// actually removes the code. Gating only the <Route> below leaves this
+// `lazy(() => import(...))` binding referenced, so Rollup still emits the
+// 17.5 kB GamificationPage chunk (measured) even though nothing can navigate
+// to it. Guarding the import itself drops the chunk entirely. The `() => null`
+// arm is never rendered: with the flag off the route is not mounted at all.
+const GamificationPage = FEATURES.gamification
+  ? lazy(() => import('./pages/gamification/GamificationPage'))
+  : () => null
 const SharedOutfitPage = lazy(() => import('./pages/shared/SharedOutfitPage'))
 const TryOnPage = lazy(() => import('./pages/try-on/TryOnPage'))
 const PhotoshootPage = lazy(() => import('./pages/photoshoot/PhotoshootPage'))
@@ -228,12 +241,29 @@ function App() {
             <Route path="/wardrobe" element={<FeatureErrorBoundary featureName="Wardrobe"><WardrobePage /></FeatureErrorBoundary>} />
             <Route path="/wardrobe/:id" element={<FeatureErrorBoundary featureName="Wardrobe"><WardrobePage /></FeatureErrorBoundary>} />
             <Route path="/outfits" element={<FeatureErrorBoundary featureName="Outfits"><OutfitsPage /></FeatureErrorBoundary>} />
+            {/* Static segment outranks /outfits/:id in the router's own ranking. */}
+            <Route path="/outfits/new" element={<FeatureErrorBoundary featureName="Create outfit"><OutfitCreatePage /></FeatureErrorBoundary>} />
             <Route path="/outfits/:id" element={<FeatureErrorBoundary featureName="Outfits"><OutfitsPage /></FeatureErrorBoundary>} />
             <Route path="/calendar" element={<FeatureErrorBoundary featureName="Calendar"><CalendarPage /></FeatureErrorBoundary>} />
             <Route path="/recommendations" element={<FeatureErrorBoundary featureName="Recommendations"><RecommendationsPage /></FeatureErrorBoundary>} />
             <Route path="/photoshoot" element={<FeatureErrorBoundary featureName="Photoshoot"><PhotoshootPage /></FeatureErrorBoundary>} />
             <Route path="/try-on" element={<FeatureErrorBoundary featureName="Virtual Try-On"><TryOnPage /></FeatureErrorBoundary>} />
-            <Route path="/gamification" element={<GamificationPage />} />
+            {/* Gamification is flag-gated (FEATURES.gamification, default off:
+                nothing on the backend writes streaks or achievements, so the
+                page can only ever show zeros). With the flag off the route is
+                simply absent, so a bookmarked /gamification falls through to
+                CatchAllRoute → /dashboard. Deliberately NOT a "feature
+                disabled" page — that would advertise unfinished work. */}
+            {FEATURES.gamification && (
+              <Route
+                path="/gamification"
+                element={
+                  <FeatureErrorBoundary featureName="Gamification">
+                    <GamificationPage />
+                  </FeatureErrorBoundary>
+                }
+              />
+            )}
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsRedirect />} />
           </Route>

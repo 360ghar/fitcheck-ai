@@ -7,8 +7,9 @@ import asyncio
 import base64
 import os
 import uuid
-from typing import Optional, List, Tuple
+from typing import Optional, List
 from datetime import datetime
+from urllib.parse import urlparse, urljoin
 
 import httpx
 from supabase import Client
@@ -18,6 +19,12 @@ from app.core.exceptions import (
     StorageServiceError,
     FileTooLargeError,
     UnsupportedMediaTypeError,
+)
+from app.utils.image_processing import (
+    EXTENSION_BY_MIME,
+    SUPPORTED_UPLOAD_MIME_TYPES,
+    sniff_image_mime,
+    validate_image_bytes,
 )
 
 logger = get_context_logger(__name__)
@@ -33,6 +40,12 @@ BUCKET_FEEDBACK = "feedback"
 # Allowed file extensions
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+# Browser/CDN cache lifetime stamped on every upload, in seconds. storage3 turns
+# a bare value into `cache-control: max-age=<v>` (see _upload_or_update in
+# storage3/_sync/file_api.py). Matches storage3's own default; kept explicit
+# because passing ANY file_options replaces the defaults wholesale.
+DEFAULT_CACHE_CONTROL = "3600"
 
 
 class StorageService:
@@ -63,6 +76,40 @@ class StorageService:
         return f"{user_id}/{timestamp}/{unique_id}{ext}"
 
     @staticmethod
+    def _sniff_content_type(file_data: bytes, filename: str = "") -> str:
+        """Resolve the real content type of image bytes. Never raises.
+
+        THIS IS NOT COSMETIC. storage3's `DEFAULT_FILE_OPTIONS` stamps
+        `content-type: text/plain;charset=UTF-8` on any upload that passes no
+        `file_options`, which is how every item, outfit and avatar object in the
+        bucket ended up being served as text/plain.
+
+        The bytes decide, not the filename: the batch web client names its
+        upload `${tempId}.png` regardless of what the generator actually
+        returned, and since `background_removal.py` landed that is frequently a
+        WebP. The extension is only consulted when the bytes are unreadable.
+
+        A consequence, and it is fine: the storage KEY may end in `.png` while
+        holding WebP bytes. Supabase serves by stored content type, and browsers
+        and Flutter's `Image.network` honour that over the suffix - so do not
+        "fix" this by renaming keys, which would churn every stored URL.
+        """
+        return sniff_image_mime(file_data, filename)
+
+    @staticmethod
+    def _upload_options(file_data: bytes, filename: str = "") -> dict:
+        """`file_options` for `storage.upload()` with a correct content type.
+
+        A FRESH dict every call: storage3 mutates what it is handed (it pops
+        cache-control and upsert out of it), so a shared constant would be
+        emptied after the first upload.
+        """
+        return {
+            "content-type": StorageService._sniff_content_type(file_data, filename),
+            "cache-control": DEFAULT_CACHE_CONTROL,
+        }
+
+    @staticmethod
     def _validate_image(file_data: bytes, filename: str) -> None:
         """Validate an image file.
 
@@ -85,7 +132,7 @@ class StorageService:
             raise FileTooLargeError(max_size_mb=MAX_FILE_SIZE // (1024 * 1024))
 
         # Check file extension
-        ext = os.path.splitext(filename)[1].lower()
+        ext = os.path.splitext(filename)[1].lower() or filename.strip().lower()
         if ext not in ALLOWED_IMAGE_EXTENSIONS:
             logger.warning(
                 "Unsupported file type",
@@ -97,6 +144,23 @@ class StorageService:
                 allowed_types=list(ALLOWED_IMAGE_EXTENSIONS),
                 message=f"Invalid file type '{ext}'. Allowed: {', '.join(ALLOWED_IMAGE_EXTENSIONS)}"
             )
+
+        # The extension and multipart content type are caller-controlled.
+        # `validate_image_bytes` decodes and verifies the actual bytes with
+        # Pillow, then requires a MIME type from the magic bytes (never the
+        # filename), so spoofed payloads are rejected before reaching storage.
+        try:
+            validate_image_bytes(file_data, max_bytes=MAX_FILE_SIZE)
+        except ValueError as error:
+            logger.warning(
+                "Uploaded bytes are not a valid image",
+                file_name=filename,
+                error=str(error),
+            )
+            raise UnsupportedMediaTypeError(
+                allowed_types=sorted(SUPPORTED_UPLOAD_MIME_TYPES),
+                message="File contents are not a valid supported image",
+            ) from error
 
     @staticmethod
     async def upload_item_image(
@@ -124,7 +188,9 @@ class StorageService:
             StorageServiceError: If upload fails
         """
         # Validate the image (raises on failure)
-        StorageService._validate_image(file_data, filename)
+        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
+        # event loop during request handling.
+        await asyncio.to_thread(StorageService._validate_image, file_data, filename)
 
         # Generate unique filename
         storage_path = StorageService._generate_filename(user_id, filename, "item")
@@ -133,7 +199,12 @@ class StorageService:
             # Upload to Supabase Storage
             bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_ITEMS
             storage = db.storage.from_(bucket)
-            await asyncio.to_thread(storage.upload, path=storage_path, file=file_data)
+            await asyncio.to_thread(
+                storage.upload,
+                path=storage_path,
+                file=file_data,
+                file_options=StorageService._upload_options(file_data, filename),
+            )
 
             # Get public URL
             image_url = storage.get_public_url(storage_path)
@@ -195,14 +266,21 @@ class StorageService:
             StorageServiceError: If upload fails
         """
         # Validate the image (raises on failure)
-        StorageService._validate_image(file_data, filename)
+        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
+        # event loop during request handling.
+        await asyncio.to_thread(StorageService._validate_image, file_data, filename)
 
         storage_path = StorageService._generate_filename(user_id, filename, "outfit")
 
         try:
             bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_OUTFITS
             storage = db.storage.from_(bucket)
-            await asyncio.to_thread(storage.upload, path=storage_path, file=file_data)
+            await asyncio.to_thread(
+                storage.upload,
+                path=storage_path,
+                file=file_data,
+                file_options=StorageService._upload_options(file_data, filename),
+            )
 
             image_url = storage.get_public_url(storage_path)
 
@@ -262,14 +340,21 @@ class StorageService:
             StorageServiceError: If upload fails
         """
         # Validate the image (raises on failure)
-        StorageService._validate_image(file_data, filename)
+        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
+        # event loop during request handling.
+        await asyncio.to_thread(StorageService._validate_image, file_data, filename)
 
         storage_path = StorageService._generate_filename(user_id, filename, "avatar")
 
         try:
             bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_AVATARS
             storage = db.storage.from_(bucket)
-            await asyncio.to_thread(storage.upload, path=storage_path, file=file_data)
+            await asyncio.to_thread(
+                storage.upload,
+                path=storage_path,
+                file=file_data,
+                file_options=StorageService._upload_options(file_data, filename),
+            )
 
             logger.info(
                 "Uploaded avatar",
@@ -375,6 +460,100 @@ class StorageService:
             raise StorageServiceError(f"Failed to delete images: {str(e)}")
 
     @staticmethod
+    async def resolve_owned_storage_paths(
+        db: Client,
+        user_id: str,
+        *,
+        item_ids: Optional[List[str]] = None,
+        outfit_ids: Optional[List[str]] = None,
+    ) -> dict:
+        """Resolve a user's owned parent rows and their child image storage paths.
+
+        The backend uses a service-role client (RLS bypassed), so child image
+        rows cannot be authorized by image id alone: owned parent ids are
+        resolved under ``user_id`` first, then child ``storage_path`` rows are
+        collected under those ids. Pass ``item_ids``/``outfit_ids`` to scope to
+        a subset (batch deletes); omit them to include everything a user owns
+        (account deletion).
+
+        Returns ``{"item_ids": [...], "outfit_ids": [...], "storage_paths": [...]}``.
+        Callers own the deletion and its error policy (best-effort for batch
+        deletes, fail-loudly for account deletion).
+        """
+        owned_item_ids: List[str] = []
+        owned_outfit_ids: List[str] = []
+        storage_paths: List[str] = []
+
+        # Sentinel DBs used by tests/direct callers have no query surface;
+        # skip resolution entirely rather than failing on an invalid client.
+        can_query_rows = hasattr(db.table("items"), "select")
+
+        scopes = (
+            ("items", "item_images", "item_id", item_ids),
+            ("outfits", "outfit_images", "outfit_id", outfit_ids),
+        )
+        # The two parent queries are independent; run them concurrently.
+        parent_queries = []
+        for parent_table, _child_table, _fk_column, scoped_ids in scopes:
+            if scoped_ids is not None and not scoped_ids:
+                continue
+            if not can_query_rows:
+                continue
+            # Source photos are stored once per photo and referenced from the
+            # parent `items` row (not a child image table), so they must be
+            # collected from the parent query itself.
+            select_cols = "id,source_image_storage_path" if parent_table == "items" else "id"
+            parent_query = db.table(parent_table).select(select_cols).eq("user_id", user_id)
+            if scoped_ids is not None:
+                parent_query = parent_query.in_("id", scoped_ids)
+            parent_queries.append((parent_table, parent_query))
+
+        parent_results = await asyncio.gather(
+            *(asyncio.to_thread(query.execute) for _table, query in parent_queries)
+        ) if parent_queries else []
+
+        for (parent_table, _query), parent_rows in zip(parent_queries, parent_results):
+            rows = getattr(parent_rows, "data", None) or []
+            owned_ids = [
+                str(row.get("id"))
+                for row in rows
+                if row.get("id")
+            ]
+            if parent_table == "items":
+                owned_item_ids.extend(owned_ids)
+                child_table, fk_column = "item_images", "item_id"
+                # The item's source photo (the original upload it was
+                # extracted from) lives in Storage, not in item_images.
+                storage_paths.extend(
+                    str(row["source_image_storage_path"])
+                    for row in rows
+                    if row.get("source_image_storage_path")
+                )
+            else:
+                owned_outfit_ids.extend(owned_ids)
+                child_table, fk_column = "outfit_images", "outfit_id"
+            if not owned_ids:
+                continue
+            # Chunk the IN clause so account deletion (a user's entire
+            # wardrobe) never exceeds PostgREST URL length limits.
+            for start in range(0, len(owned_ids), 500):
+                chunk = owned_ids[start:start + 500]
+                child_rows = await asyncio.to_thread(
+                    db.table(child_table).select("storage_path").in_(fk_column, chunk).execute
+                )
+                storage_paths.extend(
+                    str(row["storage_path"])
+                    for row in (getattr(child_rows, "data", None) or [])
+                    if row.get("storage_path")
+                )
+
+        return {
+            "item_ids": owned_item_ids,
+            "outfit_ids": owned_outfit_ids,
+            "storage_paths": storage_paths,
+        }
+
+    @staticmethod
     def get_public_url(storage_path: str, bucket: Optional[str] = None) -> str:
         """Get the public URL for a stored file.
 
@@ -401,6 +580,13 @@ class StorageService:
     ) -> bool:
         """Move an image within a bucket.
 
+        Because Supabase has no server-side move, this downloads and re-uploads,
+        which means the content type has to be RE-SNIFFED from the downloaded
+        bytes. Without that this path (used by `promote_temp_image_to_item`, i.e.
+        social-import approve) silently discards the correct type that
+        `upload_temp_generated_image` set and lands the object back on
+        storage3's `text/plain;charset=UTF-8` default.
+
         Args:
             db: Supabase client
             old_path: Current path
@@ -420,7 +606,12 @@ class StorageService:
             # Download and re-upload (Supabase doesn't have direct move)
             storage = db.storage.from_(bucket)
             file_data = await asyncio.to_thread(storage.download, old_path)
-            await asyncio.to_thread(storage.upload, path=new_path, file=file_data)
+            await asyncio.to_thread(
+                storage.upload,
+                path=new_path,
+                file=file_data,
+                file_options=StorageService._upload_options(file_data, new_path),
+            )
             await asyncio.to_thread(storage.remove, [old_path])
 
             logger.info(
@@ -465,14 +656,21 @@ class StorageService:
             StorageServiceError: If upload fails
         """
         # Validate the image (raises on failure)
-        StorageService._validate_image(file_data, filename)
+        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
+        # event loop during request handling.
+        await asyncio.to_thread(StorageService._validate_image, file_data, filename)
 
         storage_path = StorageService._generate_filename(user_id, filename, "feedback")
 
         try:
             bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_FEEDBACK
             storage = db.storage.from_(bucket)
-            await asyncio.to_thread(storage.upload, path=storage_path, file=file_data)
+            await asyncio.to_thread(
+                storage.upload,
+                path=storage_path,
+                file=file_data,
+                file_options=StorageService._upload_options(file_data, filename),
+            )
 
             image_url = storage.get_public_url(storage_path)
 
@@ -506,8 +704,15 @@ class StorageService:
         content_type: str = "application/octet-stream",
         bucket: Optional[str] = None,
         upsert: bool = False,
+        cache_control: Optional[str] = None,
     ) -> dict:
-        """Upload raw bytes to Supabase Storage with an explicit destination path."""
+        """Upload raw bytes to Supabase Storage with an explicit destination path.
+
+        `cache_control` is seconds as a string; storage3 turns it into
+        `cache-control: max-age=<v>`. Defaults to DEFAULT_CACHE_CONTROL. Pass a
+        short value (e.g. "60") when overwriting an existing key so a CDN cannot
+        keep serving the old bytes for an hour.
+        """
         if bucket is None:
             bucket = settings.SUPABASE_STORAGE_BUCKET
 
@@ -517,7 +722,11 @@ class StorageService:
                 storage.upload,
                 path=file_path,
                 file=file_data,
-                file_options={"content-type": content_type, "upsert": str(upsert).lower()},
+                file_options={
+                    "content-type": content_type,
+                    "cache-control": cache_control or DEFAULT_CACHE_CONTROL,
+                    "upsert": str(upsert).lower(),
+                },
             )
             return {
                 "public_url": storage.get_public_url(file_path),
@@ -541,14 +750,25 @@ class StorageService:
         source: str = "social-import",
         extension: str = ".png",
     ) -> dict:
-        """Upload temporary AI-generated image for review workflows."""
+        """Upload temporary AI-generated image for review workflows.
+
+        `extension` is only a hint: the real format is sniffed from the bytes,
+        because generated images are no longer always PNG (matted product shots
+        come back as WebP) and a mislabelled object is served with the wrong
+        content type for as long as it lives.
+        """
         ext = extension if extension.startswith(".") else f".{extension}"
+        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
+        # event loop during request handling.
+        await asyncio.to_thread(StorageService._validate_image, file_data, ext)
+        content_type = StorageService._sniff_content_type(file_data, ext)
+        ext = EXTENSION_BY_MIME.get(content_type, ext)
         temp_name = f"{user_id}/tmp/{source}/{uuid.uuid4().hex}{ext}"
         upload = await StorageService.upload_file(
             db=db,
             file_data=file_data,
             file_path=temp_name,
-            content_type="image/png",
+            content_type=content_type,
         )
         return {
             "image_url": upload["public_url"],
@@ -573,10 +793,13 @@ class StorageService:
         Returns {image_url, storage_path} under {user_id}/sources/.
         """
         ext = extension if extension.startswith(".") else f".{extension}"
-        # .jpg / .jpeg -> image/jpeg, everything else -> image/png (covers .png
-        # screenshots, .webp uploads, etc.). Source photos in practice are JPEGs
-        # from phone cameras / social platforms.
-        content_type = "image/jpeg" if ext.lower() in (".jpg", ".jpeg") else "image/png"
+        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
+        # event loop during request handling.
+        await asyncio.to_thread(StorageService._validate_image, file_data, ext)
+        # Sniffed from the bytes, with the caller's extension only as a fallback:
+        # the previous ext-based mapping labelled every non-.jpg source photo
+        # `image/png`, so a .webp upload was served as PNG.
+        content_type = StorageService._sniff_content_type(file_data, ext)
         path = f"{user_id}/sources/source_{uuid.uuid4().hex}{ext}"
         upload = await StorageService.upload_file(
             db=db,
@@ -593,20 +816,43 @@ class StorageService:
     async def download_to_base64(url: str, timeout: float = 10.0) -> Optional[str]:
         """Download a stored image URL back to base64 for image-gen reference.
 
-        Returns base64-encoded bytes (no data: prefix) or None on any failure
-        so callers can fall back to text-only generation gracefully.
+        Only server-owned Supabase Storage URLs are fetched. This helper is
+        used on user-controlled item/avatar records, so following arbitrary
+        URLs would turn image generation into an SSRF primitive.
+
+        Returns base64-encoded, decoded image bytes (no data: prefix) or None
+        on any failure so callers can fall back gracefully.
         """
         if not url:
             return None
         try:
+            current_url = StorageService._validate_storage_url(url)
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(timeout),
                 limits=httpx.Limits(max_connections=10),
-                follow_redirects=True,
+                follow_redirects=False,
             ) as client:
-                response = await client.get(url)
-                response.raise_for_status()
-                return base64.b64encode(response.content).decode("utf-8")
+                for _ in range(4):
+                    async with client.stream("GET", current_url) as response:
+                        if response.status_code in {301, 302, 303, 307, 308}:
+                            location = response.headers.get("location")
+                            if not location:
+                                return None
+                            current_url = StorageService._validate_storage_url(
+                                urljoin(current_url, location)
+                            )
+                            continue
+                        response.raise_for_status()
+                        content = bytearray()
+                        async for chunk in response.aiter_bytes():
+                            if len(content) + len(chunk) > MAX_FILE_SIZE:
+                                return None
+                            content.extend(chunk)
+                        if not content:
+                            return None
+                        validate_image_bytes(bytes(content), max_bytes=MAX_FILE_SIZE)
+                        return base64.b64encode(bytes(content)).decode("utf-8")
+                return None
         except Exception as e:
             logger.warning(
                 "Failed to download source image for reference",
@@ -614,6 +860,42 @@ class StorageService:
                 error=str(e),
             )
             return None
+
+    @staticmethod
+    def _validate_storage_url(url: str) -> str:
+        """Allow only the configured Supabase Storage origin and object path."""
+        expected = urlparse(settings.SUPABASE_URL)
+        parsed = urlparse(url)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("storage image URL must use HTTPS")
+        if parsed.username or parsed.password:
+            raise ValueError("storage image URL cannot contain credentials")
+        if parsed.hostname.lower() != (expected.hostname or "").lower():
+            raise ValueError("storage image URL host is not trusted")
+        if not parsed.path.startswith("/storage/v1/object/"):
+            raise ValueError("storage image URL is not a Supabase object URL")
+        return url
+
+    @staticmethod
+    def url_to_storage_path(url: Optional[str]) -> Optional[tuple]:
+        """Extract ``(bucket, storage_path)`` from a Supabase Storage URL.
+
+        Returns None for non-Supabase or malformed URLs. Used to resolve
+        objects that are referenced only by URL (e.g. user avatars) so
+        account deletion can remove them from Storage.
+        """
+        if not url:
+            return None
+        try:
+            StorageService._validate_storage_url(url)
+        except ValueError:
+            return None
+        parsed = urlparse(url)
+        parts = [part for part in parsed.path.split("/") if part]
+        # /storage/v1/object/public/<bucket>/<path...>
+        if len(parts) < 5 or parts[:4] != ["storage", "v1", "object", "public"]:
+            return None
+        return parts[4], "/".join(parts[5:])
 
     @staticmethod
     async def promote_temp_image_to_item(
@@ -658,64 +940,3 @@ class StorageService:
                 error=str(e),
             )
             return 0
-
-
-# ============================================================================
-# IMAGE PROCESSING UTILITIES
-# ============================================================================
-
-
-class ImageProcessingService:
-    """Utilities for processing images (thumbnails, resizing, etc.).
-
-    For MVP, this is a placeholder. In production, you'd use:
-    - Pillow for image processing
-    - Background tasks for async processing
-    - CDN integration for delivery
-    """
-
-    @staticmethod
-    async def generate_thumbnail(
-        file_data: bytes,
-        size: Tuple[int, int] = (300, 300)
-    ) -> bytes:
-        """Generate a thumbnail from an image.
-
-        Args:
-            file_data: Original image bytes
-            size: Target size (width, height)
-
-        Returns:
-            Thumbnail image bytes
-        """
-        # MVP: Return original data
-        # Production: Use Pillow to resize
-        return file_data
-
-    @staticmethod
-    async def get_image_dimensions(file_data: bytes) -> Tuple[int, int]:
-        """Get image dimensions.
-
-        Args:
-            file_data: Image bytes
-
-        Returns:
-            Tuple of (width, height)
-        """
-        # MVP: Return None values
-        # Production: Use Pillow to get dimensions
-        return (None, None)
-
-    @staticmethod
-    def optimize_for_web(file_data: bytes) -> bytes:
-        """Optimize image for web delivery.
-
-        Args:
-            file_data: Original image bytes
-
-        Returns:
-            Optimized image bytes
-        """
-        # MVP: Return original
-        # Production: Compress, convert to WebP, etc.
-        return file_data

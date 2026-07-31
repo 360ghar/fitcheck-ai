@@ -35,7 +35,7 @@ class AppBottomNavigationBar extends StatelessWidget {
     NavigationItem(
       icon: Icons.checkroom,
       activeIcon: Icons.checkroom,
-      label: 'Wardrobe',
+      label: 'Closet',
       route: Routes.wardrobe,
     ),
     NavigationItem(
@@ -76,7 +76,7 @@ class AppBottomNavigationBar extends StatelessWidget {
     final tokens = AppUiTokens.of(context);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
       child: SafeArea(
         top: false,
         child: Container(
@@ -85,13 +85,6 @@ class AppBottomNavigationBar extends StatelessWidget {
             color: tokens.navBackground,
             borderRadius: BorderRadius.circular(AppConstants.radius24),
             border: Border.all(color: tokens.navBorder),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: tokens.isDarkMode ? 0.4 : 0.12),
-                blurRadius: 22,
-                offset: const Offset(0, 10),
-              ),
-            ],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -105,44 +98,53 @@ class AppBottomNavigationBar extends StatelessWidget {
                   label: item.label,
                   button: true,
                   selected: isSelected,
-                  child: GestureDetector(
-                    onTap: () => _onTabTapped(index),
-                    behavior: HitTestBehavior.opaque,
-                    child: AnimatedContainer(
-                    duration: AppConstants.animationDurationShort,
-                    curve: Curves.easeInOut,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? tokens.brandColor.withValues(alpha: 0.18)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(AppConstants.radius16),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isSelected ? item.activeIcon : item.icon,
-                          size: 22,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _onTabTapped(index),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radius16,
+                      ),
+                      child: AnimatedContainer(
+                        duration: AppConstants.animationDurationShort,
+                        curve: Curves.easeInOut,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
                           color: isSelected
-                              ? tokens.brandColor
-                              : tokens.textSecondary,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.label,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                            color: isSelected
-                                ? tokens.brandColor
-                                : tokens.textSecondary,
+                              ? tokens.brandColor.withValues(alpha: 0.14)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(
+                            AppConstants.radius16,
                           ),
                         ),
-                      ],
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isSelected ? item.activeIcon : item.icon,
+                              size: 22,
+                              color: isSelected
+                                  ? tokens.brandColor
+                                  : tokens.textSecondary,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              item.label,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                                color: isSelected
+                                    ? tokens.brandColor
+                                    : tokens.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                ),
                 ),
               );
             }).toList(),

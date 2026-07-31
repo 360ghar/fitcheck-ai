@@ -1,8 +1,16 @@
+import io
 import threading
 
 import pytest
+from PIL import Image
 
 from app.services.storage_service import StorageService
+
+
+def _valid_png_bytes() -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", (2, 2), (255, 255, 255)).save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 class FakeBucket:
@@ -42,7 +50,7 @@ async def test_upload_item_image_offloads_blocking_call_to_thread():
         db=db,
         user_id="user-1",
         filename="shirt.jpg",
-        file_data=b"fake-bytes",
+        file_data=_valid_png_bytes(),
     )
 
     assert db.storage.bucket.upload_calls

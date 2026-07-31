@@ -55,11 +55,61 @@ PRODUCT_REFERENCE_LOCK = """PRODUCT LOCK (highest priority):
   is the source of truth for those tokens.
 - Ignore EVERY other garment, footwear, accessory, prop, person, face, body,
   and background visible in the reference photo. Output one item only.
-- Single isolated product shot only.
+- Single isolated product shot only: the item sits alone on a pure flat #FFFFFF
+  field with a crisp, clean silhouette edge and nothing touching it - no cast
+  shadow, no contact shadow, no reflection, no floor or table plane, no
+  gradient, no vignette.
+
+AVOID: extra items, second garment, partial second item, wrong color,
+       different design, restyled cut, mannequin face, person, watermark,
+       text, beautification, fabric smoothing, drop shadow, cast shadow,
+       reflection, gradient background, vignette, gray backdrop, floor plane."""
+
+# Product prompts that intentionally request a non-white background cannot
+# reuse PRODUCT_REFERENCE_LOCK: its pure-white clause would contradict the
+# caller and the post-generation matte. Keep the item fidelity constraints,
+# but let the requested backdrop and shadow policy win.
+PRODUCT_CUSTOM_BACKGROUND_LOCK = """PRODUCT LOCK (highest priority):
+- Reproduce ONLY the single item described in the prompt, EXACTLY as it
+  appears in the reference image: same colors, print, graphic content,
+  pattern geometry, collar/neckline, sleeves, hem length and shape, pockets,
+  fabric weave and weight, surface texture, sheen, distress, hardware color
+  and finish, logo/branding placement and scale, and fit.
+- The dense description in the prompt identifies WHICH item to reproduce and
+  is the source of truth for those tokens.
+- Ignore EVERY other garment, footwear, accessory, prop, person, face, body,
+  and background visible in the reference photo. Output one item only.
+- Output one opaque product photograph on the requested background; do not
+  replace it with white, transparency, or a different scene.
 
 AVOID: extra items, second garment, partial second item, wrong color,
        different design, restyled cut, mannequin face, person, watermark,
        text, beautification, fabric smoothing."""
+
+# The backdrop clause above is not cosmetic: app/utils/background_removal.py
+# cuts the alpha out of these images with a near-white threshold plus a
+# border-connected flood fill, so a gradient, a vignette or a cast shadow
+# directly degrades the cut (a contact shadow in particular survives as a
+# detached grey blob). Never pass include_shadows=True on a matted path.
+
+# Garment references for outfit generation. Unlike the busy multi-item source
+# photos that broke single-item product extraction (see
+# resolve_product_reference_image in app/utils/image_processing.py), these are
+# the clean per-item studio shots stored on item_images.image_url, so they can
+# be trusted as literal appearance sources. The text inventory still IDENTIFIES
+# each item and remains the only source for items that have no image.
+GARMENT_REFERENCE_LOCK = """GARMENT REFERENCE LOCK:
+- Each numbered garment image shows exactly ONE item of this outfit, isolated. It is the appearance source of truth for THAT item only.
+- Copy from each garment image: exact colors, print and graphic content, pattern geometry, collar/neckline, sleeves, hem length and shape, pockets, fabric weave and sheen, hardware color and finish, logo placement and scale, and cut.
+- If the text inventory conflicts with a garment image, follow the image. Face, body, hair, and skin still come from the person image only.
+- Keep the items separate: never merge two garments into one, never repeat a garment, never place a garment on the wrong part of the body.
+- Take garment appearance only: ignore each garment image's background, mannequin, hanger, prop, crop, and any person visible in it.
+- Items in the inventory with no reference image must be rendered from their text description alone.
+- Output ONE cohesive photograph of the worn/arranged outfit.
+
+AVOID: collage, grid, contact sheet, split screen, side-by-side panels,
+       product tiles, duplicated garment, garment on the wrong body part,
+       invented or extra garments."""
 
 # Shared instructions for the photoshoot *text* planner (LLM, not image model)
 SUBJECT_LOCK_FIELDS = """Write subject_lock as one dense paragraph with concrete visual tokens:

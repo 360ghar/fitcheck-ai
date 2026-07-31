@@ -62,7 +62,7 @@ export function ActivationChecklist({
       )}
       aria-label="Getting started"
     >
-      <div className="flex items-start justify-between gap-3 px-4 py-4 md:px-6 border-b border-border">
+      <div className="flex items-start justify-between gap-3 px-4 py-3 md:px-6 border-b border-border">
         <div className="min-w-0">
           <h2 className="text-base md:text-lg font-semibold text-foreground">
             Get set up
@@ -100,7 +100,7 @@ export function ActivationChecklist({
                 disabled={!action}
                 onClick={() => action?.()}
                 className={cn(
-                  'w-full flex items-center gap-3 px-4 py-3.5 md:px-6 text-left transition-colors',
+                  'w-full flex items-center gap-3 px-4 py-3 md:px-6 text-left transition-colors',
                   action && 'hover:bg-accent/40 touch-target',
                   isNext && !step.done && 'bg-muted/40',
                   !action && 'cursor-default'
@@ -146,7 +146,7 @@ export function ActivationChecklist({
       </ol>
 
       {next && (
-        <div className="px-4 py-4 md:px-6 border-t border-border bg-muted/20">
+        <div className="px-4 py-3 md:px-6 border-t border-border bg-muted/20">
           <Button
             type="button"
             className="w-full sm:w-auto"

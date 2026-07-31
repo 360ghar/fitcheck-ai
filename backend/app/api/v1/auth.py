@@ -224,9 +224,12 @@ async def register(
             _require_schema(db)
 
             # Create user via Supabase Auth
+            # Normalize email to lowercase to prevent case-sensitivity login
+            # mismatches regardless of Supabase project settings.
+            normalized_email = register_request.email.lower()
             try:
                 auth_response = anon_db.auth.sign_up({
-                    "email": register_request.email,
+                    "email": normalized_email,
                     "password": register_request.password,
                     "options": {
                         "data": {
@@ -258,7 +261,7 @@ async def register(
             try:
                 profile_payload = {
                     "id": user_id,
-                    "email": register_request.email,
+                    "email": normalized_email,
                     "full_name": register_request.full_name,
                     "email_verified": False,
                     "is_active": True,
@@ -328,7 +331,7 @@ async def register(
 
                 # Handle duplicate email error - user already exists in public.users
                 if code == '23505' and 'users_email_key' in message:
-                    logger.warning("Email already exists in public.users", email=register_request.email)
+                    logger.warning("Email already exists in public.users", email=normalized_email)
                     raise EmailAlreadyExistsError()
 
                 logger.error("Error creating user profile", error_info=error_info or str(e))
@@ -349,12 +352,12 @@ async def register(
                     operation="create_profile",
                 )
 
-            logger.info("User registered successfully", user_id=user_id, email=register_request.email)
+            logger.info("User registered successfully", user_id=user_id, email=normalized_email)
 
             response_data = {
                 "user": {
                     "id": user_id,
-                    "email": register_request.email,
+                    "email": normalized_email,
                     "full_name": register_request.full_name,
                     "avatar_url": None,
                     "gender": None,
@@ -411,9 +414,11 @@ async def login(
             _require_schema(db)
 
             # Authenticate with Supabase Auth
+            # Normalize email to lowercase so case never causes login failures.
+            normalized_email = login_request.email.lower()
             try:
                 auth_response = anon_db.auth.sign_in_with_password({
-                    "email": login_request.email,
+                    "email": normalized_email,
                     "password": login_request.password
                 })
             except AuthApiError as e:

@@ -25,7 +25,7 @@ export function LoginPromptModal({ isOpen, onClose, feature }: LoginPromptModalP
       <DialogContent className="sm:max-w-md border-stone-200 dark:border-stone-800">
         <DialogHeader>
           <div className="flex justify-center mb-4">
-            <div className="w-14 h-14 rounded-xl bg-indigo-600 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-xl bg-primary flex items-center justify-center">
               <Shirt className="w-7 h-7 text-white" />
             </div>
           </div>
@@ -40,22 +40,22 @@ export function LoginPromptModal({ isOpen, onClose, feature }: LoginPromptModalP
         <div className="space-y-4 mt-4">
           <ul className="space-y-2 text-sm text-stone-600 dark:text-stone-400">
             <li className="flex items-center gap-2">
-              <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <Check className="w-4 h-4 text-primary shrink-0" />
               Keep extracted items in your wardrobe
             </li>
             <li className="flex items-center gap-2">
-              <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <Check className="w-4 h-4 text-primary shrink-0" />
               Save try-ons and photoshoot results
             </li>
             <li className="flex items-center gap-2">
-              <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <Check className="w-4 h-4 text-primary shrink-0" />
               Daily outfit recommendations
             </li>
           </ul>
 
           <div className="flex flex-col gap-2">
             <Button
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-none"
+              className="w-full bg-primary hover:bg-primary-pressed text-white"
               asChild
             >
               <Link to="/auth/register">

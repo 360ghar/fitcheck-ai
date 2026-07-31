@@ -41,20 +41,22 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
         title: const Text('Create Outfit'),
         elevation: 0,
         actions: [
-          Obx(() => TextButton(
-                onPressed: controller.isSaving.value
-                    ? null
-                    : controller.selectedItems.isEmpty
-                        ? null
-                        : () => controller.saveOutfit(),
-                child: controller.isSaving.value
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
-              )),
+          Obx(
+            () => TextButton(
+              onPressed: controller.isSaving.value
+                  ? null
+                  : controller.selectedItems.isEmpty
+                  ? null
+                  : () => controller.saveOutfit(),
+              child: controller.isSaving.value
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save'),
+            ),
+          ),
         ],
       ),
       body: AppPageBackground(
@@ -63,7 +65,8 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
             // Scrollable content
             Expanded(
               child: Obx(() {
-                if (controller.isLoading.value && controller.availableItems.isEmpty) {
+                if (controller.isLoading.value &&
+                    controller.availableItems.isEmpty) {
                   return SingleChildScrollView(
                     child: Padding(
                       padding: const EdgeInsets.all(AppConstants.spacing16),
@@ -125,7 +128,11 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
     );
   }
 
-  Widget _buildOutfitDetails(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
+  Widget _buildOutfitDetails(
+    BuildContext context,
+    OutfitBuilderController controller,
+    AppUiTokens tokens,
+  ) {
     return Container(
       padding: const EdgeInsets.all(AppConstants.spacing16),
       child: Column(
@@ -152,7 +159,9 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
               ),
               errorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppConstants.radius12),
-                borderSide: BorderSide(color: Theme.of(context).colorScheme.error),
+                borderSide: BorderSide(
+                  color: Theme.of(context).colorScheme.error,
+                ),
               ),
             ),
           ),
@@ -163,59 +172,69 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
           Row(
             children: [
               Expanded(
-                child: Obx(() => DropdownButtonFormField<Style>(
-                      initialValue: controller.selectedStyle.value,
-                      decoration: InputDecoration(
-                        labelText: 'Style',
-                        filled: true,
-                        fillColor: tokens.cardColor.withValues(alpha: 0.5),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppConstants.radius12),
-                          borderSide: BorderSide.none,
+                child: Obx(
+                  () => DropdownButtonFormField<Style>(
+                    initialValue: controller.selectedStyle.value,
+                    decoration: InputDecoration(
+                      labelText: 'Style',
+                      filled: true,
+                      fillColor: tokens.cardColor.withValues(alpha: 0.5),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppConstants.radius12,
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: AppConstants.spacing12,
-                          vertical: AppConstants.spacing8,
-                        ),
+                        borderSide: BorderSide.none,
                       ),
-                      items: Style.values.map((style) {
-                        return DropdownMenuItem(
-                          value: style,
-                          child: Text(style.displayName),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) controller.selectedStyle.value = value;
-                      },
-                    )),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppConstants.spacing12,
+                        vertical: AppConstants.spacing8,
+                      ),
+                    ),
+                    items: Style.values.map((style) {
+                      return DropdownMenuItem(
+                        value: style,
+                        child: Text(style.displayName),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) controller.selectedStyle.value = value;
+                    },
+                  ),
+                ),
               ),
               const SizedBox(width: AppConstants.spacing12),
               Expanded(
-                child: Obx(() => DropdownButtonFormField<Season>(
-                      initialValue: controller.selectedSeason.value,
-                      decoration: InputDecoration(
-                        labelText: 'Season',
-                        filled: true,
-                        fillColor: tokens.cardColor.withValues(alpha: 0.5),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppConstants.radius12),
-                          borderSide: BorderSide.none,
+                child: Obx(
+                  () => DropdownButtonFormField<Season>(
+                    initialValue: controller.selectedSeason.value,
+                    decoration: InputDecoration(
+                      labelText: 'Season',
+                      filled: true,
+                      fillColor: tokens.cardColor.withValues(alpha: 0.5),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppConstants.radius12,
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: AppConstants.spacing12,
-                          vertical: AppConstants.spacing8,
-                        ),
+                        borderSide: BorderSide.none,
                       ),
-                      items: Season.values.map((season) {
-                        return DropdownMenuItem(
-                          value: season,
-                          child: Text(season.displayName),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) controller.selectedSeason.value = value;
-                      },
-                    )),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppConstants.spacing12,
+                        vertical: AppConstants.spacing8,
+                      ),
+                    ),
+                    items: Season.values.map((season) {
+                      return DropdownMenuItem(
+                        value: season,
+                        child: Text(season.displayName),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        controller.selectedSeason.value = value;
+                      }
+                    },
+                  ),
+                ),
               ),
             ],
           ),
@@ -224,7 +243,11 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
+  Widget _buildSectionHeader(
+    BuildContext context,
+    OutfitBuilderController controller,
+    AppUiTokens tokens,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
       child: Row(
@@ -232,36 +255,44 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
         children: [
           Text(
             'Add items to your outfit',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
-          Obx(() => controller.selectedItems.isNotEmpty
-              ? Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.spacing12,
-                    vertical: AppConstants.spacing4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: tokens.brandColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(AppConstants.radius16),
-                  ),
-                  child: Text(
-                    '${controller.selectedItems.length} selected',
-                    style: TextStyle(
-                      color: tokens.brandColor,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 12,
+          Obx(
+            () => controller.selectedItems.isNotEmpty
+                ? Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppConstants.spacing12,
+                      vertical: AppConstants.spacing4,
                     ),
-                  ),
-                )
-              : const SizedBox.shrink()),
+                    decoration: BoxDecoration(
+                      color: tokens.brandColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radius16,
+                      ),
+                    ),
+                    child: Text(
+                      '${controller.selectedItems.length} selected',
+                      style: TextStyle(
+                        color: tokens.brandColor,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 12,
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSelectedItemsRow(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
+  Widget _buildSelectedItemsRow(
+    BuildContext context,
+    OutfitBuilderController controller,
+    AppUiTokens tokens,
+  ) {
     return Container(
       height: 100,
       margin: const EdgeInsets.symmetric(
@@ -290,9 +321,9 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
                 const SizedBox(width: AppConstants.spacing8),
                 Text(
                   'Tap items below to add',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: tokens.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
                 ),
               ],
             ),
@@ -305,7 +336,12 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
           itemCount: controller.selectedItems.length,
           itemBuilder: (context, index) {
             final outfitItem = controller.selectedItems[index];
-            return _buildSelectedThumbnail(context, outfitItem, controller, tokens);
+            return _buildSelectedThumbnail(
+              context,
+              outfitItem,
+              controller,
+              tokens,
+            );
           },
         );
       }),
@@ -334,7 +370,8 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(AppConstants.radius8 - 2),
-              child: outfitItem.item.itemImages != null &&
+              child:
+                  outfitItem.item.itemImages != null &&
                       outfitItem.item.itemImages!.isNotEmpty
                   ? AppImage(
                       imageUrl: outfitItem.item.itemImages!.first.url,
@@ -364,11 +401,7 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
                   shape: BoxShape.circle,
                   border: Border.all(color: tokens.cardColor, width: 2),
                 ),
-                child: const Icon(
-                  Icons.close,
-                  color: Colors.white,
-                  size: 12,
-                ),
+                child: const Icon(Icons.close, color: Colors.white, size: 12),
               ),
             ),
           ),
@@ -377,7 +410,11 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
     );
   }
 
-  Widget _buildSearchFilter(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
+  Widget _buildSearchFilter(
+    BuildContext context,
+    OutfitBuilderController controller,
+    AppUiTokens tokens,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
       child: Row(
@@ -408,41 +445,47 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
 
           // Category filter
           Expanded(
-            child: Obx(() => DropdownButtonFormField<String>(
-                  initialValue: controller.categoryFilter.value,
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: tokens.cardColor.withValues(alpha: 0.5),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppConstants.radius12),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.spacing12,
-                      vertical: AppConstants.spacing8,
-                    ),
+            child: Obx(
+              () => DropdownButtonFormField<String>(
+                initialValue: controller.categoryFilter.value,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: tokens.cardColor.withValues(alpha: 0.5),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppConstants.radius12),
+                    borderSide: BorderSide.none,
                   ),
-                  isExpanded: true,
-                  items: [
-                    const DropdownMenuItem(value: 'all', child: Text('All')),
-                    ...Category.values.map((cat) {
-                      return DropdownMenuItem(
-                        value: cat.name,
-                        child: Text(cat.displayName),
-                      );
-                    }),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) controller.categoryFilter.value = value;
-                  },
-                )),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.spacing12,
+                    vertical: AppConstants.spacing8,
+                  ),
+                ),
+                isExpanded: true,
+                items: [
+                  const DropdownMenuItem(value: 'all', child: Text('All')),
+                  ...Category.values.map((cat) {
+                    return DropdownMenuItem(
+                      value: cat.name,
+                      child: Text(cat.displayName),
+                    );
+                  }),
+                ],
+                onChanged: (value) {
+                  if (value != null) controller.categoryFilter.value = value;
+                },
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildWardrobeGrid(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
+  Widget _buildWardrobeGrid(
+    BuildContext context,
+    OutfitBuilderController controller,
+    AppUiTokens tokens,
+  ) {
     return Obx(() {
       final items = controller.filteredItems;
 
@@ -452,32 +495,90 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
           alignment: Alignment.center,
           child: Text(
             'No items available',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: tokens.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
           ),
         );
       }
 
+      // Dense, horizontally-scrollable rails grouped by category (reference video UX).
+      final grouped = <String, List<dynamic>>{};
+      for (final item in items) {
+        grouped.putIfAbsent(item.category.name, () => <dynamic>[]).add(item);
+      }
+      final categories = grouped.keys.toList()..sort();
+
       return Padding(
-        padding: const EdgeInsets.all(AppConstants.spacing16),
-        child: GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            mainAxisSpacing: AppConstants.spacing12,
-            crossAxisSpacing: AppConstants.spacing12,
-            childAspectRatio: 0.75,
-          ),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final item = items[index];
-            return _buildWardrobeItemCard(context, item, controller, tokens);
-          },
+        padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: categories.map((category) {
+            final categoryItems = grouped[category]!;
+            return Column(
+              // Key the rail by category so a filter change cannot reuse a
+              // horizontal ListView for a different category and carry over
+              // its scroll offset.
+              key: ValueKey(category),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.spacing16,
+                    vertical: AppConstants.spacing8,
+                  ),
+                  child: Text(
+                    '${_categoryLabel(category)} (${categoryItems.length})',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: tokens.textMuted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  height: 132,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppConstants.spacing16,
+                    ),
+                    itemCount: categoryItems.length,
+                    itemBuilder: (context, index) {
+                      final item = categoryItems[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(
+                          right: AppConstants.spacing12,
+                        ),
+                        child: SizedBox(
+                          width: 100,
+                          child: _buildWardrobeItemCard(
+                            context,
+                            item,
+                            controller,
+                            tokens,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: AppConstants.spacing8),
+              ],
+            );
+          }).toList(),
         ),
       );
     });
+  }
+
+  String _categoryLabel(String category) {
+    try {
+      return Category.values.firstWhere((c) => c.name == category).displayName;
+    } catch (_) {
+      return category.isEmpty
+          ? 'Other'
+          : category[0].toUpperCase() + category.substring(1);
+    }
   }
 
   Widget _buildWardrobeItemCard(
@@ -520,7 +621,8 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(AppConstants.radius12),
                       ),
-                      child: item.itemImages != null && item.itemImages!.isNotEmpty
+                      child:
+                          item.itemImages != null && item.itemImages!.isNotEmpty
                           ? AppImage(
                               imageUrl: item.itemImages!.first.url,
                               fit: BoxFit.contain,
@@ -543,8 +645,8 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
                     child: Text(
                       item.name,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w500,
-                          ),
+                        fontWeight: FontWeight.w500,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -578,7 +680,11 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
     });
   }
 
-  Widget _buildBottomBar(BuildContext context, OutfitBuilderController controller, AppUiTokens tokens) {
+  Widget _buildBottomBar(
+    BuildContext context,
+    OutfitBuilderController controller,
+    AppUiTokens tokens,
+  ) {
     return Obx(() {
       if (controller.selectedItems.isEmpty) {
         return const SizedBox.shrink();
@@ -589,13 +695,12 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
           left: AppConstants.spacing16,
           right: AppConstants.spacing16,
           top: AppConstants.spacing12,
-          bottom: AppConstants.spacing12 + MediaQuery.of(context).padding.bottom,
+          bottom:
+              AppConstants.spacing12 + MediaQuery.of(context).padding.bottom,
         ),
         decoration: BoxDecoration(
           color: tokens.cardColor,
-          border: Border(
-            top: BorderSide(color: tokens.cardBorderColor),
-          ),
+          border: Border(top: BorderSide(color: tokens.cardBorderColor)),
         ),
         child: Row(
           children: [

@@ -38,6 +38,10 @@ def _settings(**overrides):
         AI_VISION_FALLBACK_API_URL=None,
         AI_IMAGE_API_URL=None,
         AI_IMAGE_FALLBACK_API_URL=None,
+        # Keys consumed by the Gemini-fallback (check #7) probe.
+        AI_CHAT_API_KEY=None,
+        AI_VISION_API_KEY=None,
+        AI_VISION_FALLBACK_API_KEY=None,
     )
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -261,3 +265,56 @@ def test_config_issue_is_frozen():
         assert False, "should have raised FrozenInstanceError"
     except AttributeError:
         pass
+
+
+def test_gemini_primary_without_agnes_fallback_key_flagged():
+    """Gemini-primary relies on the Agnes fallback to absorb free-tier quota
+    exhaustion; a missing fallback key is the difference between a transparent
+    failover and every Gemini 429 failing the extraction."""
+    with _force_prod(), patch.object(
+        config_health,
+        "settings",
+        _settings(
+            AI_VISION_PROVIDER="gemini",
+            AI_GEMINI_API_KEY="real-key",
+            AI_CHAT_API_KEY=None,
+            AI_VISION_API_KEY=None,
+            AI_VISION_FALLBACK_API_KEY=None,
+        ),
+    ):
+        issues = validate_production_config()
+    fb = [i for i in issues if i.key == "AI_CHAT_API_KEY"]
+    assert len(fb) == 1
+    assert fb[0].severity == "warning"
+    assert "fallback" in fb[0].message.lower()
+
+
+def test_gemini_primary_with_chat_key_not_flagged_for_fallback():
+    """AI_CHAT_API_KEY (Agnes) resolves as the fallback key -> no warning."""
+    with _force_prod(), patch.object(
+        config_health,
+        "settings",
+        _settings(
+            AI_VISION_PROVIDER="gemini",
+            AI_GEMINI_API_KEY="real-key",
+            AI_CHAT_API_KEY="agnes-key",
+        ),
+    ):
+        issues = validate_production_config()
+    assert not any(i.key == "AI_CHAT_API_KEY" for i in issues)
+
+
+def test_gemini_primary_with_vision_fallback_key_not_flagged():
+    """An explicit AI_VISION_FALLBACK_API_KEY also satisfies the fallback."""
+    with _force_prod(), patch.object(
+        config_health,
+        "settings",
+        _settings(
+            AI_VISION_PROVIDER="gemini",
+            AI_GEMINI_API_KEY="real-key",
+            AI_CHAT_API_KEY=None,
+            AI_VISION_FALLBACK_API_KEY="dedicated-fallback-key",
+        ),
+    ):
+        issues = validate_production_config()
+    assert not any(i.key == "AI_CHAT_API_KEY" for i in issues)

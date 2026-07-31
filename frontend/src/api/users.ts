@@ -3,6 +3,7 @@
  */
 
 import { apiClient, getApiError } from './client';
+import { ENDPOINTS } from '@/lib/endpoints';
 import type {
   ApiEnvelope,
   User,
@@ -24,7 +25,7 @@ export interface UpdateCurrentUserResult {
  */
 export async function getCurrentUser(): Promise<User> {
   try {
-    const response = await apiClient.get<ApiEnvelope<User>>('/api/v1/users/me');
+    const response = await apiClient.get<ApiEnvelope<User>>(ENDPOINTS.USERS.ME);
     return response.data.data;
   } catch (error) {
     throw getApiError(error);
@@ -43,7 +44,7 @@ export async function updateCurrentUser(data: {
   birth_place?: string | null;
 }): Promise<UpdateCurrentUserResult> {
   try {
-    const response = await apiClient.put<ApiEnvelope<User>>('/api/v1/users/me', data);
+    const response = await apiClient.put<ApiEnvelope<User>>(ENDPOINTS.USERS.ME, data);
     const meta = response.data.meta;
     const skippedFieldsRaw =
       meta && typeof meta === 'object' && 'skipped_fields' in meta
@@ -67,7 +68,7 @@ export async function updateCurrentUser(data: {
  */
 export async function deleteAccount(): Promise<void> {
   try {
-    await apiClient.delete('/api/v1/users/me');
+    await apiClient.delete(ENDPOINTS.USERS.ME);
   } catch (error) {
     throw getApiError(error);
   }
@@ -78,7 +79,7 @@ export async function deleteAccount(): Promise<void> {
  */
 export async function getUserPreferences(): Promise<UserPreferences> {
   try {
-    const response = await apiClient.get<ApiEnvelope<UserPreferences>>('/api/v1/users/preferences');
+    const response = await apiClient.get<ApiEnvelope<UserPreferences>>(ENDPOINTS.USERS.PREFERENCES);
     return response.data.data;
   } catch (error) {
     throw getApiError(error);
@@ -94,12 +95,12 @@ export async function updateUserPreferences(data: {
   liked_brands?: string[];
   disliked_patterns?: string[];
   preferred_occasions?: string[];
-  color_temperature?: string;
-  style_personality?: string;
+  color_temperature?: string | null;
+  style_personality?: string | null;
   data_points_collected?: number;
 }): Promise<UserPreferences> {
   try {
-    const response = await apiClient.put<ApiEnvelope<UserPreferences>>('/api/v1/users/preferences', data);
+    const response = await apiClient.put<ApiEnvelope<UserPreferences>>(ENDPOINTS.USERS.PREFERENCES, data);
     return response.data.data;
   } catch (error) {
     throw getApiError(error);
@@ -111,7 +112,7 @@ export async function updateUserPreferences(data: {
  */
 export async function getUserSettings(): Promise<UserSettings> {
   try {
-    const response = await apiClient.get<ApiEnvelope<UserSettings>>('/api/v1/users/settings');
+    const response = await apiClient.get<ApiEnvelope<UserSettings>>(ENDPOINTS.USERS.SETTINGS);
     return response.data.data;
   } catch (error) {
     throw getApiError(error);
@@ -122,7 +123,7 @@ export async function getUserSettings(): Promise<UserSettings> {
  * Update user settings
  */
 export async function updateUserSettings(data: {
-  default_location?: string;
+  default_location?: string | null;
   timezone?: string;
   language?: string;
   measurement_units?: 'imperial' | 'metric';
@@ -131,7 +132,7 @@ export async function updateUserSettings(data: {
   dark_mode?: boolean;
 }): Promise<UserSettings> {
   try {
-    const response = await apiClient.put<ApiEnvelope<UserSettings>>('/api/v1/users/settings', data);
+    const response = await apiClient.put<ApiEnvelope<UserSettings>>(ENDPOINTS.USERS.SETTINGS, data);
     return response.data.data;
   } catch (error) {
     throw getApiError(error);
@@ -151,7 +152,7 @@ export async function uploadAvatar(
     formData.append('file', file);
 
     const response = await apiClient.post<ApiEnvelope<{ avatar_url: string }>>(
-      '/api/v1/users/me/avatar',
+      ENDPOINTS.USERS.AVATAR,
       formData,
       {
         headers: {

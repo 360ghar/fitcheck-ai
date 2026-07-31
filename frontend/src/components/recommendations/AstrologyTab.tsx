@@ -229,7 +229,7 @@ export function AstrologyTab({
 
           <Card>
             <CardHeader className="px-4 py-3 md:px-6 md:py-4">
-              <CardTitle className="text-base md:text-lg">Wardrobe Picks</CardTitle>
+              <CardTitle className="text-base md:text-lg">Closet Picks</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
               {data.wardrobe_picks.length === 0 ? (

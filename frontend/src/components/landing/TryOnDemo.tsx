@@ -19,7 +19,7 @@ import {
   ArrowRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { GlassCard } from './GlassCard'
+import { EditorialPanel } from './EditorialPanel'
 import { LoginPromptModal } from './LoginPromptModal'
 import { demoTryOn, DemoTryOnResult, DemoApiError } from '@/api/demo'
 
@@ -95,10 +95,10 @@ export function TryOnDemo() {
   }
 
   return (
-    <GlassCard className="p-6 h-full flex flex-col">
+    <EditorialPanel className="p-6 h-full flex flex-col">
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center">
-          <Wand2 className="w-5 h-5 text-white" />
+        <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
+          <Wand2 className="h-5 w-5 text-primary-foreground" />
         </div>
         <div>
           <h3 className="font-semibold text-stone-900 dark:text-stone-50">
@@ -117,7 +117,7 @@ export function TryOnDemo() {
             {...personDropzone.getRootProps()}
             className={`h-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors flex flex-col items-center justify-center ${
               personDropzone.isDragActive
-                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30'
+                ? 'border-primary bg-secondary'
                 : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
             }`}
           >
@@ -135,7 +135,7 @@ export function TryOnDemo() {
         {/* Step 2: Upload Outfit Photo */}
         {state === 'outfit' && (
           <div className="h-full flex flex-col">
-            <div className="flex items-center gap-3 mb-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+            <div className="flex items-center gap-3 mb-4 p-3 bg-success-pale rounded-lg">
               {personPreview && (
                 <img
                   src={personPreview}
@@ -144,12 +144,12 @@ export function TryOnDemo() {
                 />
               )}
               <div className="flex-1">
-                <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                <p className="text-sm font-medium text-success">
                   Your photo uploaded
                 </p>
                 <button
                   type="button"
-                  className="text-xs text-green-600 hover:underline"
+                  className="text-xs text-success hover:underline"
                   onClick={handleReset}
                 >
                   Change photo
@@ -161,7 +161,7 @@ export function TryOnDemo() {
               {...outfitDropzone.getRootProps()}
               className={`flex-1 border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors flex flex-col items-center justify-center ${
                 outfitDropzone.isDragActive
-                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30'
+                  ? 'border-primary bg-secondary'
                   : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
               }`}
             >
@@ -197,12 +197,12 @@ export function TryOnDemo() {
                 />
               )}
             </div>
-            <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-2" />
+            <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
             <p className="text-gray-600 dark:text-gray-400">
               Creating your look...
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              This may take 20-30 seconds
+              Generation time can vary. You can keep exploring while this runs.
             </p>
           </div>
         )}
@@ -214,7 +214,7 @@ export function TryOnDemo() {
               <img
                 src={`data:image/png;base64,${result.image_base64}`}
                 alt="Try-on result"
-                className="max-h-64 rounded-xl shadow-lg object-contain"
+                className="max-h-64 rounded-xl object-contain"
               />
             </div>
 
@@ -224,7 +224,7 @@ export function TryOnDemo() {
               </Button>
               <Button
                 size="sm"
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                className="flex-1 bg-primary text-primary-foreground hover:bg-primary-pressed"
                 onClick={() => setShowLoginModal(true)}
               >
                 Save & continue free
@@ -251,6 +251,6 @@ export function TryOnDemo() {
         onClose={() => setShowLoginModal(false)}
         feature="save try-ons and keep building outfits free"
       />
-    </GlassCard>
+    </EditorialPanel>
   )
 }

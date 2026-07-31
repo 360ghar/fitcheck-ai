@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/outfit_list_controller.dart';
 import '../models/outfit_model.dart';
@@ -521,7 +522,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                   context,
                   'Last Worn',
                   outfit.lastWornAt != null
-                      ? _formatDate(outfit.lastWornAt!)
+                      ? AppDateUtils.formatRelativeTime(outfit.lastWornAt!)
                       : 'Never',
                   Icons.calendar_today,
                   tokens,
@@ -671,7 +672,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                           ),
                     ),
                     Text(
-                      _formatDate(entry.wornAt),
+                      AppDateUtils.formatRelativeTime(entry.wornAt),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: tokens.textMuted,
                           ),
@@ -759,9 +760,9 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
           child: Column(
             children: [
               if (outfit.createdAt != null)
-                _buildDetailRow(context, 'Created', _formatDate(outfit.createdAt!), tokens),
+                _buildDetailRow(context, 'Created', AppDateUtils.formatRelativeTime(outfit.createdAt!), tokens),
               if (outfit.updatedAt != null)
-                _buildDetailRow(context, 'Updated', _formatDate(outfit.updatedAt!), tokens),
+                _buildDetailRow(context, 'Updated', AppDateUtils.formatRelativeTime(outfit.updatedAt!), tokens),
               _buildDetailRow(
                 context,
                 'Status',
@@ -962,15 +963,4 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
     );
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) return 'Today';
-    if (difference.inDays == 1) return 'Yesterday';
-    if (difference.inDays < 7) return '${difference.inDays} days ago';
-    if (difference.inDays < 30) return '${(difference.inDays / 7).floor()} weeks ago';
-    if (difference.inDays < 365) return '${(difference.inDays / 30).floor()} months ago';
-    return '${(difference.inDays / 365).floor()} years ago';
-  }
 }

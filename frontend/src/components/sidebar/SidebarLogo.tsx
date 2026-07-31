@@ -10,16 +10,16 @@ export function SidebarLogo() {
     <Link
       to="/dashboard"
       className={cn(
-        'flex items-center gap-2 px-3 py-4 transition-all duration-200',
+        'flex h-16 items-center gap-2 px-3 transition-[padding] duration-200',
         isCollapsed && 'justify-center px-2'
       )}
     >
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
         <Sparkles className="h-4 w-4" />
       </div>
       <div
         className={cn(
-          'flex flex-col overflow-hidden transition-all duration-200',
+          'flex flex-col overflow-hidden transition-[width,opacity] duration-200',
           isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
         )}
       >

@@ -8,8 +8,6 @@ All AI processing is done server-side using configurable providers.
 from typing import Any, Dict, List, Optional
 
 import asyncio
-import base64
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from supabase import Client
@@ -18,6 +16,7 @@ from app.core.config import settings
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError, FitCheckException, RateLimitError
 from app.services.rate_limit import rate_limited_operation
+from app.models.subscription import OperationType
 from app.core.security import get_current_user_id
 from app.db.connection import get_db
 from app.utils.retry import is_retryable_error, with_retry
@@ -40,7 +39,10 @@ from app.agents.image_generation_agent import (
     save_generated_image,
 )
 from app.services.ai_service import EmbeddingService
+from app.services.item_reference_service import resolve_outfit_item_references
+from app.services.storage_service import StorageService
 from app.services.vector_service import get_vector_service
+from app.utils.image_processing import downscale_base64_image
 
 logger = get_context_logger(__name__)
 
@@ -58,10 +60,7 @@ async def _fetch_user_avatar_base64(user_id: str, db: Client) -> Optional[str]:
         if not avatar_url:
             return None
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(avatar_url)
-            response.raise_for_status()
-            return base64.b64encode(response.content).decode("utf-8")
+        return await StorageService.download_to_base64(avatar_url, timeout=30.0)
     except Exception as e:
         logger.warning(
             "Failed to fetch user avatar for extraction",
@@ -93,7 +92,7 @@ async def extract_items(
     and detailed descriptions suitable for image generation.
     """
     try:
-        async with rate_limited_operation(user_id, "extraction", db):
+        async with rate_limited_operation(user_id, OperationType.EXTRACTION, db):
             # Get extraction agent
             agent = await get_item_extraction_agent(user_id=user_id, db=db)
             user_avatar_base64 = await _fetch_user_avatar_base64(user_id=user_id, db=db)
@@ -104,7 +103,7 @@ async def extract_items(
                     image_base64=request.image,
                     user_profile_image_base64=user_avatar_base64,
                 ),
-                max_retries=1,
+                max_retries=2,
                 initial_delay=2.0,
                 backoff_factor=2.0,
                 retryable_exceptions=(AIServiceError,),
@@ -145,7 +144,7 @@ async def extract_single_item(
     Useful when the image contains only one item.
     """
     try:
-        async with rate_limited_operation(user_id, "extraction", db):
+        async with rate_limited_operation(user_id, OperationType.EXTRACTION, db):
             # Get extraction agent
             agent = await get_item_extraction_agent(user_id=user_id, db=db)
 
@@ -155,7 +154,7 @@ async def extract_single_item(
                     image_base64=request.image,
                     category_hint=request.category_hint,
                 ),
-                max_retries=1,
+                max_retries=2,
                 initial_delay=2.0,
                 backoff_factor=2.0,
                 retryable_exceptions=(AIServiceError,),
@@ -202,7 +201,7 @@ async def generate_outfit(
     If include_user_face is True and user has an avatar, generates with the user's face.
     """
     try:
-        async with rate_limited_operation(user_id, "generation", db):
+        async with rate_limited_operation(user_id, OperationType.GENERATION, db):
             # Fetch user avatar and body profile if include_user_face is enabled
             user_avatar_base64 = None
             body_profile = None
@@ -220,10 +219,16 @@ async def generate_outfit(
                 if user_result.data and user_result.data.get("avatar_url"):
                     avatar_url = user_result.data["avatar_url"]
                     try:
-                        async with httpx.AsyncClient(timeout=30.0) as client:
-                            resp = await client.get(avatar_url)
-                            resp.raise_for_status()
-                            user_avatar_base64 = base64.b64encode(resp.content).decode("utf-8")
+                        avatar_base64 = await StorageService.download_to_base64(
+                            avatar_url, timeout=30.0
+                        )
+                        if avatar_base64:
+                            # Downscale: a raw full-res phone avatar can be
+                            # bigger than every garment reference combined.
+                            user_avatar_base64 = await asyncio.to_thread(
+                                downscale_base64_image,
+                                avatar_base64,
+                            )
                     except Exception as e:
                         logger.warning(
                             "Failed to fetch user avatar, falling back to generic model",
@@ -253,6 +258,21 @@ async def generate_outfit(
             # Convert items to dict format
             items = [item.model_dump() for item in request.items]
 
+            # Resolve each item's own stored image into a garment reference the
+            # image model can copy from, instead of describing the garment in
+            # words and letting the model invent a lookalike. Inside the rate
+            # limit (one generation charge regardless of reference count) but
+            # outside with_retry, so a retried generation does not re-download.
+            items, reference_stats = await resolve_outfit_item_references(
+                db=db, user_id=user_id, items=items
+            )
+            logger.info(
+                "Outfit item references resolved",
+                user_id=user_id,
+                has_avatar=user_avatar_base64 is not None,
+                **reference_stats,
+            )
+
             # Generate outfit with retry
             result = await with_retry(
                 lambda: agent.generate_outfit(
@@ -268,7 +288,7 @@ async def generate_outfit(
                     user_avatar_base64=user_avatar_base64,
                     body_profile=body_profile,
                 ),
-                max_retries=1,
+                max_retries=2,
                 initial_delay=2.0,
                 backoff_factor=2.0,
                 retryable_exceptions=(AIServiceError,),
@@ -331,7 +351,7 @@ async def generate_product_image(
     Creates a professional product photo suitable for catalog listings.
     """
     try:
-        async with rate_limited_operation(user_id, "generation", db):
+        async with rate_limited_operation(user_id, OperationType.GENERATION, db):
             # Get generation agent
             agent = await get_image_generation_agent(user_id=user_id, db=db)
 
@@ -348,7 +368,7 @@ async def generate_product_image(
                     include_shadows=request.include_shadows,
                     reference_image=request.reference_image,
                 ),
-                max_retries=1,
+                max_retries=2,
                 initial_delay=2.0,
                 backoff_factor=2.0,
                 retryable_exceptions=(AIServiceError,),
@@ -446,12 +466,16 @@ async def generate_try_on(
 
         avatar_url = user_data["avatar_url"]
 
-        async with rate_limited_operation(user_id, "generation", db):
+        async with rate_limited_operation(user_id, OperationType.GENERATION, db):
             # 2. Fetch avatar image and convert to base64
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(avatar_url)
-                response.raise_for_status()
-                avatar_base64 = base64.b64encode(response.content).decode("utf-8")
+            avatar_base64 = await StorageService.download_to_base64(
+                avatar_url, timeout=30.0
+            )
+            if not avatar_base64:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Profile image could not be loaded",
+                )
 
             # 3. Get generation agent
             agent = await get_image_generation_agent(user_id=user_id, db=db)
@@ -467,7 +491,7 @@ async def generate_try_on(
                     pose=request.pose,
                     lighting=request.lighting,
                 ),
-                max_retries=1,
+                max_retries=2,
                 initial_delay=2.0,
                 backoff_factor=2.0,
                 retryable_exceptions=(AIServiceError,),
@@ -654,7 +678,7 @@ async def generate_embedding(
     Used for similarity matching and semantic search.
     """
     try:
-        async with rate_limited_operation(user_id, "embedding", db):
+        async with rate_limited_operation(user_id, OperationType.EMBEDDING, db):
             # Generate embedding
             embedding = await EmbeddingService.generate_embedding(request.text)
 
@@ -703,7 +727,7 @@ async def generate_batch_embeddings(
                 "message": "No texts provided",
             }
 
-        async with rate_limited_operation(user_id, "embedding", db, count=len(request.texts)):
+        async with rate_limited_operation(user_id, OperationType.EMBEDDING, db, count=len(request.texts)):
             # Generate batch embeddings
             embeddings = await EmbeddingService.batch_generate_embeddings(request.texts)
 
@@ -753,7 +777,7 @@ async def search_similar_items(
             query_embedding = request.embedding
         else:
             # Rate limit only applies when generating embedding from text
-            async with rate_limited_operation(user_id, "embedding", db):
+            async with rate_limited_operation(user_id, OperationType.EMBEDDING, db):
                 query_embedding = await EmbeddingService.generate_embedding(request.text)
 
         # Get vector service and search
@@ -810,7 +834,7 @@ async def test_embedding_model(
     Generates a test embedding to verify the model is working correctly.
     """
     try:
-        async with rate_limited_operation(user_id, "embedding", db):
+        async with rate_limited_operation(user_id, OperationType.EMBEDDING, db):
             # Generate test embedding
             test_embedding = await EmbeddingService.generate_embedding("test embedding")
 

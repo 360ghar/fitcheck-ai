@@ -179,7 +179,7 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                 ),
                 const SizedBox(height: AppConstants.spacing16),
                 Text(
-                  'Saving to Wardrobe...',
+                  'Saving to Closet...',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: Colors.green[700],
                     fontWeight: FontWeight.w600,
@@ -688,7 +688,7 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
                   ),
                 )
               : const Icon(Icons.add),
-          label: Text(widget.isSaving ? 'Saving...' : 'Add to Wardrobe'),
+          label: Text(widget.isSaving ? 'Saving...' : 'Add to Closet'),
           style: ElevatedButton.styleFrom(
             minimumSize: const Size.fromHeight(48),
           ),

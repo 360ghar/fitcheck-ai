@@ -10,6 +10,7 @@ stores generated images in Supabase Storage and records metadata for retrieval.
 import asyncio
 import uuid
 from datetime import datetime, timezone
+from app.utils.datetime_util import utcnow, utcnow_iso
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -71,8 +72,12 @@ class UpdateCollectionOutfitsRequest(BaseModel):
     outfit_ids: List[str] = Field(default_factory=list)
 
 
+class AddCollectionOutfitRequest(BaseModel):
+    outfit_id: str = Field(..., min_length=1)
+
+
 def _now() -> str:
-    return datetime.utcnow().isoformat()
+    return utcnow_iso()
 
 
 def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
@@ -123,6 +128,41 @@ def _collection_counts(db: Client, collection_ids: List[str]) -> Dict[str, int]:
         if cid:
             counts[cid] = counts.get(cid, 0) + 1
     return counts
+
+
+async def _owned_collection_or_404(db: Client, collection_id: str, user_id: str) -> None:
+    """Verify a collection exists under the caller's ownership (RLS bypassed)."""
+    existing = await asyncio.to_thread(
+        db.table("outfit_collections")
+        .select("id")
+        .eq("id", collection_id)
+        .eq("user_id", user_id)
+        .single()
+        .execute
+    )
+    if not existing.data:
+        raise CollectionNotFoundError(collection_id=collection_id)
+
+
+async def _collection_member_ids(db: Client, collection_id: str) -> List[str]:
+    """Ordered outfit_ids currently in a collection (for response decoration)."""
+    member_res = await asyncio.to_thread(
+        db.table("outfit_collection_items")
+        .select("outfit_id")
+        .eq("collection_id", collection_id)
+        .execute
+    )
+    return [
+        str(member.get("outfit_id"))
+        for member in (member_res.data or [])
+        if member.get("outfit_id")
+    ]
+
+
+async def _collection_count(db: Client, collection_id: str) -> int:
+    """Member count for a single collection."""
+    counts = await asyncio.to_thread(_collection_counts, db, [collection_id])
+    return counts.get(collection_id, 0)
 
 
 def _sync_collection_items(
@@ -253,6 +293,10 @@ async def list_outfits(
     is_favorite: Optional[bool] = Query(None),
     style: Optional[str] = Query(None),
     season: Optional[str] = Query(None),
+    styles: Optional[str] = Query(None, description="Comma-separated style filters"),
+    seasons: Optional[str] = Query(None, description="Comma-separated season filters"),
+    favorites_only: Optional[bool] = Query(None),
+    drafts_only: Optional[bool] = Query(None),
     search: Optional[str] = Query(None),
     tags: Optional[str] = Query(None, description="Comma-separated tags"),
     user_id: str = Depends(get_current_user_id),
@@ -260,12 +304,25 @@ async def list_outfits(
 ):
     try:
         query = db.table("outfits").select("*, outfit_images(*)").eq("user_id", user_id)
-        if is_favorite is not None:
-            query = query.eq("is_favorite", is_favorite)
+        styles_value = styles if isinstance(styles, str) else None
+        seasons_value = seasons if isinstance(seasons, str) else None
+        favorites_value = favorites_only if isinstance(favorites_only, bool) else None
+        drafts_value = drafts_only if isinstance(drafts_only, bool) else None
+        effective_favorite = is_favorite if is_favorite is not None else favorites_value
+        effective_styles = [value.strip() for value in (styles_value or "").split(",") if value.strip()]
+        effective_seasons = [value.strip() for value in (seasons_value or "").split(",") if value.strip()]
         if style:
-            query = query.eq("style", style)
+            effective_styles = [style]
         if season:
-            query = query.eq("season", season)
+            effective_seasons = [season]
+        if effective_favorite is not None:
+            query = query.eq("is_favorite", effective_favorite)
+        if effective_styles:
+            query = query.in_("style", effective_styles)
+        if effective_seasons:
+            query = query.in_("season", effective_seasons)
+        if drafts_value is not None:
+            query = query.eq("is_draft", drafts_value)
         if tags:
             tag_list = [t.strip() for t in tags.split(",") if t.strip()]
             if tag_list:
@@ -275,12 +332,14 @@ async def list_outfits(
             query = query.or_(f"name.ilike.{like},description.ilike.{like}")
 
         count_q = db.table("outfits").select("id", count="exact").eq("user_id", user_id)
-        if is_favorite is not None:
-            count_q = count_q.eq("is_favorite", is_favorite)
-        if style:
-            count_q = count_q.eq("style", style)
-        if season:
-            count_q = count_q.eq("season", season)
+        if effective_favorite is not None:
+            count_q = count_q.eq("is_favorite", effective_favorite)
+        if effective_styles:
+            count_q = count_q.in_("style", effective_styles)
+        if effective_seasons:
+            count_q = count_q.in_("season", effective_seasons)
+        if drafts_value is not None:
+            count_q = count_q.eq("is_draft", drafts_value)
         if tags:
             tag_list = [t.strip() for t in tags.split(",") if t.strip()]
             if tag_list:
@@ -431,7 +490,7 @@ async def get_public_outfit(
         share_row = (share.data or [None])[0]
         if share_row:
             expires_at = _parse_iso_datetime(share_row.get("expires_at"))
-            if expires_at and expires_at < datetime.now(timezone.utc):
+            if expires_at and expires_at < utcnow():
                 raise SharedOutfitNotFoundError(share_id=outfit_id_str)
             views = int(share_row.get("view_count") or 0) + 1
             await asyncio.to_thread(db.table("shared_outfits").update({"view_count": views}).eq("id", share_row["id"]).execute)
@@ -634,6 +693,7 @@ async def create_collection(
             _sync_collection_items(db, user_id=user_id, collection_id=collection_id, outfit_ids=outfit_ids)
 
         row["outfit_count"] = len(outfit_ids)
+        row["outfit_ids"] = outfit_ids
         return {"data": row, "message": "Created"}
     except (ValidationError, DatabaseError):
         raise
@@ -656,9 +716,30 @@ async def list_collections(
             .execute
         )
         rows = res.data or []
-        counts = _collection_counts(db, [str(r.get("id")) for r in rows])
+        collection_ids = [str(r.get("id")) for r in rows if r.get("id")]
+        # Counts and member ids are derived from ONE member-row download; the
+        # previous count query re-downloaded the same rows.
+        counts: Dict[str, int] = {}
+        members: Dict[str, List[str]] = {}
+        if collection_ids:
+            member_res = await asyncio.to_thread(
+                db.table("outfit_collection_items")
+                .select("collection_id, outfit_id")
+                .in_("collection_id", collection_ids)
+                .execute
+            )
+            for member in member_res.data or []:
+                cid = str(member.get("collection_id") or "")
+                if not cid:
+                    continue
+                counts[cid] = counts.get(cid, 0) + 1
+                outfit_id = member.get("outfit_id")
+                if outfit_id:
+                    members.setdefault(cid, []).append(str(outfit_id))
         for row in rows:
-            row["outfit_count"] = counts.get(str(row.get("id")), 0)
+            collection_id = str(row.get("id"))
+            row["outfit_count"] = counts.get(collection_id, 0)
+            row["outfit_ids"] = members.get(collection_id, [])
         return {"data": {"collections": rows}, "message": "OK"}
     except Exception as e:
         logger.error("List collections error", user_id=user_id, error=str(e))
@@ -674,16 +755,7 @@ async def update_collection(
 ):
     try:
         collection_id_str = str(collection_id)
-        existing = await asyncio.to_thread(
-            db.table("outfit_collections")
-            .select("id")
-            .eq("id", collection_id_str)
-            .eq("user_id", user_id)
-            .single()
-            .execute
-        )
-        if not existing.data:
-            raise CollectionNotFoundError(collection_id=collection_id_str)
+        await _owned_collection_or_404(db, collection_id_str, user_id)
 
         update_dict = update.model_dump(exclude_unset=True)
         outfit_ids = update_dict.pop("outfit_ids", None)
@@ -710,8 +782,12 @@ async def update_collection(
         if not row:
             raise DatabaseError("Failed to fetch collection", operation="select")
 
-        counts = _collection_counts(db, [collection_id_str])
-        row["outfit_count"] = counts.get(collection_id_str, 0)
+        row["outfit_count"] = await _collection_count(db, collection_id_str)
+        row["outfit_ids"] = (
+            [str(i) for i in outfit_ids]
+            if outfit_ids is not None
+            else await _collection_member_ids(db, collection_id_str)
+        )
         return {"data": row, "message": "Updated"}
     except (CollectionNotFoundError, ValidationError, DatabaseError):
         raise
@@ -729,16 +805,7 @@ async def replace_collection_outfits(
 ):
     try:
         collection_id_str = str(collection_id)
-        existing = await asyncio.to_thread(
-            db.table("outfit_collections")
-            .select("id")
-            .eq("id", collection_id_str)
-            .eq("user_id", user_id)
-            .single()
-            .execute
-        )
-        if not existing.data:
-            raise CollectionNotFoundError(collection_id=collection_id_str)
+        await _owned_collection_or_404(db, collection_id_str, user_id)
 
         _sync_collection_items(
             db,
@@ -755,14 +822,102 @@ async def replace_collection_outfits(
             .single()
             .execute
         )).data
-        counts = _collection_counts(db, [collection_id_str])
-        row["outfit_count"] = counts.get(collection_id_str, 0)
+        row["outfit_count"] = await _collection_count(db, collection_id_str)
+        row["outfit_ids"] = await _collection_member_ids(db, collection_id_str)
         return {"data": row, "message": "Updated"}
     except (CollectionNotFoundError, ValidationError):
         raise
     except Exception as e:
         logger.error("Replace collection outfits error", collection_id=str(collection_id), user_id=user_id, error=str(e))
         raise DatabaseError("Failed to update collection outfits", operation="update")
+
+
+@router.post("/collections/{collection_id}/outfits", response_model=Dict[str, Any])
+async def add_collection_outfit(
+    collection_id: UUID,
+    request: AddCollectionOutfitRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """Add one owned outfit to a collection without replacing existing members."""
+    collection_id_str = str(collection_id)
+    try:
+        await _owned_collection_or_404(db, collection_id_str, user_id)
+
+        outfit = await asyncio.to_thread(
+            db.table("outfits")
+            .select("id")
+            .eq("id", request.outfit_id)
+            .eq("user_id", user_id)
+            .single()
+            .execute
+        )
+        if not outfit.data:
+            raise ValidationError("Outfit not found", details={"outfit_id": request.outfit_id})
+
+        membership = await asyncio.to_thread(
+            db.table("outfit_collection_items")
+            .select("outfit_id")
+            .eq("collection_id", collection_id_str)
+            .eq("outfit_id", request.outfit_id)
+            .maybe_single()
+            .execute
+        )
+        if not membership.data:
+            # Upsert (not insert): two concurrent add/retry requests can both
+            # pass the membership read above, and the junction PK conflict
+            # would otherwise 500 one of them. The upsert is idempotent.
+            await asyncio.to_thread(
+                db.table("outfit_collection_items")
+                .upsert(
+                    {"collection_id": collection_id_str, "outfit_id": request.outfit_id},
+                    on_conflict="collection_id,outfit_id",
+                )
+                .execute
+            )
+
+        count = await _collection_count(db, collection_id_str)
+        return {
+            "data": {
+                "collection_id": collection_id_str,
+                "outfit_id": request.outfit_id,
+                "outfit_count": count,
+            },
+            "message": "Added",
+        }
+    except (CollectionNotFoundError, ValidationError):
+        raise
+    except Exception as e:
+        logger.error("Add collection outfit error", collection_id=collection_id_str, user_id=user_id, error=str(e))
+        raise DatabaseError("Failed to add outfit to collection", operation="insert")
+
+
+@router.delete("/collections/{collection_id}/outfits/{outfit_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_collection_outfit(
+    collection_id: UUID,
+    outfit_id: UUID,
+    user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
+):
+    """Remove one outfit from an owned collection."""
+    collection_id_str = str(collection_id)
+    outfit_id_str = str(outfit_id)
+    try:
+        await _owned_collection_or_404(db, collection_id_str, user_id)
+
+        await asyncio.to_thread(
+            db.table("outfit_collection_items")
+            .delete()
+            .eq("collection_id", collection_id_str)
+            .eq("outfit_id", outfit_id_str)
+            .execute
+        )
+        return None
+    except CollectionNotFoundError:
+        raise
+    except Exception as e:
+        logger.error("Remove collection outfit error", collection_id=collection_id_str, user_id=user_id, error=str(e))
+        raise DatabaseError("Failed to remove outfit from collection", operation="delete")
 
 
 @router.delete("/collections/{collection_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -773,16 +928,7 @@ async def delete_collection(
 ):
     try:
         collection_id_str = str(collection_id)
-        existing = await asyncio.to_thread(
-            db.table("outfit_collections")
-            .select("id")
-            .eq("id", collection_id_str)
-            .eq("user_id", user_id)
-            .single()
-            .execute
-        )
-        if not existing.data:
-            raise CollectionNotFoundError(collection_id=collection_id_str)
+        await _owned_collection_or_404(db, collection_id_str, user_id)
 
         await asyncio.to_thread(db.table("outfit_collections").delete().eq("id", collection_id_str).eq("user_id", user_id).execute)
         return None
@@ -1352,8 +1498,13 @@ async def batch_delete_outfits(
         raise ValidationError("outfit_ids is required", details={"field": "outfit_ids"})
 
     try:
-        imgs_res = await asyncio.to_thread(db.table("outfit_images").select("outfit_id, storage_path").in_("outfit_id", outfit_ids).execute)
-        storage_paths = [row.get("storage_path") for row in (imgs_res.data or []) if row.get("storage_path")]
+        # Resolve owned parent rows before reading child image paths. This API
+        # uses the service-role client, so the child query must not trust
+        # outfit_id alone for authorization.
+        owned = await StorageService.resolve_owned_storage_paths(
+            db, user_id, outfit_ids=outfit_ids
+        )
+        storage_paths = owned["storage_paths"]
         if storage_paths:
             try:
                 await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)

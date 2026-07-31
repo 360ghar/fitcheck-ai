@@ -21,6 +21,7 @@ export interface CalendarEvent {
   end_time: string
   location?: string | null
   outfit_id?: string | null
+  event_type: string
 }
 
 export interface CalendarEventOutfitUpdate {
@@ -66,6 +67,7 @@ export async function createCalendarEvent(data: {
   end_time: string
   location?: string
   calendar_id?: string
+  event_type?: string
 }): Promise<CalendarEvent> {
   try {
     const response = await apiClient.post<ApiEnvelope<CalendarEvent>>('/api/v1/calendar/events', data)

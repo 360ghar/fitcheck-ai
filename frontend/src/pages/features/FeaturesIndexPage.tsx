@@ -19,7 +19,7 @@ const features = [
     icon: Camera,
     title: 'AI Wardrobe Extraction',
     description:
-      'Photograph clothes and let AI detect items, colors, and categories for a digital closet in minutes.',
+      'Photograph clothes and review detected items, colors, and categories before saving a digital closet.',
     href: '/features/ai-wardrobe-extraction',
     keyword: 'AI wardrobe organizer',
   },
@@ -77,7 +77,7 @@ export default function FeaturesIndexPage() {
         <section className="py-14 md:py-20 bg-stone-50 dark:bg-stone-950 border-b border-stone-200 dark:border-stone-800">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <AnimatedSection>
-              <div className="inline-flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400 mb-4">
+              <div className="inline-flex items-center gap-2 text-sm text-primary mb-4">
                 <Shirt className="w-4 h-4" />
                 Product features
               </div>
@@ -91,7 +91,7 @@ export default function FeaturesIndexPage() {
               <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
                 <Button
                   size="lg"
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white h-12 px-6 shadow-none"
+                  className="bg-primary hover:bg-primary-pressed text-white h-12 px-6"
                   asChild
                 >
                   <Link to="/auth/register">
@@ -114,21 +114,21 @@ export default function FeaturesIndexPage() {
                 <AnimatedSection key={feature.href} delay={i * 40}>
                   <Link
                     to={feature.href}
-                    className="block h-full rounded-2xl border border-stone-200 dark:border-stone-800 p-6 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors bg-stone-50/50 dark:bg-stone-900/40"
+                    className="block h-full rounded-2xl border border-stone-200 dark:border-stone-800 p-6 hover:border-primary/40 transition-colors bg-stone-50/50 dark:bg-stone-900/40"
                   >
-                    <div className="w-10 h-10 rounded-lg bg-indigo-600/10 dark:bg-indigo-400/10 flex items-center justify-center mb-4">
-                      <feature.icon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                    <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center mb-4">
+                      <feature.icon className="w-5 h-5 text-primary" />
                     </div>
                     <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-50">
                       {feature.title}
                     </h2>
-                    <p className="mt-2 text-sm text-indigo-600/80 dark:text-indigo-400/80">
+                    <p className="mt-2 text-sm text-primary/80">
                       {feature.keyword}
                     </p>
                     <p className="mt-3 text-stone-600 dark:text-stone-400 leading-relaxed">
                       {feature.description}
                     </p>
-                    <span className="mt-4 inline-flex items-center text-sm font-medium text-indigo-600 dark:text-indigo-400">
+                    <span className="mt-4 inline-flex min-h-11 items-center text-sm font-medium text-primary">
                       Learn more
                       <ArrowRight className="ml-1 w-4 h-4" />
                     </span>

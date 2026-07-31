@@ -5,7 +5,8 @@ User Pydantic models for validation and serialization.
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List, Dict, Any
 from uuid import UUID
-from datetime import datetime, date, time as dt_time, timezone
+from datetime import datetime, date, time as dt_time
+from app.utils.datetime_util import utc_today
 
 
 # ============================================================================
@@ -28,7 +29,7 @@ class UserBase(BaseModel):
     @classmethod
     def validate_birth_date(cls, v: Optional[date]) -> Optional[date]:
         """Birth date cannot be in the future."""
-        if v is not None and v > datetime.now(timezone.utc).date():
+        if v is not None and v > utc_today():
             raise ValueError('birth_date cannot be in the future')
         return v
 
@@ -74,7 +75,7 @@ class UserUpdate(BaseModel):
     @classmethod
     def validate_birth_date(cls, v: Optional[date]) -> Optional[date]:
         """Birth date cannot be in the future."""
-        if v is not None and v > datetime.now(timezone.utc).date():
+        if v is not None and v > utc_today():
             raise ValueError('birth_date cannot be in the future')
         return v
 

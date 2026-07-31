@@ -316,12 +316,45 @@ class AIServiceError(ServiceError):
 
     error_code = "AI_SERVICE_ERROR"
 
-    def __init__(self, message: str = "AI service unavailable", retryable: bool = False):
+    def __init__(
+        self,
+        message: str = "AI service unavailable",
+        retryable: bool = False,
+        error_kind: Optional[str] = None,
+        retry_after_seconds: Optional[float] = None,
+        provider_status: Optional[int] = None,
+        provider_error_detail: Optional[str] = None,
+    ):
         # retryable: true only for transient failures (429/503/timeout) worth
         # retrying against a fallback model; false for auth/content-policy/parse
         # errors where a retry can't succeed or risks a duplicate billable call.
+        #
+        # error_kind: machine-readable bucket of the failure, surfaced to the
+        # client via to_dict() so the UI can show "AI busy, try again shortly"
+        # for capacity issues WITHOUT upselling. These are upstream/provider
+        # problems that are "on us", not the user's own plan limit (which is a
+        # separate RateLimitError). Values: "upstream_quota" (provider free-tier
+        # or billing quota), "transient" (overload/timeout), "hard"
+        # (auth/parse/content-policy). retry_after_seconds (parsed from the
+        # provider's RetryInfo) lets a caller back off for the advised window.
         self.retryable = retryable
+        self.error_kind = error_kind
+        self.retry_after_seconds = retry_after_seconds
+        self.provider_status = provider_status
+        self.provider_error_detail = provider_error_detail
         super().__init__(message, "ai")
+
+    def to_dict(self) -> Dict[str, Any]:
+        response = super().to_dict()
+        # retryable/error_kind/retry_after_seconds were previously internal-only
+        # (consumed by with_retry and never serialized). Surface them so the
+        # client can distinguish "try again shortly" from a hard failure.
+        response["retryable"] = self.retryable
+        if self.error_kind:
+            response["error_kind"] = self.error_kind
+        if self.retry_after_seconds is not None:
+            response["retry_after_seconds"] = self.retry_after_seconds
+        return response
 
 
 class WeatherServiceError(ServiceError):

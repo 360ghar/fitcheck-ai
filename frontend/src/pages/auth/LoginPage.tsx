@@ -4,14 +4,18 @@
  */
 
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
 import { Mail, Lock, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import SEO from '@/components/seo/SEO'
+import { getPostAuthDestination, persistAuthReturnTo, withAuthContext } from './authRedirect'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const selectedPlan = searchParams.get('plan_type')
+  const returnTo = searchParams.get('returnTo')
   const login = useAuthStore((state) => state.login)
   const signInWithGoogle = useAuthStore((state) => state.signInWithGoogle)
   const isLoading = useAuthStore((state) => state.isLoading)
@@ -29,7 +33,11 @@ export default function LoginPage() {
 
     try {
       await login(email, password)
-      navigate('/dashboard')
+      // The URL's plan_type (if any) has been handled by the destination;
+      // clear any stale key left behind by an aborted Google sign-in so it
+      // cannot hijack a later Google login.
+      localStorage.removeItem('pending_plan_type')
+      navigate(getPostAuthDestination(returnTo, selectedPlan))
     } catch {
       // Error is handled by the store
     }
@@ -39,9 +47,16 @@ export default function LoginPage() {
     setGoogleLoading(true)
     clearError()
     try {
+      if (selectedPlan) {
+        localStorage.setItem('pending_plan_type', selectedPlan)
+      }
+      persistAuthReturnTo(returnTo)
       await signInWithGoogle()
       // User will be redirected to Google
     } catch {
+      // Drop the pending plan so a later plain Google sign-in cannot be
+      // hijacked by a stale plan intent from this aborted attempt.
+      localStorage.removeItem('pending_plan_type')
       setGoogleLoading(false)
     }
   }
@@ -54,17 +69,16 @@ export default function LoginPage() {
         noIndex={true}
       />
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="text-xl md:text-2xl font-extrabold text-foreground">
+        <h1 className="text-xl md:text-2xl font-extrabold text-foreground">
           Sign in to your account
-        </h2>
+        </h1>
       </div>
 
       <div className="mt-6 md:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-card py-6 px-4 shadow rounded-lg sm:py-8 sm:px-10">
+        <div className="rounded-2xl border border-border bg-card py-6 px-4 sm:py-8 sm:px-10">
           {error && (
             <div
               role="alert"
-              aria-live="polite"
               className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start"
             >
               <AlertCircle className="h-5 w-5 text-destructive mt-0.5 mr-2 flex-shrink-0" />
@@ -121,7 +135,7 @@ export default function LoginPage() {
               <label htmlFor="email" className="block text-sm font-medium text-foreground">
                 Email address
               </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
+              <div className="mt-1 relative rounded-md">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Mail className="h-5 w-5 text-muted-foreground" />
                 </div>
@@ -144,7 +158,7 @@ export default function LoginPage() {
               <label htmlFor="password" className="block text-sm font-medium text-foreground">
                 Password
               </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
+              <div className="mt-1 relative rounded-md">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-muted-foreground" />
                 </div>
@@ -174,7 +188,7 @@ export default function LoginPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
               <div className="text-sm">
                 <Link
-                  to="/auth/forgot-password"
+                  to={withAuthContext('/auth/forgot-password', undefined, returnTo)}
                   className="font-medium text-primary hover:text-primary/80"
                 >
                   Forgot password?
@@ -199,7 +213,7 @@ export default function LoginPage() {
             <p className="text-sm text-muted-foreground">
               Don't have an account?{' '}
               <Link
-                to="/auth/register"
+                to={withAuthContext('/auth/register', selectedPlan, returnTo)}
                 className="font-medium text-primary hover:text-primary/80"
               >
                 Sign up

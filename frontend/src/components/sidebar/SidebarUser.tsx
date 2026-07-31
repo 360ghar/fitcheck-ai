@@ -64,7 +64,7 @@ export function SidebarUser() {
           {avatarElement}
           <div
             className={cn(
-              'flex flex-col items-start overflow-hidden transition-all duration-200',
+              'flex flex-col items-start overflow-hidden transition-[width,opacity] duration-200',
               isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
             )}
           >

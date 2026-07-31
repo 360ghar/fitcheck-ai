@@ -1,8 +1,12 @@
 # Quality score
 
-Last updated: 2026-07-25
+Last updated: 2026-07-31
 
 Grades are honest snapshots for agents: where to be careful, where tests are strong, where docs lag. Update when a domain materially improves or regresses.
+
+The [user-story ledger](./product-specs/user-story-ledger.md) separates code
+evidence from executable verification. These grades do not imply hosted
+Supabase, real-provider, Stripe, browser-E2E, or production-load validation.
 
 Scale: **A** solid · **B** workable · **C** fragile · **D** high risk
 
@@ -15,14 +19,17 @@ Scale: **A** solid · **B** workable · **C** fragile · **D** high risk
 | Recommendations | B- | 2026-07-22 | Service + astrology hooks tested partially | Vector path optional/config-sensitive |
 | Photoshoot | B | 2026-07-25 | Service tests, SSE error-path tests, bounded mobile polling | Job UX parity web/mobile |
 | Social import | B | 2026-07-25 | Pipeline + XSS-oriented tests, SSE error events | Feature-flagged; ops complexity |
-| Subscriptions / Stripe | B | 2026-07-22 | Webhook tests | Full billing matrix not fully graded |
-| Web frontend | B- | 2026-07-25 | Vitest suite (16 tests), API retry, feature error boundaries, Sentry, global error handlers | No e2e suite yet |
-| Flutter | B | 2026-07-25 | 76 tests, offline queue hardening, bounded polling, error zone, Sentry | Architecture docs still thin |
-| Docs / harness | B | 2026-07-22 | Agent map + checks introduced | Generated schema must stay fresh |
-| Infra / CI | B | 2026-07-25 | Backend + frontend + flutter CI, Sentry on web + mobile | Backend missing sentry-sdk |
+| Subscriptions / Stripe | B | 2026-07-31 | Webhook tests (incl. Plus activation), plan-limit/entitlement tests | Three tiers live; Stripe Plus price IDs must be set in env |
+| Web frontend | B- | 2026-07-31 | 25 Vitest files / 77 test cases, API retry, feature error boundaries, Sentry, global error handlers | No authenticated browser E2E; build writes tracked `public/sitemap.xml` |
+| Flutter | B | 2026-07-31 | Full Flutter suite (106 tests), offline queue hardening, bounded polling, error zone, Sentry | No `integration_test/` suite; SDK cache must be writable for local verification |
+| Docs / harness | B- | 2026-07-31 | Story ledger, architecture/docs/theme checks, conditional repo-wide runner | Curated API/schema docs can drift; unavailable toolchains need explicit follow-up |
+| Infra / CI | B- | 2026-07-31 | Backend + frontend + Flutter CI, Sentry on web + mobile | Backend missing `sentry-sdk`; no hosted smoke/load gate; public storage URL debt remains |
 
 ## How to use
 
 - Before large work in a **C/D** domain, read related tests and open an exec plan.  
 - After improving a domain, bump the grade and date.  
 - Link deferred work to `exec-plans/tech-debt-tracker.md`.
+- A green unit or static check is boundary evidence only. Run
+  `./scripts/check_all.sh` and inspect the ledger before calling a story
+  verified.

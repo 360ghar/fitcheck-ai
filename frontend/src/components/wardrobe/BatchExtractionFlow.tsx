@@ -18,10 +18,16 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ToastAction } from '@/components/ui/toast';
 import { useToast } from '@/components/ui/use-toast';
+import { logger } from '@/lib/logger';
 import { WizardSteps } from '@/components/ui/wizard-steps';
 import { useBatchExtraction, useSocialImportQueue } from '@/hooks';
 import { createItem, uploadItemImages } from '@/api/items';
 import { parallelWithRetry } from '@/lib/retry';
+import {
+  createOutfitsFromUploads,
+  createOutfitFromSavedItems,
+  type UploadedOutfitPiece,
+} from '@/lib/outfit-from-upload';
 import { normalizeUseCases } from '@/lib/use-cases';
 import { BatchImageSelector } from './BatchImageSelector';
 import { BatchExtractionProgress } from './BatchExtractionProgress';
@@ -33,6 +39,7 @@ import { SocialImportAuthPrompt } from './SocialImportAuthPrompt';
 import { SocialImportQueueReview } from './SocialImportQueueReview';
 import { SocialImportProgress } from './SocialImportProgress';
 import type { BatchJobUiStatus, DetectedItem, ItemCreate } from '@/types';
+import { FEATURES } from '@/lib/feature-flags';
 
 const BATCH_WIZARD_STEPS = [
   { id: 'select', label: 'Select' },
@@ -131,7 +138,7 @@ function buildJobUiStatus(params: {
   } else if (step === 'review') {
     label = itemCount > 0 ? `Ready · Review ${itemCount} items` : 'Ready · Review';
   } else if (step === 'saving') {
-    label = 'Saving to wardrobe…';
+    label = 'Saving to closet…';
   }
 
   return {
@@ -167,7 +174,15 @@ function generateItemName(item: DetectedItem): string {
   return parts.join(' ') || 'New Item';
 }
 
-function dataURLtoFile(dataUrl: string, filename: string): File {
+/**
+ * Turn a data URL into an upload-ready `File`.
+ *
+ * Takes a base NAME, not a full filename, and appends the extension itself:
+ * the mime is already parsed out of the data URL here, and the backend now
+ * returns matted cutouts as WebP, so a hardcoded `.png` at the call site would
+ * mislabel every one of them. One place decides the format.
+ */
+function dataURLtoFile(dataUrl: string, basename: string): File {
   const arr = dataUrl.split(',');
   const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
   const bstr = atob(arr[1]);
@@ -176,7 +191,11 @@ function dataURLtoFile(dataUrl: string, filename: string): File {
   while (n--) {
     u8arr[n] = bstr.charCodeAt(n);
   }
-  return new File([u8arr], filename, { type: mime });
+  // `image/jpeg` is the one subtype whose conventional extension is not just
+  // the subtype itself; `image/svg+xml` would otherwise keep its `+xml`.
+  const subtype = mime.split('/')[1]?.split('+')[0]?.toLowerCase() || 'png';
+  const extension = subtype === 'jpeg' ? 'jpg' : subtype;
+  return new File([u8arr], `${basename}.${extension}`, { type: mime });
 }
 
 // ============================================================================
@@ -212,7 +231,7 @@ export function BatchExtractionFlow({
   // not when the user deliberately closes an already-open review dialog.
   const prevStepRef = useRef(state.step);
   const socialImport = useSocialImportQueue();
-  const socialImportEnabled = import.meta.env.VITE_ENABLE_SOCIAL_IMPORT === 'true';
+  const socialImportEnabled = FEATURES.socialImport;
   const [inputMode, setInputMode] = useState<'upload' | 'social'>('upload');
 
   // Local state for saving
@@ -541,7 +560,7 @@ export function BatchExtractionFlow({
       async (item) => {
         // Studio photo if ready, otherwise the uploaded source photo.
         const imageFile = item.generatedImageUrl
-          ? dataURLtoFile(item.generatedImageUrl, `${item.tempId}.png`)
+          ? dataURLtoFile(item.generatedImageUrl, item.tempId)
           : sourceFileFor(item);
 
         if (!imageFile) {
@@ -590,7 +609,7 @@ export function BatchExtractionFlow({
         initialDelayMs: 1000,
         backoffFactor: 2,
         onRetry: (attempt, error, delayMs) => {
-          console.log(`Retrying item save, attempt ${attempt}, waiting ${delayMs}ms`, error);
+          logger.info(`Retrying item save, attempt ${attempt}, waiting ${delayMs}ms`, error);
         },
         onItemComplete: () => {
           completedRef.current += 1;
@@ -612,6 +631,28 @@ export function BatchExtractionFlow({
       }
     });
 
+    // Auto-create one outfit per source photo from the items we just saved, and kick off
+    // a single render of the person wearing it (mirrors the outfit builder). Fire-and-forget
+    // so it never blocks or breaks the item-save completion path.
+    try {
+      const groups = new Map<string, UploadedOutfitPiece[]>();
+      parallelResults.forEach((result, index) => {
+        if (!result.success || !result.data) return;
+        const detected = itemsToSave[index];
+        const saved = result.data as { id?: string };
+        if (!detected || !saved?.id) return;
+        const key = detected.sourceImageId ?? 'single';
+        const list = groups.get(key) ?? [];
+        list.push({ id: saved.id, category: detected.category });
+        groups.set(key, list);
+      });
+      void createOutfitsFromUploads(groups).catch((err) =>
+        logger.warn('Auto-outfit creation from uploads failed', err)
+      );
+    } catch (err) {
+      logger.warn('Auto-outfit grouping failed', err);
+    }
+
     // Cleanup and notify
     setIsSavePending(false);
     reset();
@@ -626,6 +667,26 @@ export function BatchExtractionFlow({
     onJobStatusChange,
     isSavePending,
   ]);
+
+  // ============================================================================
+  // SOCIAL IMPORT — auto-outfit on approve
+  // ============================================================================
+
+  const handleSocialApprove = useCallback(async () => {
+    try {
+      const savedItems = await socialImport.approveAwaiting();
+      const pieces: UploadedOutfitPiece[] = (savedItems || [])
+        .filter((s) => s?.id)
+        .map((s) => ({ id: s.id, category: s.category ?? 'other' }));
+      if (pieces.length > 0) {
+        void createOutfitFromSavedItems(pieces).catch((err) =>
+          logger.warn('Auto-outfit from social import failed', err)
+        );
+      }
+    } catch (err) {
+      logger.warn('Social approve failed', err);
+    }
+  }, [socialImport]);
 
   // ============================================================================
   // RENDER HELPERS
@@ -644,7 +705,7 @@ export function BatchExtractionFlow({
       case 'review':
         return 'Review Items';
       case 'saving':
-        return 'Saving to Wardrobe';
+        return 'Saving to Closet';
       default:
         return 'Batch Upload';
     }
@@ -654,20 +715,20 @@ export function BatchExtractionFlow({
     switch (state.step) {
       case 'select':
         return inputMode === 'social'
-          ? 'Import wardrobe candidates from an Instagram/Facebook profile URL with queued review.'
+          ? 'Import closet candidates from an Instagram/Facebook profile URL with queued review.'
           : 'AI finds each clothing item (about a minute), then polishes clean studio photos in the background (a few minutes). You can review and edit items as they arrive.';
       case 'uploading':
         return 'Preparing your images for processing…';
       case 'extracting':
         return 'Detecting clothing in your photos…';
       case 'generating':
-        return 'Creating clean wardrobe photos you can mix and match…';
+        return 'Creating clean closet photos you can mix and match…';
       case 'review':
         return state.isGenerationRunning
           ? 'Edit details now. Studio photos appear as they are ready.'
-          : 'Review and edit extracted items before saving to your wardrobe.';
+          : 'Review and edit extracted items before saving to your closet.';
       case 'saving':
-        return 'Saving items to your wardrobe…';
+        return 'Saving items to your closet…';
       default:
         return '';
     }
@@ -728,7 +789,7 @@ export function BatchExtractionFlow({
                     type="button"
                     className={`rounded px-3 py-1.5 text-sm ${
                       inputMode === 'upload'
-                        ? 'bg-background text-foreground shadow-sm'
+                        ? 'bg-background text-foreground'
                         : 'text-muted-foreground'
                     }`}
                     onClick={() => setInputMode('upload')}
@@ -739,7 +800,7 @@ export function BatchExtractionFlow({
                     type="button"
                     className={`rounded px-3 py-1.5 text-sm ${
                       inputMode === 'social'
-                        ? 'bg-background text-foreground shadow-sm'
+                        ? 'bg-background text-foreground'
                         : 'text-muted-foreground'
                     }`}
                     onClick={() => setInputMode('social')}
@@ -806,7 +867,7 @@ export function BatchExtractionFlow({
                         awaitingPhoto={socialImport.state.job.awaiting_review_photo || undefined}
                         bufferedPhoto={socialImport.state.job.buffered_photo || undefined}
                         processingPhoto={socialImport.state.job.processing_photo || undefined}
-                        onApprove={socialImport.approveAwaiting}
+                        onApprove={handleSocialApprove}
                         onReject={socialImport.rejectAwaiting}
                         onItemUpdate={socialImport.updateItem}
                       />
@@ -974,6 +1035,10 @@ export function BatchExtractionFlow({
                 <BatchOriginalsReview images={state.images} />
               </div>
 
+              <p className="text-xs text-muted-foreground -mt-1">
+                We’ll auto-create an outfit from each photo and generate the look when you save.
+              </p>
+
               {/* Items grid */}
               <ExtractedItemsGrid
                 items={activeItems}
@@ -1000,7 +1065,7 @@ export function BatchExtractionFlow({
               </div>
               <div className="text-center space-y-2">
                 <p className="text-lg font-medium text-gray-900 dark:text-white">
-                  Saving items to wardrobe...
+                  Saving items to closet...
                 </p>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {Math.round(savingProgress)}% complete
@@ -1008,7 +1073,7 @@ export function BatchExtractionFlow({
               </div>
               <Progress value={savingProgress} className="w-64 h-2" />
               <p className="text-xs text-gray-400 dark:text-gray-500">
-                Uploading items to your wardrobe…
+                Uploading items to your closet…
               </p>
             </div>
           )}

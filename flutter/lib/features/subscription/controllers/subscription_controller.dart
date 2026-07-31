@@ -25,8 +25,25 @@ class SubscriptionController extends GetxController {
   final RxString referralError = ''.obs;
 
   // Computed properties
-  bool get isPro => subscription.value?.planType != PlanType.free;
+  bool get isPro {
+    final plan = subscription.value?.planType;
+    // An unknown plan (fetch failed / still pending) must not be treated as
+    // paid, or the page would show pricing and a "Cancel subscription"
+    // section for a user whose entitlement is unknown.
+    return plan != null && plan != PlanType.free;
+  }
   bool get isCancelled => subscription.value?.cancelAtPeriodEnd ?? false;
+
+  /// Whether a higher tier exists to upsell (Free and Plus users).
+  ///
+  /// Distinct from [isPro]: a Plus subscriber is entitled to every paid
+  /// feature but can still move up to Pro, so an upgrade CTA gated on
+  /// `!isPro` would leave them with no way to do it.
+  bool get canUpgrade {
+    final plan = subscription.value?.planType;
+    if (plan == null) return false; // entitlement unknown (fetch failed / pending)
+    return plan != PlanType.proMonthly && plan != PlanType.proYearly;
+  }
 
   /// Whether monetization CTAs (paywall, Stripe checkout, pricing) may render.
   /// OFF on iOS for v1 (App Store Guideline 3.1.1 anti-steering).
@@ -34,6 +51,10 @@ class SubscriptionController extends GetxController {
 
   String get planName {
     switch (subscription.value?.planType) {
+      case PlanType.plusMonthly:
+        return 'Plus Monthly';
+      case PlanType.plusYearly:
+        return 'Plus Yearly';
       case PlanType.proMonthly:
         return 'Pro Monthly';
       case PlanType.proYearly:
@@ -145,7 +166,19 @@ class SubscriptionController extends GetxController {
       final session = await _repository.createCheckoutSession(
         planType: planType,
       );
-      final url = Uri.parse(session.checkoutUrl);
+      if (session.updated) {
+        // Paid-plan changes are applied directly to the existing Stripe
+        // subscription. Refresh local entitlements instead of opening a
+        // checkout URL that the backend deliberately did not return.
+        await fetchSubscription();
+        return;
+      }
+      final checkoutUrl = session.checkoutUrl;
+      if (checkoutUrl == null || checkoutUrl.isEmpty) {
+        error.value = 'Checkout did not return a payment link';
+        return;
+      }
+      final url = Uri.parse(checkoutUrl);
       if (await canLaunchUrl(url)) {
         await launchUrl(url, mode: LaunchMode.externalApplication);
       } else {

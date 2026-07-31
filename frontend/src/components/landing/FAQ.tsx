@@ -25,7 +25,7 @@ export const LANDING_FAQS = [
   {
     question: 'How does AI wardrobe extraction work?',
     answer:
-      'Upload a photo of your clothes — individually or as a flat lay or hang. FitCheck identifies each item, extracts colors, categorizes it (tops, bottoms, shoes, and more), and adds style tags. It usually finishes in seconds. Multi-item photos and batch uploads are supported in the app.',
+      'Upload a photo of your clothes — individually or as a flat lay or hang. FitCheck identifies each item, extracts colors, categorizes it (tops, bottoms, shoes, and more), and adds style tags. Review the extracted details before saving. Multi-item photos and batch uploads are supported in the app.',
   },
   {
     question: 'Is FitCheck AI free?',
@@ -86,7 +86,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
           <ChevronDown
             className={cn(
               'w-5 h-5 text-stone-400 transition-transform shrink-0',
-              isOpen && 'rotate-180 text-indigo-600 dark:text-indigo-400'
+              isOpen && 'rotate-180 text-primary'
             )}
           />
         </CollapsibleTrigger>
@@ -97,21 +97,21 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
               <p className="text-sm">
                 <Link
                   to="/compare/fitcheck-vs-acloset"
-                  className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                  className="text-primary hover:text-primary-pressed"
                 >
                   FitCheck vs Acloset
                 </Link>
                 {' · '}
                 <Link
                   to="/compare/fitcheck-vs-whering"
-                  className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                  className="text-primary hover:text-primary-pressed"
                 >
                   FitCheck vs Whering
                 </Link>
                 {' · '}
                 <Link
                   to="/best/virtual-closet-apps"
-                  className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                  className="text-primary hover:text-primary-pressed"
                 >
                   Best virtual closet apps
                 </Link>
@@ -121,21 +121,21 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
               <p className="text-sm">
                 <Link
                   to="/for/busy-professionals"
-                  className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                  className="text-primary hover:text-primary-pressed"
                 >
                   Professionals
                 </Link>
                 {' · '}
                 <Link
                   to="/for/content-creators"
-                  className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                  className="text-primary hover:text-primary-pressed"
                 >
                   Creators
                 </Link>
                 {' · '}
                 <Link
                   to="/for/festive-and-wedding-outfits"
-                  className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                  className="text-primary hover:text-primary-pressed"
                 >
                   Festive & wedding
                 </Link>
@@ -145,7 +145,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
               <p className="text-sm">
                 <Link
                   to="/privacy"
-                  className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                  className="text-primary hover:text-primary-pressed"
                 >
                   Privacy Policy
                 </Link>
@@ -186,7 +186,7 @@ export default function FAQ() {
             Need more detail?{' '}
             <Link
               to="/faq"
-              className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+              className="text-primary hover:text-primary-pressed"
             >
               Full FAQ
             </Link>

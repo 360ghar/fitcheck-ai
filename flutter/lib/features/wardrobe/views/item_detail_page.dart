@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
@@ -419,7 +420,7 @@ class ItemDetailPage extends StatelessWidget {
                   context,
                   'Last Worn',
                   item.lastWornAt != null
-                      ? _formatDate(item.lastWornAt!)
+                      ? AppDateUtils.formatRelativeTime(item.lastWornAt!)
                       : 'Never',
                   Icons.calendar_today,
                   tokens,
@@ -486,21 +487,21 @@ class ItemDetailPage extends StatelessWidget {
                 _buildDetailRow(
                   context,
                   'Purchased',
-                  _formatDate(item.purchaseDate!),
+                  AppDateUtils.formatRelativeTime(item.purchaseDate!),
                   tokens,
                 ),
               if (item.createdAt != null)
                 _buildDetailRow(
                   context,
                   'Added',
-                  _formatDate(item.createdAt!),
+                  AppDateUtils.formatRelativeTime(item.createdAt!),
                   tokens,
                 ),
               if (item.updatedAt != null)
                 _buildDetailRow(
                   context,
                   'Updated',
-                  _formatDate(item.updatedAt!),
+                  AppDateUtils.formatRelativeTime(item.updatedAt!),
                   tokens,
                 ),
             ],
@@ -588,22 +589,6 @@ class ItemDetailPage extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) return 'Today';
-    if (difference.inDays == 1) return 'Yesterday';
-    if (difference.inDays < 7) return '${difference.inDays} days ago';
-    if (difference.inDays < 30) {
-      return '${(difference.inDays / 7).floor()} weeks ago';
-    }
-    if (difference.inDays < 365) {
-      return '${(difference.inDays / 30).floor()} months ago';
-    }
-    return '${(difference.inDays / 365).floor()} years ago';
   }
 
   IconData _getCategoryIcon(Category category) {

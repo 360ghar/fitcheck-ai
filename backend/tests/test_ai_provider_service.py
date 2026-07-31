@@ -530,10 +530,11 @@ class _ChatHttpStatusClient:
     """Sequence of chat HTTP outcomes: int status codes raise HTTPStatusError;
     a dict payload is returned as a successful chat completion."""
 
-    def __init__(self, outcomes):
+    def __init__(self, outcomes, retry_after="0"):
         self.outcomes = list(outcomes)
         self.call_count = 0
         self.calls = []
+        self.retry_after = retry_after
 
     async def post(self, url, json=None, headers=None):
         self.call_count += 1
@@ -570,7 +571,7 @@ class _ChatHttpStatusClient:
         return _StatusResponse(
             outcome,
             {"error": {"message": f"provider error {outcome}"}},
-            {"Retry-After": "0"} if outcome in (429, 503) else {},
+            {"Retry-After": self.retry_after} if outcome in (429, 503) else {},
             request,
         )
 
@@ -681,6 +682,86 @@ async def test_chat_400_fails_fast_non_retryable():
     assert fake_client.call_count == 1
     assert exc_info.value.retryable is False
     assert "400" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_structured_chat_retries_without_response_format_when_provider_rejects_it():
+    """Some OpenAI-compatible gateways reject structured-output options even
+    though the same model supports ordinary chat."""
+    service = AIProviderService(_make_config())
+
+    class _ResponseFormatClient:
+        def __init__(self):
+            self.payloads = []
+
+        async def post(self, url, json=None, headers=None):
+            self.payloads.append(json)
+            if "response_format" in json:
+                request = httpx.Request("POST", url)
+                response = httpx.Response(
+                    400,
+                    request=request,
+                    json={"error": {"message": "response_format is not supported"}},
+                )
+                raise httpx.HTTPStatusError("unsupported response format", request=request, response=response)
+            return _FakeResponse({"choices": [{"message": {"content": "fallback text"}}]})
+
+    client = _ResponseFormatClient()
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=client)):
+        result = await service.chat(
+            messages=[ChatMessage(role="user", content="return JSON")],
+            response_format={"type": "json_object"},
+        )
+
+    assert result.text == "fallback text"
+    assert len(client.payloads) == 2
+    assert "response_format" in client.payloads[0]
+    assert "response_format" not in client.payloads[1]
+
+
+@pytest.mark.asyncio
+async def test_chat_retry_honors_retry_after_header():
+    service = AIProviderService(_make_config())
+    fake_client = _ChatHttpStatusClient(
+        [429, {"choices": [{"message": {"content": "recovered"}}]}],
+        retry_after="4",
+    )
+    sleep = AsyncMock()
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
+         patch("asyncio.sleep", sleep):
+        result = await service.chat(messages=[ChatMessage(role="user", content="hi")])
+
+    assert result.text == "recovered"
+    assert sleep.await_args_list[0].args[0] == 4
+
+
+def test_malformed_chat_payload_is_a_controlled_non_retryable_error():
+    service = AIProviderService(_make_config())
+
+    with pytest.raises(AIServiceError) as exc_info:
+        service._parse_chat_response({"choices": []}, "model")
+
+    assert exc_info.value.retryable is False
+    assert exc_info.value.error_kind == "hard"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"choices": [{"message": {"content": 123}}]},
+        {"choices": [{"message": {"images": [{"type": "image_url", "image_url": None}]}}]},
+        {"choices": [{"message": {"content": "ok"}}], "usage": None},
+    ],
+)
+def test_malformed_nested_chat_payload_is_controlled_non_retryable_error(payload):
+    service = AIProviderService(_make_config())
+
+    with pytest.raises(AIServiceError) as exc_info:
+        service._parse_chat_response(payload, "model")
+
+    assert exc_info.value.retryable is False
+    assert exc_info.value.error_kind == "hard"
 
 
 @pytest.mark.asyncio
@@ -1056,3 +1137,71 @@ class TestHybridGeminiVisionLeg:
 
         close_mock.assert_awaited_once()
         assert service._native_vision_provider is None
+
+
+class TestMaxOutputTokensConfig:
+    """The old hardcoded max_tokens=4096 truncated large structured
+    extractions and surfaced to users as "finish_reason=length" errors.
+    These guard the raised default (32768) and the AI_MAX_OUTPUT_TOKENS env
+    override path, so the regression can't silently return."""
+
+    def test_config_field_default_is_raised_above_4096(self):
+        """ProviderConfig.max_tokens must default well above the old 4096."""
+        cfg = ProviderConfig(api_url="https://x/v1", api_key="k", model="m")
+        assert cfg.max_tokens >= 32768
+
+    def test_settings_default_is_32768(self):
+        """AI_MAX_OUTPUT_TOKENS ships at 32K (under both providers' >=64K caps)."""
+        from app.core.config import Settings
+
+        assert Settings.model_fields["AI_MAX_OUTPUT_TOKENS"].default == 32768
+
+    def test_from_settings_reads_ai_max_output_tokens_for_custom(self):
+        """ProviderConfig.from_settings(CUSTOM) must honor the env value,
+        not fall back to the hardcoded default."""
+        from types import SimpleNamespace
+
+        s = SimpleNamespace(
+            AI_CHAT_API_URL="https://apihub.agnes-ai.com/v1",
+            AI_CHAT_API_KEY="k",
+            AI_CHAT_MODEL="agnes-2.5-flash",
+            AI_VISION_API_URL=None,
+            AI_VISION_API_KEY=None,
+            AI_VISION_MODEL="gemini-3.6-flash",
+            AI_VISION_PROVIDER="gemini",
+            AI_GEMINI_API_KEY="gk",
+            AI_VISION_FALLBACK_API_URL=None,
+            AI_VISION_FALLBACK_API_KEY=None,
+            AI_VISION_FALLBACK_MODEL="agnes-2.5-flash",
+            AI_IMAGE_API_URL=None,
+            AI_IMAGE_API_KEY=None,
+            AI_IMAGE_MODEL="agnes-image-2.1-flash",
+            AI_IMAGE_API_STYLE="images",
+            AI_IMAGE_FALLBACK_API_URL=None,
+            AI_IMAGE_FALLBACK_API_KEY=None,
+            AI_IMAGE_FALLBACK_MODEL="agnes-image-2.0-flash",
+            AI_MAX_OUTPUT_TOKENS=16384,
+        )
+        cfg = ProviderConfig.from_settings(AIProvider.CUSTOM, s)
+        assert cfg.max_tokens == 16384
+
+    def test_from_user_dict_inherits_system_ceiling(self):
+        """BYOK configs get the same output ceiling as the system config."""
+        cfg = ProviderConfig.from_user_dict({"api_url": "https://x/v1"}, api_key="k")
+        from app.core.config import settings
+
+        assert cfg.max_tokens == settings.AI_MAX_OUTPUT_TOKENS
+
+    def test_hybrid_vision_gemini_config_inherits_parent_max_tokens(self):
+        """Regression: the internal GeminiConfig built for the hybrid vision
+        leg used to be constructed with max_tokens unset, pinning native
+        Gemini vision at 4096 even after the OpenAI leg was raised. It must
+        now inherit the parent ProviderConfig's value."""
+        config = _make_config()
+        config.max_tokens = 20480
+        config.vision_provider = AIProvider.GEMINI
+        config.vision_gemini_api_key = "gemini-key"
+        service = AIProviderService(config)
+
+        native = service._get_native_vision_provider()
+        assert native.config.max_tokens == 20480

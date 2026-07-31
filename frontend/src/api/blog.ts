@@ -111,11 +111,21 @@ export async function deleteBlogPost(slug: string): Promise<{ slug: string; dele
 export async function getAllBlogPosts(
   page: number = 1,
   pageSize: number = 20,
-  includeUnpublished: boolean = true
+  includeUnpublished: boolean = true,
+  filters?: { category?: string; search?: string; status?: 'published' | 'draft' | 'all' }
 ): Promise<BlogPostListResponse> {
   try {
+    const params: Record<string, string | number | boolean> = {
+      page,
+      page_size: pageSize,
+      include_unpublished: includeUnpublished,
+    }
+    if (filters?.category && filters.category !== 'all') params.category = filters.category
+    if (filters?.search) params.search = filters.search
+    if (filters?.status && filters.status !== 'all') params.status = filters.status
+
     const response = await apiClient.get<ApiEnvelope<BlogPostListResponse>>('/api/v1/blog/admin/posts', {
-      params: { page, page_size: pageSize, include_unpublished: includeUnpublished },
+      params,
     })
     return response.data.data
   } catch (error) {

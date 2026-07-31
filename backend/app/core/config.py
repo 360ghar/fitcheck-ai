@@ -151,6 +151,13 @@ class Settings(BaseSettings):
     AI_IMAGE_FALLBACK_API_KEY: Optional[str] = None
     AI_IMAGE_FALLBACK_MODEL: str = "agnes-image-2.0-flash"
 
+    # Max output tokens per AI call. Both current providers comfortably exceed
+    # this: gemini-3.6-flash caps at 64K output, the Agnes gateway (agnes-2.5-
+    # flash / agnes-3.5-pro-alpha) at 65.5K. The old hardcoded 4096 default
+    # truncated large structured extractions and surfaced as "finish_reason=
+    # length / MAX_TOKENS" errors to users.
+    AI_MAX_OUTPUT_TOKENS: int = 32768
+
     # Rate Limiting (legacy daily limits - used as fallback)
     AI_DAILY_EXTRACTION_LIMIT: int = 100
     AI_DAILY_GENERATION_LIMIT: int = 50
@@ -166,6 +173,8 @@ class Settings(BaseSettings):
     # Stripe Configuration
     STRIPE_SECRET_KEY: Optional[str] = None
     STRIPE_WEBHOOK_SECRET: Optional[str] = None
+    STRIPE_PLUS_MONTHLY_PRICE_ID: Optional[str] = None
+    STRIPE_PLUS_YEARLY_PRICE_ID: Optional[str] = None
     STRIPE_PRO_MONTHLY_PRICE_ID: Optional[str] = None
     STRIPE_PRO_YEARLY_PRICE_ID: Optional[str] = None
 
@@ -174,11 +183,17 @@ class Settings(BaseSettings):
     PLAN_FREE_MONTHLY_GENERATIONS: int = 50
     PLAN_FREE_MONTHLY_EMBEDDINGS: int = 200
 
+    PLAN_PLUS_MONTHLY_EXTRACTIONS: int = 100
+    PLAN_PLUS_MONTHLY_GENERATIONS: int = 350
+    PLAN_PLUS_MONTHLY_EMBEDDINGS: int = 2000
+
     PLAN_PRO_MONTHLY_EXTRACTIONS: int = 200
     PLAN_PRO_MONTHLY_GENERATIONS: int = 1000
     PLAN_PRO_MONTHLY_EMBEDDINGS: int = 5000
 
     # Plan Pricing (for display purposes)
+    PLAN_PLUS_MONTHLY_PRICE: float = 10.00
+    PLAN_PLUS_YEARLY_PRICE: float = 100.00
     PLAN_PRO_MONTHLY_PRICE: float = 20.00
     PLAN_PRO_YEARLY_PRICE: float = 200.00
 
@@ -187,6 +202,7 @@ class Settings(BaseSettings):
 
     # Photoshoot Generator Configuration
     PLAN_FREE_DAILY_PHOTOSHOOT_IMAGES: int = 10
+    PLAN_PLUS_DAILY_PHOTOSHOOT_IMAGES: int = 30
     PLAN_PRO_DAILY_PHOTOSHOOT_IMAGES: int = 50
     PHOTOSHOOT_CONCURRENCY_LIMIT: int = 2  # Max concurrent image generations (lower = fewer protocol/OOM failures)
 
@@ -198,6 +214,31 @@ class Settings(BaseSettings):
     # under high parallelism, so raise cautiously.
     AI_EXTRACTION_CONCURRENCY: int = 30
     AI_GENERATION_CONCURRENCY: int = 30
+    AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES: int = 12
+    AI_OUTFIT_ITEM_REFERENCE_DOWNLOAD_CONCURRENCY: int = 8
+    AI_MAX_OUTFIT_ITEMS: int = 100
+
+    # Outfit generation sends every selected item's own stored image to the
+    # image model as a labelled garment reference (see
+    # item_reference_service.resolve_outfit_item_references). Those references
+    # are flat studio product shots — 768px preserves color, print, and
+    # hardware while keeping the payload sane when an outfit has many items.
+    # The avatar keeps the larger image_processing default: identity needs
+    # more pixels than a garment does.
+    AI_OUTFIT_ITEM_REFERENCE_MAX_EDGE: int = 768
+
+    # Gamification
+    #
+    # Deliberately defaults to the OPPOSITE of ENABLE_SOCIAL_IMPORT below.
+    # Nothing in this backend ever WRITES user_streaks or user_achievements --
+    # the only insert is the zeroed row at gamification.py:96 -- so every user
+    # sees a permanent 0-day streak and an all-zero leaderboard. Shipping that
+    # is worse than not shipping it, hence off by default.
+    #
+    # NOTE: when this is False the gamification router stays MOUNTED (see the
+    # comment at main.py's include_router call); only the handler bodies are
+    # short-circuited to a neutral zeroed 200. Never turn this into a 404.
+    ENABLE_GAMIFICATION: bool = False
 
     # Social Import
     ENABLE_SOCIAL_IMPORT: bool = True
@@ -225,6 +266,23 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = "logs"
+
+    @field_validator("AI_GENERATION_CONCURRENCY", "AI_EXTRACTION_CONCURRENCY", mode="after")
+    @classmethod
+    def _cap_process_concurrency(cls, value: int) -> int:
+        """Clamp process-wide concurrency caps.
+
+        ``extraction_jobs.generation_batch_size`` (migration 023) is bounded
+        by a DB CHECK, and the API mirrors the configured cap into that
+        column; an uncapped config could therefore persist a value the
+        database rejects. 100 is a generous ceiling — the shared AI gateways
+        start failing well below it — and keeps config and DB in agreement.
+        Values below 1 floor at 1 (a zero-cap semaphore would deadlock), which
+        matches the historical behavior in app.core.concurrency.
+        """
+        if value < 1:
+            return 1
+        return min(value, 100)
 
     class Config:
         # Load env keys regardless of whether process is started from repo root

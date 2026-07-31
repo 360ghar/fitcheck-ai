@@ -9,7 +9,7 @@ soon as each image's items are detected (overlapped with remaining extracts).
 import asyncio
 import base64
 import logging
-from datetime import datetime
+from app.utils.datetime_util import utcnow_iso
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 import httpx
@@ -45,6 +45,12 @@ class BatchExtractionService:
     def __init__(self, user_id: str, db):
         self.user_id = user_id
         self.db = db
+        # Set when an image fails with an unrecoverable upstream capacity/quota
+        # error (both Gemini and the Agnes fallback failed). Subsequent images
+        # waiting on EXTRACTION_SEMAPHORE see this and skip without burning more
+        # guaranteed-to-fail VLM calls. Per-instance == per-job (the service is
+        # constructed fresh for each pipeline run).
+        self._extraction_capacity_exhausted = False
 
     async def run_pipeline(self, job: BatchJob) -> None:
         """
@@ -63,6 +69,7 @@ class BatchExtractionService:
                 try:
                     await gen_queue.put(None)
                 except Exception:
+                    # Cleanup path - queue may already be closed.
                     pass
             if consumer_task is None:
                 return
@@ -136,7 +143,7 @@ class BatchExtractionService:
             await BatchJobService.broadcast_event(job.job_id, "job_failed", {
                 "job_id": job.job_id,
                 "error": error_msg,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utcnow_iso(),
             })
             await BatchJobService.release_image_payloads(job.job_id)
             await BatchJobService.clear_event_history(job.job_id)
@@ -158,7 +165,7 @@ class BatchExtractionService:
         await BatchJobService.broadcast_event(job.job_id, "extraction_started", {
             "job_id": job.job_id,
             "total_images": job.total_images,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow_iso(),
         })
 
         agent = await get_item_extraction_agent(user_id=self.user_id, db=self.db)
@@ -187,7 +194,7 @@ class BatchExtractionService:
             "successful": len(job.extraction_completed),
             "failed": len(job.extraction_failed),
             "total_items_detected": job.total_items,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow_iso(),
         })
 
         # If the generation consumer already died, surface its real error now
@@ -209,6 +216,31 @@ class BatchExtractionService:
         # pin tens of MB of RAM until the job TTL expires.
         await BatchJobService.release_image_payloads(job.job_id)
 
+    async def _skip_due_to_capacity(self, job: BatchJob, image_id: str) -> bool:
+        """Mark an image skipped when upstream AI capacity is exhausted.
+
+        Shared by the semaphore-entry check and the pre-call re-check: tasks
+        admitted concurrently can all pass the entry check before the flag is
+        set by the first failure, so the re-check guarantees only truly
+        in-flight calls reach the provider.
+        """
+        if not self._extraction_capacity_exhausted:
+            return False
+        skip_msg = "Skipped: AI service capacity exhausted"
+        await BatchJobService.mark_extraction_failed(job.job_id, image_id, skip_msg)
+        await BatchJobService.broadcast_event(job.job_id, "image_extraction_failed", {
+            "job_id": job.job_id,
+            "image_id": image_id,
+            "error": skip_msg,
+            "code": "AI_SERVICE_ERROR",
+            "error_kind": "upstream_quota",
+            "completed_count": len(job.extraction_completed),
+            "failed_count": len(job.extraction_failed),
+            "total_images": job.total_images,
+            "timestamp": utcnow_iso(),
+        })
+        return True
+
     async def _extract_single_image(
         self,
         job: BatchJob,
@@ -220,6 +252,10 @@ class BatchExtractionService:
         on_items_ready: OnItemsReady = None,
     ) -> List[Dict[str, Any]]:
         """Extract items from a single image with semaphore and retry."""
+        # Adopt a durable CANCELLED state persisted by a non-owner worker so
+        # queued extractions stop promptly instead of waiting for the next
+        # status flush.
+        await BatchJobService.check_durable_cancel(job)
         if job.is_cancelled():
             return []
         if consumer_task is not None and consumer_task.done():
@@ -229,6 +265,18 @@ class BatchExtractionService:
 
         async with EXTRACTION_SEMAPHORE:
             if job.is_cancelled():
+                return []
+            if await self._skip_due_to_capacity(job, image_id):
+                return []
+
+            # A prior image already exhausted the upstream AI capacity
+            # (Gemini free-tier quota + Agnes fallback both failed). Don't
+            # burn another guaranteed-to-fail VLM call; mark this image
+            # skipped and move on. Checked here too (not only at semaphore
+            # entry): tasks admitted concurrently can all pass the first
+            # check before the flag is set, so only truly in-flight calls
+            # proceed past this point.
+            if await self._skip_due_to_capacity(job, image_id):
                 return []
 
             # Persist the source photo to Supabase Storage BEFORE the vision
@@ -267,7 +315,7 @@ class BatchExtractionService:
                         image_base64=image_base64,
                         user_profile_image_base64=user_profile_image_base64,
                     ),
-                    max_retries=1,
+                    max_retries=2,
                     initial_delay=2.0,
                     backoff_factor=2.0,
                     retryable_exceptions=(AIServiceError,),
@@ -289,7 +337,7 @@ class BatchExtractionService:
                     "items_count": len(items),
                     "completed_count": len(job.extraction_completed),
                     "total_images": job.total_images,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow_iso(),
                 })
 
                 # Overlap: enqueue for generation immediately
@@ -306,9 +354,38 @@ class BatchExtractionService:
 
             except Exception as e:
                 error_msg = str(e)
+                # Pull the structured bucket off an AIServiceError so the UI can
+                # show "AI busy, try again shortly" (upstream_quota/transient,
+                # which are "on us") distinctly from a hard failure. The user's
+                # own plan limit is a separate RateLimitError and never reaches
+                # here (it is raised pre-flight, before the job starts).
+                error_kind = getattr(e, "error_kind", None)
+                retry_after = getattr(e, "retry_after_seconds", None)
+                code = "AI_SERVICE_ERROR"
+
+                # Unrecoverable upstream capacity exhaustion: stop grinding the
+                # remaining images. The Agnes fallback already tried and failed
+                # inside chat_with_vision, so retrying won't help.
+                if error_kind == "upstream_quota" and not self._extraction_capacity_exhausted:
+                    self._extraction_capacity_exhausted = True
+                    await BatchJobService.broadcast_event(
+                        job.job_id, "extraction_capacity_exhausted", {
+                            "job_id": job.job_id,
+                            "error": "AI service capacity exhausted; remaining images skipped",
+                            "code": code,
+                            "error_kind": error_kind,
+                            "timestamp": utcnow_iso(),
+                        }
+                    )
+
                 logger.error(
                     f"Extraction failed for image {image_id}",
-                    extra={"job_id": job.job_id, "error": error_msg},
+                    extra={
+                        "job_id": job.job_id,
+                        "error": error_msg,
+                        "error_kind": error_kind,
+                        "retry_after_seconds": retry_after,
+                    },
                 )
 
                 await BatchJobService.mark_extraction_failed(job.job_id, image_id, error_msg)
@@ -317,10 +394,13 @@ class BatchExtractionService:
                     "job_id": job.job_id,
                     "image_id": image_id,
                     "error": error_msg,
+                    "code": code,
+                    "error_kind": error_kind,
+                    "retry_after_seconds": retry_after,
                     "completed_count": len(job.extraction_completed),
                     "failed_count": len(job.extraction_failed),
                     "total_images": job.total_images,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow_iso(),
                 })
 
                 return []
@@ -431,6 +511,9 @@ class BatchExtractionService:
 
         try:
             while True:
+                # Adopt a durable CANCELLED state persisted by a non-owner
+                # worker between batches.
+                await BatchJobService.check_durable_cancel(job)
                 if job.is_cancelled():
                     # Drop remaining queue without generating; still wait in-flight below.
                     break
@@ -465,7 +548,7 @@ class BatchExtractionService:
                             # Continuous pool (not discrete waves). Clients may
                             # ignore total_batches when 0.
                             "total_batches": 0,
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": utcnow_iso(),
                         },
                     )
 
@@ -499,7 +582,7 @@ class BatchExtractionService:
                         "total_items": job.total_items,
                         "successful": len(job.generation_completed),
                         "failed": len(job.generation_failed),
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": utcnow_iso(),
                     },
                 )
 
@@ -592,7 +675,9 @@ class BatchExtractionService:
                         sub_category=item.sub_category,
                         colors=item.colors,
                         material=item.material,
-                        background="white",
+                        # "transparent" -> flat white prompt + server-side
+                        # matte (app/utils/background_removal.py).
+                        background="transparent",
                         view_angle="front",
                         include_shadows=False,
                         reference_image=reference_image_base64,
@@ -623,7 +708,7 @@ class BatchExtractionService:
                     "generated_image_base64": image_base64,
                     "completed_count": len(job.generation_completed),
                     "total_items": job.total_items,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow_iso(),
                 })
 
                 return image_base64
@@ -649,7 +734,7 @@ class BatchExtractionService:
                     "completed_count": len(job.generation_completed),
                     "failed_count": len(job.generation_failed),
                     "total_items": job.total_items,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": utcnow_iso(),
                 })
 
                 return None
@@ -673,7 +758,7 @@ class BatchExtractionService:
 
             result = {
                 "items": [item.to_dict() for item in job.detected_items],
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utcnow_iso(),
             }
 
             await ExtractionCacheService.set_cached_result(
@@ -708,5 +793,5 @@ class BatchExtractionService:
             "successful_generations": len(job.generation_completed),
             "failed_generations": len(job.generation_failed),
             "items": [item.to_dict() for item in job.detected_items],
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow_iso(),
         })

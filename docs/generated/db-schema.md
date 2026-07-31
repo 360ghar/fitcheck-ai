@@ -1,9 +1,18 @@
 # Database schema (generated)
 
-Generated: 2026-07-27
+Generated: 2026-08-01
 
 Source: `backend/db/supabase/migrations/`.
 Regenerate: `python scripts/generate_db_schema_doc.py`.
+
+## Limitations
+
+> This file is produced by regular-expression heuristics, not a real SQL parser.
+> Quoted identifiers, schema-qualified names, materialized views, statements inside
+> PL/pgSQL / dollar-quoted bodies, and CREATE/ALTER TABLE calls hidden behind IF/ELSE
+> or multi-line conditional blocks may be missed or misattributed. Treat this as an
+> orientation index for agents; confirm DDL in the migration files or live Supabase
+> before relying on it.
 
 This is an orientation index for agents, not a substitute for reading migrations or live Supabase.
 
@@ -29,6 +38,16 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `017_blog_posts.sql`
 - `018_default_ai_provider_custom.sql`
 - `019_add_item_source_image.sql`
+- `020_plus_plan.sql`
+- `021_calendar_event_type.sql`
+- `022_wave_b_hardening.sql`
+- `023_durable_job_state.sql`
+- `024_atomic_daily_quota_reservations.sql`
+- `025_calendar_all_day_events.sql`
+- `026_harden_rpc_privileges.sql`
+- `027_stripe_webhook_processing_state.sql`
+- `028_configurable_social_import_limit.sql`
+- `029_pr9_hardening.sql`
 
 ## Tables (CREATE TABLE)
 
@@ -49,6 +68,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `outfit_generations` | `001_full_schema.sql` |
 | `outfit_images` | `001_full_schema.sql` |
 | `outfits` | `001_full_schema.sql` |
+| `photoshoot_jobs` | `023_durable_job_state.sql` |
 | `recommendation_logs` | `001_full_schema.sql` |
 | `referral_codes` | `007_subscriptions_and_referrals.sql` |
 | `referral_redemptions` | `007_subscriptions_and_referrals.sql` |
@@ -59,6 +79,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `social_import_items` | `012_social_import_pipeline.sql` |
 | `social_import_jobs` | `012_social_import_pipeline.sql` |
 | `social_import_photos` | `012_social_import_pipeline.sql` |
+| `stripe_webhook_events` | `022_wave_b_hardening.sql` |
 | `subscription_usage` | `007_subscriptions_and_referrals.sql` |
 | `subscriptions` | `007_subscriptions_and_referrals.sql` |
 | `support_tickets` | `009_support_tickets.sql` |
@@ -71,6 +92,17 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `user_streaks` | `001_full_schema.sql` |
 | `users` | `001_full_schema.sql` |
 | `waitlist` | `005_waitlist.sql` |
+
+## Required columns added after table creation
+
+| Migration | Table | Column |
+|-----------|-------|--------|
+| `021_calendar_event_type.sql` | `calendar_events` | `event_type` |
+| `025_calendar_all_day_events.sql` | `calendar_events` | `is_all_day` |
+| `027_stripe_webhook_processing_state.sql` | `stripe_webhook_events` | `status` |
+| `027_stripe_webhook_processing_state.sql` | `stripe_webhook_events` | `attempts` |
+
+These columns are added after their table's CREATE TABLE and are required (NOT NULL DEFAULT), so inserts rely on the default until a value is supplied.
 
 ## ALTER TABLE references
 
@@ -135,6 +167,17 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `017_blog_posts.sql` → `blog_posts`
 - `018_default_ai_provider_custom.sql` → `user_ai_settings`
 - `019_add_item_source_image.sql` → `items`
+- `021_calendar_event_type.sql` → `calendar_events`
+- `022_wave_b_hardening.sql` → `stripe_webhook_events`
+- `023_durable_job_state.sql` → `extraction_jobs`
+- `023_durable_job_state.sql` → `extraction_jobs`
+- `023_durable_job_state.sql` → `photoshoot_jobs`
+- `025_calendar_all_day_events.sql` → `calendar_events`
+- `027_stripe_webhook_processing_state.sql` → `stripe_webhook_events`
+- `027_stripe_webhook_processing_state.sql` → `stripe_webhook_events`
+- `027_stripe_webhook_processing_state.sql` → `stripe_webhook_events`
+- `029_pr9_hardening.sql` → `extraction_jobs`
+- `029_pr9_hardening.sql` → `extraction_jobs`
 
 ## Related
 

@@ -40,7 +40,7 @@ const faqCategories = [
     questions: [
       {
         q: 'How accurate is the AI item extraction?',
-        a: 'Our AI item extraction is highly accurate, correctly identifying clothing items, colors, and categories in over 95% of cases. The AI works best with clear, well-lit photos. You can always edit any details after extraction to ensure your wardrobe is perfectly cataloged.'
+        a: 'AI item extraction can suggest clothing items, colors, and categories from a photo. Use clear, well-lit images and review every suggested detail before saving it to your wardrobe.'
       },
       {
         q: 'What is the AI Photoshoot Generator?',
@@ -154,7 +154,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
         <span className="font-medium text-gray-900 dark:text-white pr-4">{question}</span>
         <ChevronDown
           className={cn(
-            'w-5 h-5 text-gray-500 transition-transform shrink-0',
+            'w-5 h-5 text-muted-foreground transition-transform shrink-0',
             isOpen && 'rotate-180'
           )}
         />
@@ -192,7 +192,7 @@ export default function FAQPage() {
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center mb-16">
-                <Badge className="mb-4 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border-0">
+                <Badge className="mb-4 border-0 bg-secondary text-primary">
                   FAQ
                 </Badge>
                 <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
@@ -222,7 +222,7 @@ export default function FAQPage() {
             </div>
 
             <AnimatedSection delay={400}>
-              <div className="mt-16 text-center p-8 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl">
+              <div className="mt-16 text-center p-8 bg-secondary rounded-2xl">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                   Still have questions?
                 </h3>
@@ -231,7 +231,7 @@ export default function FAQPage() {
                 </p>
                 <a
                   href="mailto:support@fitcheckaiapp.com"
-                  className="inline-flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
+                  className="inline-flex min-h-11 items-center gap-2 text-primary font-medium hover:underline"
                 >
                   <Mail className="w-4 h-4" />
                   Contact Support
@@ -248,12 +248,12 @@ export default function FAQPage() {
               <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
                 Ready to transform your wardrobe?
               </h2>
-              <p className="text-xl text-indigo-100 mb-8">
-                Join thousands using AI to organize and optimize their style
+              <p className="text-xl text-stone-300 mb-8">
+                Start with the clothes you already own
               </p>
               <Link
                 to="/auth/register"
-                className="inline-flex items-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-colors"
+                className="inline-flex min-h-11 items-center gap-2 bg-on-image text-on-image-foreground px-8 py-4 rounded-full font-semibold text-lg transition-colors hover:bg-on-image/90"
               >
                 Get Started Free
               </Link>

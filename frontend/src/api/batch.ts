@@ -5,6 +5,7 @@
  */
 
 import { apiClient, getAccessToken } from './client';
+import { ENDPOINTS } from '@/lib/endpoints';
 import type { BatchJobResponse } from '@/types';
 
 const API_BASE_URL =
@@ -85,7 +86,7 @@ export async function startBatchExtractionMultipart(
   );
 
   const response = await apiClient.post<BatchJobResponse>(
-    '/api/v1/ai/batch-extract-multipart',
+    ENDPOINTS.AI.BATCH_EXTRACT_MULTIPART,
     form,
     {
       // Match items upload: multipart (axios/browser sets boundary).
@@ -108,7 +109,7 @@ export async function startBatchExtractionMultipart(
  * @param jobId - The job ID to cancel
  */
 export async function cancelBatchJob(jobId: string): Promise<void> {
-  await apiClient.post(`/api/v1/ai/batch-extract/${jobId}/cancel`);
+  await apiClient.post(`${ENDPOINTS.AI.BATCH_EXTRACT_BASE}/${jobId}/cancel`);
 }
 
 /**
@@ -119,7 +120,7 @@ export async function cancelBatchJob(jobId: string): Promise<void> {
  */
 export async function getBatchJobStatus(jobId: string): Promise<BatchJobStatusResponse> {
   const response = await apiClient.get<BatchJobStatusResponse>(
-    `/api/v1/ai/batch-extract/${jobId}/status`
+    `${ENDPOINTS.AI.BATCH_EXTRACT_BASE}/${jobId}/status`
   );
   return response.data;
 }
@@ -145,7 +146,7 @@ export function createAuthenticatedSSEConnection(
 ): () => void {
   const controller = new AbortController();
   const token = getAccessToken();
-  const url = `${API_BASE_URL}/api/v1/ai/batch-extract/${jobId}/events`;
+  const url = `${API_BASE_URL}${ENDPOINTS.AI.BATCH_EXTRACT_BASE}/${jobId}/events`;
   const TERMINAL_EVENTS = new Set(['job_complete', 'job_failed', 'job_cancelled']);
 
   const connect = async () => {

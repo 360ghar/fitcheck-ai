@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { Loader2 } from 'lucide-react';
+import { consumeAuthReturnTo, getPostAuthDestination, withAuthContext } from './authRedirect';
 
 export default function AuthCallbackPage() {
   const navigate = useNavigate();
@@ -23,14 +24,27 @@ export default function AuthCallbackPage() {
     let redirectTimeout: ReturnType<typeof setTimeout> | undefined;
 
     const processCallback = async () => {
+      const pendingPlan = localStorage.getItem('pending_plan_type')
+      const pendingReturnTo = consumeAuthReturnTo()
+
       try {
         await handleOAuthCallback();
-        navigate('/dashboard', { replace: true });
+        // Only consume the plan intent once the OAuth round-trip actually
+        // succeeded, so a failed callback can still carry the plan into the
+        // login redirect below instead of dropping it.
+        if (pendingPlan) localStorage.removeItem('pending_plan_type')
+        navigate(
+          getPostAuthDestination(pendingReturnTo, pendingPlan),
+          { replace: true },
+        );
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Authentication failed';
         setError(message);
         // Redirect to login after showing error
-        redirectTimeout = setTimeout(() => navigate('/auth/login', { replace: true }), 3000);
+        redirectTimeout = setTimeout(
+          () => navigate(withAuthContext('/auth/login', pendingPlan, pendingReturnTo), { replace: true }),
+          3000,
+        );
       }
     };
 
@@ -43,21 +57,21 @@ export default function AuthCallbackPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex min-h-screen items-center justify-center bg-background" role="alert">
         <div className="text-center">
           <p className="text-red-500 mb-2">Authentication failed</p>
           <p className="text-sm text-muted-foreground">{error}</p>
-          <p className="text-sm text-muted-foreground mt-2">Redirecting to login...</p>
+          <p className="text-sm text-muted-foreground mt-2">Redirecting to login…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <div className="flex min-h-screen items-center justify-center bg-background" role="status" aria-live="polite">
       <div className="text-center">
         <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-        <p className="text-muted-foreground">Completing sign in...</p>
+        <p className="text-muted-foreground">Completing sign in…</p>
       </div>
     </div>
   );

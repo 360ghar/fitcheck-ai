@@ -51,11 +51,11 @@ export default function Footer() {
         <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-10 mb-12">
           <div className="lg:col-span-2">
             <Link to="/" className="flex items-center gap-2.5 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
                 <Shirt className="w-4 h-4 text-white" />
               </div>
               <span className="text-lg font-semibold tracking-tight text-stone-50">
-                FitCheck<span className="font-normal text-stone-500"> AI</span>
+                FitCheck<span className="font-normal text-muted-foreground"> AI</span>
               </span>
             </Link>
             <p className="max-w-xs text-sm leading-relaxed">
@@ -130,7 +130,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-stone-900 pt-6 flex flex-col md:flex-row justify-between items-center gap-3">
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-muted-foreground">
             &copy; {new Date().getFullYear()} FitCheck AI. All rights reserved.
           </p>
         </div>

@@ -13,8 +13,22 @@ from pydantic import ConfigDict
 class PlanType(str, Enum):
     """Subscription plan types."""
     FREE = "free"
+    PLUS_MONTHLY = "plus_monthly"
+    PLUS_YEARLY = "plus_yearly"
     PRO_MONTHLY = "pro_monthly"
     PRO_YEARLY = "pro_yearly"
+
+
+class OperationType(str, Enum):
+    """AI operation types used by rate limits and subscription usage tracking.
+
+    Wire/DB values remain the literal strings ("extraction", "generation",
+    "embedding"); the enum centralizes them so callers cannot typo a value
+    that only surfaces as a runtime ValueError at the service boundary.
+    """
+    EXTRACTION = "extraction"
+    GENERATION = "generation"
+    EMBEDDING = "embedding"
 
 
 class SubscriptionStatus(str, Enum):
@@ -85,15 +99,22 @@ class SubscriptionWithUsage(BaseModel):
 
 class CreateCheckoutRequest(BaseModel):
     """Request to create a Stripe checkout session."""
-    plan_type: PlanType = Field(..., description="Plan to subscribe to (pro_monthly or pro_yearly)")
-    success_url: str = Field(..., description="URL to redirect to after successful payment")
-    cancel_url: str = Field(..., description="URL to redirect to if payment is cancelled")
+    plan_type: PlanType = Field(..., description="Plan to subscribe to (plus_monthly, plus_yearly, pro_monthly or pro_yearly)")
+    success_url: str = Field(
+        "/settings?checkout=success",
+        description="URL to redirect to after successful payment",
+    )
+    cancel_url: str = Field(
+        "/settings?checkout=cancelled",
+        description="URL to redirect to if payment is cancelled",
+    )
 
 
 class CheckoutSessionResponse(BaseModel):
-    """Response with Stripe checkout URL."""
-    checkout_url: str
-    session_id: str
+    """Response for a new Checkout Session or an in-place update."""
+    checkout_url: Optional[str] = None
+    session_id: Optional[str] = None
+    updated: bool = False
 
 
 class PortalSessionResponse(BaseModel):

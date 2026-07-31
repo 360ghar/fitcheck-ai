@@ -4,8 +4,16 @@ AI Pydantic models for validation and serialization.
 Models for AI operations including item extraction and image generation.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Any, Dict, List, Optional
+from uuid import UUID
+
+from app.core.config import settings
+from app.utils.image_processing import make_base64_image_validator
+
+_MAX_INLINE_IMAGE_BYTES = 7 * 1024 * 1024
+
+_validate_inline_image = make_base64_image_validator(_MAX_INLINE_IMAGE_BYTES)
 
 
 # =============================================================================
@@ -57,6 +65,8 @@ class ExtractItemsRequest(BaseModel):
     """Request to extract items from an image."""
     image: str = Field(..., description="Base64-encoded image data")
 
+    _validate_image = field_validator("image")(_validate_inline_image)
+
 
 class ExtractItemsResponse(BaseModel):
     """Response from item extraction."""
@@ -74,6 +84,8 @@ class ExtractSingleItemRequest(BaseModel):
     """Request to extract a single item from an image."""
     image: str = Field(..., description="Base64-encoded image data")
     category_hint: Optional[str] = None
+
+    _validate_image = field_validator("image")(_validate_inline_image)
 
 
 class ExtractSingleItemResponse(BaseModel):
@@ -94,7 +106,21 @@ class ExtractSingleItemResponse(BaseModel):
 
 
 class OutfitItemInput(BaseModel):
-    """Input item for outfit generation."""
+    """Input item for outfit generation.
+
+    `item_id` is the caller's own wardrobe item. When present, the backend
+    resolves that item's stored image server-side (scoped to the caller) and
+    sends it to the image model as a labelled garment reference, so the
+    generated outfit reproduces the real garment instead of inventing a
+    lookalike from the text attributes below. Absent — or an item with no
+    stored image — degrades to the text-only inventory.
+
+    Clients never send image URLs or base64 here: a client-supplied URL the
+    backend fetches is an SSRF primitive (StorageService.download_to_base64
+    follows redirects with no host allow-list), and inline base64 would
+    triple mobile request size.
+    """
+    item_id: Optional[UUID] = None
     name: str
     category: Optional[str] = None
     colors: List[str] = Field(default_factory=list)
@@ -105,9 +131,29 @@ class OutfitItemInput(BaseModel):
 
 class GenerateOutfitRequest(BaseModel):
     """Request to generate an outfit visualization."""
+    # Every item with a stored image becomes an inline reference image, so the
+    # list length drives request payload size. max_length is purely an abuse
+    # guard against payload amplification, NOT a cap on how many references a
+    # genuine outfit may use - it has to sit above anything real. Real looks are
+    # 3-8 items, but createOutfitFromSavedItems (frontend/src/lib/
+    # outfit-from-upload.ts) builds one outfit from every item detected in a
+    # single photo, and a wardrobe flat-lay can legitimately produce dozens.
     items: List[OutfitItemInput] = Field(..., min_length=1)
+
+    @field_validator("items")
+    @classmethod
+    def validate_item_count(cls, value: List[OutfitItemInput]) -> List[OutfitItemInput]:
+        if len(value) > settings.AI_MAX_OUTFIT_ITEMS:
+            raise ValueError(
+                f"At most {settings.AI_MAX_OUTFIT_ITEMS} outfit items are allowed"
+            )
+        return value
     style: str = "casual"
-    background: str = "studio white"
+    # A short token, resolved to a prompt fragment by _resolve_background in
+    # app/agents/image_generation_agent.py. Was "studio white"; the agent's own
+    # default was the far worse "seamless clean light background", which invites
+    # a gradient sweep the flat-lay matte cannot cut cleanly.
+    background: str = "transparent"
     pose: str = "standing front"
     lighting: str = "professional studio lighting"
     view_angle: str = "full body"
@@ -136,11 +182,20 @@ class GenerateProductImageRequest(BaseModel):
     sub_category: Optional[str] = None
     colors: List[str] = Field(default_factory=list)
     material: Optional[str] = None
-    background: str = "white"
+    # "transparent" == "render on matte-optimal flat white, then cut the alpha
+    # server-side". Resolves to the same prompt fragment as "white" (which every
+    # existing client still sends); see _resolve_background.
+    background: str = "transparent"
     view_angle: str = "front"
     include_shadows: bool = False
     save_to_storage: bool = False
-    reference_image: Optional[str] = None  # Base64 of source photo
+    reference_image: Optional[str] = Field(
+        None,
+        max_length=10_000_000,
+        description="Optional base64 source photo",
+    )
+
+    _validate_reference_image = field_validator("reference_image")(_validate_inline_image)
 
 
 class GenerateProductImageResponse(BaseModel):
@@ -209,6 +264,49 @@ class TestProviderResponse(BaseModel):
     response: Optional[str] = None
 
 
+class HealthCheckResult(BaseModel):
+    """Result of a provider connection/health probe.
+
+    Canonical fields are ``available`` and ``message``. ``success``, ``model``,
+    and ``response`` are preserved as wire-compatible aliases so existing
+    callers (including tests that subscript the result) keep working during
+    migration. Domain exceptions such as ``AIServiceError`` / ``DatabaseError``
+    must still propagate from provider methods; they are intentionally not
+    flattened into this envelope.
+    """
+    available: bool
+    message: str
+    model: Optional[str] = None
+    response: Optional[str] = None
+    error_type: Optional[str] = None
+    latency_ms: Optional[float] = None
+
+    @property
+    def success(self) -> bool:
+        return self.available
+
+    def to_api_dict(self) -> Dict[str, Any]:
+        data: Dict[str, Any] = {
+            "success": self.available,
+            "message": self.message,
+        }
+        for key in ("model", "response", "error_type", "latency_ms"):
+            value = getattr(self, key, None)
+            if value is not None:
+                data[key] = value
+        return data
+
+    def __getitem__(self, key: str) -> Any:
+        """Backward-compatibility shim: allow result['success'] style access."""
+        if key == "success":
+            return self.success
+        if key == "available":
+            return self.available
+        if hasattr(self, key):
+            return getattr(self, key)
+        raise KeyError(key)
+
+
 class UsageStatsResponse(BaseModel):
     """AI usage statistics."""
     daily: Dict[str, int]
@@ -232,13 +330,19 @@ class RateLimitCheckResponse(BaseModel):
 
 class TryOnRequest(BaseModel):
     """Request for virtual try-on generation."""
-    clothing_image: str = Field(..., description="Base64-encoded clothing image")
+    clothing_image: str = Field(
+        ...,
+        max_length=10_000_000,
+        description="Base64-encoded clothing image",
+    )
     clothing_description: Optional[str] = Field(None, description="Optional description to improve accuracy")
     style: str = "casual"
     background: str = "studio white"
     pose: str = "standing front"
     lighting: str = "professional studio lighting"
     save_to_storage: bool = False
+
+    _validate_image = field_validator("clothing_image")(_validate_inline_image)
 
 
 class TryOnResponse(BaseModel):

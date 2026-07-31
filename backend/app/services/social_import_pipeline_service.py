@@ -6,8 +6,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import httpx
 import uuid
-from datetime import datetime, timezone
+from app.utils.datetime_util import utcnow_iso
 from typing import Any, Dict, List, Optional
 
 from app.agents.image_generation_agent import get_image_generation_agent
@@ -24,6 +25,7 @@ from app.models.social_import import (
     SocialImportPhotoStatus,
     SocialPlatform,
 )
+from app.models.subscription import OperationType
 from app.services.ai_service import AIService
 from app.services.ai_settings_service import AISettingsService
 from app.services.social_auth_service import SocialAuthService
@@ -50,10 +52,18 @@ class SocialImportPipelineService:
     MAX_DISCOVERY_PHOTOS = 2000     # Hard limit on photos per job
     DISCOVERY_RETRY_ATTEMPTS = 3
     DISCOVERY_RETRY_BASE_DELAY_SECONDS = 1.0
+    # Delay between automatic re-attempts after upstream AI capacity
+    # exhaustion. One probe per delay keeps the job from grinding while still
+    # resuming on its own once the provider recovers.
+    CAPACITY_RETRY_DELAY_SECONDS = 300
 
     def __init__(self, *, user_id: str, db):
         self.user_id = user_id
         self.db = db
+        # Set when upstream AI capacity is exhausted (Gemini free-tier quota +
+        # Agnes fallback both failed). Stops _run_queue from grinding through
+        # every remaining photo. Per-instance == per-job run.
+        self._capacity_exhausted = False
 
     @classmethod
     def _job_lock(cls, job_id: str) -> asyncio.Lock:
@@ -79,6 +89,19 @@ class SocialImportPipelineService:
             task = cls._tasks.pop(job_id, None)
             if task and not task.done():
                 task.cancel()
+
+    async def _schedule_capacity_retry(self, job_id: str) -> None:
+        """Re-run a capacity-exhausted job after a bounded delay.
+
+        Provider 429/5xx capacity is transient; a fixed backoff keeps retry
+        intensity bounded while still letting the job resume automatically
+        instead of sitting in ``processing`` forever.
+        """
+        try:
+            await asyncio.sleep(self.CAPACITY_RETRY_DELAY_SECONDS)
+        except asyncio.CancelledError:
+            return
+        await self.schedule_job(self, job_id)
 
     @classmethod
     async def _cleanup_job_resources(cls, job_id: str) -> None:
@@ -108,6 +131,9 @@ class SocialImportPipelineService:
         )
 
     async def run(self, job_id: str) -> None:
+        # Each run is a fresh attempt: a retry scheduled after capacity
+        # exhaustion must not inherit the previous run's exhausted flag.
+        self._capacity_exhausted = False
         logger.info(
             "Social import job started",
             job_id=job_id,
@@ -158,6 +184,9 @@ class SocialImportPipelineService:
                             job_id=job_id,
                         )
                         await self._cleanup_job_resources(job_id)
+                        return
+
+                    if job.get("status") == SocialImportJobStatus.FAILED.value:
                         return
 
                 if job.get("status") == SocialImportJobStatus.AWAITING_AUTH.value:
@@ -257,6 +286,21 @@ class SocialImportPipelineService:
                 )
                 if discovered is None:
                     raise RuntimeError("Photo discovery returned no result")
+                discovery_metadata = discovered.metadata or {}
+                if (
+                    discovery_metadata.get("error_type")
+                    in {"discovery_failure", "fetch_failure"}
+                    or discovery_metadata.get("error")
+                ):
+                    # Transient network/HTTP failures are returned as a result
+                    # by the scraper, not raised; surface them as exceptions
+                    # so with_retry applies DISCOVERY_RETRY_ATTEMPTS instead
+                    # of entering the FAILED path immediately.
+                    raise RuntimeError(
+                        discovery_metadata.get("message")
+                        or discovery_metadata.get("error")
+                        or "Photo discovery failed"
+                    )
                 return discovered
 
             def _log_discovery_retry(attempt: int, error: Exception, delay: float) -> None:
@@ -377,6 +421,35 @@ class SocialImportPipelineService:
                 )
                 raise SocialImportAuthRequiredError()
 
+            discovery_metadata = result.metadata or {}
+            if discovery_metadata.get("error_type") in {
+                "discovery_failure",
+                "fetch_failure",
+            } or discovery_metadata.get("error"):
+                failure_message = discovery_metadata.get("message") or discovery_metadata.get("error") or "Photo discovery failed"
+                failure_metadata = dict(job_metadata)
+                failure_metadata.update({
+                    "discovery_failure": True,
+                    "discovery_error": failure_message,
+                    "discovery_iteration": iteration_count,
+                })
+                await SocialImportJobStore.update_job(
+                    self.db,
+                    job_id=job_id,
+                    user_id=self.user_id,
+                    updates={
+                        "status": SocialImportJobStatus.FAILED.value,
+                        "error_message": failure_message,
+                        "metadata": failure_metadata,
+                    },
+                )
+                await self._publish_event(
+                    job_id,
+                    "job_failed",
+                    {"job_id": job_id, "error": failure_message, "retryable": True},
+                )
+                return
+
             # Check if adding these photos would exceed the max limit
             current_count = ordinal - 1
             photos_to_add = result.photos
@@ -459,6 +532,14 @@ class SocialImportPipelineService:
 
         # Keep pumping until we are blocked on user review/auth or completed.
         while True:
+            if self._capacity_exhausted:
+                # Upstream AI capacity exhausted mid-run; don't claim more
+                # photos (each would just fail the same way). Leaving the job
+                # in `processing` with queued photos and no retry would strand
+                # it indefinitely, so schedule a bounded automatic retry.
+                await self._sync_job_counters(job_id)
+                asyncio.create_task(self._schedule_capacity_retry(job_id))
+                return
             job = await SocialImportJobStore.get_job(
                 self.db, job_id=job_id, user_id=self.user_id
             )
@@ -544,14 +625,14 @@ class SocialImportPipelineService:
     async def _check_rate_limit_with_pause(
         self, job_id: str, operation_type: str, count: int = 1
     ) -> bool:
-        """Check rate limit; if not allowed, pause job and return False."""
-        check = await AISettingsService.check_rate_limit(
+        """Atomically reserve quota; if unavailable, pause job and return False."""
+        reserved = await AISettingsService.reserve_usage(
             user_id=self.user_id,
             operation_type=operation_type,
             db=self.db,
             count=count,
         )
-        if not check["allowed"]:
+        if not reserved:
             await self._pause_for_rate_limit(job_id, operation_type)
             return False
         return True
@@ -591,6 +672,11 @@ class SocialImportPipelineService:
 
     async def _process_single_photo(self, job_id: str, photo: Dict[str, Any]) -> None:
         photo_id = photo["id"]
+        # Set before the try so the except handler can safely test them: the
+        # extraction reservation is only released when it was made but never
+        # consumed by an actual provider call.
+        extraction_reserved = False
+        extraction_attempted = False
         await self._publish_event(
             job_id,
             "photo_processing_started",
@@ -602,7 +688,7 @@ class SocialImportPipelineService:
         )
 
         try:
-            if not await self._check_rate_limit_with_pause(job_id, "extraction"):
+            if not await self._check_rate_limit_with_pause(job_id, OperationType.EXTRACTION):
                 await SocialImportJobStore.update_photo(
                     self.db,
                     job_id=job_id,
@@ -611,6 +697,12 @@ class SocialImportPipelineService:
                     updates={"status": SocialImportPhotoStatus.QUEUED.value},
                 )
                 return
+            # The reservation above is only consumed by an actual provider
+            # call. If the pre-extraction fetch/setup fails, the outer handler
+            # releases it again so the daily slot is not burned on a photo
+            # that never reached the VLM.
+            extraction_reserved = True
+            extraction_attempted = False
 
             image_base64 = await SocialScraperService.fetch_photo_as_base64(
                 photo["source_photo_url"]
@@ -618,17 +710,11 @@ class SocialImportPipelineService:
             extraction_agent = await get_item_extraction_agent(
                 user_id=self.user_id, db=self.db
             )
+            extraction_attempted = True
             extraction_result = await extraction_agent.extract_multiple_items(
                 image_base64=image_base64
             )
             raw_items = extraction_result.get("items") or []
-            await AISettingsService.increment_usage(
-                user_id=self.user_id,
-                operation_type="extraction",
-                db=self.db,
-                count=1,
-            )
-
             if not raw_items:
                 await SocialImportJobStore.update_photo(
                     self.db,
@@ -638,9 +724,7 @@ class SocialImportPipelineService:
                     updates={
                         "status": SocialImportPhotoStatus.FAILED.value,
                         "error_message": "No clothing items detected in photo",
-                        "processing_completed_at": datetime.now(
-                            timezone.utc
-                        ).isoformat(),
+                        "processing_completed_at": utcnow_iso(),
                     },
                 )
                 await self._publish_event(
@@ -690,7 +774,7 @@ class SocialImportPipelineService:
                     item["source_image_storage_path"] = source_image_storage_path
 
             if not await self._check_rate_limit_with_pause(
-                job_id, "generation", count=len(raw_items)
+                job_id, OperationType.GENERATION, count=len(raw_items)
             ):
                 await SocialImportJobStore.update_photo(
                     self.db,
@@ -726,7 +810,13 @@ class SocialImportPipelineService:
                 # the item's bbox, or drop it entirely - see that function for why.
                 src_url = item.get("source_image_url")
                 if src_url and src_url not in source_photo_cache:
-                    source_photo_cache[src_url] = await StorageService.download_to_base64(src_url)
+                    try:
+                        source_photo_cache[src_url] = await SocialScraperService.fetch_photo_as_base64(src_url)
+                    except (SocialImportError, httpx.HTTPStatusError, httpx.RequestError):
+                        # A failed optional reference download (4xx/5xx,
+                        # timeout, network error) degrades to text-only
+                        # generation; it must not fail the whole photo.
+                        source_photo_cache[src_url] = None
                 reference_image_base64: Optional[str] = (
                     source_photo_cache.get(src_url) if src_url else None
                 )
@@ -757,7 +847,9 @@ class SocialImportPipelineService:
                         sub_category=item.get("sub_category"),
                         colors=item.get("colors") or [],
                         material=item.get("material"),
-                        background="white",
+                        # "transparent" -> flat white prompt + server-side
+                        # matte (app/utils/background_removal.py).
+                        background="transparent",
                         view_angle="front",
                         include_shadows=False,
                         reference_image=reference_image_base64,
@@ -784,6 +876,27 @@ class SocialImportPipelineService:
                         )
                     )
                 except Exception as generation_error:
+                    # A provider quota failure on one item must stop the queue
+                    # grinding every remaining photo through the same doomed
+                    # generation call: set the capacity flag and emit the
+                    # event (the outer handler only sees non-item failures).
+                    if (
+                        getattr(generation_error, "error_kind", None) == "upstream_quota"
+                        and not self._capacity_exhausted
+                    ):
+                        self._capacity_exhausted = True
+                        await self._publish_event(
+                            job_id,
+                            "capacity_exhausted",
+                            {
+                                "job_id": job_id,
+                                "photo_id": photo_id,
+                                "error": "AI service capacity exhausted; remaining photos will retry later",
+                                "code": "AI_SERVICE_ERROR",
+                                "error_kind": "upstream_quota",
+                                "retry_after_seconds": getattr(generation_error, "retry_after_seconds", None),
+                            },
+                        )
                     processed_items.append(
                         self._build_item_dict(
                             item,
@@ -792,14 +905,6 @@ class SocialImportPipelineService:
                             generation_error=str(generation_error),
                         )
                     )
-
-            if generation_success_count > 0:
-                await AISettingsService.increment_usage(
-                    user_id=self.user_id,
-                    operation_type="generation",
-                    db=self.db,
-                    count=generation_success_count,
-                )
 
             await SocialImportJobStore.upsert_photo_items(
                 self.db,
@@ -825,7 +930,7 @@ class SocialImportPipelineService:
                 photo_id=photo_id,
                 updates={
                     "status": target_status.value,
-                    "processing_completed_at": datetime.now(timezone.utc).isoformat(),
+                    "processing_completed_at": utcnow_iso(),
                     "error_message": None,
                 },
             )
@@ -849,6 +954,47 @@ class SocialImportPipelineService:
             await self._sync_job_counters(job_id)
 
         except Exception as e:
+            error_kind = getattr(e, "error_kind", None)
+            retry_after = getattr(e, "retry_after_seconds", None)
+            # Upstream capacity/quota exhaustion is the server's problem ("on
+            # us"), not the user's plan limit (which is raised pre-flight as
+            # PAUSED_RATE_LIMITED). Stop grinding the remaining photos and tag
+            # the event so the UI can say "try again shortly" - never an upgrade.
+            if error_kind == "upstream_quota":
+                self._capacity_exhausted = True
+                await self._publish_event(
+                    job_id,
+                    "capacity_exhausted",
+                    {
+                        "job_id": job_id,
+                        "photo_id": photo_id,
+                        "error": "AI service capacity exhausted; remaining photos will retry later",
+                        "code": "AI_SERVICE_ERROR",
+                        "error_kind": error_kind,
+                        "retry_after_seconds": retry_after,
+                    },
+                )
+            # The extraction reservation was never consumed by a provider
+            # call (fetch/setup failed before the VLM ran): give the slot back
+            # so the failure cannot silently consume the daily extraction
+            # budget. Best-effort: a failed release must not mask the original
+            # error.
+            if extraction_reserved and not extraction_attempted:
+                try:
+                    await AISettingsService.release_usage(
+                        user_id=self.user_id,
+                        operation_type=OperationType.EXTRACTION,
+                        db=self.db,
+                    )
+                except Exception as release_err:
+                    logger.warning(
+                        "Failed to release un-consumed extraction reservation",
+                        extra={
+                            "job_id": job_id,
+                            "photo_id": photo_id,
+                            "error": str(release_err),
+                        },
+                    )
             await SocialImportJobStore.update_photo(
                 self.db,
                 job_id=job_id,
@@ -857,13 +1003,20 @@ class SocialImportPipelineService:
                 updates={
                     "status": SocialImportPhotoStatus.FAILED.value,
                     "error_message": str(e),
-                    "processing_completed_at": datetime.now(timezone.utc).isoformat(),
+                    "processing_completed_at": utcnow_iso(),
                 },
             )
             await self._publish_event(
                 job_id,
                 "photo_failed",
-                {"job_id": job_id, "photo_id": photo_id, "error": str(e)},
+                {
+                    "job_id": job_id,
+                    "photo_id": photo_id,
+                    "error": str(e),
+                    "code": "AI_SERVICE_ERROR",
+                    "error_kind": error_kind,
+                    "retry_after_seconds": retry_after,
+                },
             )
             await self._sync_job_counters(job_id)
 
@@ -886,6 +1039,7 @@ class SocialImportPipelineService:
                 user_id=self.user_id,
             )
             saved_count = 0
+            saved_items: List[Dict[str, Any]] = []
             for item in items:
                 if item.get("status") in {
                     SocialImportItemStatus.FAILED.value,
@@ -918,6 +1072,12 @@ class SocialImportPipelineService:
                     continue
                 if saved_item_id:
                     saved_count += 1
+                    saved_items.append(
+                        {
+                            "id": saved_item_id,
+                            "category": item.get("category"),
+                        }
+                    )
                     await SocialImportJobStore.update_item(
                         self.db,
                         job_id=job_id,
@@ -937,7 +1097,7 @@ class SocialImportPipelineService:
                 photo_id=photo_id,
                 updates={
                     "status": SocialImportPhotoStatus.APPROVED.value,
-                    "reviewed_at": datetime.now(timezone.utc).isoformat(),
+                    "reviewed_at": utcnow_iso(),
                 },
             )
 
@@ -955,7 +1115,7 @@ class SocialImportPipelineService:
             await self._sync_job_counters(job_id)
 
         await self.schedule_job(self, job_id)
-        return {"saved_count": saved_count}
+        return {"saved_count": saved_count, "saved_items": saved_items}
 
     async def reject_photo(self, job_id: str, photo_id: str) -> Dict[str, Any]:
         lock = self._job_lock(job_id)
@@ -997,7 +1157,7 @@ class SocialImportPipelineService:
                 photo_id=photo_id,
                 updates={
                     "status": SocialImportPhotoStatus.REJECTED.value,
-                    "reviewed_at": datetime.now(timezone.utc).isoformat(),
+                    "reviewed_at": utcnow_iso(),
                 },
             )
 
@@ -1358,13 +1518,13 @@ class SocialImportPipelineService:
     async def _try_resume_rate_limited_job(self, job_id: str) -> bool:
         extraction_check = await AISettingsService.check_rate_limit(
             user_id=self.user_id,
-            operation_type="extraction",
+            operation_type=OperationType.EXTRACTION,
             db=self.db,
             count=1,
         )
         generation_check = await AISettingsService.check_rate_limit(
             user_id=self.user_id,
-            operation_type="generation",
+            operation_type=OperationType.GENERATION,
             db=self.db,
             count=1,
         )
@@ -1480,7 +1640,7 @@ class SocialImportPipelineService:
         )
 
         item_id = str(uuid.uuid4())
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = utcnow_iso()
         item_data = {
             "id": item_id,
             "user_id": self.user_id,
@@ -1531,21 +1691,16 @@ class SocialImportPipelineService:
         await asyncio.to_thread(self.db.table("item_images").insert(image_data).execute)
 
         try:
-            rate_check = await AISettingsService.check_rate_limit(
+            reserved = await AISettingsService.reserve_usage(
                 user_id=self.user_id,
-                operation_type="embedding",
+                operation_type=OperationType.EMBEDDING,
                 db=self.db,
             )
-            if rate_check["allowed"]:
+            if reserved:
                 embedding = await AIService.generate_item_embedding(
                     {**item_data, "images": [image_data]}
                 )
                 if embedding:
-                    await AISettingsService.increment_usage(
-                        user_id=self.user_id,
-                        operation_type="embedding",
-                        db=self.db,
-                    )
                     vector_service = get_vector_service()
                     await vector_service.upsert_item(
                         item_id=item_id,

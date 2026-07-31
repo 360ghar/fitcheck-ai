@@ -3,7 +3,7 @@ Tests for overlapped extract → generate batch pipeline.
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -28,7 +28,7 @@ def _make_job(image_ids: List[str], auto_generate: bool = True) -> BatchJob:
         job_id=str(uuid4()),
         user_id="user-1",
         status=BatchJobStatus.PENDING,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         auto_generate=auto_generate,
         generation_batch_size=5,
         images=images,
@@ -53,6 +53,7 @@ async def test_generation_starts_before_all_extractions_complete():
 
     events: List[str] = []
     gen_started_while_b_pending = asyncio.Event()
+    img_b_held = asyncio.Event()
 
     real_broadcast = BatchJobService.broadcast_event
 
@@ -66,7 +67,8 @@ async def test_generation_starts_before_all_extractions_complete():
     async def fake_extract(self, job_arg, image_id, image_base64, agent, **kwargs):
         on_items_ready = kwargs.get("on_items_ready")
         if image_id == "img-a":
-            await asyncio.sleep(0.02)
+            # Image A returns its items immediately so generation can start
+            # before image B has produced anything. No clock-based sleep.
             items = [
                 {
                     "temp_id": "item-a1",
@@ -86,8 +88,10 @@ async def test_generation_starts_before_all_extractions_complete():
                 await on_items_ready(added)
             return items
 
-        # Slow second image
-        await asyncio.sleep(0.2)
+        # Image B is gated behind an explicit asyncio.Event so the overlap
+        # window is observable deterministically. The test releases it after
+        # asserting generation_started fired.
+        await img_b_held.wait()
         items = [
             {
                 "temp_id": "item-b1",
@@ -108,7 +112,8 @@ async def test_generation_starts_before_all_extractions_complete():
         return items
 
     async def fake_generate(self, job_arg, item, agent, reference_image_base64):
-        await asyncio.sleep(0.05)
+        # Generation completes immediately; the overlap signal
+        # (gen_started_while_b_pending) is what the assertion keys on.
         await BatchJobService.update_item_generation(
             job_arg.job_id, item.temp_id, generated_image_base64="ZmFrZQ=="
         )
@@ -146,7 +151,30 @@ async def test_generation_starts_before_all_extractions_complete():
         patch.object(BatchJobService, "clear_event_history", AsyncMock()),
         patch.object(BatchExtractionService, "_cache_extraction_results", AsyncMock()),
     ):
+        # Release image B's gate as soon as generation starts (the overlap
+        # signal we are asserting). Run run_pipeline concurrently so the
+        # gate release actually reaches the awaiting fake_extract.
+        async def _release_on_generation_start():
+            await gen_started_while_b_pending.wait()
+            img_b_held.set()
+
+        releaser = asyncio.create_task(_release_on_generation_start())
+        # Fallback: if the overlap signal never fires, release after a short
+        # timeout so the test fails on the assertion instead of hanging.
+        async def _fallback_release():
+            try:
+                await asyncio.wait_for(gen_started_while_b_pending.wait(), timeout=2.0)
+            except asyncio.TimeoutError:
+                img_b_held.set()
+
+        fallback = asyncio.create_task(_fallback_release())
         await service.run_pipeline(job)
+        # Cancel the releaser task once the pipeline is done. If the overlap
+        # signal never fired, _release_on_generation_start would still be
+        # awaiting gen_started_while_b_pending.wait() and the test would hang.
+        releaser.cancel()
+        fallback.cancel()
+        await asyncio.gather(releaser, fallback, return_exceptions=True)
 
     assert "generation_started" in events
     assert "all_extractions_complete" in events

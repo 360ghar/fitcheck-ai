@@ -5,6 +5,7 @@
 import { isAxiosError } from 'axios';
 
 import { apiClient, getApiError, skipToast } from './client';
+import { logger } from '../lib/logger';
 import type {
   ApiEnvelope,
   MatchResult,
@@ -83,7 +84,7 @@ export async function getCompleteLookSuggestions(
     // Defensive: ensure we always return an array
     const looks = response.data?.data?.complete_looks;
     if (!Array.isArray(looks)) {
-      console.warn('[recommendations] Unexpected response structure from complete-look API:', response.data);
+      logger.warn('[recommendations] Unexpected response structure from complete-look API:', response.data);
       return [];
     }
     return looks;

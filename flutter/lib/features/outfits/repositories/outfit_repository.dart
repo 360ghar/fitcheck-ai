@@ -55,7 +55,9 @@ class OutfitRepository {
   /// Get single outfit
   Future<OutfitModel> getOutfit(String outfitId) async {
     try {
-      final response = await _apiClient.get('${ApiConstants.outfits}/$outfitId');
+      final response = await _apiClient.get(
+        '${ApiConstants.outfits}/$outfitId',
+      );
       return _parseOutfit(response.data);
     } on DioException catch (e) {
       throw handleDioException(e);
@@ -67,7 +69,8 @@ class OutfitRepository {
     try {
       final response = await _apiClient.post(
         ApiConstants.outfits,
-        data: request.toNonNullJson(), // Use toNonNullJson to exclude null values
+        data: request
+            .toNonNullJson(), // Use toNonNullJson to exclude null values
       );
       return _parseOutfit(response.data);
     } on DioException catch (e) {
@@ -103,9 +106,7 @@ class OutfitRepository {
   /// Toggle outfit favorite
   Future<OutfitModel> toggleFavorite(String outfitId) async {
     try {
-      await _apiClient.post(
-        '${ApiConstants.outfits}/$outfitId/favorite',
-      );
+      await _apiClient.post('${ApiConstants.outfits}/$outfitId/favorite');
       return getOutfit(outfitId);
     } on DioException catch (e) {
       throw handleDioException(e);
@@ -115,9 +116,7 @@ class OutfitRepository {
   /// Mark outfit as worn
   Future<OutfitModel> markAsWorn(String outfitId) async {
     try {
-      await _apiClient.post(
-        '${ApiConstants.outfits}/$outfitId/wear',
-      );
+      await _apiClient.post('${ApiConstants.outfits}/$outfitId/wear');
       return getOutfit(outfitId);
     } on DioException catch (e) {
       throw handleDioException(e);
@@ -155,9 +154,7 @@ class OutfitRepository {
     try {
       final formData = FormData.fromMap({
         'images': await Future.wait(
-          images.map(
-            (image) => MultipartFile.fromFile(image.path),
-          ),
+          images.map((image) => MultipartFile.fromFile(image.path)),
         ),
       });
 
@@ -176,9 +173,7 @@ class OutfitRepository {
       }
       final dataMap = _extractDataMap(response.data);
       if (dataMap.isNotEmpty) {
-        return [
-          OutfitImage.fromJson(_normalizeOutfitImageJson(dataMap)),
-        ];
+        return [OutfitImage.fromJson(_normalizeOutfitImageJson(dataMap))];
       }
       return [];
     } on DioException catch (e) {
@@ -195,7 +190,10 @@ class OutfitRepository {
   }) async {
     try {
       // Detect image format from data URL prefix and determine MIME type/extension
-      final dataUrlRegex = RegExp(r'^data:image/(\w+);base64,', caseSensitive: false);
+      final dataUrlRegex = RegExp(
+        r'^data:image/(\w+);base64,',
+        caseSensitive: false,
+      );
       final match = dataUrlRegex.firstMatch(base64Image);
       final format = (match?.group(1) ?? 'png').toLowerCase();
       final isJpeg = format == 'jpeg' || format == 'jpg';
@@ -253,7 +251,9 @@ class OutfitRepository {
       );
 
       final data = _extractDataMap(response.data);
-      return OutfitVisualizationResult.fromJson(_normalizeVisualizationJson(data));
+      return OutfitVisualizationResult.fromJson(
+        _normalizeVisualizationJson(data),
+      );
     } on DioException catch (e) {
       throw handleDioException(e);
     }
@@ -305,7 +305,9 @@ class OutfitRepository {
   /// Get wear history for an outfit
   Future<List<WearHistoryEntry>> getWearHistory(String outfitId) async {
     try {
-      final response = await _apiClient.get('${ApiConstants.outfits}/$outfitId/wear-history');
+      final response = await _apiClient.get(
+        '${ApiConstants.outfits}/$outfitId/wear-history',
+      );
       final data = _extractDataMap(response.data);
       final historyList = data['wear_history'] as List? ?? [];
       return historyList
@@ -333,7 +335,9 @@ class OutfitRepository {
   /// Get outfit collections
   Future<List<Map<String, dynamic>>> getCollections() async {
     try {
-      final response = await _apiClient.get('${ApiConstants.outfits}/collections');
+      final response = await _apiClient.get(
+        '${ApiConstants.outfits}/collections',
+      );
       final data = _extractDataMap(response.data);
       final collections = data['collections'];
       if (collections is List) {
@@ -358,7 +362,8 @@ class OutfitRepository {
         data: {
           'name': name,
           'outfit_ids': outfitIds,
-          if (description != null && description.isNotEmpty) 'description': description,
+          if (description != null && description.isNotEmpty)
+            'description': description,
         },
       );
       return _extractDataMap(response.data);
@@ -392,7 +397,9 @@ class OutfitRepository {
   /// Delete collection
   Future<void> deleteCollection(String collectionId) async {
     try {
-      await _apiClient.delete('${ApiConstants.outfits}/collections/$collectionId');
+      await _apiClient.delete(
+        '${ApiConstants.outfits}/collections/$collectionId',
+      );
     } on DioException catch (e) {
       throw handleDioException(e);
     }
@@ -411,6 +418,37 @@ class OutfitRepository {
       return _extractDataMap(response.data);
     } on DioException catch (e) {
       throw handleDioException(e);
+    }
+  }
+
+  /// Add a user-selected set of outfits to a collection in order.
+  ///
+  /// The endpoint is intentionally called once per outfit so partial failures
+  /// remain observable and the API contract stays compatible with existing
+  /// single-item collection writes. Adds run in small concurrent batches so a
+  /// multi-outfit selection is no longer N serial RTT-bound round trips; a
+  /// batch failure still surfaces to the caller after the batch completes.
+  Future<void> addOutfitsToCollection(
+    String collectionId,
+    Iterable<String> outfitIds,
+  ) async {
+    const batchSize = 5;
+    final ids = outfitIds.toList();
+    for (var start = 0; start < ids.length; start += batchSize) {
+      final batch = ids.skip(start).take(batchSize);
+      final failures = <Object>[];
+      await Future.wait(
+        batch.map((outfitId) async {
+          try {
+            await addOutfitToCollection(collectionId, outfitId);
+          } catch (e) {
+            failures.add(e);
+          }
+        }),
+      );
+      if (failures.isNotEmpty) {
+        throw failures.first;
+      }
     }
   }
 
@@ -461,15 +499,19 @@ class OutfitRepository {
     final outfitsPayload = data['outfits'];
     final outfits = outfitsPayload is List
         ? outfitsPayload
-            .whereType<Map<String, dynamic>>()
-            .map(_normalizeOutfitJson)
-            .map(OutfitModel.fromJson)
-            .toList()
+              .whereType<Map<String, dynamic>>()
+              .map(_normalizeOutfitJson)
+              .map(OutfitModel.fromJson)
+              .toList()
         : <OutfitModel>[];
     final total = _coerceInt(data['total']);
     final pageValue = _coerceInt(data['page'], fallback: page);
-    final limitValue = _coerceInt(data['limit'] ?? data['page_size'], fallback: limit);
-    final hasMore = _coerceBool(data['has_more']) ??
+    final limitValue = _coerceInt(
+      data['limit'] ?? data['page_size'],
+      fallback: limit,
+    );
+    final hasMore =
+        _coerceBool(data['has_more']) ??
         _coerceBool(data['has_next']) ??
         (limitValue > 0 ? (pageValue * limitValue) < total : false);
     return OutfitsListResponse(
@@ -510,7 +552,8 @@ class OutfitRepository {
 
   Map<String, dynamic> _normalizeOutfitImageJson(Map<String, dynamic> json) {
     final normalized = Map<String, dynamic>.from(json);
-    normalized['url'] ??= normalized['image_url'] ?? normalized['thumbnail_url'];
+    normalized['url'] ??=
+        normalized['image_url'] ?? normalized['thumbnail_url'];
     return normalized;
   }
 
@@ -525,9 +568,11 @@ class OutfitRepository {
       normalized['image_base64'] = imageBase64;
     }
     normalized['id'] ??=
-        normalized['generation_id'] ?? 'gen-${DateTime.now().millisecondsSinceEpoch}';
-    normalized['status'] ??=
-        (imageUrl != null || imageBase64 != null) ? 'completed' : 'processing';
+        normalized['generation_id'] ??
+        'gen-${DateTime.now().millisecondsSinceEpoch}';
+    normalized['status'] ??= (imageUrl != null || imageBase64 != null)
+        ? 'completed'
+        : 'processing';
     return normalized;
   }
 
@@ -558,5 +603,4 @@ class OutfitRepository {
     }
     return null;
   }
-
 }

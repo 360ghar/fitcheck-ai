@@ -9,8 +9,12 @@ const alertVariants = cva(
     variants: {
       variant: {
         default: "bg-background text-foreground",
+        // The dropped `dark:border-destructive` half only restated the same token
+        // at full opacity. `--destructive` inverts on its own
+        // (0 88% 33% -> 0 88% 43%), so the quiet 50% edge reads in both themes
+        // and stays a hairline rather than a hard contrasting rule.
         destructive:
-          "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
+          "border-destructive/50 text-destructive [&>svg]:text-destructive",
       },
     },
     defaultVariants: {

@@ -86,7 +86,7 @@ export default function Features() {
                 <Link
                   to={feature.href}
                   className={cn(
-                    'group relative flex w-full h-full flex-col overflow-hidden rounded-2xl border border-stone-200/90 bg-white transition-colors hover:border-indigo-300 dark:border-stone-800 dark:bg-stone-950 dark:hover:border-indigo-700',
+                    'group relative flex w-full h-full flex-col overflow-hidden rounded-2xl border border-stone-200/90 bg-white transition-colors hover:border-primary/40 dark:border-stone-800 dark:bg-stone-950',
                     isHero ? 'min-h-[280px] md:min-h-[360px]' : 'min-h-[160px] p-6'
                   )}
                 >
@@ -95,10 +95,10 @@ export default function Features() {
                       <img
                         src={feature.image}
                         alt={feature.imageAlt}
-                        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                        className="absolute inset-0 h-full w-full object-cover"
                         loading="lazy"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/55 to-stone-950/10" />
+                      <div className="absolute inset-0 bg-stone-950/60" />
                       <div className="relative mt-auto p-6 md:p-8 text-white">
                         <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/20">
                           <Icon className="h-5 w-5" />
@@ -116,14 +116,14 @@ export default function Features() {
                     </>
                   ) : (
                     <>
-                      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
+                      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-secondary text-primary">
                         <Icon className="h-5 w-5" />
                       </div>
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="text-lg font-semibold text-stone-900 dark:text-stone-50">
                           {feature.title}
                         </h3>
-                        <ArrowUpRight className="h-4 w-4 shrink-0 text-stone-400 transition group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />
+                        <ArrowUpRight className="h-4 w-4 shrink-0 text-stone-400 transition group-hover:text-primary" />
                       </div>
                       <p className="mt-2 text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
                         {feature.description}
@@ -142,9 +142,9 @@ export default function Features() {
               <li key={item.title}>
                 <Link
                   to={item.href}
-                  className="inline-flex items-center gap-2 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  className="inline-flex min-h-11 items-center gap-2 hover:text-primary transition-colors"
                 >
-                  <item.icon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                  <item.icon className="h-4 w-4 text-primary" />
                   {item.title}
                 </Link>
               </li>
@@ -152,9 +152,9 @@ export default function Features() {
             <li>
               <a
                 href="#also-in-app"
-                className="text-stone-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                className="inline-flex min-h-11 items-center text-muted-foreground hover:text-primary transition-colors"
               >
-                Plus packing, streaks, sharing, import, and more in the app
+                Plus packing, sharing, import, and more in the app
               </a>
             </li>
           </ul>

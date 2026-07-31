@@ -62,8 +62,8 @@ class CalendarRepository {
       createdAt: raw['created_at'] != null
           ? DateTime.tryParse(raw['created_at'].toString())
           : (raw['connected_at'] != null
-              ? DateTime.tryParse(raw['connected_at'].toString())
-              : null),
+                ? DateTime.tryParse(raw['connected_at'].toString())
+                : null),
     );
   }
 
@@ -92,10 +92,7 @@ class CalendarRepository {
     try {
       final response = await _apiClient.post(
         '${ApiConstants.calendar}/connect',
-        data: {
-          'provider': provider.name,
-          'auth_code': authCode,
-        },
+        data: {'provider': provider.name, 'auth_code': authCode},
       );
       // API: { data: { id, provider, email, connected_at }, message }
       final data = _extractDataMap(response.data);
@@ -108,7 +105,9 @@ class CalendarRepository {
   /// Disconnect calendar
   Future<void> disconnectCalendar(String connectionId) async {
     try {
-      await _apiClient.delete('${ApiConstants.calendar}/connections/$connectionId');
+      await _apiClient.delete(
+        '${ApiConstants.calendar}/connections/$connectionId',
+      );
     } on DioException catch (e) {
       throw handleDioException(e);
     }
@@ -162,8 +161,7 @@ class CalendarRepository {
           'end_time': endTime.toIso8601String(),
           if (description != null) 'description': description,
           if (location != null) 'location': location,
-          // is_all_day may not exist on DB; only send if true to reduce schema-drift risk
-          if (isAllDay) 'is_all_day': isAllDay,
+          'is_all_day': isAllDay,
           if (outfitId != null) 'outfit_id': outfitId,
         },
       );
@@ -180,6 +178,26 @@ class CalendarRepository {
   }
 
   /// Update event
+  Map<String, dynamic> buildUpdateEventPayload({
+    String? title,
+    DateTime? startTime,
+    DateTime? endTime,
+    String? description,
+    String? location,
+    bool? isAllDay,
+    String? outfitId,
+  }) {
+    final data = <String, dynamic>{};
+    if (title != null) data['title'] = title;
+    if (startTime != null) data['start_time'] = startTime.toIso8601String();
+    if (endTime != null) data['end_time'] = endTime.toIso8601String();
+    if (description != null) data['description'] = description;
+    if (location != null) data['location'] = location;
+    if (isAllDay != null) data['is_all_day'] = isAllDay;
+    if (outfitId != null) data['outfit_id'] = outfitId;
+    return data;
+  }
+
   Future<CalendarEventModel> updateEvent(
     String eventId, {
     String? title,
@@ -190,18 +208,21 @@ class CalendarRepository {
     bool? isAllDay,
     String? outfitId,
   }) async {
-    final data = <String, dynamic>{};
-    if (title != null) data['title'] = title;
-    if (startTime != null) data['start_time'] = startTime.toIso8601String();
-    if (endTime != null) data['end_time'] = endTime.toIso8601String();
-    if (description != null) data['description'] = description;
-    if (location != null) data['location'] = location;
-    // Avoid writing is_all_day until schema is guaranteed
-    if (outfitId != null) data['outfit_id'] = outfitId;
+    final data = buildUpdateEventPayload(
+      title: title,
+      startTime: startTime,
+      endTime: endTime,
+      description: description,
+      location: location,
+      isAllDay: isAllDay,
+      outfitId: outfitId,
+    );
 
     try {
-      final response =
-          await _apiClient.put('${ApiConstants.calendar}/events/$eventId', data: data);
+      final response = await _apiClient.put(
+        '${ApiConstants.calendar}/events/$eventId',
+        data: data,
+      );
       final payload = _extractDataMap(response.data);
       final eventMap = payload['event'] is Map
           ? Map<String, dynamic>.from(payload['event'] as Map)
@@ -239,7 +260,9 @@ class CalendarRepository {
   /// Remove outfit from event. Returns success; outfit cleared.
   Future<void> removeOutfit(String eventId) async {
     try {
-      await _apiClient.delete('${ApiConstants.calendar}/events/$eventId/outfit');
+      await _apiClient.delete(
+        '${ApiConstants.calendar}/events/$eventId/outfit',
+      );
     } on DioException catch (e) {
       throw handleDioException(e);
     }

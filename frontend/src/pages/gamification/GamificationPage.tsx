@@ -67,7 +67,7 @@ export default function GamificationPage() {
     : 0
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-8 space-y-6">
+    <div className="app-page max-w-7xl space-y-3">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Streaks &amp; Rewards</h1>
@@ -97,7 +97,7 @@ export default function GamificationPage() {
         </Card>
       ) : (
         <>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -163,7 +163,7 @@ export default function GamificationPage() {
                     if (earned.length === 0 && locked.length === 0) {
                       return (
                         <EmptyState
-                          className="border-0 shadow-none py-6"
+                          className="border-0 py-6"
                           icon={Trophy}
                           title="No achievements yet"
                           description="Wear outfits and build your wardrobe to unlock rewards."

@@ -125,7 +125,7 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
               const SizedBox(height: AppConstants.spacing8),
               Text(
-                'Start building your AI-powered wardrobe in minutes.',
+                'Start building your AI-powered closet in minutes.',
                 style: TextStyle(
                   fontSize: bodySize,
                   color: tokens.secondaryTextColor,

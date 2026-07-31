@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
 import { validateReferralCode } from '@/api/subscription'
 import SEO from '@/components/seo/SEO'
+import { getPostAuthDestination, persistAuthReturnTo, withAuthContext } from './authRedirect'
 
 function getPasswordStrength(pwd: string) {
   let strength = 0
@@ -25,6 +26,8 @@ function getPasswordStrength(pwd: string) {
 export default function RegisterPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const selectedPlan = searchParams.get('plan_type')
+  const returnTo = searchParams.get('returnTo')
   const register = useAuthStore((state) => state.register)
   const signInWithGoogle = useAuthStore((state) => state.signInWithGoogle)
   const isLoading = useAuthStore((state) => state.isLoading)
@@ -125,7 +128,7 @@ export default function RegisterPage() {
           title: 'Confirm your email',
           description: 'Check your inbox for a confirmation email, then sign in to continue.',
         })
-        navigate('/auth/login')
+        navigate(withAuthContext('/auth/login', selectedPlan, returnTo))
         return
       }
 
@@ -138,7 +141,11 @@ export default function RegisterPage() {
         })
       }
 
-      navigate('/dashboard')
+      // The URL's plan_type (if any) has been handled by the destination;
+      // clear any stale key left behind by an aborted Google sign-in so it
+      // cannot hijack a later Google login.
+      localStorage.removeItem('pending_plan_type')
+      navigate(getPostAuthDestination(returnTo, selectedPlan))
     } catch {
       // Registration error is handled by the store and displayed in UI
     }
@@ -152,11 +159,18 @@ export default function RegisterPage() {
     if (referralCode.trim()) {
       localStorage.setItem('pending_referral_code', referralCode.trim())
     }
+    if (selectedPlan) {
+      localStorage.setItem('pending_plan_type', selectedPlan)
+    }
+    persistAuthReturnTo(returnTo)
 
     try {
       await signInWithGoogle()
       // User will be redirected to Google
     } catch {
+      // Drop the pending plan/referral so a later plain sign-in cannot be
+      // hijacked by stale intent from this aborted attempt.
+      localStorage.removeItem('pending_plan_type')
       setGoogleLoading(false)
     }
   }
@@ -169,17 +183,16 @@ export default function RegisterPage() {
         noIndex={true}
       />
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="text-xl md:text-2xl font-extrabold text-foreground">
+        <h1 className="text-xl md:text-2xl font-extrabold text-foreground">
           Create your account
-        </h2>
+        </h1>
       </div>
 
       <div className="mt-6 md:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-card py-6 px-4 shadow rounded-lg sm:py-8 sm:px-10">
+        <div className="rounded-2xl border border-border bg-card py-6 px-4 sm:py-8 sm:px-10">
           {error && (
             <div
               role="alert"
-              aria-live="polite"
               className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start"
             >
               <AlertCircle className="h-5 w-5 text-destructive mt-0.5 mr-2 flex-shrink-0" />
@@ -475,7 +488,7 @@ export default function RegisterPage() {
               <p className="text-sm text-muted-foreground">
                 Already have an account?{' '}
                 <Link
-                  to="/auth/login"
+                  to={withAuthContext('/auth/login', selectedPlan, returnTo)}
                   className="font-medium text-primary hover:text-primary/80"
                 >
                   Sign in

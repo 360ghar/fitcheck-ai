@@ -1,8 +1,12 @@
 # FitCheck AI - Implementation Status
 
-Last Updated: 2026-02-15
+Last Updated: 2026-07-31
 
 This document tracks the implementation status of all FitCheck AI features, comparing the documented specifications against actual implementation.
+
+The [user-story ledger](./user-story-ledger.md) is authoritative for story status
+and verification. A route, component, or unit test is implementation evidence;
+it is not by itself an end-to-end pass.
 
 ---
 
@@ -10,10 +14,12 @@ This document tracks the implementation status of all FitCheck AI features, comp
 
 | Status | Description |
 |--------|-------------|
-| ✅ Complete | Fully implemented and working end-to-end |
+| ✅ Implemented | Code and route evidence exist; end-to-end verification is tracked separately |
 | 🟡 Partial | Exists but incomplete or needs improvement |
-| ❌ Not Started | Documented but not implemented |
+| ⚪ Disabled by default | Code exists but the shipped default does not expose or activate it |
+| ❌ Not Started | Documented but no implementation evidence was found |
 | 🔄 In Progress | Currently being developed |
+| ⛔ Blocked | Verification requires an unavailable toolchain or external operator action |
 
 ---
 
@@ -70,6 +76,7 @@ This document tracks the implementation status of all FitCheck AI features, comp
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Virtual try-on | ✅ | `TryOnPage.tsx` - requires user avatar |
+| Item images sent as garment references | 🟡 | Clients send `item_id`; backend resolves stored images, but the current default caps resolved references at 12 and provider image-count behavior remains unverified (`item_reference_service.py`, `docs/BACKEND.md` → Outfit generation) |
 | Multiple poses/angles | ✅ | `generateMultiPoseOutfit` API + AIGenerator.tsx |
 | **Body type customization** | 🟡 | BodyProfile exists but basic measurements only |
 | **Lighting scenarios** | ✅ | `AIGenerator.tsx` - 8 scenario presets (office, outdoor, evening, etc.) |
@@ -139,13 +146,13 @@ This document tracks the implementation status of all FitCheck AI features, comp
 ### Gamification
 | Feature | Status | Location |
 |---------|--------|----------|
-| Streak tracking | ✅ | `StreakDisplay.tsx` |
-| Streak freezes | ✅ | Pause functionality |
-| Achievements | ✅ | `AchievementCard.tsx` |
-| XP rewards | ✅ | Achievement unlocks |
-| Leaderboard | ✅ | `Leaderboard.tsx` |
-| **Wardrobe stats (fun metrics)** | ✅ | `src/lib/wardrobe-stats.ts` + `WardrobeStats.tsx` |
-| **Sustainability goals** | ✅ | `src/lib/sustainability-goals.ts` + `SustainabilityGoals.tsx` |
+| Streak tracking | ⚪ | `StreakDisplay.tsx`; backend gamification is disabled by default and the mobile dashboard now degrades independently when streak loading fails |
+| Streak freezes | ⚪ | Pause functionality is present, but the feature is disabled by default |
+| Achievements | ⚪ | `AchievementCard.tsx`; backend read paths exist but no shipped write path is evidenced |
+| XP rewards | ⚪ | Achievement unlock surface exists; disabled-by-default gamification and no verified write path |
+| Leaderboard | ⚪ | UI surface exists; disabled-by-default gamification and no verified end-to-end path |
+| **Wardrobe stats (fun metrics)** | 🟡 | `src/lib/wardrobe-stats.ts` + `WardrobeStats.tsx`; no dedicated cross-client verification |
+| **Sustainability goals** | 🟡 | `src/lib/sustainability-goals.ts` + `SustainabilityGoals.tsx`; goal UI exists, but sustainability score/data source is absent |
 
 ### AI Photoshoot Generator
 | Feature | Status | Location |
@@ -155,7 +162,7 @@ This document tracks the implementation status of all FitCheck AI features, comp
 | Image count slider | ✅ | 1-10 images selection |
 | Image generation | ✅ | Backend AI provider integration (configurable models) |
 | Results gallery | ✅ | Download individual/all |
-| Daily usage limits | ✅ | Free: 10/day, Pro: 50/day |
+| Daily usage limits | ✅ | Free: 10/day, Plus: 30/day, Pro: 50/day |
 | Landing page demo | ✅ | 2 images, IP-limited |
 | Referral limit prompt | ✅ | Flutter dialog + React referral banner |
 
@@ -182,22 +189,14 @@ This document tracks the implementation status of all FitCheck AI features, comp
 
 ---
 
-## Summary Statistics
+## Aggregate status
 
-| Category | Complete | Partial | Not Started | Total |
-|----------|----------|---------|-------------|-------|
-| Core Features | 11 | 1 | 0 | 12 |
-| Visualization | 3 | 1 | 2 | 6 |
-| Planning | 8 | 0 | 0 | 8 |
-| Recommendations | 8 | 0 | 1 | 9 |
-| Social | 5 | 0 | 3 | 8 |
-| Shopping | 1 | 0 | 5 | 6 |
-| Advanced | 3 | 0 | 3 | 6 |
-| Gamification | 6 | 0 | 0 | 6 |
-| AI Photoshoot | 8 | 0 | 0 | 8 |
-| **TOTAL** | **53** | **2** | **14** | **69** |
-
-**Completion Rate:** 77% Complete, 3% Partial, 20% Not Started
+The former percentage summary is retired. It counted UI/code presence as
+end-to-end completion and overstated shipped behavior. Use the ledger for
+story-level status, evidence, and verification boundaries. Community, stylist,
+challenge, retailer, price-tracking, sustainability-score, resale,
+enhancement, and household stories remain absent; gamification is disabled by
+default.
 
 ---
 
@@ -242,13 +241,21 @@ Based on user impact and AI capability:
 
 | Issue | Priority | Notes |
 |-------|----------|-------|
-| No automated frontend tests | Medium | Add Vitest/Playwright |
+| Cross-client verification is incomplete | High | Web has Vitest coverage but no authenticated browser E2E; Flutter has unit/widget tests but no `integration_test/` suite; backend tests are predominantly service/direct-call tests |
 | Style learning not ML-based | Medium | UserPreferences exists but static |
 | No trend data source | Low | Need fashion trend API or scraping |
+| Flutter local verification can be blocked | Medium | Active hardening plan records an SDK cache write-permission failure; CI remains the available verification boundary |
+| Public storage buckets/raw URLs remain | High | Ownership checks exist, but migration to private buckets/signed URLs is deferred; see `SECURITY.md` and the active hardening plan |
+| Plan/document lifecycle drift | Medium | Completed work can remain under `exec-plans/active/`; status is tracked in the debt ledger |
 
 ---
 
 ## Files Reference
+
+Mounted backend routes are included in `backend/app/main.py:426-502`, web
+routes in `frontend/src/App.tsx:153-287`, and mobile feature ownership under
+`flutter/lib/features/`. These inventories are implementation evidence; the
+story ledger records whether the behavior is actually verified.
 
 ### Frontend - Implemented Features
 | Feature | Primary File |

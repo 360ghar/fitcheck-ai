@@ -10,25 +10,106 @@ Features:
 - Generate variations
 """
 
+import asyncio
 import base64
+import re
 import uuid
 from typing import Any, Dict, List, Optional
 
 from app.agents.prompt_fidelity import (
+    GARMENT_REFERENCE_LOCK,
     OUTFIT_LOCK,
     PERSON_REFERENCE_FIDELITY,
+    PRODUCT_CUSTOM_BACKGROUND_LOCK,
     PRODUCT_REFERENCE_LOCK,
     SHORT_NEGATIVES,
 )
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
 from app.core.concurrency import GENERATION_SEMAPHORE
-from app.services.ai_provider_service import AIProviderService
+from app.services.ai_provider_service import AIProviderService, ChatMessage
 from app.services.ai_settings_service import AISettingsService
 from app.services.storage_service import StorageService
+from app.utils.background_removal import (
+    STATUS_MATTED,
+    MatteResult,
+    remove_white_background,
+)
+from app.utils.image_processing import (
+    EXTENSION_BY_MIME,
+    sniff_image_mime,
+    to_data_url,
+)
 from app.utils.parallel import parallel_with_retry
 
 logger = get_context_logger(__name__)
+
+
+# =============================================================================
+# BACKGROUND PROMPT FRAGMENTS
+# =============================================================================
+# No provider we use can return an alpha channel: `_generate_image_via_images_
+# api` sends a fixed payload with no output_format, and gemini_provider discards
+# the response mime entirely. So `background="transparent"` does NOT mean "ask
+# the model for transparency" - it means "render on a matte-optimal flat white,
+# then cut the alpha out server-side" (app/utils/background_removal.py).
+#
+# THESE STRINGS ARE PART OF THE MATTE'S CONTRACT. The guard thresholds
+# (MIN/MAX_TRANSPARENT_FRACTION, WHITE_MIN_CHANNEL) are tuned against the
+# backdrop these strings actually produce. Any edit here must be re-validated
+# against a batch of fresh generations, not just eyeballed.
+_FLAT_WHITE_BACKDROP = (
+    "pure flat #FFFFFF white background, completely uniform - no gradient, "
+    "no vignette, no gray falloff, no floor plane, no cast shadow, no "
+    "reflection, no surface texture"
+)
+
+# The product / flat-lay variant. Adds the silhouette requirement, which only
+# makes sense when there is no person in frame.
+_MATTE_READY_BACKGROUND = (
+    f"{_FLAT_WHITE_BACKDROP}; the garment is fully isolated with a "
+    "crisp clean silhouette edge"
+)
+
+# Short tokens clients and services actually send. Every one of these means
+# "white studio backdrop", and the web client still hardcodes 'studio white' in
+# api/ai.ts while Flutter hardcodes 'white' - so they have to be aliases here
+# rather than a client-side change.
+_WHITE_BACKGROUND_KEYS = frozenset(
+    {
+        "",
+        "white",
+        "transparent",
+        "studio white",
+        "pure white",
+        "clean white background",
+        "seamless clean light background",
+    }
+)
+
+# Deliberately left HONEST: a caller that explicitly asks for gray gets gray,
+# the matte's G1 guard then finds no white backdrop and keeps the opaque
+# original. That is the correct outcome, not a bug.
+_NON_WHITE_BACKGROUNDS = {
+    "gray": "light gray seamless studio background",
+    "grey": "light gray seamless studio background",
+    "gradient": "subtle gray-to-white gradient background",
+}
+
+
+def _resolve_background(background: Optional[str], *, matte_ready: bool) -> str:
+    """Turn a caller's short background token into a prompt fragment.
+
+    `matte_ready=True` for the no-person paths (product shot, flat lay), which
+    additionally demand an isolated silhouette. Unknown values pass through
+    verbatim so a caller can still describe a real scene.
+    """
+    key = (background or "").strip().lower()
+    if key in _WHITE_BACKGROUND_KEYS:
+        return _MATTE_READY_BACKGROUND if matte_ready else _FLAT_WHITE_BACKDROP
+    if key in _NON_WHITE_BACKGROUNDS:
+        return _NON_WHITE_BACKGROUNDS[key]
+    return background or _FLAT_WHITE_BACKDROP
 
 
 # =============================================================================
@@ -78,9 +159,179 @@ class ImageGenerationAgent:
         """Initialize with an AI service instance."""
         self.ai_service = ai_service
 
+    # Key set on each item dict by
+    # app/services/item_reference_service.resolve_outfit_item_references.
+    # References ride INSIDE the item dicts rather than in a parallel list so
+    # label/image misalignment is structurally impossible, and the delegating
+    # entry points (generate_flat_lay, generate_variations) inherit the
+    # feature without signature changes.
+    REFERENCE_KEY = "reference_image_base64"
+
     @staticmethod
-    def _build_outfit_inventory(items: List[Dict[str, Any]]) -> str:
-        """Build a detailed, deterministic outfit inventory for prompt fidelity."""
+    def _as_data_url(image_base64: str) -> str:
+        """Normalize bare base64 to the data URL the content parts expect.
+
+        The mime type is SNIFFED, not assumed. This used to hardcode
+        `image/jpeg` for every reference image, and
+        `GeminiProvider._decode_image_part` parses that header straight into
+        `Part.from_bytes(mime_type=...)` - so a PNG or WebP reference reached the
+        model labelled as a JPEG.
+        """
+        return to_data_url(image_base64)
+
+    @staticmethod
+    async def _matte(generated: "GeneratedImage", *, context: str) -> "GeneratedImage":
+        """Cut the white backdrop out of a freshly generated image.
+
+        Wired at EXACTLY TWO call sites - the `generate_product_image` return and
+        `generate_outfit`'s flat-lay branch. Deliberately NOT applied inside
+        `_generate_image` / `_generate_with_references`, because the avatar
+        branch, the generic-model branch and `generate_try_on` all route through
+        those and must stay opaque: a Pillow threshold matte cannot cut hair, and
+        the guards would NOT catch it (a full-body figure lands ~0.70-0.80
+        transparent, under MAX_TRANSPARENT_FRACTION, so bad hair would ship).
+
+        Runs on a worker thread: the matte is ~110ms of GIL-held C work and must
+        not sit on the event loop while a batch SSE stream is being served.
+        Never raises - on any failure the original image is returned untouched.
+        """
+        def _run() -> tuple[str, MatteResult]:
+            result = remove_white_background(base64.b64decode(generated.image_base64))
+            if result.status != STATUS_MATTED:
+                return generated.image_base64, result
+            return base64.b64encode(result.image_bytes).decode("utf-8"), result
+
+        try:
+            image_base64, result = await asyncio.to_thread(_run)
+        except Exception as e:
+            logger.warning(
+                "Background matte failed",
+                context=context,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            return generated
+
+        logger.info(
+            "Background matte finished",
+            context=context,
+            status=result.status,
+            transparent_fraction=round(result.transparent_fraction, 4),
+            center_opacity=round(result.center_opacity, 4),
+            content_type=result.content_type,
+            base64_len_before=len(generated.image_base64),
+            base64_len_after=len(image_base64),
+        )
+
+        if result.status != STATUS_MATTED:
+            return generated
+
+        return GeneratedImage(
+            image_base64=image_base64,
+            prompt=generated.prompt,
+            model=generated.model,
+            provider=generated.provider,
+            image_url=generated.image_url,
+            storage_path=generated.storage_path,
+        )
+
+    @staticmethod
+    def _tidy_prompt(prompt: str) -> str:
+        """Collapse the runs of blank lines left by empty optional blocks.
+
+        Several prompt slots (garment references, body profile, custom
+        instructions) are empty for most requests; without this the model gets
+        three or four blank lines where a section would have been.
+        """
+        return re.sub(r"\n{3,}", "\n\n", prompt).strip()
+
+    @classmethod
+    def _collect_garment_references(
+        cls,
+        items: List[Dict[str, Any]],
+        first_image_number: int,
+    ) -> tuple[List[str], Dict[int, int]]:
+        """Split items into ordered garment reference images plus their labels.
+
+        Args:
+            items: Item dicts, some carrying REFERENCE_KEY.
+            first_image_number: The IMAGE number the first garment gets — 2
+                when a person reference occupies IMAGE 1, else 1.
+
+        Returns:
+            (images, image_numbers) where `images` is in item order and
+            `image_numbers` maps a 1-based item index (the same numbering
+            _build_outfit_inventory uses) to the 1-based IMAGE number the
+            model sees.
+        """
+        images: List[str] = []
+        image_numbers: Dict[int, int] = {}
+        for idx, item in enumerate(items, start=1):
+            reference = item.get(cls.REFERENCE_KEY)
+            if not reference:
+                continue
+            image_numbers[idx] = first_image_number + len(images)
+            images.append(reference)
+        return images, image_numbers
+
+    @classmethod
+    def _build_reference_map(
+        cls,
+        items: List[Dict[str, Any]],
+        image_numbers: Dict[int, int],
+        *,
+        person_image: bool,
+    ) -> str:
+        """Numbered map of what each inline image is.
+
+        Without this the model has to guess which image is which garment.
+        Returns the pre-existing single-line person header verbatim when there
+        are no garment references, so the prompt that works today is
+        unchanged for clients that send no item_ids.
+        """
+        if not image_numbers:
+            if person_image:
+                return "REFERENCE IMAGE = person identity (source of truth for face/body/hair/skin)."
+            return ""
+
+        lines = ["REFERENCE IMAGES (in order):"]
+        if person_image:
+            lines.append(
+                "- IMAGE 1 = the person: identity source of truth "
+                "(face, body, hair, skin). Not a garment."
+            )
+        for idx, item in enumerate(items, start=1):
+            number = image_numbers.get(idx)
+            if not number:
+                continue
+            name = str(item.get("name") or "unspecified item").strip()
+            category = str(item.get("category") or "other").strip() or "other"
+            lines.append(
+                f'- IMAGE {number} = Item {idx} "{name}" ({category}): garment appearance only.'
+            )
+
+        missing = [str(idx) for idx in range(1, len(items) + 1) if idx not in image_numbers]
+        if missing:
+            lines.append(
+                f"Item {missing[0]} has no reference image - "
+                "render it from its inventory description."
+                if len(missing) == 1
+                else f"Items {', '.join(missing)} have no reference image - "
+                "render them from their inventory descriptions."
+            )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _build_outfit_inventory(
+        items: List[Dict[str, Any]],
+        image_numbers: Optional[Dict[int, int]] = None,
+    ) -> str:
+        """Build a detailed, deterministic outfit inventory for prompt fidelity.
+
+        When `image_numbers` is provided (see _collect_garment_references) each
+        item also states which inline IMAGE carries its true appearance, so the
+        model binds garment to image instead of guessing.
+        """
         if not items:
             return "Outfit inventory: none provided."
 
@@ -98,6 +349,13 @@ class ImageGenerationAgent:
             lines.append(f"  - material: {material if material else 'unspecified'}")
             lines.append(f"  - pattern: {pattern if pattern else 'unspecified'}")
             lines.append(f"  - brand/details: {brand if brand else 'unspecified'}")
+            if image_numbers:
+                number = image_numbers.get(idx)
+                lines.append(
+                    f"  - appearance reference: IMAGE {number} — copy this garment exactly"
+                    if number
+                    else "  - appearance reference: none — render from this description"
+                )
 
         lines.append("- Include every listed item exactly once unless naturally hidden by layering.")
         lines.append("- Do not add any extra clothing, footwear, accessories, or props.")
@@ -107,7 +365,11 @@ class ImageGenerationAgent:
         self,
         items: List[Dict[str, Any]],
         style: str = "casual",
-        background: str = "studio white",
+        # Was "seamless clean light background", the worst possible string for
+        # matting: "seamless" and "light" both invite a soft gradient sweep, and
+        # a smooth 200-250 ramp half-passes the matte's thresholds and yields a
+        # ragged partial cut. See _resolve_background.
+        background: str = "transparent",
         pose: str = "standing front",
         lighting: str = "professional studio lighting",
         view_angle: str = "full body",
@@ -121,7 +383,12 @@ class ImageGenerationAgent:
         Generate an outfit visualization image.
 
         Args:
-            items: List of items with name, category, colors, brand, material, pattern
+            items: List of items with name, category, colors, brand, material,
+                pattern, and optionally REFERENCE_KEY holding that item's own
+                image as base64 (set by item_reference_service). Items with a
+                reference are sent to the model as labelled garment images so
+                the output reproduces the real garment; items without one are
+                still rendered from their text description.
             style: Overall style (casual, formal, streetwear, etc.)
             background: Background description
             pose: Model pose
@@ -143,9 +410,16 @@ class ImageGenerationAgent:
             include_model=include_model,
             has_avatar=user_avatar_base64 is not None,
             has_body_profile=body_profile is not None,
+            item_reference_count=sum(1 for i in items if i.get(self.REFERENCE_KEY)),
         )
 
         wants_flat_lay = not include_model or "flat lay" in pose.lower()
+        # Flat lay has no person in frame, so it may demand an isolated
+        # silhouette; the model/avatar branches get flat white without that
+        # clause. Both end up on a flat white backdrop, which keeps model shots
+        # visually consistent with the now-transparent item shots and leaves the
+        # corpus matte-ready if a real segmenter is ever added.
+        background = _resolve_background(background, matte_ready=wants_flat_lay)
 
         # Build item descriptions
         item_descriptions = []
@@ -164,7 +438,26 @@ class ImageGenerationAgent:
             item_descriptions.append(" ".join(parts))
 
         items_list = "; ".join(item_descriptions)
-        outfit_inventory = self._build_outfit_inventory(items)
+
+        # Garment references: the items' own stored images, numbered so the
+        # prompt can bind IMAGE n -> Item n. The person reference (when used)
+        # takes IMAGE 1, so garments start at 2.
+        uses_person_reference = bool(user_avatar_base64) and not wants_flat_lay
+        garment_images, image_numbers = self._collect_garment_references(
+            items, first_image_number=2 if uses_person_reference else 1
+        )
+        outfit_inventory = self._build_outfit_inventory(items, image_numbers=image_numbers)
+        reference_map = self._build_reference_map(
+            items, image_numbers, person_image=uses_person_reference
+        )
+        garment_block = f"\n{GARMENT_REFERENCE_LOCK}\n" if garment_images else ""
+        # Only warn about collaging reference images when references exist -
+        # otherwise the line names inputs the model was never given.
+        no_collage = (
+            " — not a collage, grid, or copy of the reference images side by side"
+            if garment_images
+            else ""
+        )
 
         # Build body profile description if available
         body_desc = ""
@@ -183,6 +476,8 @@ class ImageGenerationAgent:
         if wants_flat_lay:
             prompt = f"""Professional flat lay fashion photo of a cohesive {style} outfit: {items_list}.
 
+{reference_map}
+{garment_block}
 {outfit_inventory}
 
 {OUTFIT_LOCK}
@@ -194,19 +489,39 @@ Style:
 - Lighting: {lighting}
 - Sharp focus, realistic fabric textures, accurate colors
 
+Composition: ONE single flat lay photograph of these garments arranged together on the background{no_collage}.
+
 {SHORT_NEGATIVES}
 
-{f"Additional instructions: {custom_prompt}" if custom_prompt else ""}""".strip()
+{f"Additional instructions: {custom_prompt}" if custom_prompt else ""}"""
 
-            return await self._generate_image(prompt)
+            # MATTE SITE 1 of 2. Flat lay is the same optical regime as a product
+            # shot - no subject, no hair - so the same algorithm and guards apply.
+            # This also covers generate_flat_lay() and any include_model=False
+            # request.
+            return await self._matte(
+                await self._generate_with_references(
+                    self._tidy_prompt(prompt), garment_images, context="outfit flat lay"
+                ),
+                context="outfit flat lay",
+            )
 
         elif user_avatar_base64:
-            # Reference image = identity source; text inventory = garments only
-            base_prompt = f"""REFERENCE IMAGE = person identity (source of truth for face/body/hair/skin).
-TASK: Photoreal fashion photo of that same person wearing the outfit below.
+            # IMAGE 1 = identity source. Garment images (when the items have
+            # stored photos) follow it and are the appearance source for the
+            # clothes; the text inventory still identifies every item and is
+            # the only source for items with no image. PERSON_REFERENCE_
+            # FIDELITY stays ahead of the garment block so IDENTITY_LOCK keeps
+            # top priority.
+            # A multi-line reference map wants a blank line before TASK; the
+            # single-line legacy header sat directly above it, and keeping that
+            # exact spacing means a client sending no item_ids gets byte-for-byte
+            # the prompt that works today.
+            person_header = reference_map + ("\n\n" if image_numbers else "\n")
+            base_prompt = f"""{person_header}TASK: Photoreal fashion photo of that same person wearing the outfit below.
 
 {PERSON_REFERENCE_FIDELITY}
-
+{garment_block}
 {outfit_inventory}
 {body_desc}
 
@@ -216,60 +531,22 @@ SCENE (change only these):
 - Pose: {pose} (face clearly visible; front or slight 3/4; no sunglasses)
 - View angle: {view_angle}
 - Lighting: {lighting} (even face light; no beauty-filter look)
-- Clothing fits naturally with realistic draping and shadows
+- Clothing fits naturally with realistic draping
 
-{f"Additional instructions: {custom_prompt}" if custom_prompt else ""}""".strip()
+{f"Additional instructions: {custom_prompt}" if custom_prompt else ""}"""
 
-            # Use multi-modal generation with avatar image
-            try:
-                avatar_url = f"data:image/jpeg;base64,{user_avatar_base64}" if not user_avatar_base64.startswith("data:") else user_avatar_base64
-
-                content = [
-                    {"type": "image_url", "image_url": {"url": avatar_url}},
-                    {"type": "text", "text": base_prompt},
-                ]
-
-                from app.services.ai_provider_service import ChatMessage
-
-                messages = [ChatMessage(role="user", content=content)]
-
-                response = await self.ai_service.chat(
-                    messages=messages,
-                    model=self.ai_service.get_image_gen_model(),
-                    response_modalities=["TEXT", "IMAGE"],
-                )
-
-                if not response.images:
-                    # 200-with-no-images is usually a transient silent moderation
-                    # refusal - retryable so the caller's retry round gets a chance
-                    # (matches the provider's own no-images classification).
-                    raise AIServiceError("AI generated no images for outfit with avatar", retryable=True)
-
-                return GeneratedImage(
-                    image_base64=response.images[0],
-                    prompt=base_prompt,
-                    model=response.model,
-                    provider=response.provider,
-                )
-
-            except AIServiceError:
-                raise
-            except Exception as e:
-                logger.error(
-                    "Outfit generation with avatar failed",
-                    error=str(e),
-                    error_type=type(e).__name__,
-                    style=style,
-                    item_count=len(items),
-                    include_model=include_model,
-                    has_avatar=True,
-                )
-                raise AIServiceError(f"Outfit generation with avatar failed: {str(e)}")
+            return await self._generate_with_references(
+                self._tidy_prompt(base_prompt),
+                [user_avatar_base64, *garment_images],
+                context="outfit with avatar",
+            )
 
         else:
             # Generic model generation (no avatar)
             prompt = f"""Professional fashion photo of a {model_gender} model wearing a cohesive {style} outfit: {items_list}.
 
+{reference_map}
+{garment_block}
 {outfit_inventory}
 
 {OUTFIT_LOCK}
@@ -282,11 +559,15 @@ Style:
 - Lighting: {lighting}
 - Sharp focus, realistic fabric textures, accurate colors
 
+Composition: ONE single photograph of the model wearing this outfit{no_collage}.
+
 {SHORT_NEGATIVES}
 
-{f"Additional instructions: {custom_prompt}" if custom_prompt else ""}""".strip()
+{f"Additional instructions: {custom_prompt}" if custom_prompt else ""}"""
 
-            return await self._generate_image(prompt)
+            return await self._generate_with_references(
+                self._tidy_prompt(prompt), garment_images, context="outfit"
+            )
 
     async def generate_product_image(
         self,
@@ -295,7 +576,10 @@ Style:
         sub_category: Optional[str] = None,
         colors: Optional[List[str]] = None,
         material: Optional[str] = None,
-        background: str = "white",
+        # "transparent" and "white" resolve to the same prompt string (see
+        # _resolve_background) - a matte-friendly white is a strictly better
+        # white. The token exists so intent is greppable at the call sites.
+        background: str = "transparent",
         view_angle: str = "front",
         include_shadows: bool = False,
         reference_image: Optional[str] = None,
@@ -327,12 +611,19 @@ Style:
             has_reference=reference_image is not None,
         )
 
-        background_map = {
-            "white": "pure white studio background",
-            "gray": "light gray seamless studio background",
-            "gradient": "subtle gray-to-white gradient background",
-            "transparent": "clean white background",
-        }
+        matte_requested = (background or "").strip().lower() in _WHITE_BACKGROUND_KEYS
+        background_desc = _resolve_background(background, matte_ready=matte_requested)
+        effective_shadows = include_shadows and not matte_requested
+
+        if include_shadows and matte_requested:
+            # A cast shadow is border-connected near-white's worst enemy: it
+            # survives the matte as a detached grey blob. The request is still
+            # honoured (the caller asked for it explicitly) but it is a
+            # self-inflicted matte degradation, so make it visible in the logs.
+            logger.warning(
+                "include_shadows=True conflicts with a white/transparent product matte; disabling shadows",
+                category=category,
+            )
 
         view_map = {
             "front": "front view, straight-on angle",
@@ -369,14 +660,14 @@ Style:
 IDENTIFY the item to reproduce from this dense description (NOT any other item in the photo):
 {item_description}
 
-{PRODUCT_REFERENCE_LOCK}
+{PRODUCT_REFERENCE_LOCK if matte_requested else PRODUCT_CUSTOM_BACKGROUND_LOCK}
 
 Item: {tokens}.
 
 Output:
-- {background_map.get(background, background_map["white"])}
+- {background_desc}
 - {view_map.get(view_angle, view_map["front"])}
-- {"Subtle natural drop shadow" if include_shadows else "No shadows; fully isolated"}
+- {"Subtle natural drop shadow" if effective_shadows else "No shadows; fully isolated"}
 - Soft studio light, sharp focus, catalog quality
 - Reproduce ONLY that single item, exactly as it appears in the reference photo. Ignore every other garment, footwear, accessory, prop, person, and background visible in the photo. One isolated product shot; no second or partial second item.
 - Flat or invisible mannequin; no person""".strip()
@@ -386,22 +677,23 @@ Output:
 {item_description}
 
 Specs:
-- {background_map.get(background, background_map["white"])}
+- {background_desc}
 - {view_map.get(view_angle, view_map["front"])}
-- {"Subtle natural drop shadow" if include_shadows else "No shadows; fully isolated"}
+- {"Subtle natural drop shadow" if effective_shadows else "No shadows; fully isolated"}
 - Accurate colors{f": {color_desc}" if color_desc else ""}, realistic fabric{f" ({material})" if material else ""}
 - Soft studio light, sharp focus
 - Only this single item; no model, extra garments, or second item
 
 {SHORT_NEGATIVES}""".strip()
 
-        return await self._generate_image(prompt, reference_image=reference_image)
+        generated = await self._generate_image(prompt, reference_image=reference_image)
+        return await self._matte(generated, context="product image") if matte_requested else generated
 
     async def generate_flat_lay(
         self,
         items: List[Dict[str, Any]],
         style: str = "casual",
-        background: str = "white",
+        background: str = "transparent",
         lighting: str = "soft natural light",
     ) -> GeneratedImage:
         """
@@ -487,6 +779,75 @@ Specs:
         )
 
         return successful
+
+    async def _generate_with_references(
+        self,
+        prompt: str,
+        images: Optional[List[str]] = None,
+        *,
+        context: str = "image",
+    ) -> GeneratedImage:
+        """
+        Generate one image from a prompt plus N inline reference images.
+
+        Args:
+            prompt: The generation prompt. Its "IMAGE n" labels must match the
+                order of `images`.
+            images: Base64 (or data URL) references, IMAGE 1 first. Multi-image
+                input has to go through chat() because
+                ai_provider_service.generate_image() takes a SINGLE
+                reference_image, so with no images this delegates to
+                _generate_image and the text-only path is untouched.
+            context: Shapes the error message and log ("outfit with avatar").
+
+        Returns:
+            GeneratedImage with the result
+        """
+        if not images:
+            return await self._generate_image(prompt)
+
+        try:
+            # Images first, then the text - mirrors the working try-on path and
+            # the Gemini provider's part ordering.
+            content: List[Dict[str, Any]] = [
+                {"type": "image_url", "image_url": {"url": self._as_data_url(image)}}
+                for image in images
+            ]
+            content.append({"type": "text", "text": prompt})
+
+            response = await self.ai_service.chat(
+                messages=[ChatMessage(role="user", content=content)],
+                model=self.ai_service.get_image_gen_model(),
+                response_modalities=["TEXT", "IMAGE"],
+            )
+
+            if not response.images:
+                # 200-with-no-images is usually a transient silent moderation
+                # refusal - retryable so the caller's retry round gets a chance
+                # (matches the provider's own no-images classification).
+                raise AIServiceError(
+                    f"AI generated no images for {context}", retryable=True
+                )
+
+            return GeneratedImage(
+                image_base64=response.images[0],
+                prompt=prompt,
+                model=response.model,
+                provider=response.provider,
+            )
+
+        except AIServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                "Reference image generation failed",
+                context=context,
+                error=str(e),
+                error_type=type(e).__name__,
+                image_count=len(images),
+                prompt_length=len(prompt),
+            )
+            raise AIServiceError(f"{context} generation failed: {str(e)}")
 
     async def _generate_image(
         self, prompt: str, reference_image: Optional[str] = None
@@ -590,16 +951,11 @@ Output one cohesive image of THIS same person wearing that exact garment."""
         try:
             # Use chat_with_vision for multi-image input with image generation
             # Build message content with two images
-            avatar_url = f"data:image/jpeg;base64,{user_avatar_base64}" if not user_avatar_base64.startswith("data:") else user_avatar_base64
-            clothing_url = f"data:image/jpeg;base64,{clothing_image_base64}" if not clothing_image_base64.startswith("data:") else clothing_image_base64
-
             content = [
-                {"type": "image_url", "image_url": {"url": avatar_url}},
-                {"type": "image_url", "image_url": {"url": clothing_url}},
+                {"type": "image_url", "image_url": {"url": self._as_data_url(user_avatar_base64)}},
+                {"type": "image_url", "image_url": {"url": self._as_data_url(clothing_image_base64)}},
                 {"type": "text", "text": prompt},
             ]
-
-            from app.services.ai_provider_service import ChatMessage
 
             messages = [ChatMessage(role="user", content=content)]
 
@@ -664,15 +1020,21 @@ async def save_generated_image(
         # Decode base64 image
         image_data = base64.b64decode(generated.image_base64)
 
+        # Sniffed, not assumed: a matted image is WebP, an unmatted one is
+        # whatever the provider returned. Hardcoding .png/image/png here served
+        # every generated object with the wrong content type.
+        content_type = sniff_image_mime(image_data)
+        extension = EXTENSION_BY_MIME.get(content_type, ".png")
+
         # Generate unique filename
-        filename = f"{user_id}/generated/{image_type}/{uuid.uuid4().hex}.png"
+        filename = f"{user_id}/generated/{image_type}/{uuid.uuid4().hex}{extension}"
 
         # Upload to storage
         storage = StorageService()
         result = await storage.upload_file(
             file_data=image_data,
             file_path=filename,
-            content_type="image/png",
+            content_type=content_type,
             db=db,
         )
 

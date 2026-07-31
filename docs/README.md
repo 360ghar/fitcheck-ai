@@ -65,6 +65,7 @@ docs/
 
 1. `FRONTEND.md` → `DESIGN.md`
 2. `references/frontend-components.md`, `references/workflows.md`
+3. `product-specs/user-story-ledger.md` for story-level evidence and status
 
 **Planning a feature**
 
@@ -78,8 +79,8 @@ docs/
 |-------------|---------------|
 | Backend logic | `cd backend && source .venv/bin/activate && pytest` + `ruff check .` |
 | Architecture / docs layout | From **repo root**: `python scripts/check_architecture.py` + `python scripts/check_docs_structure.py` |
-| Web UI code | `cd frontend && npm run lint && npm run build` |
-| Mobile | `cd flutter && flutter test` |
+| Web UI code | `cd frontend && npm run lint && npm test -- --run`; build is separate because its prebuild writes tracked `public/sitemap.xml` |
+| Mobile | `cd flutter && flutter analyze --no-fatal-infos --no-fatal-warnings && flutter test` |
 | UI bug fix | Browser: reproduce → screenshot/DOM → fix → re-verify in browser |
 
-Full harness (architecture + docs + pytest if venv present): `./scripts/check_all.sh` from repo root.
+Full harness (architecture/docs/theme plus available backend, web, and mobile checks; no Docker or local Supabase): `./scripts/check_all.sh` from repo root. Use `RUN_FRONTEND_BUILD=1 ./scripts/check_all.sh` only when the tracked sitemap side effect is acceptable.
