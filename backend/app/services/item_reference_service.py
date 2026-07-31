@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from supabase import Client
 
 from app.core.config import settings
+from app.core.concurrency import REFERENCE_DOWNLOAD_SEMAPHORE
 from app.core.logging_config import get_context_logger
 from app.services.storage_service import StorageService
 from app.utils.image_processing import downscale_base64_image
@@ -37,9 +38,6 @@ REFERENCE_KEY = "reference_image_base64"
 # download holds the raw image plus its base64 in memory, and a big outfit
 # would otherwise open one connection per item. Eight rounds through a
 # 60-item worst case still costs a fraction of the generation that follows.
-_DOWNLOAD_CONCURRENCY = 8
-
-
 async def resolve_outfit_item_references(
     db: Client,
     user_id: str,
@@ -68,6 +66,7 @@ async def resolve_outfit_item_references(
         "items": len(items),
         "with_item_id": 0,
         "found_images": 0,
+        "skipped_references": 0,
         "download_failed": 0,
         "resolved": 0,
         "reference_kb": 0,
@@ -135,10 +134,8 @@ async def resolve_outfit_item_references(
     if not url_by_item_id:
         return list(items), stats
 
-    semaphore = asyncio.Semaphore(_DOWNLOAD_CONCURRENCY)
-
     async def _fetch(item_id: str) -> Optional[str]:
-        async with semaphore:
+        async with REFERENCE_DOWNLOAD_SEMAPHORE:
             raw = await StorageService.download_to_base64(url_by_item_id[item_id])
             if not raw:
                 return None
@@ -146,7 +143,15 @@ async def resolve_outfit_item_references(
             # batch_extraction_service.
             return await asyncio.to_thread(downscale_base64_image, raw, edge)
 
-    fetch_ids = list(url_by_item_id.keys())
+    fetch_ids = list(url_by_item_id.keys())[: max(0, settings.AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES)]
+    stats["skipped_references"] = max(0, len(url_by_item_id) - len(fetch_ids))
+    if stats["skipped_references"]:
+        logger.info(
+            "Skipped outfit item reference images above configured limit",
+            user_id=user_id,
+            skipped_references=stats["skipped_references"],
+            reference_limit=settings.AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES,
+        )
     results = await parallel_map_settled(fetch_ids, _fetch)
 
     base64_by_item_id: Dict[str, str] = {}

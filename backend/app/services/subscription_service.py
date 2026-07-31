@@ -80,6 +80,42 @@ class SubscriptionService:
     TOP_TIER_PLAN_TYPES = (PlanType.PRO_MONTHLY, PlanType.PRO_YEARLY)
 
     @staticmethod
+    def stripe_price_plan_map() -> dict[str, PlanType]:
+        return {
+            settings.STRIPE_PLUS_MONTHLY_PRICE_ID: PlanType.PLUS_MONTHLY,
+            settings.STRIPE_PLUS_YEARLY_PRICE_ID: PlanType.PLUS_YEARLY,
+            settings.STRIPE_PRO_MONTHLY_PRICE_ID: PlanType.PRO_MONTHLY,
+            settings.STRIPE_PRO_YEARLY_PRICE_ID: PlanType.PRO_YEARLY,
+        }
+
+    @classmethod
+    def effective_plan_type(
+        cls,
+        plan_type: PlanType,
+        status: SubscriptionStatus,
+        current_period_end: Optional[datetime],
+        trial_end: Optional[datetime],
+        now: Optional[datetime] = None,
+    ) -> PlanType:
+        """Return the plan whose entitlements are currently valid."""
+        if not cls.is_paid_plan(plan_type):
+            return PlanType.FREE
+
+        check_at = now or utcnow()
+        if status == SubscriptionStatus.TRIAL:
+            entitled_until = trial_end
+        elif status == SubscriptionStatus.ACTIVE:
+            entitled_until = current_period_end
+        else:
+            return PlanType.FREE
+
+        if entitled_until is None:
+            return PlanType.FREE
+        if entitled_until.tzinfo is None:
+            entitled_until = entitled_until.replace(tzinfo=check_at.tzinfo)
+        return plan_type if entitled_until > check_at else PlanType.FREE
+
+    @staticmethod
     def is_paid_plan(plan_type: PlanType) -> bool:
         """True for any paid plan (Plus or Pro) — Pro-level features unlocked."""
         return plan_type in SubscriptionService.PAID_PLAN_TYPES
@@ -142,17 +178,26 @@ class SubscriptionService:
             if not data:
                 raise DatabaseError("Subscription record could not be loaded after creation")
 
-            plan_type = PlanType(data.get("plan_type", "free"))
+            stored_plan_type = PlanType(data.get("plan_type", "free"))
+            status = SubscriptionStatus(data.get("status", "active"))
+            current_period_end = SubscriptionService._parse_datetime(data.get("current_period_end"))
+            trial_end = SubscriptionService._parse_datetime(data.get("trial_end"))
+            plan_type = SubscriptionService.effective_plan_type(
+                stored_plan_type,
+                status,
+                current_period_end,
+                trial_end,
+            )
 
             return SubscriptionResponse(
                 id=data["id"],
                 user_id=data["user_id"],
                 plan_type=plan_type,
-                status=SubscriptionStatus(data.get("status", "active")),
+                status=status,
                 current_period_start=SubscriptionService._parse_datetime(data.get("current_period_start")) or utcnow(),
-                current_period_end=SubscriptionService._parse_datetime(data.get("current_period_end")),
+                current_period_end=current_period_end,
                 cancel_at_period_end=data.get("cancel_at_period_end", False),
-                trial_end=SubscriptionService._parse_datetime(data.get("trial_end")),
+                trial_end=trial_end,
                 referral_credit_months=data.get("referral_credit_months", 0),
                 created_at=SubscriptionService._parse_datetime(data.get("created_at")),
                 updated_at=SubscriptionService._parse_datetime(data.get("updated_at")),
@@ -212,6 +257,82 @@ class SubscriptionService:
         except Exception as e:
             logger.error(f"Error upgrading subscription for user {user_id}: {e}")
             raise DatabaseError(f"Failed to upgrade subscription: {str(e)}")
+
+    @classmethod
+    async def sync_stripe_subscription(
+        cls,
+        user_id: str,
+        stripe_subscription: object,
+        db: Client,
+        *,
+        plan_type_hint: Optional[PlanType] = None,
+    ) -> SubscriptionResponse:
+        """Synchronize the local subscription from one Stripe subscription.
+
+        Stripe is the source of truth for the price, status, period dates, and
+        cancellation flag. Webhooks can deliver either StripeObject instances
+        or plain dictionaries, so this deliberately uses the common mapping /
+        attribute surface.
+        """
+        def value(obj: object, key: str, default=None):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+
+        def timestamp(value_to_parse) -> Optional[str]:
+            if value_to_parse is None:
+                return None
+            try:
+                return datetime.fromtimestamp(float(value_to_parse), tz=utcnow().tzinfo).isoformat()
+            except (TypeError, ValueError, OSError):
+                return None
+
+        items = value(value(stripe_subscription, "items", {}), "data", []) or []
+        first_item = items[0] if items else None
+        price = value(first_item, "price", {}) if first_item else {}
+        price_id = price if isinstance(price, str) else value(price, "id")
+        plan_type = cls.stripe_price_plan_map().get(price_id) or plan_type_hint
+        if plan_type is None:
+            raise DatabaseError(
+                f"Stripe subscription {value(stripe_subscription, 'id', 'unknown')} has an unknown price; billing sync requires a configured price ID"
+            )
+
+        stripe_status = str(value(stripe_subscription, "status", "active")).lower()
+        status_map = {
+            "active": SubscriptionStatus.ACTIVE,
+            "trialing": SubscriptionStatus.TRIAL,
+            "past_due": SubscriptionStatus.PAST_DUE,
+            "canceled": SubscriptionStatus.CANCELLED,
+            "cancelled": SubscriptionStatus.CANCELLED,
+            "unpaid": SubscriptionStatus.PAST_DUE,
+            "incomplete": SubscriptionStatus.PAST_DUE,
+            "incomplete_expired": SubscriptionStatus.CANCELLED,
+        }
+        status = status_map.get(stripe_status, SubscriptionStatus.PAST_DUE)
+        now = utcnow()
+        payload = {
+            "user_id": user_id,
+            "plan_type": plan_type.value,
+            "status": status.value,
+            "stripe_customer_id": value(stripe_subscription, "customer"),
+            "stripe_subscription_id": value(stripe_subscription, "id"),
+            "current_period_start": timestamp(value(stripe_subscription, "current_period_start")) or now.isoformat(),
+            "current_period_end": timestamp(value(stripe_subscription, "current_period_end")),
+            "trial_end": timestamp(value(stripe_subscription, "trial_end")),
+            "cancel_at_period_end": bool(value(stripe_subscription, "cancel_at_period_end", False)),
+            "updated_at": now.isoformat(),
+        }
+        await asyncio.to_thread(
+            db.table("subscriptions").upsert(payload, on_conflict="user_id").execute
+        )
+        logger.info(
+            "Synchronized Stripe subscription",
+            user_id=user_id,
+            stripe_subscription_id=payload["stripe_subscription_id"],
+            plan_type=plan_type.value,
+            status=status.value,
+        )
+        return await cls.get_subscription(user_id, db)
 
     @staticmethod
     async def apply_referral_credit(user_id: str, months: int, db: Client) -> None:

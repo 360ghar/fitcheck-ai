@@ -159,7 +159,19 @@ class SubscriptionController extends GetxController {
       final session = await _repository.createCheckoutSession(
         planType: planType,
       );
-      final url = Uri.parse(session.checkoutUrl);
+      if (session.updated) {
+        // Paid-plan changes are applied directly to the existing Stripe
+        // subscription. Refresh local entitlements instead of opening a
+        // checkout URL that the backend deliberately did not return.
+        await fetchSubscription();
+        return;
+      }
+      final checkoutUrl = session.checkoutUrl;
+      if (checkoutUrl == null || checkoutUrl.isEmpty) {
+        error.value = 'Checkout did not return a payment link';
+        return;
+      }
+      final url = Uri.parse(checkoutUrl);
       if (await canLaunchUrl(url)) {
         await launchUrl(url, mode: LaunchMode.externalApplication);
       } else {

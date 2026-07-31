@@ -186,6 +186,7 @@ export default function CalendarPage() {
             end_time: e.end_time,
             location: e.location || undefined,
             outfit_id: e.outfit_id || undefined,
+            event_type: e.event_type || 'other',
             is_all_day: false,
           }))
         )
@@ -259,6 +260,7 @@ export default function CalendarPage() {
         location: createLocation.trim() || undefined,
         start_time: new Date(createStart).toISOString(),
         end_time: new Date(createEnd).toISOString(),
+        event_type: 'other',
       })
 
       setEvents((prev) => [
@@ -271,6 +273,7 @@ export default function CalendarPage() {
           end_time: created.end_time,
           location: created.location || undefined,
           outfit_id: created.outfit_id || undefined,
+          event_type: created.event_type || 'other',
           is_all_day: false,
         },
       ])

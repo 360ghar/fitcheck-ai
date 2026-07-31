@@ -214,6 +214,9 @@ class Settings(BaseSettings):
     # under high parallelism, so raise cautiously.
     AI_EXTRACTION_CONCURRENCY: int = 30
     AI_GENERATION_CONCURRENCY: int = 30
+    AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES: int = 12
+    AI_OUTFIT_ITEM_REFERENCE_DOWNLOAD_CONCURRENCY: int = 8
+    AI_MAX_OUTFIT_ITEMS: int = 100
 
     # Outfit generation sends every selected item's own stored image to the
     # image model as a labelled garment reference (see

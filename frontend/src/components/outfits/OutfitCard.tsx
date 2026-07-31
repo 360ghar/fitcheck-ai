@@ -93,6 +93,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
             // Not `hover:bg-accent`: `--accent` is byte-identical to `--card`
             // in `:root`, which would erase the light-mode hover. See ItemCard.
             'hover:bg-surface-soft transition-colors cursor-pointer',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
             'touch-target',
             className
           )}
@@ -152,7 +153,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
                 type="button"
                 aria-label={outfit.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
                 className={cn(
-                  'row-cq-secondary p-2 rounded-full touch-target',
+                  'row-cq-secondary row-cq-favorite p-2 rounded-full touch-target',
                   // The list row sits on `bg-card`, not on a photo, so this one
                   // is page chrome and follows the page palette: brand red, not
                   // an off-system pink.
@@ -180,6 +181,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
           'group relative overflow-hidden rounded-md bg-card',
           'cursor-pointer',
           'border border-transparent transition-colors hover:border-border',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           variant === 'compact' && 'aspect-square',
           (!imageSrc || isGenerating || generationFailed) && 'aspect-[3/4] min-h-36',
           className
@@ -292,7 +294,9 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
               // a hue outside the red / purple / warm-neutral system.
               outfit.is_favorite
                 ? 'bg-primary text-primary-foreground'
-                : 'bg-on-image text-on-image-foreground/60 hover:text-primary'
+                : onPhoto
+                  ? 'bg-on-image text-on-image-foreground/60 hover:text-primary'
+                  : 'bg-card text-muted-foreground hover:text-primary'
             )}
             onClick={(e) => {
               e.stopPropagation()

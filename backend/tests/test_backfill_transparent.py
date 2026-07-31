@@ -220,6 +220,139 @@ class TestUploadOptions:
         assert opts["cache-control"] == "60"
 
 
+class _FakeStorage:
+    def __init__(self, original=b"source", download_error=None, upload_error=None):
+        self.original = original
+        self.download_error = download_error
+        self.upload_error = upload_error
+        self.uploads = []
+
+    def download(self, key):
+        if self.download_error:
+            raise self.download_error
+        return self.original
+
+    def upload(self, **kwargs):
+        if self.upload_error:
+            raise self.upload_error
+        self.uploads.append(kwargs)
+
+
+class _FakeDb:
+    def __init__(self, storage):
+        self.storage = self
+        self.storage_client = storage
+        self.updated = []
+        self.update_error = None
+
+    def from_(self, bucket):
+        return self.storage_client
+
+    def table(self, table):
+        return self
+
+    def update(self, payload):
+        self.updated.append(payload)
+        if self.update_error:
+            raise self.update_error
+        return self
+
+    def eq(self, *args):
+        return self
+
+    def execute(self):
+        return None
+
+
+def _cfg():
+    return bf.Config(
+        bucket=BUCKET,
+        dry_run=False,
+        cache_control=60,
+        bust_cache=False,
+        update_dimensions=True,
+        throttle_ms=0,
+        version=1,
+    )
+
+
+def _matte_result(status, width=100, height=80):
+    from app.utils.background_removal import MatteResult
+
+    return MatteResult(
+        image_bytes=b"matted",
+        content_type="image/webp",
+        status=status,
+        transparent_fraction=0.7,
+        center_opacity=1.0,
+        width=width,
+        height=height,
+    )
+
+
+class TestProcessRowFailures:
+    def _row(self):
+        return {"id": "row-1", "storage_path": "user-1/item.jpg", "width": None, "height": None}
+
+    def test_download_failure_is_retryable_and_not_decoded(self):
+        storage = _FakeStorage(download_error=RuntimeError("offline"))
+        db = _FakeDb(storage)
+
+        record = bf.process_row(db, bf.TABLE_SPECS["item_images"], self._row(), _cfg())
+
+        assert record["action"] == bf.ACTION_ERROR
+        assert record["decoded"] is False
+        assert not storage.uploads
+        assert not db.updated
+
+    def test_rejection_skips_upload_but_updates_original_dimensions(self, monkeypatch):
+        storage = _FakeStorage()
+        db = _FakeDb(storage)
+        monkeypatch.setattr(bf, "remove_white_background", lambda *_: _matte_result(
+            bf.STATUS_REJECTED_ATE_SUBJECT, width=100, height=80
+        ))
+
+        record = bf.process_row(db, bf.TABLE_SPECS["item_images"], self._row(), _cfg())
+
+        assert record["action"] == bf.ACTION_REJECTED
+        assert record["decoded"] is True
+        assert not storage.uploads
+        assert db.updated == [{"width": 100, "height": 80}]
+
+    def test_upload_failure_is_retryable(self, monkeypatch):
+        storage = _FakeStorage(upload_error=RuntimeError("storage down"))
+        db = _FakeDb(storage)
+        monkeypatch.setattr(bf, "remove_white_background", lambda *_: _matte_result(bf.STATUS_MATTED))
+
+        record = bf.process_row(db, bf.TABLE_SPECS["item_images"], self._row(), _cfg())
+
+        assert record["action"] == bf.ACTION_ERROR
+        assert record["decoded"] is True
+        assert not db.updated
+
+    def test_decode_failure_is_not_counted_as_decoded(self, monkeypatch):
+        storage = _FakeStorage()
+        db = _FakeDb(storage)
+        monkeypatch.setattr(bf, "remove_white_background", lambda *_: _matte_result(bf.STATUS_ERROR))
+
+        record = bf.process_row(db, bf.TABLE_SPECS["item_images"], self._row(), _cfg())
+
+        assert record["action"] == bf.ACTION_ERROR
+        assert record["decoded"] is False
+
+    def test_database_update_failure_is_retryable_after_upload(self, monkeypatch):
+        storage = _FakeStorage()
+        db = _FakeDb(storage)
+        db.update_error = RuntimeError("database down")
+        monkeypatch.setattr(bf, "remove_white_background", lambda *_: _matte_result(bf.STATUS_MATTED))
+
+        record = bf.process_row(db, bf.TABLE_SPECS["item_images"], self._row(), _cfg())
+
+        assert record["action"] == bf.ACTION_ERROR
+        assert record["decoded"] is True
+        assert len(storage.uploads) == 1
+
+
 # --------------------------------------------------------------------------- #
 # audit / resume
 # --------------------------------------------------------------------------- #

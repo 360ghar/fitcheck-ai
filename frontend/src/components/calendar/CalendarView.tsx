@@ -176,7 +176,7 @@ function EventBadge({ event, onClick }: EventBadgeProps) {
     <button
       type="button"
       onClick={() => onClick(event)}
-      className="flex w-full items-center gap-1.5 truncate rounded border border-border bg-card px-2 py-1 text-left text-xs text-foreground transition-colors hover:bg-accent"
+      className="flex w-full items-center gap-1.5 truncate rounded border border-border bg-card px-2 py-1 text-left text-xs text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       title={event.title}
     >
       {/* Rounded caps: a bare square-capped hairline used as ornament is its own
@@ -196,7 +196,7 @@ function EventBadge({ event, onClick }: EventBadgeProps) {
       <span className="flex-1 truncate">{event.title}</span>
       {/* The type is not decoration, so it is also available to a screen reader
           and to anyone who cannot separate the hues. */}
-      <span className="sr-only">{event.event_type || 'other'}</span>
+      <span className="sr-only">Event type: {event.event_type || 'other'}</span>
     </button>
   )
 }
@@ -668,7 +668,7 @@ export function CalendarView({
                     }
                   }}
                   className={cn(
-                    'flex items-start gap-3 rounded-lg border p-3 transition-colors cursor-pointer touch-target',
+                    'flex items-start gap-3 rounded-lg border p-3 transition-colors cursor-pointer touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                     day.isToday
                       ? 'bg-primary/5 border-primary'
                       : 'bg-card border-border hover:bg-accent'
@@ -764,7 +764,7 @@ export function CalendarView({
                           handleEventClick(event)
                         }
                       }}
-                      className="flex items-start gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent transition-colors cursor-pointer touch-target"
+                      className="flex items-start gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent transition-colors cursor-pointer touch-target focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
                       {/* Date column */}
                       <div className="flex flex-col items-center justify-center w-14 shrink-0 text-muted-foreground">
@@ -866,7 +866,7 @@ export function CalendarView({
                       }
                     }}
                     className={cn(
-                      'group min-h-[52px] overflow-hidden rounded-lg border p-0.5 transition-colors cursor-pointer sm:min-h-[60px] sm:p-1 md:min-h-24 md:p-2',
+                      'group min-h-[52px] overflow-hidden rounded-lg border p-0.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-h-[60px] sm:p-1 md:min-h-24 md:p-2',
                       day.isCurrentMonth
                         ? day.isToday
                           ? 'bg-primary/5 border-primary'

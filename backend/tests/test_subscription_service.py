@@ -6,7 +6,7 @@ Previously had zero test coverage despite directly controlling revenue-path
 correctness (see architecture review, section 16).
 """
 from unittest.mock import Mock, patch
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import httpx
 import pytest
@@ -47,7 +47,11 @@ def _mock_maybe_single(db, row_or_none):
 @pytest.mark.asyncio
 async def test_get_subscription_returns_existing_row():
     db = Mock()
-    _mock_maybe_single(db, _subscription_row(plan_type="pro_monthly", status="active"))
+    _mock_maybe_single(db, _subscription_row(
+        plan_type="pro_monthly",
+        status="active",
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+    ))
 
     result = await SubscriptionService.get_subscription(USER_ID, db)
 
@@ -88,7 +92,11 @@ async def test_get_subscription_raises_if_still_missing_after_creation():
 @pytest.mark.asyncio
 async def test_upgrade_to_pro_upserts_and_returns_pro_subscription():
     db = Mock()
-    _mock_maybe_single(db, _subscription_row(plan_type="pro_yearly", status="active"))
+    _mock_maybe_single(db, _subscription_row(
+        plan_type="pro_yearly",
+        status="active",
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+    ))
 
     result = await SubscriptionService.upgrade_to_pro(
         user_id=USER_ID,
@@ -112,7 +120,11 @@ async def test_upgrade_to_plus_yearly_sets_one_year_period_end():
     subscriber would have been billed for a year but granted one month.
     """
     db = Mock()
-    _mock_maybe_single(db, _subscription_row(plan_type="plus_yearly", status="active"))
+    _mock_maybe_single(db, _subscription_row(
+        plan_type="plus_yearly",
+        status="active",
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+    ))
 
     result = await SubscriptionService.upgrade_to_pro(
         user_id=USER_ID,
@@ -145,6 +157,33 @@ def test_is_paid_plan_treats_plus_as_entitled(plan_type, expected):
     assert SubscriptionService.is_paid_plan(plan_type) is expected
     # is_pro_plan is the legacy alias feeding SubscriptionResponse.is_pro
     assert SubscriptionService.is_pro_plan(plan_type) is expected
+
+
+@pytest.mark.parametrize(
+    "status,end_field,expected",
+    [
+        ("active", "current_period_end", PlanType.PRO_MONTHLY),
+        ("active", "current_period_end", PlanType.FREE),
+        ("past_due", "current_period_end", PlanType.FREE),
+        ("cancelled", "current_period_end", PlanType.FREE),
+        ("trial", "trial_end", PlanType.PRO_MONTHLY),
+        ("trial", "trial_end", PlanType.FREE),
+    ],
+)
+def test_effective_plan_requires_valid_status_and_expiry(status, end_field, expected):
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    end = now + timedelta(days=7) if expected != PlanType.FREE else now - timedelta(seconds=1)
+    current_end = end if end_field == "current_period_end" else None
+    trial_end = end if end_field == "trial_end" else None
+    assert SubscriptionService.effective_plan_type(
+        PlanType.PRO_MONTHLY,
+        status,
+        current_end,
+        trial_end,
+        now=now,
+    ) == expected
 
 
 @pytest.mark.parametrize(

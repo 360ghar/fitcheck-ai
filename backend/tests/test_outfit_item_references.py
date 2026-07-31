@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 from PIL import Image
 
+from app.core.config import settings
 from app.services import item_reference_service
 from app.services.item_reference_service import (
     REFERENCE_KEY,
@@ -242,9 +243,13 @@ async def test_no_cap_every_item_with_an_image_gets_a_reference(stub_download):
 
 @pytest.mark.asyncio
 async def test_downloads_are_concurrency_bounded(monkeypatch):
-    """Reference count is uncapped, so the downloads must not be: each in-flight
-    one holds a multi-MB buffer and its own connection."""
+    """Downloads remain bounded independently of the reference count."""
     ids = [f"item-{n}" for n in range(40)]
+    monkeypatch.setattr(settings, "AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES", 40)
+    # pytest-asyncio gives each test its own loop; replace the process-wide
+    # production semaphore for this isolated loop rather than exercising
+    # cross-loop asyncio.Semaphore behavior.
+    monkeypatch.setattr(item_reference_service, "REFERENCE_DOWNLOAD_SEMAPHORE", asyncio.Semaphore(8))
     db = _FakeDb([
         _row(item_id, [{"image_url": f"https://x.test/{item_id}.jpg", "is_primary": True}])
         for item_id in ids
@@ -276,7 +281,7 @@ async def test_downloads_are_concurrency_bounded(monkeypatch):
     )
 
     assert stats["resolved"] == 40
-    assert peak <= item_reference_service._DOWNLOAD_CONCURRENCY
+    assert peak <= 8
 
 
 @pytest.mark.asyncio

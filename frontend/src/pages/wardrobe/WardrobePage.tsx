@@ -391,7 +391,6 @@ export default function WardrobePage() {
         tags: updatedItem.tags,
         notes: updatedItem.notes,
         condition: updatedItem.condition,
-        is_favorite: updatedItem.is_favorite,
       })
       toast({
         title: 'Item updated',

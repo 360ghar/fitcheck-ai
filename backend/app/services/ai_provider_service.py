@@ -434,10 +434,18 @@ class AIProviderService:
         permanent 4xx (auth/policy) as transient.
         """
 
+        def __init__(self, message: str, retry_after_seconds: Optional[float] = None):
+            super().__init__(message)
+            self.retry_after_seconds = retry_after_seconds
+
     class _TransientChatAPIOverload(Exception):
         """Marks transient gateway HTTP status from /chat/completions as
         retry-worthy (408/429/500/502/503/504). Same pattern as
         _TransientImageAPIOverload but for the chat transport leg."""
+
+        def __init__(self, message: str, retry_after_seconds: Optional[float] = None):
+            super().__init__(message)
+            self.retry_after_seconds = retry_after_seconds
 
     _TRANSIENT_TRANSPORT_ERRORS = (
         httpx.ReadError,
@@ -481,7 +489,8 @@ class AIProviderService:
         cls, response: httpx.Response, attempt: int
     ) -> float:
         """Prefer Retry-After when the provider sends it; else exponential backoff."""
-        retry_after = response.headers.get("Retry-After")
+        headers = getattr(response, "headers", {}) or {}
+        retry_after = headers.get("Retry-After")
         if retry_after:
             try:
                 return min(float(retry_after), 30.0)
@@ -543,8 +552,14 @@ class AIProviderService:
             raise
 
         if self._is_transient_http_status(response.status_code):
+            headers = getattr(response, "headers", {}) or {}
             raise self._TransientChatAPIOverload(
-                f"status={response.status_code}: {self._http_error_detail(response)}"
+                f"status={response.status_code}: {self._http_error_detail(response)}",
+                retry_after_seconds=(
+                    self._http_retry_delay_seconds(response, 0)
+                    if headers.get("Retry-After")
+                    else None
+                ),
             )
         response.raise_for_status()
         return response.json(), response.status_code
@@ -592,6 +607,7 @@ class AIProviderService:
                 last_exc = AIServiceError(
                     f"AI chat request failed after retries: {error_message}",
                     retryable=True,
+                    retry_after_seconds=e.retry_after_seconds,
                 )
                 logger.warning(
                     "AI chat attempt exhausted transient HTTP retries",
@@ -610,6 +626,8 @@ class AIProviderService:
                 last_exc = AIServiceError(
                     f"AI request failed ({status}): {error_detail}",
                     retryable=retryable,
+                    provider_status=status,
+                    provider_error_detail=error_detail,
                 )
                 if not retryable or index == len(attempts) - 1:
                     raise last_exc
@@ -886,9 +904,37 @@ class AIProviderService:
             raise AIServiceError(
                 f"AI request failed ({status}): {error_detail}",
                 retryable=retryable,
+                provider_status=status,
+                provider_error_detail=error_detail,
             )
 
-        except AIServiceError:
+        except AIServiceError as provider_error:
+            # _call_with_retry_and_fallback converts permanent provider HTTP
+            # failures into AIServiceError. Preserve the status/detail on that
+            # exception so structured-output callers can still retry once
+            # without response_format when the provider rejects that feature.
+            if response_format and provider_error.provider_status is not None:
+                if self._should_retry_without_response_format(
+                    status_code=provider_error.provider_status,
+                    error_detail=provider_error.provider_error_detail or str(provider_error),
+                ):
+                    logger.warning(
+                        f"Provider rejected response_format (status={provider_error.provider_status}), retrying without it",
+                        error=provider_error.provider_error_detail,
+                    )
+                    fallback_payload = dict(payload)
+                    fallback_payload.pop("response_format", None)
+                    fallback_attempts: List[Dict[str, Any]] = [{
+                        "req_payload": fallback_payload,
+                        "url": url,
+                        "api_key": active_api_key,
+                        "client": client,
+                        "base_url": active_base_url,
+                    }]
+                    data, status_code = await self._call_with_retry_and_fallback(
+                        fallback_attempts
+                    )
+                    return self._parse_chat_response(data, use_model, active_base_url)
             raise
 
         except (httpx.RequestError, httpx.TimeoutException, ValueError, KeyError, TypeError) as e:
@@ -918,11 +964,29 @@ class AIProviderService:
         self, data: Dict[str, Any], model: str, provider_url: Optional[str] = None
     ) -> AIResponse:
         """Parse the chat completion response."""
+        def malformed(detail: str) -> None:
+            raise AIServiceError(
+                f"AI provider returned a malformed chat response: {detail}",
+                retryable=False,
+                error_kind="hard",
+            )
+
+        if not isinstance(data, dict):
+            raise AIServiceError(
+                "AI provider returned a malformed response object",
+                retryable=False,
+                error_kind="hard",
+            )
+
         text = None
         images = []
 
         # Extract from choices
         choices = data.get("choices", [])
+        if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+            malformed("choices is missing or invalid")
+        if not isinstance(choices[0].get("message"), dict):
+            malformed("message is missing or invalid")
         logger.debug(
             "Parsing chat response - choices",
             choices_count=len(choices),
@@ -943,44 +1007,72 @@ class AIProviderService:
             elif isinstance(content, list):
                 # Multimodal response (text + images)
                 for part in content:
-                    if isinstance(part, dict):
-                        if part.get("type") == "text":
-                            text = part.get("text", "")
-                        elif part.get("type") == "image_url":
-                            image_url = part.get("image_url", {})
-                            url = image_url.get("url", "")
-                            # Extract base64 from data URL if present
-                            if url.startswith("data:"):
-                                # Format: data:image/png;base64,<data>
-                                if ";base64," in url:
-                                    images.append(url.split(";base64,")[1])
-                                else:
-                                    images.append(url)
+                    if not isinstance(part, dict):
+                        malformed("content part is invalid")
+                    if part.get("type") == "text":
+                        part_text = part.get("text", "")
+                        if not isinstance(part_text, str):
+                            malformed("text content is invalid")
+                        text = part_text
+                    elif part.get("type") == "image_url":
+                        image_url = part.get("image_url", {})
+                        if not isinstance(image_url, dict):
+                            malformed("image_url content is invalid")
+                        url = image_url.get("url", "")
+                        if not isinstance(url, str):
+                            malformed("image URL is invalid")
+                        # Extract base64 from data URL if present
+                        if url.startswith("data:"):
+                            # Format: data:image/png;base64,<data>
+                            if ";base64," in url:
+                                images.append(url.split(";base64,", 1)[1])
                             else:
                                 images.append(url)
-                        elif part.get("type") == "image":
-                            # Alternative format with inline_data
-                            inline_data = part.get("inline_data", {})
-                            if inline_data.get("data"):
-                                images.append(inline_data["data"])
+                        else:
+                            images.append(url)
+                    elif part.get("type") == "image":
+                        # Alternative format with inline_data
+                        inline_data = part.get("inline_data", {})
+                        if not isinstance(inline_data, dict):
+                            malformed("inline image data is invalid")
+                        inline_value = inline_data.get("data")
+                        if inline_value is not None and not isinstance(inline_value, str):
+                            malformed("inline image data is invalid")
+                        if inline_value:
+                            images.append(inline_value)
+            elif content is not None:
+                malformed("message content is invalid")
 
             # Check for images array in message (custom provider format)
             message_images = message.get("images", [])
+            if not isinstance(message_images, list):
+                malformed("images is invalid")
             for img in message_images:
+                if not isinstance(img, dict):
+                    malformed("image entry is invalid")
                 if img.get("type") == "image_url":
                     image_url = img.get("image_url", {})
+                    if not isinstance(image_url, dict):
+                        malformed("image_url image entry is invalid")
                     url = image_url.get("url", "")
+                    if not isinstance(url, str):
+                        malformed("image URL is invalid")
                     if url.startswith("data:"):
                         if ";base64," in url:
-                            images.append(url.split(";base64,")[1])
+                            images.append(url.split(";base64,", 1)[1])
                         else:
                             images.append(url)
                     else:
                         images.append(url)
 
+            if content is None and not message_images:
+                malformed("message has no content or images")
+
         # Extract usage if present
         usage = None
         if "usage" in data:
+            if not isinstance(data["usage"], dict):
+                malformed("usage is invalid")
             usage = {
                 "prompt_tokens": data["usage"].get("prompt_tokens", 0),
                 "completion_tokens": data["usage"].get("completion_tokens", 0),
@@ -1323,8 +1415,14 @@ class AIProviderService:
                 # memory overloaded) is common under concurrent image gen —
                 # same transient set as chat(). Permanent 4xx fail via
                 # raise_for_status without entering with_retry.
+                headers = getattr(response, "headers", {}) or {}
                 raise self._TransientImageAPIOverload(
-                    f"status={response.status_code}: {self._http_error_detail(response)}"
+                    f"status={response.status_code}: {self._http_error_detail(response)}",
+                    retry_after_seconds=(
+                        self._http_retry_delay_seconds(response, 0)
+                        if headers.get("Retry-After")
+                        else None
+                    ),
                 )
             response.raise_for_status()
             return response
@@ -1351,6 +1449,7 @@ class AIProviderService:
             raise AIServiceError(
                 f"AI image provider overloaded after retries: {e}",
                 retryable=True,
+                retry_after_seconds=e.retry_after_seconds,
             )
         except httpx.HTTPStatusError as e:
             error_detail = self._http_error_detail(e.response)
@@ -1366,6 +1465,8 @@ class AIProviderService:
             raise AIServiceError(
                 f"AI image request failed ({status}): {error_detail}",
                 retryable=self._is_transient_http_status(status),
+                provider_status=status,
+                provider_error_detail=error_detail,
             )
         except self._TRANSIENT_TRANSPORT_ERRORS as e:
             # Timeout/connection error that exhausted with_retry's internal

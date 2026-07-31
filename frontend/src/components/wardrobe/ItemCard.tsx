@@ -120,6 +120,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
             // entirely. `--surface-soft` is the only token that lifts off
             // `--card` in the SAME direction (lighter) in both themes.
             'hover:bg-surface-soft transition-colors cursor-pointer',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
             'touch-target',
             className
           )}
@@ -178,7 +179,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
                 type="button"
                 aria-label={item.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
                 className={cn(
-                  'row-cq-secondary p-2 rounded-full touch-target',
+                  'row-cq-secondary row-cq-favorite p-2 rounded-full touch-target',
                   // List row sits on `bg-card`, not on a photo: page chrome, so
                   // brand red rather than an off-system pink (mirrors the grid
                   // tile's disc, which already uses `bg-primary`).
@@ -206,6 +207,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
           'group relative overflow-hidden rounded-md bg-card',
           'cursor-pointer',
           'border border-transparent transition-colors hover:border-border',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           variant === 'compact' && 'aspect-square',
           !imageSrc && 'aspect-[3/4] min-h-36',
           isSelected && 'ring-2 ring-primary ring-offset-2',

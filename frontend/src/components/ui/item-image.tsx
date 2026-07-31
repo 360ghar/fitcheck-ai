@@ -119,6 +119,17 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
   // `ZoomableImage` does not forward a ref, hence reading the img through the
   // wrapper. The <img> is never hidden while this is pending — see below.
   useEffect(() => {
+    setIsLoading(true)
+    setHasError(false)
+  }, [imageUrl])
+
+  useEffect(() => {
+    // A failed image renders the fallback instead of the wrapper. When its
+    // URL changes, the reset effect above first clears the error, which mounts
+    // the new image; this effect then runs again and inspects that image. Keep
+    // the error state stable until the source actually changes so a broken URL
+    // does not bounce between the fallback and an immediate retry.
+    if (hasError) return
     const img = wrapperRef.current?.querySelector('img')
     if (!img) return
     // Intrinsic width is the honest "has paintable pixels" signal.
@@ -133,12 +144,13 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
       setHasError(true)
       return
     }
-    setIsLoading(true)
-    setHasError(false)
     // Still in flight. `decode()` is a promise, so unlike the `load` event it
     // cannot be missed by arriving before the handler was attached — which is
     // what left the skeleton pulsing forever under a `loading="lazy"` image
     // whose load event never fired.
+    // Older browsers and jsdom do not implement decode(); in those runtimes
+    // the normal load/error handlers remain the source of truth.
+    if (typeof img.decode !== 'function') return
     let cancelled = false
     img
       .decode()
@@ -152,7 +164,7 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
     return () => {
       cancelled = true
     }
-  }, [imageUrl])
+  }, [imageUrl, hasError])
 
   // No image available
   if (!imageUrl) {

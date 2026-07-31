@@ -530,10 +530,11 @@ class _ChatHttpStatusClient:
     """Sequence of chat HTTP outcomes: int status codes raise HTTPStatusError;
     a dict payload is returned as a successful chat completion."""
 
-    def __init__(self, outcomes):
+    def __init__(self, outcomes, retry_after="0"):
         self.outcomes = list(outcomes)
         self.call_count = 0
         self.calls = []
+        self.retry_after = retry_after
 
     async def post(self, url, json=None, headers=None):
         self.call_count += 1
@@ -570,7 +571,7 @@ class _ChatHttpStatusClient:
         return _StatusResponse(
             outcome,
             {"error": {"message": f"provider error {outcome}"}},
-            {"Retry-After": "0"} if outcome in (429, 503) else {},
+            {"Retry-After": self.retry_after} if outcome in (429, 503) else {},
             request,
         )
 
@@ -681,6 +682,86 @@ async def test_chat_400_fails_fast_non_retryable():
     assert fake_client.call_count == 1
     assert exc_info.value.retryable is False
     assert "400" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_structured_chat_retries_without_response_format_when_provider_rejects_it():
+    """Some OpenAI-compatible gateways reject structured-output options even
+    though the same model supports ordinary chat."""
+    service = AIProviderService(_make_config())
+
+    class _ResponseFormatClient:
+        def __init__(self):
+            self.payloads = []
+
+        async def post(self, url, json=None, headers=None):
+            self.payloads.append(json)
+            if "response_format" in json:
+                request = httpx.Request("POST", url)
+                response = httpx.Response(
+                    400,
+                    request=request,
+                    json={"error": {"message": "response_format is not supported"}},
+                )
+                raise httpx.HTTPStatusError("unsupported response format", request=request, response=response)
+            return _FakeResponse({"choices": [{"message": {"content": "fallback text"}}]})
+
+    client = _ResponseFormatClient()
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=client)):
+        result = await service.chat(
+            messages=[ChatMessage(role="user", content="return JSON")],
+            response_format={"type": "json_object"},
+        )
+
+    assert result.text == "fallback text"
+    assert len(client.payloads) == 2
+    assert "response_format" in client.payloads[0]
+    assert "response_format" not in client.payloads[1]
+
+
+@pytest.mark.asyncio
+async def test_chat_retry_honors_retry_after_header():
+    service = AIProviderService(_make_config())
+    fake_client = _ChatHttpStatusClient(
+        [429, {"choices": [{"message": {"content": "recovered"}}]}],
+        retry_after="4",
+    )
+    sleep = AsyncMock()
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
+         patch("asyncio.sleep", sleep):
+        result = await service.chat(messages=[ChatMessage(role="user", content="hi")])
+
+    assert result.text == "recovered"
+    assert sleep.await_args_list[0].args[0] == 4
+
+
+def test_malformed_chat_payload_is_a_controlled_non_retryable_error():
+    service = AIProviderService(_make_config())
+
+    with pytest.raises(AIServiceError) as exc_info:
+        service._parse_chat_response({"choices": []}, "model")
+
+    assert exc_info.value.retryable is False
+    assert exc_info.value.error_kind == "hard"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"choices": [{"message": {"content": 123}}]},
+        {"choices": [{"message": {"images": [{"type": "image_url", "image_url": None}]}}]},
+        {"choices": [{"message": {"content": "ok"}}], "usage": None},
+    ],
+)
+def test_malformed_nested_chat_payload_is_controlled_non_retryable_error(payload):
+    service = AIProviderService(_make_config())
+
+    with pytest.raises(AIServiceError) as exc_info:
+        service._parse_chat_response(payload, "model")
+
+    assert exc_info.value.retryable is False
+    assert exc_info.value.error_kind == "hard"
 
 
 @pytest.mark.asyncio

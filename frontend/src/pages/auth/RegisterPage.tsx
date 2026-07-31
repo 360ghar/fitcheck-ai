@@ -25,6 +25,7 @@ function getPasswordStrength(pwd: string) {
 export default function RegisterPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const selectedPlan = searchParams.get('plan_type')
   const register = useAuthStore((state) => state.register)
   const signInWithGoogle = useAuthStore((state) => state.signInWithGoogle)
   const isLoading = useAuthStore((state) => state.isLoading)
@@ -138,7 +139,7 @@ export default function RegisterPage() {
         })
       }
 
-      navigate('/dashboard')
+      navigate(selectedPlan ? `/profile?tab=plan&plan_type=${encodeURIComponent(selectedPlan)}` : '/dashboard')
     } catch {
       // Registration error is handled by the store and displayed in UI
     }
@@ -151,6 +152,9 @@ export default function RegisterPage() {
     // Save referral code before OAuth redirect
     if (referralCode.trim()) {
       localStorage.setItem('pending_referral_code', referralCode.trim())
+    }
+    if (selectedPlan) {
+      localStorage.setItem('pending_plan_type', selectedPlan)
     }
 
     try {
@@ -475,7 +479,7 @@ export default function RegisterPage() {
               <p className="text-sm text-muted-foreground">
                 Already have an account?{' '}
                 <Link
-                  to="/auth/login"
+                  to={selectedPlan ? `/auth/login?plan_type=${encodeURIComponent(selectedPlan)}` : '/auth/login'}
                   className="font-medium text-primary hover:text-primary/80"
                 >
                   Sign in

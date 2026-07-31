@@ -112,6 +112,30 @@ async def test_webhook_marks_past_due_when_subscription_row_missing():
 
 
 @pytest.mark.asyncio
+async def test_deleted_webhook_looks_up_user_when_metadata_is_missing():
+    db = Mock()
+    lookup = Mock(data={"user_id": "user-1"})
+    db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = lookup
+
+    event = {
+        "type": "customer.subscription.deleted",
+        "data": {"object": {"id": "sub_without_metadata", "metadata": {}}},
+    }
+
+    with patch("app.api.v1.subscription.settings") as mock_settings, \
+         patch("app.api.v1.subscription.stripe") as mock_stripe:
+        mock_settings.STRIPE_SECRET_KEY = "sk_test"
+        mock_settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
+        mock_stripe.Webhook.construct_event.return_value = event
+
+        result = await stripe_webhook(_fake_request(), db)
+
+    assert result == {"received": True}
+    db.table.return_value.update.assert_called_once()
+    assert db.table.return_value.update.call_args.args[0]["plan_type"] == "free"
+
+
+@pytest.mark.asyncio
 async def test_webhook_returns_500_instead_of_swallowing_processing_error():
     """A failure while activating a subscription must surface as a 5xx so
     Stripe retries the event, not a silently-swallowed 200."""

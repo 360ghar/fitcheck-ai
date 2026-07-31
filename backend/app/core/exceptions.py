@@ -321,7 +321,9 @@ class AIServiceError(ServiceError):
         message: str = "AI service unavailable",
         retryable: bool = False,
         error_kind: Optional[str] = None,
-        retry_after_seconds: Optional[int] = None,
+        retry_after_seconds: Optional[float] = None,
+        provider_status: Optional[int] = None,
+        provider_error_detail: Optional[str] = None,
     ):
         # retryable: true only for transient failures (429/503/timeout) worth
         # retrying against a fallback model; false for auth/content-policy/parse
@@ -338,6 +340,8 @@ class AIServiceError(ServiceError):
         self.retryable = retryable
         self.error_kind = error_kind
         self.retry_after_seconds = retry_after_seconds
+        self.provider_status = provider_status
+        self.provider_error_detail = provider_error_detail
         super().__init__(message, "ai")
 
     def to_dict(self) -> Dict[str, Any]:

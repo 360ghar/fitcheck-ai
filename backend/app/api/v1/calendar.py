@@ -61,6 +61,7 @@ class CalendarEventData(BaseModel):
     end_time: str
     location: Optional[str] = None
     outfit_id: Optional[str] = None
+    event_type: str = Field("other", max_length=30)
 
 
 class AssignOutfitRequest(BaseModel):
@@ -74,6 +75,7 @@ class CreateEventRequest(BaseModel):
     end_time: str
     location: Optional[str] = None
     calendar_id: Optional[str] = None
+    event_type: str = Field("other", max_length=30)
 
 
 class UpdateEventRequest(BaseModel):
@@ -84,6 +86,7 @@ class UpdateEventRequest(BaseModel):
     location: Optional[str] = None
     is_all_day: Optional[bool] = None
     outfit_id: Optional[str] = None
+    event_type: Optional[str] = Field(None, max_length=30)
 
 
 # ============================================================================
@@ -338,6 +341,7 @@ async def get_calendar_events(
                     end_time=row.get("end_time"),
                     location=row.get("location"),
                     outfit_id=row.get("outfit_id"),
+                    event_type=row.get("event_type") or "other",
                 )
             )
 
@@ -394,6 +398,7 @@ async def create_calendar_event(
             "end_time": request.end_time,
             "location": request.location,
             "outfit_id": None,
+            "event_type": request.event_type,
             "created_at": now,
             "updated_at": now,
         }
@@ -463,6 +468,8 @@ async def update_calendar_event(
             update_data["is_all_day"] = request.is_all_day
         if request.outfit_id is not None:
             update_data["outfit_id"] = request.outfit_id
+        if request.event_type is not None:
+            update_data["event_type"] = request.event_type
 
         if not update_data:
             # No fields to update, return existing event

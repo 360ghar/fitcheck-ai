@@ -344,6 +344,14 @@ def main() -> int:
         if not smtp_reply_to:
             smtp_reply_to = smtp_from
 
+    # Validate the selected email transport before any live grant write. A
+    # missing Resend key must never leave a partially granted campaign behind.
+    resend_key = None
+    from_email = None
+    if not skip_email and email_transport == "resend":
+        resend_key = _env("RESEND_API_KEY", required=True)
+        from_email = _env("FROM_EMAIL", "FitCheck AI <team@fitcheckaiapp.com>")
+
     now = datetime.now(timezone.utc)
     trial_end_dt = now + relativedelta(months=duration_months)
     now_iso = now.isoformat()
@@ -389,7 +397,7 @@ def main() -> int:
     # Decouple grant from email:
     #   - paid users (live stripe_subscription_id) -> email only; their paid
     #     subscription row is NEVER overwritten with a trial.
-    #   - everyone else -> grant a 1-month trial AND email.
+    #   - eligible Free rows -> grant a 1-month trial AND email.
     email_only: list[dict[str, Any]] = []
     eligible: list[dict[str, Any]] = []
     for u in users:
@@ -397,7 +405,11 @@ def main() -> int:
         has_stripe = bool(sub and sub.get("stripe_subscription_id"))
         if has_stripe:
             email_only.append(u)
-        else:
+        elif sub and (
+            sub.get("plan_type") == "free"
+            and sub.get("status") == "active"
+            and not sub.get("stripe_subscription_id")
+        ):
             eligible.append(u)
 
     print(f"  paid (email only, no grant): {len(email_only)}")
@@ -425,44 +437,47 @@ def main() -> int:
     state = _load_audit(audit_path)
     print(f"audit: {len(state['granted'])} already granted, {len(state['emailed'])} already emailed")
 
-    # Step 1: grants (batched upsert per page of eligible users not yet granted)
+    # Step 1: conditional grants. Never overwrite a row that changed between
+    # the eligibility read and this write (for example, a concurrent checkout).
     to_grant = [u for u in eligible if u["id"] not in state["granted"]]
     print(f"\n[grant] {len(to_grant)} users to grant...")
 
     granted_now = 0
     grant_failed = 0
     newly_granted: set[str] = set()
-    batch = 100
-    for i in range(0, len(to_grant), batch):
-        chunk = to_grant[i : i + batch]
-        rows = [
-            {
-                "user_id": u["id"],
+    grant_skipped = 0
+    for u in to_grant:
+        try:
+            result = db.table("subscriptions").update({
                 "plan_type": "pro_monthly",
                 "status": "trial",
                 "current_period_start": now_iso,
                 "current_period_end": trial_end_iso,
                 "trial_end": trial_end_iso,
                 "cancel_at_period_end": True,
-            }
-            for u in chunk
-        ]
-        try:
-            db.table("subscriptions").upsert(rows, on_conflict="user_id").execute()
+            }).eq("user_id", u["id"]).eq("plan_type", "free").eq(
+                "status", "active"
+            ).is_("stripe_subscription_id", "null").execute()
         except Exception as e:
-            print(f"  ERROR upserting batch {i}-{i+len(chunk)}: {e}", file=sys.stderr)
-            grant_failed += len(chunk)
+            print(f"  ERROR updating {u['id']}: {e}", file=sys.stderr)
+            grant_failed += 1
             continue
-        for u in chunk:
-            newly_granted.add(u["id"])
-            _append_audit(audit_path, {
-                "user_id": u["id"],
-                "action": "granted",
-                "granted_at": now_iso,
-                "trial_end": trial_end_iso,
-            })
-        granted_now += len(chunk)
-        print(f"  granted {granted_now}/{len(to_grant)}")
+        if not getattr(result, "data", None):
+            grant_skipped += 1
+            continue
+        newly_granted.add(u["id"])
+        _append_audit(audit_path, {
+            "user_id": u["id"],
+            "action": "granted",
+            "granted_at": now_iso,
+            "trial_end": trial_end_iso,
+        })
+        granted_now += 1
+        if granted_now % 100 == 0 or granted_now == len(to_grant):
+            print(f"  granted {granted_now}/{len(to_grant)}")
+
+    if grant_skipped:
+        print(f"  skipped {grant_skipped} users whose subscription changed during the campaign")
 
     # All granted users = previously granted (from audit) + newly granted.
     all_granted = state["granted"] | newly_granted
@@ -528,10 +543,7 @@ def main() -> int:
             if rate_ms > 0:
                 time.sleep(rate_ms / 1000.0)
     else:
-        # Resend over httpx. Validate Resend credentials here (not at the top
-        # of main()) so that SMTP mode and SKIP_EMAIL=1 don't need the key.
-        resend_key = _env("RESEND_API_KEY", required=True)
-        from_email = _env("FROM_EMAIL", "FitCheck AI <team@fitcheckaiapp.com>")
+        # Resend over httpx. Credentials were validated before grant writes.
         with httpx.Client() as client:
             for u in to_email:
                 html, text = _render_email(u.get("full_name"), trial_end_pretty)

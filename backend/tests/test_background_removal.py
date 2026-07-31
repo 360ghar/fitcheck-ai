@@ -201,6 +201,32 @@ def test_scene_photo_is_skipped_and_original_kept():
     assert result.image_bytes == source
 
 
+def test_oversized_success_reports_processed_dimensions():
+    """Successful mattes report the bounded processing canvas, not stale input
+    dimensions that no longer match the bytes uploaded to storage."""
+    size = (2048, 1024)
+    img = Image.new("RGB", size, (255, 255, 255))
+    ImageDraw.Draw(img).rounded_rectangle((600, 160, 1448, 864), radius=60, fill=(38, 44, 61))
+    result = remove_white_background(_encode(img))
+
+    assert result.status == STATUS_MATTED
+    assert (result.width, result.height) == (1536, 768)
+
+
+def test_oversized_rejection_reports_original_dimensions_and_bytes():
+    """Rejected input keeps the original bytes, so its audit dimensions must
+    remain the original decoded canvas rather than the temporary thumbnail."""
+    size = (2048, 1024)
+    img = Image.new("RGB", size, (255, 255, 255))
+    ImageDraw.Draw(img).rounded_rectangle((600, 160, 1448, 864), radius=60, fill=(253, 253, 253))
+    source = _encode(img)
+    result = remove_white_background(source)
+
+    assert result.status == STATUS_REJECTED_ATE_SUBJECT
+    assert (result.width, result.height) == size
+    assert result.image_bytes == source
+
+
 # =============================================================================
 # Robustness / idempotence / performance
 # =============================================================================

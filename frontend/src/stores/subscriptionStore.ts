@@ -136,7 +136,16 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
         cancelUrl
       );
 
-      // Redirect to Stripe Checkout
+      if (session.updated) {
+        await get().fetchSubscription();
+        set({ isCheckingOut: false });
+        return;
+      }
+
+      if (!session.checkout_url) {
+        throw new Error('Checkout did not return a redirect URL');
+      }
+      // Redirect to Stripe Checkout for a new subscription.
       window.location.href = session.checkout_url;
     } catch (error) {
       const message = getApiError(error).message || 'Failed to start checkout';

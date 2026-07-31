@@ -22,3 +22,6 @@ EXTRACTION_SEMAPHORE: asyncio.Semaphore = asyncio.Semaphore(
 GENERATION_SEMAPHORE: asyncio.Semaphore = asyncio.Semaphore(
     max(1, settings.AI_GENERATION_CONCURRENCY)
 )
+REFERENCE_DOWNLOAD_SEMAPHORE: asyncio.Semaphore = asyncio.Semaphore(
+    max(1, settings.AI_OUTFIT_ITEM_REFERENCE_DOWNLOAD_CONCURRENCY)
+)

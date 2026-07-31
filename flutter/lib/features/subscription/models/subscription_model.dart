@@ -131,8 +131,9 @@ abstract class PlanDetailsModel with _$PlanDetailsModel {
 @freezed
 abstract class CheckoutSessionModel with _$CheckoutSessionModel {
   const factory CheckoutSessionModel({
-    @JsonKey(name: 'checkout_url') required String checkoutUrl,
-    @JsonKey(name: 'session_id') required String sessionId,
+    @JsonKey(name: 'checkout_url') String? checkoutUrl,
+    @JsonKey(name: 'session_id') String? sessionId,
+    @Default(false) bool updated,
   }) = _CheckoutSessionModel;
 
   factory CheckoutSessionModel.fromJson(Map<String, dynamic> json) =>

@@ -431,6 +431,7 @@ export function ItemDetailBody({ item, editor, notice }: ItemDetailBodyProps) {
                   <div key={image.id} className="overflow-hidden rounded-md bg-card">
                     <ZoomableImage
                       src={image.thumbnail_url || image.image_url}
+                      lightboxSrc={image.image_url}
                       alt={item.name}
                       className="aspect-square w-full object-contain"
                     />

@@ -64,6 +64,10 @@ function PricingCard({
   const displayPrice = isYearly ? price.yearly : price.monthly
   // Each tier states its own real saving rather than one hardcoded figure.
   const savings = price.monthly * 12 - price.yearly
+  const planType = name === 'Plus' ? 'plus' : name === 'Pro' ? 'pro' : null
+  const registerHref = planType
+    ? `/auth/register?plan_type=${planType}_${isYearly ? 'yearly' : 'monthly'}`
+    : '/auth/register'
 
   return (
     <div
@@ -75,7 +79,7 @@ function PricingCard({
       )}
     >
       {badge && (
-        <div className="absolute top-0 right-0 bg-primary text-white px-4 py-1 text-sm font-medium rounded-bl-lg">
+        <div className="absolute top-0 right-0 rounded-bl-lg bg-primary px-4 py-1 text-sm font-medium text-primary-foreground">
           {badge}
         </div>
       )}
@@ -114,14 +118,14 @@ function PricingCard({
         className={cn(
           'w-full h-12 text-base font-medium',
           highlighted
-            ? 'bg-primary hover:bg-primary-pressed text-white'
+            ? 'bg-primary text-primary-foreground hover:bg-primary-pressed'
             : 'border-stone-300 dark:border-stone-700'
         )}
         variant={highlighted ? 'default' : 'outline'}
         size="lg"
         asChild
       >
-        <Link to="/auth/register">{cta}</Link>
+        <Link to={registerHref}>{cta}</Link>
       </Button>
     </div>
   )

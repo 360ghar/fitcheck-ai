@@ -1,4 +1,5 @@
 import pytest
+import httpx
 
 from app.models.social_import import SocialPlatform
 from app.services.social_scraper_service import InstagramLoginResult, SocialScraperService
@@ -55,6 +56,45 @@ async def test_discovery_does_not_enqueue_non_image_fallback_urls(monkeypatch):
     assert result.requires_auth is False
     assert result.photos == []
     assert result.exhausted is True
+
+
+@pytest.mark.asyncio
+async def test_discovery_http_failure_is_not_reported_as_exhausted(monkeypatch):
+    response = _FakeResponse(status_code=503, text="temporarily unavailable")
+    monkeypatch.setattr(
+        "app.services.social_scraper_service.httpx.AsyncClient",
+        lambda *args, **kwargs: _FakeAsyncClient(response),
+    )
+
+    result = await SocialScraperService.discover_profile_photos(
+        normalized_url="https://www.instagram.com/example/",
+        platform=SocialPlatform.INSTAGRAM,
+        auth_session=None,
+    )
+
+    assert result.exhausted is False
+    assert result.metadata["error_type"] == "fetch_failure"
+
+
+@pytest.mark.asyncio
+async def test_discovery_transport_failure_is_not_reported_as_exhausted(monkeypatch):
+    class FailingClient(_FakeAsyncClient):
+        async def get(self, *_args, **_kwargs):
+            raise httpx.ConnectError("offline")
+
+    monkeypatch.setattr(
+        "app.services.social_scraper_service.httpx.AsyncClient",
+        lambda *args, **kwargs: FailingClient(_FakeResponse(status_code=200, text="")),
+    )
+
+    result = await SocialScraperService.discover_profile_photos(
+        normalized_url="https://www.instagram.com/example/",
+        platform=SocialPlatform.INSTAGRAM,
+        auth_session=None,
+    )
+
+    assert result.exhausted is False
+    assert result.metadata["error_type"] == "fetch_failure"
 
 
 @pytest.mark.asyncio

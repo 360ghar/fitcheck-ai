@@ -1127,8 +1127,9 @@ export interface RedeemReferralResponse {
 }
 
 export interface CheckoutSession {
-  checkout_url: string;
-  session_id: string;
+  checkout_url?: string | null;
+  session_id?: string | null;
+  updated: boolean;
 }
 
 export interface PortalSession {

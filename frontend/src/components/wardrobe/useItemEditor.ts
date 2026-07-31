@@ -7,7 +7,7 @@
  * abandoned edit would otherwise leak onto the next garment you click.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Item } from '@/types'
 
 export interface ItemEditor {
@@ -32,6 +32,10 @@ export function useItemEditor(
   const [customUseCase, setCustomUseCase] = useState('')
 
   const itemId = item?.id ?? null
+  const currentItemIdRef = useRef(itemId)
+  // Update during render, not only in an effect: an older save promise can
+  // resolve between the selection render and React's post-commit effects.
+  currentItemIdRef.current = itemId
   useEffect(() => {
     setIsEditing(false)
     setIsSaving(false)
@@ -58,19 +62,24 @@ export function useItemEditor(
 
   const save = useCallback(async () => {
     if (isSaving) return
+    const savedItemId = itemId
     setIsSaving(true)
     try {
       await onSave(form as Item)
-      setIsEditing(false)
-      setForm({})
-      setCustomUseCase('')
+      // The detail pane stays mounted while selection changes. An older save
+      // resolving after a new selection must not close/reset the new editor.
+      if (currentItemIdRef.current === savedItemId) {
+        setIsEditing(false)
+        setForm({})
+        setCustomUseCase('')
+      }
     } catch {
       // The api/client interceptor already toasts. Stay in edit mode so the
       // user's typing survives a failed save and can be retried.
     } finally {
       setIsSaving(false)
     }
-  }, [form, isSaving, onSave])
+  }, [form, isSaving, itemId, onSave])
 
   return {
     isEditing,

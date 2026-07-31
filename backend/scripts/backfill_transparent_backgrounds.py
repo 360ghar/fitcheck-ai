@@ -447,6 +447,7 @@ def make_record(
     result: Optional[MatteResult] = None,
     bytes_before: int = 0,
     bytes_after: int = 0,
+    decoded: bool = False,
 ) -> dict[str, Any]:
     """One audit line. Shape is fixed; downstream analysis depends on it."""
     return {
@@ -460,6 +461,7 @@ def make_record(
         "center_opacity": round(result.center_opacity, 4) if result else None,
         "bytes_before": bytes_before,
         "bytes_after": bytes_after,
+        "decoded": decoded,
         "width": result.width if result else None,
         "height": result.height if result else None,
     }
@@ -488,7 +490,18 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
             before += int(rec.get("bytes_before") or 0)
             after += int(rec.get("bytes_after") or 0)
 
-    decoded = sum(count for action, count in actions.items() if action != ACTION_UNRESOLVABLE)
+    # Older audit files predate the explicit flag. Their terminal matte
+    # actions imply decoding; new records use the flag so download errors do
+    # not inflate the denominator.
+    decoded = sum(
+        1
+        for rec in records
+        if rec.get("decoded") is True
+        or (
+            "decoded" not in rec
+            and rec.get("action") in {ACTION_MATTED, ACTION_SKIPPED, ACTION_REJECTED}
+        )
+    )
     rejected = actions.get(ACTION_REJECTED, 0)
     return {
         "total": len(records),
@@ -743,6 +756,7 @@ def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config) -> d
             storage_path=None,
             action=ACTION_UNRESOLVABLE,
             status="no_storage_key",
+            decoded=False,
         )
 
     storage = db.storage.from_(cfg.bucket)
@@ -758,6 +772,7 @@ def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config) -> d
             storage_path=key,
             action=ACTION_ERROR,
             status=f"download_failed: {exc}"[:200],
+            decoded=False,
         )
 
     result = remove_white_background(original, key)
@@ -771,6 +786,10 @@ def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config) -> d
         result=result,
         bytes_before=len(original),
         bytes_after=len(result.image_bytes) if action == ACTION_MATTED else len(original),
+        # remove_white_background is best-effort and returns STATUS_ERROR when
+        # Pillow cannot decode the bytes. Only its successful/guarded outcomes
+        # prove that an image was actually decoded for rejection metrics.
+        decoded=action in {ACTION_MATTED, ACTION_SKIPPED, ACTION_REJECTED},
     )
 
     if cfg.dry_run:

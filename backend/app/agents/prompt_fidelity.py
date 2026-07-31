@@ -65,6 +65,18 @@ AVOID: extra items, second garment, partial second item, wrong color,
        text, beautification, fabric smoothing, drop shadow, cast shadow,
        reflection, gradient background, vignette, gray backdrop, floor plane."""
 
+# Product prompts that intentionally request a non-white background cannot
+# reuse PRODUCT_REFERENCE_LOCK: its pure-white clause would contradict the
+# caller and the post-generation matte. Keep the item fidelity constraints,
+# but let the requested backdrop and shadow policy win.
+PRODUCT_CUSTOM_BACKGROUND_LOCK = """PRODUCT LOCK (highest priority):
+- Reproduce ONLY the single item described in the prompt, EXACTLY as it
+  appears in the reference image: preserve colors, print, pattern, silhouette,
+  material, texture, hardware, branding, and fit.
+- Ignore every other garment, accessory, prop, person, and source background.
+- Output one opaque product photograph on the requested background; do not
+  replace it with white, transparency, a gradient, or a different scene."""
+
 # The backdrop clause above is not cosmetic: app/utils/background_removal.py
 # cuts the alpha out of these images with a near-white threshold plus a
 # border-connected flood fill, so a gradient, a vignette or a cast shadow

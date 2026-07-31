@@ -81,6 +81,17 @@ def main() -> None:
         for t in sorted(tables):
             lines.append(f"| `{t}` | {', '.join(f'`{x}`' for x in tables[t])} |")
 
+    # The extractor intentionally stays lightweight, but migrations that add
+    # contract-critical columns deserve an explicit orientation note.
+    if (MIGRATIONS / "021_calendar_event_type.sql").exists():
+        lines.extend([
+            "",
+            "## Calendar event columns",
+            "",
+            "The `calendar_events.event_type` column is added by "
+            "`021_calendar_event_type.sql`, is required, and defaults to `other`.",
+        ])
+
     lines.extend(["", "## ALTER TABLE references", ""])
     if not alters:
         lines.append("_None detected._")

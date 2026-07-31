@@ -2,7 +2,8 @@ import { Link } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
 import { ArrowRight, Check, Sparkles } from 'lucide-react'
 import SEO from '@/components/seo/SEO'
-import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
+import { BreadcrumbJsonLd, buildHowToSchema } from '@/components/seo/JsonLd'
+import { SEO_CONFIG } from '@/components/seo/seo-config'
 import { Button } from '@/components/ui/button'
 import { AnimatedSection } from './AnimatedSection'
 
@@ -41,8 +42,6 @@ export interface FeaturePageTemplateProps {
   relatedFeatures: RelatedFeature[]
 }
 
-const siteUrl = 'https://fitcheckaiapp.com'
-
 /**
  * Shared public feature-page structure. It keeps the five capability pages
  * comparable and avoids publishing performance or accuracy assertions unless
@@ -66,22 +65,28 @@ export function FeaturePageTemplate({
   relatedFeatures,
 }: FeaturePageTemplateProps) {
   const breadcrumbs = [
-    { name: 'Home', url: `${siteUrl}/` },
-    { name: 'Features', url: `${siteUrl}/features` },
-    { name: title, url: `${siteUrl}${canonicalPath}` },
+    { name: 'Home', url: `${SEO_CONFIG.siteUrl}/` },
+    { name: 'Features', url: `${SEO_CONFIG.siteUrl}/features` },
+    { name: title, url: `${SEO_CONFIG.siteUrl}${canonicalPath}` },
   ]
+  const howToSchema = buildHowToSchema({
+    name: `${title}: how it works`,
+    description,
+    steps: steps.map((step) => ({ name: step.title, text: step.description })),
+  })
 
   return (
     <>
       <SEO
         title={`${title} | FitCheck AI`}
         description={description}
-        canonicalUrl={`${siteUrl}${canonicalPath}`}
+        canonicalUrl={`${SEO_CONFIG.siteUrl}${canonicalPath}`}
         keywords={keywords}
+        jsonLd={howToSchema}
       />
       <BreadcrumbJsonLd items={breadcrumbs} />
 
-      <main className="pt-16 landing-surface">
+      <div className="pt-16 landing-surface">
         <section className="border-b border-stone-200 bg-stone-50 py-14 dark:border-stone-800 dark:bg-stone-950 md:py-20">
           <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[1fr_0.9fr] lg:items-center lg:px-8">
             <AnimatedSection>
@@ -224,7 +229,7 @@ export function FeaturePageTemplate({
             </div>
           </div>
         </section>
-      </main>
+      </div>
     </>
   )
 }

@@ -65,7 +65,11 @@ export function OutfitMetaBar({
   disabled,
 }: OutfitMetaBarProps) {
   const [isNoteOpen, setIsNoteOpen] = React.useState(description.trim().length > 0)
-  const tagsValue = React.useMemo(() => tags.join(', '), [tags])
+  const [tagsValue, setTagsValue] = React.useState(() => tags.join(', '))
+
+  React.useEffect(() => {
+    setTagsValue(tags.join(', '))
+  }, [tags])
 
   return (
     <div className="mb-lg">
@@ -151,9 +155,10 @@ export function OutfitMetaBar({
           <Input
             id="outfit-tags"
             value={tagsValue}
-            onChange={(e) =>
+            onChange={(e) => setTagsValue(e.target.value)}
+            onBlur={() =>
               onTagsChange(
-                e.target.value
+                tagsValue
                   .split(',')
                   .map((tag) => tag.trim())
                   .filter(Boolean)

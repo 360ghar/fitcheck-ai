@@ -39,6 +39,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `018_default_ai_provider_custom.sql`
 - `019_add_item_source_image.sql`
 - `020_plus_plan.sql`
+- `021_calendar_event_type.sql`
 
 ## Tables (CREATE TABLE)
 
@@ -81,6 +82,10 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `user_streaks` | `001_full_schema.sql` |
 | `users` | `001_full_schema.sql` |
 | `waitlist` | `005_waitlist.sql` |
+
+## Calendar event columns
+
+The `calendar_events.event_type` column is added by `021_calendar_event_type.sql`, is required, and defaults to `other`.
 
 ## ALTER TABLE references
 
@@ -145,6 +150,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `017_blog_posts.sql` → `blog_posts`
 - `018_default_ai_provider_custom.sql` → `user_ai_settings`
 - `019_add_item_source_image.sql` → `items`
+- `021_calendar_event_type.sql` → `calendar_events`
 
 ## Related
 

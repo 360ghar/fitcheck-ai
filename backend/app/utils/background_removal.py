@@ -318,15 +318,16 @@ def remove_white_background(
             already_transparent = _existing_alpha_fraction(opened)
             oriented = ImageOps.exif_transpose(opened)
             rgb = oriented.convert("RGB")
+            original_size = rgb.size
             if max(rgb.size) > MATTE_MAX_EDGE:
                 rgb.thumbnail((MATTE_MAX_EDGE, MATTE_MAX_EDGE))
-            size = rgb.size
+            processing_size = rgb.size
 
             if already_transparent >= MIN_TRANSPARENT_FRACTION:
                 return _unchanged(
                     STATUS_SKIPPED_NO_BACKGROUND,
                     transparent=already_transparent,
-                    size=size,
+                    size=original_size,
                 )
 
             candidate, min_ch = _near_white_candidate(rgb)
@@ -341,7 +342,7 @@ def remove_white_background(
                     STATUS_SKIPPED_NO_BACKGROUND,
                     transparent_fraction,
                     center_opacity,
-                    size,
+                    original_size,
                 )
             # G2 - the matte ate the subject.
             if transparent_fraction > MAX_TRANSPARENT_FRACTION:
@@ -349,7 +350,7 @@ def remove_white_background(
                     STATUS_REJECTED_ATE_SUBJECT,
                     transparent_fraction,
                     center_opacity,
-                    size,
+                    original_size,
                 )
             # G3 - the flood walked through the garment.
             if center_opacity < MIN_CENTER_OPACITY:
@@ -357,7 +358,7 @@ def remove_white_background(
                     STATUS_REJECTED_CENTER_TRANSPARENT,
                     transparent_fraction,
                     center_opacity,
-                    size,
+                    original_size,
                 )
 
             rgb.putalpha(_build_alpha(background, min_ch))
@@ -374,8 +375,8 @@ def remove_white_background(
                 status=STATUS_MATTED,
                 transparent_fraction=transparent_fraction,
                 center_opacity=center_opacity,
-                width=size[0],
-                height=size[1],
+                width=processing_size[0],
+                height=processing_size[1],
             )
     except Exception:
         # Best-effort: the caller keeps the image it already had.

@@ -4,9 +4,11 @@ AI Pydantic models for validation and serialization.
 Models for AI operations including item extraction and image generation.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Any, Dict, List, Optional
 from uuid import UUID
+
+from app.core.config import settings
 
 
 # =============================================================================
@@ -127,7 +129,16 @@ class GenerateOutfitRequest(BaseModel):
     # 3-8 items, but createOutfitFromSavedItems (frontend/src/lib/
     # outfit-from-upload.ts) builds one outfit from every item detected in a
     # single photo, and a wardrobe flat-lay can legitimately produce dozens.
-    items: List[OutfitItemInput] = Field(..., min_length=1, max_length=60)
+    items: List[OutfitItemInput] = Field(..., min_length=1)
+
+    @field_validator("items")
+    @classmethod
+    def validate_item_count(cls, value: List[OutfitItemInput]) -> List[OutfitItemInput]:
+        if len(value) > settings.AI_MAX_OUTFIT_ITEMS:
+            raise ValueError(
+                f"At most {settings.AI_MAX_OUTFIT_ITEMS} outfit items are allowed"
+            )
+        return value
     style: str = "casual"
     # A short token, resolved to a prompt fragment by _resolve_background in
     # app/agents/image_generation_agent.py. Was "studio white"; the agent's own

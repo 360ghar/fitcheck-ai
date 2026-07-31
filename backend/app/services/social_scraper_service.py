@@ -376,7 +376,7 @@ class SocialScraperService:
                 requires_auth=False,
                 photos=[],
                 next_cursor=None,
-                exhausted=True,
+                exhausted=False,
                 metadata={
                     "error_type": "discovery_failure",
                     "message": str(e),
@@ -528,8 +528,8 @@ class SocialScraperService:
                 requires_auth=False,
                 photos=[],
                 next_cursor=None,
-                exhausted=True,
-                metadata={"error": str(e)},
+                exhausted=False,
+                metadata={"error_type": "fetch_failure", "message": str(e)},
             )
         except Exception as e:
             cls._logger.exception(
@@ -540,7 +540,7 @@ class SocialScraperService:
                 requires_auth=False,
                 photos=[],
                 next_cursor=None,
-                exhausted=True,
+                exhausted=False,
                 metadata={
                     "error_type": "fetch_failure",
                     "message": str(e),
@@ -1108,9 +1108,23 @@ class SocialScraperService:
 
         headers = cls._build_headers(auth_session)
 
-        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
-            response = await client.get(normalized_url, headers=headers)
-            html = response.text or ""
+        try:
+            async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+                response = await client.get(normalized_url, headers=headers)
+                html = response.text or ""
+        except httpx.RequestError as e:
+            cls._logger.warning(
+                "Social profile discovery request failed",
+                extra={"error": str(e), "platform": platform.value},
+                exc_info=True,
+            )
+            return DiscoverPhotosResult(
+                requires_auth=False,
+                photos=[],
+                next_cursor=None,
+                exhausted=False,
+                metadata={"error_type": "fetch_failure", "message": str(e)},
+            )
 
         if response.status_code in (401, 403):
             return DiscoverPhotosResult(
@@ -1119,6 +1133,19 @@ class SocialScraperService:
                 next_cursor=None,
                 exhausted=True,
                 metadata={"http_status": response.status_code},
+            )
+
+        if response.status_code >= 400:
+            return DiscoverPhotosResult(
+                requires_auth=False,
+                photos=[],
+                next_cursor=None,
+                exhausted=False,
+                metadata={
+                    "error_type": "fetch_failure",
+                    "message": f"Social profile returned HTTP {response.status_code}",
+                    "http_status": response.status_code,
+                },
             )
 
         private_detected = cls._is_private_or_blocked(html)

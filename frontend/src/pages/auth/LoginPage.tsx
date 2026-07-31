@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
 import { Mail, Lock, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,8 @@ import SEO from '@/components/seo/SEO'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const selectedPlan = searchParams.get('plan_type')
   const login = useAuthStore((state) => state.login)
   const signInWithGoogle = useAuthStore((state) => state.signInWithGoogle)
   const isLoading = useAuthStore((state) => state.isLoading)
@@ -29,7 +31,7 @@ export default function LoginPage() {
 
     try {
       await login(email, password)
-      navigate('/dashboard')
+      navigate(selectedPlan ? `/profile?tab=plan&plan_type=${encodeURIComponent(selectedPlan)}` : '/dashboard')
     } catch {
       // Error is handled by the store
     }
@@ -39,6 +41,9 @@ export default function LoginPage() {
     setGoogleLoading(true)
     clearError()
     try {
+      if (selectedPlan) {
+        localStorage.setItem('pending_plan_type', selectedPlan)
+      }
       await signInWithGoogle()
       // User will be redirected to Google
     } catch {
@@ -199,7 +204,7 @@ export default function LoginPage() {
             <p className="text-sm text-muted-foreground">
               Don't have an account?{' '}
               <Link
-                to="/auth/register"
+                to={selectedPlan ? `/auth/register?plan_type=${encodeURIComponent(selectedPlan)}` : '/auth/register'}
                 className="font-medium text-primary hover:text-primary/80"
               >
                 Sign up

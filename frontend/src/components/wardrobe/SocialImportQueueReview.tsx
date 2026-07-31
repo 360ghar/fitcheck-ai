@@ -48,7 +48,7 @@ export function SocialImportQueueReview({
             className="h-auto w-full rounded-md object-contain bg-card"
           />
 
-          <PinGrid className="columns-1 sm:columns-2">
+          <PinGrid className="columns-1 sm:columns-2 md:columns-2 lg:columns-2 xl:columns-2 2xl:columns-2">
             {awaitingPhoto.items.map((item) => (
               <div key={item.id} className="rounded-md border border-border bg-background p-3">
                 <div className="grid gap-2 sm:grid-cols-2">

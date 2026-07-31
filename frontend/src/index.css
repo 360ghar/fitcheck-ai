@@ -219,6 +219,13 @@
     @apply bg-background;
   }
 
+  .landing-surface a:focus-visible,
+  .landing-surface button:focus-visible,
+  .landing-surface [role="button"]:focus-visible {
+    outline: 3px solid hsl(var(--ring));
+    outline-offset: 3px;
+  }
+
   /* The border literal is dropped: the global `* { @apply border-border }`
      reset already supplies the hairline, and it inverts. rounded-2xl (32px)
      is the documented large-card radius (06), so geometry is unchanged. */
@@ -255,7 +262,7 @@
     /* Secondary affordances step aside so the NAME -- the only thing that
        identifies the garment -- gets the width back. Both are still reachable
        from the detail pane the row opens. */
-    .row-cq-secondary { display: none; }
+    .row-cq-secondary:not(.row-cq-favorite) { display: none; }
   }
 
   .app-page { @apply w-full mx-auto px-4 md:px-6 py-3 md:py-4; }

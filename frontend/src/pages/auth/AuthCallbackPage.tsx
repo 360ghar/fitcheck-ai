@@ -24,8 +24,15 @@ export default function AuthCallbackPage() {
 
     const processCallback = async () => {
       try {
+        const pendingPlan = localStorage.getItem('pending_plan_type')
+        if (pendingPlan) localStorage.removeItem('pending_plan_type')
         await handleOAuthCallback();
-        navigate('/dashboard', { replace: true });
+        navigate(
+          pendingPlan
+            ? `/profile?tab=plan&plan_type=${encodeURIComponent(pendingPlan)}`
+            : '/dashboard',
+          { replace: true },
+        );
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Authentication failed';
         setError(message);

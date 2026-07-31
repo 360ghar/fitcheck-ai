@@ -20,6 +20,7 @@ from app.agents.prompt_fidelity import (
     GARMENT_REFERENCE_LOCK,
     OUTFIT_LOCK,
     PERSON_REFERENCE_FIDELITY,
+    PRODUCT_CUSTOM_BACKGROUND_LOCK,
     PRODUCT_REFERENCE_LOCK,
     SHORT_NEGATIVES,
 )
@@ -610,18 +611,17 @@ Composition: ONE single photograph of the model wearing this outfit{no_collage}.
             has_reference=reference_image is not None,
         )
 
-        # A product shot is always matted, so it always asks for the isolated
-        # silhouette variant.
-        background_desc = _resolve_background(background, matte_ready=True)
+        matte_requested = (background or "").strip().lower() in _WHITE_BACKGROUND_KEYS
+        background_desc = _resolve_background(background, matte_ready=matte_requested)
+        effective_shadows = include_shadows and not matte_requested
 
-        if include_shadows:
+        if include_shadows and matte_requested:
             # A cast shadow is border-connected near-white's worst enemy: it
             # survives the matte as a detached grey blob. The request is still
             # honoured (the caller asked for it explicitly) but it is a
             # self-inflicted matte degradation, so make it visible in the logs.
             logger.warning(
-                "include_shadows=True on a matted product path; the cast shadow "
-                "will degrade the background matte",
+                "include_shadows=True conflicts with a white/transparent product matte; disabling shadows",
                 category=category,
             )
 
@@ -660,14 +660,14 @@ Composition: ONE single photograph of the model wearing this outfit{no_collage}.
 IDENTIFY the item to reproduce from this dense description (NOT any other item in the photo):
 {item_description}
 
-{PRODUCT_REFERENCE_LOCK}
+{PRODUCT_REFERENCE_LOCK if matte_requested else PRODUCT_CUSTOM_BACKGROUND_LOCK}
 
 Item: {tokens}.
 
 Output:
 - {background_desc}
 - {view_map.get(view_angle, view_map["front"])}
-- {"Subtle natural drop shadow" if include_shadows else "No shadows; fully isolated"}
+- {"Subtle natural drop shadow" if effective_shadows else "No shadows; fully isolated"}
 - Soft studio light, sharp focus, catalog quality
 - Reproduce ONLY that single item, exactly as it appears in the reference photo. Ignore every other garment, footwear, accessory, prop, person, and background visible in the photo. One isolated product shot; no second or partial second item.
 - Flat or invisible mannequin; no person""".strip()
@@ -679,22 +679,15 @@ Output:
 Specs:
 - {background_desc}
 - {view_map.get(view_angle, view_map["front"])}
-- {"Subtle natural drop shadow" if include_shadows else "No shadows; fully isolated"}
+- {"Subtle natural drop shadow" if effective_shadows else "No shadows; fully isolated"}
 - Accurate colors{f": {color_desc}" if color_desc else ""}, realistic fabric{f" ({material})" if material else ""}
 - Soft studio light, sharp focus
 - Only this single item; no model, extra garments, or second item
 
 {SHORT_NEGATIVES}""".strip()
 
-        # MATTE SITE 2 of 2. A product shot has no subject and no hair, and the
-        # prompt above pins the backdrop to flat white, so the threshold matte
-        # applies cleanly. include_shadows must never be True on this path - a
-        # cast shadow is border-connected near-white's worst enemy and survives
-        # as a detached grey blob.
-        return await self._matte(
-            await self._generate_image(prompt, reference_image=reference_image),
-            context="product image",
-        )
+        generated = await self._generate_image(prompt, reference_image=reference_image)
+        return await self._matte(generated, context="product image") if matte_requested else generated
 
     async def generate_flat_lay(
         self,

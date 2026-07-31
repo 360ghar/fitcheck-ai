@@ -9,6 +9,8 @@ class AppColors {
   static const Color primaryLight = Color(0xFFFFDDE3);
   static const Color primaryDark = Color(0xFFCC001F);
   static const Color primaryContainer = Color(0xFFFFE8EC);
+  // Lightened dark-mode accent for AA contrast on dark surfaces.
+  static const Color primaryDarkMode = Color(0xFFFF9AAA);
 
   // Editorial purple is reserved for AI picks and recommendation context.
   static const Color secondary = Color(0xFF7E238B);
@@ -29,6 +31,7 @@ class AppColors {
   static const Color error = Color(0xFF9E0A0A);
   static const Color errorLight = Color(0xFFF8D0D0);
   static const Color errorDark = Color(0xFF760707);
+  static const Color errorDarkMode = Color(0xFFFF9B9B);
 
   // Neutral Colors - Light Mode
   static const Color backgroundLight = Color(0xFFFBFBF9);

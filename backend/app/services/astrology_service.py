@@ -527,7 +527,7 @@ class AstrologyService:
             return timezone.utc
         try:
             return ZoneInfo(timezone_name)
-        except (ValueError, TypeError, OSError):
+        except (KeyError, ValueError, TypeError, OSError):
             logger.exception("Failed to parse timezone, falling back to UTC", timezone_name=timezone_name)
             return timezone.utc
 
@@ -563,4 +563,3 @@ astrology_service = AstrologyService()
 def get_astrology_service() -> AstrologyService:
     """Dependency-safe astrology service getter."""
     return astrology_service
-

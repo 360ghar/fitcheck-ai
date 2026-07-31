@@ -165,6 +165,9 @@ class SocialImportPipelineService:
                         await self._cleanup_job_resources(job_id)
                         return
 
+                    if job.get("status") == SocialImportJobStatus.FAILED.value:
+                        return
+
                 if job.get("status") == SocialImportJobStatus.AWAITING_AUTH.value:
                     logger.info(
                         "Job awaiting authentication",
@@ -381,6 +384,35 @@ class SocialImportPipelineService:
                     event_payload,
                 )
                 raise SocialImportAuthRequiredError()
+
+            discovery_metadata = result.metadata or {}
+            if discovery_metadata.get("error_type") in {
+                "discovery_failure",
+                "fetch_failure",
+            } or discovery_metadata.get("error"):
+                failure_message = discovery_metadata.get("message") or discovery_metadata.get("error") or "Photo discovery failed"
+                failure_metadata = dict(job_metadata)
+                failure_metadata.update({
+                    "discovery_failure": True,
+                    "discovery_error": failure_message,
+                    "discovery_iteration": iteration_count,
+                })
+                await SocialImportJobStore.update_job(
+                    self.db,
+                    job_id=job_id,
+                    user_id=self.user_id,
+                    updates={
+                        "status": SocialImportJobStatus.FAILED.value,
+                        "error_message": failure_message,
+                        "metadata": failure_metadata,
+                    },
+                )
+                await self._publish_event(
+                    job_id,
+                    "job_failed",
+                    {"job_id": job_id, "error": failure_message, "retryable": True},
+                )
+                return
 
             # Check if adding these photos would exceed the max limit
             current_count = ordinal - 1

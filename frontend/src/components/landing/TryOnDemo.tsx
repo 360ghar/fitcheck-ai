@@ -98,7 +98,7 @@ export function TryOnDemo() {
     <GlassCard className="p-6 h-full flex flex-col">
       <div className="flex items-center gap-3 mb-4">
         <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-          <Wand2 className="w-5 h-5 text-white" />
+          <Wand2 className="h-5 w-5 text-primary-foreground" />
         </div>
         <div>
           <h3 className="font-semibold text-stone-900 dark:text-stone-50">
@@ -224,7 +224,7 @@ export function TryOnDemo() {
               </Button>
               <Button
                 size="sm"
-                className="flex-1 bg-primary hover:bg-primary-pressed text-white"
+                className="flex-1 bg-primary text-primary-foreground hover:bg-primary-pressed"
                 onClick={() => setShowLoginModal(true)}
               >
                 Save & continue free

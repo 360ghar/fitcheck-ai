@@ -24,7 +24,8 @@ Usage:
 
 Optional env:
     AUDIT_FILE=backend/logs/pro_grant.jsonl   # must match the grant run
-    INCLUDE_PAID=0                            # 1 = also revert paying users (DANGEROUS)
+    INCLUDE_PAID=0                            # 1 = also revert externally-cancelled users
+    STRIPE_CANCEL_CONFIRMED=0                 # required with INCLUDE_PAID=1
 
 Recommended: schedule daily (Railway cron / system cron) until the campaign
 window is fully reverted, then retire. Not wired automatically.
@@ -105,9 +106,22 @@ def main() -> int:
         return 0
 
     # Which ones are past trial_end?
-    expired_ids = [uid for uid, te in campaign.items()
-                   if datetime.fromisoformat(te) < now]
+    expired_ids: list[str] = []
+    malformed_timestamps = 0
+    for uid, trial_end in campaign.items():
+        try:
+            parsed_trial_end = datetime.fromisoformat(
+                str(trial_end).replace("Z", "+00:00")
+            )
+            if parsed_trial_end.tzinfo is None:
+                parsed_trial_end = parsed_trial_end.replace(tzinfo=timezone.utc)
+        except (AttributeError, TypeError, ValueError):
+            malformed_timestamps += 1
+            continue
+        if parsed_trial_end < now:
+            expired_ids.append(uid)
     print(f"expired (trial_end < now): {len(expired_ids)}")
+    print(f"skipped (malformed trial_end): {malformed_timestamps}")
     if not expired_ids:
         print("no expired trials yet; nothing to revert.")
         return 0
@@ -173,13 +187,30 @@ def main() -> int:
             # state (pro_monthly trial, no Stripe subscription). This prevents
             # a TOCTOU race where a user completes a paid checkout between the
             # scan above and this update.
-            result = db.table("subscriptions").update({
+            update_payload = {
                 "plan_type": "free",
                 "status": "active",
                 "trial_end": None,
                 "current_period_end": None,
                 "cancel_at_period_end": False,
-            }).eq("user_id", uid).eq("plan_type", "pro_monthly").eq("status", "trial").is_("stripe_subscription_id", "null").execute()
+            }
+            if include_paid:
+                # INCLUDE_PAID is only permitted after the operator has
+                # confirmed those Stripe subscriptions were cancelled
+                # externally. Clear the stale IDs so the account cannot be
+                # treated as having a live paid subscription afterwards.
+                update_payload.update({
+                    "stripe_subscription_id": None,
+                    "stripe_customer_id": None,
+                })
+            query = db.table("subscriptions").update(update_payload).eq(
+                "user_id", uid
+            ).eq("plan_type", "pro_monthly").eq("status", "trial").eq(
+                "trial_end", campaign[uid]
+            )
+            if not include_paid:
+                query = query.is_("stripe_subscription_id", "null")
+            result = query.execute()
             # If no row matched the filter, the subscription changed state
             # since the scan (e.g. user became paid) — skip silently.
             if not (result.data and len(result.data) > 0):

@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   CreditCard,
   Crown,
@@ -69,6 +70,8 @@ const UPGRADE_TIERS = (["plus", "pro"] as const).map((tier) => ({
 // ============================================================================
 
 export function SubscriptionPanel() {
+  const [searchParams] = useSearchParams();
+  const requestedPlan = searchParams.get("plan_type");
   const [copied, setCopied] = useState(false);
   const [isLoadingReferral, setIsLoadingReferral] = useState(false);
   const { toast } = useToast();
@@ -110,6 +113,12 @@ export function SubscriptionPanel() {
     fetchReferralStats();
     fetchPlans();
   }, [fetchSubscription, fetchReferralCode, fetchReferralStats, fetchPlans]);
+
+  useEffect(() => {
+    if (!requestedPlan) return;
+    const target = document.getElementById(`plan-${requestedPlan.split("_")[0]}`);
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [requestedPlan, offeredTiers.length]);
 
   // Handle copy referral link
   const handleCopyLink = async () => {
@@ -332,6 +341,7 @@ export function SubscriptionPanel() {
                 }) => (
                   <div
                     key={tier}
+                    id={`plan-${tier}`}
                     className={
                       recommended
                         ? "relative flex h-full flex-col rounded-lg border-2 border-indigo-500 p-4"
