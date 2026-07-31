@@ -37,8 +37,14 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Optional
 
 from supabase import create_client
+
+# The import is cheap and safe: app/utils/datetime_util.py is pure stdlib.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app.utils.datetime_util import parse_utc_datetime  # noqa: E402
 
 
 def _env(name: str, default: str | None = None, *, required: bool = False) -> str:
@@ -51,6 +57,26 @@ def _env(name: str, default: str | None = None, *, required: bool = False) -> st
 
 def _env_bool(name: str, default: bool = False) -> bool:
     return os.environ.get(name, "1" if default else "0").strip() in {"1", "true", "yes", "on"}
+
+
+def _parse_instant(value: Any) -> Optional[datetime]:
+    """Parse a trial_end value into an aware UTC datetime, or None.
+
+    Accepts ISO strings with or without a timezone suffix: PostgREST renders
+    a timestamptz column in the DATABASE SESSION timezone, so the string form
+    can legitimately differ (offset AND wall clock) from the audit file's
+    Python ``isoformat()`` output while denoting the same instant. Naive
+    values are assumed to be UTC (the grant script writes aware strings, but
+    tolerate legacy naive rows).
+    """
+    return parse_utc_datetime(value)
+
+
+def _same_instant(db_value: Any, audited_value: Any) -> bool:
+    """True when two trial_end representations denote the same instant."""
+    left = _parse_instant(db_value)
+    right = _parse_instant(audited_value)
+    return left is not None and left == right
 
 
 def _load_campaign(path: Path) -> dict[str, str]:
@@ -134,7 +160,9 @@ def main() -> int:
     # pro_monthly trial) are considered revertable — this prevents unrelated
     # subscriptions (e.g. pro_yearly, a later upgraded state) from being
     # accidentally downgraded.
-    page = 500
+    # Chunk at 200 ids: keeps the querystring well under PostgREST's URL
+    # length ceiling (see _ID_CHUNK in backfill_transparent_backgrounds.py).
+    page = 200
     to_revert: list[str] = []
     skipped_paid = 0
     skipped_already_free = 0
@@ -159,8 +187,11 @@ def main() -> int:
                 skipped_already_free += 1
                 continue
             # Confirm the row's trial_end matches the audited campaign value.
-            audited_trial_end = campaign.get(uid)
-            if not audited_trial_end or str(row.get("trial_end") or "") != audited_trial_end:
+            # Compare parsed instants, never byte-equal strings: PostgREST
+            # renders timestamptz in the database session timezone, so a
+            # byte-for-byte comparison breaks on any non-UTC session timezone
+            # and silently no-ops the whole campaign.
+            if not _same_instant(row.get("trial_end"), campaign.get(uid)):
                 skipped_trial_mismatch += 1
                 continue
             to_revert.append(uid)
@@ -206,7 +237,10 @@ def main() -> int:
             query = db.table("subscriptions").update(update_payload).eq(
                 "user_id", uid
             ).eq("plan_type", "pro_monthly").eq("status", "trial").eq(
-                "trial_end", campaign[uid]
+                # Re-serialize the audited instant to a canonical aware ISO
+                # string so Postgres compares instants regardless of the
+                # database session timezone.
+                "trial_end", _parse_instant(campaign.get(uid)).isoformat()
             )
             if not include_paid:
                 query = query.is_("stripe_subscription_id", "null")

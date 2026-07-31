@@ -586,14 +586,14 @@ class SocialImportPipelineService:
     async def _check_rate_limit_with_pause(
         self, job_id: str, operation_type: str, count: int = 1
     ) -> bool:
-        """Check rate limit; if not allowed, pause job and return False."""
-        check = await AISettingsService.check_rate_limit(
+        """Atomically reserve quota; if unavailable, pause job and return False."""
+        reserved = await AISettingsService.reserve_usage(
             user_id=self.user_id,
             operation_type=operation_type,
             db=self.db,
             count=count,
         )
-        if not check["allowed"]:
+        if not reserved:
             await self._pause_for_rate_limit(job_id, operation_type)
             return False
         return True
@@ -664,13 +664,6 @@ class SocialImportPipelineService:
                 image_base64=image_base64
             )
             raw_items = extraction_result.get("items") or []
-            await AISettingsService.increment_usage(
-                user_id=self.user_id,
-                operation_type=OperationType.EXTRACTION,
-                db=self.db,
-                count=1,
-            )
-
             if not raw_items:
                 await SocialImportJobStore.update_photo(
                     self.db,
@@ -766,7 +759,10 @@ class SocialImportPipelineService:
                 # the item's bbox, or drop it entirely - see that function for why.
                 src_url = item.get("source_image_url")
                 if src_url and src_url not in source_photo_cache:
-                    source_photo_cache[src_url] = await StorageService.download_to_base64(src_url)
+                    try:
+                        source_photo_cache[src_url] = await SocialScraperService.fetch_photo_as_base64(src_url)
+                    except SocialImportError:
+                        source_photo_cache[src_url] = None
                 reference_image_base64: Optional[str] = (
                     source_photo_cache.get(src_url) if src_url else None
                 )
@@ -834,14 +830,6 @@ class SocialImportPipelineService:
                             generation_error=str(generation_error),
                         )
                     )
-
-            if generation_success_count > 0:
-                await AISettingsService.increment_usage(
-                    user_id=self.user_id,
-                    operation_type=OperationType.GENERATION,
-                    db=self.db,
-                    count=generation_success_count,
-                )
 
             await SocialImportJobStore.upsert_photo_items(
                 self.db,
@@ -1607,21 +1595,16 @@ class SocialImportPipelineService:
         await asyncio.to_thread(self.db.table("item_images").insert(image_data).execute)
 
         try:
-            rate_check = await AISettingsService.check_rate_limit(
+            reserved = await AISettingsService.reserve_usage(
                 user_id=self.user_id,
                 operation_type=OperationType.EMBEDDING,
                 db=self.db,
             )
-            if rate_check["allowed"]:
+            if reserved:
                 embedding = await AIService.generate_item_embedding(
                     {**item_data, "images": [image_data]}
                 )
                 if embedding:
-                    await AISettingsService.increment_usage(
-                        user_id=self.user_id,
-                        operation_type=OperationType.EMBEDDING,
-                        db=self.db,
-                    )
                     vector_service = get_vector_service()
                     await vector_service.upsert_item(
                         item_id=item_id,

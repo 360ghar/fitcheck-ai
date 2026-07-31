@@ -685,6 +685,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       creationOccasion,
       previewImageDataUrl,
       previewStatus,
+      previewSourceKey,
     } = state;
 
     if (creationItems.size === 0) {
@@ -720,8 +721,18 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 
     set((current) => ({ outfits: [outfit, ...current.outfits], isLoading: false }));
 
-    // Nothing approved — the outfit exists without a look, on purpose.
-    if (previewStatus !== 'ready' || !previewImageDataUrl) {
+    // Nothing approved — the outfit exists without a look, on purpose. A
+    // preview whose source key no longer matches the live draft must also be
+    // treated as nothing approved: attaching it would ship a photo of
+    // different clothes than the outfit's item_ids.
+    const previewMatchesDraft =
+      previewSourceKey !== null &&
+      previewSourceKey === draftPreviewKey(creationItems, creationStyle);
+    if (
+      previewStatus !== 'ready' ||
+      !previewImageDataUrl ||
+      !previewMatchesDraft
+    ) {
       set({ ...initialCreationState, creationItems: new Set<string>(), ...initialPreviewState });
       return outfit;
     }

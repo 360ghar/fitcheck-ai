@@ -12,11 +12,20 @@ fix.
 """
 
 import asyncio
+import base64
+import io
 
 import pytest
+from PIL import Image
 
 from app.services.batch_job_service import BatchJobService
 from app.services.photoshoot_job_service import PhotoshootJobService
+
+
+def _valid_photo_base64() -> str:
+    buffer = io.BytesIO()
+    Image.new("RGB", (2, 2), "white").save(buffer, format="PNG")
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
 @pytest.fixture(autouse=True)
@@ -59,7 +68,7 @@ async def test_photoshoot_generate_holds_strong_ref_to_pipeline_task(monkeypatch
     assert not ps._pipeline_tasks, "leaked tasks from a previous test"
 
     body = StartPhotoshootRequest(
-        photos=["ZmFrZS1waG90bw=="],
+        photos=[_valid_photo_base64()],
         use_case=PhotoshootUseCase.AESTHETIC,
         num_images=1,
     )

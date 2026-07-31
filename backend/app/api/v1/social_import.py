@@ -227,24 +227,31 @@ async def create_social_import_job(
         raise HTTPException(status_code=404, detail="Social import is disabled")
 
     max_concurrent_jobs = max(1, int(settings.SOCIAL_IMPORT_MAX_CONCURRENT_JOBS or 1))
-    active_jobs = await SocialImportJobStore.count_active_jobs(db, user_id=user_id)
-    if active_jobs >= max_concurrent_jobs:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                "You already have the maximum number of active social imports. "
-                "Please finish or cancel an existing job before starting a new one."
-            ),
-        )
-
     normalized = SocialURLService.normalize_profile_url(body.source_url)
-    job = await SocialImportJobStore.create_job(
-        db,
-        user_id=user_id,
-        platform=normalized.platform.value,
-        source_url=normalized.source_url,
-        normalized_url=normalized.normalized_url,
-    )
+    try:
+        job = await SocialImportJobStore.create_job(
+            db,
+            user_id=user_id,
+            platform=normalized.platform.value,
+            source_url=normalized.source_url,
+            normalized_url=normalized.normalized_url,
+            max_concurrent_jobs=max_concurrent_jobs,
+        )
+    except Exception as exc:
+        # The RPC serializes admission per user and rejects only when the
+        # configured limit is reached. A duplicate-key race (two concurrent
+        # creates for the same user) is the same user-facing condition - an
+        # active job already exists - so surface both as 429, never 500.
+        message = str(exc).lower()
+        if "concurrency limit reached" in message or "duplicate key value violates" in message:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(
+                    "You already have the maximum number of active social imports. "
+                    "Please finish or cancel an existing job before starting a new one."
+                ),
+            ) from exc
+        raise
 
     service = _service(user_id, db)
     await SocialImportPipelineService.schedule_job(service, job["id"])

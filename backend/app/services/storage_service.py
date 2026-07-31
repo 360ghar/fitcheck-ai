@@ -9,6 +9,7 @@ import os
 import uuid
 from typing import Optional, List
 from datetime import datetime
+from urllib.parse import urlparse, urljoin
 
 import httpx
 from supabase import Client
@@ -19,7 +20,12 @@ from app.core.exceptions import (
     FileTooLargeError,
     UnsupportedMediaTypeError,
 )
-from app.utils.image_processing import EXTENSION_BY_MIME, sniff_image_mime
+from app.utils.image_processing import (
+    EXTENSION_BY_MIME,
+    SUPPORTED_UPLOAD_MIME_TYPES,
+    sniff_image_mime,
+    validate_image_bytes,
+)
 
 logger = get_context_logger(__name__)
 
@@ -126,7 +132,7 @@ class StorageService:
             raise FileTooLargeError(max_size_mb=MAX_FILE_SIZE // (1024 * 1024))
 
         # Check file extension
-        ext = os.path.splitext(filename)[1].lower()
+        ext = os.path.splitext(filename)[1].lower() or filename.strip().lower()
         if ext not in ALLOWED_IMAGE_EXTENSIONS:
             logger.warning(
                 "Unsupported file type",
@@ -138,6 +144,23 @@ class StorageService:
                 allowed_types=list(ALLOWED_IMAGE_EXTENSIONS),
                 message=f"Invalid file type '{ext}'. Allowed: {', '.join(ALLOWED_IMAGE_EXTENSIONS)}"
             )
+
+        # The extension and multipart content type are caller-controlled.
+        # `validate_image_bytes` decodes and verifies the actual bytes with
+        # Pillow, then requires a MIME type from the magic bytes (never the
+        # filename), so spoofed payloads are rejected before reaching storage.
+        try:
+            validate_image_bytes(file_data, max_bytes=MAX_FILE_SIZE)
+        except ValueError as error:
+            logger.warning(
+                "Uploaded bytes are not a valid image",
+                file_name=filename,
+                error=str(error),
+            )
+            raise UnsupportedMediaTypeError(
+                allowed_types=sorted(SUPPORTED_UPLOAD_MIME_TYPES),
+                message="File contents are not a valid supported image",
+            ) from error
 
     @staticmethod
     async def upload_item_image(
@@ -165,7 +188,9 @@ class StorageService:
             StorageServiceError: If upload fails
         """
         # Validate the image (raises on failure)
-        StorageService._validate_image(file_data, filename)
+        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
+        # event loop during request handling.
+        await asyncio.to_thread(StorageService._validate_image, file_data, filename)
 
         # Generate unique filename
         storage_path = StorageService._generate_filename(user_id, filename, "item")
@@ -241,7 +266,9 @@ class StorageService:
             StorageServiceError: If upload fails
         """
         # Validate the image (raises on failure)
-        StorageService._validate_image(file_data, filename)
+        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
+        # event loop during request handling.
+        await asyncio.to_thread(StorageService._validate_image, file_data, filename)
 
         storage_path = StorageService._generate_filename(user_id, filename, "outfit")
 
@@ -313,7 +340,9 @@ class StorageService:
             StorageServiceError: If upload fails
         """
         # Validate the image (raises on failure)
-        StorageService._validate_image(file_data, filename)
+        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
+        # event loop during request handling.
+        await asyncio.to_thread(StorageService._validate_image, file_data, filename)
 
         storage_path = StorageService._generate_filename(user_id, filename, "avatar")
 
@@ -431,6 +460,88 @@ class StorageService:
             raise StorageServiceError(f"Failed to delete images: {str(e)}")
 
     @staticmethod
+    async def resolve_owned_storage_paths(
+        db: Client,
+        user_id: str,
+        *,
+        item_ids: Optional[List[str]] = None,
+        outfit_ids: Optional[List[str]] = None,
+    ) -> dict:
+        """Resolve a user's owned parent rows and their child image storage paths.
+
+        The backend uses a service-role client (RLS bypassed), so child image
+        rows cannot be authorized by image id alone: owned parent ids are
+        resolved under ``user_id`` first, then child ``storage_path`` rows are
+        collected under those ids. Pass ``item_ids``/``outfit_ids`` to scope to
+        a subset (batch deletes); omit them to include everything a user owns
+        (account deletion).
+
+        Returns ``{"item_ids": [...], "outfit_ids": [...], "storage_paths": [...]}``.
+        Callers own the deletion and its error policy (best-effort for batch
+        deletes, fail-loudly for account deletion).
+        """
+        owned_item_ids: List[str] = []
+        owned_outfit_ids: List[str] = []
+        storage_paths: List[str] = []
+
+        # Sentinel DBs used by tests/direct callers have no query surface;
+        # skip resolution entirely rather than failing on an invalid client.
+        can_query_rows = hasattr(db.table("items"), "select")
+
+        scopes = (
+            ("items", "item_images", "item_id", item_ids),
+            ("outfits", "outfit_images", "outfit_id", outfit_ids),
+        )
+        # The two parent queries are independent; run them concurrently.
+        parent_queries = []
+        for parent_table, _child_table, _fk_column, scoped_ids in scopes:
+            if scoped_ids is not None and not scoped_ids:
+                continue
+            if not can_query_rows:
+                continue
+            parent_query = db.table(parent_table).select("id").eq("user_id", user_id)
+            if scoped_ids is not None:
+                parent_query = parent_query.in_("id", scoped_ids)
+            parent_queries.append((parent_table, parent_query))
+
+        parent_results = await asyncio.gather(
+            *(asyncio.to_thread(query.execute) for _table, query in parent_queries)
+        ) if parent_queries else []
+
+        for (parent_table, _query), parent_rows in zip(parent_queries, parent_results):
+            owned_ids = [
+                str(row.get("id"))
+                for row in (getattr(parent_rows, "data", None) or [])
+                if row.get("id")
+            ]
+            if parent_table == "items":
+                owned_item_ids.extend(owned_ids)
+                child_table, fk_column = "item_images", "item_id"
+            else:
+                owned_outfit_ids.extend(owned_ids)
+                child_table, fk_column = "outfit_images", "outfit_id"
+            if not owned_ids:
+                continue
+            # Chunk the IN clause so account deletion (a user's entire
+            # wardrobe) never exceeds PostgREST URL length limits.
+            for start in range(0, len(owned_ids), 500):
+                chunk = owned_ids[start:start + 500]
+                child_rows = await asyncio.to_thread(
+                    db.table(child_table).select("storage_path").in_(fk_column, chunk).execute
+                )
+                storage_paths.extend(
+                    str(row["storage_path"])
+                    for row in (getattr(child_rows, "data", None) or [])
+                    if row.get("storage_path")
+                )
+
+        return {
+            "item_ids": owned_item_ids,
+            "outfit_ids": owned_outfit_ids,
+            "storage_paths": storage_paths,
+        }
+
+    @staticmethod
     def get_public_url(storage_path: str, bucket: Optional[str] = None) -> str:
         """Get the public URL for a stored file.
 
@@ -533,7 +644,9 @@ class StorageService:
             StorageServiceError: If upload fails
         """
         # Validate the image (raises on failure)
-        StorageService._validate_image(file_data, filename)
+        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
+        # event loop during request handling.
+        await asyncio.to_thread(StorageService._validate_image, file_data, filename)
 
         storage_path = StorageService._generate_filename(user_id, filename, "feedback")
 
@@ -633,6 +746,9 @@ class StorageService:
         content type for as long as it lives.
         """
         ext = extension if extension.startswith(".") else f".{extension}"
+        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
+        # event loop during request handling.
+        await asyncio.to_thread(StorageService._validate_image, file_data, ext)
         content_type = StorageService._sniff_content_type(file_data, ext)
         ext = EXTENSION_BY_MIME.get(content_type, ext)
         temp_name = f"{user_id}/tmp/{source}/{uuid.uuid4().hex}{ext}"
@@ -665,6 +781,9 @@ class StorageService:
         Returns {image_url, storage_path} under {user_id}/sources/.
         """
         ext = extension if extension.startswith(".") else f".{extension}"
+        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
+        # event loop during request handling.
+        await asyncio.to_thread(StorageService._validate_image, file_data, ext)
         # Sniffed from the bytes, with the caller's extension only as a fallback:
         # the previous ext-based mapping labelled every non-.jpg source photo
         # `image/png`, so a .webp upload was served as PNG.
@@ -685,20 +804,43 @@ class StorageService:
     async def download_to_base64(url: str, timeout: float = 10.0) -> Optional[str]:
         """Download a stored image URL back to base64 for image-gen reference.
 
-        Returns base64-encoded bytes (no data: prefix) or None on any failure
-        so callers can fall back to text-only generation gracefully.
+        Only server-owned Supabase Storage URLs are fetched. This helper is
+        used on user-controlled item/avatar records, so following arbitrary
+        URLs would turn image generation into an SSRF primitive.
+
+        Returns base64-encoded, decoded image bytes (no data: prefix) or None
+        on any failure so callers can fall back gracefully.
         """
         if not url:
             return None
         try:
+            current_url = StorageService._validate_storage_url(url)
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(timeout),
                 limits=httpx.Limits(max_connections=10),
-                follow_redirects=True,
+                follow_redirects=False,
             ) as client:
-                response = await client.get(url)
-                response.raise_for_status()
-                return base64.b64encode(response.content).decode("utf-8")
+                for _ in range(4):
+                    async with client.stream("GET", current_url) as response:
+                        if response.status_code in {301, 302, 303, 307, 308}:
+                            location = response.headers.get("location")
+                            if not location:
+                                return None
+                            current_url = StorageService._validate_storage_url(
+                                urljoin(current_url, location)
+                            )
+                            continue
+                        response.raise_for_status()
+                        content = bytearray()
+                        async for chunk in response.aiter_bytes():
+                            if len(content) + len(chunk) > MAX_FILE_SIZE:
+                                return None
+                            content.extend(chunk)
+                        if not content:
+                            return None
+                        validate_image_bytes(bytes(content), max_bytes=MAX_FILE_SIZE)
+                        return base64.b64encode(bytes(content)).decode("utf-8")
+                return None
         except Exception as e:
             logger.warning(
                 "Failed to download source image for reference",
@@ -706,6 +848,21 @@ class StorageService:
                 error=str(e),
             )
             return None
+
+    @staticmethod
+    def _validate_storage_url(url: str) -> str:
+        """Allow only the configured Supabase Storage origin and object path."""
+        expected = urlparse(settings.SUPABASE_URL)
+        parsed = urlparse(url)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("storage image URL must use HTTPS")
+        if parsed.username or parsed.password:
+            raise ValueError("storage image URL cannot contain credentials")
+        if parsed.hostname.lower() != (expected.hostname or "").lower():
+            raise ValueError("storage image URL host is not trusted")
+        if not parsed.path.startswith("/storage/v1/object/"):
+            raise ValueError("storage image URL is not a Supabase object URL")
+        return url
 
     @staticmethod
     async def promote_temp_image_to_item(

@@ -12,11 +12,13 @@ from app.utils.datetime_util import utcnow, utcnow_iso
 from typing import Any, Dict, List, Optional, Set
 from uuid import uuid4
 
-from app.core.exceptions import RateLimitError
+from app.core.exceptions import DatabaseError, RateLimitError
 from app.core.logging_config import get_context_logger
 from app.models.photoshoot import PhotoshootJobStatus
+from app.services.job_persistence import JobPersistenceStore
 from app.utils.process_metrics import estimate_base64_mb, log_memory
 from app.utils.sse_queue import fanout
+from app.utils.db import maybe_single_data
 
 logger = get_context_logger(__name__)
 
@@ -33,6 +35,53 @@ _TERMINAL_STATUSES = frozenset({
     PhotoshootJobStatus.CANCELLED,
     PhotoshootJobStatus.FAILED,
 })
+
+
+def _build_persisted_payload(
+    job: "PhotoshootJob",
+    *,
+    status: Optional[PhotoshootJobStatus] = None,
+    error_message: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Durable summary row for a photoshoot job.
+
+    Reference photos and generated base64 are process-local; the row carries
+    metadata, durable image URLs, and counters only.
+    """
+    images = []
+    for image in job.generated_images:
+        if isinstance(image, dict):
+            images.append({key: value for key, value in image.items() if key != "image_base64"})
+    target_status = status or job.status
+    return {
+        "id": job.job_id,
+        "user_id": job.user_id,
+        "status": target_status.value,
+        "session_id": job.session_id,
+        "use_case": job.use_case,
+        "custom_prompt": job.custom_prompt,
+        "num_images": job.num_images,
+        "batch_size": job.batch_size,
+        "aspect_ratio": job.aspect_ratio,
+        "total_batches": job.total_batches,
+        "current_batch": job.current_batch,
+        "generated_images": images,
+        "failed_indices": sorted(job.failed_indices),
+        "usage": job.usage,
+        "error_message": error_message if error_message is not None else job.error_message,
+        "reference_photo_count": len(job.photos),
+        "created_at": job.created_at.isoformat(),
+        "completed_at": utcnow_iso() if target_status in _TERMINAL_STATUSES else None,
+    }
+
+
+_store = JobPersistenceStore(
+    table="photoshoot_jobs",
+    terminal_statuses=_TERMINAL_STATUSES,
+    build_payload=_build_persisted_payload,
+    cancelled_member=PhotoshootJobStatus.CANCELLED,
+    logger=logger,
+)
 
 
 @dataclass
@@ -71,6 +120,13 @@ class PhotoshootJob:
     # Error info
     error_message: Optional[str] = None
     usage: Optional[Dict[str, Any]] = None
+    persistence_db: Any = field(default=None, repr=False, compare=False)
+    recovered_from_persistence: bool = field(default=False, repr=False, compare=False)
+    # Coalesced persistence state owned by JobPersistenceStore: `persistence_dirty`
+    # means an in-memory mutation has not reached the durable row yet, and
+    # `_persisted_status` is the status the row currently holds (the CAS anchor).
+    persistence_dirty: bool = field(default=False, repr=False, compare=False)
+    _persisted_status: Any = field(default=None, repr=False, compare=False)
 
     def is_cancelled(self) -> bool:
         """Check if job is cancelled."""
@@ -103,6 +159,41 @@ class PhotoshootJobService:
         return sum(1 for j in cls._jobs.values() if j.status in cls._ACTIVE_STATUSES)
 
     @classmethod
+    def _hydrate(cls, row: Dict[str, Any], db: Any) -> Optional[PhotoshootJob]:
+        try:
+            status = PhotoshootJobStatus(row.get("status", PhotoshootJobStatus.PENDING.value))
+            generated_images = []
+            for image in row.get("generated_images") or []:
+                if isinstance(image, dict):
+                    generated_images.append({key: value for key, value in image.items() if key != "image_base64"})
+            job = PhotoshootJob(
+                job_id=str(row["id"]),
+                user_id=str(row["user_id"]),
+                status=status,
+                created_at=_store.parse_created_at(row.get("created_at")),
+                photos=[],
+                use_case=str(row.get("use_case") or "aesthetic"),
+                custom_prompt=row.get("custom_prompt"),
+                num_images=int(row.get("num_images") or 0),
+                batch_size=int(row.get("batch_size") or 1),
+                aspect_ratio=str(row.get("aspect_ratio") or "1:1"),
+                session_id=str(row.get("session_id") or ""),
+                total_batches=int(row.get("total_batches") or 1),
+                current_batch=int(row.get("current_batch") or 0),
+                generated_images=generated_images,
+                failed_indices={int(index) for index in row.get("failed_indices") or []},
+                error_message=row.get("error_message"),
+                usage=row.get("usage"),
+                persistence_db=db,
+                recovered_from_persistence=True,
+                _persisted_status=status,
+            )
+            return job
+        except (KeyError, TypeError, ValueError) as exc:
+            logger.warning("Could not hydrate persisted photoshoot job", extra={"error": str(exc)})
+            return None
+
+    @classmethod
     async def create_job(
         cls,
         user_id: str,
@@ -112,6 +203,7 @@ class PhotoshootJobService:
         batch_size: int = 10,
         aspect_ratio: str = "1:1",
         custom_prompt: Optional[str] = None,
+        db: Any = None,
     ) -> PhotoshootJob:
         """Create a new photoshoot job.
 
@@ -150,6 +242,7 @@ class PhotoshootJobService:
             aspect_ratio=aspect_ratio,
             session_id=session_id,
             total_batches=total_batches,
+            persistence_db=db,
         )
 
         async with cls._lock:
@@ -166,6 +259,19 @@ class PhotoshootJobService:
                     retry_after=60,
                 )
             cls._jobs[job_id] = job
+
+        # Persist only after admission so a job that loses the cap race never
+        # leaves an orphaned durable row; if the write fails or returns no
+        # row, drop the in-memory job (so it cannot occupy a concurrency
+        # slot) and let the caller's reservation compensation surface it.
+        if db is not None:
+            try:
+                if not await _store.create(job):
+                    raise DatabaseError("Failed to persist photoshoot job")
+            except Exception:
+                async with cls._lock:
+                    cls._jobs.pop(job_id, None)
+                raise
 
         # Start cleanup task if not running
         cls._ensure_cleanup_task()
@@ -227,13 +333,42 @@ class PhotoshootJobService:
         )
 
     @classmethod
-    async def get_job(cls, job_id: str, user_id: str) -> Optional[PhotoshootJob]:
-        """Get a job by ID, validating user ownership."""
+    async def get_job(cls, job_id: str, user_id: str, db: Any = None) -> Optional[PhotoshootJob]:
+        """Get a job by ID, validating user ownership.
+
+        In-memory jobs are authoritative; the durable row only matters for
+        cross-worker recovery (memory miss). Durable progress for a live job
+        is coalesced onto the 60s cleanup tick and the synchronous terminal
+        transitions, so reads never trigger a full-row write.
+        """
         async with cls._lock:
             job = cls._jobs.get(job_id)
             if job and job.user_id == user_id:
+                if db is not None:
+                    job.persistence_db = db
                 return job
-            return None
+        if db is not None:
+            result = await asyncio.to_thread(
+                db.table("photoshoot_jobs")
+                .select("*")
+                .eq("id", job_id)
+                .eq("user_id", user_id)
+                .maybe_single()
+                .execute
+            )
+            row = maybe_single_data(result)
+            if not row:
+                return None
+            async with cls._lock:
+                job = cls._jobs.get(job_id)
+                if job and job.user_id == user_id:
+                    job.persistence_db = db
+                    return job
+                job = cls._hydrate(row, db)
+                if job:
+                    cls._jobs[job_id] = job
+                return job
+        return None
 
     @classmethod
     async def get_job_by_id(cls, job_id: str) -> Optional[PhotoshootJob]:
@@ -242,8 +377,10 @@ class PhotoshootJobService:
             return cls._jobs.get(job_id)
 
     @classmethod
-    async def cancel_job(cls, job_id: str, user_id: str) -> bool:
+    async def cancel_job(cls, job_id: str, user_id: str, db: Any = None) -> bool:
         """Cancel a running job."""
+        if db is not None and job_id not in cls._jobs:
+            await cls.get_job(job_id, user_id, db=db)
         async with cls._lock:
             job = cls._jobs.get(job_id)
             if not job or job.user_id != user_id:
@@ -255,6 +392,16 @@ class PhotoshootJobService:
                 PhotoshootJobStatus.FAILED,
             ):
                 return False
+
+            if job.persistence_db is not None and not await _store.transition(
+                job,
+                status=PhotoshootJobStatus.CANCELLED,
+            ):
+                # The CAS lost to a writer that already persisted CANCELLED;
+                # adoption moved this job to the terminal state, so report
+                # success instead of a 404.
+                if job.status != PhotoshootJobStatus.CANCELLED:
+                    return False
 
             job.cancelled = True
             job.cancel_event.set()
@@ -271,13 +418,23 @@ class PhotoshootJobService:
 
     @classmethod
     async def update_status(cls, job_id: str, status: PhotoshootJobStatus) -> None:
-        """Update job status. Terminal statuses are final and never overwritten."""
+        """Update job status. Terminal statuses are final and never overwritten.
+
+        Terminal transitions are written synchronously (required CAS) so a
+        crash right after the transition still leaves a durable final row;
+        non-terminal progress is coalesced via the dirty flag.
+        """
         async with cls._lock:
             job = cls._jobs.get(job_id)
             if not job:
                 return
-            if job.status in _TERMINAL_STATUSES and status not in _TERMINAL_STATUSES:
+            if job.status in _TERMINAL_STATUSES:
                 return
+            if status in _TERMINAL_STATUSES:
+                if not await _store.transition(job, status=status):
+                    return
+            else:
+                _store.mark_dirty(job)
             job.status = status
 
     @classmethod
@@ -285,8 +442,9 @@ class PhotoshootJobService:
         """Update the current batch number."""
         async with cls._lock:
             job = cls._jobs.get(job_id)
-            if job:
+            if job and job.status not in _TERMINAL_STATUSES:
                 job.current_batch = batch_num
+                _store.mark_dirty(job)
 
     @classmethod
     async def add_generated_image(
@@ -300,36 +458,49 @@ class PhotoshootJobService:
         """Add a successfully generated image to the job."""
         async with cls._lock:
             job = cls._jobs.get(job_id)
-            if job:
+            if job and job.status not in _TERMINAL_STATUSES:
                 job.generated_images.append({
                     "id": image_id,
                     "index": index,
                     "image_base64": image_base64,
                     "image_url": image_url,
                 })
+                _store.mark_dirty(job)
 
     @classmethod
     async def mark_image_failed(cls, job_id: str, index: int, error: str) -> None:
         """Mark an image generation as failed."""
         async with cls._lock:
             job = cls._jobs.get(job_id)
-            if job:
+            if job and job.status not in _TERMINAL_STATUSES:
                 job.failed_indices.add(index)
+                _store.mark_dirty(job)
 
     @classmethod
     async def set_usage(cls, job_id: str, usage: Dict[str, Any]) -> None:
         """Set usage info on job completion."""
         async with cls._lock:
             job = cls._jobs.get(job_id)
-            if job:
+            if job and job.status not in _TERMINAL_STATUSES:
                 job.usage = usage
+                _store.mark_dirty(job)
 
     @classmethod
     async def set_error(cls, job_id: str, error: str) -> None:
         """Set job error and mark as failed."""
         async with cls._lock:
             job = cls._jobs.get(job_id)
-            if job:
+            if job and job.status not in _TERMINAL_STATUSES:
+                if (
+                    job.persistence_db is not None
+                    and not await _store.transition(
+                        job,
+                        status=PhotoshootJobStatus.FAILED,
+                        error_message=error,
+                    )
+                    and job.status != PhotoshootJobStatus.FAILED
+                ):
+                    return
                 job.error_message = error
                 job.status = PhotoshootJobStatus.FAILED
 
@@ -347,6 +518,11 @@ class PhotoshootJobService:
             job.event_history.append(event)
 
             subscribers = list(job.subscribers)
+
+            # Coalesce the durable write via the dirty flag instead of rewriting
+            # the whole row per event (the row grows with every generated image,
+            # so per-event writes are O(n^2)).
+            _store.mark_dirty(job)
 
         # Same policy as BatchJobService: never block the pipeline, never let a
         # stalled client grow the queue (these events carry base64 images).
@@ -408,7 +584,13 @@ class PhotoshootJobService:
 
     @classmethod
     async def get_job_status(cls, job_id: str) -> Optional[Dict[str, Any]]:
-        """Get current status of a job for reconnection/polling."""
+        """Get current status of a job for reconnection/polling.
+
+        Callers resolve the job first via ``get_job`` (which handles durable
+        recovery); this only reads in-memory state. Durable progress is
+        coalesced on the cleanup tick and terminal transitions, so a status
+        poll never triggers a full-row write.
+        """
         async with cls._lock:
             job = cls._jobs.get(job_id)
             if not job:
@@ -450,6 +632,19 @@ class PhotoshootJobService:
     @classmethod
     async def _cleanup_expired_jobs(cls) -> None:
         """Remove jobs past active/finished TTLs and free base64 early."""
+        async with cls._lock:
+            # Coalesced writes may still be pending; flush them before evicting
+            # so the durable row is never silently dropped with the job.
+            # Snapshot the dirty jobs under the lock and write outside it so a
+            # slow Supabase roundtrip never blocks job-service operations.
+            dirty_jobs = [
+                job
+                for job in cls._jobs.values()
+                if job.persistence_db is not None and job.persistence_dirty
+            ]
+
+        await _store.flush_all(dirty_jobs)
+
         now = utcnow()
         expired_ids = []
         finished = {

@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sse_starlette.sse import EventSourceResponse
 from supabase import Client
 
@@ -33,6 +33,8 @@ from app.services.ai_settings_service import AISettingsService
 from app.services.batch_job_service import BatchJobService, BatchJobStatus
 from app.services.batch_extraction_service import BatchExtractionService
 from app.utils.sse_queue import SSE_QUEUE_MAXSIZE, STREAM_OVERFLOW
+from app.utils.image_processing import make_base64_image_validator, validate_image_bytes
+from app.utils.db import persistence_db as _persistence_db
 
 logger = get_context_logger(__name__)
 
@@ -69,6 +71,35 @@ def _spawn_pipeline(service: BatchExtractionService, job) -> None:
     task.add_done_callback(_pipeline_tasks.discard)
 
 
+async def _release_usage_best_effort(
+    user_id: str,
+    operation_type: Any,
+    db: Any,
+    count: int,
+) -> None:
+    """Compensate one reservation without masking the original admission error.
+
+    Releasing quota is best-effort cleanup on a path that is already failing
+    (a rejected multi-quota admission or a failed job creation). A release
+    RPC failure must not replace the original exception, and it must not
+    skip the sibling reservation's release.
+    """
+    try:
+        await AISettingsService.release_usage(
+            user_id=user_id,
+            operation_type=operation_type,
+            db=db,
+            count=count,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to release AI usage reservation",
+            user_id=user_id,
+            operation_type=getattr(operation_type, "value", operation_type),
+            error=str(exc),
+        )
+
+
 class BatchImageInput(BaseModel):
     """Single image for batch processing."""
     image_id: str = Field(..., description="Client-generated unique ID for tracking")
@@ -76,6 +107,10 @@ class BatchImageInput(BaseModel):
         ...,
         max_length=_MAX_BATCH_IMAGE_B64,
         description="Base64-encoded image data (max ~10MB encoded)",
+    )
+
+    validate_image_content = field_validator("image_base64")(
+        make_base64_image_validator(_MAX_BATCH_IMAGE_BYTES)
     )
     filename: Optional[str] = Field(None, description="Original filename")
 
@@ -110,6 +145,10 @@ class SingleExtractionRequest(BaseModel):
         ...,
         max_length=_MAX_BATCH_IMAGE_B64,
         description="Base64-encoded image (max ~10MB encoded)",
+    )
+
+    validate_image_content = field_validator("image")(
+        make_base64_image_validator(_MAX_BATCH_IMAGE_BYTES)
     )
     auto_generate: bool = Field(
         True,
@@ -155,34 +194,85 @@ async def _check_batch_rate_limits(
     db: Client,
     total_images: int,
     auto_generate: bool,
-) -> None:
-    """Raise RateLimitError if this batch would exceed the user's daily limits."""
-    extraction_check = await AISettingsService.check_rate_limit(
-        user_id=user_id,
-        operation_type=OperationType.EXTRACTION,
-        db=db,
-        count=total_images,
-    )
-    if not extraction_check["allowed"]:
-        raise RateLimitError(
-            f"Daily extraction limit ({extraction_check['limit']}) would be exceeded. "
-            f"You have {extraction_check['remaining']} remaining."
-        )
+) -> Dict[str, int]:
+    """Atomically reserve this batch's daily AI quota before buffering work."""
+    reservations: Dict[str, int] = {"extraction": total_images}
 
-    if auto_generate:
-        estimated_generations = total_images * 3
-        generation_check = await AISettingsService.check_rate_limit(
+    if not auto_generate:
+        extraction_reserved = await AISettingsService.reserve_usage(
+            user_id=user_id,
+            operation_type=OperationType.EXTRACTION,
+            db=db,
+            count=total_images,
+        )
+        if not extraction_reserved:
+            raise RateLimitError(
+                f"Daily extraction limit would be exceeded for {total_images} images."
+            )
+        return reservations
+
+    # Extraction and generation reservations are independent RPCs; run them
+    # concurrently and compensate any reservation that won the race when the
+    # other one fails, so a rejected batch never leaks quota.
+    estimated_generations = total_images * 3
+    extraction_res, generation_res = await asyncio.gather(
+        AISettingsService.reserve_usage(
+            user_id=user_id,
+            operation_type=OperationType.EXTRACTION,
+            db=db,
+            count=total_images,
+        ),
+        AISettingsService.reserve_usage(
             user_id=user_id,
             operation_type=OperationType.GENERATION,
             db=db,
             count=estimated_generations,
-        )
-        if not generation_check["allowed"]:
-            raise RateLimitError(
-                f"Daily generation limit ({generation_check['limit']}) may be exceeded. "
-                f"You have {generation_check['remaining']} remaining. "
-                f"Consider disabling auto_generate."
+        ),
+        return_exceptions=True,
+    )
+
+    extraction_ok = extraction_res is True
+    generation_ok = generation_res is True
+
+    if not extraction_ok or not generation_ok:
+        # Compensation is best-effort and concurrent; a failing release must
+        # not mask the original error or skip the sibling reservation.
+        release_tasks = []
+        if extraction_ok:
+            release_tasks.append(
+                _release_usage_best_effort(
+                    user_id=user_id,
+                    operation_type=OperationType.EXTRACTION,
+                    db=db,
+                    count=total_images,
+                )
             )
+        if generation_ok:
+            release_tasks.append(
+                _release_usage_best_effort(
+                    user_id=user_id,
+                    operation_type=OperationType.GENERATION,
+                    db=db,
+                    count=estimated_generations,
+                )
+            )
+        if release_tasks:
+            await asyncio.gather(*release_tasks)
+        if isinstance(extraction_res, BaseException):
+            raise extraction_res
+        if not extraction_ok:
+            raise RateLimitError(
+                f"Daily extraction limit would be exceeded for {total_images} images."
+            )
+        if isinstance(generation_res, BaseException):
+            raise generation_res
+        raise RateLimitError(
+            f"Daily generation limit would be exceeded for approximately {estimated_generations} images. "
+            "Consider disabling auto_generate."
+        )
+
+    reservations["generation"] = estimated_generations
+    return reservations
 
 
 async def _start_batch_job(
@@ -194,6 +284,11 @@ async def _start_batch_job(
     generation_batch_size: int,
 ) -> BatchJobResponse:
     """Rate-limit, create job, kick off pipeline, return 202 payload."""
+    # Production uses the hosted Supabase client. Keeping the guard here also
+    # preserves direct-call tests and non-HTTP callers that use a sentinel DB
+    # object; those paths remain explicitly in-memory rather than failing
+    # while trying to persist through an invalid client.
+    persistence_db = _persistence_db(db)
     total_images = len(images_data)
     if total_images < 1:
         raise HTTPException(
@@ -206,19 +301,35 @@ async def _start_batch_job(
             detail=f"Maximum {_MAX_BATCH_IMAGES} images per batch",
         )
 
-    await _check_batch_rate_limits(
+    reservations = await _check_batch_rate_limits(
         user_id=user_id,
         db=db,
         total_images=total_images,
         auto_generate=auto_generate,
-    )
+    ) or {}
 
-    job = await BatchJobService.create_job(
-        user_id=user_id,
-        images=images_data,
-        auto_generate=auto_generate,
-        generation_batch_size=generation_batch_size,
-    )
+    try:
+        job = await BatchJobService.create_job(
+            user_id=user_id,
+            images=images_data,
+            auto_generate=auto_generate,
+            generation_batch_size=generation_batch_size,
+            db=persistence_db,
+        )
+    except Exception:
+        # Admission succeeded but job creation did not. Return the reserved
+        # daily capacity before surfacing the failure to the caller.
+        if reservations:
+            await asyncio.gather(*[
+                _release_usage_best_effort(
+                    user_id=user_id,
+                    operation_type=operation_type,
+                    db=db,
+                    count=count,
+                )
+                for operation_type, count in reservations.items()
+            ])
+        raise
 
     service = BatchExtractionService(user_id=user_id, db=db)
     _spawn_pipeline(service, job)
@@ -374,6 +485,13 @@ async def start_batch_extraction_multipart(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Empty file at index {index}",
                 )
+            try:
+                validate_image_bytes(content, max_bytes=_MAX_BATCH_IMAGE_BYTES)
+            except ValueError as error:
+                raise UnsupportedMediaTypeError(
+                    allowed_types=["image/jpeg", "image/png", "image/webp", "image/gif"],
+                    message=f"Invalid image at index {index}: {error}",
+                ) from error
 
             image_id = ids[index] if ids else f"img-{uuid4().hex[:12]}"
             images_data.append(
@@ -410,6 +528,7 @@ async def start_batch_extraction_multipart(
 async def batch_job_events(
     job_id: str,
     user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
 ):
     """
     SSE endpoint for real-time batch job progress.
@@ -433,7 +552,8 @@ async def batch_job_events(
     - job_failed: Pipeline failed
     - job_cancelled: User cancelled job
     """
-    job = await BatchJobService.get_job(job_id, user_id)
+    persistence_db = _persistence_db(db)
+    job = await BatchJobService.get_job(job_id, user_id, db=persistence_db)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -471,6 +591,15 @@ async def batch_job_events(
                     }
                     yield {
                         "event": status_event_map.get(job.status, f"job_{job.status.value}"),
+                        "data": json.dumps(status_data),
+                    }
+                return
+
+            if job.recovered_from_persistence:
+                status_data = await BatchJobService.get_job_status(job_id)
+                if status_data:
+                    yield {
+                        "event": "job_recovered",
                         "data": json.dumps(status_data),
                     }
                 return
@@ -534,13 +663,15 @@ async def batch_job_events(
 async def cancel_batch_job(
     job_id: str,
     user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
 ):
     """
     Cancel a running batch job.
 
     Cancellation is best-effort - currently running operations may complete.
     """
-    success = await BatchJobService.cancel_job(job_id, user_id)
+    persistence_db = _persistence_db(db)
+    success = await BatchJobService.cancel_job(job_id, user_id, db=persistence_db)
     if not success:
         raise HTTPException(
             status_code=404,
@@ -558,20 +689,20 @@ async def cancel_batch_job(
 async def get_batch_job_status(
     job_id: str,
     user_id: str = Depends(get_current_user_id),
+    db: Client = Depends(get_db),
 ):
     """
     Get current status of a batch job.
 
     Useful for reconnection scenarios or checking progress without SSE.
     """
-    status_data = await BatchJobService.get_job_status(job_id)
-
-    if not status_data:
+    persistence_db = _persistence_db(db)
+    job = await BatchJobService.get_job(job_id, user_id, db=persistence_db)
+    if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    # Verify user ownership
-    job = await BatchJobService.get_job(job_id, user_id)
-    if not job:
+    status_data = await BatchJobService.get_job_status(job_id)
+    if not status_data:
         raise HTTPException(status_code=404, detail="Job not found")
 
     return BatchJobStatusResponse(**status_data)
@@ -622,6 +753,7 @@ async def start_single_extraction(
                     images=[image_data],
                     auto_generate=request.auto_generate,
                     generation_batch_size=1,
+                    db=_persistence_db(db),
                 )
 
                 # Hydrate cached items into the in-memory job and mark it complete
@@ -644,19 +776,15 @@ async def start_single_extraction(
                 )
 
         # Cache miss or skip_cache - proceed with normal extraction
-        # Check rate limit
-        from app.services.ai_settings_service import AISettingsService
-
-        extraction_check = await AISettingsService.check_rate_limit(
+        # Reserve admission through the same atomic path as multi-image jobs.
+        # The cache-hit path above does not call a provider and intentionally
+        # does not consume quota.
+        reservations = await _check_batch_rate_limits(
             user_id=user_id,
-            operation_type=OperationType.EXTRACTION,
             db=db,
-            count=1,
+            total_images=1,
+            auto_generate=request.auto_generate,
         )
-        if not extraction_check["allowed"]:
-            raise RateLimitError(
-                f"Daily extraction limit ({extraction_check['limit']}) exceeded"
-            )
 
         # Create single-image batch job (reuse batch infrastructure)
         image_data = {
@@ -665,15 +793,29 @@ async def start_single_extraction(
             "filename": "uploaded_image.jpg",
         }
 
-        job = await BatchJobService.create_job(
-            user_id=user_id,
-            images=[image_data],
-            auto_generate=request.auto_generate,
-            # Generate one photo's items concurrently rather than one-at-a-time.
-            # The process-wide GENERATION_SEMAPHORE (AI_GENERATION_CONCURRENCY,
-            # default 30) is the real ceiling; this only tightens below it.
-            generation_batch_size=settings.AI_GENERATION_CONCURRENCY,
-        )
+        try:
+            job = await BatchJobService.create_job(
+                user_id=user_id,
+                images=[image_data],
+                auto_generate=request.auto_generate,
+                # Generate one photo's items concurrently rather than one-at-a-time.
+                # The process-wide GENERATION_SEMAPHORE (AI_GENERATION_CONCURRENCY,
+                # default 30) is the real ceiling; this only tightens below it.
+                generation_batch_size=settings.AI_GENERATION_CONCURRENCY,
+                db=_persistence_db(db),
+            )
+        except Exception:
+            if reservations:
+                await asyncio.gather(*[
+                    _release_usage_best_effort(
+                        user_id=user_id,
+                        operation_type=operation_type,
+                        db=db,
+                        count=count,
+                    )
+                    for operation_type, count in reservations.items()
+                ])
+            raise
 
         # Start processing in background
         from app.services.batch_extraction_service import BatchExtractionService

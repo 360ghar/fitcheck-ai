@@ -34,6 +34,7 @@ def _async_return(value):
 async def test_webhook_activates_subscription_on_checkout_completed():
     db = Mock()
     event = {
+        "id": "evt_checkout_123",
         "type": "checkout.session.completed",
         "data": {
             "object": {
@@ -51,10 +52,14 @@ async def test_webhook_activates_subscription_on_checkout_completed():
         mock_settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
         mock_stripe.Webhook.construct_event.return_value = event
         mock_service.upgrade_to_pro = _async_noop()
+        db.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value = Mock(
+            data=[{"event_id": event["id"]}]
+        )
 
         result = await stripe_webhook(_fake_request(), db)
 
     assert result == {"received": True}
+    assert db.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.called
 
 
 @pytest.mark.asyncio

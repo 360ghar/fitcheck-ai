@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { ErrorState } from '@/components/ui/error-state'
 import { ChipGroup } from '@/components/ui/chip-group'
 import { useToast } from '@/components/ui/use-toast'
 import { logger } from '@/lib/logger'
@@ -25,6 +26,8 @@ export function PreferencesPanel() {
 
   const [isLoadingPreferences, setIsLoadingPreferences] = useState(false)
   const [isSavingPreferences, setIsSavingPreferences] = useState(false)
+  const [preferencesError, setPreferencesError] = useState<string | null>(null)
+  const [preferencesRetryKey, setPreferencesRetryKey] = useState(0)
   const [preferences, setPreferences] = useState<UserPreferences | null>(null)
   const [favoriteColors, setFavoriteColors] = useState<string[]>([])
   const [preferredStyles, setPreferredStyles] = useState<string[]>([])
@@ -40,6 +43,7 @@ export function PreferencesPanel() {
     // Load preferences once per session.
     // (These are a separate table and may be created lazily by the backend.)
     setIsLoadingPreferences(true)
+    setPreferencesError(null)
 
     // A fast user switch must not land the previous user's data.
     let cancelled = false
@@ -58,6 +62,9 @@ export function PreferencesPanel() {
       })
       .catch((err) => {
         logger.warn('Failed to load preferences:', err)
+        setPreferencesError(
+          err instanceof Error ? err.message : 'Try again to load your style preferences.'
+        )
       })
       .finally(() => {
         if (!cancelled) setIsLoadingPreferences(false)
@@ -70,7 +77,7 @@ export function PreferencesPanel() {
     // every profile save, which would refetch preferences over the values the
     // user just wrote. The cancelled flag above handles the switch case.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id])
+  }, [user?.id, preferencesRetryKey])
 
   const handleSavePreferences = async () => {
     if (!user) return
@@ -103,7 +110,13 @@ export function PreferencesPanel() {
         </p>
       </div>
 
-      {isLoadingPreferences ? (
+      {preferencesError ? (
+        <ErrorState
+          title="Style preferences could not be loaded"
+          description={preferencesError}
+          onRetry={() => setPreferencesRetryKey((key) => key + 1)}
+        />
+      ) : isLoadingPreferences ? (
         <div className="p-4 bg-muted rounded-md text-center text-muted-foreground">Loading…</div>
       ) : (
         <div className="space-y-5">

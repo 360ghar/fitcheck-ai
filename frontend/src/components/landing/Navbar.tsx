@@ -52,10 +52,11 @@ export default function Navbar() {
 
   return (
     <nav
+      aria-label="Public navigation"
       className={cn(
         'fixed top-0 left-0 right-0 z-50 transition-[background-color,border-color] duration-300',
         isScrolled
-          ? 'bg-stone-50/90 dark:bg-stone-950/90 backdrop-blur-md border-b border-stone-200/70 dark:border-stone-800/70'
+          ? 'bg-background/90 backdrop-blur-md border-b border-border'
           : 'bg-transparent'
       )}
     >
@@ -63,7 +64,7 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center gap-2.5 shrink-0">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Shirt className="w-4 h-4 text-white" />
+              <Shirt className="w-4 h-4 text-primary-foreground" aria-hidden="true" />
             </div>
             <span className="text-[17px] font-semibold tracking-tight text-stone-900 dark:text-stone-50">
               FitCheck<span className="font-normal text-stone-500 dark:text-stone-400"> AI</span>
@@ -96,7 +97,7 @@ export default function Navbar() {
           <div className="hidden lg:flex items-center gap-3">
             <ThemeToggle />
             {isAuthenticated ? (
-              <Button asChild className="bg-primary hover:bg-primary-pressed text-white">
+              <Button asChild className="bg-primary hover:bg-primary-pressed text-primary-foreground">
                 <Link to="/dashboard">Dashboard</Link>
               </Button>
             ) : (
@@ -104,7 +105,7 @@ export default function Navbar() {
                 <Button variant="ghost" asChild className="text-stone-700 dark:text-stone-300">
                   <Link to="/auth/login">Log in</Link>
                 </Button>
-                <Button asChild className="bg-primary hover:bg-primary-pressed text-white">
+                <Button asChild className="bg-primary hover:bg-primary-pressed text-primary-foreground">
                   <Link to="/auth/register">Start free</Link>
                 </Button>
               </>
@@ -117,7 +118,7 @@ export default function Navbar() {
                 <Menu className="w-5 h-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[300px] sm:w-[360px] bg-stone-50 dark:bg-stone-950">
+            <SheetContent side="right" className="w-[300px] bg-background sm:w-[360px]">
               <SheetTitle className="sr-only">Navigation menu</SheetTitle>
               <div className="flex flex-col gap-5 mt-6">
                 {navLinks.map((link) =>
@@ -147,7 +148,7 @@ export default function Navbar() {
                 </div>
                 <hr className="border-stone-200 dark:border-stone-800" />
                 {isAuthenticated ? (
-                  <Button asChild className="w-full bg-primary hover:bg-primary-pressed text-white">
+                  <Button asChild className="w-full bg-primary hover:bg-primary-pressed text-primary-foreground">
                     <Link to="/dashboard">Dashboard</Link>
                   </Button>
                 ) : (
@@ -155,7 +156,7 @@ export default function Navbar() {
                     <Button variant="outline" asChild className="w-full border-stone-300 dark:border-stone-700">
                       <Link to="/auth/login">Log in</Link>
                     </Button>
-                    <Button asChild className="w-full bg-primary hover:bg-primary-pressed text-white">
+                    <Button asChild className="w-full bg-primary hover:bg-primary-pressed text-primary-foreground">
                       <Link to="/auth/register">Start free</Link>
                     </Button>
                   </>

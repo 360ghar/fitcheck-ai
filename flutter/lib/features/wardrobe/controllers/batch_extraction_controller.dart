@@ -38,14 +38,13 @@ class BatchExtractionController extends GetxController {
   final SocialImportRepository _socialRepo = SocialImportRepository();
   final ImagePicker _imagePicker = ImagePicker();
   final AppLinks _appLinks = AppLinks();
-  PersistenceService get _persistence =>
-      Get.isRegistered<PersistenceService>()
-          ? Get.find<PersistenceService>()
-          : PersistenceService();
+  PersistenceService get _persistence => Get.isRegistered<PersistenceService>()
+      ? Get.find<PersistenceService>()
+      : PersistenceService();
   WardrobeSyncService get _wardrobeSync =>
       Get.isRegistered<WardrobeSyncService>()
-          ? Get.find<WardrobeSyncService>()
-          : WardrobeSyncService();
+      ? Get.find<WardrobeSyncService>()
+      : WardrobeSyncService();
 
   /// [batchRepository] is injectable so unit tests can drive the fallback
   /// polling loop without hitting the real API. Defaults to a live repository.
@@ -136,6 +135,7 @@ class BatchExtractionController extends GetxController {
   bool get isExtracting => jobStatus.value == BatchJobStatus.extracting;
   bool get isGenerating => jobStatus.value == BatchJobStatus.generating;
   bool get isComplete => jobStatus.value == BatchJobStatus.complete;
+
   /// One-shot guard so progress UI doesn't schedule navigation on every rebuild
   bool hasNavigatedToReview = false;
   bool get isFailed => jobStatus.value == BatchJobStatus.failed;
@@ -439,7 +439,10 @@ class BatchExtractionController extends GetxController {
         throw Exception('Unable to open social login. Please try again.');
       }
 
-      ErrorHandler.showInfo('Complete login in your browser, then return to FitCheck.', title: 'Connect social account');
+      ErrorHandler.showInfo(
+        'Complete login in your browser, then return to FitCheck.',
+        title: 'Connect social account',
+      );
     } catch (e) {
       socialError.value = 'Failed to connect social account: $e';
     } finally {
@@ -711,7 +714,9 @@ class BatchExtractionController extends GetxController {
         } catch (e) {
           lastError = e;
           if (kDebugMode) {
-            print('Social import status poll error (attempt ${attempt + 1}): $e');
+            print(
+              'Social import status poll error (attempt ${attempt + 1}): $e',
+            );
           }
         }
         await Future.delayed(const Duration(seconds: 2));
@@ -791,8 +796,8 @@ class BatchExtractionController extends GetxController {
 
   Future<void> _restoreSocialImportState() async {
     try {
-      final persistedJobId = (await _persistence.getString(_socialPersistedJobIdKey) ?? '')
-          .trim();
+      final persistedJobId =
+          (await _persistence.getString(_socialPersistedJobIdKey) ?? '').trim();
       if (persistedJobId.isEmpty || socialJobId.value.isNotEmpty) {
         return;
       }
@@ -923,6 +928,9 @@ class BatchExtractionController extends GetxController {
   }
 
   /// Subscribe to SSE events for the job
+  @visibleForTesting
+  void subscribeToEventsForTesting(String id) => _subscribeToEvents(id);
+
   void _subscribeToEvents(String id) {
     _sseSubscription?.cancel();
     _sseSubscription = _batchRepo
@@ -939,6 +947,16 @@ class BatchExtractionController extends GetxController {
           onDone: () {
             if (kDebugMode) {
               print('SSE stream completed');
+            }
+            // A clean close is not necessarily a terminal job event (common
+            // with proxy/request timeouts). Reconcile the server state just as
+            // we do for an error, while respecting the single-flight guard.
+            if (!_isClosed &&
+                id == jobId.value &&
+                !isComplete &&
+                !isFailed &&
+                !isCancelled) {
+              pollJobStatus(id);
             }
           },
         );

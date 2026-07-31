@@ -9,6 +9,11 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from app.core.config import settings
+from app.utils.image_processing import make_base64_image_validator
+
+_MAX_INLINE_IMAGE_BYTES = 7 * 1024 * 1024
+
+_validate_inline_image = make_base64_image_validator(_MAX_INLINE_IMAGE_BYTES)
 
 
 # =============================================================================
@@ -60,6 +65,8 @@ class ExtractItemsRequest(BaseModel):
     """Request to extract items from an image."""
     image: str = Field(..., description="Base64-encoded image data")
 
+    _validate_image = field_validator("image")(_validate_inline_image)
+
 
 class ExtractItemsResponse(BaseModel):
     """Response from item extraction."""
@@ -77,6 +84,8 @@ class ExtractSingleItemRequest(BaseModel):
     """Request to extract a single item from an image."""
     image: str = Field(..., description="Base64-encoded image data")
     category_hint: Optional[str] = None
+
+    _validate_image = field_validator("image")(_validate_inline_image)
 
 
 class ExtractSingleItemResponse(BaseModel):
@@ -180,7 +189,13 @@ class GenerateProductImageRequest(BaseModel):
     view_angle: str = "front"
     include_shadows: bool = False
     save_to_storage: bool = False
-    reference_image: Optional[str] = None  # Base64 of source photo
+    reference_image: Optional[str] = Field(
+        None,
+        max_length=10_000_000,
+        description="Optional base64 source photo",
+    )
+
+    _validate_reference_image = field_validator("reference_image")(_validate_inline_image)
 
 
 class GenerateProductImageResponse(BaseModel):
@@ -315,13 +330,19 @@ class RateLimitCheckResponse(BaseModel):
 
 class TryOnRequest(BaseModel):
     """Request for virtual try-on generation."""
-    clothing_image: str = Field(..., description="Base64-encoded clothing image")
+    clothing_image: str = Field(
+        ...,
+        max_length=10_000_000,
+        description="Base64-encoded clothing image",
+    )
     clothing_description: Optional[str] = Field(None, description="Optional description to improve accuracy")
     style: str = "casual"
     background: str = "studio white"
     pose: str = "standing front"
     lighting: str = "professional studio lighting"
     save_to_storage: bool = False
+
+    _validate_image = field_validator("clothing_image")(_validate_inline_image)
 
 
 class TryOnResponse(BaseModel):

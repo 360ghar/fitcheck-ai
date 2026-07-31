@@ -190,6 +190,16 @@
     outline-offset: 2px;
     box-shadow: 0 0 0 2px hsl(var(--focus-inner));
   }
+
+  .skip-link {
+    @apply fixed left-4 top-4 z-[200] rounded-md bg-primary px-4 py-3 font-semibold text-primary-foreground shadow-lg;
+    transform: translateY(-150%);
+    transition: transform 160ms ease-out;
+  }
+
+  .skip-link:focus-visible {
+    transform: translateY(0);
+  }
 }
 
 /* Custom utilities */
@@ -332,10 +342,18 @@
     *,
     *::before,
     *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
+      animation: none !important;
+      transition: none !important;
       scroll-behavior: auto !important;
+    }
+
+    /* A reduced-motion user still needs to see live job/error state. */
+    [role='status'],
+    [role='alert'],
+    [aria-live='polite'],
+    [aria-live='assertive'] {
+      opacity: 1 !important;
+      visibility: visible !important;
     }
   }
 }

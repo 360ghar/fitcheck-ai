@@ -14,7 +14,7 @@ import {
   setTokens,
 } from '@/lib/auth';
 import { logger } from '@/lib/logger';
-import { isApiError, type ApiError } from '@/lib/errors';
+import { RATE_LIMIT_EXCEEDED, isApiError, isRateLimitExhausted, type ApiError } from '@/lib/errors';
 import { ENDPOINTS, LONG_RUNNING_PREFIXES } from '@/lib/endpoints';
 import { useUpgradePromptStore } from '@/stores/upgradePromptStore';
 
@@ -237,7 +237,12 @@ apiClient.interceptors.response.use(
 
     const status = error.response?.status;
     const isNetworkError = !error.response && !!error.request;
-    const isRetryable = isNetworkError || (status !== undefined && RETRYABLE_STATUS_CODES.has(status));
+    // A deterministic quota-exhausted response (the user's OWN plan limit,
+    // raised pre-flight by the backend) cannot clear within seconds, so
+    // retrying it only multiplies duplicate requests and delays the upgrade
+    // prompt in the interceptor below. 429s from upstream capacity issues
+    // (error_kind: upstream_quota / transient) are still retried.
+    const isRetryable = !isRateLimitExhausted(error) && (isNetworkError || (status !== undefined && RETRYABLE_STATUS_CODES.has(status)));
 
     if (!isRetryable) {
       return Promise.reject(error);
@@ -325,7 +330,7 @@ apiClient.interceptors.response.use(
     // the one place we show an upgrade prompt. Upstream AI capacity issues
     // (errorKind) are "on us" and handled as a friendly retry below — never an
     // upgrade.
-    if (!originalRequest._skipToast && apiError.code === 'RATE_LIMIT_EXCEEDED') {
+    if (!originalRequest._skipToast && apiError.code === RATE_LIMIT_EXCEEDED) {
       useUpgradePromptStore.getState().open('rate_limit', apiError.message);
       return Promise.reject(error);
     }

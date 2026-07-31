@@ -55,6 +55,7 @@ export function ScrollableTabs({
         ref={scrollRef}
         role="tablist"
         aria-label={ariaLabel}
+        aria-orientation="horizontal"
         className="overflow-x-auto scrollbar-hide scroll-snap-x px-4 md:px-0 touch-pan-x overscroll-x-contain"
       >
         <div className="flex gap-1 w-max">{children}</div>
@@ -63,7 +64,7 @@ export function ScrollableTabs({
       {/* Left fade indicator */}
       {showFade && canScrollLeft && (
         <div
-          className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background to-transparent pointer-events-none"
+          className="pointer-events-none absolute bottom-0 left-0 top-0 w-8 bg-background/90"
           aria-hidden="true"
         />
       )}
@@ -71,7 +72,7 @@ export function ScrollableTabs({
       {/* Right fade indicator */}
       {showFade && canScrollRight && (
         <div
-          className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent pointer-events-none"
+          className="pointer-events-none absolute bottom-0 right-0 top-0 w-8 bg-background/90"
           aria-hidden="true"
         />
       )}
@@ -88,13 +89,39 @@ export function ScrollableTab({
   isActive,
   children,
   className,
+  onKeyDown,
   ...props
 }: ScrollableTabProps) {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    onKeyDown?.(event)
+    if (event.defaultPrevented) return
+
+    const direction = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+    const tablist = event.currentTarget.closest('[role="tablist"]')
+    if (!tablist || direction === 0 && event.key !== 'Home' && event.key !== 'End') return
+
+    const tabs = Array.from(
+      tablist.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)')
+    )
+    const currentIndex = tabs.indexOf(event.currentTarget)
+    if (currentIndex < 0 || tabs.length === 0) return
+
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? tabs.length - 1
+        : (currentIndex + direction + tabs.length) % tabs.length
+
+    event.preventDefault()
+    tabs[nextIndex]?.focus()
+    tabs[nextIndex]?.click()
+  }
+
   return (
     <button
       type="button"
       role="tab"
-      aria-selected={isActive}
+      aria-selected={Boolean(isActive)}
       tabIndex={isActive ? 0 : -1}
       className={cn(
         // Base styles
@@ -111,6 +138,7 @@ export function ScrollableTab({
           : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted',
         className
       )}
+      onKeyDown={handleKeyDown}
       {...props}
     >
       {children}

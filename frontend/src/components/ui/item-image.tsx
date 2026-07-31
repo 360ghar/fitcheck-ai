@@ -34,6 +34,12 @@ const ICON_SIZES = {
   lg: 'h-10 w-10',
 }
 
+const IMAGE_DIMENSIONS = {
+  sm: { width: 40, height: 40 },
+  md: { width: 64, height: 64 },
+  lg: { width: 96, height: 96 },
+} as const
+
 /**
  * Get the best available image URL for an item.
  * Accepts wardrobe-normalized `images[]`, raw Supabase `item_images[]`, or flat `image_url`.
@@ -108,6 +114,7 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
   const imageUrl = getImageUrl(item, !enableZoom && size === 'sm')
   const sizeClass = SIZE_CLASSES[size]
   const iconSize = ICON_SIZES[size]
+  const dimensions = IMAGE_DIMENSIONS[size]
   const CategoryIcon = getCategoryIcon()
 
   // Settle the skeleton from the element's OWN state, not only from `onLoad`.
@@ -214,6 +221,8 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
         <ZoomableImage
           src={imageUrl}
           alt={item.name}
+          width={dimensions.width}
+          height={dimensions.height}
           className="h-full w-full object-contain"
           onLoad={() => setIsLoading(false)}
           onError={() => {
@@ -234,6 +243,8 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
       <img
         src={imageUrl}
         alt={item.name}
+        width={dimensions.width}
+        height={dimensions.height}
         className="h-full w-full object-contain"
         loading="lazy"
         decoding="async"
@@ -261,6 +272,7 @@ export function ItemImageSimple({
   const imageUrl = getImageUrl(item, size === 'sm')
   const sizeClass = SIZE_CLASSES[size]
   const iconSize = ICON_SIZES[size]
+  const dimensions = IMAGE_DIMENSIONS[size]
   const CategoryIcon = getCategoryIcon()
 
   // Clear a stale error when the item (and so the source) changes. No loading
@@ -289,6 +301,8 @@ export function ItemImageSimple({
     <img
       src={imageUrl}
       alt={item.name}
+      width={dimensions.width}
+      height={dimensions.height}
       className={cn(sizeClass, 'rounded-lg bg-card object-contain', className)}
       loading="lazy"
       decoding="async"

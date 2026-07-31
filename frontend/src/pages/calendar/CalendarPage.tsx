@@ -41,6 +41,13 @@ function toDateTimeLocalValue(date: Date): string {
   return `${y}-${m}-${d}T${hh}:${mm}`
 }
 
+export function isValidCalendarRange(start: string, end: string): boolean {
+  if (!start || !end) return false
+  const startTime = new Date(start).getTime()
+  const endTime = new Date(end).getTime()
+  return Number.isFinite(startTime) && Number.isFinite(endTime) && endTime > startTime
+}
+
 export default function CalendarPage() {
   const { toast } = useToast()
 
@@ -251,6 +258,14 @@ export default function CalendarPage() {
       toast({ title: 'Start and end time are required', variant: 'destructive' })
       return
     }
+    if (!isValidCalendarRange(createStart, createEnd)) {
+      toast({
+        title: 'End time must be after start time',
+        description: 'Choose a later end time for this event.',
+        variant: 'destructive',
+      })
+      return
+    }
 
     setIsCreating(true)
     try {
@@ -436,7 +451,7 @@ export default function CalendarPage() {
         <CardHeader className="flex-row items-center justify-between space-y-0 px-4 py-3 md:px-6 md:py-4">
           <CardTitle className="text-base md:text-lg">Events</CardTitle>
           {isLoadingEvents && (
-            <div className="text-sm text-muted-foreground flex items-center gap-2">
+            <div className="text-sm text-muted-foreground flex items-center gap-2" role="status" aria-live="polite">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span className="hidden md:inline">Loading…</span>
             </div>

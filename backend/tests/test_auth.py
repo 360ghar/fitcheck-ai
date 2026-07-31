@@ -22,7 +22,13 @@ from app.core.security import reset_jwks_client, verify_password_strength, verif
 
 
 def _make_token(sub="user-1", aud="authenticated", exp_delta_seconds=3600, **extra_claims):
-    payload = {"sub": sub, "aud": aud, "exp": int(time.time()) + exp_delta_seconds, **extra_claims}
+    payload = {
+        "sub": sub,
+        "aud": aud,
+        "iss": f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1",
+        "exp": int(time.time()) + exp_delta_seconds,
+        **extra_claims,
+    }
     return jwt.encode(payload, settings.SUPABASE_JWT_SECRET, algorithm="HS256")
 
 
@@ -48,6 +54,7 @@ def _make_es256_token(
     payload = {
         "sub": sub,
         "aud": aud,
+        "iss": f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1",
         "exp": int(time.time()) + exp_delta_seconds,
         **extra_claims,
     }
@@ -98,6 +105,16 @@ async def test_verify_token_rejects_wrong_audience():
 
     with pytest.raises(HTTPException) as exc_info:
         await verify_token(_credentials(wrong_aud))
+    assert exc_info.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_verify_token_rejects_wrong_issuer():
+    wrong_issuer = _make_token(iss="https://attacker.example.com/auth/v1")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await verify_token(_credentials(wrong_issuer))
+
     assert exc_info.value.status_code == 401
 
 

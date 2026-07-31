@@ -150,11 +150,16 @@ def _append_audit(path: Path, record: dict[str, Any]) -> None:
 
 
 def _fetch_subscriptions(db: Any, user_ids: list[str]) -> dict[str, dict[str, Any]]:
-    """Return {user_id: subscription_row} for the given user_ids (paged)."""
+    """Return {user_id: subscription_row} for the given user_ids (paged).
+
+    Chunked at 200 ids per `.in_()`: keeps the querystring well under
+    PostgREST's URL length ceiling (see _ID_CHUNK in
+    backfill_transparent_backgrounds.py); 500 UUIDs would be ~18.5KB.
+    """
     out: dict[str, dict[str, Any]] = {}
-    page = 500
-    for i in range(0, len(user_ids), page):
-        chunk = user_ids[i : i + page]
+    chunk_size = 200
+    for i in range(0, len(user_ids), chunk_size):
+        chunk = user_ids[i : i + chunk_size]
         res = db.table("subscriptions").select("user_id,plan_type,status,stripe_subscription_id").in_(
             "user_id", chunk
         ).execute()
@@ -186,9 +191,57 @@ def _page_users(db: Any, page_size: int):
 # --------------------------------------------------------------------------- #
 # email
 # --------------------------------------------------------------------------- #
-def _render_email(full_name: str | None, trial_end: str) -> tuple[str, str]:
+def _render_email(full_name: str | None, trial_end: str, *, for_paid: bool = False) -> tuple[str, str]:
+    """Render the campaign email.
+
+    ``for_paid=True`` for users who are ALREADY paying: they were never
+    granted a trial, so the free-trial claims ("Pro free for the next month",
+    "returns to the free plan automatically") would be factually false for
+    them. They get a plan-neutral thank-you instead.
+    """
     first = (full_name or "").strip().split(" ", 1)[0]
     greeting = f"Hi {first}," if first else "Hi there,"
+    if for_paid:
+        html = f"""<!DOCTYPE html>
+<html>
+  <body style="margin:0;padding:0;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111827;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:32px 0;">
+      <tr><td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+          <tr><td style="padding:32px 40px 8px 40px;">
+            <h1 style="margin:0 0 8px 0;font-size:22px;font-weight:600;">Thank you for being an early user.</h1>
+          </td></tr>
+          <tr><td style="padding:0 40px 24px 40px;">
+            <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;">{greeting}</p>
+            <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;">
+              As one of our earliest users, your support means everything to us.
+              This is just a note to say thank you.
+            </p>
+            <p style="margin:0 0 8px 0;font-size:15px;line-height:1.6;">
+              No action is needed on your account — your FitCheck subscription
+              continues exactly as it is.
+            </p>
+          </td></tr>
+          <tr><td style="padding:16px 40px 32px 40px;border-top:1px solid #f0f0f0;">
+            <p style="margin:0;font-size:12px;line-height:1.5;color:#9ca3af;">
+              The FitCheck AI team &middot; <a href="https://www.fitcheckaiapp.com" style="color:#9ca3af;text-decoration:underline;">fitcheckaiapp.com</a>
+            </p>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>"""
+        text = (
+            f"{greeting}\n\n"
+            "As one of our earliest users, your support means everything to us. "
+            "This is just a note to say thank you.\n\n"
+            "No action is needed on your account - your FitCheck subscription "
+            "continues exactly as it is.\n\n"
+            "-- The FitCheck AI team\nhttps://www.fitcheckaiapp.com\n"
+        )
+        return html, text
+
     html = f"""<!DOCTYPE html>
 <html>
   <body style="margin:0;padding:0;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111827;">
@@ -514,14 +567,21 @@ def main() -> int:
         for e in skipped_bogus:
             print(f"    - {e}")
 
-    subject = "You've got Pro, on us. Thanks for being an early FitCheck user."
+    # Paid users were never granted a trial, so they get a plan-neutral
+    # thank-you (see _render_email for_paid) with its own subject — the
+    # "You've got Pro, on us" free-trial claims are false for them.
+    email_only_ids = {u["id"] for u in email_only}
+    subject_granted = "You've got Pro, on us. Thanks for being an early FitCheck user."
+    subject_paid = "Thanks for being an early FitCheck user."
     sent = 0
     email_failed = 0
 
     if email_transport == "smtp":
         # SMTP: one connection per recipient (simple, robust to mid-run drops).
         for u in to_email:
-            html, text = _render_email(u.get("full_name"), trial_end_pretty)
+            is_paid = u["id"] in email_only_ids
+            subject = subject_paid if is_paid else subject_granted
+            html, text = _render_email(u.get("full_name"), trial_end_pretty, for_paid=is_paid)
             ok, detail = _send_email_smtp(
                 smtp_host, smtp_port, smtp_username, smtp_password,
                 smtp_from, u["email"], smtp_reply_to, subject, html, text,
@@ -546,7 +606,9 @@ def main() -> int:
         # Resend over httpx. Credentials were validated before grant writes.
         with httpx.Client() as client:
             for u in to_email:
-                html, text = _render_email(u.get("full_name"), trial_end_pretty)
+                is_paid = u["id"] in email_only_ids
+                subject = subject_paid if is_paid else subject_granted
+                html, text = _render_email(u.get("full_name"), trial_end_pretty, for_paid=is_paid)
                 ok, detail = _send_email(
                     client, resend_key, from_email, u["email"], subject, html, text
                 )

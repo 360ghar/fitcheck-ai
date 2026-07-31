@@ -8,18 +8,22 @@ It supports pagination semantics (offset cursor) and auth-required signalling.
 from __future__ import annotations
 
 import base64
+import asyncio
+import ipaddress
 import json
 import logging
 import re
+import socket
 import time
 from dataclasses import dataclass
 from html import unescape
 from typing import Dict, List, Optional
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, urlencode, urljoin, urlparse
 
 import httpx
 
 from app.core.config import settings
+from app.core.exceptions import SocialImportError
 from app.models.social_import import DiscoverPhotosResult, ScrapedPhotoRef, SocialPlatform
 
 
@@ -62,6 +66,40 @@ class SocialScraperService:
     _INSTAGRAM_LOGIN_URL = "https://www.instagram.com/accounts/login/"
     _INSTAGRAM_LOGIN_AJAX = "https://www.instagram.com/api/v1/web/accounts/login/ajax/"
     _INSTAGRAM_APP_ID = "936619743392459"
+    _MAX_IMPORTED_IMAGE_BYTES = 10 * 1024 * 1024
+    _MAX_IMAGE_REDIRECTS = 3
+
+    @classmethod
+    async def _validate_remote_image_url(cls, image_url: str) -> str:
+        """Reject non-HTTP URLs and hosts that resolve to private addresses."""
+        parsed = urlparse(image_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise SocialImportError("Imported image URL must use HTTP or HTTPS")
+        if parsed.username or parsed.password:
+            raise SocialImportError("Imported image URL cannot contain credentials")
+
+        try:
+            addresses = await asyncio.to_thread(
+                socket.getaddrinfo,
+                parsed.hostname,
+                parsed.port or (443 if parsed.scheme == "https" else 80),
+                type=socket.SOCK_STREAM,
+            )
+        except (OSError, ValueError) as exc:
+            raise SocialImportError("Imported image host could not be resolved") from exc
+
+        for address in addresses:
+            ip = ipaddress.ip_address(address[4][0])
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_reserved
+                or ip.is_multicast
+                or ip.is_unspecified
+            ):
+                raise SocialImportError("Imported image host is private or blocked")
+        return image_url
 
     @classmethod
     async def _instagram_login(
@@ -1198,16 +1236,38 @@ class SocialScraperService:
 
     @staticmethod
     async def fetch_photo_as_base64(photo_url: str) -> str:
-        """Download a photo URL and return base64 content without data URL prefix."""
-        import base64
+        """Download an imported image with SSRF, redirect, and size guards."""
+        encoded_url = quote(photo_url, safe=":/?&=#%") if " " in photo_url else photo_url
+        current_url = encoded_url
+        await SocialScraperService._validate_remote_image_url(current_url)
 
-        encoded_url = photo_url
-        if " " in photo_url:
-            encoded_url = quote(photo_url, safe=":/?&=#%")
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+            for redirect_count in range(SocialScraperService._MAX_IMAGE_REDIRECTS + 1):
+                async with client.stream("GET", current_url) as response:
+                    if response.status_code in {301, 302, 303, 307, 308}:
+                        location = response.headers.get("location")
+                        if not location or redirect_count >= SocialScraperService._MAX_IMAGE_REDIRECTS:
+                            raise SocialImportError("Imported image redirect chain is invalid or too long")
+                        current_url = urljoin(current_url, location)
+                        await SocialScraperService._validate_remote_image_url(current_url)
+                        continue
 
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            response = await client.get(encoded_url)
-            response.raise_for_status()
-            content = response.content
+                    response.raise_for_status()
+                    content_type = (response.headers.get("content-type") or "").split(";", 1)[0].lower()
+                    if content_type and not content_type.startswith("image/"):
+                        raise SocialImportError("Imported URL did not return an image")
 
-        return base64.b64encode(content).decode("utf-8")
+                    content_length = response.headers.get("content-length")
+                    if content_length and int(content_length) > SocialScraperService._MAX_IMPORTED_IMAGE_BYTES:
+                        raise SocialImportError("Imported image exceeds the maximum size")
+
+                    content = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        if len(content) + len(chunk) > SocialScraperService._MAX_IMPORTED_IMAGE_BYTES:
+                            raise SocialImportError("Imported image exceeds the maximum size")
+                        content.extend(chunk)
+                    if not content:
+                        raise SocialImportError("Imported image is empty")
+                    return base64.b64encode(bytes(content)).decode("utf-8")
+
+        raise SocialImportError("Imported image redirect chain is invalid")

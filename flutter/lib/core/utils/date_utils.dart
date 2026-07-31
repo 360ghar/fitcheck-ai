@@ -23,19 +23,22 @@ class AppDateUtils {
   static String formatRelativeTime(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date);
+    // Future timestamps (e.g. a user-entered future purchase date) must not
+    // render as '-1 days ago' — clamp to zero.
+    final days = difference.inDays < 0 ? 0 : difference.inDays;
 
-    if (difference.inDays == 0) return 'Today';
-    if (difference.inDays == 1) return 'Yesterday';
-    if (difference.inDays < 7) return '${difference.inDays} days ago';
-    if (difference.inDays < 30) {
-      final weeks = (difference.inDays / 7).floor();
+    if (days == 0) return 'Today';
+    if (days == 1) return 'Yesterday';
+    if (days < 7) return '$days days ago';
+    if (days < 30) {
+      final weeks = (days / 7).floor();
       return '$weeks weeks ago';
     }
-    if (difference.inDays < 365) {
-      final months = (difference.inDays / 30).floor();
+    if (days < 365) {
+      final months = (days / 30).floor();
       return '$months months ago';
     }
-    final years = (difference.inDays / 365).floor();
+    final years = (days / 365).floor();
     return '$years years ago';
   }
 

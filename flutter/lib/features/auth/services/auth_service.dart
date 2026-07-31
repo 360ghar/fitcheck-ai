@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/services/analytics_service.dart';
+import '../../../core/exceptions/app_exceptions.dart' as app_exceptions;
 import '../models/user_model.dart';
 import '../repositories/auth_repository.dart';
 
@@ -14,6 +15,10 @@ import '../repositories/auth_repository.dart';
 class AuthService extends GetxService {
   final SupabaseService _supabase = SupabaseService.instance;
   final AuthRepository _authRepository = AuthRepository();
+  final Future<bool> Function()? _googleSignInLauncher;
+
+  AuthService({Future<bool> Function()? googleSignInLauncher})
+    : _googleSignInLauncher = googleSignInLauncher;
 
   /// Login with email and password using Supabase.
   /// Returns the [AuthResponse] on success, or throws on failure.
@@ -51,7 +56,14 @@ class AuthService extends GetxService {
 
   /// Sign in with Google OAuth.
   Future<void> signInWithGoogle() async {
-    await _supabase.signInWithGoogle();
+    final started =
+        await (_googleSignInLauncher ?? _supabase.signInWithGoogle)();
+    if (!started) {
+      throw const app_exceptions.AuthException(
+        message: 'Unable to start Google Sign-In. Please try again.',
+        errorCode: 'GOOGLE_SIGN_IN_START_FAILED',
+      );
+    }
   }
 
   /// Sign in with Apple (native flow). Returns the [AuthResponse].
@@ -137,29 +149,32 @@ class AuthService extends GetxService {
 
     return current.copyWith(
       fullName: toNullableString(backendUser['full_name']) ?? current.fullName,
-      avatarUrl: toNullableString(backendUser['avatar_url']) ?? current.avatarUrl,
+      avatarUrl:
+          toNullableString(backendUser['avatar_url']) ?? current.avatarUrl,
       birthDate: toNullableString(backendUser['birth_date']),
       birthTime: toNullableString(backendUser['birth_time']),
       birthPlace: toNullableString(backendUser['birth_place']),
-      createdAt: DateTime.tryParse(backendUser['created_at']?.toString() ?? '') ??
+      createdAt:
+          DateTime.tryParse(backendUser['created_at']?.toString() ?? '') ??
           current.createdAt,
-      updatedAt: DateTime.tryParse(backendUser['updated_at']?.toString() ?? '') ??
+      updatedAt:
+          DateTime.tryParse(backendUser['updated_at']?.toString() ?? '') ??
           current.updatedAt,
     );
   }
 
   /// Track authentication events.
   void trackLogin(String method) {
-    AnalyticsService.instance.track('auth_login', properties: {'method': method});
+    AnalyticsService.instance.track(
+      'auth_login',
+      properties: {'method': method},
+    );
   }
 
   void trackRegister({required bool hasReferral}) {
     AnalyticsService.instance.track(
       'auth_register',
-      properties: {
-        'method': 'email',
-        'has_referral': hasReferral,
-      },
+      properties: {'method': 'email', 'has_referral': hasReferral},
     );
   }
 

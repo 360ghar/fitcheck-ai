@@ -1,7 +1,12 @@
 # Reliability
 
 Status: draft  
-Last updated: 2026-07-25
+Last updated: 2026-07-31
+
+The [user-story ledger](./product-specs/user-story-ledger.md) is the source of
+truth for verification status. Current tests are primarily unit/service/widget
+tests; they do not prove hosted Supabase, proxy buffering, external-provider,
+Stripe, browser-E2E, mobile integration, or production-load behavior.
 
 ## Health and readiness
 
@@ -52,6 +57,27 @@ Last updated: 2026-07-25
 | Backend (FastAPI) | — | **Not integrated.** `sentry-sdk` is not in `requirements.txt`. Structured logging with correlation IDs provides request tracing, but there is no centralized error tracking/alerting. |
 | Frontend (React) | `@sentry/react` | **Integrated 2026-07-25.** Initializes only when `VITE_SENTRY_DSN` is set. `ErrorBoundary.componentDidCatch` reports to Sentry. Add the DSN to the deployment environment to activate. |
 | Flutter (mobile) | `sentry_flutter ^9.0.0` | **Fully integrated.** Initializes from `EnvConfig.sentryDsn`; wraps `runApp` in `SentryFlutter.init` with `runZonedGuarded` for uncaught async errors. |
+
+## Verification boundaries and residual debt
+
+- The bounded repository harness is `./scripts/check_all.sh`; it runs the
+  architecture, docs, theme, backend lint/tests, web lint/tests, and Flutter
+  analyze/tests checks when their existing toolchains are available. It never
+  starts Docker or local Supabase. The web build is opt-in because its prebuild
+  writes tracked `frontend/public/sitemap.xml`.
+- Batch extraction and asynchronous photoshoot jobs persist ownership-scoped
+  metadata, progress, and final storage URLs in hosted Supabase. A process
+  restart does not resume an active provider call; clients receive a durable
+  `job_recovered` snapshot for polling and retry UX. Social-import workers
+  remain process-local, and synchronous photoshoot generation plus advisory
+  cancellation remain known contract gaps (TD-009/TD-018/TD-019).
+- Provider garment-reference count remains unverified and the current backend
+  caps resolved references at 12 (TD-033); SSE terminal names and status enums
+  still differ between streams (TD-020/TD-021).
+- The Flutter dashboard now isolates optional streak loading from the main
+  dashboard request (TD-034 resolved). The local SDK cache may still be
+  unwritable in the default sandbox; verification with a writable SDK cache
+  passed, while CI remains the reproducible release boundary.
 
 ## Observability (agent legibility)
 

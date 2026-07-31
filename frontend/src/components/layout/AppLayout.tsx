@@ -24,7 +24,11 @@ function AppLayoutContent() {
   const { isCollapsed } = useSidebar()
 
   return (
-    <div className="flex min-h-[100svh] md:min-h-screen bg-background">
+    <>
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
+      <div className="flex min-h-[100svh] md:min-h-screen bg-background">
       {/* Desktop sidebar */}
       <Sidebar className="hidden md:flex" />
 
@@ -44,6 +48,8 @@ function AppLayoutContent() {
 
       {/* Main content */}
       <main
+        id="main-content"
+        tabIndex={-1}
         className={cn(
           'flex-1 transition-[margin] duration-200',
           isCollapsed ? 'md:ml-16' : 'md:ml-60'
@@ -65,7 +71,8 @@ function AppLayoutContent() {
       {/* Bottom navigation for mobile */}
       <SidebarMobile />
       <BottomNav />
-    </div>
+      </div>
+    </>
   )
 }
 

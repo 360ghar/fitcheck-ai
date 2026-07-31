@@ -38,6 +38,7 @@ from app.models.photoshoot import (
 from app.services.photoshoot_service import PhotoshootService, PhotoshootStreamingService
 from app.services.photoshoot_job_service import PhotoshootJobService
 from app.utils.sse_queue import SSE_QUEUE_MAXSIZE, STREAM_OVERFLOW
+from app.utils.db import persistence_db as _persistence_db
 
 logger = get_context_logger(__name__)
 
@@ -205,7 +206,10 @@ async def generate_photoshoot(
             retry_after=86400,
         )
 
-    # Create job
+    # Create job. The API dependency is a hosted Supabase Client in production;
+    # direct-call tests may pass a sentinel object and should exercise the
+    # documented in-memory compatibility path instead.
+    persistence_db = _persistence_db(db)
     job = await PhotoshootJobService.create_job(
         user_id=user_id,
         photos=body.photos,
@@ -214,6 +218,7 @@ async def generate_photoshoot(
         batch_size=body.batch_size,
         aspect_ratio=body.aspect_ratio,
         custom_prompt=body.custom_prompt,
+        db=persistence_db,
     )
 
     # Start processing in background
@@ -264,6 +269,7 @@ async def get_usage(
 async def photoshoot_job_events(
     job_id: str,
     user = Depends(get_current_user),
+    db: Client = Depends(get_db),
 ):
     """
     SSE endpoint for real-time photoshoot job progress.
@@ -284,7 +290,8 @@ async def photoshoot_job_events(
     - job_cancelled: Job was cancelled
     """
     user_id = user["id"]
-    job = await PhotoshootJobService.get_job(job_id, user_id)
+    persistence_db = _persistence_db(db)
+    job = await PhotoshootJobService.get_job(job_id, user_id, db=persistence_db)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -323,6 +330,15 @@ async def photoshoot_job_events(
                     }
                     yield {
                         "event": event_map.get(job.status, "job_complete"),
+                        "data": json.dumps(status_data),
+                    }
+                return
+
+            if job.recovered_from_persistence:
+                status_data = await PhotoshootJobService.get_job_status(job_id)
+                if status_data:
+                    yield {
+                        "event": "job_recovered",
                         "data": json.dumps(status_data),
                     }
                 return
@@ -399,6 +415,7 @@ async def photoshoot_job_events(
 async def cancel_photoshoot_job(
     job_id: str,
     user = Depends(get_current_user),
+    db: Client = Depends(get_db),
 ):
     """
     Cancel a running photoshoot job.
@@ -406,7 +423,8 @@ async def cancel_photoshoot_job(
     Cancellation is best-effort - currently running image generations may complete.
     """
     user_id = user["id"]
-    success = await PhotoshootJobService.cancel_job(job_id, user_id)
+    persistence_db = _persistence_db(db)
+    success = await PhotoshootJobService.cancel_job(job_id, user_id, db=persistence_db)
     if not success:
         raise HTTPException(
             status_code=404,
@@ -421,6 +439,7 @@ async def cancel_photoshoot_job(
 async def get_photoshoot_job_status(
     job_id: str,
     user = Depends(get_current_user),
+    db: Client = Depends(get_db),
 ):
     """
     Get current status of a photoshoot job.
@@ -431,7 +450,8 @@ async def get_photoshoot_job_status(
     user_id = user["id"]
 
     # Verify ownership
-    job = await PhotoshootJobService.get_job(job_id, user_id)
+    persistence_db = _persistence_db(db)
+    job = await PhotoshootJobService.get_job(job_id, user_id, db=persistence_db)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 

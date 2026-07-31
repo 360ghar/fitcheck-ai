@@ -11,15 +11,16 @@ from app.services.social_import_job_store import SocialImportJobStore
 @pytest.mark.asyncio
 async def test_create_social_import_job_enforces_concurrent_limit(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_SOCIAL_IMPORT", True)
-    monkeypatch.setattr(settings, "SOCIAL_IMPORT_MAX_CONCURRENT_JOBS", 1)
+    monkeypatch.setattr(settings, "SOCIAL_IMPORT_MAX_CONCURRENT_JOBS", 2)
 
-    async def fake_count_active_jobs(db, *, user_id):  # noqa: ANN001
-        return 1
+    async def fake_create_job(db, **kwargs):  # noqa: ANN001
+        assert kwargs["max_concurrent_jobs"] == 2
+        raise RuntimeError("Social import concurrency limit reached")
 
     monkeypatch.setattr(
         SocialImportJobStore,
-        "count_active_jobs",
-        staticmethod(fake_count_active_jobs),
+        "create_job",
+        staticmethod(fake_create_job),
     )
 
     with pytest.raises(HTTPException) as exc_info:

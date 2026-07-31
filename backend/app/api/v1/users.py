@@ -44,6 +44,7 @@ from app.models.user import (
     UserUpdate,
 )
 from app.services.storage_service import MAX_FILE_SIZE, StorageService
+from app.services.vector_service import get_vector_service
 from app.services.weather_service import get_weather_service
 
 logger = get_context_logger(__name__)
@@ -319,21 +320,41 @@ async def delete_current_user(
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
 ):
-    """Delete the current user's account and data (best-effort)."""
-    try:
-        # Best-effort: delete auth user (requires service role)
-        try:
-            admin = getattr(db.auth, "admin", None)
-            if admin and hasattr(admin, "delete_user"):
-                admin.delete_user(user_id)
-        except Exception as e:
-            logger.warning("Auth user deletion failed", user_id=user_id, error=str(e))
+    """Delete the current user's account and data.
 
-        # Ensure public data is deleted even if auth deletion isn't available
-        try:
-            await asyncio.to_thread(db.table("users").delete().eq("id", user_id).execute)
-        except Exception:
-            pass
+    External vectors/storage are cleaned before the public user row is removed.
+    The public row is deleted before Auth so an Auth outage cannot leave a live
+    user profile and wardrobe behind. Auth and Postgres still cannot share a
+    transaction; every boundary fails loudly and the operation is safe to
+    retry with the same authenticated session.
+    """
+    try:
+        # Resolve owned storage paths through the parent rows. Child image
+        # tables do not carry user_id and the backend uses a service client.
+        owned = await StorageService.resolve_owned_storage_paths(db, user_id)
+        storage_paths = owned["storage_paths"]
+
+        async def _delete_storage() -> None:
+            if storage_paths:
+                await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)
+
+        async def _delete_vectors() -> None:
+            if hasattr(db.table("items"), "select"):
+                try:
+                    await get_vector_service().delete_user_items(user_id)
+                except Exception as error:
+                    raise DatabaseError("Failed to delete wardrobe embeddings", operation="delete_vectors") from error
+
+        # Storage and vector cleanup are independent of each other; the user
+        # row delete stays last so an Auth outage cannot leave a live profile.
+        await asyncio.gather(_delete_storage(), _delete_vectors())
+
+        await asyncio.to_thread(db.table("users").delete().eq("id", user_id).execute)
+
+        admin = getattr(getattr(db, "auth", None), "admin", None)
+        if not admin or not hasattr(admin, "delete_user"):
+            raise DatabaseError("Auth account deletion is unavailable", operation="delete_auth_user")
+        await asyncio.to_thread(admin.delete_user, user_id)
 
         return None
 

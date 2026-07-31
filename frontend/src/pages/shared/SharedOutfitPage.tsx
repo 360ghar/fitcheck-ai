@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ZoomableImage } from '@/components/ui/zoomable-image'
 import { SEO, OutfitJsonLd } from '@/components/seo'
+import { withAuthContext } from '@/pages/auth/authRedirect'
 
 export default function SharedOutfitPage() {
   const { id } = useParams()
@@ -81,11 +82,15 @@ export default function SharedOutfitPage() {
           </Link>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <Button variant="outline" asChild className="w-full sm:w-auto">
-              <Link to="/auth/login">Sign in</Link>
+              <Link to={id ? withAuthContext('/auth/login', undefined, `/outfits/${id}`) : '/auth/login'}>
+                Sign in
+              </Link>
             </Button>
             {id && (
               <Button asChild className="w-full sm:w-auto">
-                <Link to={`/outfits/${id}`}>Open in app</Link>
+                <Link to={withAuthContext('/auth/login', undefined, `/outfits/${id}`)}>
+                  Open in app
+                </Link>
               </Button>
             )}
           </div>
@@ -162,4 +167,3 @@ export default function SharedOutfitPage() {
     </>
   )
 }
-

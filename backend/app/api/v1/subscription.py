@@ -1,6 +1,7 @@
 """
 Subscription API endpoints for managing user subscriptions and billing.
 """
+from datetime import timedelta
 from typing import Any, Dict, Optional
 
 import asyncio
@@ -20,10 +21,19 @@ from app.models.subscription import (
 )
 from app.services.subscription_service import SubscriptionService
 from app.utils import maybe_single_data
+from app.utils.datetime_util import parse_utc_datetime, utcnow, utcnow_iso
 
 logger = get_context_logger(__name__)
 
 router = APIRouter()
+
+
+# Webhook deduplication/processing state machine (migration 027). The route and
+# any future reaper share one spelling for each state.
+_WEBHOOK_STATUS_PENDING = "pending"
+_WEBHOOK_STATUS_PROCESSING = "processing"
+_WEBHOOK_STATUS_PROCESSED = "processed"
+_WEBHOOK_STATUS_FAILED = "failed"
 
 
 def _has_expanded_subscription_items(subscription: object) -> bool:
@@ -422,6 +432,9 @@ async def cancel_subscription(
             )
         except stripe.error.StripeError as e:
             logger.error(f"Error cancelling Stripe subscription: {e}")
+            raise ServiceError(
+                "Stripe could not schedule cancellation; your local subscription was not changed."
+            ) from e
 
     result = await SubscriptionService.cancel_subscription(user["id"], db)
     return {"data": result.model_dump(mode="json"), "message": "OK"}
@@ -459,6 +472,63 @@ async def stripe_webhook(request: Request, db: Client = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid payload")
     except stripe.error.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Invalid signature")
+
+    # Stripe retries deliveries. Keep an explicit processing state so an
+    # event is only acknowledged after side effects succeed. Events without an
+    # ID are retained for backwards-compatible test/minimal payload handling.
+    event_id = event.get("id") if isinstance(event, dict) else getattr(event, "id", None)
+    if event_id:
+        event_row = None
+        try:
+            await asyncio.to_thread(
+                db.table("stripe_webhook_events")
+                .insert({"event_id": event_id, "event_type": event["type"], "status": _WEBHOOK_STATUS_PENDING})
+                .execute
+            )
+        except Exception as exc:
+            if "duplicate" in str(exc).lower() or "unique" in str(exc).lower():
+                existing = await asyncio.to_thread(
+                    db.table("stripe_webhook_events")
+                    .select("event_id,event_type,status,processing_started_at,attempts")
+                    .eq("event_id", event_id)
+                    .maybe_single()
+                    .execute
+                )
+                event_row = maybe_single_data(existing)
+                # Preserve the old safe acknowledgement when a legacy table
+                # or a minimal test double cannot return the row.
+                if not event_row:
+                    logger.info("Ignoring duplicate Stripe webhook", extra={"event_id": event_id})
+                    return {"received": True, "duplicate": True}
+                if event_row.get("status") == _WEBHOOK_STATUS_PROCESSED:
+                    return {"received": True, "duplicate": True}
+            else:
+                raise HTTPException(status_code=500, detail="Failed to record webhook event") from exc
+
+        current_status = (event_row or {}).get("status", _WEBHOOK_STATUS_PENDING)
+        if current_status == _WEBHOOK_STATUS_PROCESSING:
+            started = (event_row or {}).get("processing_started_at")
+            started_at = parse_utc_datetime(started)
+            if started_at and started_at > utcnow() - timedelta(minutes=15):
+                return {"received": True, "duplicate": True}
+            # A worker died while processing. Reclaim the stale row.
+            current_status = _WEBHOOK_STATUS_PROCESSING
+
+        previous_attempts = int((event_row or {}).get("attempts") or 0)
+        claim = await asyncio.to_thread(
+            db.table("stripe_webhook_events")
+            .update({
+                "status": _WEBHOOK_STATUS_PROCESSING,
+                "processing_started_at": utcnow_iso(),
+                "attempts": previous_attempts + 1,
+            })
+            .eq("event_id", event_id)
+            .eq("status", current_status)
+            .execute
+        )
+        claim_data = getattr(claim, "data", None)
+        if claim_data is not None and not claim_data:
+            return {"received": True, "duplicate": True}
 
     logger.info(f"Received Stripe event: {event['type']}")
 
@@ -573,9 +643,26 @@ async def stripe_webhook(request: Request, db: Client = Depends(get_db)):
         logger.error(
             f"Error processing webhook event {event['type']}: {e}", exc_info=True
         )
+        if event_id:
+            try:
+                await asyncio.to_thread(
+                    db.table("stripe_webhook_events")
+                    .update({"status": _WEBHOOK_STATUS_FAILED, "last_error": str(e)[:1000]})
+                    .eq("event_id", event_id)
+                    .execute
+                )
+            except Exception:
+                logger.error("Failed to record Stripe webhook failure", extra={"event_id": event_id})
         raise HTTPException(
             status_code=500,
             detail=f"Failed to process webhook event {event['type']}",
         )
 
+    if event_id:
+        await asyncio.to_thread(
+            db.table("stripe_webhook_events")
+            .update({"status": _WEBHOOK_STATUS_PROCESSED, "processed_at": utcnow_iso(), "last_error": None})
+            .eq("event_id", event_id)
+            .execute
+        )
     return {"received": True}

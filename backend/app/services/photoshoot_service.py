@@ -11,6 +11,7 @@ import re
 import uuid
 from datetime import datetime, date, timedelta, timezone
 from app.utils.datetime_util import utcnow, utcnow_iso, utc_today
+from app.utils.db import unwrap_rpc_bool, unwrap_rpc_result
 from app.utils.image_processing import to_data_url
 from typing import Any, List, Optional, Tuple
 
@@ -287,52 +288,57 @@ class PhotoshootService:
         return True, usage
 
     @staticmethod
+    async def reserve_daily_usage(
+        user_id: str,
+        num_images: int,
+        db: Client,
+    ) -> Tuple[bool, PhotoshootUsage]:
+        """Atomically reserve daily photoshoot images before provider work."""
+        if num_images <= 0:
+            raise ValueError("num_images must be positive")
+        subscription = await SubscriptionService.get_subscription(user_id, db)
+        daily_limit = PhotoshootService._get_daily_limit(subscription.plan_type)
+        await PhotoshootService.get_or_create_daily_usage(user_id, db)
+        period_start = SubscriptionService._get_current_period_start()
+        try:
+            result = await asyncio.to_thread(
+                db.rpc(
+                    "reserve_daily_photoshoot_usage",
+                    {
+                        "p_user_id": user_id,
+                        "p_period_start": period_start.isoformat(),
+                        "p_count": num_images,
+                        "p_limit": daily_limit,
+                    },
+                ).execute
+            )
+        except Exception as error:
+            logger.error("Failed to reserve photoshoot usage", user_id=user_id, error=str(error))
+            raise DatabaseError("Failed to reserve photoshoot usage") from error
+
+        # `reserve_daily_photoshoot_usage` returns a scalar BOOLEAN, so
+        # PostgREST keys the result by the function name.
+        reserved = unwrap_rpc_bool(result, "reserve_daily_photoshoot_usage")
+        usage = await PhotoshootService.get_usage(user_id, db)
+        return reserved is True, usage
+
+    @staticmethod
     async def increment_usage(
         user_id: str,
         num_images: int,
         db: Client,
     ) -> None:
-        """Increment daily photoshoot usage."""
+        """Reserve daily photoshoot usage through the atomic hosted RPC."""
         try:
-            period_start = SubscriptionService._get_current_period_start()
+            reserved, _ = await PhotoshootService.reserve_daily_usage(user_id, num_images, db)
+            if not reserved:
+                raise RateLimitError("Daily photoshoot limit exceeded")
 
-            # Ensure usage record exists
-            await SubscriptionService.get_or_create_usage_record(user_id, db)
-
-            # Use atomic increment via RPC when available (migration 010)
-            try:
-                await asyncio.to_thread(db.rpc(
-                    "increment_usage",
-                    {
-                        "p_user_id": user_id,
-                        "p_period_start": period_start.isoformat(),
-                        "p_field": "daily_photoshoot_images",
-                        "p_count": num_images,
-                    },
-                ).execute)
-                return
-            except Exception as rpc_err:
-                logger.debug(f"RPC increment_usage not available, using fallback: {rpc_err}")
-
-            # Fallback: Use SQL UPDATE with increment expression for atomicity
-            # This is safer than read-then-write but still not fully atomic
-            try:
-                await asyncio.to_thread(db.table("subscription_usage").update(
-                    {"daily_photoshoot_images": db.func("daily_photoshoot_images + %s", num_images)}
-                ).eq("user_id", user_id).eq("period_start", period_start.isoformat()).execute)
-            except Exception:
-                # Final fallback: non-atomic update (best-effort)
-                usage_record = await PhotoshootService.get_or_create_daily_usage(user_id, db)
-                current = usage_record.get("daily_photoshoot_images", 0) or 0
-                await asyncio.to_thread(db.table("subscription_usage").update(
-                    {"daily_photoshoot_images": current + num_images}
-                ).eq("user_id", user_id).eq("period_start", period_start.isoformat()).execute)
-
-            logger.debug(f"Incremented photoshoot usage for user {user_id} by {num_images}")
-
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.error(f"Error incrementing photoshoot usage for user {user_id}: {e}")
-            # Don't raise - usage tracking failure shouldn't block the operation
+            raise DatabaseError("Failed to reserve photoshoot usage") from e
 
     # =========================================================================
     # Prompt Generation
@@ -930,7 +936,7 @@ RULES:
                 raise ValidationError("Custom prompt is required for custom use case")
 
             # Check daily limit
-            allowed, usage = await PhotoshootService.check_daily_limit(user_id, num_images, db)
+            allowed, usage = await PhotoshootService.reserve_daily_usage(user_id, num_images, db)
             if not allowed:
                 raise RateLimitError(
                     message=f"Daily limit exceeded. You have {usage.remaining} images remaining today.",
@@ -953,11 +959,10 @@ RULES:
                 db=db,
             )
 
-            # Increment usage
-            await PhotoshootService.increment_usage(user_id, len(images), db)
-
-            # Get updated usage
-            updated_usage = await PhotoshootService.get_usage(user_id, db)
+            # The reservation RPC already reflects today's usage; reuse the
+            # usage object returned by reserve_daily_usage instead of paying a
+            # redundant read after generation.
+            updated_usage = usage
 
             generation_time = time.time() - start_time
 
@@ -1021,7 +1026,7 @@ class PhotoshootStreamingService:
             await PhotoshootJobService.update_status(job.job_id, PhotoshootJobStatus.PROCESSING)
 
             # Check daily limit
-            allowed, usage = await PhotoshootService.check_daily_limit(
+            allowed, usage = await PhotoshootService.reserve_daily_usage(
                 self.user_id, job.num_images, self.db
             )
             if not allowed:
@@ -1056,13 +1061,10 @@ class PhotoshootStreamingService:
             if job.is_cancelled():
                 return
 
-            # Increment usage for successfully generated images
-            generated_count = job.generated_count
-            if generated_count > 0:
-                await PhotoshootService.increment_usage(self.user_id, generated_count, self.db)
-
-            # Get updated usage
-            updated_usage = await PhotoshootService.get_usage(self.user_id, self.db)
+            # The reservation RPC already reflects today's usage; reuse the
+            # usage object returned by reserve_daily_usage instead of paying a
+            # redundant read after generation.
+            updated_usage = usage
             usage_dict = updated_usage.model_dump(mode="json")
             await PhotoshootJobService.set_usage(job.job_id, usage_dict)
 
@@ -1070,6 +1072,7 @@ class PhotoshootStreamingService:
             await PhotoshootJobService.update_status(job.job_id, PhotoshootJobStatus.COMPLETE)
 
             # Broadcast completion
+            generated_count = job.generated_count
             await PhotoshootJobService.broadcast_event(job.job_id, "job_complete", {
                 "job_id": job.job_id,
                 "session_id": job.session_id,

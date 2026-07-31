@@ -2,8 +2,8 @@
  * Blog List Page - Admin interface for managing blog posts
  */
 
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -77,13 +77,14 @@ function formatDate(dateString: string) {
 
 export default function BlogListPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
   // State
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [category, setCategory] = useState<string>('all');
-  const [status, setStatus] = useState<string>('all');
+  const [page, setPage] = useState(() => Number(searchParams.get('page')) || 1);
+  const [search, setSearch] = useState(() => searchParams.get('search') || '');
+  const [category, setCategory] = useState<string>(() => searchParams.get('category') || 'all');
+  const [status, setStatus] = useState<string>(() => searchParams.get('status') || 'all');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [postToDelete, setPostToDelete] = useState<BlogPostSummary | null>(null);
 
@@ -96,7 +97,7 @@ export default function BlogListPage() {
     error,
   } = useQuery({
     queryKey: ['blog-posts', 'admin', page, search, category, status],
-    queryFn: () => getAllBlogPosts(page, pageSize, true),
+    queryFn: () => getAllBlogPosts(page, pageSize, true, { search, category, status: status as 'published' | 'draft' | 'all' }),
   });
 
   // Fetch categories
@@ -119,21 +120,22 @@ export default function BlogListPage() {
     },
   });
 
-  // Filter posts client-side
-  const filteredPosts = postsData?.posts.filter((post) => {
-    const matchesSearch =
-      search === '' ||
-      post.title.toLowerCase().includes(search.toLowerCase()) ||
-      post.excerpt.toLowerCase().includes(search.toLowerCase()) ||
-      post.author.toLowerCase().includes(search.toLowerCase());
+  useEffect(() => {
+    setPage(1);
+  }, [search, category, status]);
 
-    const matchesCategory = category === 'all' || post.category === category;
-    const matchesStatus =
-      status === 'all' ||
-      (status === 'published' ? post.is_published : !post.is_published);
+  useEffect(() => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('page', String(page));
+      search ? next.set('search', search) : next.delete('search');
+      category !== 'all' ? next.set('category', category) : next.delete('category');
+      status !== 'all' ? next.set('status', status) : next.delete('status');
+      return next;
+    }, { replace: true });
+  }, [page, search, category, status, setSearchParams]);
 
-    return matchesSearch && matchesCategory && matchesStatus;
-  });
+  const filteredPosts = postsData?.posts;
 
   // Handle delete
   const handleDelete = (post: BlogPostSummary) => {
@@ -173,7 +175,10 @@ export default function BlogListPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search posts..."
+            id="admin-blog-search"
+            name="search"
+            autoComplete="off"
+            placeholder="Search posts…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10"
@@ -219,7 +224,7 @@ export default function BlogListPage() {
         <div className="bg-card border rounded-lg p-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <CheckCircle2 className="w-4 h-4 text-green-500" />
-            <span className="text-sm">Published</span>
+            <span className="text-sm">Published (this page)</span>
           </div>
           <p className="text-2xl font-bold">
             {postsData?.posts.filter((p) => p.is_published).length || 0}
@@ -228,7 +233,7 @@ export default function BlogListPage() {
         <div className="bg-card border rounded-lg p-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <XCircle className="w-4 h-4 text-amber-500" />
-            <span className="text-sm">Drafts</span>
+            <span className="text-sm">Drafts (this page)</span>
           </div>
           <p className="text-2xl font-bold">
             {postsData?.posts.filter((p) => !p.is_published).length || 0}
@@ -356,7 +361,7 @@ export default function BlogListPage() {
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={`More actions for ${post.title}`}>
                           <MoreHorizontal className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>

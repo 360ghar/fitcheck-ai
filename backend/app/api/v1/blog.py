@@ -6,7 +6,8 @@ and admin-only write access.
 """
 
 import asyncio
-from typing import Any, Dict
+import re
+from typing import Any, Dict, Literal
 
 from fastapi import APIRouter, Depends, Query, status
 from supabase import Client
@@ -390,6 +391,9 @@ async def list_all_posts(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     include_unpublished: bool = Query(True),
+    category: str | None = Query(None, min_length=1),
+    search: str | None = Query(None, min_length=1),
+    post_status: Literal["published", "draft", "all"] | None = Query(None, alias="status"),
     user=Depends(get_current_user),
     db: Client = Depends(get_db),
 ):
@@ -407,6 +411,25 @@ async def list_all_posts(
 
         if not include_unpublished:
             query = query.eq("is_published", True)
+
+        if category:
+            query = query.eq("category", category)
+
+        if search:
+            # The term is interpolated into postgrest's .or_() filter syntax;
+            # strip characters that would inject extra filter clauses (`,`,
+            # `(`, `)`, and the `*` wildcard) while keeping % and _ as the
+            # intended ilike wildcards.
+            safe_term = re.sub(r"[(),*]", "", search)
+            search_term = f"%{safe_term}%"
+            query = query.or_(
+                f"title.ilike.{search_term},excerpt.ilike.{search_term},author.ilike.{search_term}"
+            )
+
+        if post_status == "published":
+            query = query.eq("is_published", True)
+        elif post_status == "draft":
+            query = query.eq("is_published", False)
 
         # Order by updated_at descending
         query = query.order("updated_at", desc=True)

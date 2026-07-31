@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
 import { validateReferralCode } from '@/api/subscription'
 import SEO from '@/components/seo/SEO'
+import { getPostAuthDestination, persistAuthReturnTo, withAuthContext } from './authRedirect'
 
 function getPasswordStrength(pwd: string) {
   let strength = 0
@@ -26,6 +27,7 @@ export default function RegisterPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const selectedPlan = searchParams.get('plan_type')
+  const returnTo = searchParams.get('returnTo')
   const register = useAuthStore((state) => state.register)
   const signInWithGoogle = useAuthStore((state) => state.signInWithGoogle)
   const isLoading = useAuthStore((state) => state.isLoading)
@@ -126,7 +128,7 @@ export default function RegisterPage() {
           title: 'Confirm your email',
           description: 'Check your inbox for a confirmation email, then sign in to continue.',
         })
-        navigate('/auth/login')
+        navigate(withAuthContext('/auth/login', selectedPlan, returnTo))
         return
       }
 
@@ -139,7 +141,11 @@ export default function RegisterPage() {
         })
       }
 
-      navigate(selectedPlan ? `/profile?tab=plan&plan_type=${encodeURIComponent(selectedPlan)}` : '/dashboard')
+      // The URL's plan_type (if any) has been handled by the destination;
+      // clear any stale key left behind by an aborted Google sign-in so it
+      // cannot hijack a later Google login.
+      localStorage.removeItem('pending_plan_type')
+      navigate(getPostAuthDestination(returnTo, selectedPlan))
     } catch {
       // Registration error is handled by the store and displayed in UI
     }
@@ -156,6 +162,7 @@ export default function RegisterPage() {
     if (selectedPlan) {
       localStorage.setItem('pending_plan_type', selectedPlan)
     }
+    persistAuthReturnTo(returnTo)
 
     try {
       await signInWithGoogle()
@@ -479,7 +486,7 @@ export default function RegisterPage() {
               <p className="text-sm text-muted-foreground">
                 Already have an account?{' '}
                 <Link
-                  to={selectedPlan ? `/auth/login?plan_type=${encodeURIComponent(selectedPlan)}` : '/auth/login'}
+                  to={withAuthContext('/auth/login', selectedPlan, returnTo)}
                   className="font-medium text-primary hover:text-primary/80"
                 >
                   Sign in

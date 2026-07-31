@@ -941,19 +941,13 @@ async def similar_items(
     # Vector search best-effort
     results: List[Dict[str, Any]] = []
     try:
-        rate_check = await AISettingsService.check_rate_limit(
+        if await AISettingsService.reserve_usage(
             user_id=user_id,
             operation_type=OperationType.EMBEDDING,
             db=db,
-        )
-        if rate_check["allowed"]:
+        ):
             embedding = await AIService.generate_item_embedding(source.data)
             if embedding:
-                await AISettingsService.increment_usage(
-                    user_id=user_id,
-                    operation_type=OperationType.EMBEDDING,
-                    db=db,
-                )
                 vector_service = get_vector_service()
                 matches = await vector_service.find_similar(
                     embedding=embedding,
@@ -977,8 +971,6 @@ async def similar_items(
                 "Embedding rate limit exceeded for recommendations similar, using fallback",
                 user_id=user_id,
                 item_id=item_id,
-                remaining=rate_check["remaining"],
-                limit=rate_check["limit"],
             )
     except Exception as ve:
         logger.debug(

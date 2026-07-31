@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Layers, Palette, Search, Shirt, Sparkles, Stars, Sun, TrendingUp } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -15,13 +15,14 @@ import { ScrollableTabs, ScrollableTab } from '@/components/ui/scrollable-tabs'
 import { useToast } from '@/components/ui/use-toast'
 import { ItemImage } from '@/components/ui/item-image'
 import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
 import { ActionStatusLabel, ActionErrorNote } from '@/components/ui/action-status'
 import { useElapsedSeconds } from '@/hooks/useElapsedSeconds'
 import { cn } from '@/lib/utils'
 import { generateFallbackOutfits } from '@/lib/outfit-generator'
 import { AstrologyTab } from '@/components/recommendations'
 
-import { isApiError } from '@/lib/errors'
+import { getApiError } from '@/lib/errors'
 import { useClosetStore } from '@/stores/wardrobeStore'
 import {
   findMatchingItems,
@@ -35,12 +36,21 @@ import type { AstrologyRecommendationMode, CompleteLookSuggestion, MatchResult, 
 
 /** Normalize a thrown value (ApiError plain object, real Error, or unknown) into copy. */
 function getErrorMessage(err: unknown): string {
-  if (isApiError(err)) return err.message
-  if (err instanceof Error) return err.message
-  return 'An error occurred'
+  return getApiError(err).message
 }
 
 type TabType = 'today' | 'match' | 'complete' | 'weather' | 'astrology' | 'shopping'
+
+export function getRecommendationsClosetState(
+  itemCount: number,
+  isLoading: boolean,
+  error: unknown
+): 'loading' | 'error' | 'empty' | 'ready' {
+  if (isLoading) return 'loading'
+  if (error) return 'error'
+  if (itemCount === 0) return 'empty'
+  return 'ready'
+}
 
 const RECOMMENDATIONS_TABS = [
   { id: 'today' as TabType, name: 'Today', icon: Sun },
@@ -128,12 +138,32 @@ const enrichItemWithImages = (item: Item, wardrobeItems: Item[]): Item => {
 }
 
 export default function RecommendationsPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('today')
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabFromUrl = searchParams.get('tab') as TabType | null
+  const initialTab = RECOMMENDATIONS_TABS.some((tab) => tab.id === tabFromUrl) ? tabFromUrl! : 'today'
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab)
   const { toast } = useToast()
 
   const items = useClosetStore((s) => s.items)
   const isLoadingItems = useClosetStore((s) => s.isLoading)
+  const wardrobeError = useClosetStore((s) => s.error)
   const fetchItems = useClosetStore((s) => s.fetchItems)
+  const closetState = getRecommendationsClosetState(items.length, isLoadingItems, wardrobeError)
+
+  useEffect(() => {
+    if (tabFromUrl && RECOMMENDATIONS_TABS.some((tab) => tab.id === tabFromUrl)) {
+      setActiveTab(tabFromUrl)
+    }
+  }, [tabFromUrl])
+
+  const selectTab = (tab: TabType) => {
+    setActiveTab(tab)
+    setSearchParams((current) => {
+      current.set('tab', tab)
+      return current
+    }, { replace: true })
+  }
 
   useEffect(() => {
     if (items.length === 0) {
@@ -410,7 +440,9 @@ export default function RecommendationsPage() {
           <ScrollableTab
             key={tab.id}
             isActive={activeTab === tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            id={`recommendation-tab-${tab.id}`}
+            aria-controls={`recommendation-panel-${tab.id}`}
+            onClick={() => selectTab(tab.id)}
             className="min-w-[100px] justify-center"
           >
             <tab.icon className="h-4 w-4" />
@@ -420,20 +452,32 @@ export default function RecommendationsPage() {
         ))}
       </ScrollableTabs>
 
-      <div className="space-y-4">
+      <div
+        className="space-y-4"
+        role="tabpanel"
+        id={`recommendation-panel-${activeTab}`}
+        aria-labelledby={`recommendation-tab-${activeTab}`}
+        tabIndex={0}
+      >
         {activeTab === 'today' && (
           <Card>
             <CardHeader className="px-4 py-3 md:px-6 md:py-4">
               <CardTitle className="text-base md:text-lg">What to wear today</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
-              {items.length === 0 && !isLoadingItems ? (
+              {closetState === 'error' ? (
+                <ErrorState
+                  title="Your closet could not be loaded"
+                  description={wardrobeError?.message || 'Try again to load your wardrobe before requesting recommendations.'}
+                  onRetry={() => void fetchItems(true)}
+                />
+              ) : closetState === 'empty' ? (
                 <EmptyState
                   icon={Shirt}
                   title="Add clothes first"
                   description="Upload a few photos — AI catalogs each item, then we can suggest what to wear."
                   actionLabel="Upload photos"
-                  onAction={() => { window.location.href = '/wardrobe?action=add' }}
+                  onAction={() => navigate('/wardrobe?action=add')}
                 />
               ) : (
                 <>
@@ -510,7 +554,7 @@ export default function RecommendationsPage() {
                         <Button asChild variant="outline" size="sm">
                           <Link to="/try-on">Try on</Link>
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setActiveTab('complete')}>
+                        <Button variant="ghost" size="sm" onClick={() => selectTab('complete')}>
                           Complete look tools
                         </Button>
                       </div>
@@ -528,13 +572,19 @@ export default function RecommendationsPage() {
               <CardTitle className="text-base md:text-lg">Find Matches</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
-              {items.length === 0 && !isLoadingItems ? (
+              {closetState === 'error' ? (
+                <ErrorState
+                  title="Your closet could not be loaded"
+                  description={wardrobeError?.message || 'Try again to load items for matching.'}
+                  onRetry={() => void fetchItems(true)}
+                />
+              ) : closetState === 'empty' ? (
                 <EmptyState
                   icon={Shirt}
                   title="Add items first"
                   description="Add closet items to find matching pieces."
                   actionLabel="Add item"
-                  onAction={() => { window.location.href = '/wardrobe?action=add' }}
+                  onAction={() => navigate('/wardrobe?action=add')}
                 />
               ) : (
                 <>
@@ -735,7 +785,14 @@ export default function RecommendationsPage() {
                 </div>
               )}
 
-              {items.length === 0 && !isLoadingItems && (
+              {closetState === 'error' && (
+                <ErrorState
+                  title="Your closet could not be loaded"
+                  description={wardrobeError?.message || 'Try again to unlock recommendations.'}
+                  onRetry={() => void fetchItems(true)}
+                />
+              )}
+              {closetState === 'empty' && (
                 <div className="text-sm text-muted-foreground">
                   Add items to your closet first to unlock recommendations.
                 </div>
@@ -752,8 +809,11 @@ export default function RecommendationsPage() {
             <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
               <div className="flex flex-col gap-3 md:flex-row md:items-end">
                 <div className="flex-1 w-full space-y-2">
-                  <div className="text-sm font-medium text-foreground">Location (optional)</div>
+                  <label htmlFor="recommendation-weather-location" className="text-sm font-medium text-foreground">Location (optional)</label>
                   <Input
+                    id="recommendation-weather-location"
+                    name="weather_location"
+                    autoComplete="off"
                     placeholder="e.g., New York or 40.7128,-74.0060"
                     value={weatherLocation}
                     onChange={(e) => setWeatherLocation(e.target.value)}
@@ -852,24 +912,35 @@ export default function RecommendationsPage() {
             <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="space-y-2">
-                  <div className="text-sm font-medium text-foreground">Category</div>
+                  <label htmlFor="recommendation-shopping-category" className="text-sm font-medium text-foreground">Category</label>
                   <Input
+                    id="recommendation-shopping-category"
+                    name="shopping_category"
+                    autoComplete="off"
                     placeholder="e.g., tops"
                     value={shoppingCategory}
                     onChange={(e) => setShoppingCategory(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <div className="text-sm font-medium text-foreground">Style</div>
+                  <label htmlFor="recommendation-shopping-style" className="text-sm font-medium text-foreground">Style</label>
                   <Input
+                    id="recommendation-shopping-style"
+                    name="shopping_style"
+                    autoComplete="off"
                     placeholder="e.g., minimalist"
                     value={shoppingStyle}
                     onChange={(e) => setShoppingStyle(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <div className="text-sm font-medium text-foreground">Budget</div>
+                  <label htmlFor="recommendation-shopping-budget" className="text-sm font-medium text-foreground">Budget</label>
                   <Input
+                    id="recommendation-shopping-budget"
+                    name="shopping_budget"
+                    type="number"
+                    inputMode="decimal"
+                    autoComplete="off"
                     placeholder="e.g., 200"
                     value={shoppingBudget}
                     onChange={(e) => setShoppingBudget(e.target.value)}

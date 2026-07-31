@@ -19,6 +19,29 @@ export interface ApiError {
   retryAfterSeconds?: number
 }
 
+/**
+ * Backend error code for a deterministic quota-exhausted response. A 429
+ * carrying this code is the user's OWN plan limit (raised pre-flight), so it
+ * cannot clear within seconds — retrying it only multiplies duplicate
+ * requests and delays the upgrade prompt.
+ */
+export const RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED' as const
+
+/**
+ * True when an HTTP error is a deterministic quota-exhausted 429.
+ *
+ * Shared by the axios retry interceptor and `withRetry()` so both retry
+ * layers agree on which 429s are the user's own plan limit (never retry) vs
+ * upstream capacity (retry with backoff).
+ */
+export function isRateLimitExhausted(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const response = (error as { response?: { status?: number; data?: unknown } }).response
+  if (response?.status !== 429) return false
+  const data = response.data as { code?: string } | undefined
+  return typeof data === 'object' && data !== null && data.code === RATE_LIMIT_EXCEEDED
+}
+
 export function isApiError(error: unknown): error is ApiError {
   return (
     typeof error === 'object' &&

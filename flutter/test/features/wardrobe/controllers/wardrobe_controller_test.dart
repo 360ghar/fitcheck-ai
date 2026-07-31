@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fitcheck_ai/core/exceptions/app_exceptions.dart';
 import 'package:fitcheck_ai/core/services/network_service.dart';
 import 'package:fitcheck_ai/domain/enums/category.dart';
@@ -25,16 +27,17 @@ class FakeNetworkService extends NetworkService {
 }
 
 ItemModel _item(String id, {String name = 'Test Item'}) => ItemModel(
-      id: id,
-      userId: 'user-1',
-      name: name,
-      category: Category.tops,
-      condition: domain.Condition.clean,
-    );
+  id: id,
+  userId: 'user-1',
+  name: name,
+  category: Category.tops,
+  condition: domain.Condition.clean,
+);
 
 /// A fake [ItemRepository] driven by callbacks so tests can simulate success
 /// and failure without any network / Supabase involvement.
 class FakeItemRepository extends ItemRepository {
+  int getItemsCalls = 0;
   Future<ItemsListResponse> Function()? onGetItems;
   Future<void> Function(String id)? onDeleteItem;
   Future<ItemModel> Function(String id)? onToggleFavorite;
@@ -51,15 +54,18 @@ class FakeItemRepository extends ItemRepository {
     String? sortBy,
     String? sortOrder,
   }) {
+    getItemsCalls++;
     final handler = onGetItems;
     if (handler != null) return handler();
-    return Future.value(const ItemsListResponse(
-      items: [],
-      total: 0,
-      page: 1,
-      limit: 20,
-      hasMore: false,
-    ));
+    return Future.value(
+      const ItemsListResponse(
+        items: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        hasMore: false,
+      ),
+    );
   }
 
   @override
@@ -110,15 +116,60 @@ void main() {
   }
 
   group('WardrobeController.fetchItems', () {
+    testWidgets('stale refresh response cannot overwrite newer results', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      final first = Completer<ItemsListResponse>();
+      final second = Completer<ItemsListResponse>();
+      fakeRepo.onGetItems = () =>
+          fakeRepo.getItemsCalls == 1 ? first.future : second.future;
+      final controller = WardrobeController(itemRepository: fakeRepo);
+
+      final firstRequest = controller.fetchItems(refresh: true);
+      await tester.pump();
+      final secondRequest = controller.fetchItems(refresh: true);
+      await tester.pump();
+
+      second.complete(
+        ItemsListResponse(
+          items: [_item('new')],
+          total: 1,
+          page: 1,
+          limit: 20,
+          hasMore: false,
+        ),
+      );
+      await tester.pump();
+      first.complete(
+        ItemsListResponse(
+          items: [_item('old')],
+          total: 1,
+          page: 1,
+          limit: 20,
+          hasMore: false,
+        ),
+      );
+      await Future.wait([firstRequest, secondRequest]);
+      await tester.pump();
+
+      expect(controller.items.single.id, 'new');
+      controller.onClose();
+      await settle(tester);
+    });
+
     testWidgets('populates items on successful response', (tester) async {
       await pumpApp(tester);
       fakeRepo.onGetItems = () async => ItemsListResponse(
-            items: [_item('item-1', name: 'Blue Shirt'), _item('item-2')],
-            total: 2,
-            page: 1,
-            limit: 20,
-            hasMore: false,
-          );
+        items: [
+          _item('item-1', name: 'Blue Shirt'),
+          _item('item-2'),
+        ],
+        total: 2,
+        page: 1,
+        limit: 20,
+        hasMore: false,
+      );
 
       final controller = WardrobeController(itemRepository: fakeRepo);
       controller.onInit();
@@ -134,8 +185,9 @@ void main() {
       await settle(tester);
     });
 
-    testWidgets('sets error and resets loading on non-retryable failure',
-        (tester) async {
+    testWidgets('sets error and resets loading on non-retryable failure', (
+      tester,
+    ) async {
       await pumpApp(tester);
       fakeRepo.onGetItems = () async => throw AuthException.unauthorized();
 
@@ -145,16 +197,20 @@ void main() {
 
       expect(controller.items, isEmpty);
       expect(controller.error.value, isNotEmpty);
-      expect(controller.isLoading.value, isFalse,
-          reason: 'loading flag must reset in finally block');
+      expect(
+        controller.isLoading.value,
+        isFalse,
+        reason: 'loading flag must reset in finally block',
+      );
       expect(controller.isLoadingMore.value, isFalse);
 
       controller.onClose();
       await settle(tester);
     });
 
-    testWidgets('empty response results in empty list and no error',
-        (tester) async {
+    testWidgets('empty response results in empty list and no error', (
+      tester,
+    ) async {
       await pumpApp(tester);
 
       final controller = WardrobeController(itemRepository: fakeRepo);
@@ -180,12 +236,12 @@ void main() {
       // calls fetchItems(refresh: true) inside deleteItem).
       final serverItems = <ItemModel>[_item('item-1')];
       fakeRepo.onGetItems = () async => ItemsListResponse(
-            items: List.of(serverItems),
-            total: serverItems.length,
-            page: 1,
-            limit: 20,
-            hasMore: false,
-          );
+        items: List.of(serverItems),
+        total: serverItems.length,
+        page: 1,
+        limit: 20,
+        hasMore: false,
+      );
       fakeRepo.onDeleteItem = (id) async {
         serverItems.removeWhere((i) => i.id == id);
       };
@@ -205,17 +261,19 @@ void main() {
       await settle(tester);
     });
 
-    testWidgets('resets deleting state and rethrows on failure', (tester) async {
+    testWidgets('resets deleting state and rethrows on failure', (
+      tester,
+    ) async {
       await pumpApp(tester);
       fakeRepo.onGetItems = () async => ItemsListResponse(
-            items: [_item('item-1')],
-            total: 1,
-            page: 1,
-            limit: 20,
-            hasMore: false,
-          );
-      fakeRepo.onDeleteItem =
-          (id) async => throw ServerException.internalError();
+        items: [_item('item-1')],
+        total: 1,
+        page: 1,
+        limit: 20,
+        hasMore: false,
+      );
+      fakeRepo.onDeleteItem = (id) async =>
+          throw ServerException.internalError();
 
       final controller = WardrobeController(itemRepository: fakeRepo);
       controller.onInit();
@@ -241,14 +299,14 @@ void main() {
     testWidgets('resets favoriting state on failure', (tester) async {
       await pumpApp(tester);
       fakeRepo.onGetItems = () async => ItemsListResponse(
-            items: [_item('item-1')],
-            total: 1,
-            page: 1,
-            limit: 20,
-            hasMore: false,
-          );
-      fakeRepo.onToggleFavorite =
-          (id) async => throw ServerException.internalError();
+        items: [_item('item-1')],
+        total: 1,
+        page: 1,
+        limit: 20,
+        hasMore: false,
+      );
+      fakeRepo.onToggleFavorite = (id) async =>
+          throw ServerException.internalError();
 
       final controller = WardrobeController(itemRepository: fakeRepo);
       controller.onInit();
@@ -266,6 +324,21 @@ void main() {
   });
 
   group('WardrobeController network monitoring', () {
+    testWidgets('does not call the repository while offline', (tester) async {
+      await pumpApp(tester);
+      fakeNetwork.connected = false;
+
+      final controller = WardrobeController(itemRepository: fakeRepo);
+      controller.onInit();
+      await tester.pumpAndSettle();
+
+      expect(fakeRepo.getItemsCalls, 0);
+      expect(controller.isOffline.value, isTrue);
+
+      controller.onClose();
+      await settle(tester);
+    });
+
     testWidgets('reflects offline state from NetworkService', (tester) async {
       await pumpApp(tester);
       fakeNetwork.connected = false;

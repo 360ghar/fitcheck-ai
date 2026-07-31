@@ -40,6 +40,13 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `019_add_item_source_image.sql`
 - `020_plus_plan.sql`
 - `021_calendar_event_type.sql`
+- `022_wave_b_hardening.sql`
+- `023_durable_job_state.sql`
+- `024_atomic_daily_quota_reservations.sql`
+- `025_calendar_all_day_events.sql`
+- `026_harden_rpc_privileges.sql`
+- `027_stripe_webhook_processing_state.sql`
+- `028_configurable_social_import_limit.sql`
 
 ## Tables (CREATE TABLE)
 
@@ -60,6 +67,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `outfit_generations` | `001_full_schema.sql` |
 | `outfit_images` | `001_full_schema.sql` |
 | `outfits` | `001_full_schema.sql` |
+| `photoshoot_jobs` | `023_durable_job_state.sql` |
 | `recommendation_logs` | `001_full_schema.sql` |
 | `referral_codes` | `007_subscriptions_and_referrals.sql` |
 | `referral_redemptions` | `007_subscriptions_and_referrals.sql` |
@@ -70,6 +78,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `social_import_items` | `012_social_import_pipeline.sql` |
 | `social_import_jobs` | `012_social_import_pipeline.sql` |
 | `social_import_photos` | `012_social_import_pipeline.sql` |
+| `stripe_webhook_events` | `022_wave_b_hardening.sql` |
 | `subscription_usage` | `007_subscriptions_and_referrals.sql` |
 | `subscriptions` | `007_subscriptions_and_referrals.sql` |
 | `support_tickets` | `009_support_tickets.sql` |
@@ -83,9 +92,15 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `users` | `001_full_schema.sql` |
 | `waitlist` | `005_waitlist.sql` |
 
-## Calendar event columns
+## Required columns added after table creation
 
-The `calendar_events.event_type` column is added by `021_calendar_event_type.sql`, is required, and defaults to `other`.
+| Migration | Table | Column |
+|-----------|-------|--------|
+| `021_calendar_event_type.sql` | `calendar_events` | `event_type` |
+| `025_calendar_all_day_events.sql` | `calendar_events` | `is_all_day` |
+| `027_stripe_webhook_processing_state.sql` | `stripe_webhook_events` | `status` |
+
+These columns are added after their table's CREATE TABLE and are required (NOT NULL DEFAULT), so inserts rely on the default until a value is supplied.
 
 ## ALTER TABLE references
 
@@ -151,6 +166,14 @@ The `calendar_events.event_type` column is added by `021_calendar_event_type.sql
 - `018_default_ai_provider_custom.sql` → `user_ai_settings`
 - `019_add_item_source_image.sql` → `items`
 - `021_calendar_event_type.sql` → `calendar_events`
+- `022_wave_b_hardening.sql` → `stripe_webhook_events`
+- `023_durable_job_state.sql` → `extraction_jobs`
+- `023_durable_job_state.sql` → `extraction_jobs`
+- `023_durable_job_state.sql` → `photoshoot_jobs`
+- `025_calendar_all_day_events.sql` → `calendar_events`
+- `027_stripe_webhook_processing_state.sql` → `stripe_webhook_events`
+- `027_stripe_webhook_processing_state.sql` → `stripe_webhook_events`
+- `027_stripe_webhook_processing_state.sql` → `stripe_webhook_events`
 
 ## Related
 

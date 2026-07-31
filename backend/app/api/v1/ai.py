@@ -8,8 +8,6 @@ All AI processing is done server-side using configurable providers.
 from typing import Any, Dict, List, Optional
 
 import asyncio
-import base64
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from supabase import Client
@@ -42,6 +40,7 @@ from app.agents.image_generation_agent import (
 )
 from app.services.ai_service import EmbeddingService
 from app.services.item_reference_service import resolve_outfit_item_references
+from app.services.storage_service import StorageService
 from app.services.vector_service import get_vector_service
 from app.utils.image_processing import downscale_base64_image
 
@@ -61,10 +60,7 @@ async def _fetch_user_avatar_base64(user_id: str, db: Client) -> Optional[str]:
         if not avatar_url:
             return None
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(avatar_url)
-            response.raise_for_status()
-            return base64.b64encode(response.content).decode("utf-8")
+        return await StorageService.download_to_base64(avatar_url, timeout=30.0)
     except Exception as e:
         logger.warning(
             "Failed to fetch user avatar for extraction",
@@ -223,14 +219,15 @@ async def generate_outfit(
                 if user_result.data and user_result.data.get("avatar_url"):
                     avatar_url = user_result.data["avatar_url"]
                     try:
-                        async with httpx.AsyncClient(timeout=30.0) as client:
-                            resp = await client.get(avatar_url)
-                            resp.raise_for_status()
+                        avatar_base64 = await StorageService.download_to_base64(
+                            avatar_url, timeout=30.0
+                        )
+                        if avatar_base64:
                             # Downscale: a raw full-res phone avatar can be
                             # bigger than every garment reference combined.
                             user_avatar_base64 = await asyncio.to_thread(
                                 downscale_base64_image,
-                                base64.b64encode(resp.content).decode("utf-8"),
+                                avatar_base64,
                             )
                     except Exception as e:
                         logger.warning(
@@ -471,10 +468,14 @@ async def generate_try_on(
 
         async with rate_limited_operation(user_id, OperationType.GENERATION, db):
             # 2. Fetch avatar image and convert to base64
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(avatar_url)
-                response.raise_for_status()
-                avatar_base64 = base64.b64encode(response.content).decode("utf-8")
+            avatar_base64 = await StorageService.download_to_base64(
+                avatar_url, timeout=30.0
+            )
+            if not avatar_base64:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Profile image could not be loaded",
+                )
 
             # 3. Get generation agent
             agent = await get_image_generation_agent(user_id=user_id, db=db)

@@ -191,7 +191,8 @@ class TryOnContent extends StatelessWidget {
               ),
 
               Obx(() {
-                if (controller.generatedImageUrl.value.isNotEmpty) {
+                if (controller.generatedImageUrl.value.isNotEmpty ||
+                    controller.generatedImageBase64.value.isNotEmpty) {
                   return Column(
                     children: [
                       const SizedBox(height: AppConstants.spacing16),

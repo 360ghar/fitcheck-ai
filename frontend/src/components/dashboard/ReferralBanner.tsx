@@ -135,21 +135,21 @@ export function ReferralBanner({ variant = 'default', onDismiss }: ReferralBanne
   return (
     <div
       className={cn(
-        'relative rounded-xl p-4 text-white overflow-hidden',
+        'relative overflow-hidden rounded-xl border p-4',
         'transition-[transform,opacity] duration-300',
         isUrgent
-          ? 'bg-gradient-to-r from-amber-500 via-indigo-600 to-purple-600'
-          : 'bg-gradient-to-r from-indigo-600 to-purple-600'
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-border bg-card text-foreground'
       )}
     >
-      {/* Background glow effect */}
-      <div className="absolute inset-0 bg-white/5" />
-
       <div className="relative flex flex-col sm:flex-row sm:items-center gap-3">
         {/* Icon and text */}
         <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
-          <div className="p-2 rounded-lg bg-white/20 backdrop-blur-sm shrink-0">
-            <Gift className="h-5 w-5" />
+          <div className={cn(
+            'shrink-0 rounded-lg p-2',
+            isUrgent ? 'bg-primary-foreground/10' : 'bg-secondary'
+          )}>
+            <Gift className="h-5 w-5" aria-hidden="true" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold">
@@ -157,7 +157,10 @@ export function ReferralBanner({ variant = 'default', onDismiss }: ReferralBanne
                 ? 'Running low? Refer a friend for 1 free month!'
                 : 'Refer a friend, get 1 month Pro free!'}
             </p>
-            <p className="text-xs text-white/80 mt-0.5">
+            <p className={cn(
+              'mt-0.5 text-xs',
+              isUrgent ? 'text-primary-foreground/80' : 'text-muted-foreground'
+            )}>
               {isUrgent
                 ? 'Share your link - you both get rewarded.'
                 : 'Both you and your friend get 1 month of Pro.'}
@@ -173,7 +176,9 @@ export function ReferralBanner({ variant = 'default', onDismiss }: ReferralBanne
             className={cn(
               'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg',
               'text-xs font-medium',
-              'bg-white/20 hover:bg-white/30 backdrop-blur-sm',
+              isUrgent
+                ? 'bg-primary-foreground/10 hover:bg-primary-foreground/20'
+                : 'bg-secondary hover:bg-secondary/80',
               'transition-colors duration-200'
             )}
           >
@@ -184,7 +189,7 @@ export function ReferralBanner({ variant = 'default', onDismiss }: ReferralBanne
               </>
             ) : (
               <>
-                <Copy className="h-3.5 w-3.5" />
+                <Copy className="h-3.5 w-3.5" aria-hidden="true" />
                 Copy Link
               </>
             )}
@@ -198,12 +203,14 @@ export function ReferralBanner({ variant = 'default', onDismiss }: ReferralBanne
             className={cn(
               'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg',
               'text-xs font-medium',
-              'bg-white/20 hover:bg-white/30 backdrop-blur-sm',
+              isUrgent
+                ? 'bg-primary-foreground/10 hover:bg-primary-foreground/20'
+                : 'bg-secondary hover:bg-secondary/80',
               'transition-colors duration-200',
               isSharing && 'opacity-70 cursor-wait'
             )}
           >
-            <Share2 className="h-3.5 w-3.5" />
+            <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
             {isSharing ? 'Sharing…' : 'Share'}
           </button>
 
@@ -214,12 +221,12 @@ export function ReferralBanner({ variant = 'default', onDismiss }: ReferralBanne
               onClick={onDismiss}
               className={cn(
                 'p-1.5 rounded-lg',
-                'hover:bg-white/20',
+                isUrgent ? 'hover:bg-primary-foreground/10' : 'hover:bg-secondary',
                 'transition-colors duration-200'
               )}
               aria-label="Dismiss banner"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
           )}
         </div>

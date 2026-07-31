@@ -16,6 +16,11 @@ from app.core.exceptions import AuthenticationError
 logger = logging.getLogger(__name__)
 
 
+def _is_missing_profile_error(error: Exception) -> bool:
+    """Return whether PostgREST reported the expected no-row condition."""
+    return getattr(error, "code", None) == "PGRST116" or "PGRST116" in str(error)
+
+
 async def get_current_user(
     db: Client = Depends(get_db),
     token_data: TokenData = Depends(verify_token)
@@ -51,9 +56,16 @@ async def get_current_user(
             if not user.data.get("email") and token_data.email:
                 user.data["email"] = token_data.email
             return user.data
-    except Exception:
-        # User might not exist in public.users table yet
-        pass
+    except Exception as error:
+        # Only a confirmed no-row response may enter OAuth profile
+        # auto-provisioning. Timeouts, permissions, and other database errors
+        # must not be misclassified as a missing profile.
+        if not _is_missing_profile_error(error):
+            logger.warning("Failed to load user profile for %s: %s", token_data.sub, error)
+            raise AuthenticationError(
+                message="User profile lookup failed",
+                error_code="AUTH_PROFILE_LOOKUP_ERROR",
+            ) from error
 
     # Profile doesn't exist - attempt auto-creation for OAuth users.
     # All sync Supabase calls run in a worker thread so first-login does not

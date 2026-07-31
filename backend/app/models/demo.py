@@ -6,7 +6,13 @@ Pydantic models for public demo endpoints (no authentication required).
 
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.utils.image_processing import make_base64_image_validator
+
+_MAX_INLINE_IMAGE_BYTES = 7 * 1024 * 1024
+
+_validate_inline_image = make_base64_image_validator(_MAX_INLINE_IMAGE_BYTES)
 
 
 # =============================================================================
@@ -22,6 +28,8 @@ class DemoExtractItemsRequest(BaseModel):
         description="Base64-encoded image data",
         max_length=10_000_000,  # ~7.5MB limit
     )
+
+    _validate_image = field_validator("image")(_validate_inline_image)
 
 
 class DemoTryOnRequest(BaseModel):
@@ -47,6 +55,9 @@ class DemoTryOnRequest(BaseModel):
         description="Overall style (casual, formal, etc.)",
         max_length=50,
     )
+
+    _validate_person_image = field_validator("person_image")(_validate_inline_image)
+    _validate_clothing_image = field_validator("clothing_image")(_validate_inline_image)
 
 
 # =============================================================================

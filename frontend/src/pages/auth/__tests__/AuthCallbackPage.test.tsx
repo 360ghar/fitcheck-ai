@@ -27,6 +27,7 @@ describe('AuthCallbackPage', () => {
     navigate.mockReset()
     handleOAuthCallback.mockReset()
     handleOAuthCallback.mockResolvedValue(undefined)
+    localStorage.clear()
   })
 
   it('calls handleOAuthCallback once under StrictMode', async () => {
@@ -39,5 +40,15 @@ describe('AuthCallbackPage', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalled())
     expect(handleOAuthCallback).toHaveBeenCalledTimes(1)
     expect(navigate).toHaveBeenCalledWith('/dashboard', { replace: true })
+  })
+
+  it('returns OAuth users to the pending internal destination', async () => {
+    localStorage.setItem('pending_auth_return_to', '/outfits/outfit-1')
+
+    render(<AuthCallbackPage />)
+
+    await waitFor(() => expect(navigate).toHaveBeenCalled())
+    expect(navigate).toHaveBeenCalledWith('/outfits/outfit-1', { replace: true })
+    expect(localStorage.getItem('pending_auth_return_to')).toBeNull()
   })
 })

@@ -58,7 +58,7 @@ export default function Hero() {
                 className="absolute inset-0 w-full h-full object-cover"
                 width={1152}
                 height={864}
-                fetchPriority="high"
+                {...({ fetchpriority: 'high' } as Record<string, string>)}
               />
               <div className="absolute inset-0 bg-stone-950/35" />
 

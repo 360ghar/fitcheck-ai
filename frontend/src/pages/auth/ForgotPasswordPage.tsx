@@ -4,13 +4,16 @@
  */
 
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Mail, AlertCircle, CheckCircle } from 'lucide-react'
 import { requestPasswordReset } from '@/api/auth'
 import { Button } from '@/components/ui/button'
 import SEO from '@/components/seo/SEO'
+import { withAuthContext } from './authRedirect'
 
 export default function ForgotPasswordPage() {
+  const [searchParams] = useSearchParams()
+  const returnTo = searchParams.get('returnTo')
   const [email, setEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -97,7 +100,7 @@ export default function ForgotPasswordPage() {
           </form>
 
           <div className="mt-6 text-center">
-            <Link to="/auth/login" className="text-sm font-medium text-primary hover:text-primary/80">
+            <Link to={withAuthContext('/auth/login', undefined, returnTo)} className="text-sm font-medium text-primary hover:text-primary/80">
               Back to sign in
             </Link>
           </div>

@@ -2,7 +2,17 @@
 
 ## Overview
 
-This document provides a complete specification for all FastAPI endpoints, including request/response examples, error codes, and authentication requirements.
+This is a curated API reference for representative endpoints, request/response
+examples, error codes, and authentication requirements. The running FastAPI
+OpenAPI document (`/api/v1/openapi.json`, exposed by the app's docs route) is
+canonical; this file is not a generated or complete contract.
+
+Known reconciliation points: `/items/upload` is currently synchronous despite
+its 202 declaration (TD-023); SSE terminal event names differ between streams
+(TD-020); feature flags alter route behavior; Stripe price IDs are environment
+configuration; and outfit garment references are capped at 12 by default while
+provider image-count behavior remains unverified (TD-033). Compare the live
+OpenAPI output before making a client contract claim.
 
 ## Base URL
 

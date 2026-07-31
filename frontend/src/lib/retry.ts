@@ -5,6 +5,8 @@
  * exponential backoff and jitter to prevent thundering herd problems.
  */
 
+import { isRateLimitExhausted } from '@/lib/errors'
+
 export interface RetryOptions {
   /** Maximum number of retry attempts (default: 3) */
   maxRetries?: number
@@ -44,9 +46,17 @@ const DEFAULT_OPTIONS: Required<Omit<RetryOptions, 'onRetry' | 'signal'>> = {
  * Check if an error is retryable based on status code or error type
  */
 function isRetryableError(error: unknown, retryableStatusCodes: number[]): boolean {
+  // A 429 carrying RATE_LIMIT_EXCEEDED is the user's OWN deterministic plan
+  // limit (raised pre-flight by the backend) — it cannot clear within
+  // seconds, so retrying only multiplies duplicate requests and delays the
+  // upgrade prompt. Other 429s (upstream capacity) stay retryable.
+  if (isRateLimitExhausted(error)) {
+    return false
+  }
+
   // Check for Axios error with response status
   if (error && typeof error === 'object' && 'response' in error) {
-    const axiosError = error as { response?: { status?: number } }
+    const axiosError = error as { response?: { status?: number; data?: unknown } }
     const status = axiosError.response?.status
     if (status && retryableStatusCodes.includes(status)) {
       return true

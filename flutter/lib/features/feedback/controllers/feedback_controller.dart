@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,8 +10,12 @@ import '../../../core/utils/error_handler.dart';
 
 /// Controller for feedback submission
 class FeedbackController extends GetxController {
-  final FeedbackRepository _repository = FeedbackRepository();
+  final FeedbackRepository _repository;
   final ImagePicker _imagePicker = ImagePicker();
+  Timer? _successResetTimer;
+
+  FeedbackController({FeedbackRepository? repository})
+    : _repository = repository ?? FeedbackRepository();
 
   // Form state
   final Rx<TicketCategory> category = TicketCategory.generalFeedback.obs;
@@ -48,6 +53,8 @@ class FeedbackController extends GetxController {
 
   @override
   void onClose() {
+    _successResetTimer?.cancel();
+    _successResetTimer = null;
     subjectController.dispose();
     descriptionController.dispose();
     super.onClose();
@@ -56,7 +63,10 @@ class FeedbackController extends GetxController {
   /// Pick image from gallery
   Future<void> pickImage() async {
     if (attachments.length >= 5) {
-      ErrorHandler.showValidation('Maximum 5 attachments allowed', title: 'Limit Reached');
+      ErrorHandler.showValidation(
+        'Maximum 5 attachments allowed',
+        title: 'Limit Reached',
+      );
       return;
     }
 
@@ -68,11 +78,16 @@ class FeedbackController extends GetxController {
     );
 
     if (pickedFile != null) {
+      if (isClosed) return;
       final file = File(pickedFile.path);
       final size = await file.length();
+      if (isClosed) return;
 
       if (size > 5 * 1024 * 1024) {
-        ErrorHandler.showValidation('Image must be under 5MB', title: 'File Too Large');
+        ErrorHandler.showValidation(
+          'Image must be under 5MB',
+          title: 'File Too Large',
+        );
         return;
       }
 
@@ -83,7 +98,10 @@ class FeedbackController extends GetxController {
   /// Take photo with camera
   Future<void> takePhoto() async {
     if (attachments.length >= 5) {
-      ErrorHandler.showValidation('Maximum 5 attachments allowed', title: 'Limit Reached');
+      ErrorHandler.showValidation(
+        'Maximum 5 attachments allowed',
+        title: 'Limit Reached',
+      );
       return;
     }
 
@@ -95,11 +113,16 @@ class FeedbackController extends GetxController {
     );
 
     if (pickedFile != null) {
+      if (isClosed) return;
       final file = File(pickedFile.path);
       final size = await file.length();
+      if (isClosed) return;
 
       if (size > 5 * 1024 * 1024) {
-        ErrorHandler.showValidation('Image must be under 5MB', title: 'File Too Large');
+        ErrorHandler.showValidation(
+          'Image must be under 5MB',
+          title: 'File Too Large',
+        );
         return;
       }
 
@@ -129,6 +152,8 @@ class FeedbackController extends GetxController {
         attachments: attachments.isNotEmpty ? attachments.toList() : null,
       );
 
+      if (isClosed) return;
+
       // Reset form
       category.value = TicketCategory.generalFeedback;
       subjectController.clear();
@@ -138,19 +163,24 @@ class FeedbackController extends GetxController {
       attachments.clear();
 
       showSuccess.value = true;
-      Future.delayed(const Duration(seconds: 5), () {
-        showSuccess.value = false;
-      });
+      scheduleSuccessDismissal();
 
       // Reload tickets
       fetchTickets();
 
-      ErrorHandler.showInfo('Your feedback has been submitted successfully.', title: 'Thank You!');
+      ErrorHandler.showInfo(
+        'Your feedback has been submitted successfully.',
+        title: 'Thank You!',
+      );
     } catch (e) {
+      if (isClosed) return;
       error.value = ErrorHandler.extractMessage(e);
-      ErrorHandler.showError('Failed to submit feedback. Please try again.', title: 'Error');
+      ErrorHandler.showError(
+        'Failed to submit feedback. Please try again.',
+        title: 'Error',
+      );
     } finally {
-      isSubmitting.value = false;
+      if (!isClosed) isSubmitting.value = false;
     }
   }
 
@@ -160,12 +190,24 @@ class FeedbackController extends GetxController {
     isLoadingTickets.value = true;
     try {
       final result = await _repository.getMyTickets();
+      if (isClosed) return;
       tickets.assignAll(result);
     } catch (e) {
-      // Ignore - user might not be authenticated
+      if (isClosed) return;
+      error.value = ErrorHandler.extractMessage(e);
     } finally {
-      isLoadingTickets.value = false;
+      if (!isClosed) isLoadingTickets.value = false;
     }
+  }
+
+  @visibleForTesting
+  void scheduleSuccessDismissal({
+    Duration duration = const Duration(seconds: 5),
+  }) {
+    _successResetTimer?.cancel();
+    _successResetTimer = Timer(duration, () {
+      if (!isClosed) showSuccess.value = false;
+    });
   }
 
   /// Set category and optionally navigate from help page

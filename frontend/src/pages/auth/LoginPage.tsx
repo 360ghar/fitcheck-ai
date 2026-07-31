@@ -9,11 +9,13 @@ import { useAuthStore } from '../../stores/authStore'
 import { Mail, Lock, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import SEO from '@/components/seo/SEO'
+import { getPostAuthDestination, persistAuthReturnTo, withAuthContext } from './authRedirect'
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const selectedPlan = searchParams.get('plan_type')
+  const returnTo = searchParams.get('returnTo')
   const login = useAuthStore((state) => state.login)
   const signInWithGoogle = useAuthStore((state) => state.signInWithGoogle)
   const isLoading = useAuthStore((state) => state.isLoading)
@@ -31,7 +33,11 @@ export default function LoginPage() {
 
     try {
       await login(email, password)
-      navigate(selectedPlan ? `/profile?tab=plan&plan_type=${encodeURIComponent(selectedPlan)}` : '/dashboard')
+      // The URL's plan_type (if any) has been handled by the destination;
+      // clear any stale key left behind by an aborted Google sign-in so it
+      // cannot hijack a later Google login.
+      localStorage.removeItem('pending_plan_type')
+      navigate(getPostAuthDestination(returnTo, selectedPlan))
     } catch {
       // Error is handled by the store
     }
@@ -44,6 +50,7 @@ export default function LoginPage() {
       if (selectedPlan) {
         localStorage.setItem('pending_plan_type', selectedPlan)
       }
+      persistAuthReturnTo(returnTo)
       await signInWithGoogle()
       // User will be redirected to Google
     } catch {
@@ -179,7 +186,7 @@ export default function LoginPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
               <div className="text-sm">
                 <Link
-                  to="/auth/forgot-password"
+                  to={withAuthContext('/auth/forgot-password', undefined, returnTo)}
                   className="font-medium text-primary hover:text-primary/80"
                 >
                   Forgot password?
@@ -204,7 +211,7 @@ export default function LoginPage() {
             <p className="text-sm text-muted-foreground">
               Don't have an account?{' '}
               <Link
-                to={selectedPlan ? `/auth/register?plan_type=${encodeURIComponent(selectedPlan)}` : '/auth/register'}
+                to={withAuthContext('/auth/register', selectedPlan, returnTo)}
                 className="font-medium text-primary hover:text-primary/80"
               >
                 Sign up

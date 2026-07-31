@@ -60,6 +60,7 @@ export function BottomNav() {
 
   return (
     <nav
+      aria-label="Primary navigation"
       className={cn(
         // Fixed to bottom with safe area padding
         'fixed bottom-0 left-0 right-0 z-[100] w-screen max-w-[100vw]',

@@ -3,7 +3,8 @@ Referral service for managing referral codes and redemptions.
 """
 import asyncio
 import re
-from app.utils.datetime_util import utcnow, utcnow_iso
+from app.utils.datetime_util import utcnow
+from app.utils.db import unwrap_rpc_result
 from typing import Any, Dict, Optional
 
 from supabase import Client
@@ -17,7 +18,6 @@ from app.models.subscription import (
     ValidateReferralResponse,
     RedeemReferralResponse,
 )
-from app.services.subscription_service import SubscriptionService
 
 logger = get_context_logger(__name__)
 
@@ -280,94 +280,20 @@ class ReferralService:
         """Redeem a referral code for a new user."""
         normalized_code = ReferralService._normalize_code(code)
         try:
-            # Validate the code first
-            validation = await ReferralService.validate_referral_code(normalized_code, db)
-            if not validation.valid:
-                return RedeemReferralResponse(
-                    success=False,
-                    message=validation.message or "Invalid referral code",
-                    credit_months=0,
-                )
-
-            # Get the referral code record
-            code_result = await asyncio.to_thread(
-                db.table("referral_codes")
-                .select("*")
-                .eq("code", normalized_code)
-                .maybe_single()
-                .execute
-            )
-
-            if not code_result or not code_result.data:
-                return RedeemReferralResponse(
-                    success=False,
-                    message="Referral code not found",
-                    credit_months=0,
-                )
-
-            referrer_user_id = code_result.data["user_id"]
-            referral_code_id = code_result.data["id"]
-
-            # Check if user is trying to use their own code
-            if referrer_user_id == referred_user_id:
-                return RedeemReferralResponse(
-                    success=False,
-                    message="You cannot use your own referral code",
-                    credit_months=0,
-                )
-
-            # Check if this user has already been referred
-            existing = await asyncio.to_thread(db.table("referral_redemptions").select("id").eq("referred_user_id", referred_user_id).execute)
-
-            if existing.data:
-                return RedeemReferralResponse(
-                    success=False,
-                    message="You have already used a referral code",
-                    credit_months=0,
-                )
-
-            # Create redemption record
-            await asyncio.to_thread(db.table("referral_redemptions").insert({
-                "referrer_user_id": referrer_user_id,
-                "referred_user_id": referred_user_id,
-                "referral_code_id": referral_code_id,
-                "referrer_credit_applied": False,
-                "referred_credit_applied": False,
-                "redeemed_at": utcnow_iso(),
-            }).execute)
-
-            # Increment times_used on the referral code atomically to prevent race conditions
-            await asyncio.to_thread(db.rpc("increment_referral_times_used", {
-                "p_referral_code_id": referral_code_id,
-                "p_count": 1,
-            }).execute)
-
-            # Apply credits to both users
             credit_months = settings.REFERRAL_CREDIT_MONTHS
-
-            # Credit the referred user (new user)
-            await SubscriptionService.apply_referral_credit(referred_user_id, credit_months, db)
-            await asyncio.to_thread(db.table("referral_redemptions").update({
-                "referred_credit_applied": True,
-            }).eq("referred_user_id", referred_user_id).execute)
-
-            # Credit the referrer
-            await SubscriptionService.apply_referral_credit(referrer_user_id, credit_months, db)
-            await asyncio.to_thread(db.table("referral_redemptions").update({
-                "referrer_credit_applied": True,
-            }).eq("referred_user_id", referred_user_id).execute)
-
-            # Update the referred_by_code on the user
-            await asyncio.to_thread(db.table("users").update({
-                "referred_by_code": normalized_code,
-            }).eq("id", referred_user_id).execute)
-
-            logger.info(f"Referral redeemed: {referred_user_id} used code {normalized_code} from {referrer_user_id}")
+            result = await asyncio.to_thread(db.rpc("redeem_referral_atomic", {
+                "p_referred_user_id": referred_user_id,
+                "p_code": normalized_code,
+                "p_credit_months": credit_months,
+            }).execute)
+            data = unwrap_rpc_result(result)
+            if not isinstance(data, dict):
+                raise DatabaseError("Referral redemption returned no result")
 
             return RedeemReferralResponse(
-                success=True,
-                message=f"Referral code applied! You and your friend both received {credit_months} month(s) of Pro free.",
-                credit_months=credit_months,
+                success=bool(data.get("success")),
+                message=data.get("message") or "Referral code applied",
+                credit_months=int(data.get("credit_months") or 0),
             )
 
         except Exception as e:

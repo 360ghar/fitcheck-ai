@@ -1,9 +1,9 @@
 /**
  * StatCard Component
  *
- * A compact stat card with gradient accent and hover effects.
+ * A compact stat card with a restrained semantic accent and hover effects.
  * Features:
- * - Gradient accent bar at top
+ * - Solid semantic accent bar at top
  * - Horizontal layout: icon on the left, value and label on the right
  * - Loading skeleton support
  * - Hover lift animation
@@ -29,7 +29,7 @@ export interface StatCardProps {
   value: number | string
   /** Icon component */
   icon: LucideIcon
-  /** Gradient for accent bar and icon background */
+  /** Semantic tone for the accent bar and icon background. */
   gradient?: 'primary' | 'accent' | 'cool' | 'warm' | 'success'
   /** Link destination */
   link?: string
@@ -43,31 +43,26 @@ export interface StatCardProps {
 // HELPERS
 // ============================================================================
 
-const gradientConfig = {
+const toneConfig = {
   primary: {
-    bar: 'bg-gradient-primary',
-    icon: 'bg-gradient-to-br from-indigo-500 to-purple-600',
-    shadow: 'shadow-indigo-500/25',
+    bar: 'bg-primary',
+    icon: 'bg-primary text-primary-foreground',
   },
   accent: {
-    bar: 'bg-gradient-accent',
-    icon: 'bg-gradient-to-br from-amber-500 to-red-500',
-    shadow: 'shadow-amber-500/25',
+    bar: 'bg-primary',
+    icon: 'bg-primary/10 text-primary',
   },
   cool: {
-    bar: 'bg-gradient-cool',
-    icon: 'bg-gradient-to-br from-cyan-500 to-blue-500',
-    shadow: 'shadow-cyan-500/25',
+    bar: 'bg-secondary',
+    icon: 'bg-secondary text-secondary-foreground',
   },
   warm: {
-    bar: 'bg-gradient-warm',
-    icon: 'bg-gradient-to-br from-orange-500 to-pink-500',
-    shadow: 'shadow-orange-500/25',
+    bar: 'bg-secondary',
+    icon: 'bg-secondary text-secondary-foreground',
   },
   success: {
-    bar: 'bg-gradient-success',
-    icon: 'bg-gradient-to-br from-emerald-500 to-cyan-500',
-    shadow: 'shadow-emerald-500/25',
+    bar: 'bg-success-pale',
+    icon: 'bg-success-pale text-success-deep',
   },
 }
 
@@ -88,7 +83,7 @@ export const StatCard = React.forwardRef<HTMLDivElement, StatCardProps>(
     },
     ref
   ) => {
-    const config = gradientConfig[gradient]
+    const config = toneConfig[gradient]
 
     const content = (
       <div
@@ -103,21 +98,19 @@ export const StatCard = React.forwardRef<HTMLDivElement, StatCardProps>(
           className
         )}
       >
-        {/* Gradient accent bar */}
+        {/* Solid semantic accent bar */}
         <div className={cn('absolute top-0 left-0 right-0 h-1', config.bar)} />
 
         <div className="p-3 md:p-4">
           <div className="flex items-center gap-3">
-            {/* Icon with gradient background */}
+            {/* Icon with semantic background */}
             <div
               className={cn(
                 'shrink-0 p-2 md:p-2.5 rounded-lg',
                 config.icon,
-                '',
-                config.shadow
               )}
             >
-              <Icon className="h-4 w-4 md:h-5 md:w-5 text-white" />
+              <Icon className="h-4 w-4 md:h-5 md:w-5" aria-hidden="true" />
             </div>
 
             {/* Value and label */}

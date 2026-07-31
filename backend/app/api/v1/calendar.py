@@ -60,6 +60,7 @@ class CalendarEventData(BaseModel):
     start_time: str
     end_time: str
     location: Optional[str] = None
+    is_all_day: bool = False
     outfit_id: Optional[str] = None
     event_type: str = Field("other", max_length=30)
 
@@ -75,6 +76,8 @@ class CreateEventRequest(BaseModel):
     end_time: str
     location: Optional[str] = None
     calendar_id: Optional[str] = None
+    is_all_day: bool = False
+    outfit_id: Optional[str] = None
     event_type: str = Field("other", max_length=30)
 
 
@@ -340,6 +343,7 @@ async def get_calendar_events(
                     start_time=row.get("start_time"),
                     end_time=row.get("end_time"),
                     location=row.get("location"),
+                    is_all_day=bool(row.get("is_all_day", False)),
                     outfit_id=row.get("outfit_id"),
                     event_type=row.get("event_type") or "other",
                 )
@@ -397,7 +401,8 @@ async def create_calendar_event(
             "start_time": request.start_time,
             "end_time": request.end_time,
             "location": request.location,
-            "outfit_id": None,
+            "is_all_day": request.is_all_day,
+            "outfit_id": request.outfit_id,
             "event_type": request.event_type,
             "created_at": now,
             "updated_at": now,

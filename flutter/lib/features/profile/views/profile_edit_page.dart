@@ -91,7 +91,10 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     if (!_formKey.currentState!.validate()) return;
     if (_birthDateController.text.trim().isEmpty &&
         _birthTimeController.text.trim().isNotEmpty) {
-      ErrorHandler.showValidation('Please select date of birth if birth time is provided.', title: 'Date of Birth Required');
+      ErrorHandler.showValidation(
+        'Please select date of birth if birth time is provided.',
+        title: 'Date of Birth Required',
+      );
       return;
     }
 
@@ -139,12 +142,18 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       await authController.refreshUser();
 
       if (skippedBirthFields.isNotEmpty) {
-        ErrorHandler.showSuccess('Birth details couldn’t be saved right now. Please try again later.', title: 'Profile Partially Updated');
+        ErrorHandler.showSuccess(
+          'Birth details couldn’t be saved right now. Please try again later.',
+          title: 'Profile Partially Updated',
+        );
         return;
       }
 
       Get.back();
-      ErrorHandler.showSuccess('Profile updated successfully', title: 'Success');
+      ErrorHandler.showSuccess(
+        'Profile updated successfully',
+        title: 'Success',
+      );
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {
@@ -193,62 +202,71 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
               child: Column(
                 children: [
                   // Avatar section
-                  GestureDetector(
-                    onTap: _pickAvatar,
-                    child: AppGlassCard(
-                      padding: const EdgeInsets.all(AppConstants.spacing20),
-                      child: Row(
-                        children: [
-                          Obx(() {
-                            final avatar = newAvatar.value;
+                  Semantics(
+                    button: true,
+                    label: 'Change profile photo',
+                    hint: 'Double tap to choose a new avatar.',
+                    child: GestureDetector(
+                      onTap: _pickAvatar,
+                      child: AppGlassCard(
+                        padding: const EdgeInsets.all(AppConstants.spacing20),
+                        child: Row(
+                          children: [
+                            Obx(() {
+                              final avatar = newAvatar.value;
 
-                            return Container(
-                              width: 80,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: tokens.brandColor,
-                                  width: 2,
+                              return Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: tokens.brandColor,
+                                    width: 2,
+                                  ),
                                 ),
+                                child: ClipOval(
+                                  child: avatar != null
+                                      ? Image.file(avatar, fit: BoxFit.cover)
+                                      : _currentAvatarUrl != null &&
+                                            _currentAvatarUrl!.isNotEmpty
+                                      ? Image.network(
+                                          _currentAvatarUrl!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) =>
+                                                  _buildAvatarPlaceholder(
+                                                    tokens,
+                                                  ),
+                                        )
+                                      : _buildAvatarPlaceholder(tokens),
+                                ),
+                              );
+                            }),
+                            const SizedBox(width: AppConstants.spacing16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Profile Photo',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                  ),
+                                  const SizedBox(height: AppConstants.spacing4),
+                                  Text(
+                                    'Tap to change',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(color: tokens.textMuted),
+                                  ),
+                                ],
                               ),
-                              child: ClipOval(
-                                child: avatar != null
-                                    ? Image.file(avatar, fit: BoxFit.cover)
-                                    : _currentAvatarUrl != null &&
-                                          _currentAvatarUrl!.isNotEmpty
-                                    ? Image.network(
-                                        _currentAvatarUrl!,
-                                        fit: BoxFit.cover,
-                                        errorBuilder:
-                                            (context, error, stackTrace) =>
-                                                _buildAvatarPlaceholder(tokens),
-                                      )
-                                    : _buildAvatarPlaceholder(tokens),
-                              ),
-                            );
-                          }),
-                          const SizedBox(width: AppConstants.spacing16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Profile Photo',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w600),
-                                ),
-                                const SizedBox(height: AppConstants.spacing4),
-                                Text(
-                                  'Tap to change',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(color: tokens.textMuted),
-                                ),
-                              ],
                             ),
-                          ),
-                          Icon(Icons.camera_alt, color: tokens.brandColor),
-                        ],
+                            Icon(Icons.camera_alt, color: tokens.brandColor),
+                          ],
+                        ),
                       ),
                     ),
                   ),

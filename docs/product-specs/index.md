@@ -4,6 +4,7 @@
 |-----|-------------|
 | [overview.md](./overview.md) | Product framing and scope |
 | [user-stories.md](./user-stories.md) | User journeys |
+| [user-story-ledger.md](./user-story-ledger.md) | Authoritative story evidence and verification ledger |
 | [implementation-status.md](./implementation-status.md) | Feature-level implementation tracker |
 | [authentication-notes.md](./authentication-notes.md) | Auth behavior notes |
 | [user-management-notes.md](./user-management-notes.md) | Profile / user management |

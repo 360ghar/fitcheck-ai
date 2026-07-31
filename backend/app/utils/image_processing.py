@@ -53,6 +53,16 @@ DEFAULT_CROP_PADDING_FLOOR = 4.0
 
 FALLBACK_MIME = "application/octet-stream"
 
+# Formats accepted at user-upload boundaries. Provider-only formats such as
+# AVIF/HEIF remain detectable for downstream use, but are not accepted here
+# until every client and image pipeline can decode them consistently.
+SUPPORTED_UPLOAD_MIME_TYPES = frozenset({
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+})
+
 # Magic-byte prefixes, so a MIME can be resolved from ~32 bytes with no
 # decode and no Pillow call. Order matters only in that ISO-BMFF (`ftyp`)
 # checks look at bytes 4-12 rather than 0.
@@ -149,6 +159,79 @@ def sniff_image_mime(file_data: bytes, filename: Optional[str] = None) -> str:
             return mime
 
     return FALLBACK_MIME
+
+
+def validate_image_bytes(
+    file_data: bytes,
+    *,
+    max_bytes: int,
+    allowed_mimes: Optional[set[str] | frozenset[str]] = None,
+) -> str:
+    """Decode and validate an image payload at an upload boundary.
+
+    Multipart content types, filenames, and base64 strings are all
+    caller-controlled. This helper verifies the actual bytes with Pillow and
+    returns the decoded MIME type so callers can reject spoofed payloads before
+    they enter a job or storage bucket.
+
+    Raises ``ValueError`` so Pydantic validators can surface a normal 422;
+    HTTP routes should translate it to ``UnsupportedMediaTypeError``.
+    """
+    if not file_data:
+        raise ValueError("Image payload is empty")
+    if len(file_data) > max_bytes:
+        raise ValueError(f"Image payload exceeds the {max_bytes // (1024 * 1024)}MB limit")
+
+    try:
+        with Image.open(io.BytesIO(file_data)) as image:
+            image.verify()
+    except Exception as error:
+        raise ValueError("Image payload is not a valid decodable image") from error
+
+    mime = sniff_image_mime(file_data, "")
+    accepted = allowed_mimes or SUPPORTED_UPLOAD_MIME_TYPES
+    if mime not in accepted:
+        raise ValueError(f"Unsupported decoded image format: {mime}")
+    return mime
+
+
+def decode_and_validate_base64_image(value: str, *, max_bytes: int) -> bytes:
+    """Decode a raw base64/data-URL image and validate its actual bytes."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("Image payload is required")
+
+    payload = value.strip()
+    if payload.lower().startswith("data:"):
+        header, separator, payload = payload.partition(",")
+        if not separator or ";base64" not in header.lower():
+            raise ValueError("Image data URL must contain base64-encoded data")
+
+    try:
+        decoded = base64.b64decode(payload, validate=True)
+    except (ValueError, TypeError, base64.binascii.Error) as error:
+        raise ValueError("Image payload is not valid base64") from error
+
+    validate_image_bytes(decoded, max_bytes=max_bytes)
+    return decoded
+
+
+def make_base64_image_validator(max_bytes: int):
+    """Build a ``field_validator``-compatible base64 image validator.
+
+    Four request models across the API duplicated the same
+    decode-and-validate wrapper (``models/ai.py``, ``models/demo.py``,
+    ``api/v1/batch_processing.py``) with identical error wording. This factory
+    keeps the decode + byte verification + MIME allowlist in one place.
+    """
+
+    def validate(value: str) -> str:
+        try:
+            decode_and_validate_base64_image(value, max_bytes=max_bytes)
+        except ValueError as error:
+            raise ValueError(f"Image is invalid: {error}") from error
+        return value
+
+    return validate
 
 
 def to_data_url(image_base64: str) -> str:

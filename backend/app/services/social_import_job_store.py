@@ -31,17 +31,21 @@ class SocialImportJobStore:
         platform: str,
         source_url: str,
         normalized_url: str,
+        max_concurrent_jobs: int = 1,
     ) -> Dict[str, Any]:
-        payload = {
-            "user_id": user_id,
-            "platform": platform,
-            "source_url": source_url,
-            "normalized_url": normalized_url,
-            "status": SocialImportJobStatus.CREATED.value,
-            "created_at": _utc_now_iso(),
-            "updated_at": _utc_now_iso(),
-        }
-        result = await asyncio.to_thread(db.table("social_import_jobs").insert(payload).execute)
+        """Create a job under the database-enforced per-user limit."""
+        result = await asyncio.to_thread(
+            db.rpc(
+                "create_social_import_job",
+                {
+                    "p_user_id": user_id,
+                    "p_platform": platform,
+                    "p_source_url": source_url,
+                    "p_normalized_url": normalized_url,
+                    "p_max_concurrent_jobs": max_concurrent_jobs,
+                },
+            ).execute
+        )
         rows = result.data or []
         if not rows:
             raise RuntimeError("Failed to create social import job")

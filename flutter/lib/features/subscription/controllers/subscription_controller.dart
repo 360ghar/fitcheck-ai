@@ -25,7 +25,13 @@ class SubscriptionController extends GetxController {
   final RxString referralError = ''.obs;
 
   // Computed properties
-  bool get isPro => subscription.value?.planType != PlanType.free;
+  bool get isPro {
+    final plan = subscription.value?.planType;
+    // An unknown plan (fetch failed / still pending) must not be treated as
+    // paid, or the page would show pricing and a "Cancel subscription"
+    // section for a user whose entitlement is unknown.
+    return plan != null && plan != PlanType.free;
+  }
   bool get isCancelled => subscription.value?.cancelAtPeriodEnd ?? false;
 
   /// Whether a higher tier exists to upsell (Free and Plus users).
@@ -35,6 +41,7 @@ class SubscriptionController extends GetxController {
   /// `!isPro` would leave them with no way to do it.
   bool get canUpgrade {
     final plan = subscription.value?.planType;
+    if (plan == null) return false; // entitlement unknown (fetch failed / pending)
     return plan != PlanType.proMonthly && plan != PlanType.proYearly;
   }
 

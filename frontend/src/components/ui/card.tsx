@@ -96,17 +96,4 @@ const CardFooter = React.forwardRef<
 ))
 CardFooter.displayName = "CardFooter"
 
-/** Solid brand accent bar for cards (name retained for API compatibility). */
-const CardAccent = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & { gradient?: string }
->(({ className, gradient = "bg-primary", ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn("absolute top-0 left-0 right-0 h-1", gradient, className)}
-    {...props}
-  />
-))
-CardAccent.displayName = "CardAccent"
-
-export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent, CardAccent, cardVariants }
+export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent, cardVariants }

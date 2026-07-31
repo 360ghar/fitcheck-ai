@@ -12,7 +12,7 @@ import { useDropzone } from 'react-dropzone';
 import { Camera, Loader2, Download, AlertCircle, CheckCircle2, ArrowRight, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { logger } from '@/lib/logger';
-import { GlassCard } from './GlassCard';
+import { EditorialPanel } from './EditorialPanel';
 import { LoginPromptModal } from './LoginPromptModal';
 import { demoPhotoshoot, DemoPhotoshootResult, DemoApiError } from '@/api/demo';
 import { ensureSessionRecording, trackEvent } from '@/lib/analytics';
@@ -189,7 +189,7 @@ export function PhotoshootDemo() {
   };
 
   return (
-    <GlassCard className="p-6 h-full flex flex-col">
+    <EditorialPanel className="p-6 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
         <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
@@ -379,6 +379,6 @@ export function PhotoshootDemo() {
         onClose={() => setShowLoginModal(false)}
         feature="get 10 free AI photoshoot images per day"
       />
-    </GlassCard>
+    </EditorialPanel>
   );
 }

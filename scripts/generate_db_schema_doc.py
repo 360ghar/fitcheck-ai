@@ -29,6 +29,13 @@ ALTER_TABLE_RE = re.compile(
     r"ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z0-9_\.\"]+)",
     re.IGNORECASE,
 )
+# ALTER TABLE ... ADD COLUMN [IF NOT EXISTS] <name> <rest-of-statement-until-;>
+# Captures the column definition so contract-critical additions (NOT NULL
+# DEFAULT) can be flagged generically instead of per-migration.
+ALTER_ADD_COLUMN_RE = re.compile(
+    r"ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z0-9_\.\"]+)\s+ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+([a-zA-Z0-9_\"]+)([^;]*)",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def clean_name(name: str) -> str:
@@ -39,6 +46,7 @@ def main() -> None:
     files = sorted(MIGRATIONS.glob("*.sql"))
     tables: dict[str, list[str]] = {}
     alters: list[tuple[str, str]] = []
+    added_columns: list[tuple[str, str, str, str]] = []
 
     for path in files:
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -47,6 +55,10 @@ def main() -> None:
             tables.setdefault(t, []).append(path.name)
         for m in ALTER_TABLE_RE.finditer(text):
             alters.append((path.name, clean_name(m.group(1))))
+        for m in ALTER_ADD_COLUMN_RE.finditer(text):
+            added_columns.append(
+                (path.name, clean_name(m.group(1)), m.group(2).replace('"', ""), m.group(3))
+            )
 
     lines = [
         "# Database schema (generated)",
@@ -81,16 +93,29 @@ def main() -> None:
         for t in sorted(tables):
             lines.append(f"| `{t}` | {', '.join(f'`{x}`' for x in tables[t])} |")
 
-    # The extractor intentionally stays lightweight, but migrations that add
-    # contract-critical columns deserve an explicit orientation note.
-    if (MIGRATIONS / "021_calendar_event_type.sql").exists():
-        lines.extend([
-            "",
-            "## Calendar event columns",
-            "",
-            "The `calendar_events.event_type` column is added by "
-            "`021_calendar_event_type.sql`, is required, and defaults to `other`.",
-        ])
+    # The extractor intentionally stays lightweight, but migrations that add a
+    # contract-critical column (required, NOT NULL, with a DEFAULT) deserve an
+    # explicit orientation note. Detected generically from the DDL so future
+    # migrations are covered without a per-file special case.
+    contract_columns = [
+        (mig, table, column)
+        for mig, table, column, definition in added_columns
+        if "NOT NULL" in definition.upper() and "DEFAULT" in definition.upper()
+    ]
+    if contract_columns:
+        lines.extend(["", "## Required columns added after table creation", ""])
+        lines.append("| Migration | Table | Column |")
+        lines.append("|-----------|-------|--------|")
+        for mig, table, column in contract_columns:
+            lines.append(f"| `{mig}` | `{table}` | `{column}` |")
+        lines.extend(
+            [
+                "",
+                "These columns are added after their table's CREATE TABLE and are "
+                "required (NOT NULL DEFAULT), so inserts rely on the default until "
+                "a value is supplied.",
+            ]
+        )
 
     lines.extend(["", "## ALTER TABLE references", ""])
     if not alters:

@@ -10,7 +10,7 @@ import httpx
 from supabase import Client
 
 from app.core.config import settings
-from app.core.exceptions import DatabaseError
+from app.core.exceptions import DatabaseError, RateLimitError
 from app.core.logging_config import get_context_logger
 from app.models.subscription import (
     PlanType,
@@ -22,6 +22,7 @@ from app.models.subscription import (
     UsageCheckResult,
 )
 from app.utils.datetime_util import utcnow, utcnow_iso
+from app.utils.db import unwrap_rpc_bool, unwrap_rpc_result
 from app.utils import maybe_single_data
 
 logger = get_context_logger(__name__)
@@ -582,13 +583,22 @@ class SubscriptionService:
         db: Client,
         count: int = 1,
     ) -> None:
-        """Increment usage counter for an operation."""
+        """Atomically reserve usage for an operation.
+
+        The previous check-then-increment sequence allowed concurrent
+        requests to pass the same preflight check and overshoot a plan limit.
+        The hosted Supabase RPC performs the conditional increment while the
+        usage row is locked.
+        """
         try:
             op = SubscriptionService._coerce_operation_type(operation_type)
             period_start = SubscriptionService._get_current_period_start()
 
             # Ensure usage record exists
             await SubscriptionService.get_or_create_usage_record(user_id, db)
+
+            subscription = await SubscriptionService.get_subscription(user_id, db)
+            limits = SubscriptionService.get_plan_limits(subscription.plan_type)
 
             # Map operation type to column
             column_map = {
@@ -599,19 +609,31 @@ class SubscriptionService:
 
             column = column_map[op]
 
-            # Use atomic increment via RPC to prevent race conditions
-            await asyncio.to_thread(db.rpc("increment_usage", {
+            result = await asyncio.to_thread(db.rpc("reserve_usage", {
                 "p_user_id": user_id,
                 "p_period_start": period_start.isoformat(),
                 "p_field": column,
                 "p_count": count,
+                "p_limit": limits[column],
             }).execute)
+
+            # `reserve_usage` returns a scalar BOOLEAN, so PostgREST keys the
+            # result by the function name rather than a column name.
+            reserved = unwrap_rpc_bool(result, "reserve_usage")
+            if reserved is not True:
+                raise RateLimitError(
+                    f"You've reached your monthly {op.value} limit ({limits[column]})."
+                )
 
             logger.debug(f"Incremented {op.value} usage for user {user_id} by {count}")
 
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.error(f"Error incrementing usage for user {user_id}: {e}")
-            # Don't raise - usage tracking failure shouldn't block the operation
+            # Fail closed if the reservation migration is unavailable. A
+            # best-effort counter is not safe for entitlement enforcement.
+            raise DatabaseError(f"Failed to reserve usage: {str(e)}")
 
     # ==========================================================================
     # Combined Methods

@@ -370,16 +370,12 @@ class TestPhotoshootUsageTracking:
 
     @pytest.mark.asyncio
     async def test_usage_increment(self, mock_db):
-        """Test that usage is incremented via the SQL-update fallback when the
-        atomic increment_usage RPC isn't available (e.g. migration not applied)."""
-        mock_db.rpc.return_value.execute.side_effect = Exception("RPC not available")
-
-        with patch.object(mock_db.table.return_value, 'update') as mock_update:
-            mock_update.return_value = mock_update
-            mock_update.eq = Mock(return_value=mock_update)
-            mock_update.eq.return_value = mock_update
-            mock_update.execute = Mock()
-
+        """The compatibility wrapper delegates to the atomic reservation path."""
+        with patch.object(
+            PhotoshootService,
+            "reserve_daily_usage",
+            return_value=(True, Mock()),
+        ) as reserve:
             await PhotoshootService.increment_usage("user-123", 3, mock_db)
 
-            mock_update.execute.assert_called_once()
+        reserve.assert_awaited_once_with("user-123", 3, mock_db)

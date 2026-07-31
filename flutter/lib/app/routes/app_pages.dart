@@ -55,23 +55,30 @@ class AppPages {
   static final routes = [
     // Splash/Welcome
     GetPage(name: Routes.splash, page: () => const SplashPage()),
-    GetPage(name: Routes.onboarding, page: () => const AuthEntryPage()),
+    GetPage(
+      name: Routes.onboarding,
+      page: () => const AuthEntryPage(),
+      middlewares: [GuestMiddleware()],
+    ),
 
     // Authentication
     GetPage(
       name: Routes.login,
       page: () => const LoginPage(),
       binding: AuthBinding(),
+      middlewares: [GuestMiddleware()],
     ),
     GetPage(
       name: Routes.register,
       page: () => const RegisterPage(),
       binding: AuthBinding(),
+      middlewares: [GuestMiddleware()],
     ),
     GetPage(
       name: Routes.forgotPassword,
       page: () => const ForgotPasswordPage(),
       binding: AuthBinding(),
+      middlewares: [GuestMiddleware()],
     ),
 
     // Main App (Protected Routes) - Shell with IndexedStack for main tabs
@@ -299,6 +306,24 @@ class AuthMiddleware extends GetMiddleware {
             route == Routes.onboarding ||
             route == Routes.register ||
             route == Routes.forgotPassword)) {
+      return const RouteSettings(name: Routes.home);
+    }
+
+    return null;
+  }
+}
+
+/// Prevent authenticated users from reopening guest-only auth pages.
+class GuestMiddleware extends GetMiddleware {
+  @override
+  RouteSettings? redirect(String? route) {
+    final authController = Get.find<AuthController>();
+
+    if (!authController.isInitialized.value) {
+      return const RouteSettings(name: Routes.splash);
+    }
+
+    if (authController.isAuthenticated) {
       return const RouteSettings(name: Routes.home);
     }
 

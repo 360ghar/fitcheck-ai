@@ -19,7 +19,7 @@ import {
   Shirt,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { GlassCard } from './GlassCard'
+import { EditorialPanel } from './EditorialPanel'
 import { LoginPromptModal } from './LoginPromptModal'
 import {
   demoExtractItems,
@@ -81,7 +81,7 @@ export function ExtractionDemo() {
   }
 
   return (
-    <GlassCard className="p-6 h-full flex flex-col">
+    <EditorialPanel className="p-6 h-full flex flex-col">
       <div className="flex items-center gap-3 mb-4">
         <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
           <Camera className="w-5 h-5 text-white" />
@@ -194,7 +194,7 @@ export function ExtractionDemo() {
         onClose={() => setShowLoginModal(false)}
         feature="save items to your wardrobe"
       />
-    </GlassCard>
+    </EditorialPanel>
   )
 }
 

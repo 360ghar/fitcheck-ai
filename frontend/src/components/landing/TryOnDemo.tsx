@@ -19,7 +19,7 @@ import {
   ArrowRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { GlassCard } from './GlassCard'
+import { EditorialPanel } from './EditorialPanel'
 import { LoginPromptModal } from './LoginPromptModal'
 import { demoTryOn, DemoTryOnResult, DemoApiError } from '@/api/demo'
 
@@ -95,7 +95,7 @@ export function TryOnDemo() {
   }
 
   return (
-    <GlassCard className="p-6 h-full flex flex-col">
+    <EditorialPanel className="p-6 h-full flex flex-col">
       <div className="flex items-center gap-3 mb-4">
         <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
           <Wand2 className="h-5 w-5 text-primary-foreground" />
@@ -251,6 +251,6 @@ export function TryOnDemo() {
         onClose={() => setShowLoginModal(false)}
         feature="save try-ons and keep building outfits free"
       />
-    </GlassCard>
+    </EditorialPanel>
   )
 }

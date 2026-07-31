@@ -3,7 +3,8 @@ import '../../../../domain/enums/style.dart';
 import '../../../../domain/enums/season.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/haptic_service.dart';
-import '../../../core/services/network_service.dart' show RetryHelper, NetworkService;
+import '../../../core/services/network_service.dart'
+    show RetryHelper, NetworkService;
 import '../models/outfit_model.dart';
 import '../repositories/outfit_repository.dart';
 import '../../../core/utils/frame_safe.dart';
@@ -12,19 +13,22 @@ import '../../../core/utils/error_handler.dart';
 /// Controller for outfit list, filtering, and pagination
 /// Focused responsibility: Managing the outfit list and filters
 class OutfitListController extends GetxController {
-  final OutfitRepository _repository = OutfitRepository();
+  final OutfitRepository _repository;
   final NetworkService _networkService;
+  int _fetchGeneration = 0;
 
   /// [networkService] is injectable for unit tests.
-  OutfitListController({NetworkService? networkService})
-    : _networkService = networkService ?? Get.find<NetworkService>();
+  OutfitListController({
+    NetworkService? networkService,
+    OutfitRepository? repository,
+  }) : _repository = repository ?? OutfitRepository(),
+       _networkService = networkService ?? Get.find<NetworkService>();
 
   // Workers for cleanup
   final List<Worker> _workers = [];
 
   // List state
   final RxList<OutfitModel> outfits = <OutfitModel>[].obs;
-  final RxList<OutfitModel> filteredOutfits = <OutfitModel>[].obs;
   final RxBool isLoading = false.obs;
   final RxBool isLoadingMore = false.obs;
   final RxString error = ''.obs;
@@ -54,7 +58,8 @@ class OutfitListController extends GetxController {
   final RxString singleFetchError = ''.obs;
 
   // Wear history state
-  final RxMap<String, List<WearHistoryEntry>> wearHistoryCache = <String, List<WearHistoryEntry>>{}.obs;
+  final RxMap<String, List<WearHistoryEntry>> wearHistoryCache =
+      <String, List<WearHistoryEntry>>{}.obs;
   final RxBool isLoadingWearHistory = false.obs;
 
   // Offline state
@@ -64,6 +69,10 @@ class OutfitListController extends GetxController {
   bool get hasError => error.value.isNotEmpty;
   bool get isSelectionActive => selectedIds.isNotEmpty;
   int get selectedCount => selectedIds.length;
+
+  /// The list shown to the user. Filtering is server-side, so this is the
+  /// single outfit list — kept as a named getter for view compatibility.
+  List<OutfitModel> get filteredOutfits => outfits;
 
   // Loading state helpers
   bool isDeleting(String id) => isDeletingMap[id] ?? false;
@@ -81,6 +90,7 @@ class OutfitListController extends GetxController {
 
   @override
   void onClose() {
+    _fetchGeneration++;
     for (final worker in _workers) {
       worker.dispose();
     }
@@ -91,24 +101,64 @@ class OutfitListController extends GetxController {
   void _setupFilters() {
     // Debounce all filter changes to avoid excessive API calls
     _workers.addAll([
-      debounce(searchQuery, (_) => fetchOutfits(refresh: true), time: const Duration(milliseconds: 500)),
-      debounce(selectedStyles, (_) => fetchOutfits(refresh: true), time: const Duration(milliseconds: 100)),
-      debounce(selectedSeasons, (_) => fetchOutfits(refresh: true), time: const Duration(milliseconds: 100)),
-      debounce(favoritesOnly, (_) => fetchOutfits(refresh: true), time: const Duration(milliseconds: 100)),
-      debounce(draftsOnly, (_) => fetchOutfits(refresh: true), time: const Duration(milliseconds: 100)),
+      debounce(
+        searchQuery,
+        (_) => fetchOutfits(refresh: true),
+        time: const Duration(milliseconds: 500),
+      ),
+      debounce(
+        selectedStyles,
+        (_) => fetchOutfits(refresh: true),
+        time: const Duration(milliseconds: 100),
+      ),
+      debounce(
+        selectedSeasons,
+        (_) => fetchOutfits(refresh: true),
+        time: const Duration(milliseconds: 100),
+      ),
+      debounce(
+        favoritesOnly,
+        (_) => fetchOutfits(refresh: true),
+        time: const Duration(milliseconds: 100),
+      ),
+      debounce(
+        draftsOnly,
+        (_) => fetchOutfits(refresh: true),
+        time: const Duration(milliseconds: 100),
+      ),
     ]);
   }
 
   /// Fetch outfits from server with filters
   Future<void> fetchOutfits({bool refresh = false}) async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
+
+    if (!_networkService.isConnected.value) {
+      isOffline.value = true;
+      error.value = 'You are offline. Reconnect to refresh your outfits.';
+      return;
+    }
+
     if (refresh) {
+      _fetchGeneration++;
       currentPage.value = 1;
       hasMore.value = true;
       outfits.clear();
+    } else {
+      if (isLoadingMore.value) return;
+      _fetchGeneration++;
     }
-
-    if (isLoadingMore.value) return;
+    final requestGeneration = _fetchGeneration;
+    final requestPage = currentPage.value;
+    final requestSearch = searchQuery.value.isEmpty ? null : searchQuery.value;
+    final requestStyles = selectedStyles.isEmpty
+        ? null
+        : selectedStyles.map((s) => s.name.toLowerCase()).toList();
+    final requestSeasons = selectedSeasons.isEmpty
+        ? null
+        : selectedSeasons.map((s) => s.name.toLowerCase()).toList();
+    final requestFavoritesOnly = favoritesOnly.value ? true : null;
+    final requestDraftsOnly = draftsOnly.value ? true : null;
 
     try {
       if (refresh) {
@@ -121,20 +171,18 @@ class OutfitListController extends GetxController {
       // Build filter parameters for server-side filtering
       final response = await RetryHelper.execute(
         operation: () => _repository.getOutfits(
-          page: currentPage.value,
+          page: requestPage,
           limit: 20,
-          search: searchQuery.value.isEmpty ? null : searchQuery.value,
-          styles: selectedStyles.isEmpty
-              ? null
-              : selectedStyles.map((s) => s.name.toLowerCase()).toList(),
-          seasons: selectedSeasons.isEmpty
-              ? null
-              : selectedSeasons.map((s) => s.name.toLowerCase()).toList(),
-          favoritesOnly: favoritesOnly.value ? true : null,
-          draftsOnly: draftsOnly.value ? true : null,
+          search: requestSearch,
+          styles: requestStyles,
+          seasons: requestSeasons,
+          favoritesOnly: requestFavoritesOnly,
+          draftsOnly: requestDraftsOnly,
         ),
         maxAttempts: 3,
       );
+
+      if (requestGeneration != _fetchGeneration || isClosed) return;
 
       if (refresh) {
         outfits.clear();
@@ -144,15 +192,15 @@ class OutfitListController extends GetxController {
       totalOutfits.value = response.total;
       hasMore.value = response.hasMore;
       currentPage.value++;
-
-      // Server-side filtering - no client-side filtering needed
-      filteredOutfits.value = outfits.toList();
     } catch (e) {
+      if (requestGeneration != _fetchGeneration || isClosed) return;
       error.value = ErrorHandler.extractMessage(e);
       ErrorHandler.showError(error.value);
     } finally {
-      isLoading.value = false;
-      isLoadingMore.value = false;
+      if (requestGeneration == _fetchGeneration) {
+        isLoading.value = false;
+        isLoadingMore.value = false;
+      }
     }
   }
 
@@ -178,7 +226,6 @@ class OutfitListController extends GetxController {
       } else {
         outfits[existingIndex] = outfit;
       }
-      _syncFilteredOutfits();
 
       return outfit;
     } catch (e) {
@@ -196,9 +243,7 @@ class OutfitListController extends GetxController {
       final outfit = await _repository.getOutfit(outfitId);
       _updateOutfitInLists(outfitId, outfit);
     } catch (e) {
-      ErrorHandler.showError(
-        ErrorHandler.extractMessage(e),
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e));
     }
   }
 
@@ -215,9 +260,7 @@ class OutfitListController extends GetxController {
       wearHistoryCache[outfitId] = history;
       return history;
     } catch (e) {
-      ErrorHandler.showError(
-        ErrorHandler.extractMessage(e),
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e));
       return [];
     } finally {
       isLoadingWearHistory.value = false;
@@ -227,11 +270,6 @@ class OutfitListController extends GetxController {
   /// Apply filters - triggers server refetch with current filters
   void applyFilters() {
     fetchOutfits(refresh: true);
-  }
-
-  /// Sync filtered outfits with the outfits list (after local changes)
-  void _syncFilteredOutfits() {
-    filteredOutfits.value = outfits.toList();
   }
 
   /// Set selected outfit for detail view
@@ -263,12 +301,12 @@ class OutfitListController extends GetxController {
       _updateOutfitInLists(outfitId, updatedOutfit);
 
       NotificationService.instance.showMessage(
-        updatedOutfit.isFavorite ? 'Added to Favorites' : 'Removed from Favorites',
+        updatedOutfit.isFavorite
+            ? 'Added to Favorites'
+            : 'Removed from Favorites',
       );
     } catch (e) {
-      ErrorHandler.showError(
-        ErrorHandler.extractMessage(e),
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e));
     } finally {
       isFavoritingMap.remove(outfitId);
     }
@@ -300,9 +338,7 @@ class OutfitListController extends GetxController {
         title: 'Great outfit!',
       );
     } catch (e) {
-      ErrorHandler.showError(
-        ErrorHandler.extractMessage(e),
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e));
     } finally {
       isMarkingWornMap.remove(outfitId);
     }
@@ -316,17 +352,17 @@ class OutfitListController extends GetxController {
       await _repository.deleteOutfit(outfitId);
 
       outfits.removeWhere((outfit) => outfit.id == outfitId);
-      _syncFilteredOutfits();
 
       if (selectedOutfit.value?.id == outfitId) {
         selectedOutfit.value = null;
       }
 
-      NotificationService.instance.showSuccess('Outfit removed', title: 'Deleted');
-    } catch (e) {
-      ErrorHandler.showError(
-        ErrorHandler.extractMessage(e),
+      NotificationService.instance.showSuccess(
+        'Outfit removed',
+        title: 'Deleted',
       );
+    } catch (e) {
+      ErrorHandler.showError(ErrorHandler.extractMessage(e));
       rethrow;
     } finally {
       isDeletingMap.remove(outfitId);
@@ -339,23 +375,23 @@ class OutfitListController extends GetxController {
     try {
       final duplicated = await _repository.duplicateOutfit(outfitId);
       outfits.insert(0, duplicated);
-      _syncFilteredOutfits();
 
       NotificationService.instance.showSuccess(
         'Outfit duplicated successfully',
         title: 'Duplicated',
       );
     } catch (e) {
-      ErrorHandler.showError(
-        ErrorHandler.extractMessage(e),
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e));
     } finally {
       isDuplicatingMap.remove(outfitId);
     }
   }
 
   /// Update outfit in list
-  Future<void> updateOutfit(String outfitId, UpdateOutfitRequest request) async {
+  Future<void> updateOutfit(
+    String outfitId,
+    UpdateOutfitRequest request,
+  ) async {
     try {
       final updatedOutfit = await _repository.updateOutfit(outfitId, request);
       _updateOutfitInLists(outfitId, updatedOutfit);
@@ -365,16 +401,13 @@ class OutfitListController extends GetxController {
         title: 'Updated',
       );
     } catch (e) {
-      ErrorHandler.showError(
-        ErrorHandler.extractMessage(e),
-      );
+      ErrorHandler.showError(ErrorHandler.extractMessage(e));
     }
   }
 
   /// Add newly created outfit to list
   void addOutfit(OutfitModel outfit) {
     outfits.insert(0, outfit);
-    _syncFilteredOutfits();
   }
 
   /// Clear filters
@@ -397,11 +430,6 @@ class OutfitListController extends GetxController {
       outfits[index] = updatedOutfit;
     }
 
-    final filteredIndex = filteredOutfits.indexWhere((o) => o.id == outfitId);
-    if (filteredIndex != -1) {
-      filteredOutfits[filteredIndex] = updatedOutfit;
-    }
-
     if (selectedOutfit.value?.id == outfitId) {
       selectedOutfit.value = updatedOutfit;
     }
@@ -411,13 +439,15 @@ class OutfitListController extends GetxController {
   void _setupNetworkMonitoring() {
     // Update offline state based on network connectivity. No frame guard needed
     // here: connectivity_plus delivers on the event loop, never inside a build.
-    _workers.add(ever(_networkService.isConnected, (connected) {
-      isOffline.value = !connected;
-      if (connected && outfits.isEmpty && !isLoading.value) {
-        // Network recovered and we have no outfits, try fetching
-        fetchOutfits();
-      }
-    }));
+    _workers.add(
+      ever(_networkService.isConnected, (connected) {
+        isOffline.value = !connected;
+        if (connected && outfits.isEmpty && !isLoading.value) {
+          // Network recovered and we have no outfits, try fetching
+          fetchOutfits();
+        }
+      }),
+    );
 
     // Initial state. This one *does* run from onInit, which can be mid-frame,
     // and isOffline is read by mounted Obx widgets in the shell's outfits tab.

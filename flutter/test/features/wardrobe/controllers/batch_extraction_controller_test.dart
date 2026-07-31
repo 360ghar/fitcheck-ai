@@ -16,6 +16,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 class FakeBatchExtractionRepository extends BatchExtractionRepository {
   int getJobStatusCalls = 0;
   Future<BatchJobStatusResponse> Function(String jobId)? onGetJobStatus;
+  Stream<SSEEvent> Function(String jobId)? onSubscribeToEvents;
 
   @override
   Future<BatchJobStatusResponse> getJobStatus(String jobId) {
@@ -23,8 +24,18 @@ class FakeBatchExtractionRepository extends BatchExtractionRepository {
     final handler = onGetJobStatus;
     if (handler != null) return handler(jobId);
     return Future.value(
-      BatchJobStatusResponse(jobId: jobId, status: 'extracting', totalImages: 1),
+      BatchJobStatusResponse(
+        jobId: jobId,
+        status: 'extracting',
+        totalImages: 1,
+      ),
     );
+  }
+
+  @override
+  Stream<SSEEvent> subscribeToEvents(String jobId) {
+    final handler = onSubscribeToEvents;
+    return handler?.call(jobId) ?? const Stream<SSEEvent>.empty();
   }
 }
 
@@ -46,8 +57,30 @@ void main() {
   }
 
   group('BatchExtractionController.pollJobStatus', () {
-    testWidgets('gives up after maxPollAttempts and surfaces the failure',
-        (tester) async {
+    testWidgets('clean SSE close falls back to status polling', (tester) async {
+      await tester.pumpWidget(const MaterialApp(home: Scaffold()));
+      final repo = FakeBatchExtractionRepository()
+        ..onGetJobStatus = (id) async => BatchJobStatusResponse(
+          jobId: id,
+          status: 'completed',
+          totalImages: 1,
+        );
+
+      final controller = BatchExtractionController(batchRepository: repo)
+        ..jobId.value = 'job-1';
+      controller.subscribeToEventsForTesting('job-1');
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+
+      expect(repo.getJobStatusCalls, 1);
+      expect(controller.isComplete, isTrue);
+
+      controller.onClose();
+    });
+
+    testWidgets('gives up after maxPollAttempts and surfaces the failure', (
+      tester,
+    ) async {
       await tester.pumpWidget(const MaterialApp(home: Scaffold()));
       final repo = FakeBatchExtractionRepository()
         ..onGetJobStatus = (_) async => throw Exception('network down');
@@ -60,19 +93,28 @@ void main() {
       // Pre-fix the catch neither reported nor rescheduled, so this made
       // exactly 1 call and left the page frozen at its last percentage with
       // no error and no status transition.
-      expect(repo.getJobStatusCalls,
-          BatchExtractionController.maxPollAttempts,
-          reason: 'transient failures must be retried, up to the cap');
-      expect(controller.error.value, isNotEmpty,
-          reason: 'user must see an error, not a frozen progress bar');
-      expect(controller.isFailed, isTrue,
-          reason: 'job must transition out of the processing state');
+      expect(
+        repo.getJobStatusCalls,
+        BatchExtractionController.maxPollAttempts,
+        reason: 'transient failures must be retried, up to the cap',
+      );
+      expect(
+        controller.error.value,
+        isNotEmpty,
+        reason: 'user must see an error, not a frozen progress bar',
+      );
+      expect(
+        controller.isFailed,
+        isTrue,
+        reason: 'job must transition out of the processing state',
+      );
 
       controller.onClose();
     });
 
-    testWidgets('caps a job that never reaches a terminal status',
-        (tester) async {
+    testWidgets('caps a job that never reaches a terminal status', (
+      tester,
+    ) async {
       await tester.pumpWidget(const MaterialApp(home: Scaffold()));
       // Backend is reachable but the job is wedged in "extracting" forever.
       final repo = FakeBatchExtractionRepository();
@@ -82,18 +124,22 @@ void main() {
       unawaited(controller.pollJobStatus('job-1'));
       await runClock(tester);
 
-      expect(repo.getJobStatusCalls,
-          BatchExtractionController.maxPollAttempts,
-          reason: 'pre-fix this recursed once per clock tick forever '
-              '(201 calls for this clock budget)');
+      expect(
+        repo.getJobStatusCalls,
+        BatchExtractionController.maxPollAttempts,
+        reason:
+            'pre-fix this recursed once per clock tick forever '
+            '(201 calls for this clock budget)',
+      );
       expect(controller.error.value, isNotEmpty);
       expect(controller.isFailed, isTrue);
 
       controller.onClose();
     });
 
-    testWidgets('abandons the chain when the user starts a different job',
-        (tester) async {
+    testWidgets('abandons the chain when the user starts a different job', (
+      tester,
+    ) async {
       await tester.pumpWidget(const MaterialApp(home: Scaffold()));
       final repo = FakeBatchExtractionRepository();
 
@@ -108,17 +154,22 @@ void main() {
       controller.reset();
       await runClock(tester, ticks: 20);
 
-      expect(repo.getJobStatusCalls, callsBeforeReset,
-          reason: 'a stale chain must not keep polling (or keep writing '
-              'progress) for an abandoned job');
+      expect(
+        repo.getJobStatusCalls,
+        callsBeforeReset,
+        reason:
+            'a stale chain must not keep polling (or keep writing '
+            'progress) for an abandoned job',
+      );
       expect(controller.error.value, isEmpty);
       expect(controller.isIdle, isTrue);
 
       controller.onClose();
     });
 
-    testWidgets('a second call while polling does not start a second chain',
-        (tester) async {
+    testWidgets('a second call while polling does not start a second chain', (
+      tester,
+    ) async {
       await tester.pumpWidget(const MaterialApp(home: Scaffold()));
       final repo = FakeBatchExtractionRepository()
         ..onGetJobStatus = (_) async => throw Exception('network down');
@@ -132,8 +183,7 @@ void main() {
 
       // Without the single-flight guard every SSE onError starts its own
       // chain with a fresh counter, so N x cap is still unbounded.
-      expect(repo.getJobStatusCalls,
-          BatchExtractionController.maxPollAttempts);
+      expect(repo.getJobStatusCalls, BatchExtractionController.maxPollAttempts);
 
       controller.onClose();
     });
@@ -142,10 +192,10 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: Scaffold()));
       final repo = FakeBatchExtractionRepository()
         ..onGetJobStatus = (id) async => BatchJobStatusResponse(
-              jobId: id,
-              status: 'completed',
-              totalImages: 1,
-            );
+          jobId: id,
+          status: 'completed',
+          totalImages: 1,
+        );
 
       final controller = BatchExtractionController(batchRepository: repo)
         ..jobId.value = 'job-1';
@@ -159,8 +209,9 @@ void main() {
       controller.onClose();
     });
 
-    testWidgets('recovers from a transient failure without erroring out',
-        (tester) async {
+    testWidgets('recovers from a transient failure without erroring out', (
+      tester,
+    ) async {
       await tester.pumpWidget(const MaterialApp(home: Scaffold()));
       final repo = FakeBatchExtractionRepository();
       var calls = 0;
@@ -180,8 +231,11 @@ void main() {
       await runClock(tester, ticks: 5);
 
       expect(controller.isComplete, isTrue);
-      expect(controller.error.value, isEmpty,
-          reason: 'one blip must be retried, not reported to the user');
+      expect(
+        controller.error.value,
+        isEmpty,
+        reason: 'one blip must be retried, not reported to the user',
+      );
 
       controller.onClose();
     });
@@ -191,7 +245,10 @@ void main() {
     test('captureToSentry is a no-op while Sentry is not initialised', () {
       expect(Sentry.isEnabled, isFalse);
       // Must not throw even though SentryFlutter.init never ran.
-      ErrorHandler.captureToSentry(Exception('boom'), stackTrace: StackTrace.current);
+      ErrorHandler.captureToSentry(
+        Exception('boom'),
+        stackTrace: StackTrace.current,
+      );
       ErrorHandler.reportError(Exception('boom'), 'test failure');
     });
 
@@ -209,7 +266,8 @@ void main() {
       expect(
         offenders,
         isEmpty,
-        reason: 'Sentry.captureException/captureMessage must go through '
+        reason:
+            'Sentry.captureException/captureMessage must go through '
             'ErrorHandler.captureToSentry, which guards on Sentry.isEnabled. '
             'Unguarded call sites found in: $offenders',
       );
