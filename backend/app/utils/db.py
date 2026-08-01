@@ -106,3 +106,117 @@ def missing_rpc_log_hint(function_name: str) -> str:
         "024_atomic_daily_quota_reservations.sql and "
         "026_harden_rpc_privileges.sql to restore AI admission."
     )
+
+
+# ============================================================================
+# Durable-job persistence (migration gap) detection
+#
+# Batch and photoshoot job creation mirror a durable summary row to
+# `extraction_jobs` / `photoshoot_jobs` (migrations 016 / 023). When those
+# migrations (or their columns/constraints) are missing on the hosted DB,
+# postgrest-py raises a raw APIError (PGRST205 unknown table, 42703 unknown
+# column, 23514 CHECK violation). Services must wrap those raw errors into a
+# friendly retryable 503 and log this operator hint - never send the raw DB
+# text to a client. Same policy as the quota-RPC helpers above.
+# ============================================================================
+
+_MISSING_SCHEMA_MARKERS = ("pgrst205", "42703")
+# CHECK-violation marker for the extraction_jobs.generation_batch_size bound
+# (016 allows <=10; 023/029 raise it to <=50/<=100 to match the API cap).
+_CHECK_VIOLATION_MARKERS = ("23514", "valid_batch_size")
+
+
+def is_missing_table_or_column(error: Exception) -> bool:
+    """True when a postgrest error means the table/column is absent (migration gap)."""
+    text = str(error).lower()
+    return any(marker in text for marker in _MISSING_SCHEMA_MARKERS)
+
+
+def job_persistence_migration_hint(table: str, error: Exception) -> str:
+    """Operator-facing log hint for durable-job persistence migration gaps.
+
+    Covers the two ways a hosted-Supabase migration gap breaks job creation:
+    the table/columns do not exist (016/023 missing) or the
+    ``generation_batch_size`` CHECK is still the pre-023 bound (<=10) while
+    the API sends up to 50. Returns "" when the error is not a migration gap.
+
+    LOGS ONLY — never put this string in a client-facing error message.
+    """
+    text = str(error).lower()
+    if is_missing_table_or_column(error):
+        return (
+            f"AI job persistence is unavailable: '{table}' or its columns are "
+            "missing from the hosted schema (migrations "
+            "016_extraction_jobs.sql / 023_durable_job_state.sql not applied). "
+            "Apply them to restore batch/photoshoot job creation."
+        )
+    if all(marker in text for marker in _CHECK_VIOLATION_MARKERS):
+        return (
+            "AI job persistence rejected generation_batch_size: the "
+            "extraction_jobs.valid_batch_size CHECK is still the pre-023 bound "
+            "(<=10). Apply 023_durable_job_state.sql / 029_pr9_hardening.sql "
+            "to raise it to the API's cap."
+        )
+    return ""
+
+
+# ============================================================================
+# Boot-time quota-RPC presence probe (non-mutating)
+#
+# Deferred-debt item from the 2026-07-31 batch-quota outage: verify at boot
+# that the hosted DB actually has the quota RPCs the deployed backend
+# requires, so a missing migration is logged with the runbook hint the moment
+# the deploy lands instead of surfacing as request-time 500s/503s.
+#
+# Every probe targets a UUID that matches no user row, so the RPCs return
+# FALSE without touching data. A missing function raises PGRST202; anything
+# else (permissions, transient errors) means the function EXISTS and is
+# reported as present - it is not a migration gap.
+# ============================================================================
+
+# Postgres UUID 'nil' - matches no real user row.
+_NIL_USER_UUID = "00000000-0000-0000-0000-000000000000"
+
+QUOTA_RPC_PROBES = {
+    "reserve_ai_usage": {
+        "p_user_id": _NIL_USER_UUID,
+        "p_operation": "extraction",
+        "p_count": 1,
+        "p_limit": 0,
+    },
+    "release_ai_usage": {
+        "p_user_id": _NIL_USER_UUID,
+        "p_operation": "extraction",
+        "p_count": 1,
+    },
+    "reserve_usage": {
+        "p_user_id": _NIL_USER_UUID,
+        "p_period_start": "1970-01-01",
+        "p_field": "monthly_extractions",
+        "p_count": 1,
+        "p_limit": 0,
+    },
+    "reserve_daily_photoshoot_usage": {
+        "p_user_id": _NIL_USER_UUID,
+        "p_period_start": "1970-01-01",
+        "p_count": 1,
+        "p_limit": 0,
+    },
+}
+
+
+def missing_quota_rpcs(db) -> list:
+    """Return the quota RPC names absent from the hosted schema (migration gap).
+
+    Non-mutating: probes target a nil UUID that matches no user row. Missing
+    functions raise PGRST202; a present function (even one that errors for
+    other reasons) is counted as present.
+    """
+    missing = []
+    for name, args in QUOTA_RPC_PROBES.items():
+        try:
+            db.rpc(name, args).execute()
+        except Exception as error:
+            if is_pgrst202_missing_rpc(error):
+                missing.append(name)
+    return missing

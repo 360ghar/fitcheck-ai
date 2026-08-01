@@ -517,3 +517,199 @@ async def test_ensure_ai_settings_row_fk_race_returns_friendly_503_and_logs_deta
 
     logged = " ".join(r.getMessage() for r in caplog.records)
     assert "23503" in logged
+
+
+# =============================================================================
+# Durable-job persistence (migration gap) tests
+# =============================================================================
+
+
+class _PGRST205(Exception):
+    """Simulates postgrest-py's error when a table is absent from the schema."""
+
+    def __init__(self, table: str):
+        super().__init__(
+            f'PGRST205: Could not find the "{table}" relation in the schema cache'
+        )
+
+
+class _PostgresCheckViolation(Exception):
+    """Simulates a 23514 CHECK violation (e.g. stale valid_batch_size bound)."""
+
+    def __init__(self):
+        super().__init__(
+            'ERROR: 23514: new row for relation "extraction_jobs" violates check '
+            'constraint "valid_batch_size"'
+        )
+
+
+@pytest.mark.asyncio
+async def test_batch_job_create_missing_table_returns_friendly_503_and_logs_hint(caplog):
+    """Missing extraction_jobs table (migration 016/023 not applied) must surface
+    as a friendly retryable 503, never the raw PGRST205 text. The in-memory job
+    must be removed to free the concurrency slot."""
+    from app.core.exceptions import AIServiceError
+
+    db = Mock()
+    db.table.return_value.upsert.side_effect = _PGRST205("extraction_jobs")
+
+    with pytest.raises(AIServiceError) as exc_info:
+        await BatchJobService.create_job(
+            user_id="user-1",
+            images=[{"image_id": "img-1", "image_base64": "abc"}],
+            db=db,
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.retryable is True
+    assert exc_info.value.message == FRIENDLY_QUOTA_503
+
+    # The raw DB text (PGRST205, table names, migration names) must never
+    # reach the client.
+    assert "PGRST205" not in exc_info.value.message
+    assert "extraction_jobs" not in exc_info.value.message
+    assert "016" not in exc_info.value.message
+    assert "023" not in exc_info.value.message
+
+    # The in-memory job must be removed.
+    assert BatchJobService._jobs == {}
+
+    # The operator hint must be in the server logs (LOGS ONLY).
+    logged = " ".join(r.getMessage() for r in caplog.records)
+    assert "extraction_jobs" in logged
+    assert "016_extraction_jobs.sql" in logged
+
+
+@pytest.mark.asyncio
+async def test_batch_job_create_check_violation_returns_friendly_503_and_logs_hint(caplog):
+    """Stale valid_batch_size CHECK (<=10 pre-023) on extraction_jobs must
+    surface as a friendly retryable 503, never the raw 23514 text."""
+    from app.core.exceptions import AIServiceError
+
+    db = Mock()
+    db.table.return_value.upsert.side_effect = _PostgresCheckViolation()
+
+    with pytest.raises(AIServiceError) as exc_info:
+        await BatchJobService.create_job(
+            user_id="user-1",
+            images=[{"image_id": "img-1", "image_base64": "abc"}],
+            db=db,
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.retryable is True
+    assert exc_info.value.message == FRIENDLY_QUOTA_503
+
+    assert "23514" not in exc_info.value.message
+    assert "valid_batch_size" not in exc_info.value.message
+
+    assert BatchJobService._jobs == {}
+
+    logged = " ".join(r.getMessage() for r in caplog.records)
+    assert "valid_batch_size" in logged
+    assert "023" in logged
+
+
+@pytest.mark.asyncio
+async def test_photoshoot_job_create_missing_table_returns_friendly_503_and_logs_hint(caplog):
+    """Missing photoshoot_jobs table (migration 023 not applied) must surface
+    as a friendly retryable 503, never the raw PGRST205 text."""
+    from app.core.exceptions import AIServiceError
+
+    db = Mock()
+    db.table.return_value.upsert.side_effect = _PGRST205("photoshoot_jobs")
+
+    with pytest.raises(AIServiceError) as exc_info:
+        await PhotoshootJobService.create_job(
+            user_id="user-1",
+            photos=["abc"],
+            use_case="aesthetic",
+            num_images=1,
+            db=db,
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.retryable is True
+    assert exc_info.value.message == FRIENDLY_QUOTA_503
+
+    assert "PGRST205" not in exc_info.value.message
+    assert "photoshoot_jobs" not in exc_info.value.message
+
+    assert PhotoshootJobService._jobs == {}
+
+    logged = " ".join(r.getMessage() for r in caplog.records)
+    assert "photoshoot_jobs" in logged
+
+
+@pytest.mark.asyncio
+async def test_batch_job_create_non_migration_error_logs_type_in_message_and_returns_503(caplog):
+    """A non-migration error (e.g. network timeout) during persistence also
+    raises AIServiceError 503, and the exception type appears in the log
+    message text (because Railway's plain-text drain does not render
+    structured `extra` fields)."""
+    from app.core.exceptions import AIServiceError
+
+    db = Mock()
+    db.table.return_value.upsert.side_effect = TimeoutError("connection timed out")
+
+    with pytest.raises(AIServiceError) as exc_info:
+        await BatchJobService.create_job(
+            user_id="user-1",
+            images=[{"image_id": "img-1", "image_base64": "abc"}],
+            db=db,
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.message == FRIENDLY_QUOTA_503
+
+    assert BatchJobService._jobs == {}
+
+    logged = " ".join(r.getMessage() for r in caplog.records)
+    assert "TimeoutError" in logged
+    # The hint should not fire for non-migration errors.
+    assert "016" not in logged
+
+
+# =============================================================================
+# Non-mutating quota-RPC presence probe tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_missing_quota_rpcs_detects_missing_functions():
+    """missing_quota_rpcs should return only the functions that raise PGRST202."""
+    from app.utils.db import missing_quota_rpcs
+
+    db = Mock()
+
+    # Two present, two missing (PGRST202)
+    results = {
+        "reserve_ai_usage": Mock(),
+        "release_ai_usage": Mock(),
+        "reserve_usage": _PGRST202("reserve_usage"),
+        "reserve_daily_photoshoot_usage": _PGRST202("reserve_daily_photoshoot_usage"),
+    }
+
+    def rpc_side_effect(name, args=None, **kwargs):
+        value = results.get(name, Mock())
+        if isinstance(value, BaseException):
+            raise value
+        return value
+
+    db.rpc.side_effect = rpc_side_effect
+
+    missing = missing_quota_rpcs(db)
+    assert sorted(missing) == ["reserve_daily_photoshoot_usage", "reserve_usage"]
+
+
+@pytest.mark.asyncio
+async def test_missing_quota_rpcs_non_pgrst202_error_counts_as_present():
+    """A function that errors for non-schema reasons (permissions, connectivity)
+    is counted as present — it is not a migration gap."""
+    from app.utils.db import missing_quota_rpcs
+
+    db = Mock()
+    db.rpc.side_effect = RuntimeError("connection refused")  # not PGRST202
+
+    missing = missing_quota_rpcs(db)
+    assert missing == []

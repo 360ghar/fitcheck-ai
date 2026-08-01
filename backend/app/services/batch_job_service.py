@@ -14,12 +14,16 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 from uuid import uuid4
 
-from app.core.exceptions import DatabaseError, RateLimitError
+from app.core.exceptions import AIServiceError, DatabaseError, RateLimitError
 from app.core.logging_config import get_context_logger
 from app.services.job_persistence import JobPersistenceStore
 from app.utils.process_metrics import estimate_base64_mb, log_memory
 from app.utils.sse_queue import fanout
-from app.utils.db import maybe_single_data
+from app.utils.db import (
+    QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
+    job_persistence_migration_hint,
+    maybe_single_data,
+)
 
 logger = get_context_logger(__name__)
 
@@ -426,14 +430,43 @@ class BatchJobService:
         # leaves an orphaned durable row; if the write fails or returns no
         # row, drop the in-memory job (so it cannot occupy a concurrency
         # slot) and let the caller's reservation compensation surface it.
+        #
+        # A raw postgrest APIError (missing extraction_jobs table/columns or a
+        # stale valid_batch_size CHECK - migrations 016/023 not applied) must
+        # never surface as an opaque 500: log the actionable hint (LOGS ONLY,
+        # exception type in the message text because Railway's plain-text
+        # drain does not render structured extra fields) and raise the
+        # friendly retryable 503, matching the quota-RPC error policy.
         if db is not None:
             try:
                 if not await _store.create(job):
                     raise DatabaseError("Failed to persist batch job")
-            except Exception:
+            except AIServiceError:
                 async with cls._lock:
                     cls._jobs.pop(job_id, None)
                 raise
+            except Exception as exc:
+                async with cls._lock:
+                    cls._jobs.pop(job_id, None)
+                hint = job_persistence_migration_hint("extraction_jobs", exc)
+                if hint:
+                    logger.error(
+                        f"{type(exc).__name__}: {hint}",
+                        job_id=job_id,
+                        user_id=user_id,
+                        error=str(exc),
+                    )
+                else:
+                    logger.error(
+                        f"Failed to persist batch job ({type(exc).__name__}): {exc}",
+                        job_id=job_id,
+                        user_id=user_id,
+                        error=str(exc),
+                    )
+                raise AIServiceError(
+                    QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
+                    retryable=True,
+                ) from exc
 
         # Start cleanup task if not running
         cls._ensure_cleanup_task()

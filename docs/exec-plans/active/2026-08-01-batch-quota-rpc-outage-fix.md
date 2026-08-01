@@ -72,17 +72,39 @@ The actual fix is operational: apply the three migrations and set
 
 ## Ops runbook (human — the actual fix)
 
-1. Supabase (hosted project `ckzpgfibnqmwzrndsvcx.supabase.co`) → SQL editor,
-   run in order:
-   - `backend/db/supabase/migrations/022_wave_b_hardening.sql`
-   - `backend/db/supabase/migrations/024_atomic_daily_quota_reservations.sql`
-   - `backend/db/supabase/migrations/026_harden_rpc_privileges.sql`
-   - Verify: `SELECT proname FROM pg_proc WHERE proname IN
-     ('reserve_ai_usage','release_ai_usage','reserve_usage',
-     'reserve_daily_photoshoot_usage');` → 4 rows.
-2. Railway backend service → Variables:
+1. Supabase (hosted project `ckzpgfibnqmwzrndsvcx.supabase.co`) → SQL editor.
+   **Verify before applying** (migrations may already be applied; re-running a
+   migration that is already applied must not fail — 023 is now re-runnable
+   via drop-then-create guards, but verify anyway to keep the DB honest):
+   ```sql
+   SELECT proname FROM pg_proc WHERE proname IN
+    ('create_social_import_job','reserve_usage','apply_referral_credit_atomic','redeem_referral_atomic',
+     'reserve_ai_usage','release_ai_usage','reserve_daily_photoshoot_usage','release_daily_photoshoot_usage');
+   SELECT to_regclass('public.extraction_jobs') AS extraction_jobs,
+          to_regclass('public.photoshoot_jobs') AS photoshoot_jobs,
+          to_regclass('public.stripe_webhook_events') AS stripe_webhook_events,
+          to_regclass('public.apple_iap_events') AS apple_iap_events,
+          to_regclass('public.google_rtdn_events') AS google_rtdn_events;
+   SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint
+   WHERE conrelid = 'public.extraction_jobs'::regclass AND conname = 'valid_batch_size';
+   ```
+2. Apply **all** unapplied migrations **in order** (each is idempotent except
+   where noted; verify-then-run keeps the SQL editor from aborting):
+   - `016_extraction_jobs.sql` (if `extraction_jobs` is absent)
+   - `022_wave_b_hardening.sql` (stripe_webhook_events + quota/referral RPCs)
+   - `023_durable_job_state.sql` (durable job rows + CHECK ≤50; re-runnable)
+   - `024_atomic_daily_quota_reservations.sql` (daily quota RPCs)
+   - `025_calendar_all_day_events.sql`
+   - `026_harden_rpc_privileges.sql` (service_role-only RPC execution)
+   - `027_stripe_webhook_processing_state.sql`
+   - `028_configurable_social_import_limit.sql`
+   - `029_pr9_hardening.sql` (raises valid_batch_size CHECK to ≤100)
+   - `030_mobile_iap.sql`
+3. Railway backend service → Variables:
    `AI_ENCRYPTION_KEY=$(openssl rand -hex 32)`; restart.
-3. Deploy updated main.
+4. Deploy updated main. After boot, confirm the new startup probes log no
+   `Quota reservation RPCs missing` error and no `Config issue at startup:
+   AI_ENCRYPTION_KEY` line.
 
 ## Progress log
 
@@ -90,6 +112,9 @@ The actual fix is operational: apply the three migrations and set
 |------|------|
 | 2026-08-01 | Started; pull a124226 onto main (user work stashed, restoration handled in parallel session). Backend + frontend fixes implemented with regression tests; backend tests 28/28 targeted, frontend 4/4. |
 | 2026-08-01 | Client-error policy tightened: backend logs the actionable detail (missing RPC + migrations), clients get friendly copy only (never raw DB text). Backend tests updated to pin the friendly message + `caplog` detail; frontend helper rewritten as a friendly mapper with a leak guard. |
+| 2026-08-01 | Rerun of 023 on hosted Supabase aborted with `42710 trigger "photoshoot_jobs_updated_at" already exists` — confirmed 023 was already applied (its constraint block is idempotent, the trigger/policies were not). 023 made re-runnable (`DROP TRIGGER/POLICY IF EXISTS` guards). |
+| 2026-08-01 | Second failure class found after the RPC fix: raw postgrest errors from the durable-job write (`extraction_jobs`/`photoshoot_jobs` upsert, migrations 016/023) escaped `JobPersistenceStore.create` as opaque 500s ("Failed to start multipart batch extraction"). `create_job` in both job services now wraps them into the friendly retryable 503 + logged migration hint (`job_persistence_migration_hint`), with the exception type in the message text (Railway's drain drops `extra`). Regression tests added (22/22 in test_wave_b_hardening.py; 706/706 backend). |
+| 2026-08-01 | Deferred-debt item implemented: boot-time `missing_quota_rpcs` probe (non-mutating nil-UUID RPC calls) logs a runbook hint in `_seed_schema_status_in_thread`; `extraction_jobs`/`photoshoot_jobs` added to the `/ready` table check. |
 
 ## Decision log
 
@@ -111,5 +136,10 @@ python scripts/check_docs_structure.py
 ## Deferred debt
 
 - `AI_ENCRYPTION_KEY` still empty in prod until the runbook is executed.
-- Migrations 022/024/026 application is not verifiable from code; add a
-  boot-time RPC-presence check if this class of failure recurs.
+- ~~Migrations 022/024/026 application is not verifiable from code; add a
+  boot-time RPC-presence check if this class of failure recurs.~~ **Done
+  2026-08-01** — `missing_quota_rpcs` (non-mutating nil-UUID probes) runs at
+  boot in `main._seed_schema_status_in_thread` and logs the runbook hint when
+  any quota RPC is absent; `extraction_jobs`/`photoshoot_jobs` added to the
+  `/ready` table check. Remaining migration state (016/023 tables, CHECK
+  bounds) is covered by the verify-before-apply queries in the runbook above.
