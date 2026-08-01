@@ -166,6 +166,51 @@ def test_conditional_grant_skips_a_row_changed_by_a_concurrent_checkout(monkeypa
     assert grant.main() == 0
     assert not (tmp_path / "grant.jsonl").exists()
 
+def test_rerun_emails_users_granted_by_an_earlier_run(monkeypatch, tmp_path):
+    """A re-run must still email users whose grant landed but whose email failed.
+
+    Regression: the email selection used to iterate only currently-eligible
+    (free/active) rows, so once a user was granted (row now pro_monthly/trial)
+    a retry run silently skipped them and the campaign could never deliver.
+    """
+    audit = tmp_path / "grant.jsonl"
+    audit.write_text(
+        '{"user_id":"user-1","action":"granted","trial_end":"2026-09-01T00:00:00+00:00"}\n'
+    )
+
+    db = _GrantDb()
+    # Post-grant state: row is pro_monthly/trial, so the user is NOT currently
+    # eligible — only the audit knows they were granted.
+    db.sub_query = _Query([{
+        "user_id": "user-1",
+        "plan_type": "pro_monthly",
+        "status": "trial",
+        "stripe_subscription_id": None,
+    }])
+    monkeypatch.setenv("SUPABASE_URL", "https://project.supabase.co")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "service-key")
+    monkeypatch.setenv("EMAIL_TRANSPORT", "smtp")
+    monkeypatch.setenv("SMTP_USERNAME", "u")
+    monkeypatch.setenv("SMTP_PASSWORD", "p")
+    monkeypatch.setenv("SMTP_FROM", "FitCheck <u@example.com>")
+    monkeypatch.setenv("DRY_RUN", "0")
+    monkeypatch.setenv("AUDIT_FILE", str(audit))
+    monkeypatch.setattr(grant, "create_client", lambda *_args: db)
+
+    sent: list[str] = []
+
+    def fake_send(host, port, username, password, from_addr, to_addr,
+                  reply_to, subject, html, text):
+        sent.append(to_addr)
+        return True, "sent"
+
+    monkeypatch.setattr(grant, "_send_email_smtp", fake_send)
+
+    assert grant.main() == 0
+    assert sent == ["user@real.test"]
+    assert audit.read_text().count('"action":"emailed"') == 1
+
+
 
 def test_include_paid_requires_confirmation_and_clears_stripe_ids(monkeypatch, tmp_path):
     trial_end = "2020-01-01T00:00:00+00:00"

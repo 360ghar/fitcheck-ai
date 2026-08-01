@@ -544,10 +544,18 @@ def main() -> int:
     # Only email users who were actually granted (not failed batches) plus
     # the email_only (paid) users. This prevents falsely telling a user their
     # Pro is active when the upsert didn't succeed.
+    #
+    # Selection iterates ALL scanned users and keys off the audit's granted
+    # set (all_granted), NOT the currently-eligible rows: once a grant lands
+    # the row is pro_monthly/trial (no longer "free"), so a re-run retrying
+    # failed email delivery must still be able to find the recipient. Keying
+    # on eligible rows instead silently dropped every previously-granted user
+    # and their campaign email could never be delivered.
+    email_only_ids = {u["id"] for u in email_only}
     to_email_all = [
-        u for u in (eligible + email_only)
+        u for u in users
         if u["id"] not in state["emailed"]
-        and (u["id"] in all_granted or u in email_only)
+        and (u["id"] in all_granted or u["id"] in email_only_ids)
     ]
 
     # Drop recipients on bogus/reserved domains (example.com, test.com, ...).
@@ -571,7 +579,6 @@ def main() -> int:
     # Paid users were never granted a trial, so they get a plan-neutral
     # thank-you (see _render_email for_paid) with its own subject — the
     # "You've got Pro, on us" free-trial claims are false for them.
-    email_only_ids = {u["id"] for u in email_only}
     subject_granted = "You've got Pro, on us. Thanks for being an early FitCheck user."
     subject_paid = "Thanks for being an early FitCheck user."
     sent = 0
