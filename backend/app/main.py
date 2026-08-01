@@ -18,7 +18,7 @@ from app.core.exceptions import FitCheckException
 from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, get_correlation_id
 from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog, promo
 from app.db.connection import SupabaseDB
-from app.utils.db import missing_quota_rpcs
+from app.utils.db import missing_quota_rpcs, probe_valid_batch_size_bound
 from postgrest.exceptions import APIError as PostgrestAPIError
 
 REQUIRED_TABLES = (
@@ -54,6 +54,11 @@ REQUIRED_TABLES = (
     "promo_redemptions",
     # Support tickets
     "support_tickets",
+    # Store webhook event ledgers (mobile IAP, migration 030): without these
+    # tables the App Store / Play notification endpoints fail every delivery,
+    # so readiness fails closed until the migration is applied.
+    "apple_iap_events",
+    "google_rtdn_events",
 )
 
 # Only required when ENABLE_GAMIFICATION is on. With the flag off the handlers
@@ -229,19 +234,27 @@ async def _seed_schema_status_in_thread() -> None:
     connections: Railway health probes /health as soon as the port binds.
 
     Also probes the hosted DB for the quota reservation RPCs (migrations
-    022/024/026) the deployed backend requires. Missing RPCs are logged with
-    the runbook hint at boot - the deferred-debt follow-up from the
-    2026-07-31 batch-quota outage - so a migration gap is caught when the
-    deploy lands instead of at request time.
+    022/024/026) and the extraction_jobs.valid_batch_size CHECK bound
+    (migrations 023/029) the deployed backend requires. Gaps are logged with
+    the runbook hint at boot - the deferred-debt follow-ups from the
+    2026-07-31 batch-quota outage and the 2026-08-01 single-extract outage -
+    so a migration gap is caught when the deploy lands instead of at request
+    time.
     """
     import asyncio
 
     def _check():
         db = SupabaseDB.get_service_client()
-        return _schema_missing(db), missing_quota_rpcs(db)
+        return (
+            _schema_missing(db),
+            missing_quota_rpcs(db),
+            probe_valid_batch_size_bound(db),
+        )
 
     try:
-        missing, missing_rpcs = await asyncio.to_thread(_check)
+        missing, missing_rpcs, (bound_level, bound_message) = await asyncio.to_thread(
+            _check
+        )
         _SCHEMA_STATUS_CACHE["missing"] = missing
         _SCHEMA_STATUS_CACHE["checked_at"] = utcnow()
         log = logging.getLogger(__name__)
@@ -253,6 +266,16 @@ async def _seed_schema_status_in_thread() -> None:
                 "and 026_harden_rpc_privileges.sql to restore AI admission "
                 "(every quota-backed request fails closed until then)."
             )
+        if bound_level == "critical":
+            log.error(f"AI job persistence will fail for every job: {bound_message}")
+        elif bound_level == "warn":
+            log.warning(f"AI job persistence bound drift: {bound_message}")
+        elif bound_level == "missing":
+            log.error(f"AI job persistence unavailable: {bound_message}")
+        elif bound_level == "unknown":
+            log.warning(f"AI job persistence probe inconclusive: {bound_message}")
+        else:
+            log.info(f"AI job persistence bound check: {bound_message}")
         if missing:
             log.warning(
                 "Supabase schema not initialized/complete. Run "

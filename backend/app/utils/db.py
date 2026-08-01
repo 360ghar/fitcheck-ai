@@ -2,7 +2,7 @@
 Helpers for working with postgrest-py query results.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 
 def persistence_db(db: Any) -> Any:
@@ -153,9 +153,10 @@ def job_persistence_migration_hint(table: str, error: Exception) -> str:
     if all(marker in text for marker in _CHECK_VIOLATION_MARKERS):
         return (
             "AI job persistence rejected generation_batch_size: the "
-            "extraction_jobs.valid_batch_size CHECK is still the pre-023 bound "
-            "(<=10). Apply 023_durable_job_state.sql / 029_pr9_hardening.sql "
-            "to raise it to the API's cap."
+            "extraction_jobs.valid_batch_size CHECK bound is below the API's "
+            "cap (migrations 023/029 not applied; the boot probe logs the "
+            "exact bound). Apply 023_durable_job_state.sql / "
+            "029_pr9_hardening.sql on hosted Supabase."
         )
     return ""
 
@@ -220,3 +221,119 @@ def missing_quota_rpcs(db) -> list:
             if is_pgrst202_missing_rpc(error):
                 missing.append(name)
     return missing
+
+# ============================================================================
+# Boot-time valid_batch_size bound probe (non-mutating)
+#
+# The API persists generation_batch_size into extraction_jobs (single-extract
+# writes AI_GENERATION_CONCURRENCY, clamped to <=100) and the DB enforces it
+# with the valid_batch_size CHECK. Three migration eras exist:
+#   016 -> <=10 | 023 -> <=50 | 029 -> <=100
+# A stale bound turns every job creation into a 23514 CHECK violation and a
+# friendly 503 at request time (the 2026-08-01 single-extract outage). The
+# probe detects the bound at boot so the gap is logged with the runbook hint
+# the moment the deploy lands - same policy as the quota-RPC probes above.
+#
+# Non-mutating by construction: the probe insert targets the nil UUID user,
+# so the row always fails the users(id) foreign key (23503) and nothing is
+# ever persisted. CHECK constraints fire before FK checks, so 23514 means the
+# probe value exceeded the bound; 23503 (or a success, which the nil FK makes
+# impossible) means the CHECK passed.
+# ============================================================================
+
+# Probe values: 11 passes only when bound >= 11 (post-016); 51 passes only
+# when bound >= 51 (post-023).
+_BATCH_SIZE_PROBE_VALUES = (11, 51)
+
+# 23503 is the users(id) FK rejection the nil-UUID probe always triggers once
+# the CHECK accepts the probe value.
+_PROBE_FK_BLOCKED_MARKER = "23503"
+
+
+def _probe_insert(db: Any, generation_batch_size: int) -> Optional[str]:
+    """Non-mutating probe insert; None means the CHECK accepted the value.
+
+    Returns one of: None (CHECK passed), "violated" (23514/valid_batch_size),
+    "missing" (PGRST205/42703), "unknown" (connectivity/permissions/etc.).
+    """
+    try:
+        db.table("extraction_jobs").insert(
+            {
+                "id": f"boot-probe-{generation_batch_size}",
+                "user_id": _NIL_USER_UUID,
+                "status": "pending",
+                "job_type": "single",
+                "generation_batch_size": generation_batch_size,
+            }
+        ).execute()
+        # Unreachable in practice: nil user_id always fails the FK.
+        return None
+    except Exception as error:
+        code = str(getattr(error, "code", "")).lower()
+        text = str(error).lower()
+        if (code and code in _CHECK_VIOLATION_MARKERS) or any(
+            marker in text for marker in _CHECK_VIOLATION_MARKERS
+        ):
+            return "violated"
+        if (code and code in _MISSING_SCHEMA_MARKERS) or any(
+            marker in text for marker in _MISSING_SCHEMA_MARKERS
+        ):
+            return "missing"
+        if code == _PROBE_FK_BLOCKED_MARKER:
+            return None
+        return "unknown"
+
+
+def probe_valid_batch_size_bound(db: Any) -> Tuple[str, str]:
+    """Probe the extraction_jobs.valid_batch_size CHECK bound at boot.
+
+    Returns ``(level, message)`` with level in:
+      - "ok": bound accepts >= 51 (029-era, <=100) or no CHECK at all
+      - "warn": bound is 11-50 (023-era) - caps above 50 will 503
+      - "critical": bound <= 10 (016-era) - every job creation 503s
+      - "missing": extraction_jobs absent (016/023 not applied)
+      - "unknown": DB unreachable / probe blocked - no bound reported
+
+    LOGS ONLY - never part of a client-facing payload.
+    """
+    first = _probe_insert(db, _BATCH_SIZE_PROBE_VALUES[0])
+    if first == "violated":
+        return (
+            "critical",
+            "extraction_jobs.valid_batch_size CHECK bound is <= 10 (016-era; "
+            "migrations 023/029 not applied). Every job creation (single/batch "
+            "extract, photoshoot mirror) fails with a friendly 503 until 023 "
+            "and 029 are applied on hosted Supabase.",
+        )
+    if first in ("missing", "unknown"):
+        return first, _probe_inconclusive_message(first)
+    second = _probe_insert(db, _BATCH_SIZE_PROBE_VALUES[1])
+    if second == "violated":
+        return (
+            "warn",
+            "extraction_jobs.valid_batch_size CHECK bound is 11-50 (023-era; "
+            "029 not applied). Job creation with generation_batch_size > 50 "
+            "(e.g. single-extract with AI_GENERATION_CONCURRENCY > 50) will "
+            "503. Apply 029_pr9_hardening.sql to raise the bound to 100.",
+        )
+    if second in ("missing", "unknown"):
+        return second, _probe_inconclusive_message(second)
+    return (
+        "ok",
+        "extraction_jobs.valid_batch_size CHECK bound accepts >= 51 "
+        "(029-era, <=100) - aligned with the API cap.",
+    )
+
+
+def _probe_inconclusive_message(level: str) -> str:
+    if level == "missing":
+        return (
+            "extraction_jobs is absent from hosted Supabase (migrations "
+            "016_extraction_jobs.sql / 023_durable_job_state.sql not applied) "
+            "- cannot probe the valid_batch_size bound."
+        )
+    return (
+        "valid_batch_size bound probe inconclusive (DB unreachable or the "
+        "probe was blocked) - no bound reported; check DB connectivity."
+    )
+
