@@ -111,6 +111,23 @@ AVOID: collage, grid, contact sheet, split screen, side-by-side panels,
        product tiles, duplicated garment, garment on the wrong body part,
        invented or extra garments."""
 
+# The original uploaded photo the outfit's items were extracted from, sent as
+# ONE extra reference on the upload flow only (GenerateOutfitRequest.
+# use_source_photo -> resolve_outfit_source_reference). Unlike the per-item
+# studio shots, this photo shows the garments AS WORN TOGETHER: real fit,
+# draping, and layering that isolated product shots cannot carry. It is
+# deliberately NOT an identity source — the person in the photo may not be the
+# user — so face/body/hair/skin still come only from the person reference
+# image (when one is present).
+SOURCE_PHOTO_REFERENCE_LOCK = """SOURCE PHOTO LOCK (original uploaded photo):
+- The source photo shows the exact outfit being worn. Copy EVERY listed garment exactly as it appears there: colors, print and graphic content, pattern geometry, collar/neckline, sleeves, hem length and shape, pockets, fabric weave and sheen, hardware color and finish, logo placement and scale, cut, AND how each piece fits, drapes, and layers over the others.
+- Change ONLY the scene: pose, background, lighting, and camera angle listed in the scene instructions.
+- The photo may show other garments, people, or props not in the outfit inventory - ignore them; never add, swap, merge, or repeat items.
+- Face, body, hair, and skin come from the person reference image only (if one is present), never from this photo.
+- If the source photo and a garment image disagree, the source photo wins for how the clothes are worn; the garment image still supplies isolated detail.
+
+AVOID: copying the source photo's background, pose, or composition; adding unseen items; restyling the garments; changing how pieces layer or fit."""
+
 # Shared instructions for the photoshoot *text* planner (LLM, not image model)
 SUBJECT_LOCK_FIELDS = """Write subject_lock as one dense paragraph with concrete visual tokens:
 face shape; jaw/chin/cheekbones; eye shape/color/spacing/brows; nose shape/bridge/size;

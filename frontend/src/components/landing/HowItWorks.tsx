@@ -80,7 +80,7 @@ export default function HowItWorks() {
         <AnimatedSection delay={160}>
           <div className="mt-10 md:mt-12 relative rounded-2xl overflow-hidden border border-stone-200 dark:border-stone-800 aspect-[16/10] sm:aspect-[21/9] max-h-[360px]">
             <img
-              src="/landing/outfit.jpg"
+              src="/landing/outfit.webp"
               alt="A complete everyday outfit ready to wear"
               className="w-full h-full object-cover object-[center_20%]"
               loading="lazy"

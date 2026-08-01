@@ -12,8 +12,12 @@ const links = [
     href: '/guides/what-to-wear-today',
   },
   {
-    title: 'Cost per wear explained',
-    href: '/guides/cost-per-wear-calculator-explained',
+    title: 'Cost per wear calculator',
+    href: '/tools/cost-per-wear-calculator',
+  },
+  {
+    title: 'What is a capsule wardrobe?',
+    href: '/guides/what-is-a-capsule-wardrobe',
   },
   {
     title: 'FitCheck AI vs Acloset',

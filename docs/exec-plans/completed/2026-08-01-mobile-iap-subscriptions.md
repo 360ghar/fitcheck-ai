@@ -1,6 +1,6 @@
 # Plan: Mobile IAP subscriptions (Apple App Store + Google Play)
 
-Status: active  
+Status: completed  
 Started: 2026-08-01  
 Owner: Droid
 
@@ -37,6 +37,7 @@ Subscriptions are purchasable through the stores on mobile: Apple In-App Purchas
 | Date | Note |
 |------|------|
 | 2026-08-01 | Spec approved (App Store Server API chosen; Google Play in scope). Backend services + router + migration + tests done. Flutter IAP flow + tests done. Docs updated. |
+| 2026-08-01 | Gap-close: legal/store copy now states iOS subscriptions are sold through Apple IAP; regression tests assert iOS never reaches Stripe checkout/portal; backend fail-closed checkout test added; plan moved to completed/. |
 
 ## Decision log
 

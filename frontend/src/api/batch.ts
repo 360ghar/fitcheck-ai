@@ -51,6 +51,8 @@ export interface BatchJobStatusResponse {
     generated_image_base64?: string;
     generated_image_url?: string;
     generation_error?: string;
+    source_image_url?: string;
+    source_image_storage_path?: string;
   }>;
   error?: string;
 }

@@ -592,6 +592,11 @@ export function BatchExtractionFlow({
           tags: [],
           condition: 'clean',
           is_favorite: false,
+          // Persist the original uploaded photo so the auto-outfit
+          // generation can use it as an "as worn" reference (the backend
+          // resolves it server-side from these columns; never re-uploaded).
+          source_image_url: item.sourceImageUrl,
+          source_image_storage_path: item.sourceImageStoragePath,
           images: [
             {
               image_url: uploadedImage.image_url,

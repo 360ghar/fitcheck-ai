@@ -23,6 +23,7 @@ from app.agents.prompt_fidelity import (
     PRODUCT_CUSTOM_BACKGROUND_LOCK,
     PRODUCT_REFERENCE_LOCK,
     SHORT_NEGATIVES,
+    SOURCE_PHOTO_REFERENCE_LOCK,
 )
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
@@ -281,6 +282,7 @@ class ImageGenerationAgent:
         image_numbers: Dict[int, int],
         *,
         person_image: bool,
+        source_photo: bool = False,
     ) -> str:
         """Numbered map of what each inline image is.
 
@@ -289,7 +291,7 @@ class ImageGenerationAgent:
         are no garment references, so the prompt that works today is
         unchanged for clients that send no item_ids.
         """
-        if not image_numbers:
+        if not image_numbers and not source_photo:
             if person_image:
                 return "REFERENCE IMAGE = person identity (source of truth for face/body/hair/skin)."
             return ""
@@ -299,6 +301,16 @@ class ImageGenerationAgent:
             lines.append(
                 "- IMAGE 1 = the person: identity source of truth "
                 "(face, body, hair, skin). Not a garment."
+            )
+        if source_photo:
+            # The uploaded photo sits directly after the person reference (if
+            # any): it shows the outfit as worn, so it is the appearance
+            # source of truth for the clothes, never an identity source.
+            source_number = 1 + (1 if person_image else 0)
+            lines.append(
+                f"- IMAGE {source_number} = the original photo of this outfit "
+                "as worn (appearance source of truth for the clothes; not an "
+                "identity source)."
             )
         for idx, item in enumerate(items, start=1):
             number = image_numbers.get(idx)
@@ -378,6 +390,7 @@ class ImageGenerationAgent:
         custom_prompt: Optional[str] = None,
         user_avatar_base64: Optional[str] = None,
         body_profile: Optional[Dict[str, Any]] = None,
+        source_photo_base64: Optional[str] = None,
     ) -> GeneratedImage:
         """
         Generate an outfit visualization image.
@@ -399,6 +412,13 @@ class ImageGenerationAgent:
             custom_prompt: Additional prompt instructions
             user_avatar_base64: Optional user avatar for face consistency
             body_profile: Optional body profile dict with height_cm, body_shape, skin_tone
+            source_photo_base64: Optional original uploaded photo the outfit's
+                items were extracted from (set by the upload flow via
+                resolve_outfit_source_reference). Sent to the model as ONE
+                extra "as worn" reference so the render reproduces the real
+                fit, draping, and layering of the garments; it is never an
+                identity source. Absent -> the pre-existing reference-only
+                behavior, byte for byte.
 
         Returns:
             GeneratedImage with the result
@@ -410,6 +430,7 @@ class ImageGenerationAgent:
             include_model=include_model,
             has_avatar=user_avatar_base64 is not None,
             has_body_profile=body_profile is not None,
+            has_source_photo=source_photo_base64 is not None,
             item_reference_count=sum(1 for i in items if i.get(self.REFERENCE_KEY)),
         )
 
@@ -441,16 +462,29 @@ class ImageGenerationAgent:
 
         # Garment references: the items' own stored images, numbered so the
         # prompt can bind IMAGE n -> Item n. The person reference (when used)
-        # takes IMAGE 1, so garments start at 2.
+        # takes IMAGE 1, the uploaded source photo (when the upload flow opted
+        # in) takes the next slot, so garments start after both.
         uses_person_reference = bool(user_avatar_base64) and not wants_flat_lay
+        uses_source_photo = bool(source_photo_base64)
         garment_images, image_numbers = self._collect_garment_references(
-            items, first_image_number=2 if uses_person_reference else 1
+            items,
+            first_image_number=(
+                (2 if uses_person_reference else 1) + (1 if uses_source_photo else 0)
+            ),
         )
         outfit_inventory = self._build_outfit_inventory(items, image_numbers=image_numbers)
         reference_map = self._build_reference_map(
-            items, image_numbers, person_image=uses_person_reference
+            items,
+            image_numbers,
+            person_image=uses_person_reference,
+            source_photo=uses_source_photo,
         )
         garment_block = f"\n{GARMENT_REFERENCE_LOCK}\n" if garment_images else ""
+        # The "as worn" lock rides above the per-item garment lock: the source
+        # photo shows how the pieces combine, which isolated product shots
+        # cannot. Empty string when absent, so the templates below stay
+        # byte-identical to the pre-source-photo prompts.
+        source_photo_block = f"\n{SOURCE_PHOTO_REFERENCE_LOCK}\n" if uses_source_photo else ""
         # Only warn about collaging reference images when references exist -
         # otherwise the line names inputs the model was never given.
         no_collage = (
@@ -477,7 +511,7 @@ class ImageGenerationAgent:
             prompt = f"""Professional flat lay fashion photo of a cohesive {style} outfit: {items_list}.
 
 {reference_map}
-{garment_block}
+{source_photo_block}{garment_block}
 {outfit_inventory}
 
 {OUTFIT_LOCK}
@@ -499,29 +533,34 @@ Composition: ONE single flat lay photograph of these garments arranged together 
             # shot - no subject, no hair - so the same algorithm and guards apply.
             # This also covers generate_flat_lay() and any include_model=False
             # request.
+            reference_images = (
+                ([source_photo_base64] if uses_source_photo else []) + garment_images
+            )
             return await self._matte(
                 await self._generate_with_references(
-                    self._tidy_prompt(prompt), garment_images, context="outfit flat lay"
+                    self._tidy_prompt(prompt), reference_images, context="outfit flat lay"
                 ),
                 context="outfit flat lay",
             )
 
         elif user_avatar_base64:
-            # IMAGE 1 = identity source. Garment images (when the items have
-            # stored photos) follow it and are the appearance source for the
-            # clothes; the text inventory still identifies every item and is
-            # the only source for items with no image. PERSON_REFERENCE_
+            # IMAGE 1 = identity source. The uploaded source photo (upload flow
+            # only) follows it as the "as worn" appearance source, then the
+            # garment images; the text inventory still identifies every item
+            # and is the only source for items with no image. PERSON_REFERENCE_
             # FIDELITY stays ahead of the garment block so IDENTITY_LOCK keeps
             # top priority.
             # A multi-line reference map wants a blank line before TASK; the
             # single-line legacy header sat directly above it, and keeping that
             # exact spacing means a client sending no item_ids gets byte-for-byte
             # the prompt that works today.
-            person_header = reference_map + ("\n\n" if image_numbers else "\n")
+            person_header = reference_map + (
+                "\n\n" if (image_numbers or uses_source_photo) else "\n"
+            )
             base_prompt = f"""{person_header}TASK: Photoreal fashion photo of that same person wearing the outfit below.
 
 {PERSON_REFERENCE_FIDELITY}
-{garment_block}
+{source_photo_block}{garment_block}
 {outfit_inventory}
 {body_desc}
 
@@ -537,7 +576,9 @@ SCENE (change only these):
 
             return await self._generate_with_references(
                 self._tidy_prompt(base_prompt),
-                [user_avatar_base64, *garment_images],
+                [user_avatar_base64]
+                + ([source_photo_base64] if uses_source_photo else [])
+                + garment_images,
                 context="outfit with avatar",
             )
 
@@ -546,7 +587,7 @@ SCENE (change only these):
             prompt = f"""Professional fashion photo of a {model_gender} model wearing a cohesive {style} outfit: {items_list}.
 
 {reference_map}
-{garment_block}
+{source_photo_block}{garment_block}
 {outfit_inventory}
 
 {OUTFIT_LOCK}
@@ -566,7 +607,9 @@ Composition: ONE single photograph of the model wearing this outfit{no_collage}.
 {f"Additional instructions: {custom_prompt}" if custom_prompt else ""}"""
 
             return await self._generate_with_references(
-                self._tidy_prompt(prompt), garment_images, context="outfit"
+                self._tidy_prompt(prompt),
+                ([source_photo_base64] if uses_source_photo else []) + garment_images,
+                context="outfit",
             )
 
     async def generate_product_image(

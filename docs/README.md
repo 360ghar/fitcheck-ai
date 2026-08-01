@@ -17,6 +17,7 @@ This directory is the **system of record** for product intent, design decisions,
 | Mobile depth | `FLUTTER.md` |
 | Product intent | `PRODUCT_SENSE.md` + `product-specs/` |
 | Quality / debt | `QUALITY_SCORE.md`, `exec-plans/tech-debt-tracker.md` |
+| SEO / GEO / AEO ops | `geo/measurement-and-monitoring.md`, `geo/data-study-blueprint.md` |
 
 ## Layout
 
@@ -25,6 +26,7 @@ docs/
 ├── design-docs/       # beliefs, design decisions (indexed)
 ├── exec-plans/        # active/, completed/, tech-debt-tracker
 ├── generated/         # regenerable artifacts (e.g. db-schema)
+├── geo/               # SEO/GEO/AEO ops + data-study blueprint
 ├── product-specs/     # product overview, stories, feature PRDs
 ├── references/        # API, auth, setup, stack, implementation notes
 ├── store/             # app store / play store listing copy

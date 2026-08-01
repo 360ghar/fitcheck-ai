@@ -77,6 +77,9 @@ const WardrobeAnalyticsPage = lazy(() => import('./pages/features/WardrobeAnalyt
 
 // Intent SEO pages (compare, best-of, personas, guides)
 const IntentSeoPage = lazy(() => import('./pages/seo/IntentSeoPage'))
+const CostPerWearCalculatorPage = lazy(
+  () => import('./pages/tools/CostPerWearCalculatorPage')
+)
 
 // Loading spinner for hydration state (theme-aware)
 function LoadingSpinner() {
@@ -182,6 +185,14 @@ function App() {
             <Route path="/guides/what-to-wear-today" element={<IntentSeoPage />} />
             <Route path="/guides/cost-per-wear-calculator-explained" element={<IntentSeoPage />} />
             <Route path="/guides/how-to-reduce-clothing-returns-with-virtual-try-on" element={<IntentSeoPage />} />
+            <Route path="/compare/fitcheck-vs-stylebook" element={<IntentSeoPage />} />
+            <Route path="/compare/fitcheck-vs-indyx" element={<IntentSeoPage />} />
+            <Route path="/compare/fitcheck-vs-cladwell" element={<IntentSeoPage />} />
+            <Route path="/compare/fitcheck-vs-open-wardrobe" element={<IntentSeoPage />} />
+            <Route path="/guides/what-is-a-capsule-wardrobe" element={<IntentSeoPage />} />
+            <Route path="/guides/what-is-wardrobe-utilization" element={<IntentSeoPage />} />
+            <Route path="/wear/:citySlug" element={<IntentSeoPage />} />
+            <Route path="/tools/cost-per-wear-calculator" element={<CostPerWearCalculatorPage />} />
           </Route>
 
           {/* Auth routes */}

@@ -163,6 +163,15 @@ class GenerateOutfitRequest(BaseModel):
     save_to_storage: bool = False
     include_user_face: bool = True  # Use avatar for face consistency when available
     use_body_profile: bool = True   # Use body profile data if available
+    # Upload flow ONLY: when True, the backend additionally resolves the
+    # original uploaded source photo the outfit's items were extracted from
+    # and sends it to the image model as an "as worn" reference, so the render
+    # reproduces the garments' real fit, draping, and layering instead of
+    # compounding the loss from the extracted/generated item shots. Default
+    # False: the outfit builder and every other caller keep the existing
+    # item-reference-only behavior. Resolution is server-side and user-scoped
+    # (same SSRF posture as `item_id`); clients never send URLs or base64.
+    use_source_photo: bool = False
 
 
 class GenerateOutfitResponse(BaseModel):

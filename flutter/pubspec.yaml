@@ -64,6 +64,9 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
+  # URL launching (platform interface stub in widget tests)
+  url_launcher_platform_interface: ^2.3.2
+
   # Icon Generation
   flutter_launcher_icons: ^0.14.3
 

@@ -2,7 +2,7 @@ import { useParams, Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
 import SEO from '@/components/seo/SEO'
-import { BreadcrumbJsonLd } from '@/components/seo/JsonLd'
+import { BreadcrumbJsonLd, buildArticleSchema } from '@/components/seo/JsonLd'
 import { Calendar, Clock, ArrowLeft, User, ArrowRight, Loader2 } from 'lucide-react'
 import { useBlogPost, useBlogPosts } from '@/hooks/useBlog'
 import { escapeHtml, sanitizeMarkdownUrl } from '@/lib/utils'
@@ -73,29 +73,19 @@ export default function BlogPostPage() {
     { name: post.title, url: `https://fitcheckaiapp.com/blog/${post.slug}` }
   ]
 
-  // Generate Article schema
-  const articleSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'Article',
+  // Article schema with a named Person author + speakable (E-E-A-T / answer engines)
+  const articleSchema = buildArticleSchema({
     headline: post.title,
     description: post.excerpt,
-    author: {
-      '@type': 'Organization',
-      name: post.author
-    },
-    publisher: {
-      '@type': 'Organization',
-      name: 'FitCheck AI',
-      logo: {
-        '@type': 'ImageObject',
-        url: 'https://fitcheckaiapp.com/og-default.jpg'
-      }
-    },
+    authorName: post.author,
     datePublished: new Date(post.date).toISOString(),
     dateModified: new Date(post.updated_at || post.date).toISOString(),
-    keywords: post.keywords.join(', '),
-    articleSection: post.category
-  }
+    keywords: post.keywords,
+    section: post.category,
+    url: `https://fitcheckaiapp.com/blog/${post.slug}`,
+    image: post.featured_image_url,
+    speakableSelectors: ['#article-lede', '#article-body'],
+  })
 
   return (
     <>
@@ -128,7 +118,7 @@ export default function BlogPostPage() {
               </Badge>
 
               {/* Title */}
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-6">
+              <h1 id="article-lede" className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-6">
                 {post.title}
               </h1>
 
@@ -181,7 +171,7 @@ export default function BlogPostPage() {
         <section className="pb-16 md:pb-24">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
-              <article className="prose prose-lg md:prose-xl dark:prose-invert max-w-none">
+              <article id="article-body" className="prose prose-lg md:prose-xl dark:prose-invert max-w-none">
                 {/* Render content as HTML-like structure */}
                 {post.content.split('\n\n').map((paragraph, index) => {
                   const trimmed = paragraph.trim()

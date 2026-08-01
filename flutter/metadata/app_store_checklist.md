@@ -108,6 +108,7 @@
 - [ ] Supabase Apple provider enabled for production
 - [ ] Demo reviewer account seeded (`backend/scripts/seed_app_store_reviewer.py`)
 - [ ] Production API reachable: `https://api.fitcheckaiapp.com`
+- [ ] Production backend env has Apple IAP config: `APPLE_ISSUER_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`, and all four `APPLE_*_PRODUCT_ID`s (backend fails closed without them)
 - [ ] GitHub secrets for signing + ASC API (see `build-ios.yml` header)
 
 ### Before Submit for Review

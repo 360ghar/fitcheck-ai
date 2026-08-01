@@ -138,7 +138,14 @@ interface OutfitState {
 
   // Generation actions
   startGeneration: (outfitId: string, request?: { pose?: string; variations?: number; lighting?: string; body_profile_id?: string }) => Promise<void>;
-  startGenerationForNewOutfit: (outfitId: string) => void;
+  /**
+   * Fire-and-forget generation for a newly created outfit (marks it in
+   * `generatingOutfits`). `useSourcePhoto` is the upload flow's opt-in: pass
+   * true only when this outfit was built from one uploaded photo's extracted
+   * items, so the backend can send the original photo as an "as worn"
+   * reference. Default false keeps the builder/retry paths unchanged.
+   */
+  startGenerationForNewOutfit: (outfitId: string, options?: { useSourcePhoto?: boolean }) => void;
   resetGeneration: () => void;
   clearError: () => void;
 }
@@ -610,11 +617,14 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 
     set({ previewStatus: 'processing', previewError: null });
 
-    // Same options as `startGenerationForNewOutfit`, so what the user approves
-    // is what the old auto-generation would have produced. No `background`:
-    // the backend default owns that prompt fragment now. `skipToast`: this
-    // flow surfaces its own inline `previewError`, so the global error toast
-    // is suppressed — otherwise each withRetry attempt would also toast.
+    // Mirrors the auto-generation options (`startGenerationForNewOutfit`),
+    // so what the user approves is what the old auto-generation would have
+    // produced. Deliberately NO `useSourcePhoto`: the preview lives in the
+    // outfit builder, and the source-photo "as worn" reference is upload-flow
+    // only. No `background`: the backend default owns that prompt fragment
+    // now. `skipToast`: this flow surfaces its own inline `previewError`, so
+    // the global error toast is suppressed — otherwise each withRetry attempt
+    // would also toast.
     const aiResult = await withRetry(
       () =>
         generateOutfit(
@@ -940,7 +950,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
   },
 
   // Start generation for newly created outfit (fire-and-forget, updates generatingOutfits map)
-  startGenerationForNewOutfit: (outfitId: string) => {
+  startGenerationForNewOutfit: (outfitId: string, options?: { useSourcePhoto?: boolean }) => {
     // Run async generation in background
     (async () => {
       try {
@@ -998,6 +1008,9 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
               include_model: true,
               include_user_face: true,
               use_body_profile: true,
+              // Upload flow only: the outfit came from one uploaded photo, so
+              // the backend sends that photo as an "as worn" reference.
+              useSourcePhoto: options?.useSourcePhoto ?? false,
             }),
           {
             maxRetries: 3,

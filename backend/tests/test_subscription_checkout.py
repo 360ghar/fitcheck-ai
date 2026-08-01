@@ -129,6 +129,31 @@ async def test_paid_local_state_without_stripe_subscription_fails_before_checkou
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("provider", ["apple", "google"])
+async def test_store_billed_subscription_refuses_stripe_checkout(provider):
+    """Fail closed: an App Store / Play-billed account must never be steered
+    to Stripe checkout (App Store Guideline 3.1.1 / Play policy), and a web
+    Stripe purchase must not double-bill alongside a store subscription."""
+    db = _db_with_subscription(
+        {
+            "plan_type": "plus_monthly",
+            "stripe_subscription_id": None,
+            "stripe_customer_id": None,
+            "billing_provider": provider,
+        }
+    )
+    request = CreateCheckoutRequest(plan_type=PlanType.PLUS_MONTHLY)
+
+    with patch.multiple(settings, **_stripe_settings()), \
+         patch.object(stripe.checkout.Session, "create") as session_create, \
+         patch.object(SubscriptionService, "get_subscription", new=AsyncMock()):
+        with pytest.raises(ServiceError, match="billed through"):
+            await create_checkout_session(request, user={"id": "user-1"}, db=db)
+
+    session_create.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_sync_stripe_subscription_persists_price_status_period_and_cancel_flag():
     db = Mock()
     row = {

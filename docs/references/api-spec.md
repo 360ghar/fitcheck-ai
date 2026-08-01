@@ -270,6 +270,14 @@ reference so the render reproduces the real garment. Omitting `item_id` still
 works and falls back to generating from the text attributes alone. Never send
 image URLs or base64 here. Max 100 items (server-enforced `AI_MAX_OUTFIT_ITEMS`, default 100; configurable via `backend/.env`).
 
+`use_source_photo` (default `false`) is the **upload flow's opt-in only**: when
+true, the backend additionally resolves the original uploaded photo the
+outfit's items were extracted from (`items.source_image_url`, user-scoped) and
+sends it as one "as worn" reference so the render reproduces real fit and
+draping instead of compounding loss from the extracted/generated item shots.
+The outfit builder and manual regenerations keep it off. Ties between multiple
+photos are skipped; failures degrade to the item-reference-only behavior.
+
 **Request:**
 ```json
 {
@@ -294,7 +302,8 @@ image URLs or base64 here. Max 100 items (server-enforced `AI_MAX_OUTFIT_ITEMS`,
   "custom_prompt": null,
   "save_to_storage": false,
   "include_user_face": true,
-  "use_body_profile": true
+  "use_body_profile": true,
+  "use_source_photo": false
 }
 ```
 

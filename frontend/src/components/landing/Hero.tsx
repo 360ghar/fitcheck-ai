@@ -21,6 +21,27 @@ export default function Hero() {
               Web + Android live · iOS waitlist
             </p>
 
+            {/* Real plan numbers — the GEO "statistics" lever (no fabricated claims) */}
+            <div className="mt-8 grid grid-cols-3 gap-3 max-w-md">
+              {[
+                { value: '25', label: 'AI extractions / month free' },
+                { value: '10', label: 'Photoshoot images / day free' },
+                { value: '1,000', label: 'Visualizations / month on Pro' },
+              ].map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-xl border border-stone-200 bg-white px-3 py-2.5 dark:border-stone-800 dark:bg-stone-900"
+                >
+                  <p className="landing-display text-lg font-semibold text-stone-900 dark:text-stone-50">
+                    {stat.value}
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-tight text-stone-500 dark:text-stone-400">
+                    {stat.label}
+                  </p>
+                </div>
+              ))}
+            </div>
+
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
               <Button
                 size="lg"
@@ -53,7 +74,7 @@ export default function Hero() {
           <div className="lg:col-span-7 relative pb-6 sm:pb-8">
             <div className="relative aspect-[4/3] overflow-hidden rounded-lg border border-stone-200/80 bg-stone-200 dark:border-stone-800 dark:bg-stone-900">
               <img
-                src="/landing/wardrobe.jpg"
+                src="/landing/wardrobe.webp"
                 alt="A neatly arranged wardrobe of everyday clothes"
                 className="absolute inset-0 w-full h-full object-cover"
                 width={1152}
@@ -87,7 +108,7 @@ export default function Hero() {
             {/* Secondary photo - reserved space below so it is not clipped */}
             <div className="hidden sm:block absolute bottom-0 right-0 lg:right-4 w-36 h-44 rounded-xl overflow-hidden border-4 border-stone-50 dark:border-stone-950 rotate-2 translate-y-2">
               <img
-                src="/landing/outfit.jpg"
+                src="/landing/outfit.webp"
                 alt="Styled everyday outfit"
                 className="w-full h-full object-cover"
                 width={864}

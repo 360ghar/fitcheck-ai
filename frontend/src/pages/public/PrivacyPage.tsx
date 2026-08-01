@@ -62,10 +62,11 @@ export default function PrivacyPage() {
                   content reports you submit to our team
                 </li>
                 <li>
-                  <strong>Payment Information (web/Android where offered):</strong>{' '}
-                  Billing is processed by our payment provider (e.g. Stripe).
-                  We do not store full card numbers. The iOS app free v1 does
-                  not offer in-app purchases or subscriptions.
+                  <strong>Payment Information:</strong>{' '}
+                  Mobile subscriptions are processed by the App Store (Apple
+                  In-App Purchase) or Google Play Billing; web subscriptions
+                  are processed by our payment provider (e.g. Stripe). We do
+                  not store full card numbers.
                 </li>
               </ul>
 
@@ -146,8 +147,9 @@ export default function PrivacyPage() {
                   that run our API and website
                 </li>
                 <li>
-                  <strong>Payment processors</strong> (where paid plans are
-                  offered outside iOS free v1): e.g. Stripe for web billing
+                  <strong>Payment processors:</strong> Apple (App Store
+                  In-App Purchase) and Google (Play Billing) for mobile
+                  subscriptions; Stripe for web billing
                 </li>
               </ul>
               <p>

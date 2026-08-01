@@ -92,15 +92,18 @@ export default function TermsPage() {
 
               <h2>6. Subscriptions and Pricing</h2>
               <p>
-                The FitCheck AI iOS app is free to download and use in its free v1 release. There
-                are no in-app purchases or subscriptions offered through the iOS App Store in this
-                version.
+                FitCheck AI is free to download and use. Optional Plus and Pro subscriptions
+                (monthly and yearly) are offered on the web and in the mobile apps. On iOS,
+                subscriptions are sold exclusively through Apple In-App Purchase and are managed in
+                your App Store subscription settings. On Android, subscriptions are sold through
+                Google Play Billing.
               </p>
               <p>
-                On web or other platforms where paid plans are offered, fees, renewal, and refund
-                terms will be disclosed at purchase. Those purchases are processed by our payment
-                provider and are not available as external payment links from the iOS app for
-                digital content.
+                On the web, paid plans are sold through our payment provider; fees, renewal, and
+                refund terms are disclosed at purchase. Store purchases are billed, renewed, and
+                refunded according to the applicable store's terms (Apple App Store or Google
+                Play). No external payment links are offered inside the iOS app for digital
+                content.
               </p>
 
               <h2>7. AI-Generated Content</h2>

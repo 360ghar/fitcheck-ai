@@ -1,6 +1,6 @@
 import type { Context } from '@netlify/edge-functions'
 
-const BACKEND_API_URL = 'https://fitcheck-backend.railway.app'
+const BACKEND_API_URL = 'https://api.fitcheckaiapp.com'
 const SITE_URL = 'https://fitcheckaiapp.com'
 const DEFAULT_OG_IMAGE = `${SITE_URL}/og-default.jpg`
 const OUTFIT_FALLBACK_IMAGE = `${SITE_URL}/og-outfit-fallback.svg`

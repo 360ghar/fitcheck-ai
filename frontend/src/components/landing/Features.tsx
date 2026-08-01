@@ -20,7 +20,7 @@ const primaryFeatures = [
       'Upload a photo. FitCheck tags each piece with color, category, and style — including multi-item hangs and flat lays.',
     href: '/features/ai-wardrobe-extraction',
     span: 'md:col-span-4 md:row-span-2',
-    image: '/landing/flatlay.jpg',
+    image: '/landing/flatlay.webp',
     imageAlt: 'Clothing flat lay ready for cataloging',
   },
   {

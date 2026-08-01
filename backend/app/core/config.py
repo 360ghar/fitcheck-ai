@@ -263,6 +263,20 @@ class Settings(BaseSettings):
     # more pixels than a garment does.
     AI_OUTFIT_ITEM_REFERENCE_MAX_EDGE: int = 768
 
+    # Upload flow only (GenerateOutfitRequest.use_source_photo ->
+    # item_reference_service.resolve_outfit_source_reference): the original
+    # uploaded photo the outfit's items were extracted from, sent to the image
+    # model as ONE extra "as worn" reference so the render reproduces real fit
+    # and draping instead of compounding loss from the item shots. The
+    # coherence gate requires at least MIN_SHARED_ITEMS of the outfit's items
+    # to come from that photo (the auto-outfit flow groups one photo per
+    # outfit, so the default 1 always passes there); MAX_IMAGES caps how many
+    # photos are ever sent (a tie for most-shared is skipped entirely, so 1 is
+    # the real ceiling). Reuses AI_OUTFIT_ITEM_REFERENCE_MAX_EDGE for the
+    # downscale.
+    AI_OUTFIT_SOURCE_REFERENCE_MAX_IMAGES: int = 1
+    AI_OUTFIT_SOURCE_REFERENCE_MIN_SHARED_ITEMS: int = 1
+
     # Gamification
     #
     # Deliberately defaults to the OPPOSITE of ENABLE_SOCIAL_IMPORT below.

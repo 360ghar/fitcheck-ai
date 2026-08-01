@@ -1,6 +1,6 @@
 # Tech debt tracker
 
-Last updated: 2026-08-01 (TD-030–TD-041)
+Last updated: 2026-08-01 (TD-030–TD-042)
 
 | ID | Item | Severity | Domain | Notes |
 |----|------|----------|--------|-------|
@@ -48,7 +48,8 @@ Last updated: 2026-08-01 (TD-030–TD-041)
 | TD-038 | Flutter local SDK cache permission blocker | medium | mobile/infra | The default sandbox may not write the Flutter SDK cache. Verification passed with an approved writable SDK cache; keep CI as the reproducible release boundary and do not alter the SDK from the repository. |
 | TD-039 | Stale aggregate/status documentation | medium | docs | The former 77% implementation summary and old test counts overstated completion. The story ledger is now authoritative; curated API docs remain non-canonical. |
 | TD-040 | Active/completed plan lifecycle drift | low | process | `cross-platform-wardrobe-studio.md` is marked completed while remaining under `exec-plans/active/`; reconcile during plan GC, without treating plan prose as verification evidence. |
-| TD-041 | No lazy server-side re-verification of stored store transactions | medium | backend | After mobile IAP ships, `GET /subscription` trusts the stored row until a webhook or the expiry cron touches it. A missed App Store/Play webhook leaves a stale entitlement until the next renewal/expiry event (or the `revert_expired_pro_trials.py` cron, TD-031). Defense in depth: lazily re-verify the stored `apple_original_transaction_id` / `google_purchase_token` with the store APIs on `GET /subscription` (rate-limited, cache per row) — deferred from the mobile-IAP plan (`docs/exec-plans/active/2026-08-01-mobile-iap-subscriptions.md`). Found 2026-08-01 |
+| TD-041 | No lazy server-side re-verification of stored store transactions | medium | backend | After mobile IAP ships, `GET /subscription` trusts the stored row until a webhook or the expiry cron touches it. A missed App Store/Play webhook leaves a stale entitlement until the next renewal/expiry event (or the `revert_expired_pro_trials.py` cron, TD-031). Defense in depth: lazily re-verify the stored `apple_original_transaction_id` / `google_purchase_token` with the store APIs on `GET /subscription` (rate-limited, cache per row) — deferred from the mobile-IAP plan (`docs/exec-plans/completed/2026-08-01-mobile-iap-subscriptions.md`). Found 2026-08-01 |
+| TD-042 | Flutter batch flow drops `source_image_url` when saving items | low | mobile | The web batch flow now surfaces the SSE payload's `source_image_url`/`source_image_storage_path` and persists both in `createItem` so the auto-outfit upload flow can use the original photo as an "as worn" generation reference (`docs/exec-plans/active/2026-08-01-outfit-source-photo-reference.md`). Flutter's `DetectedItemData` freezed model + create payload still drop the fields; only matters once Flutter auto-outfit lands (freezed `.g`/`.freezed.dart` regeneration deferred). Found 2026-08-01 |
 
 ## Process
 

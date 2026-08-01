@@ -77,7 +77,7 @@ export async function createOutfitFromSavedItems(
       outfits: [outfit, ...store.outfits],
       generatingOutfits: generating,
     });
-    store.startGenerationForNewOutfit(outfit.id);
+    store.startGenerationForNewOutfit(outfit.id, { useSourcePhoto: true });
 
     return outfit.id;
   } catch (err) {

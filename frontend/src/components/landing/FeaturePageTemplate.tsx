@@ -24,6 +24,11 @@ export interface RelatedFeature {
   href: string
 }
 
+export interface FeatureStat {
+  value: string
+  label: string
+}
+
 export interface FeaturePageTemplateProps {
   title: string
   description: string
@@ -40,6 +45,8 @@ export interface FeaturePageTemplateProps {
   contextDescription: string
   contextItems: string[]
   relatedFeatures: RelatedFeature[]
+  /** Real plan numbers for the GEO statistics lever (optional). */
+  stats?: FeatureStat[]
 }
 
 /**
@@ -63,6 +70,7 @@ export function FeaturePageTemplate({
   contextDescription,
   contextItems,
   relatedFeatures,
+  stats,
 }: FeaturePageTemplateProps) {
   const breadcrumbs = [
     { name: 'Home', url: `${SEO_CONFIG.siteUrl}/` },
@@ -100,6 +108,23 @@ export function FeaturePageTemplate({
               <p className="mt-5 max-w-2xl text-base leading-relaxed text-stone-600 dark:text-stone-400 md:text-lg">
                 {description}
               </p>
+              {stats && stats.length > 0 && (
+                <div className="mt-8 grid max-w-xl grid-cols-2 gap-3 sm:grid-cols-3">
+                  {stats.map((stat) => (
+                    <div
+                      key={stat.label}
+                      className="rounded-xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-800 dark:bg-stone-900"
+                    >
+                      <p className="landing-display text-xl font-semibold text-stone-900 dark:text-stone-50">
+                        {stat.value}
+                      </p>
+                      <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                        {stat.label}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg" className="h-12 px-6">
                   <Link to="/auth/register">

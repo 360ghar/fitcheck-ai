@@ -8,13 +8,33 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:url_launcher_platform_interface/link.dart' show LinkDelegate;
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
+
+/// Stub for the URL launcher platform channel (unavailable in widget tests).
+class FakeUrlLauncherPlatform extends UrlLauncherPlatform {
+  FakeUrlLauncherPlatform({this.canLaunchResult = false});
+
+  final bool canLaunchResult;
+
+  @override
+  LinkDelegate? get linkDelegate => null;
+
+  @override
+  Future<bool> canLaunch(String url) async => canLaunchResult;
+
+  @override
+  Future<bool> launchUrl(String url, LaunchOptions options) async => true;
+}
 
 /// Fake IAP gateway with manually pumped purchase events.
 class FakeIapService extends IapService {
-  FakeIapService({bool storeBillingAvailable = true})
-      : _storeBillingAvailable = storeBillingAvailable;
+  FakeIapService({bool storeBillingAvailable = true, String storeName = 'google'})
+      : _storeBillingAvailable = storeBillingAvailable,
+        _storeName = storeName;
 
   final bool _storeBillingAvailable;
+  final String _storeName;
   final _streamController = StreamController<List<PurchaseDetails>>.broadcast();
   int fetchProductsCalls = 0;
   int startPurchaseCalls = 0;
@@ -28,7 +48,11 @@ class FakeIapService extends IapService {
   bool get isStoreBillingAvailable => _storeBillingAvailable;
 
   @override
-  String get storeName => 'google'; // flutter_test defaults to android
+  bool get isApple => _storeName == 'apple';
+
+  @override
+  String get storeName =>
+      _storeName; // flutter_test defaults to android; pass 'apple' for iOS tests
 
   @override
   Stream<List<PurchaseDetails>> get purchaseStream => _streamController.stream;
@@ -72,6 +96,8 @@ class FakeIapService extends IapService {
 /// Fake repository; only the IAP registration path is exercised.
 class FakeSubscriptionRepository extends SubscriptionRepository {
   int registerCalls = 0;
+  int checkoutCalls = 0;
+  int portalCalls = 0;
   String? lastStore;
   String? lastTransactionId;
   String? lastProductId;
@@ -96,6 +122,22 @@ class FakeSubscriptionRepository extends SubscriptionRepository {
           planType: PlanType.plusMonthly,
           billingProvider: store,
         );
+  }
+
+  @override
+  Future<CheckoutSessionModel> createCheckoutSession({
+    required String planType,
+    String? successUrl,
+    String? cancelUrl,
+  }) async {
+    checkoutCalls++;
+    return const CheckoutSessionModel();
+  }
+
+  @override
+  Future<String> createPortalSession() async {
+    portalCalls++;
+    return '';
   }
 }
 
@@ -142,6 +184,7 @@ void main() {
   tearDown(() {
     iapService.dispose();
     Get.reset();
+    UrlLauncherPlatform.instance = FakeUrlLauncherPlatform();
   });
 
   Future<void> pumpApp(WidgetTester tester) async {
@@ -180,6 +223,7 @@ void main() {
       expect(iapService.lastQueriedIds, {'plus_monthly'});
       expect(iapService.startPurchaseCalls, 1);
       // The Stripe path must never run on mobile.
+      expect(repository.checkoutCalls, 0);
       expect(controller.error.value, isEmpty);
       await settle(tester);
       controller.onClose();
@@ -296,6 +340,62 @@ void main() {
 
       // The store owns billing; nothing may call the Stripe cancel endpoint.
       expect(controller.isStoreBilled, isTrue);
+      await settle(tester);
+      controller.onClose();
+    });
+  });
+
+  group('SubscriptionController iOS (Apple IAP only)', () {
+    testWidgets('iOS startCheckout uses StoreKit and never Stripe checkout', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      iapService = FakeIapService(storeName: 'apple');
+      repository = FakeSubscriptionRepository();
+      iapService.productsToReturn = [_product('plus_monthly')];
+      final controller = buildController();
+
+      await controller.startCheckout('plus_monthly');
+
+      expect(iapService.fetchProductsCalls, 1);
+      expect(iapService.startPurchaseCalls, 1);
+      // The Stripe checkout path must never run on iOS (Guideline 3.1.1).
+      expect(repository.checkoutCalls, 0);
+
+      // A completed StoreKit transaction registers with the backend as Apple.
+      iapService.emit(_purchase(
+        purchaseID: '100000123456789',
+        serverVerificationData: '100000123456789',
+      ));
+      await tester.pump();
+      await tester.pump();
+
+      expect(repository.registerCalls, 1);
+      expect(repository.lastStore, 'apple');
+      expect(repository.lastTransactionId, '100000123456789');
+      expect(iapService.completeCalls, 1);
+      await settle(tester);
+      controller.onClose();
+    });
+
+    testWidgets('iOS manage subscription opens App Store settings, never the Stripe portal', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      iapService = FakeIapService(storeName: 'apple');
+      repository = FakeSubscriptionRepository();
+      final controller = buildController();
+      // Stub the URL launcher so the harness cannot hang on the real
+      // platform channel; the App Store URL is not launchable here.
+      UrlLauncherPlatform.instance = FakeUrlLauncherPlatform(canLaunchResult: false);
+
+      await controller.openManageSubscription();
+
+      // The Stripe billing portal is web-only. iOS points at App Store
+      // subscription settings; the stub cannot launch the URL, so the
+      // controller reports that instead of falling through to Stripe.
+      expect(repository.portalCalls, 0);
+      expect(controller.error.value, contains('Could not open'));
       await settle(tester);
       controller.onClose();
     });

@@ -123,4 +123,50 @@ describe('outfitStore.startGenerationForNewOutfit', () => {
     })
     expect(unhandled).toEqual([])
   })
+
+  it('defaults to NOT sending the source photo (builder/retry paths unchanged)', async () => {
+    vi.mocked(outfitsApi.getAvailableItems).mockResolvedValue([
+      { id: 'item-1', name: 'Cream sweater', category: 'tops', colors: ['cream'], image_url: 'https://x.test/a.jpg' },
+    ])
+    vi.mocked(generateOutfit).mockResolvedValue({
+      image_base64: 'aGk=',
+      prompt: 'p',
+      model: 'm',
+      provider: 'fake',
+    } as never)
+    vi.mocked(outfitsApi.uploadOutfitImage).mockRejectedValue(new Error('stop'))
+
+    useOutfitStore.getState().startGenerationForNewOutfit(OUTFIT_ID)
+
+    await vi.waitFor(() => {
+      expect(generateOutfit).toHaveBeenCalled()
+    })
+    expect(vi.mocked(generateOutfit).mock.calls[0][1]).toMatchObject({
+      useSourcePhoto: false,
+    })
+  })
+
+  it('sends use_source_photo when the upload flow opts in', async () => {
+    vi.mocked(outfitsApi.getAvailableItems).mockResolvedValue([
+      { id: 'item-1', name: 'Cream sweater', category: 'tops', colors: ['cream'], image_url: 'https://x.test/a.jpg' },
+    ])
+    vi.mocked(generateOutfit).mockResolvedValue({
+      image_base64: 'aGk=',
+      prompt: 'p',
+      model: 'm',
+      provider: 'fake',
+    } as never)
+    vi.mocked(outfitsApi.uploadOutfitImage).mockRejectedValue(new Error('stop'))
+
+    useOutfitStore.getState().startGenerationForNewOutfit(OUTFIT_ID, {
+      useSourcePhoto: true,
+    })
+
+    await vi.waitFor(() => {
+      expect(generateOutfit).toHaveBeenCalled()
+    })
+    expect(vi.mocked(generateOutfit).mock.calls[0][1]).toMatchObject({
+      useSourcePhoto: true,
+    })
+  })
 })

@@ -6,39 +6,12 @@
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { SITE, SEO_ROUTES, urlForPath } from './seo-content.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = join(__dirname, '..')
-const SITE = 'https://fitcheckaiapp.com'
 const today = new Date().toISOString().slice(0, 10)
 
-const STATIC_ROUTES = [
-  { path: '/', priority: '1.0', changefreq: 'weekly' },
-  { path: '/features', priority: '0.9', changefreq: 'monthly' },
-  { path: '/features/ai-wardrobe-extraction', priority: '0.9', changefreq: 'monthly' },
-  { path: '/features/virtual-try-on', priority: '0.9', changefreq: 'monthly' },
-  { path: '/features/ai-photoshoot-generator', priority: '0.9', changefreq: 'monthly' },
-  { path: '/features/outfit-recommendations', priority: '0.9', changefreq: 'monthly' },
-  { path: '/features/wardrobe-analytics', priority: '0.8', changefreq: 'monthly' },
-  { path: '/about', priority: '0.7', changefreq: 'monthly' },
-  { path: '/faq', priority: '0.8', changefreq: 'monthly' },
-  { path: '/blog', priority: '0.8', changefreq: 'weekly' },
-  { path: '/support', priority: '0.5', changefreq: 'monthly' },
-  { path: '/privacy', priority: '0.4', changefreq: 'yearly' },
-  { path: '/terms', priority: '0.4', changefreq: 'yearly' },
-  { path: '/best/virtual-closet-apps', priority: '0.9', changefreq: 'monthly' },
-  { path: '/best/ai-outfit-planners', priority: '0.9', changefreq: 'monthly' },
-  { path: '/compare/fitcheck-vs-acloset', priority: '0.85', changefreq: 'monthly' },
-  { path: '/compare/fitcheck-vs-whering', priority: '0.85', changefreq: 'monthly' },
-  { path: '/alternatives/acloset-alternatives', priority: '0.85', changefreq: 'monthly' },
-  { path: '/for/busy-professionals', priority: '0.85', changefreq: 'monthly' },
-  { path: '/for/content-creators', priority: '0.85', changefreq: 'monthly' },
-  { path: '/for/festive-and-wedding-outfits', priority: '0.85', changefreq: 'monthly' },
-  { path: '/guides/how-to-digitize-your-wardrobe', priority: '0.85', changefreq: 'monthly' },
-  { path: '/guides/what-to-wear-today', priority: '0.85', changefreq: 'monthly' },
-  { path: '/guides/cost-per-wear-calculator-explained', priority: '0.8', changefreq: 'monthly' },
-  { path: '/guides/how-to-reduce-clothing-returns-with-virtual-try-on', priority: '0.8', changefreq: 'monthly' },
-]
 
 function escapeXml(s) {
   return s
@@ -71,7 +44,7 @@ async function fetchBlogSlugs() {
     process.env.SITEMAP_API_URL ||
     process.env.VITE_API_URL ||
     process.env.VITE_API_BASE_URL ||
-    'https://fitcheck-backend.railway.app'
+    'https://api.fitcheckaiapp.com'
 
   const posts = []
   try {
@@ -117,9 +90,9 @@ async function main() {
         title: 'FitCheck AI - AI Virtual Closet & Outfit Planner',
       },
     }),
-    ...STATIC_ROUTES.filter((r) => r.path !== '/').map((r) =>
+    ...SEO_ROUTES.filter((r) => r.path !== '/').map((r) =>
       urlEntry({
-        loc: `${SITE}${r.path}`,
+        loc: urlForPath(r.path),
         lastmod: today,
         changefreq: r.changefreq,
         priority: r.priority,

@@ -16,7 +16,7 @@
       "request": "launch",
       "program": "lib/main.dart",
       "args": [
-        "--dart-define=API_BASE_URL=https://fitcheck-backend.railway.app"
+        "--dart-define=API_BASE_URL=https://api.fitcheckaiapp.com"
       ]
     },
     {
@@ -35,7 +35,7 @@
       "request": "launch",
       "program": "lib/main.dart",
       "args": [
-        "--dart-define=API_BASE_URL=https://fitcheck-backend.railway.app",
+        "--dart-define=API_BASE_URL=https://api.fitcheckaiapp.com",
         "--release"
       ]
     }

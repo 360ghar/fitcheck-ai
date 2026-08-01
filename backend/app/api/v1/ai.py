@@ -39,7 +39,10 @@ from app.agents.image_generation_agent import (
     save_generated_image,
 )
 from app.services.ai_service import EmbeddingService
-from app.services.item_reference_service import resolve_outfit_item_references
+from app.services.item_reference_service import (
+    resolve_outfit_item_references,
+    resolve_outfit_source_reference,
+)
 from app.services.storage_service import StorageService
 from app.services.vector_service import get_vector_service
 from app.utils.image_processing import downscale_base64_image
@@ -273,6 +276,24 @@ async def generate_outfit(
                 **reference_stats,
             )
 
+            # Upload flow ONLY (GenerateOutfitRequest.use_source_photo): also
+            # resolve the original uploaded photo the outfit's items were
+            # extracted from, so the model can copy the garments exactly as
+            # worn (fit, draping, layering) instead of compounding the loss
+            # from the extracted/generated item shots. Off for the outfit
+            # builder and every other caller. Same placement rules as the item
+            # references: inside the rate limit, outside with_retry.
+            source_photo_base64 = None
+            if request.use_source_photo:
+                source_photo_base64, source_ref_stats = await resolve_outfit_source_reference(
+                    db=db, user_id=user_id, items=items
+                )
+                logger.info(
+                    "Outfit source photo reference resolved",
+                    user_id=user_id,
+                    **source_ref_stats,
+                )
+
             # Generate outfit with retry
             result = await with_retry(
                 lambda: agent.generate_outfit(
@@ -287,6 +308,7 @@ async def generate_outfit(
                     custom_prompt=request.custom_prompt,
                     user_avatar_base64=user_avatar_base64,
                     body_profile=body_profile,
+                    source_photo_base64=source_photo_base64,
                 ),
                 max_retries=2,
                 initial_delay=2.0,

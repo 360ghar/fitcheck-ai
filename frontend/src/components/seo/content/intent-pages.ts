@@ -1,8 +1,10 @@
 import type { SeoPageContent } from '../SeoPageLayout'
+import { CITY_WEAR_PAGES, getCityWearPageByPath } from './city-wear-pages'
 
 export const INTENT_PAGES: Record<string, SeoPageContent> = {
   'best-virtual-closet-apps': {
     path: '/best/virtual-closet-apps',
+    lastUpdated: '2026-08-01',
     title: 'Best Virtual Closet Apps in 2026 | FitCheck AI',
     description:
       'Compare the best virtual closet and digital wardrobe apps. See which AI outfit planners help you wear more of what you own.',
@@ -15,6 +17,15 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
     ],
     keywords:
       'best virtual closet apps, digital wardrobe app, AI closet organizer, virtual wardrobe',
+    stats: [
+      { value: '25', label: 'AI item extractions/month on the free plan' },
+      { value: '10', label: 'AI photoshoot images/day on the free plan' },
+      { value: '1,000', label: 'Outfit visualizations/month on Pro' },
+    ],
+    sources: [
+      { label: 'National Retail Federation — 2023 retail returns report (16.5% of sales returned)', url: 'https://nrf.com/research/retail-returns' },
+      { label: 'WRAP — Valuing Our Clothes: extending garment life 9 months cuts footprints ~20–30%', url: 'https://wrap.org.uk/resources/report/valuing-our-clothes-cost-uk-fashion' },
+    ],
     sections: [
       {
         heading: 'What makes a virtual closet app worth using?',
@@ -78,6 +89,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
 
   'best-ai-outfit-planners': {
     path: '/best/ai-outfit-planners',
+    lastUpdated: '2026-08-01',
     title: 'Best AI Outfit Planners in 2026 | FitCheck AI',
     description:
       'A practical comparison of AI outfit planners and stylists — free options, try-on, wardrobe digitization, and daily recommendations.',
@@ -133,6 +145,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
 
   'fitcheck-vs-acloset': {
     path: '/compare/fitcheck-vs-acloset',
+    lastUpdated: '2026-08-01',
     title: 'FitCheck AI vs Acloset | Virtual Closet Comparison',
     description:
       'Side-by-side comparison of FitCheck AI and Acloset: wardrobe extraction, try-on, recommendations, pricing, and who each app is for.',
@@ -144,6 +157,11 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
       { name: 'FitCheck vs Acloset', path: '/compare/fitcheck-vs-acloset' },
     ],
     keywords: 'FitCheck vs Acloset, Acloset alternative, Acloset comparison, virtual closet comparison',
+    stats: [
+      { value: '25', label: 'Free monthly AI extractions (FitCheck)' },
+      { value: '50', label: 'Free monthly outfit visualizations (FitCheck)' },
+      { value: '$10', label: 'FitCheck Plus per month (or $100/year)' },
+    ],
     sections: [
       {
         heading: 'Quick comparison',
@@ -186,6 +204,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
 
   'fitcheck-vs-whering': {
     path: '/compare/fitcheck-vs-whering',
+    lastUpdated: '2026-08-01',
     title: 'FitCheck AI vs Whering | Digital Wardrobe Comparison',
     description:
       'Compare FitCheck AI and Whering for digital wardrobes, outfit planning, analytics, and AI features.',
@@ -233,6 +252,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
 
   'acloset-alternatives': {
     path: '/alternatives/acloset-alternatives',
+    lastUpdated: '2026-08-01',
     title: 'Best Acloset Alternatives in 2026 | FitCheck AI',
     description:
       'Looking for Acloset alternatives? Compare virtual closet apps with AI try-on, photoshoots, and smarter outfit recommendations.',
@@ -280,6 +300,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
 
   'busy-professionals': {
     path: '/for/busy-professionals',
+    lastUpdated: '2026-08-01',
     title: 'Outfit Planner for Busy Professionals | FitCheck AI',
     description:
       'Spend less time deciding what to wear. AI outfits from your real wardrobe, planned around weather and your calendar.',
@@ -323,6 +344,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
 
   'content-creators': {
     path: '/for/content-creators',
+    lastUpdated: '2026-08-01',
     title: 'AI Wardrobe & Try-On for Content Creators | FitCheck AI',
     description:
       'Plan looks, visualize outfits, and generate photoshoot-style images for content calendars — from clothes you already own.',
@@ -360,6 +382,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
 
   'festive-and-wedding-outfits': {
     path: '/for/festive-and-wedding-outfits',
+    lastUpdated: '2026-08-01',
     title: 'Festive & Wedding Guest Outfit Planner | FitCheck AI',
     description:
       'Plan festive, wedding guest, and occasion looks from your wardrobe. Digitize ethnic and formal wear, then mix outfits with AI.',
@@ -403,6 +426,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
 
   'how-to-digitize-your-wardrobe': {
     path: '/guides/how-to-digitize-your-wardrobe',
+    lastUpdated: '2026-08-01',
     title: 'How to Digitize Your Wardrobe (Step-by-Step) | FitCheck AI',
     description:
       'A practical guide to photographing and cataloging your clothes into a digital closet — faster with AI extraction.',
@@ -414,6 +438,13 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
       { name: 'Digitize your wardrobe', path: '/guides/how-to-digitize-your-wardrobe' },
     ],
     keywords: 'digitize wardrobe, digital closet how to, catalog clothes app, photo wardrobe inventory',
+    stats: [
+      { value: '25–200', label: 'AI item extractions/month across Free → Pro' },
+      { value: '~20–30%', label: 'Footprint cut when a garment lasts 9 months longer (WRAP)' },
+    ],
+    sources: [
+      { label: 'WRAP — Valuing Our Clothes: the true cost of UK fashion', url: 'https://wrap.org.uk/resources/report/valuing-our-clothes-cost-uk-fashion' },
+    ],
     sections: [
       {
         heading: 'Step 1: Define the minimum viable closet',
@@ -458,6 +489,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
 
   'what-to-wear-today': {
     path: '/guides/what-to-wear-today',
+    lastUpdated: '2026-08-01',
     title: 'What to Wear Today: A Simple System | FitCheck AI',
     description:
       'Stop staring at a full closet. Use weather, occasion, and your real clothes to decide what to wear.',
@@ -469,6 +501,13 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
       { name: 'What to wear today', path: '/guides/what-to-wear-today' },
     ],
     keywords: 'what to wear today, daily outfit ideas, outfit decision system, AI outfit suggestion',
+    stats: [
+      { value: '10×', label: 'More purchases with 6 options vs 24 (classic choice-overload study)' },
+      { value: '3', label: 'Inputs in the system: weather, occasion, your shortlist' },
+    ],
+    sources: [
+      { label: 'Iyengar & Lepper (2000) — When Choice Is Demotivating (jam study)', url: 'https://psycnet.apa.org/record/2000-15301-010' },
+    ],
     sections: [
       {
         heading: 'The 4-question checklist',
@@ -499,6 +538,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
 
   'cost-per-wear-explained': {
     path: '/guides/cost-per-wear-calculator-explained',
+    lastUpdated: '2026-08-01',
     title: 'Cost Per Wear Explained (+ How to Track It) | FitCheck AI',
     description:
       'What cost-per-wear means, how to calculate it, and how wardrobe analytics help you buy less and wear more.',
@@ -510,6 +550,14 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
       { name: 'Cost per wear', path: '/guides/cost-per-wear-calculator-explained' },
     ],
     keywords: 'cost per wear, cost per wear calculator, wardrobe analytics, cost per use fashion',
+    stats: [
+      { value: 'Price ÷ wears', label: 'The cost-per-wear formula' },
+      { value: '16.5%', label: 'of 2023 retail sales were returned (NRF)' },
+    ],
+    sources: [
+      { label: 'National Retail Federation — 2023 retail returns report', url: 'https://nrf.com/research/retail-returns' },
+      { label: 'Try the interactive calculator', url: '/tools/cost-per-wear-calculator' },
+    ],
     sections: [
       {
         heading: 'The formula',
@@ -537,8 +585,329 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
     ],
   },
 
+  'fitcheck-vs-stylebook': {
+    path: '/compare/fitcheck-vs-stylebook',
+    lastUpdated: '2026-08-01',
+    title: 'FitCheck AI vs Stylebook | Digital Closet Comparison',
+    description:
+      'Compare FitCheck AI and Stylebook for digital wardrobes: manual cataloging vs AI extraction, try-on, outfit planning, and pricing.',
+    h1: 'FitCheck AI vs Stylebook',
+    lede:
+      'Stylebook is a manual, offline-first closet organizer famous for fine-grained outfit logging. FitCheck AI is an AI-first wardrobe app that auto-catalogs clothes from photos and adds generative virtual try-on, recommendations, and photoshoots. Choose by how much cataloging effort you are willing to invest.',
+    breadcrumbs: [
+      { name: 'Home', path: '/' },
+      { name: 'FitCheck vs Stylebook', path: '/compare/fitcheck-vs-stylebook' },
+    ],
+    keywords: 'FitCheck vs Stylebook, Stylebook alternative, Stylebook comparison, digital closet app',
+    stats: [
+      { value: 'Photo → item', label: 'FitCheck catalogs with AI; Stylebook needs manual entry' },
+      { value: '25', label: 'Free monthly AI extractions on FitCheck' },
+      { value: '$3.99', label: 'Stylebook is a one-time purchase (typical)' },
+    ],
+    sections: [
+      {
+        heading: 'How cataloging differs',
+        body: [
+          'Stylebook treats your closet as a database you build by hand: add photos, crops, categories, and stats yourself. That gives you total control and works fully offline, but a full wardrobe can take days to enter.',
+          'FitCheck AI extracts items from photos automatically — single pieces, flat lays, and multi-item shots — then asks you to review before saving. The entry cost is minutes, not days.',
+        ],
+      },
+      {
+        heading: 'Outfits, try-on, and photoshoots',
+        body: 'Stylebook offers outfit creation, calendar planning, and a pack-list tool with no AI generation. FitCheck AI adds virtual try-on, weather- and calendar-aware recommendations, and AI photoshoot-style images — all from pieces you actually own.',
+      },
+      {
+        heading: 'Who each app suits',
+        body: 'Choose Stylebook if you enjoy hands-on wardrobe administration, want offline access, and prefer a one-time purchase. Choose FitCheck AI if you want the closet built for you first, then daily outfit help and AI visualization on top.',
+      },
+    ],
+    faqs: [
+      {
+        question: 'Is Stylebook free?',
+        answer:
+          'No — Stylebook is a paid one-time app purchase. FitCheck AI has a free plan with monthly AI limits and paid Plus/Pro tiers.',
+      },
+      {
+        question: 'Can Stylebook do virtual try-on?',
+        answer:
+          'No. Stylebook is a manual organizer; AI visualization is not part of the product. FitCheck AI includes virtual try-on on Plus and Pro plans.',
+      },
+    ],
+    relatedLinks: [
+      { label: 'FitCheck vs Acloset', href: '/compare/fitcheck-vs-acloset' },
+      { label: 'Best virtual closet apps', href: '/best/virtual-closet-apps' },
+      { label: 'Virtual try-on feature', href: '/features/virtual-try-on' },
+    ],
+  },
+
+  'fitcheck-vs-indyx': {
+    path: '/compare/fitcheck-vs-indyx',
+    lastUpdated: '2026-08-01',
+    title: 'FitCheck AI vs Indyx | Wardrobe App Comparison',
+    description:
+      'Compare FitCheck AI and Indyx: AI wardrobe cataloging, stylist services, try-on, analytics, and who each app suits.',
+    h1: 'FitCheck AI vs Indyx',
+    lede:
+      'Indyx combines wardrobe cataloging with optional human stylist services and a community. FitCheck AI is product-led: AI photo extraction, generative virtual try-on, photoshoots, and analytics in one plan. If you want a stylist in the loop, Indyx; if you want automated help at scale, FitCheck.',
+    breadcrumbs: [
+      { name: 'Home', path: '/' },
+      { name: 'FitCheck vs Indyx', path: '/compare/fitcheck-vs-indyx' },
+    ],
+    keywords: 'FitCheck vs Indyx, Indyx alternative, Indyx comparison, wardrobe stylist app',
+    stats: [
+      { value: 'AI', label: 'FitCheck cataloging: photo → item automatically' },
+      { value: 'Human', label: 'Indyx differentiator: stylist sessions and community' },
+      { value: '$10', label: 'FitCheck Plus per month (or $100/year)' },
+    ],
+    sections: [
+      {
+        heading: 'Cataloging and analytics',
+        body: 'Both apps digitize your wardrobe and surface analytics, but FitCheck AI extracts items from photos with AI (multi-item and batch supported) while Indyx leans on manual entry plus its services. FitCheck adds cost-per-wear and utilization analytics as core features.',
+      },
+      {
+        heading: 'AI features',
+        body: 'FitCheck AI includes generative virtual try-on, AI photoshoot-style images, and weather/calendar-aware outfit recommendations. Indyx focuses on styling services and outfit inspiration rather than generative AI visualization.',
+      },
+      {
+        heading: 'Who each app suits',
+        body: 'Indyx suits people who want professional styling input and a community. FitCheck AI suits people who want self-serve, always-on outfit help from their real wardrobe without scheduling sessions.',
+      },
+    ],
+    faqs: [
+      {
+        question: 'Does Indyx have AI try-on?',
+        answer:
+          'Indyx is not primarily an AI visualization product; FitCheck AI includes virtual try-on and AI photoshoots on paid plans.',
+      },
+      {
+        question: 'Which app is cheaper?',
+        answer:
+          'Both offer free tiers. FitCheck AI pricing starts at $10/month or $100/year for Plus; Indyx pricing varies by subscription tier and services.',
+      },
+    ],
+    relatedLinks: [
+      { label: 'FitCheck vs Cladwell', href: '/compare/fitcheck-vs-cladwell' },
+      { label: 'Best AI outfit planners', href: '/best/ai-outfit-planners' },
+      { label: 'AI photoshoot generator', href: '/features/ai-photoshoot-generator' },
+    ],
+  },
+
+  'fitcheck-vs-cladwell': {
+    path: '/compare/fitcheck-vs-cladwell',
+    lastUpdated: '2026-08-01',
+    title: 'FitCheck AI vs Cladwell | AI Wardrobe & Outfit Comparison',
+    description:
+      'Compare FitCheck AI and Cladwell: daily outfit math, wardrobe utilization, try-on, and AI generation.',
+    h1: 'FitCheck AI vs Cladwell',
+    lede:
+      'Cladwell is a minimalist wardrobe system that calculates daily outfit combinations from your items and pushes utilization. FitCheck AI is an AI-first closet that adds photo extraction, virtual try-on, photoshoot generation, and weather/calendar-aware planning on top of analytics. Minimalists may love Cladwell; mixed wardrobes get more from FitCheck.',
+    breadcrumbs: [
+      { name: 'Home', path: '/' },
+      { name: 'FitCheck vs Cladwell', path: '/compare/fitcheck-vs-cladwell' },
+    ],
+    keywords: 'FitCheck vs Cladwell, Cladwell alternative, Cladwell comparison, wardrobe utilization app',
+    stats: [
+      { value: 'Utilization', label: 'Cladwell strength: outfit math from your items' },
+      { value: 'Try-on', label: 'FitCheck strength: generative visualization' },
+      { value: '25', label: 'Free monthly AI extractions on FitCheck' },
+    ],
+    sections: [
+      {
+        heading: 'How each app thinks about your closet',
+        body: 'Cladwell treats a wardrobe as a system to optimize: it estimates outfit combinations, tracks utilization, and nudges you to wear more of what you own. FitCheck AI also tracks utilization and cost-per-wear, but starts by building the digital closet for you from photos.',
+      },
+      {
+        heading: 'Visualization and planning',
+        body: 'FitCheck AI adds virtual try-on, AI photoshoot-style images, and weather/calendar-aware recommendations — capabilities Cladwell does not attempt. If your wardrobe includes festive, formal, or occasion wear, FitCheck handles mixed categories more naturally.',
+      },
+      {
+        heading: 'Who each app suits',
+        body: 'Choose Cladwell for a minimalist, numbers-driven wardrobe system. Choose FitCheck AI if you want fast digitization, generative visualization, and planning features in one product.',
+      },
+    ],
+    faqs: [
+      {
+        question: 'Does Cladwell use AI?',
+        answer:
+          'Cladwell focuses on wardrobe math and utilization nudges rather than generative AI. FitCheck AI uses AI for extraction, try-on, recommendations, and photoshoots.',
+      },
+      {
+        question: 'Can I try FitCheck AI free?',
+        answer:
+          'Yes — FitCheck AI has a free plan with 25 AI extractions/month, 50 outfit visualizations/month, and 10 photoshoot images/day.',
+      },
+    ],
+    relatedLinks: [
+      { label: 'FitCheck vs Indyx', href: '/compare/fitcheck-vs-indyx' },
+      { label: 'Wardrobe analytics', href: '/features/wardrobe-analytics' },
+      { label: 'What is wardrobe utilization', href: '/guides/what-is-wardrobe-utilization' },
+    ],
+  },
+
+  'fitcheck-vs-open-wardrobe': {
+    path: '/compare/fitcheck-vs-open-wardrobe',
+    lastUpdated: '2026-08-01',
+    title: 'FitCheck AI vs Open Wardrobe | Virtual Closet Comparison',
+    description:
+      'Compare FitCheck AI and Open Wardrobe: open-source cataloging vs AI extraction, try-on, and outfit recommendations.',
+    h1: 'FitCheck AI vs Open Wardrobe',
+    lede:
+      'Open Wardrobe is a free, open-source closet organizer you self-host or run locally. FitCheck AI is a hosted product where AI extracts items from photos and adds generative try-on, recommendations, and photoshoots. If you value ownership and tinkering, Open Wardrobe; if you want results in minutes, FitCheck.',
+    breadcrumbs: [
+      { name: 'Home', path: '/' },
+      { name: 'FitCheck vs Open Wardrobe', path: '/compare/fitcheck-vs-open-wardrobe' },
+    ],
+    keywords: 'FitCheck vs Open Wardrobe, Open Wardrobe alternative, open source closet app',
+    stats: [
+      { value: '$0', label: 'Both have free entry points' },
+      { value: 'Self-hosted', label: 'Open Wardrobe model vs hosted FitCheck AI' },
+      { value: 'AI', label: 'FitCheck adds extraction, try-on, and photoshoots' },
+    ],
+    sections: [
+      {
+        heading: 'Ownership vs convenience',
+        body: 'Open Wardrobe gives you full control: your data on your server, no subscriptions, and code you can modify. That control comes with setup and maintenance. FitCheck AI runs on the web and Android with no infrastructure to manage, and AI does the cataloging.',
+      },
+      {
+        heading: 'Feature set',
+        body: 'Open Wardrobe covers core cataloging and outfit organization. FitCheck AI adds AI wardrobe extraction from photos, virtual try-on, weather-aware recommendations, AI photoshoots, and cost-per-wear analytics.',
+      },
+      {
+        heading: 'Who each app suits',
+        body: 'Developers and privacy-maximalists who enjoy self-hosting will appreciate Open Wardrobe. Anyone who wants a working digital closet today, including AI visualization, should start with FitCheck AI’s free plan.',
+      },
+    ],
+    faqs: [
+      {
+        question: 'Is Open Wardrobe really free?',
+        answer:
+          'Yes, it is open-source software, though you typically host it yourself. FitCheck AI is free to start, with paid Plus/Pro tiers for higher AI limits.',
+      },
+      {
+        question: 'Does Open Wardrobe have AI try-on?',
+        answer:
+          'No. AI visualization is not part of Open Wardrobe; FitCheck AI includes virtual try-on on Plus and Pro plans.',
+      },
+    ],
+    relatedLinks: [
+      { label: 'FitCheck vs Stylebook', href: '/compare/fitcheck-vs-stylebook' },
+      { label: 'Best virtual closet apps', href: '/best/virtual-closet-apps' },
+      { label: 'How to digitize your wardrobe', href: '/guides/how-to-digitize-your-wardrobe' },
+    ],
+  },
+
+  'what-is-a-capsule-wardrobe': {
+    path: '/guides/what-is-a-capsule-wardrobe',
+    lastUpdated: '2026-08-01',
+    title: 'What Is a Capsule Wardrobe? Definition, Checklist & Apps | FitCheck AI',
+    description:
+      'A capsule wardrobe definition, how to build one from clothes you own, checklists, and which apps help.',
+    h1: 'What is a capsule wardrobe?',
+    lede:
+      'A capsule wardrobe is a small, curated set of interchangeable clothing items — typically 20 to 40 pieces — that mix together into many outfits. You build it from what you already own first, then fill genuine gaps. The goal is fewer, better decisions, not a specific number.',
+    breadcrumbs: [
+      { name: 'Home', path: '/' },
+      { name: 'Capsule wardrobe', path: '/guides/what-is-a-capsule-wardrobe' },
+    ],
+    keywords: 'capsule wardrobe, capsule wardrobe checklist, minimalist wardrobe, wardrobe capsule',
+    stats: [
+      { value: '20–40', label: 'Typical capsule wardrobe size (pieces)' },
+      { value: '30–33', label: 'Common seasonal capsule count for one season' },
+      { value: '3', label: 'Mix-and-match rule: tops, bottoms, and layers' },
+    ],
+    sections: [
+      {
+        heading: 'What counts as a capsule?',
+        body: 'A capsule is defined by interchangeability: every top should work with several bottoms, and every piece should earn its place. Seasonal capsules (spring/summer, autumn/winter) are the most practical way to start because they match the weather you actually face.',
+        bullets: [
+          'Start with your most-worn 20–30 items rather than emptying the closet',
+          'Keep silhouettes and colors compatible so pieces mix',
+          'Replace only when something wears out or a real gap appears',
+        ],
+      },
+      {
+        heading: 'A starter checklist',
+        body: 'A workable starter capsule: 5–7 tops, 4–5 bottoms, 2–3 layering pieces, 2 outerwear options, 5–7 pairs of shoes, and 6–10 accessories. Adjust for your dress code and climate — a capsule is a tool, not a uniform.',
+      },
+      {
+        heading: 'How a digital closet helps',
+        body: 'A virtual closet app makes a capsule tangible: photograph what you own, see what you actually reach for, and spot gaps before you buy. FitCheck AI adds cost-per-wear and utilization analytics so capsule decisions are based on your real wear data.',
+      },
+    ],
+    faqs: [
+      {
+        question: 'How many items should a capsule wardrobe have?',
+        answer:
+          'Most guides suggest 20–40 pieces total, often 30–33 for a single season. Start from the clothes you already wear most.',
+      },
+      {
+        question: 'Can a capsule wardrobe include festive or formal wear?',
+        answer:
+          'Yes — capsules work for any occasion category. FitCheck AI is designed for mixed wardrobes that include festive, wedding-guest, and formal pieces, not only Western basics.',
+      },
+    ],
+    relatedLinks: [
+      { label: 'What is wardrobe utilization', href: '/guides/what-is-wardrobe-utilization' },
+      { label: 'How to digitize your wardrobe', href: '/guides/how-to-digitize-your-wardrobe' },
+      { label: 'Best virtual closet apps', href: '/best/virtual-closet-apps' },
+    ],
+  },
+
+  'what-is-wardrobe-utilization': {
+    path: '/guides/what-is-wardrobe-utilization',
+    lastUpdated: '2026-08-01',
+    title: 'Wardrobe Utilization: What It Is and How to Measure It | FitCheck AI',
+    description:
+      'Wardrobe utilization explained — the share of your closet you actually wear — plus how to measure and improve it.',
+    h1: 'What is wardrobe utilization?',
+    lede:
+      'Wardrobe utilization is the share of your closet you actually wear: items worn in a period divided by total items owned. Most people concentrate wear on a small share of their clothes. Measuring utilization turns “I have nothing to wear” into a data-backed fix.',
+    breadcrumbs: [
+      { name: 'Home', path: '/' },
+      { name: 'Wardrobe utilization', path: '/guides/what-is-wardrobe-utilization' },
+    ],
+    keywords: 'wardrobe utilization, closet utilization, cost per wear, wear your wardrobe',
+    stats: [
+      { value: 'Worn ÷ owned', label: 'The utilization formula per period' },
+      { value: 'High-ticket first', label: 'Track expensive and high-guilt items first' },
+      { value: 'CPW', label: 'Cost-per-wear drops as utilization rises' },
+    ],
+    sections: [
+      {
+        heading: 'Why utilization matters',
+        body: 'Low utilization is usually invisible spending: items bought and worn once or twice still cost money and closet space. Raising utilization — by rewearing quality pieces and planning outfits — lowers cost-per-wear without buying anything.',
+      },
+      {
+        heading: 'How to measure it',
+        body: 'Pick a period (a season works well), count items worn at least once, and divide by total items. Track high-ticket pieces first. Update the log honestly; the metric is only useful if the data is real.',
+      },
+      {
+        heading: 'How to improve it',
+        body: 'Plan outfits a week ahead, keep a shortlist of go-to combinations, and use analytics to spot neglected items. FitCheck AI tracks wear and cost-per-wear so utilization improves automatically as you log outfits.',
+      },
+    ],
+    faqs: [
+      {
+        question: 'What is a good wardrobe utilization rate?',
+        answer:
+          'There is no universal target — it depends on wardrobe size and category. The useful benchmark is your own trend: raise utilization on items you already own before buying more.',
+      },
+      {
+        question: 'Does FitCheck AI track utilization automatically?',
+        answer:
+          'Yes — wardrobe analytics records wears and plans, then surfaces utilization and cost-per-wear insights from the data you log.',
+      },
+    ],
+    relatedLinks: [
+      { label: 'Cost per wear explained', href: '/guides/cost-per-wear-calculator-explained' },
+      { label: 'Wardrobe analytics', href: '/features/wardrobe-analytics' },
+      { label: 'What is a capsule wardrobe', href: '/guides/what-is-a-capsule-wardrobe' },
+    ],
+  },
+
   'reduce-returns-virtual-try-on': {
     path: '/guides/how-to-reduce-clothing-returns-with-virtual-try-on',
+    lastUpdated: '2026-08-01',
     title: 'Reduce Clothing Returns with Virtual Try-On | FitCheck AI',
     description:
       'How AI virtual try-on helps you visualize purchases with clothes you own — and cut return-prone shopping mistakes.',
@@ -550,6 +919,13 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
       { name: 'Reduce returns', path: '/guides/how-to-reduce-clothing-returns-with-virtual-try-on' },
     ],
     keywords: 'virtual try-on reduce returns, AI try on clothes, online shopping outfit check',
+    stats: [
+      { value: '~25–40%', label: 'Estimated return rate for online apparel purchases' },
+      { value: '~9%', label: 'Typical in-store apparel return rate by comparison' },
+    ],
+    sources: [
+      { label: 'National Retail Federation — retail returns research (apparel is the most-returned online category)', url: 'https://nrf.com/research/retail-returns' },
+    ],
     sections: [
       {
         heading: 'Where try-on helps most',
@@ -578,8 +954,11 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
   },
 }
 
-export const INTENT_PAGE_SLUGS = Object.keys(INTENT_PAGES)
+export const INTENT_PAGE_SLUGS = [...Object.keys(INTENT_PAGES), ...Object.keys(CITY_WEAR_PAGES)]
 
 export function getIntentPageByPath(path: string): SeoPageContent | undefined {
-  return Object.values(INTENT_PAGES).find((p) => p.path === path)
+  return (
+    Object.values(INTENT_PAGES).find((p) => p.path === path) ||
+    getCityWearPageByPath(path)
+  )
 }

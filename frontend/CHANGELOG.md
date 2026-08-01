@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **SEO / GEO / AEO growth pass**:
+  - Six new SEO pages: FitCheck vs Stylebook / Indyx / Cladwell / Open
+    Wardrobe comparisons, plus "What is a capsule wardrobe" and "What is
+    wardrobe utilization" guides (with stats blocks and cited sources).
+  - Ten "What to wear in <city>" pages under `/wear/` (Mumbai, Delhi,
+    Bengaluru, Chennai, London, New York, Dubai, Singapore, Toronto, Sydney)
+    with season-by-season, city-specific content.
+  - Interactive cost-per-wear calculator at `/tools/cost-per-wear-calculator`.
+  - Shared build-time route registry (`scripts/seo-content.mjs`) now drives
+    sitemap, prerendered meta, llms files, and the IndexNow ping.
+  - `llms-full.txt` + per-page `.md` mirrors generated at build; `llms.txt`
+    bumped to v2.2.
+  - Entity/structured data upgrades: `sameAs`, `SearchAction`, `VideoObject`
+    (site-hosted promo), `Person` authors + `speakable` on blog articles.
+  - Crawler soft-404 guard edge function (`not-found`) + real 404s for
+    missing blog posts; `X-Robots-Tag: noindex` headers on app routes.
+  - IndexNow key + build-time ping for Bing/Copilot/Seznam/Naver.
+  - Hero/landing images converted to WebP (~80% smaller).
+
 ### Changed
 
 - **Saving an outfit no longer fires an AI generation you did not approve.**

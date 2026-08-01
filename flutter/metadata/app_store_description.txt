@@ -39,7 +39,7 @@ PERFECT FOR
 - Anyone refreshing their dating or social profile photos
 
 PRICING
-FitCheck AI is free to download and use. There are no in-app purchases in this version.
+FitCheck AI is free to download and use. Optional Plus and Pro subscriptions (monthly and yearly) are sold through Apple In-App Purchase. Subscriptions renew automatically and can be managed or cancelled anytime in your App Store subscription settings.
 
 HOW IT WORKS
 FitCheck AI connects to a secure cloud backend to run its AI features (item extraction, try-on, photoshoot, and recommendations). An account is required so your wardrobe and outfits sync across your devices. You can delete your account and all associated data at any time from Settings.

@@ -16,11 +16,16 @@
   path = "/blog/*"
   function = "seo-html"
 
+# Crawler soft-404 guard: unknown public paths get a real 404 + noindex
+[[edge_functions]]
+  path = "/*"
+  function = "not-found"
+
 # API proxy - forward API requests to backend (Railway)
 # IMPORTANT: This must come before the SPA fallback
 [[redirects]]
   from = "/api/*"
-  to = "https://fitcheck-backend.railway.app/api/:splat"
+  to = "https://api.fitcheckaiapp.com/api/:splat"
   status = 200
   force = true
 
@@ -38,6 +43,62 @@
     X-Content-Type-Options = "nosniff"
     X-XSS-Protection = "1; mode=block"
     Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Authenticated app routes: robots.txt already disallows them; belt-and-braces noindex
+[[headers]]
+  for = "/dashboard/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/wardrobe/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/outfits/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/calendar/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/recommendations/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/try-on/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/photoshoot/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/profile/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/settings/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/auth/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/admin/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
 
 [[headers]]
   for = "/assets/*"
@@ -62,6 +123,26 @@
     Cache-Control = "public, max-age=86400"
     Content-Type = "text/plain"
 
+[[headers]]
+  for = "/llms-full.txt"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+    Content-Type = "text/plain"
+
+# LLM-friendly markdown mirrors of public pages (llms.txt spec: page.md)
+[[headers]]
+  for = "/*.md"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+    Content-Type = "text/markdown"
+
+# IndexNow verification key (Bing/Copilot/Seznam/Naver instant indexing)
+[[headers]]
+  for = "/.well-known/indexnow/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+    Content-Type = "text/plain"
+
 # OG images
 [[headers]]
   for = "/og-*.svg"
@@ -74,3 +155,10 @@
   [headers.values]
     Cache-Control = "public, max-age=604800"
     Content-Type = "image/jpeg"
+
+# Promo video
+[[headers]]
+  for = "/video/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+

@@ -16,6 +16,12 @@ const ORGANIZATION_SCHEMA = {
   url: SEO_CONFIG.siteUrl,
   logo: `${SEO_CONFIG.siteUrl}/og-default.jpg`,
   description: SEO_CONFIG.positioning,
+  sameAs: [
+    'https://play.google.com/store/apps/details?id=com.fitcheckaiapp.fitcheckai',
+    'https://x.com/FitCheckAI',
+    'https://www.linkedin.com/company/fitcheck-ai',
+    'https://www.youtube.com/@FitCheckAI',
+  ],
   contactPoint: {
     '@type': 'ContactPoint',
     contactType: 'Customer Support',
@@ -61,6 +67,14 @@ const WEBSITE_SCHEMA = {
   name: 'FitCheck AI',
   url: SEO_CONFIG.siteUrl,
   description: SEO_CONFIG.positioning,
+  potentialAction: {
+    '@type': 'SearchAction',
+    target: {
+      '@type': 'EntryPoint',
+      urlTemplate: `${SEO_CONFIG.siteUrl}/blog?search={search_term_string}`,
+    },
+    'query-input': 'required name=search_term_string',
+  },
 }
 
 export function WebSiteJsonLd() {
@@ -205,5 +219,105 @@ export function buildFeatureItemListSchema(
       url: item.url,
       ...(item.description ? { description: item.description } : {}),
     })),
+  }
+}
+
+/**
+ * speakable — for voice assistants / answer engines. The cssSelectors must
+ * resolve on the rendered page (Add the ids to the markup you target).
+ */
+export function buildSpeakableSchema(cssSelectors: string[]) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: 'FitCheck AI',
+    url: SEO_CONFIG.siteUrl,
+    speakable: {
+      '@type': 'SpeakableSpecification',
+      cssSelector: cssSelectors,
+    },
+  }
+}
+
+export interface VideoObjectSchemaInput {
+  name: string
+  description: string
+  contentUrl: string
+  thumbnailUrl: string
+  uploadDate: string
+  duration?: string
+}
+
+/** VideoObject schema for the site-hosted promo video (see /public/video/promo.mp4). */
+export function buildVideoObjectSchema({
+  name,
+  description,
+  contentUrl,
+  thumbnailUrl,
+  uploadDate,
+  duration,
+}: VideoObjectSchemaInput) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'VideoObject',
+    name,
+    description,
+    contentUrl,
+    thumbnailUrl,
+    uploadDate,
+    ...(duration ? { duration } : {}),
+  }
+}
+
+/**
+ * Article schema with a named Person author + optional speakable — stronger
+ * E-E-A-T and answer-engine signals than an anonymous Organization author.
+ */
+export function buildArticleSchema({
+  headline,
+  description,
+  authorName,
+  datePublished,
+  dateModified,
+  image,
+  keywords,
+  section,
+  url,
+  speakableSelectors,
+}: {
+  headline: string
+  description?: string
+  authorName: string
+  datePublished: string
+  dateModified?: string
+  image?: string
+  keywords?: string[]
+  section?: string
+  url: string
+  speakableSelectors?: string[]
+}) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline,
+    description: description || headline,
+    author: { '@type': 'Person', name: authorName },
+    publisher: {
+      '@type': 'Organization',
+      name: 'FitCheck AI',
+      logo: {
+        '@type': 'ImageObject',
+        url: `${SEO_CONFIG.siteUrl}/og-default.jpg`,
+      },
+    },
+    datePublished,
+    dateModified: dateModified || datePublished,
+    mainEntityOfPage: url,
+    image: image || `${SEO_CONFIG.siteUrl}/og-default.jpg`,
+    ...(keywords?.length ? { keywords: keywords.join(', ') } : {}),
+    ...(section ? { articleSection: section } : {}),
+    ...(speakableSelectors?.length
+      ? { speakable: { '@type': 'SpeakableSpecification', cssSelector: speakableSelectors } }
+      : {}),
   }
 }

@@ -4,7 +4,7 @@
  */
 import type { Context } from '@netlify/edge-functions'
 
-const BACKEND_API_URL = 'https://fitcheck-backend.railway.app'
+const BACKEND_API_URL = 'https://api.fitcheckaiapp.com'
 const SITE_URL = 'https://fitcheckaiapp.com'
 const DEFAULT_OG_IMAGE = `${SITE_URL}/og-default.jpg`
 
@@ -79,7 +79,7 @@ function generateBlogHead(post: BlogPost, url: string): string {
     '@type': 'Article',
     headline: post.title,
     description: post.excerpt || post.title,
-    author: { '@type': 'Organization', name: post.author || 'FitCheck AI' },
+    author: { '@type': 'Person', name: post.author || 'FitCheck AI' },
     publisher: {
       '@type': 'Organization',
       name: 'FitCheck AI',
@@ -141,6 +141,20 @@ export default async function handler(
       `${BACKEND_API_URL}/api/v1/blog/posts/${encodeURIComponent(slug)}`,
       { headers: { Accept: 'application/json' } }
     )
+
+    if (apiResponse.status === 404) {
+      // Known-but-missing post: return a real 404 so crawlers don't index it.
+      return new Response(
+        '<!doctype html><html><head><meta name="robots" content="noindex, nofollow"><title>404 — Post not found</title></head><body><h1>404</h1><p>This article does not exist.</p></body></html>',
+        {
+          status: 404,
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            'x-robots-tag': 'noindex, nofollow',
+          },
+        }
+      )
+    }
 
     if (!apiResponse.ok) {
       return context.next()

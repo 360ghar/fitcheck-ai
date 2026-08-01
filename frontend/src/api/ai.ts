@@ -91,6 +91,14 @@ export interface GenerateOutfitOptions {
   save_to_storage?: boolean;
   include_user_face?: boolean;  // Use avatar for face consistency when available
   use_body_profile?: boolean;   // Use body profile data if available
+  /**
+   * Upload flow ONLY: include the original uploaded source photo (the photo
+   * the outfit's items were extracted from) as an "as worn" reference, so the
+   * render reproduces the real fit and draping instead of compounding loss
+   * from the extracted/generated item shots. The backend resolves the photo
+   * server-side from the items' `source_image_url`; never send URLs/base64.
+   */
+  useSourcePhoto?: boolean;
 }
 
 export interface GeneratedOutfit {
@@ -332,6 +340,7 @@ export async function generateOutfit(
     save_to_storage: options.save_to_storage ?? false,
     include_user_face: options.include_user_face ?? true,
     use_body_profile: options.use_body_profile ?? true,
+    use_source_photo: options.useSourcePhoto ?? false,
   }, config);
 
   return response.data.data;

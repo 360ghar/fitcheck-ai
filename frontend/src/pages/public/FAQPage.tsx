@@ -77,7 +77,7 @@ const faqCategories = [
       },
       {
         q: 'Is my payment information secure?',
-        a: 'We use Stripe, a PCI-compliant payment processor, to handle all payments. Your card details are never stored on our servers. All transactions are encrypted and secure.'
+        a: 'Yes. On iOS, subscriptions are purchased through Apple In-App Purchase and billed by Apple; on Android, through Google Play Billing. On the web, payments are handled by Stripe, a PCI-compliant payment processor. Your card details are never stored on our servers, and all transactions are encrypted.'
       }
     ]
   },
@@ -86,15 +86,15 @@ const faqCategories = [
     questions: [
       {
         q: 'How do I upgrade to Pro?',
-        a: 'You can upgrade to Pro from your account settings or by clicking "Upgrade" in the app. We accept all major credit cards and PayPal. Your subscription automatically renews monthly or annually depending on your chosen plan.'
+        a: 'You can upgrade to Pro from your account settings or by clicking "Upgrade" in the app. In the mobile apps, purchases go through the App Store or Google Play; on the web, through our checkout. Your subscription automatically renews monthly or annually depending on your chosen plan.'
       },
       {
         q: 'Can I cancel my subscription?',
-        a: 'Yes, you can cancel your subscription at any time from your account settings. You will continue to have access to Pro features until the end of your current billing period, after which your account will revert to the free plan.'
+        a: 'Yes. Subscriptions purchased through the App Store or Google Play are managed in the store\'s subscription settings; web subscriptions can be cancelled from your account settings. You will continue to have access to Pro features until the end of your current billing period, after which your account will revert to the free plan.'
       },
       {
         q: 'Do you offer refunds?',
-        a: 'We offer a 14-day money-back guarantee for new Pro subscriptions. If you are not satisfied with FitCheck AI Pro, contact our support team within 14 days of your purchase for a full refund.'
+        a: 'For web purchases, we offer a 14-day money-back guarantee for new Pro subscriptions — contact our support team within 14 days of your purchase for a full refund. Purchases made through the App Store or Google Play are subject to the store\'s refund terms.'
       },
       {
         q: 'How does the referral program work?',

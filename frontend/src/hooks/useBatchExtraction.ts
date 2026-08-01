@@ -151,6 +151,8 @@ function convertToDetectedItem(
     generated_image_url?: string;
     generation_error?: string;
     occasion_tags?: string[];
+    source_image_url?: string;
+    source_image_storage_path?: string;
   },
   imageId?: string,
   jobStatus?: string
@@ -165,6 +167,8 @@ function convertToDetectedItem(
   return {
     tempId: apiItem.temp_id,
     sourceImageId: imageId,
+    sourceImageUrl: apiItem.source_image_url,
+    sourceImageStoragePath: apiItem.source_image_storage_path,
     personId: apiItem.person_id,
     personLabel: apiItem.person_label,
     isCurrentUserPerson: apiItem.is_current_user_person,

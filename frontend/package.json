@@ -7,6 +7,7 @@
     "dev": "vite",
     "prebuild": "node scripts/generate-sitemap.mjs",
     "build": "tsc && vite build && node scripts/prerender-meta.mjs",
+    "postbuild": "node scripts/generate-llms.mjs && node scripts/ping-indexnow.mjs",
     "sitemap": "node scripts/generate-sitemap.mjs",
     "prerender-meta": "node scripts/prerender-meta.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",

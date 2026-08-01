@@ -12,6 +12,16 @@ export interface SeoFaq {
   answer: string
 }
 
+export interface SeoStat {
+  value: string
+  label: string
+}
+
+export interface SeoSource {
+  label: string
+  url: string
+}
+
 export interface SeoSection {
   heading: string
   body: string | string[]
@@ -37,6 +47,12 @@ export interface SeoPageContent {
   keywords?: string
   ctaPrimary?: { label: string; href: string }
   ctaSecondary?: { label: string; href: string; external?: boolean }
+  /** Real product/industry numbers — the Princeton GEO "statistics" lever. */
+  stats?: SeoStat[]
+  /** Cited sources rendered at the foot of the page — the GEO "citations" lever. */
+  sources?: SeoSource[]
+  /** ISO date (YYYY-MM-DD) shown as "Last updated" for recency signals. */
+  lastUpdated?: string
 }
 
 const PLAY_STORE =
@@ -93,6 +109,28 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
               <p className="mt-5 text-lg text-stone-600 dark:text-stone-400 leading-relaxed">
                 {content.lede}
               </p>
+              {content.lastUpdated && (
+                <p className="mt-3 text-sm text-stone-500 dark:text-stone-500">
+                  Last updated {formatLastUpdated(content.lastUpdated)}
+                </p>
+              )}
+              {content.stats && content.stats.length > 0 && (
+                <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-xl">
+                  {content.stats.map((stat) => (
+                    <div
+                      key={stat.label}
+                      className="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 px-4 py-3"
+                    >
+                      <p className="landing-display text-xl font-semibold text-stone-900 dark:text-stone-50">
+                        {stat.value}
+                      </p>
+                      <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                        {stat.label}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
                 <Button
                   size="lg"
@@ -184,6 +222,28 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
               </AnimatedSection>
             )}
 
+            {content.sources && content.sources.length > 0 && (
+              <AnimatedSection>
+                <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-50 mb-4">
+                  Sources
+                </h2>
+                <ul className="space-y-2 text-sm">
+                  {content.sources.map((source) => (
+                    <li key={source.url}>
+                      <a
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 dark:text-indigo-400 hover:underline break-all"
+                      >
+                        {source.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </AnimatedSection>
+            )}
+
             {content.relatedLinks && content.relatedLinks.length > 0 && (
               <AnimatedSection>
                 <h2 className="text-xl font-semibold text-stone-900 dark:text-stone-50 mb-4">
@@ -246,3 +306,10 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
 }
 
 export default SeoPageLayout
+
+/** Renders an ISO date (YYYY-MM-DD) as e.g. "August 1, 2026". */
+export function formatLastUpdated(isoDate: string): string {
+  const parsed = new Date(`${isoDate}T00:00:00Z`)
+  if (Number.isNaN(parsed.getTime())) return isoDate
+  return parsed.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+}
