@@ -7,7 +7,10 @@ a check itself cannot delay uvicorn from binding the port.
 
 Why this exists: AI_ENCRYPTION_KEY, FRONTEND_URL, and AI_VISION_API_URL
 have all been observed mis-set in production Railway env. Each one fails
-silently at request time and is hard to diagnose from logs alone.
+silently at request time and is hard to diagnose from logs alone. The Apple
+IAP checks (#8/#9) exist because missing APPLE_* vars make every iOS
+purchase registration fail closed at request time ("Apple IAP is not
+configured") - the store sale succeeds but the entitlement is never granted.
 """
 
 from dataclasses import dataclass
@@ -191,5 +194,63 @@ def validate_production_config() -> List[ConfigIssue]:
                     "extraction. Set AI_CHAT_API_KEY (or move Gemini to a paid tier)."
                 ),
             ))
+
+    # 8. Apple IAP verification credentials. Without all three, every iOS
+    # purchase registration fails closed at request time
+    # (AppleIAPService.verify_transaction raises "Apple IAP is not
+    # configured") - the app can buy via StoreKit but never receives an
+    # entitlement. Surfaced here so a deploy missing the credentials is
+    # caught in the startup logs, not discovered by the first paying user.
+    missing_apple_creds = [
+        name
+        for name, value in (
+            ("APPLE_ISSUER_ID", settings.APPLE_ISSUER_ID),
+            ("APPLE_KEY_ID", settings.APPLE_KEY_ID),
+            ("APPLE_PRIVATE_KEY", settings.APPLE_PRIVATE_KEY),
+        )
+        if not (value or "").strip()
+    ]
+    if missing_apple_creds:
+        issues.append(ConfigIssue(
+            severity="error",
+            key="APPLE_ISSUER_ID",
+            message=(
+                "Apple IAP verification is not configured "
+                f"({' and '.join(missing_apple_creds)} missing). Every iOS "
+                "purchase registration fails closed at request time. Create an "
+                "App Store Connect API key with the In-App Purchase permission "
+                "(ASC > Users and Access > Integrations) and set APPLE_ISSUER_ID, "
+                "APPLE_KEY_ID, APPLE_PRIVATE_KEY."
+            ),
+        ))
+
+    # 9. Apple product map. The /plans endpoint publishes these IDs to the
+    # mobile apps (store_products.apple); a missing ID makes that variant
+    # show "not available for purchase yet" in-app and makes transaction
+    # verification reject it. Warn (not error): the other variants and the
+    # web/Stripe rail keep working.
+    missing_apple_products = [
+        name
+        for name, value in (
+            ("APPLE_PLUS_MONTHLY_PRODUCT_ID", settings.APPLE_PLUS_MONTHLY_PRODUCT_ID),
+            ("APPLE_PLUS_YEARLY_PRODUCT_ID", settings.APPLE_PLUS_YEARLY_PRODUCT_ID),
+            ("APPLE_PRO_MONTHLY_PRODUCT_ID", settings.APPLE_PRO_MONTHLY_PRODUCT_ID),
+            ("APPLE_PRO_YEARLY_PRODUCT_ID", settings.APPLE_PRO_YEARLY_PRODUCT_ID),
+        )
+        if not (value or "").strip()
+    ]
+    if missing_apple_products:
+        issues.append(ConfigIssue(
+            severity="warning",
+            key="APPLE_PLUS_MONTHLY_PRODUCT_ID",
+            message=(
+                "Apple product map is incomplete "
+                f"({' and '.join(missing_apple_products)} missing). /plans "
+                "publishes null for those variants so the iOS app shows 'not "
+                "available for purchase yet'. Create the matching auto-renewable "
+                "subscriptions in App Store Connect > Monetization > Subscriptions "
+                "and set the APPLE_*_PRODUCT_ID vars to the exact same IDs."
+            ),
+        ))
 
     return issues

@@ -49,7 +49,7 @@
 - [x] UGC report flow on shared outfits / generated images
 - [x] Hide shared outfit content on-device (Guideline 1.2)
 - [x] Subscriptions sold through Apple In-App Purchase only (`in_app_purchase` plugin; no Stripe/other purchase mechanism reachable from iOS)
-- [x] In-App Purchase entitlement (`com.apple.InAppPurchase`) in `Runner.entitlements`
+- [x] App ID has the In-App Purchase capability enabled in App Store Connect (no entitlement key required — StoreKit IAP needs no entry in `Runner.entitlements`; `com.apple.developer.in-app-payments` is Apple Pay, not IAP)
 - [x] "Restore Purchases" button on the Subscription page
 - [x] Store-billed subscriptions show "Manage in Store" (no in-app cancellation of store billing)
 - [x] `PAYWALL_ENABLED=false` dart-define available to strip all monetization CTAs from a build (App Review fallback)

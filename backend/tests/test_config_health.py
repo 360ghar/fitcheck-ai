@@ -42,6 +42,19 @@ def _settings(**overrides):
         AI_CHAT_API_KEY=None,
         AI_VISION_API_KEY=None,
         AI_VISION_FALLBACK_API_KEY=None,
+        # Apple IAP (checks #8/#9): healthy by default so the base config
+        # stays issue-free.
+        APPLE_BUNDLE_ID="com.fitcheckaiapp.fitcheckai",
+        APPLE_ISSUER_ID="issuer-123",
+        APPLE_KEY_ID="key-123",
+        APPLE_PRIVATE_KEY=(
+            "-----BEGIN PRIVATE KEY-----\nMOCKAPPLEKEY\n-----END PRIVATE KEY-----"
+        ),
+        APPLE_ENV="production",
+        APPLE_PLUS_MONTHLY_PRODUCT_ID="com.fitcheck.plus.monthly",
+        APPLE_PLUS_YEARLY_PRODUCT_ID="com.fitcheck.plus.yearly",
+        APPLE_PRO_MONTHLY_PRODUCT_ID="com.fitcheck.pro.monthly",
+        APPLE_PRO_YEARLY_PRODUCT_ID="com.fitcheck.pro.yearly",
     )
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -318,3 +331,62 @@ def test_gemini_primary_with_vision_fallback_key_not_flagged():
     ):
         issues = validate_production_config()
     assert not any(i.key == "AI_CHAT_API_KEY" for i in issues)
+
+
+# ---------------------------------------------------------------------------
+# Apple IAP config checks (#8 credentials, #9 product map)
+# ---------------------------------------------------------------------------
+
+
+def test_apple_iap_missing_credentials_flagged_as_error():
+    """No APPLE_ISSUER_ID/KEY_ID/PRIVATE_KEY -> every iOS purchase
+    registration fails closed at request time; startup must flag it."""
+    with _force_prod(), patch.object(
+        config_health,
+        "settings",
+        _settings(APPLE_ISSUER_ID=None, APPLE_KEY_ID=None, APPLE_PRIVATE_KEY=None),
+    ):
+        issues = validate_production_config()
+    apple = [i for i in issues if i.key == "APPLE_ISSUER_ID"]
+    assert len(apple) == 1
+    assert apple[0].severity == "error"
+    assert "Apple IAP verification is not configured" in apple[0].message
+    assert "APPLE_ISSUER_ID" in apple[0].message
+
+
+def test_apple_iap_partial_credentials_flagged_as_error():
+    """A single missing credential must still fail closed (e.g. the .p8)."""
+    with _force_prod(), patch.object(
+        config_health,
+        "settings",
+        _settings(APPLE_PRIVATE_KEY=""),
+    ):
+        issues = validate_production_config()
+    apple = [i for i in issues if i.key == "APPLE_ISSUER_ID"]
+    assert len(apple) == 1
+    assert apple[0].severity == "error"
+    assert "APPLE_PRIVATE_KEY" in apple[0].message
+
+
+def test_apple_iap_missing_product_ids_flagged_as_warning():
+    """Incomplete product map -> /plans publishes nulls for those variants,
+    so the iOS app shows 'not available for purchase yet'."""
+    with _force_prod(), patch.object(
+        config_health,
+        "settings",
+        _settings(APPLE_PLUS_MONTHLY_PRODUCT_ID=None, APPLE_PRO_YEARLY_PRODUCT_ID=""),
+    ):
+        issues = validate_production_config()
+    prod = [i for i in issues if i.key == "APPLE_PLUS_MONTHLY_PRODUCT_ID"]
+    assert len(prod) == 1
+    assert prod[0].severity == "warning"
+    assert "APPLE_PLUS_MONTHLY_PRODUCT_ID" in prod[0].message
+    assert "APPLE_PRO_YEARLY_PRODUCT_ID" in prod[0].message
+
+
+def test_apple_iap_fully_configured_not_flagged():
+    """Credentials + all four product IDs -> no Apple issues."""
+    with _force_prod(), patch.object(config_health, "settings", _settings()):
+        issues = validate_production_config()
+    assert not any(i.key.startswith("APPLE_") for i in issues)
+
