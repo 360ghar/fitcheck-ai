@@ -379,15 +379,24 @@ def main() -> int:
     db = create_client(supabase_url, supabase_key)
 
     if args.to:
-        # ---- test mode: one address, no audit, SMTP by default ----
-        if transport_mode != "resend" and not (smtp_username and smtp_password and smtp_from):
-            print("ERROR: test email via SMTP requires SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM", file=sys.stderr)
-            return 2
+        # ---- test mode: one address, no audit, honors EMAIL_TRANSPORT ----
         html, text = _render_email(args.name, args.code, share_url)
-        ok, detail = _send_email_smtp(
-            smtp_host, smtp_port, smtp_username, smtp_password, smtp_from,
-            args.to, smtp_reply_to, SUBJECT, html, text,
-        )
+        if transport_mode == "resend":
+            if not _env("RESEND_API_KEY", ""):
+                print("ERROR: EMAIL_TRANSPORT=resend requires RESEND_API_KEY", file=sys.stderr)
+                return 2
+            resend_key = _env("RESEND_API_KEY")
+            from_email = _env("FROM_EMAIL", "FitCheck AI <team@fitcheckaiapp.com>")
+            with httpx.Client() as client:
+                ok, detail = _send_email_resend(client, resend_key, from_email, args.to, SUBJECT, html, text)
+        else:
+            if not (smtp_username and smtp_password and smtp_from):
+                print("ERROR: test email via SMTP requires SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM", file=sys.stderr)
+                return 2
+            ok, detail = _send_email_smtp(
+                smtp_host, smtp_port, smtp_username, smtp_password, smtp_from,
+                args.to, smtp_reply_to, SUBJECT, html, text,
+            )
         if not ok:
             print(f"FAIL test email to {args.to}: {detail}", file=sys.stderr)
             return 1

@@ -86,3 +86,37 @@ def test_preview_mode_requires_no_env(monkeypatch, capsys):
     assert "Happy Girlfriend's Day" in out
     assert "GFDAY2026" in out
     assert "auth/register?promo=GFDAY2026" in out
+
+
+def test_test_mode_honors_resend_transport(monkeypatch, capsys):
+    """--to with EMAIL_TRANSPORT=resend must send via Resend, not SMTP."""
+    from unittest.mock import Mock
+
+    calls = []
+
+    def fake_resend(*_a, **_k):
+        calls.append("resend")
+        return True, "sent"
+
+    def fake_smtp(*_a, **_k):
+        calls.append("smtp")
+        return True, "sent"
+
+    monkeypatch.setenv("SUPABASE_URL", "https://x.supabase.co")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "key")
+    monkeypatch.setenv("RESEND_API_KEY", "re_x")
+    monkeypatch.setenv("FROM_EMAIL", "FitCheck AI <team@fitcheckaiapp.com>")
+    monkeypatch.setenv("EMAIL_TRANSPORT", "resend")
+    monkeypatch.setattr(campaign, "create_client", lambda *_a, **_k: Mock())
+    monkeypatch.setattr(campaign, "_send_email_resend", fake_resend)
+    monkeypatch.setattr(campaign, "_send_email_smtp", fake_smtp)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["girlfriend_day_campaign.py", "--code", "GFDAY2026", "--to", "a@b.com", "--name", "X"],
+    )
+
+    code = campaign.main()
+
+    assert code == 0
+    assert calls == ["resend"]
+
