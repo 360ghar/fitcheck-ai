@@ -24,6 +24,7 @@ from app.core.exceptions import (
     DatabaseError,
 )
 from app.core.ip_rate_limit import auth_rate_limited_operation
+from app.utils.db import execute_with_reconnect, run_sync_with_reconnect
 from app.services.referral_service import ReferralService
 from supabase import Client
 from supabase_auth.errors import AuthApiError
@@ -47,11 +48,26 @@ def _require_schema(db: Client) -> None:
     running, so once this succeeds once we stop re-running it on every
     register/login/oauth_sync call - it was previously 4 extra DB round trips
     on the hottest auth paths for an answer that's effectively static post-deploy.
+
+    Runs through run_sync_with_reconnect: a dead pooled HTTP/2 connection is
+    NOT a schema gap and must not be misread as one (observed 2026-08-01:
+    oauth/sync 500 at boot on a stale connection).
     """
     global _schema_confirmed_ready
     if _schema_confirmed_ready:
         return
 
+    run_sync_with_reconnect(
+        _check_schema_tables,
+        db,
+        extra={"operation": "_require_schema"},
+    )
+    _schema_confirmed_ready = True
+
+
+def _check_schema_tables(db: Client) -> None:
+    """The four schema probes. Separate function so the reconnect wrapper can
+    re-run them against a rebuilt client."""
     try:
         db.table("users").select("id").limit(1).execute()
         db.table("user_preferences").select("preferred_occasions").limit(1).execute()
@@ -62,8 +78,6 @@ def _require_schema(db: Client) -> None:
         if code in {"PGRST205", "42703"}:
             raise SchemaNotInitializedError()
         raise
-    else:
-        _schema_confirmed_ready = True
 
 
 async def _upsert_user_profile(
@@ -268,7 +282,11 @@ async def register(
                     "created_at": datetime.now().isoformat(),
                     "updated_at": datetime.now().isoformat(),
                 }
-                profile_created = await _upsert_user_profile(db, profile_payload)
+                profile_created = await execute_with_reconnect(
+                    lambda d: _upsert_user_profile(d, profile_payload),
+                    db,
+                    extra={"operation": "register.upsert_profile", "user_id": user_id},
+                )
                 if not profile_created:
                     logger.error(
                         "Auth user record not available for profile creation",
@@ -689,7 +707,11 @@ async def oauth_sync(
         _require_schema(db)
 
         # Check if user profile already exists
-        existing = await asyncio.to_thread(db.table("users").select("*").eq("id", user_id).execute)
+        existing = await execute_with_reconnect(
+            lambda d: d.table("users").select("*").eq("id", user_id).execute(),
+            db,
+            extra={"operation": "oauth_sync.lookup", "user_id": user_id},
+        )
         is_new_user = not existing.data
 
         if is_new_user:
@@ -741,28 +763,36 @@ async def oauth_sync(
 
             # Create default user_preferences
             try:
-                await asyncio.to_thread(db.table("user_preferences").upsert({
-                    "user_id": user_id,
-                    "favorite_colors": [],
-                    "preferred_styles": [],
-                    "liked_brands": [],
-                    "disliked_patterns": [],
-                    "preferred_occasions": [],
-                    "data_points_collected": 0,
-                }, on_conflict="user_id").execute)
+                await execute_with_reconnect(
+                    lambda d: d.table("user_preferences").upsert({
+                        "user_id": user_id,
+                        "favorite_colors": [],
+                        "preferred_styles": [],
+                        "liked_brands": [],
+                        "disliked_patterns": [],
+                        "preferred_occasions": [],
+                        "data_points_collected": 0,
+                    }, on_conflict="user_id").execute(),
+                    db,
+                    extra={"operation": "oauth_sync.upsert_preferences", "user_id": user_id},
+                )
             except Exception as e:
                 logger.debug(f"User preferences upsert skipped: {e}")
 
             # Create default user_settings
             try:
-                await asyncio.to_thread(db.table("user_settings").upsert({
-                    "user_id": user_id,
-                    "language": "en",
-                    "measurement_units": "imperial",
-                    "notifications_enabled": True,
-                    "email_marketing": False,
-                    "dark_mode": False,
-                }, on_conflict="user_id").execute)
+                await execute_with_reconnect(
+                    lambda d: d.table("user_settings").upsert({
+                        "user_id": user_id,
+                        "language": "en",
+                        "measurement_units": "imperial",
+                        "notifications_enabled": True,
+                        "email_marketing": False,
+                        "dark_mode": False,
+                    }, on_conflict="user_id").execute(),
+                    db,
+                    extra={"operation": "oauth_sync.upsert_settings", "user_id": user_id},
+                )
             except Exception as e:
                 logger.debug(f"User settings upsert skipped: {e}")
 
@@ -783,13 +813,21 @@ async def oauth_sync(
             logger.info("Created user profile via OAuth sync", user_id=user_id)
 
             # Fetch the created profile
-            profile_result = await asyncio.to_thread(db.table("users").select("*").eq("id", user_id).execute)
+            profile_result = await execute_with_reconnect(
+                lambda d: d.table("users").select("*").eq("id", user_id).execute(),
+                db,
+                extra={"operation": "oauth_sync.fetch_profile", "user_id": user_id},
+            )
             user_data = profile_result.data[0] if (profile_result.data and len(profile_result.data) > 0) else profile_payload
         else:
             # Profile exists - update last_login_at
-            await asyncio.to_thread(db.table("users").update({
-                "last_login_at": datetime.now().isoformat()
-            }).eq("id", user_id).execute)
+            await execute_with_reconnect(
+                lambda d: d.table("users").update({
+                    "last_login_at": datetime.now().isoformat()
+                }).eq("id", user_id).execute(),
+                db,
+                extra={"operation": "oauth_sync.touch_login", "user_id": user_id},
+            )
 
             user_data = existing.data[0] if (existing.data and len(existing.data) > 0) else {}
             logger.info("OAuth sync for existing user", user_id=user_id)

@@ -55,6 +55,13 @@ def _settings(**overrides):
         APPLE_PLUS_YEARLY_PRODUCT_ID="com.fitcheck.plus.yearly",
         APPLE_PRO_MONTHLY_PRODUCT_ID="com.fitcheck.pro.monthly",
         APPLE_PRO_YEARLY_PRODUCT_ID="com.fitcheck.pro.yearly",
+        # Stripe web billing (check #10): healthy by default so the base
+        # config stays issue-free.
+        STRIPE_SECRET_KEY="sk_test_123",
+        STRIPE_PLUS_MONTHLY_PRICE_ID="price_plus_monthly",
+        STRIPE_PLUS_YEARLY_PRICE_ID="price_plus_yearly",
+        STRIPE_PRO_MONTHLY_PRICE_ID="price_pro_monthly",
+        STRIPE_PRO_YEARLY_PRICE_ID="price_pro_yearly",
     )
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -390,3 +397,38 @@ def test_apple_iap_fully_configured_not_flagged():
         issues = validate_production_config()
     assert not any(i.key.startswith("APPLE_") for i in issues)
 
+
+# =============================================================================
+# Stripe web billing (check #10) - observed 2026-08-01: dozens of
+# /subscription/checkout 503s because STRIPE_SECRET_KEY was unset in prod.
+# =============================================================================
+
+
+def test_stripe_config_healthy_by_default():
+    with _force_prod(), patch.object(config_health, "settings", _settings()):
+        issues = validate_production_config()
+    assert not [i for i in issues if i.key == "STRIPE_SECRET_KEY"]
+
+
+def test_missing_stripe_secret_key_reported():
+    with _force_prod(), patch.object(
+        config_health, "settings", _settings(STRIPE_SECRET_KEY="")
+    ):
+        issues = validate_production_config()
+    stripe_issues = [i for i in issues if i.key == "STRIPE_SECRET_KEY"]
+    assert len(stripe_issues) == 1
+    assert stripe_issues[0].severity == "error"
+    assert "STRIPE_SECRET_KEY missing" in stripe_issues[0].message
+
+
+def test_missing_stripe_price_ids_reported():
+    with _force_prod(), patch.object(
+        config_health,
+        "settings",
+        _settings(STRIPE_PRO_YEARLY_PRICE_ID="", STRIPE_PLUS_MONTHLY_PRICE_ID=""),
+    ):
+        issues = validate_production_config()
+    stripe_issues = [i for i in issues if i.key == "STRIPE_SECRET_KEY"]
+    assert len(stripe_issues) == 1
+    assert "STRIPE_PRO_YEARLY_PRICE_ID" in stripe_issues[0].message
+    assert "STRIPE_PLUS_MONTHLY_PRICE_ID" in stripe_issues[0].message

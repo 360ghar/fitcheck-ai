@@ -28,6 +28,7 @@ from app.agents.prompt_fidelity import (
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
 from app.core.concurrency import GENERATION_SEMAPHORE
+from app.core.config import settings
 from app.services.ai_provider_service import AIProviderService, ChatMessage
 from app.services.ai_settings_service import AISettingsService
 from app.services.storage_service import StorageService
@@ -251,6 +252,7 @@ class ImageGenerationAgent:
         cls,
         items: List[Dict[str, Any]],
         first_image_number: int,
+        max_images: Optional[int] = None,
     ) -> tuple[List[str], Dict[int, int]]:
         """Split items into ordered garment reference images plus their labels.
 
@@ -258,6 +260,13 @@ class ImageGenerationAgent:
             items: Item dicts, some carrying REFERENCE_KEY.
             first_image_number: The IMAGE number the first garment gets — 2
                 when a person reference occupies IMAGE 1, else 1.
+            max_images: Optional budget on how many references to collect.
+                Image providers reject calls with too many inline images
+                (observed agnes-image-2.1-flash: "too many input images: 7
+                provided, at most 6 allowed"). Items beyond the budget are
+                rendered from their text description — the reference map and
+                inventory already list items without an image, so numbering
+                stays consistent.
 
         Returns:
             (images, image_numbers) where `images` is in item order and
@@ -268,6 +277,8 @@ class ImageGenerationAgent:
         images: List[str] = []
         image_numbers: Dict[int, int] = {}
         for idx, item in enumerate(items, start=1):
+            if max_images is not None and len(images) >= max_images:
+                break
             reference = item.get(cls.REFERENCE_KEY)
             if not reference:
                 continue
@@ -466,11 +477,32 @@ class ImageGenerationAgent:
         # in) takes the next slot, so garments start after both.
         uses_person_reference = bool(user_avatar_base64) and not wants_flat_lay
         uses_source_photo = bool(source_photo_base64)
+        # The provider rejects calls with more than AI_IMAGE_GEN_MAX_INPUT_IMAGES
+        # inline images (observed: 7 provided, at most 6 allowed). Avatar and
+        # source photo each take a slot; the rest is the garment budget.
+        # References beyond the budget are dropped - those items still render
+        # from their text description (see _build_reference_map /
+        # _build_outfit_inventory, which list items without images).
+        garment_budget = max(
+            0,
+            settings.AI_IMAGE_GEN_MAX_INPUT_IMAGES
+            - (1 if uses_person_reference else 0)
+            - (1 if uses_source_photo else 0),
+        )
+        requested_references = sum(1 for i in items if i.get(self.REFERENCE_KEY))
+        if requested_references > garment_budget:
+            logger.warning(
+                "Garment reference images truncated to fit the provider input cap",
+                requested_references=requested_references,
+                garment_budget=garment_budget,
+                max_inline_images=settings.AI_IMAGE_GEN_MAX_INPUT_IMAGES,
+            )
         garment_images, image_numbers = self._collect_garment_references(
             items,
             first_image_number=(
                 (2 if uses_person_reference else 1) + (1 if uses_source_photo else 0)
             ),
+            max_images=garment_budget,
         )
         outfit_inventory = self._build_outfit_inventory(items, image_numbers=image_numbers)
         reference_map = self._build_reference_map(
@@ -848,6 +880,19 @@ Specs:
         """
         if not images:
             return await self._generate_image(prompt)
+
+        # Hard safety net: callers must fit under the provider's inline-image
+        # cap. A 400 from the provider wastes a multi-second request and the
+        # retry budget; fail fast with an actionable message instead.
+        max_inputs = getattr(settings, "AI_IMAGE_GEN_MAX_INPUT_IMAGES", 6)
+        if len(images) > max_inputs:
+            raise AIServiceError(
+                f"{context} requested {len(images)} reference images but the "
+                f"provider allows at most {max_inputs}; reduce the number of "
+                "items with reference images and retry.",
+                retryable=False,
+                error_kind="config",
+            )
 
         try:
             # Images first, then the text - mirrors the working try-on path and

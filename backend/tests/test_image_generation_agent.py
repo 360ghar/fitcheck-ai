@@ -493,3 +493,84 @@ async def test_model_outfit_prompt_drops_the_shadow_request():
     # The model branch gets flat white WITHOUT the garment-isolation clause.
     assert "pure flat #FFFFFF white background" in prompt
     assert "crisp clean silhouette edge" not in prompt
+
+
+# =============================================================================
+# Provider inline-image cap (observed 2026-08-01: agnes-image-2.1-flash
+# rejects "too many input images: 7 provided, at most 6 allowed")
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_outfit_truncates_garment_references_to_provider_input_cap(monkeypatch):
+    """Avatar takes one slot; with the default cap of 6 the garment budget is
+    5. Items beyond the budget still render - from their descriptions, with
+    no IMAGE number - instead of 400-ing the whole request."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "AI_IMAGE_GEN_MAX_INPUT_IMAGES", 6)
+    agent = _make_agent()
+    items = [
+        _item(f"Garment {i}", "tops", reference="cmVmZXJlbmNlLXtJbn0=".replace("{I}", str(i)))
+        for i in range(1, 9)
+    ]
+
+    await agent.generate_outfit(items=items, user_avatar_base64="YXZhdGFy")
+
+    content = _captured_chat_content(agent)
+    # avatar + 5 garments + prompt = 7 parts, NOT 10
+    assert [part["type"] for part in content] == ["image_url"] * 6 + ["text"]
+    prompt = content[-1]["text"]
+    assert 'IMAGE 2 = Item 1 "Garment 1" (tops)' in prompt
+    assert 'IMAGE 6 = Item 5 "Garment 5" (tops)' in prompt
+    # Truncated items fall back to their description, exactly like items that
+    # never had an image.
+    assert "Items 6, 7, 8 have no reference image" in prompt
+    assert 'IMAGE 7 = Item 6' not in prompt
+
+
+@pytest.mark.asyncio
+async def test_outfit_avatar_plus_source_photo_leaves_four_garment_slots(monkeypatch):
+    """Avatar + source photo each consume a slot: budget = 6 - 2 = 4."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "AI_IMAGE_GEN_MAX_INPUT_IMAGES", 6)
+    agent = _make_agent()
+    items = [
+        _item(f"Garment {i}", "tops", reference="cmVmZXJlbmNlLXtJbn0=".replace("{I}", str(i)))
+        for i in range(1, 7)
+    ]
+
+    await agent.generate_outfit(
+        items=items,
+        user_avatar_base64="YXZhdGFy",
+        source_photo_base64="c291cmNlLXBob3Rv",
+    )
+
+    content = _captured_chat_content(agent)
+    # avatar + source photo + 4 garments + prompt = 7 parts
+    assert [part["type"] for part in content] == ["image_url"] * 6 + ["text"]
+    prompt = content[-1]["text"]
+    assert "IMAGE 2 = the original photo of this outfit as worn" in prompt
+    assert 'IMAGE 3 = Item 1 "Garment 1" (tops)' in prompt
+    assert 'IMAGE 6 = Item 4 "Garment 4" (tops)' in prompt
+    assert "Items 5, 6 have no reference image" in prompt
+
+
+@pytest.mark.asyncio
+async def test_generate_with_references_raises_non_retryable_over_cap(monkeypatch):
+    """A >cap payload (e.g. a future caller that skips the budget) fails fast
+    with an actionable config error instead of a wasted provider 400."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "AI_IMAGE_GEN_MAX_INPUT_IMAGES", 6)
+    agent = _make_agent()
+
+    with pytest.raises(AIServiceError) as excinfo:
+        await agent._generate_with_references(
+            "prompt", images=["a"] * 7, context="outfit"
+        )
+
+    assert excinfo.value.retryable is False
+    assert excinfo.value.error_kind == "config"
+    assert "at most 6" in str(excinfo.value)

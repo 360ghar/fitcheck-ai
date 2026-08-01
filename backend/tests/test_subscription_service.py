@@ -5,7 +5,7 @@ whether a paying user is actually upgraded/downgraded/cancelled.
 Previously had zero test coverage despite directly controlling revenue-path
 correctness (see architecture review, section 16).
 """
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from datetime import datetime, timezone, timedelta
 
 import httpx
@@ -299,6 +299,34 @@ async def test_check_limit_does_not_retry_on_unrelated_error():
     ):
         with pytest.raises(DatabaseError):
             await SubscriptionService.check_limit(USER_ID, "extraction", db=Mock())
+
+
+
+@pytest.mark.asyncio
+async def test_increment_usage_retries_once_on_dead_http2_connection():
+    """increment_usage (observed 2026-08-01: ConnectionTerminated on this exact
+    path) rebuilds the Supabase singleton and retries the whole reservation
+    once through the fresh client instead of failing the request."""
+    call_count = {"n": 0}
+
+    def fake_rpc():
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise httpx.RemoteProtocolError("<ConnectionTerminated error_code:1>")
+        return Mock(data=[{"reserve_usage": True}])
+
+    fake_db = Mock()
+    fake_db.rpc.return_value.execute = fake_rpc
+
+    with patch.object(SubscriptionService, "get_or_create_usage_record", new=AsyncMock()),          patch.object(
+             SubscriptionService, "get_subscription",
+             return_value=Mock(plan_type=PlanType.FREE),
+         ),          patch.object(SubscriptionService, "get_plan_limits", return_value={"monthly_extractions": 10}),          patch("app.db.connection.SupabaseDB") as mock_supabase_db:
+        mock_supabase_db.get_service_client.return_value = fake_db
+        await SubscriptionService.increment_usage(USER_ID, "extraction", db=fake_db)
+
+    assert call_count["n"] == 2
+    mock_supabase_db.reset.assert_called_once()
 
 
 # =============================================================================

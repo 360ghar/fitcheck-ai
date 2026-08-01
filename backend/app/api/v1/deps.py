@@ -12,6 +12,7 @@ from supabase import Client
 from app.db.connection import get_db, SupabaseDB
 from app.core.security import verify_token, TokenData
 from app.core.exceptions import AuthenticationError
+from app.utils.db import execute_with_reconnect
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +54,10 @@ async def get_current_user(
         # the sync client (a much larger, separately-planned effort - see
         # app/db/connection.py for the full migration path this stops short
         # of). asyncio.to_thread offloads just this call to a worker thread.
-        user = await asyncio.to_thread(
-            lambda: db.table("users").select("*").eq("id", token_data.sub).single().execute()
+        user = await execute_with_reconnect(
+            lambda d: d.table("users").select("*").eq("id", token_data.sub).single().execute(),
+            db,
+            extra={"operation": "get_current_user.lookup", "user_id": token_data.sub},
         )
         if user.data:
             # Add email from token if not in database

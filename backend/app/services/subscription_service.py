@@ -6,7 +6,6 @@ from typing import Optional, Union
 from dateutil.relativedelta import relativedelta
 
 import asyncio
-import httpx
 from supabase import Client
 
 from app.core.config import settings
@@ -24,6 +23,8 @@ from app.models.subscription import (
 from app.utils.datetime_util import utcnow, utcnow_iso
 from app.utils.db import (
     QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
+    execute_with_reconnect,
+    is_db_connection_error,
     is_pgrst202_missing_rpc,
     missing_rpc_log_hint,
     unwrap_rpc_bool,
@@ -771,12 +772,11 @@ class SubscriptionService:
             )
 
         except Exception as e:
-            # Retry once on a dead pooled HTTP/2 connection - matches
-            # ai_provider_service.py's isinstance-based check for the same
-            # error class, instead of fragile string-matching on str(e)
-            # (which silently stops working if the wrapped exception's
-            # repr format ever changes).
-            if _retry and isinstance(e, httpx.RemoteProtocolError):
+            # Retry once on a dead pooled HTTP/2 connection (gateway restart /
+            # idle). is_db_connection_error covers httpx transport errors AND
+            # the embedded h2 `<ConnectionTerminated ...>` repr, whichever the
+            # installed postgrest/httpx version surfaces.
+            if _retry and is_db_connection_error(e):
                 logger.warning(f"Connection error for user {user_id}, retrying: {e}")
                 from app.db.connection import SupabaseDB
                 SupabaseDB.reset()
@@ -805,12 +805,6 @@ class SubscriptionService:
             op = SubscriptionService._coerce_operation_type(operation_type)
             period_start = SubscriptionService._get_current_period_start()
 
-            # Ensure usage record exists
-            await SubscriptionService.get_or_create_usage_record(user_id, db)
-
-            subscription = await SubscriptionService.get_subscription(user_id, db)
-            limits = SubscriptionService.get_plan_limits(subscription.plan_type)
-
             # Map operation type to column
             column_map = {
                 OperationType.EXTRACTION: "monthly_extractions",
@@ -820,21 +814,36 @@ class SubscriptionService:
 
             column = column_map[op]
 
-            result = await asyncio.to_thread(db.rpc("reserve_usage", {
-                "p_user_id": user_id,
-                "p_period_start": period_start.isoformat(),
-                "p_field": column,
-                "p_count": count,
-                "p_limit": limits[column],
-            }).execute)
+            async def _reserve(d):
+                """Full reservation against client `d` - rebuilt on retry so a
+                dead pooled connection (observed 2026-08-01: ConnectionTerminated
+                on this exact path) heals in-request instead of 500ing."""
+                # Ensure usage record exists
+                await SubscriptionService.get_or_create_usage_record(user_id, d)
 
-            # `reserve_usage` returns a scalar BOOLEAN, so PostgREST keys the
-            # result by the function name rather than a column name.
-            reserved = unwrap_rpc_bool(result, "reserve_usage")
-            if reserved is not True:
-                raise RateLimitError(
-                    f"You've reached your monthly {op.value} limit ({limits[column]})."
-                )
+                subscription = await SubscriptionService.get_subscription(user_id, d)
+                limits = SubscriptionService.get_plan_limits(subscription.plan_type)
+
+                result = await asyncio.to_thread(d.rpc("reserve_usage", {
+                    "p_user_id": user_id,
+                    "p_period_start": period_start.isoformat(),
+                    "p_field": column,
+                    "p_count": count,
+                    "p_limit": limits[column],
+                }).execute)
+
+                # `reserve_usage` returns a scalar BOOLEAN, so PostgREST keys the
+                # result by the function name rather than a column name.
+                reserved = unwrap_rpc_bool(result, "reserve_usage")
+                if reserved is not True:
+                    raise RateLimitError(
+                        f"You've reached your monthly {op.value} limit ({limits[column]})."
+                    )
+                return reserved
+
+            await execute_with_reconnect(
+                _reserve, db, extra={"operation": "increment_usage", "user_id": user_id}
+            )
 
             logger.debug(f"Incremented {op.value} usage for user {user_id} by {count}")
 

@@ -491,3 +491,63 @@ class TestLifecycle:
             with pytest.raises(AIServiceError) as exc_info:
                 await provider.test_connection()
         assert exc_info.value.retryable is False
+
+
+class TestRateLimiter:
+    """AI_GEMINI_MAX_REQUESTS_PER_MINUTE spacing (free-tier quota bursts,
+    observed 2026-08-01: 8 parallel 429 RESOURCE_EXHAUSTED)."""
+
+    @pytest.mark.asyncio
+    async def test_rate_limiter_disabled_by_default(self):
+        provider = GeminiProvider(_make_config())  # max_requests_per_minute=0
+        with patch("asyncio.sleep", new=AsyncMock()) as fake_sleep:
+            await provider._wait_for_rate_slot()
+        fake_sleep.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_rate_limiter_waits_when_bucket_empty(self):
+        import time
+
+        provider = GeminiProvider(_make_config(max_requests_per_minute=60))
+        provider._next_allowed_at = time.monotonic() + 10
+        with patch("asyncio.sleep", new=AsyncMock()) as fake_sleep:
+            await provider._wait_for_rate_slot()
+        fake_sleep.assert_awaited_once()
+        wait = fake_sleep.await_args.args[0]
+        assert 9.5 <= wait <= 10.5
+
+    @pytest.mark.asyncio
+    async def test_rate_limiter_spaces_back_to_back_requests(self):
+        import time
+
+        provider = GeminiProvider(_make_config(max_requests_per_minute=60))  # 1 req/s
+        provider._next_allowed_at = time.monotonic() - 1  # slot already available
+        with patch("asyncio.sleep", new=AsyncMock()) as fake_sleep:
+            await provider._wait_for_rate_slot()  # first: no wait
+            await provider._wait_for_rate_slot()  # second: waits ~1s
+        assert fake_sleep.await_count == 1
+        wait = fake_sleep.await_args.args[0]
+        assert 0.9 <= wait <= 1.1
+
+    @pytest.mark.asyncio
+    async def test_chat_spaces_requests_when_rpm_configured(self):
+        """chat() honours the limiter BEFORE sending (patched sleep, no real
+        waiting) and still returns the parsed response."""
+        import time
+
+        provider = GeminiProvider(_make_config(max_requests_per_minute=60))
+        provider._next_allowed_at = time.monotonic() + 5  # bucket currently empty
+
+        async def fake_generate_content(**kwargs):
+            return _fake_response(text="ok")
+
+        with _patched_client(provider, fake_generate_content), patch(
+            "asyncio.sleep", new=AsyncMock()
+        ) as fake_sleep:
+            response = await provider.chat(
+                messages=[ChatMessage(role="user", content="hi")], max_tokens=10
+            )
+        assert response.text == "ok"
+        fake_sleep.assert_awaited_once()
+        wait = fake_sleep.await_args.args[0]
+        assert 4.5 <= wait <= 5.5

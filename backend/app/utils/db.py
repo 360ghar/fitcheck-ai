@@ -2,7 +2,14 @@
 Helpers for working with postgrest-py query results.
 """
 
-from typing import Any, Dict, Optional, Tuple
+import asyncio
+import inspect
+import logging
+from typing import Any, Callable, Dict, Optional, Tuple
+
+import httpx
+
+logger = logging.getLogger(__name__)
 
 
 def persistence_db(db: Any) -> Any:
@@ -13,6 +20,136 @@ def persistence_db(db: Any) -> Any:
     persist through an invalid client.
     """
     return db if hasattr(db, "table") else None
+
+
+# =============================================================================
+# Pooled-connection resilience
+#
+# supabase-py keeps ONE httpx pool per singleton client (SupabaseDB). When the
+# Supabase gateway or a proxy between it and the app restarts / idles the
+# connection, every subsequent request on that pool fails with an HTTP/2
+# transport error (observed 2026-08-01: `<ConnectionTerminated error_code:1,
+# last_stream_id:...>` on /items, /auth/oauth/sync, /outfits and usage
+# increments - a process restart was the only thing that healed it). The
+# helpers below detect that class of error and retry once through a freshly
+# built client, which also heals all later requests.
+# =============================================================================
+
+_DB_TRANSIENT_ERRORS = (
+    httpx.RemoteProtocolError,
+    httpx.LocalProtocolError,
+    httpx.ConnectError,
+    httpx.ConnectTimeout,
+    httpx.ReadError,
+    httpx.ReadTimeout,
+    httpx.WriteError,
+    httpx.PoolTimeout,
+)
+
+# String fallback: postgrest/httpx versions can wrap the h2 exception without
+# a matching isinstance type (the repr embeds `<ConnectionTerminated ...>`).
+_DB_CONNECTION_TEXT_MARKERS = (
+    "connectionterminated",
+    "remote protocol error",
+    "pool timeout",
+    "connection reset by peer",
+    "connection closed by peer",
+    "peer closed connection",
+    "goaway",
+)
+
+
+def is_db_connection_error(exc: Exception) -> bool:
+    """True when `exc` means the pooled Supabase connection is dead and the
+    operation is worth one retry through a fresh client."""
+    if isinstance(exc, _DB_TRANSIENT_ERRORS):
+        return True
+    text = str(exc).lower()
+    return any(marker in text for marker in _DB_CONNECTION_TEXT_MARKERS)
+
+
+async def execute_with_reconnect(
+    builder: Callable[[Any], Any],
+    db: Any,
+    *,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Any:
+    """Run ``builder(db)`` in a worker thread; on a pooled-connection error,
+    rebuild the Supabase singleton client and retry once with the fresh client.
+
+    ``builder`` receives the client and returns the query result (a plain
+    function is called directly; an ``async def``/coroutine-returning callable
+    is awaited). Example::
+
+        result = await execute_with_reconnect(
+            lambda d: d.table("items").select("*").execute(),
+            db,
+            extra={"operation": "list_items", "user_id": user_id},
+        )
+
+    The retry only fires for connection-class errors; anything else (missing
+    rows, permissions, RPC errors) propagates unchanged.
+
+    Note on retry semantics: a connection error can mean the server never got
+    the request OR that the response was lost after the server committed it.
+    For non-idempotent writes (e.g. a fresh ``outfits`` insert) the retry can
+    therefore duplicate the row in the rare lost-response case - the same
+    hazard a user-triggered manual retry already had, now automatic. Prefer
+    wrapping reads and idempotent upserts (``on_conflict``) for exact-once
+    semantics; wrap plain inserts knowing the tradeoff.
+    """
+    from app.db.connection import SupabaseDB  # local import avoids a cycle
+
+    async def _attempt(d: Any) -> Any:
+        if inspect.iscoroutinefunction(builder):
+            # Coroutine builders run on the event loop (they schedule their
+            # own to_thread calls internally).
+            return await builder(d)
+        # Plain callables run in a worker thread so the sync supabase client
+        # never blocks the loop; a callable that RETURNS a coroutine (e.g. a
+        # lambda wrapping an async function) is awaited on the loop after the
+        # thread hands the coroutine back.
+        outcome = await asyncio.to_thread(builder, d)
+        if inspect.iscoroutine(outcome):
+            outcome = await outcome
+        return outcome
+
+    try:
+        return await _attempt(db)
+    except Exception as exc:
+        if not is_db_connection_error(exc):
+            raise
+        logger.warning(
+            "Supabase pooled connection error, rebuilding client and retrying once",
+            extra={"db_error": str(exc)[:300], **(extra or {})},
+        )
+        SupabaseDB.reset()
+        fresh_db = SupabaseDB.get_service_client()
+        return await _attempt(fresh_db)
+
+
+def run_sync_with_reconnect(
+    fn: Callable[[Any], Any],
+    db: Any,
+    *,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Any:
+    """Synchronous twin of :func:`execute_with_reconnect` for the few call
+    sites that talk to the client directly without ``asyncio.to_thread``
+    (e.g. ``auth._require_schema``)."""
+    from app.db.connection import SupabaseDB
+
+    try:
+        return fn(db)
+    except Exception as exc:
+        if not is_db_connection_error(exc):
+            raise
+        logger.warning(
+            "Supabase pooled connection error (sync call), rebuilding client and retrying once",
+            extra={"db_error": str(exc)[:300], **(extra or {})},
+        )
+        SupabaseDB.reset()
+        return fn(SupabaseDB.get_service_client())
 
 
 def maybe_single_data(result: Any) -> Optional[Dict[str, Any]]:

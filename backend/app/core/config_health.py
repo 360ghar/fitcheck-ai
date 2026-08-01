@@ -253,4 +253,34 @@ def validate_production_config() -> List[ConfigIssue]:
             ),
         ))
 
+    # 10. Stripe web billing. Without STRIPE_SECRET_KEY and the four price IDs,
+    # every web checkout fails closed with a 503 at request time
+    # ("Stripe is not configured" / "Stripe price not configured") - observed
+    # 2026-08-01: dozens of /subscription/checkout 503s. Surfaced here so a
+    # deploy missing the credentials is caught in the startup logs, like the
+    # Apple IAP checks above.
+    missing_stripe = [
+        name
+        for name, value in (
+            ("STRIPE_SECRET_KEY", settings.STRIPE_SECRET_KEY),
+            ("STRIPE_PLUS_MONTHLY_PRICE_ID", settings.STRIPE_PLUS_MONTHLY_PRICE_ID),
+            ("STRIPE_PLUS_YEARLY_PRICE_ID", settings.STRIPE_PLUS_YEARLY_PRICE_ID),
+            ("STRIPE_PRO_MONTHLY_PRICE_ID", settings.STRIPE_PRO_MONTHLY_PRICE_ID),
+            ("STRIPE_PRO_YEARLY_PRICE_ID", settings.STRIPE_PRO_YEARLY_PRICE_ID),
+        )
+        if not (value or "").strip()
+    ]
+    if missing_stripe:
+        issues.append(ConfigIssue(
+            severity="error",
+            key="STRIPE_SECRET_KEY",
+            message=(
+                "Stripe web billing is not configured "
+                f"({' and '.join(missing_stripe)} missing). Every web checkout "
+                "fails closed with a 503 at request time. Create subscription "
+                "prices in Stripe and set STRIPE_SECRET_KEY plus the four "
+                "STRIPE_*_PRICE_ID vars."
+            ),
+        ))
+
     return issues

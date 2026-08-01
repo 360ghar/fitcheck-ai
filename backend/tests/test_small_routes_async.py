@@ -21,7 +21,11 @@ SCANNED_DIRS = (APP_DIR / "api" / "v1", APP_DIR / "services")
 
 # Callables that hand work off to a worker thread; anything inside their
 # argument list is already off the event loop.
-OFFLOADERS = {"to_thread", "run_in_threadpool", "run_in_executor", "run_sync"}
+# execute_with_reconnect (app/utils/db.py) is the sanctioned wrapper for the
+# sync supabase client: it runs the builder via asyncio.to_thread (and awaits
+# coroutine builders that schedule their own to_thread calls), so a
+# ``.execute()`` inside its builder argument is not on the event loop.
+OFFLOADERS = {"to_thread", "run_in_threadpool", "run_in_executor", "run_sync", "execute_with_reconnect"}
 
 
 def _is_offloader(node: ast.Call) -> bool:

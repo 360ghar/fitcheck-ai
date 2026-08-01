@@ -105,6 +105,13 @@ class Settings(BaseSettings):
     AI_GEMINI_VISION_FALLBACK_MODEL: Optional[str] = None
     AI_GEMINI_IMAGE_MODEL: str = "gemini-3.1-flash-image"
     AI_GEMINI_IMAGE_FALLBACK_MODEL: Optional[str] = None
+    # Per-provider rate control for the NATIVE Gemini leg. 0 = unlimited.
+    # Free-tier Gemini keys are limited to ~5 requests/minute/model; bursts of
+    # concurrent extractions exhaust the quota in one second (observed
+    # 2026-08-01: 8 parallel 429 RESOURCE_EXHAUSTED). Setting this spaces
+    # Gemini calls so the hybrid vision leg falls back to Agnes while the
+    # bucket refills instead of hammering the quota with retries.
+    AI_GEMINI_MAX_REQUESTS_PER_MINUTE: int = 0
 
     # OpenAI Provider Defaults
     AI_OPENAI_API_URL: str = "https://api.openai.com/v1"
@@ -251,6 +258,12 @@ class Settings(BaseSettings):
     AI_EXTRACTION_CONCURRENCY: int = 30
     AI_GENERATION_CONCURRENCY: int = 30
     AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES: int = 12
+    # Hard cap on TOTAL inline input images per image-generation call. The
+    # Agnes image gateway (agnes-image-2.1-flash) rejects requests with more
+    # than 6 ("too many input images: 7 provided, at most 6 allowed"). Outfit
+    # generation sends avatar (1) + source photo (1) + garment references, so
+    # image_generation_agent.py derives the garment budget from this cap.
+    AI_IMAGE_GEN_MAX_INPUT_IMAGES: int = 6
     AI_OUTFIT_ITEM_REFERENCE_DOWNLOAD_CONCURRENCY: int = 8
     AI_MAX_OUTFIT_ITEMS: int = 100
 

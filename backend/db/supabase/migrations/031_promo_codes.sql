@@ -131,7 +131,7 @@ BEGIN
         RETURN QUERY SELECT
             FALSE,
             TRUE,
-            redemption_row.plan_type,
+            redemption_row.plan_type::TEXT,
             redemption_row.months,
             'You have already redeemed a promo code'::TEXT;
         RETURN;
@@ -218,7 +218,7 @@ BEGIN
     RETURN QUERY SELECT
         TRUE,
         FALSE,
-        promo_row.plan_type,
+        promo_row.plan_type::TEXT,
         promo_row.months,
         'Promo code applied'::TEXT;
 END;

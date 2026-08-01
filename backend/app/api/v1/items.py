@@ -43,6 +43,7 @@ from app.services.ai_service import AIService
 from app.services.ai_settings_service import AISettingsService
 from app.services.storage_service import MAX_FILE_SIZE, StorageService
 from app.services.vector_service import get_vector_service
+from app.utils.db import execute_with_reconnect
 from app.utils.parallel import parallel_with_retry
 
 logger = get_context_logger(__name__)
@@ -364,67 +365,62 @@ async def list_items(
             normalized_occasion = normalize_tag_list([occasion])
             occasion_filter = normalized_occasion[0] if normalized_occasion else None
 
-        query = db.table("items").select("*, item_images(*)").eq("user_id", user_id).eq("is_deleted", False)
-
         if category:
             categories = [c.strip().lower() for c in category.split(",") if c.strip()]
             invalid = [c for c in categories if c not in VALID_CATEGORIES]
             if invalid:
                 raise ValidationError("Invalid category", details={"invalid_categories": invalid})
-            if len(categories) == 1:
-                query = query.eq("category", categories[0])
-            else:
-                query = query.in_("category", categories)
+        if condition and condition not in VALID_CONDITIONS:
+            raise ValidationError(
+                "Invalid condition",
+                details={"condition": condition, "valid_conditions": list(VALID_CONDITIONS)},
+            )
 
-        if condition:
-            if condition not in VALID_CONDITIONS:
-                raise ValidationError("Invalid condition", details={"condition": condition, "valid_conditions": list(VALID_CONDITIONS)})
-            query = query.eq("condition", condition)
+        def _apply_filters(q):
+            """Apply every optional filter to a base query builder."""
+            if category:
+                categories = [c.strip().lower() for c in category.split(",") if c.strip()]
+                q = q.in_("category", categories) if len(categories) > 1 else q.eq("category", categories[0])
+            if condition:
+                q = q.eq("condition", condition)
+            if is_favorite is not None:
+                q = q.eq("is_favorite", is_favorite)
+            if brand:
+                q = q.ilike("brand", f"%{brand}%")
+            if color:
+                # JSONB array contains
+                q = q.contains("colors", [color])
+            if occasion_filter:
+                q = q.contains("occasion_tags", [occasion_filter])
+            if search:
+                like = f"%{search}%"
+                q = q.or_(f"name.ilike.{like},brand.ilike.{like}")
+            return q
 
-        if is_favorite is not None:
-            query = query.eq("is_favorite", is_favorite)
+        def _list_and_count(d):
+            """Run count + page queries against client `d` (rebuilt on retry)."""
+            count_res = _apply_filters(
+                d.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_deleted", False)
+            ).execute()
+            total = getattr(count_res, "count", len(count_res.data or []))
+            start = (page - 1) * page_size
+            end = start + page_size - 1
+            list_res = (
+                _apply_filters(
+                    d.table("items").select("*, item_images(*)").eq("user_id", user_id).eq("is_deleted", False)
+                )
+                .order("created_at", desc=True)
+                .range(start, end)
+                .execute()
+            )
+            return total, list_res
 
-        if brand:
-            query = query.ilike("brand", f"%{brand}%")
-
-        if color:
-            # JSONB array contains
-            query = query.contains("colors", [color])
-        if occasion_filter:
-            query = query.contains("occasion_tags", [occasion_filter])
-
-        if search:
-            like = f"%{search}%"
-            query = query.or_(f"name.ilike.{like},brand.ilike.{like}")
-
-        # Count
-        count_q = db.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_deleted", False)
-        if category:
-            categories = [c.strip().lower() for c in category.split(",") if c.strip()]
-            if len(categories) == 1:
-                count_q = count_q.eq("category", categories[0])
-            else:
-                count_q = count_q.in_("category", categories)
-        if condition:
-            count_q = count_q.eq("condition", condition)
-        if is_favorite is not None:
-            count_q = count_q.eq("is_favorite", is_favorite)
-        if brand:
-            count_q = count_q.ilike("brand", f"%{brand}%")
-        if color:
-            count_q = count_q.contains("colors", [color])
-        if occasion_filter:
-            count_q = count_q.contains("occasion_tags", [occasion_filter])
-        if search:
-            like = f"%{search}%"
-            count_q = count_q.or_(f"name.ilike.{like},brand.ilike.{like}")
-        count_res = await asyncio.to_thread(count_q.execute)
-        total = getattr(count_res, "count", len(count_res.data or []))
-
-        start = (page - 1) * page_size
-        end = start + page_size - 1
-
-        res = await asyncio.to_thread(query.order("created_at", desc=True).range(start, end).execute)
+        # A dead pooled HTTP/2 connection (gateway restart/idle) previously
+        # turned this endpoint into a permanent 500 until a process restart.
+        # execute_with_reconnect rebuilds the client and retries once.
+        total, res = await execute_with_reconnect(
+            _list_and_count, db, extra={"operation": "list_items", "user_id": user_id}
+        )
         items = [_normalize_item_images(i) for i in (res.data or [])]
 
         total_pages = max(1, (total + page_size - 1) // page_size)

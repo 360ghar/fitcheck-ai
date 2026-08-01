@@ -28,6 +28,7 @@ from app.services.ai_provider_interface import AIProviderClient, get_provider_cl
 from app.utils.crypto import derive_fernet_key, legacy_derive_fernet_key
 from app.utils.db import (
     QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
+    execute_with_reconnect,
     is_pgrst202_missing_rpc,
     missing_rpc_log_hint,
     unwrap_rpc_bool,
@@ -188,7 +189,11 @@ class AISettingsService:
             User's AI settings dict
         """
         try:
-            result = await asyncio.to_thread(db.table("user_ai_settings").select("*").eq("user_id", user_id).execute)
+            result = await execute_with_reconnect(
+                lambda d: d.table("user_ai_settings").select("*").eq("user_id", user_id).execute(),
+                db,
+                extra={"operation": "get_user_ai_settings.select", "user_id": user_id},
+            )
 
             if result.data and len(result.data) > 0:
                 settings_row = result.data[0]
@@ -200,12 +205,16 @@ class AISettingsService:
                         last_reset = date.fromisoformat(last_reset)
                     if last_reset < date.today():
                         # Reset daily counts
-                        await asyncio.to_thread(db.table("user_ai_settings").update({
-                            "daily_extraction_count": 0,
-                            "daily_generation_count": 0,
-                            "daily_embedding_count": 0,
-                            "last_reset_date": date.today().isoformat(),
-                        }).eq("user_id", user_id).execute)
+                        await execute_with_reconnect(
+                            lambda d: d.table("user_ai_settings").update({
+                                "daily_extraction_count": 0,
+                                "daily_generation_count": 0,
+                                "daily_embedding_count": 0,
+                                "last_reset_date": date.today().isoformat(),
+                            }).eq("user_id", user_id).execute(),
+                            db,
+                            extra={"operation": "get_user_ai_settings.reset", "user_id": user_id},
+                        )
                         settings_row["daily_extraction_count"] = 0
                         settings_row["daily_generation_count"] = 0
                         settings_row["daily_embedding_count"] = 0
@@ -215,7 +224,11 @@ class AISettingsService:
             # Create default settings if not exists
             default_settings = _default_settings_row(user_id)
 
-            await asyncio.to_thread(db.table("user_ai_settings").insert(default_settings).execute)
+            await execute_with_reconnect(
+                lambda d: d.table("user_ai_settings").insert(default_settings).execute(),
+                db,
+                extra={"operation": "get_user_ai_settings.insert_default", "user_id": user_id},
+            )
             return default_settings
 
         except Exception as e:
@@ -408,22 +421,26 @@ class AISettingsService:
         returns encrypted provider keys) is for read paths, not admission.
         """
         try:
-            result = await asyncio.to_thread(
-                db.table("user_ai_settings")
+            result = await execute_with_reconnect(
+                lambda d: d.table("user_ai_settings")
                 .select("user_id")
                 .eq("user_id", user_id)
                 .maybe_single()
-                .execute
+                .execute(),
+                db,
+                extra={"operation": "ensure_ai_settings_row.select", "user_id": user_id},
             )
             if result and result.data:
                 return
             # Upsert on the PK: extraction + generation reservations run
             # concurrently, so a user's very first admission can race two
             # select-misses into a duplicate-key insert.
-            await asyncio.to_thread(
-                db.table("user_ai_settings")
+            await execute_with_reconnect(
+                lambda d: d.table("user_ai_settings")
                 .upsert(_default_settings_row(user_id), on_conflict="user_id")
-                .execute
+                .execute(),
+                db,
+                extra={"operation": "ensure_ai_settings_row.upsert", "user_id": user_id},
             )
         except Exception as e:
             if "23503" in str(e) or "users_id_fkey" in str(e):

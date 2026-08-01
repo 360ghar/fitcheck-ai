@@ -45,7 +45,12 @@ Forbidden: services/models/core importing `app.api`. See `scripts/check_architec
 
 ## Database
 
-- Hosted Supabase via `supabase-py`.
+- Hosted Supabase via `supabase-py`. The sync client's singleton pool can
+  die on gateway restarts/idles (`ConnectionTerminated`); `app/utils/db.py`
+  `is_db_connection_error` + `execute_with_reconnect`/`run_sync_with_reconnect`
+  rebuild the client and retry once on the hot paths (2026-08-01 incident:
+  `/items`, `/auth/oauth/sync`, `/outfits`, usage increments 500'd until a
+  redeploy).
 - `get_service_client()` for elevated route work; `get_client()` for some auth flows.
 - Migrations: `backend/db/supabase/migrations/` (baseline `001_full_schema.sql`).
 - Generated overview: `docs/generated/db-schema.md`.
@@ -247,11 +252,13 @@ Rules:
 Campaign codes (`/auth/register?promo=CODE`) grant Plus/Pro free for a fixed
 number of months. `POST /api/v1/promo/validate` (public) and
 `POST /api/v1/promo/redeem` (auth) wrap the atomic `redeem_promo_atomic` RPC
-(migration `031_promo_codes.sql`), which writes the same `subscriptions` row as
-any other grant (`plan_type` + `status='trial'` + `trial_end`) — entitlement,
-limits, and expiry → free downgrade need no special-casing. One redemption per
-user; paid subscribers are never overwritten. Codes are created by operators
-with `backend/scripts/create_promo_code.py`.
+(migrations `031_promo_codes.sql` + `032_fix_redeem_promo_atomic_plan_type.sql`
+— 032 adds the `::TEXT` casts the 031 version was missing, which 42804'd at
+runtime), which writes the same `subscriptions` row as any other grant
+(`plan_type` + `status='trial'` + `trial_end`) — entitlement, limits, and
+expiry → free downgrade need no special-casing. One redemption per user; paid
+subscribers are never overwritten. Codes are created by operators with
+`backend/scripts/create_promo_code.py`.
 
 ## Route registration
 

@@ -1,6 +1,6 @@
 # Database schema (generated)
 
-Generated: 2026-08-01
+Generated: 2026-08-02
 
 Source: `backend/db/supabase/migrations/`.
 Regenerate: `python scripts/generate_db_schema_doc.py`.
@@ -50,6 +50,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `029_pr9_hardening.sql`
 - `030_mobile_iap.sql`
 - `031_promo_codes.sql`
+- `032_fix_redeem_promo_atomic_plan_type.sql`
 
 ## Tables (CREATE TABLE)
 

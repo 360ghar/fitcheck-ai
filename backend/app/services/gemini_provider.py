@@ -14,6 +14,7 @@ mismatch. This implementation talks to Google's SDK directly and satisfies the
 same AIProviderClient interface every other provider does.
 """
 
+import asyncio
 import base64
 import re
 import time
@@ -65,6 +66,13 @@ class GeminiConfig:
     image_gen_model: str = DEFAULT_GEMINI_IMAGE_MODEL
     image_fallback_model: Optional[str] = None
     max_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
+    # Requests per minute allowed through this provider instance; 0 = unlimited.
+    # Free-tier Gemini keys are limited to ~5 rpm per model - bursts of
+    # concurrent extractions exhaust the quota in one second (observed
+    # 2026-08-01: 8 parallel 429 RESOURCE_EXHAUSTED). When set, chat() spaces
+    # requests so the hybrid vision leg falls back to Agnes while the bucket
+    # refills instead of hammering the quota with retries.
+    max_requests_per_minute: int = 0
 
     def get_vision_model(self) -> str:
         """Get the vision model, falling back to the default chat model."""
@@ -88,6 +96,7 @@ class GeminiConfig:
             image_gen_model=getattr(s, "AI_GEMINI_IMAGE_MODEL", None) or DEFAULT_GEMINI_IMAGE_MODEL,
             image_fallback_model=getattr(s, "AI_GEMINI_IMAGE_FALLBACK_MODEL", None) or None,
             max_tokens=getattr(s, "AI_MAX_OUTPUT_TOKENS", DEFAULT_MAX_OUTPUT_TOKENS),
+            max_requests_per_minute=getattr(s, "AI_GEMINI_MAX_REQUESTS_PER_MINUTE", 0) or 0,
         )
 
     @classmethod
@@ -106,6 +115,7 @@ class GeminiConfig:
             image_fallback_model=raw.get("image_fallback_model"),
             # BYOK configs inherit the same output ceiling as the system config.
             max_tokens=raw.get("max_tokens") or DEFAULT_MAX_OUTPUT_TOKENS,
+            max_requests_per_minute=raw.get("max_requests_per_minute") or 0,
         )
 
     @classmethod
@@ -209,6 +219,30 @@ class GeminiProvider:
         # across instances would get torn down by one caller while another is
         # still using it.
         self._client: Optional[genai.Client] = None
+        # Rate-limiting state (see _wait_for_rate_slot). Lock is created
+        # lazily so provider construction never binds to an event loop.
+        self._rate_lock: Optional[asyncio.Lock] = None
+        self._next_allowed_at: float = 0.0
+
+    async def _wait_for_rate_slot(self) -> None:
+        """Space requests to `max_requests_per_minute` when configured
+        (0 = unlimited). The wait happens BEFORE the request is sent, so a
+        burst of concurrent extractions cannot slam a free-tier quota in one
+        second (observed 2026-08-01: 8 parallel 429 RESOURCE_EXHAUSTED);
+        callers that exceed the bucket simply back off and the hybrid vision
+        leg falls back to Agnes while they wait."""
+        rpm = self.config.max_requests_per_minute
+        if rpm <= 0:
+            return
+        interval = 60.0 / rpm
+        if self._rate_lock is None:
+            self._rate_lock = asyncio.Lock()
+        async with self._rate_lock:
+            now = time.monotonic()
+            wait = self._next_allowed_at - now
+            if wait > 0:
+                await asyncio.sleep(wait)
+            self._next_allowed_at = max(now, self._next_allowed_at) + interval
 
     def _get_client(self) -> genai.Client:
         if self._client is None:
@@ -280,6 +314,7 @@ class GeminiProvider:
         response_modalities: Optional[List[str]] = None,
         response_format: Optional[Dict[str, Any]] = None,
     ) -> AIResponse:
+        await self._wait_for_rate_slot()
         client = self._get_client()
         use_model = model or self.config.chat_model
         system_instruction, contents = self._messages_to_contents(messages)
@@ -325,7 +360,13 @@ class GeminiProvider:
             )
         except genai_errors.APIError as e:
             retryable, error_kind, retry_after = classify_gemini_error(e)
-            logger.error(
+            # Handled upstream failures (quota 429 / 5xx overload) that the
+            # hybrid vision leg will absorb via the Agnes fallback are WARN
+            # level - error-level logging here turned every free-tier burst
+            # into a log-drain flood. Hard failures (auth/blocked/parse) stay
+            # at error level.
+            log_fn = logger.error if not retryable else logger.warning
+            log_fn(
                 f"Gemini request failed: {e}",
                 model=use_model,
                 retryable=retryable,

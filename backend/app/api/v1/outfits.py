@@ -46,6 +46,7 @@ from app.models.outfit import (
     OutfitCollectionUpdate,
 )
 from app.services.storage_service import MAX_FILE_SIZE, StorageService
+from app.utils.db import execute_with_reconnect
 
 logger = get_context_logger(__name__)
 
@@ -243,7 +244,11 @@ async def create_outfit(
 
         # Verify items exist and belong to user
         item_ids = [str(i) for i in request.item_ids]
-        items_res = await asyncio.to_thread(db.table("items").select("id").eq("user_id", user_id).in_("id", item_ids).execute)
+        items_res = await execute_with_reconnect(
+            lambda d: d.table("items").select("id").eq("user_id", user_id).in_("id", item_ids).execute(),
+            db,
+            extra={"operation": "create_outfit.verify_items", "user_id": user_id},
+        )
         found_ids = {row["id"] for row in (items_res.data or [])}
         missing = [iid for iid in item_ids if iid not in found_ids]
         if missing:
@@ -271,7 +276,11 @@ async def create_outfit(
             "updated_at": now,
         }
 
-        res = await asyncio.to_thread(db.table("outfits").insert(insert).execute)
+        res = await execute_with_reconnect(
+            lambda d: d.table("outfits").insert(insert).execute(),
+            db,
+            extra={"operation": "create_outfit.insert", "user_id": user_id},
+        )
         row = (res.data or [None])[0]
         if not row:
             raise DatabaseError("Failed to create outfit", operation="insert")
