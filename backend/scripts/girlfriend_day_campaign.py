@@ -35,7 +35,7 @@ Optional env:
     EMAIL_TRANSPORT=split       # 'split' (default) | 'resend' | 'smtp'
     EMAIL_RATE_LIMIT_MS=250     # throttle between sends
     PAGE_SIZE=500
-    AUDIT_FILE=backend/logs/girlfriend_day_emails.jsonl
+    AUDIT_FILE=backend/logs/girlfriend_day_emails.jsonl   # default: <backend>/logs/...
 
 Notes:
     - The promo code must already exist (scripts/create_promo_code.py); the
@@ -45,6 +45,8 @@ Notes:
       addresses are not audited, so the run can resume next day.
     - Recipients on bogus/reserved domains (example.com, ...) are skipped to
       avoid guaranteed bounces.
+    - A lockfile (<audit>.lock) prevents two concurrent runs from double-
+      sending; re-running after a crash/interrupt resumes from the audit.
 """
 from __future__ import annotations
 
@@ -65,6 +67,10 @@ from supabase import create_client
 
 RESEND_URL = "https://api.resend.com/emails"
 DEFAULT_CODE = "GFDAY2026"
+
+# Default audit path resolves relative to the repo backend root (scripts/..),
+# so the script works from any cwd: <backend>/logs/girlfriend_day_emails.jsonl.
+DEFAULT_AUDIT_PATH = Path(__file__).resolve().parents[1] / "logs" / "girlfriend_day_emails.jsonl"
 
 # Domains we never send to - reserved/fake TLDs that receivers reject or
 # that would hard-bounce. Kept explicit; not a generic regex (same list as
@@ -166,6 +172,35 @@ def _promo_code_exists(db: Any, code: str) -> bool:
     except Exception as e:
         print(f"WARNING: could not verify promo code {code}: {e}", file=sys.stderr)
         return True  # never block the campaign on a read-only check failure
+
+
+def _acquire_lock(audit_path: Path) -> Path:
+    """Take an exclusive lock next to the audit file (atomic O_EXCL create).
+
+    Two concurrent campaign runs would both read an empty audit and double-
+    send, so a second run refuses to start. A lock whose owning PID is gone
+    (crash / kill -9) is reclaimed automatically.
+    """
+    lock_path = Path(str(audit_path) + ".lock")
+    try:
+        fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        try:
+            pid = int(lock_path.read_text().strip().split()[0])
+            os.kill(pid, 0)  # raises ProcessLookupError if the owner is gone
+        except (ValueError, ProcessLookupError, FileNotFoundError):
+            lock_path.unlink(missing_ok=True)
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        else:
+            print(
+                f"ERROR: another campaign run is in progress (pid {pid}, lock {lock_path}). "
+                "Refusing to start to avoid double-sending.",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+    os.write(fd, f"{os.getpid()} {datetime.now(timezone.utc).isoformat()}\n".encode())
+    os.close(fd)
+    return lock_path
 
 # --------------------------------------------------------------------------- #
 # email
@@ -363,7 +398,7 @@ def main() -> int:
     resend_cap = _env_int("RESEND_DAILY_CAP", 100)
     rate_ms = _env_int("EMAIL_RATE_LIMIT_MS", 250)
     page_size = _env_int("PAGE_SIZE", 500)
-    audit_path = Path(_env("AUDIT_FILE", "backend/logs/girlfriend_day_emails.jsonl"))
+    audit_path = Path(_env("AUDIT_FILE", str(DEFAULT_AUDIT_PATH)))
     transport_mode = _env("EMAIL_TRANSPORT", "split").strip().lower()
     if transport_mode not in ("split", "resend", "smtp"):
         print(f"ERROR: EMAIL_TRANSPORT={transport_mode!r} must be 'split', 'resend' or 'smtp'", file=sys.stderr)
@@ -439,6 +474,9 @@ def main() -> int:
         print("nothing to send.")
         return 0
 
+    # Exclusive lock: a concurrent run would double-send the same users.
+    lock_path = _acquire_lock(audit_path)
+
     resend_key = _env("RESEND_API_KEY", "") if transport_mode != "smtp" else ""
     from_email = _env("FROM_EMAIL", "FitCheck AI <team@fitcheckaiapp.com>")
     sent = 0
@@ -476,6 +514,7 @@ def main() -> int:
                 if rate_ms > 0:
                     time.sleep(rate_ms / 1000.0)
 
+    lock_path.unlink(missing_ok=True)
     print(f"DONE. sent={sent} failed={failed} (audit: {audit_path})")
     return 1 if failed else 0
 
