@@ -59,4 +59,33 @@ describe('auth destination preservation', () => {
     await waitFor(() => expect(signInWithGoogle).toHaveBeenCalled())
     expect(localStorage.getItem('pending_auth_return_to')).toBe('/outfits/outfit-1')
   })
+
+  it('lands email sign-in on the plan page when a promo code is in the URL', async () => {
+    render(
+      <MemoryRouter initialEntries={['/auth/login?promo=LAUNCH30'] }>
+        <LoginPage />
+      </MemoryRouter>
+    )
+
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } })
+    fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }).closest('form')!)
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/profile?tab=plan'))
+    // The promo is stashed so the plan page can pre-fill and redeem it.
+    expect(localStorage.getItem('pending_promo_code')).toBe('LAUNCH30')
+  })
+
+  it('stashes the promo code before Google OAuth so the callback can land on the plan page', async () => {
+    render(
+      <MemoryRouter initialEntries={['/auth/login?promo=LAUNCH30'] }>
+        <LoginPage />
+      </MemoryRouter>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Continue with Google/i }))
+
+    await waitFor(() => expect(signInWithGoogle).toHaveBeenCalled())
+    expect(localStorage.getItem('pending_promo_code')).toBe('LAUNCH30')
+  })
 })

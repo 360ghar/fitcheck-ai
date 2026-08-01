@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.core.logging_config import setup_session_logging
 from app.core.exceptions import FitCheckException
 from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, get_correlation_id
-from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog
+from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog, promo
 from app.db.connection import SupabaseDB
 from app.utils.db import missing_quota_rpcs
 from postgrest.exceptions import APIError as PostgrestAPIError
@@ -49,6 +49,9 @@ REQUIRED_TABLES = (
     "subscription_usage",
     "referral_codes",
     "referral_redemptions",
+    # Promo codes (shareable campaign grants)
+    "promo_codes",
+    "promo_redemptions",
     # Support tickets
     "support_tickets",
 )
@@ -508,6 +511,9 @@ app.include_router(iap.router, prefix="/api/v1", tags=["Subscription", "IAP"])
 
 # Referral routes (requires auth, except validate)
 app.include_router(referral.router, prefix="/api/v1/referral", tags=["Referral"])
+
+# Promo code routes (validate is public, redeem requires auth)
+app.include_router(promo.router, prefix="/api/v1/promo", tags=["Promo"])
 
 # Feedback routes (public for submit, auth for ticket history)
 app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"])

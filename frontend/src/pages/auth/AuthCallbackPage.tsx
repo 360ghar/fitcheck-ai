@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { PENDING_PROMO_KEY } from '@/lib/promo';
 import { Loader2 } from 'lucide-react';
 import { consumeAuthReturnTo, getPostAuthDestination, withAuthContext } from './authRedirect';
 
@@ -25,6 +26,9 @@ export default function AuthCallbackPage() {
 
     const processCallback = async () => {
       const pendingPlan = localStorage.getItem('pending_plan_type')
+      // A promo stashed before OAuth lands the user on the plan page, where
+      // the code is pre-filled and ready to redeem (consumed by the panel).
+      const pendingPromo = localStorage.getItem(PENDING_PROMO_KEY)
       const pendingReturnTo = consumeAuthReturnTo()
 
       try {
@@ -34,7 +38,7 @@ export default function AuthCallbackPage() {
         // login redirect below instead of dropping it.
         if (pendingPlan) localStorage.removeItem('pending_plan_type')
         navigate(
-          getPostAuthDestination(pendingReturnTo, pendingPlan),
+          getPostAuthDestination(pendingReturnTo, pendingPlan, pendingPromo),
           { replace: true },
         );
       } catch (err: unknown) {

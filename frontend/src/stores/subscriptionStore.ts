@@ -11,6 +11,8 @@ import type {
   PlanType,
   Subscription,
   PlansResponse,
+  ValidatePromoResponse,
+  RedeemPromoResponse,
 } from '../types';
 import * as subscriptionApi from '../api/subscription';
 import { logger } from '../lib/logger';
@@ -31,6 +33,12 @@ interface SubscriptionState {
   isCheckingOut: boolean;
   error: string | null;
 
+  // Promo code state
+  promoValidation: ValidatePromoResponse | null;
+  isPromoValidating: boolean;
+  isRedeemingPromo: boolean;
+  promoError: string | null;
+
   // Actions
   fetchSubscription: () => Promise<void>;
   fetchUsage: () => Promise<void>;
@@ -41,6 +49,9 @@ interface SubscriptionState {
   openBillingPortal: () => Promise<void>;
   cancelSubscription: () => Promise<void>;
   copyReferralLink: () => Promise<boolean>;
+  validatePromo: (code: string) => Promise<ValidatePromoResponse | null>;
+  redeemPromo: (code: string) => Promise<RedeemPromoResponse | null>;
+  clearPromo: () => void;
   clearError: () => void;
   reset: () => void;
 }
@@ -58,6 +69,10 @@ const initialState = {
   isLoading: false,
   isCheckingOut: false,
   error: null,
+  promoValidation: null,
+  isPromoValidating: false,
+  isRedeemingPromo: false,
+  promoError: null,
 };
 
 // ============================================================================
@@ -206,6 +221,48 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
       }
     }
     return false;
+  },
+
+  // Validate a promo code (public, non-mutating)
+  validatePromo: async (code: string) => {
+    set({ isPromoValidating: true, promoError: null, promoValidation: null });
+    try {
+      const promoValidation = await subscriptionApi.validatePromoCode(code);
+      set({ promoValidation, isPromoValidating: false });
+      return promoValidation;
+    } catch (error) {
+      const message = getApiError(error).message || 'Failed to validate promo code';
+      set({ isPromoValidating: false, promoError: message });
+      return null;
+    }
+  },
+
+  // Redeem a promo code for the current user; refreshes the subscription on
+  // success so the plan card and upgrade offers reflect the new entitlement.
+  redeemPromo: async (code: string) => {
+    set({ isRedeemingPromo: true, promoError: null });
+    try {
+      const result = await subscriptionApi.redeemPromoCode(code);
+      if (result.success) {
+        set({ promoValidation: null, isRedeemingPromo: false });
+        await get().fetchSubscription();
+      } else {
+        set({
+          isRedeemingPromo: false,
+          promoError: result.message || 'This promo code could not be applied',
+        });
+      }
+      return result;
+    } catch (error) {
+      const message = getApiError(error).message || 'Failed to redeem promo code';
+      set({ isRedeemingPromo: false, promoError: message });
+      return null;
+    }
+  },
+
+  // Clear promo validation state (e.g. after a successful redemption)
+  clearPromo: () => {
+    set({ promoValidation: null, isPromoValidating: false, isRedeemingPromo: false, promoError: null });
   },
 
   // Clear error

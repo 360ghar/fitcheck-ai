@@ -212,6 +212,47 @@ class RedeemReferralResponse(BaseModel):
 
 
 # =============================================================================
+# Promo Code Models
+# =============================================================================
+
+
+class ValidatePromoRequest(BaseModel):
+    """Request to validate a promo code without redeeming it."""
+    code: str = Field(..., min_length=3, max_length=50)
+
+
+class ValidatePromoResponse(BaseModel):
+    """Response from promo code validation (public, non-mutating)."""
+    valid: bool
+    # Plan variant the code grants (e.g. "pro_monthly"); null when invalid.
+    plan_type: Optional[str] = None
+    # Free-access duration in months; 0 when invalid.
+    months: int = 0
+    # Human-readable plan name ("Plus" / "Pro").
+    plan_name: Optional[str] = None
+    # Shareable campaign URL for this code (present even when valid is False
+    # so clients can show "ask the sender for a valid link").
+    share_url: Optional[str] = None
+    message: str
+
+
+class RedeemPromoRequest(BaseModel):
+    """Request to redeem a promo code."""
+    model_config = ConfigDict(populate_by_name=True)
+
+    code: str = Field(..., min_length=3, max_length=50, alias="promo_code")
+
+
+class RedeemPromoResponse(BaseModel):
+    """Response from redeeming a promo code."""
+    success: bool
+    message: str
+    plan_type: Optional[str] = None
+    months: int = 0
+
+
+
+# =============================================================================
 # Usage Check Models
 # =============================================================================
 

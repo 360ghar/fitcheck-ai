@@ -18,6 +18,7 @@ import {
   AlertCircle,
   Share2,
   Users,
+  Ticket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +51,7 @@ import {
   useIsNearLimit,
 } from "@/stores/subscriptionStore";
 import { PLAN_LIMITS, PLAN_PRICES } from "@/lib/plan-limits";
+import { PENDING_PROMO_KEY, planDisplayName } from "@/lib/promo";
 import type { PlanType, PlansResponse } from "@/types";
 
 // Upgrade options offered to users without a paid plan. Plus and Pro unlock
@@ -89,6 +91,7 @@ export function SubscriptionPanel() {
   const requestedPlan = searchParams.get("plan_type");
   const [copied, setCopied] = useState(false);
   const [isLoadingReferral, setIsLoadingReferral] = useState(false);
+  const [promoInput, setPromoInput] = useState("");
   const { toast } = useToast();
 
   const {
@@ -100,6 +103,10 @@ export function SubscriptionPanel() {
     isLoading,
     isCheckingOut,
     error,
+    promoValidation,
+    isPromoValidating,
+    isRedeemingPromo,
+    promoError,
     fetchSubscription,
     fetchReferralCode,
     fetchReferralStats,
@@ -108,6 +115,9 @@ export function SubscriptionPanel() {
     openBillingPortal,
     cancelSubscription,
     copyReferralLink,
+    validatePromo,
+    redeemPromo,
+    clearPromo,
   } = useSubscriptionStore();
 
   const planName = usePlanName();
@@ -136,6 +146,53 @@ export function SubscriptionPanel() {
     // plans?.plans gates the upgrade cards' render: for a free user the tier
     // list is empty until /plans resolves, so the scroll must re-fire then.
   }, [requestedPlan, offeredTiers.length, plans?.plans]);
+
+  // Consume a shared promo link: `?promo=CODE` in the URL or a code stashed
+  // by the register/login page (survives the Google OAuth round-trip via
+  // localStorage). Only free users can redeem, so a paid user never sees it.
+  const isFreePlan = currentPlan === "free";
+  useEffect(() => {
+    if (!isFreePlan || promoValidation) return;
+    const urlCode = searchParams.get("promo");
+    const storedCode = localStorage.getItem(PENDING_PROMO_KEY);
+    const code = (urlCode || storedCode || "").trim();
+    if (code.length < 3) return;
+    // Consumed once: the URL/param stays in the address bar (harmless), but a
+    // stale localStorage key must not re-validate on every page visit.
+    if (storedCode) localStorage.removeItem(PENDING_PROMO_KEY);
+    setPromoInput(code);
+    void validatePromo(code);
+    // Run once on mount per plan state; `promoValidation` gates re-entry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFreePlan]);
+
+  // Handle promo code validation (manual entry)
+  const handleValidatePromo = async () => {
+    const code = promoInput.trim();
+    if (code.length < 3) {
+      toast({
+        title: "Enter a promo code",
+        description: "Promo codes are at least 3 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+    await validatePromo(code);
+  };
+
+  // Handle promo code redemption
+  const handleRedeemPromo = async () => {
+    const code = promoInput.trim();
+    if (!code) return;
+    const result = await redeemPromo(code);
+    if (result?.success) {
+      localStorage.removeItem(PENDING_PROMO_KEY);
+      toast({
+        title: `You're on ${planDisplayName(result.plan_type)}! 🎉`,
+        description: result.message,
+      });
+    }
+  };
 
   // Handle copy referral link
   const handleCopyLink = async () => {
@@ -320,6 +377,105 @@ export function SubscriptionPanel() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Promo Code - free users only: a promo grant replaces a paid checkout
+          (paid subscribers are never overwritten, so Plus/Pro users don't see
+          the input at all). */}
+      {isFreePlan && (
+        <Card>
+          <CardHeader className="px-4 py-4 md:px-6 md:py-6">
+            <CardTitle className="flex items-center gap-2">
+              <Ticket className="h-5 w-5 text-indigo-500" />
+              Have a promo code?
+            </CardTitle>
+            <CardDescription>
+              Redeem a code to get Plus or Pro free for a limited time.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
+            {/* The banner requires a non-empty input: a stale validation result
+                from a previous session must not render a redeem button that
+                has no code to redeem. */}
+            {promoValidation?.valid && promoInput.trim() ? (
+              <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <Gift className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-green-800 dark:text-green-200">
+                      {promoValidation.message}
+                    </p>
+                    <p className="text-sm text-green-700 dark:text-green-300">
+                      Code{" "}
+                      <code className="font-mono">{promoInput.trim()}</code> — apply it
+                      and skip the checkout.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleRedeemPromo}
+                  disabled={isRedeemingPromo}
+                  className="bg-green-600 hover:bg-green-700 shrink-0"
+                >
+                  {isRedeemingPromo ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Applying...
+                    </>
+                  ) : (
+                    <>
+                      <Gift className="h-4 w-4 mr-2" />
+                      Get {promoValidation.plan_name} free
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="text"
+                    value={promoInput}
+                    onChange={(e) => {
+                      setPromoInput(e.target.value);
+                      // New input invalidates the previous validation result.
+                      if (promoValidation || promoError) clearPromo();
+                    }}
+                    placeholder="Enter promo code"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void handleValidatePromo();
+                      }
+                    }}
+                    className="flex-1 h-11 px-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
+                    aria-label="Promo code"
+                  />
+                  <Button
+                    onClick={handleValidatePromo}
+                    disabled={isPromoValidating}
+                    className="h-11"
+                  >
+                    {isPromoValidating ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Ticket className="h-4 w-4 mr-2" />
+                    )}
+                    {isPromoValidating ? "Checking..." : "Apply"}
+                  </Button>
+                </div>
+                {promoError && (
+                  <p className="mt-2 text-sm text-destructive">{promoError}</p>
+                )}
+                {promoValidation && !promoValidation.valid && (
+                  <p className="mt-2 text-sm text-destructive">
+                    {promoValidation.message}
+                  </p>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Upgrade options - shown whenever a higher tier exists, so a Plus
           subscriber still has a path to Pro (gating this on !isPro stranded

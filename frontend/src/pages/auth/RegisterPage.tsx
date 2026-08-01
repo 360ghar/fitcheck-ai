@@ -10,6 +10,7 @@ import { Mail, Lock, User, AlertCircle, CheckCircle, Loader2, Gift, Check, Eye, 
 import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
 import { validateReferralCode } from '@/api/subscription'
+import { stashPromoCode } from '@/lib/promo'
 import SEO from '@/components/seo/SEO'
 import { getPostAuthDestination, persistAuthReturnTo, withAuthContext } from './authRedirect'
 
@@ -28,6 +29,10 @@ export default function RegisterPage() {
   const [searchParams] = useSearchParams()
   const selectedPlan = searchParams.get('plan_type')
   const returnTo = searchParams.get('returnTo')
+  // Promo code from a shared campaign URL (e.g. /auth/register?promo=LAUNCH30).
+  // Stashed to localStorage so it survives signup (incl. the Google OAuth
+  // round-trip) and is consumed by the plan page after login.
+  const promoCode = searchParams.get('promo')
   const register = useAuthStore((state) => state.register)
   const signInWithGoogle = useAuthStore((state) => state.signInWithGoogle)
   const isLoading = useAuthStore((state) => state.isLoading)
@@ -62,7 +67,13 @@ export default function RegisterPage() {
       setReferralCode(storedRef)
       validateReferral(storedRef)
     }
-  }, [searchParams])
+
+    // Stash a promo code from a shared URL so the plan page can redeem it
+    // after signup (survives the Google OAuth round-trip via localStorage).
+    if (promoCode) {
+      stashPromoCode(promoCode)
+    }
+  }, [searchParams, promoCode])
 
   // Validate referral code
   const validateReferral = async (code: string) => {
@@ -145,7 +156,7 @@ export default function RegisterPage() {
       // clear any stale key left behind by an aborted Google sign-in so it
       // cannot hijack a later Google login.
       localStorage.removeItem('pending_plan_type')
-      navigate(getPostAuthDestination(returnTo, selectedPlan))
+      navigate(getPostAuthDestination(returnTo, selectedPlan, promoCode))
     } catch {
       // Registration error is handled by the store and displayed in UI
     }
@@ -433,6 +444,16 @@ export default function RegisterPage() {
                 <p className="mt-1 text-sm text-destructive">Invalid referral code</p>
               )}
             </div>
+
+            {/* Promo code notice - shown when arriving via a shared campaign URL */}
+            {promoCode && (
+              <div className="rounded-md border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-3 py-2">
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  🎁 Promo code <code className="font-mono">{promoCode}</code> found —
+                  it will be applied to your account after signup.
+                </p>
+              </div>
+            )}
 
             {/* Terms agreement */}
             <div className="flex items-start touch-target">

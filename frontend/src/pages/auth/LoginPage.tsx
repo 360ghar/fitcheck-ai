@@ -3,11 +3,12 @@
  * User authentication with email and password
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
 import { Mail, Lock, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { PENDING_PROMO_KEY, stashPromoCode } from '@/lib/promo'
 import SEO from '@/components/seo/SEO'
 import { getPostAuthDestination, persistAuthReturnTo, withAuthContext } from './authRedirect'
 
@@ -16,6 +17,10 @@ export default function LoginPage() {
   const [searchParams] = useSearchParams()
   const selectedPlan = searchParams.get('plan_type')
   const returnTo = searchParams.get('returnTo')
+  // Promo code from a shared campaign URL (e.g. /auth/login?promo=LAUNCH30).
+  // Stashed to localStorage so it survives login and is consumed by the plan
+  // page (which also validates it).
+  const promoCode = searchParams.get('promo')
   const login = useAuthStore((state) => state.login)
   const signInWithGoogle = useAuthStore((state) => state.signInWithGoogle)
   const isLoading = useAuthStore((state) => state.isLoading)
@@ -27,6 +32,12 @@ export default function LoginPage() {
   const [googleLoading, setGoogleLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
+  // Stash a promo code from a shared URL before either login path (email or
+  // Google) navigates away, so the plan page can redeem it after login.
+  useEffect(() => {
+    stashPromoCode(promoCode)
+  }, [promoCode])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     clearError()
@@ -37,7 +48,11 @@ export default function LoginPage() {
       // clear any stale key left behind by an aborted Google sign-in so it
       // cannot hijack a later Google login.
       localStorage.removeItem('pending_plan_type')
-      navigate(getPostAuthDestination(returnTo, selectedPlan))
+      // A promo may have been stashed earlier (e.g. a failed OAuth attempt
+      // redirected here); carry it into the destination so the plan page is
+      // still reached when the URL no longer has the param.
+      const promoFromStorage = localStorage.getItem(PENDING_PROMO_KEY)
+      navigate(getPostAuthDestination(returnTo, selectedPlan, promoCode || promoFromStorage))
     } catch {
       // Error is handled by the store
     }
@@ -50,6 +65,8 @@ export default function LoginPage() {
       if (selectedPlan) {
         localStorage.setItem('pending_plan_type', selectedPlan)
       }
+      // A promo code from a shared URL must survive the OAuth round-trip.
+      stashPromoCode(promoCode)
       persistAuthReturnTo(returnTo)
       await signInWithGoogle()
       // User will be redirected to Google

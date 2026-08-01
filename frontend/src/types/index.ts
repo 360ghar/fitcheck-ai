@@ -140,6 +140,11 @@ export interface ItemCreate {
   condition?: Condition;
   is_favorite?: boolean;
   images?: ItemImageBase[];
+  /** Original source photo reference (set by AI extraction flows; optional
+   * for manual creation). Used by the upload flow's outfit generation as an
+   * "as worn" reference so the render reproduces the real garments. */
+  source_image_url?: string;
+  source_image_storage_path?: string;
 }
 
 export interface ItemImageBase {
@@ -513,6 +518,14 @@ export interface DetectedItem {
   sourceImageId?: string;
   /** Object-URL preview of the uploaded photo this item came from */
   sourcePreviewUrl?: string;
+  /**
+   * Persisted original source photo (Supabase Storage URL + path) that this
+   * item was extracted from. Surfaced from the batch SSE payload so the save
+   * step can persist it on the item - the outfit-generation upload flow then
+   * uses it as an "as worn" reference.
+   */
+  sourceImageUrl?: string;
+  sourceImageStoragePath?: string;
   /** Person identifier in source image */
   personId?: string;
   /** Human-readable person label */
@@ -728,6 +741,8 @@ export interface ImageExtractionCompleteData {
     bounding_box?: BoundingBox;
     detailed_description?: string;
     status: string;
+    source_image_url?: string;
+    source_image_storage_path?: string;
   }>;
   items_count: number;
   completed_count: number;
@@ -864,6 +879,8 @@ export interface JobCompleteData {
     generated_image_base64?: string;
     generated_image_url?: string;
     generation_error?: string;
+    source_image_url?: string;
+    source_image_storage_path?: string;
   }>;
   timestamp: string;
 }
@@ -1126,6 +1143,22 @@ export interface RedeemReferralResponse {
   success: boolean;
   message: string;
   credit_months: number;
+}
+
+export interface ValidatePromoResponse {
+  valid: boolean;
+  plan_type?: string | null;
+  months: number;
+  plan_name?: string | null;
+  share_url?: string | null;
+  message: string;
+}
+
+export interface RedeemPromoResponse {
+  success: boolean;
+  message: string;
+  plan_type?: string | null;
+  months: number;
 }
 
 export interface CheckoutSession {

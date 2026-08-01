@@ -49,6 +49,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `028_configurable_social_import_limit.sql`
 - `029_pr9_hardening.sql`
 - `030_mobile_iap.sql`
+- `031_promo_codes.sql`
 
 ## Tables (CREATE TABLE)
 
@@ -72,6 +73,8 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `outfit_images` | `001_full_schema.sql` |
 | `outfits` | `001_full_schema.sql` |
 | `photoshoot_jobs` | `023_durable_job_state.sql` |
+| `promo_codes` | `031_promo_codes.sql` |
+| `promo_redemptions` | `031_promo_codes.sql` |
 | `recommendation_logs` | `001_full_schema.sql` |
 | `referral_codes` | `007_subscriptions_and_referrals.sql` |
 | `referral_redemptions` | `007_subscriptions_and_referrals.sql` |
@@ -193,6 +196,8 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `030_mobile_iap.sql` → `google_rtdn_events`
 - `030_mobile_iap.sql` → `google_rtdn_events`
 - `030_mobile_iap.sql` → `google_rtdn_events`
+- `031_promo_codes.sql` → `promo_codes`
+- `031_promo_codes.sql` → `promo_redemptions`
 
 ## Related
 

@@ -15,9 +15,16 @@ export function getSafeReturnTo(value: string | null | undefined): string | unde
   }
 }
 
-export function getPostAuthDestination(returnTo: string | null | undefined, planType?: string | null): string {
+export function getPostAuthDestination(
+  returnTo: string | null | undefined,
+  planType?: string | null,
+  promoCode?: string | null,
+): string {
   const safeReturnTo = getSafeReturnTo(returnTo)
   if (safeReturnTo) return safeReturnTo
+  // A promo code from a shared campaign URL lands the user on the plan page
+  // where the code is pre-filled and validated (redemption is one tap).
+  if (promoCode) return '/profile?tab=plan'
   return planType
     ? `/profile?tab=plan&plan_type=${encodeURIComponent(planType)}`
     : '/dashboard'

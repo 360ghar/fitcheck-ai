@@ -10,6 +10,8 @@ import type {
   ReferralCode,
   ReferralStats,
   ValidateReferralResponse,
+  ValidatePromoResponse,
+  RedeemPromoResponse,
   CheckoutSession,
   PortalSession,
   PlansResponse,
@@ -139,6 +141,40 @@ export async function validateReferralCode(code: string): Promise<ValidateReferr
   try {
     const response = await apiClient.post<ApiEnvelope<ValidateReferralResponse>>('/api/v1/referral/validate', {
       code,
+    })
+    return response.data.data
+  } catch (error) {
+    throw getApiError(error)
+  }
+}
+
+// ============================================================================
+// PROMO CODE ENDPOINTS
+// ============================================================================
+
+/**
+ * Validate a promo code without redeeming it
+ * Public endpoint: used before signup to show what the code grants
+ */
+export async function validatePromoCode(code: string): Promise<ValidatePromoResponse> {
+  try {
+    const response = await apiClient.post<ApiEnvelope<ValidatePromoResponse>>('/api/v1/promo/validate', {
+      code,
+    })
+    return response.data.data
+  } catch (error) {
+    throw getApiError(error)
+  }
+}
+
+/**
+ * Redeem a promo code for the current user
+ * Grants the code's plan for free for its configured number of months
+ */
+export async function redeemPromoCode(code: string): Promise<RedeemPromoResponse> {
+  try {
+    const response = await apiClient.post<ApiEnvelope<RedeemPromoResponse>>('/api/v1/promo/redeem', {
+      promo_code: code,
     })
     return response.data.data
   } catch (error) {

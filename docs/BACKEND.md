@@ -166,11 +166,12 @@ These are NOT per-job: two simultaneous batch jobs draw from the same pool. A pe
 
 1. Client submits selected items (each with its wardrobe `item_id`) and generation options to `POST /api/v1/ai/generate-outfit`.
 2. **Resolve garment references** (`resolve_outfit_item_references` in `app/services/item_reference_service.py`): one batched, **user-scoped** query over `items` + `item_images` for the submitted ids, then download + downscale (`AI_OUTFIT_ITEM_REFERENCE_MAX_EDGE`, default 768) with process-wide bounded concurrency. Up to `AI_MAX_OUTFIT_ITEMS` text items are accepted (default 100), but only the first `AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES` stored image references (default 12) are resolved. This cap is current behavior; the active no-cap acceptance criterion is not verified. Ownership is enforced by `.eq("user_id", …)` on the parent `items` row, since `item_images` has no `user_id` of its own; another user's id resolves to nothing. Any failure (missing image, dead URL, DB error) degrades that item to text-only rather than failing the request. Runs inside the rate limit (one generation charge regardless of reference count) but outside `with_retry`.
-3. `image_generation_agent.generate_outfit` builds one inline image list — avatar first when used, then garments in item order — and a prompt that binds `IMAGE n` → `Item n` (`_build_reference_map` in `app/agents/image_generation_agent.py`, `GARMENT_REFERENCE_LOCK` in `app/agents/prompt_fidelity.py`). Items with no image are explicitly told to render from their description. `IDENTITY_LOCK` stays ahead of the garment block so the avatar remains the sole source for face/body/hair/skin. Multi-image has to go through `chat(..., response_modalities=["TEXT","IMAGE"])`, since `generate_image()` takes a single `reference_image`; with zero images the pre-existing text-to-image path is used unchanged.
-4. Backend stores generated images and updates outfit records.
-5. Client receives image URLs and render metadata.
+3. **Resolve the source photo (upload flow only)** — when the request carries `use_source_photo: true` (`GenerateOutfitRequest`; set only by `frontend/src/lib/outfit-from-upload.ts` for the one-outfit-per-uploaded-photo flow), `resolve_outfit_source_reference` fetches the **original uploaded photo** the items were extracted from (`items.source_image_url`) with one batched, user-scoped query, dedupes by URL, and sends at most one photo (the one shared by the most items; a tie is skipped; `AI_OUTFIT_SOURCE_REFERENCE_MIN_SHARED_ITEMS` gates coverage, `AI_OUTFIT_SOURCE_REFERENCE_MAX_IMAGES` caps). It is downscaled to the same 768px edge and added to the prompt as an "as worn" reference (`SOURCE_PHOTO_REFERENCE_LOCK`), so the render reproduces real fit/draping/layering instead of compounding the loss from the extracted/generated item shots. Every failure degrades to the item-reference-only behavior. The flag defaults **off**: the outfit builder, preview, and manual regenerations never send the source photo.
+4. `image_generation_agent.generate_outfit` builds one inline image list — avatar first when used, then the source photo (upload flow only), then garments in item order — and a prompt that binds `IMAGE n` → `Item n` (`_build_reference_map` in `app/agents/image_generation_agent.py`, `GARMENT_REFERENCE_LOCK` in `app/agents/prompt_fidelity.py`). Items with no image are explicitly told to render from their description. `IDENTITY_LOCK` stays ahead of the garment block so the avatar remains the sole source for face/body/hair/skin (the source photo is an outfit source, never an identity source). Multi-image has to go through `chat(..., response_modalities=["TEXT","IMAGE"])`, since `generate_image()` takes a single `reference_image`; with zero images the pre-existing text-to-image path is used unchanged.
+5. Backend stores generated images and updates outfit records.
+6. Client receives image URLs and render metadata.
 
-Sending no `item_id` is still valid and produces the previous text-only prompt byte-for-byte. Grep `Outfit item references resolved` and `AI image generation request started` (`reference_images=`) to see how many references a generation actually carried.
+Sending no `item_id` is still valid and produces the previous text-only prompt byte-for-byte; sending `use_source_photo: false` (the default) produces the previous reference-only prompt byte-for-byte. Grep `Outfit item references resolved` / `Outfit source photo reference resolved` and `AI image generation request started` (`reference_images=`) to see how many references a generation actually carried.
 
 ### Generated image transparency
 
@@ -241,9 +242,20 @@ Rules:
 - Webhook handlers return 500 on processing failure so the store retries; signature failures are acknowledged without processing.
 - Env: `APPLE_ISSUER_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` / `APPLE_*_PRODUCT_ID` / `APPLE_ENV`, `GOOGLE_SERVICE_ACCOUNT_JSON` / `GOOGLE_RTDN_AUDIENCE` / `GOOGLE_*_PRODUCT_ID` (see `backend/.env.example`). Requires migration `030_mobile_iap.sql` (columns + webhook ledgers).
 
+### Promo codes (free grants)
+
+Campaign codes (`/auth/register?promo=CODE`) grant Plus/Pro free for a fixed
+number of months. `POST /api/v1/promo/validate` (public) and
+`POST /api/v1/promo/redeem` (auth) wrap the atomic `redeem_promo_atomic` RPC
+(migration `031_promo_codes.sql`), which writes the same `subscriptions` row as
+any other grant (`plan_type` + `status='trial'` + `trial_end`) — entitlement,
+limits, and expiry → free downgrade need no special-casing. One redemption per
+user; paid subscribers are never overwritten. Codes are created by operators
+with `backend/scripts/create_promo_code.py`.
+
 ## Route registration
 
-Modules wired from `main.py` include: auth, users, items, outfits, shared_outfits, recommendations, calendar, weather, gamification (flagged), ai, ai_settings, batch_processing, photoshoot, feedback, waitlist, demo, subscription, referral, social_import (flagged), blog.
+Modules wired from `main.py` include: auth, users, items, outfits, shared_outfits, recommendations, calendar, weather, gamification (flagged), ai, ai_settings, batch_processing, photoshoot, feedback, waitlist, demo, subscription, referral, promo, social_import (flagged), blog.
 
 ### Flagged routes — two different shapes
 
