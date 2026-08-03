@@ -39,6 +39,14 @@ async def test_validate_endpoint_is_public_and_returns_envelope():
     validate.assert_awaited_once_with("LAUNCH30", db)
 
 
+def test_validate_promo_accepts_partial_code():
+    """Landing/register pages validate as the user types; a 1-char partial
+    code must reach the service (which normalizes + returns valid=False)
+    instead of 422ing (observed 2026-08-03: POST /promo/validate | 422)."""
+    request = ValidatePromoRequest(code="L")
+    assert request.code == "L"
+
+
 @pytest.mark.asyncio
 async def test_redeem_endpoint_passes_user_id_and_code():
     request = RedeemPromoRequest(promo_code="launch30")

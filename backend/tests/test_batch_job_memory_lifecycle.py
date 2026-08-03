@@ -117,6 +117,42 @@ async def test_terminal_release_keeps_base64_when_upload_failed():
 
 
 @pytest.mark.asyncio
+async def test_concurrent_job_cap_raises_server_busy_code():
+    """The process-wide cap is SERVER capacity, not the user's own plan
+    limit: it must carry the SERVER_BUSY code so clients show "retry in a
+    minute" instead of the upgrade prompt (observed 2026-08-03: batch-extract
+    429s at 18:08/18:26 were all RATE_LIMIT_EXCEEDED)."""
+    from app.core.exceptions import RateLimitError
+    from app.services.batch_job_service import MAX_CONCURRENT_BATCH_JOBS
+
+    # Occupy both slots (jobs are held in the class store; references are
+    # not needed - the autouse fixture clears them after the test).
+    await BatchJobService.create_job(
+        user_id="u1",
+        images=[{"image_id": "img1", "image_base64": "c291cmNl"}],
+    )
+    await BatchJobService.create_job(
+        user_id="u2",
+        images=[{"image_id": "img2", "image_base64": "c291cmNl"}],
+    )
+    assert MAX_CONCURRENT_BATCH_JOBS == 2
+
+    with pytest.raises(RateLimitError) as exc_info:
+        await BatchJobService.create_job(
+            user_id="u3",
+            images=[{"image_id": "img3", "image_base64": "c291cmNl"}],
+        )
+
+    assert exc_info.value.error_code == "SERVER_BUSY"
+    assert exc_info.value.status_code == 429
+    assert exc_info.value.details.get("retry_after_seconds") == 60
+    body = exc_info.value.to_dict()
+    assert body["code"] == "SERVER_BUSY"
+    # User-facing copy, no implementation detail.
+    assert "batch job" not in body["error"].lower()
+
+
+@pytest.mark.asyncio
 async def test_single_image_payload_release_is_per_image():
     job = await BatchJobService.create_job(
         user_id="u1",

@@ -6,6 +6,7 @@
 
 import { apiClient, getAccessToken } from './client';
 import { ENDPOINTS } from '@/lib/endpoints';
+import { createSSEConnection } from '@/lib/sse';
 import type { BatchJobResponse } from '@/types';
 
 const API_BASE_URL =
@@ -130,9 +131,11 @@ export async function getBatchJobStatus(jobId: string): Promise<BatchJobStatusRe
 /**
  * Create an authenticated SSE connection using fetch.
  *
- * This is a more flexible approach that supports Authorization headers.
+ * Thin wrapper over the shared SSE client in `lib/sse.ts` that adds the
+ * Authorization header. Supports arbitrary URLs.
  *
- * @param jobId - The job ID to connect to
+ * @param url - Full SSE endpoint URL (e.g. `/api/v1/ai/batch-extract/{id}/events`).
+ *   Must be on the same origin or include the full API base.
  * @param onMessage - Callback for each SSE message
  * @param onError - Callback for errors
  * @param onClose - Callback when the stream ends; `sawTerminal` is true if a
@@ -141,105 +144,40 @@ export async function getBatchJobStatus(jobId: string): Promise<BatchJobStatusRe
  * @returns Abort function to close the connection
  */
 export function createAuthenticatedSSEConnection(
+  url: string,
+  onMessage: (event: { type: string; data: unknown }) => void,
+  onError?: (error: Error) => void,
+  onClose?: (sawTerminal: boolean) => void
+): () => void {
+  return createSSEConnection({
+    url,
+    onMessage,
+    onError,
+    onClose,
+    headers: { Authorization: `Bearer ${getAccessToken()}` },
+  });
+}
+
+/**
+ * Create an authenticated SSE connection to a batch extraction job.
+ *
+ * @param jobId - The job ID to connect to
+ * @param onMessage - Callback for each SSE message
+ * @param onError - Callback for errors
+ * @param onClose - Callback when the stream ends; `sawTerminal` is true if a
+ *   terminal event (job_complete/failed/cancelled) was received.
+ * @returns Abort function to close the connection
+ */
+export function subscribeToBatchJobEvents(
   jobId: string,
   onMessage: (event: { type: string; data: unknown }) => void,
   onError?: (error: Error) => void,
   onClose?: (sawTerminal: boolean) => void
 ): () => void {
-  const controller = new AbortController();
-  const token = getAccessToken();
-  const url = `${API_BASE_URL}${ENDPOINTS.AI.BATCH_EXTRACT_BASE}/${jobId}/events`;
-  const TERMINAL_EVENTS = new Set(['job_complete', 'job_failed', 'job_cancelled']);
-
-  const connect = async () => {
-    let sawTerminal = false;
-    try {
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'text/event-stream',
-        },
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`SSE connection failed: ${response.status}`);
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('No response body');
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let currentEvent = '';
-      let dataLines: string[] = [];
-
-      const dispatchEvent = () => {
-        if (!currentEvent && dataLines.length === 0) return;
-
-        const payload = dataLines.join('\n');
-        const eventType = currentEvent || 'message';
-        if (TERMINAL_EVENTS.has(eventType)) sawTerminal = true;
-
-        if (payload) {
-          try {
-            const parsed = JSON.parse(payload);
-            onMessage({ type: eventType, data: parsed });
-          } catch {
-            onMessage({ type: eventType, data: payload });
-          }
-        } else {
-          onMessage({ type: eventType, data: null });
-        }
-
-        currentEvent = '';
-        dataLines = [];
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const rawLine of lines) {
-          const line = rawLine.replace(/\r$/, '');
-
-          if (line.startsWith('event:')) {
-            currentEvent = line.slice(6).trim();
-            continue;
-          }
-
-          if (line.startsWith('data:')) {
-            dataLines.push(line.slice(5).trimStart());
-            continue;
-          }
-
-          if (line === '') {
-            dispatchEvent();
-          }
-        }
-      }
-
-      dispatchEvent();
-
-      // Stream ended on its own. Tell the caller whether a terminal event was
-      // seen so it can reconcile (poll /status) when the end was silent.
-      if (!controller.signal.aborted) onClose?.(sawTerminal);
-    } catch (error) {
-      if ((error as Error).name !== 'AbortError') {
-        onError?.(error as Error);
-      }
-    }
-  };
-
-  connect();
-
-  return () => {
-    controller.abort();
-  };
+  return createAuthenticatedSSEConnection(
+    `${API_BASE_URL}${ENDPOINTS.AI.BATCH_EXTRACT_BASE}/${jobId}/events`,
+    onMessage,
+    onError,
+    onClose
+  );
 }

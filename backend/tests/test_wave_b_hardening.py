@@ -182,7 +182,7 @@ async def test_batch_admission_compensates_extraction_when_generation_reservatio
     monkeypatch.setattr(AISettingsService, "reserve_usage", reserve_usage)
     monkeypatch.setattr(AISettingsService, "release_usage", release_usage)
 
-    with pytest.raises(RateLimitError, match="generation limit"):
+    with pytest.raises(RateLimitError, match="more AI generations"):
         await batch_processing_api._check_batch_rate_limits(
             user_id="user-1",
             db=Mock(),
@@ -713,3 +713,67 @@ async def test_missing_quota_rpcs_non_pgrst202_error_counts_as_present():
 
     missing = missing_quota_rpcs(db)
     assert missing == []
+
+
+# =============================================================================
+# Referral RPC presence probe (RCA 2026-08-04)
+# =============================================================================
+# A missing redeem_referral_atomic / apply_referral_credit_atomic (migrations
+# 022/026 never applied) made every referral redemption fail silently - the
+# register/oauth_sync callers swallow the error and the user + referrer stay
+# on free. The boot probe closes the blind spot.
+
+
+@pytest.mark.asyncio
+async def test_missing_referral_rpcs_detects_missing_functions():
+    """missing_referral_rpcs should return only functions that raise PGRST202."""
+    from app.utils.db import missing_referral_rpcs
+
+    db = Mock()
+
+    # redeem_referral_atomic present, apply_referral_credit_atomic missing.
+    def rpc_side_effect(name, args=None, **kwargs):
+        if name == "apply_referral_credit_atomic":
+            raise _PGRST202("apply_referral_credit_atomic")
+        return Mock()
+
+    db.rpc.side_effect = rpc_side_effect
+
+    missing = missing_referral_rpcs(db)
+    assert missing == ["apply_referral_credit_atomic"]
+
+
+@pytest.mark.asyncio
+async def test_missing_referral_rpcs_non_pgrst202_error_counts_as_present():
+    """A non-schema error (permissions, FK rejection on the nil-UUID probe)
+    means the function exists - not a migration gap."""
+    from app.utils.db import missing_referral_rpcs
+
+    db = Mock()
+    db.rpc.side_effect = RuntimeError("connection refused")  # not PGRST202
+
+    missing = missing_referral_rpcs(db)
+    assert missing == []
+
+
+@pytest.mark.asyncio
+async def test_referral_rpc_probes_are_non_mutating():
+    """Both probes must use the nil UUID / a nonexistent code so nothing is
+    ever granted or written during the boot check."""
+    from app.utils.db import (
+        REFERRAL_RPC_PROBES,
+        _BOOT_PROBE_NONEXISTENT_CODE,
+        _NIL_USER_UUID,
+    )
+
+    assert set(REFERRAL_RPC_PROBES) == {
+        "redeem_referral_atomic",
+        "apply_referral_credit_atomic",
+    }
+    redeem_args = REFERRAL_RPC_PROBES["redeem_referral_atomic"]
+    assert redeem_args["p_referred_user_id"] == _NIL_USER_UUID
+    assert redeem_args["p_code"] == _BOOT_PROBE_NONEXISTENT_CODE
+    assert redeem_args["p_credit_months"] == 1
+    apply_args = REFERRAL_RPC_PROBES["apply_referral_credit_atomic"]
+    assert apply_args["p_user_id"] == _NIL_USER_UUID
+    assert apply_args["p_months"] == 1

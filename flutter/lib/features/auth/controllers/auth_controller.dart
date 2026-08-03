@@ -208,6 +208,14 @@ class AuthController extends GetxController {
         // Check if email confirmation is required (no session means
         // Supabase is configured to send a verification email first).
         if (response.session?.accessToken == null) {
+          // The redemption cannot run until the account is confirmed, so
+          // stash the code - the auth-change listener / next login retries
+          // it via handleOAuthCallback's pending-code path (RCA 2026-08-04:
+          // a referral must survive the signup flow regardless of failure
+          // point).
+          if (referralCode != null && referralCode.isNotEmpty) {
+            await _referralService.setPendingReferralCode(referralCode);
+          }
           showEmailNotVerifiedError.value = true;
           unverifiedEmail.value = email;
           ErrorHandler.showInfo(
@@ -225,7 +233,14 @@ class AuthController extends GetxController {
 
         // Redeem referral code if provided
         if (referralCode != null && referralCode.isNotEmpty) {
-          await _referralService.redeemReferralCode(referralCode);
+          final redeemed = await _referralService.redeemReferralCode(referralCode);
+          if (!redeemed) {
+            // Transient failure (missing backend RPC, dead connection):
+            // stash so the next auth event (login / OAuth callback / app
+            // start) retries instead of silently losing the grant (RCA
+            // 2026-08-04).
+            await _referralService.setPendingReferralCode(referralCode);
+          }
         }
 
         ErrorHandler.showInfo('Account created successfully', title: 'Welcome to Fit Check!');

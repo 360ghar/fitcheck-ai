@@ -1,6 +1,7 @@
 /**
- * Generating step — honest wait surface with source previews.
- * No fake percentage progress.
+ * Generating step — live wait surface.
+ * Shows real progress, the scene being generated, an ETA from rolling
+ * per-image latency, and thumbnails as each image completes. No fake progress.
  */
 
 import { usePhotoshoot } from '@/stores/photoshootStore';
@@ -10,15 +11,26 @@ import { useJobUiStore } from '@/stores/jobUiStore';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+function formatEta(seconds: number): string {
+  if (seconds < 60) return `~${Math.max(seconds, 5)}s left`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return remainder > 0 ? `~${minutes}m ${remainder}s left` : `~${minutes}m left`;
+}
+
 export function PhotoshootGeneratingStep() {
   const {
     progress,
     statusMessage,
     numImages,
     photoPreviewUrls,
+    generatedImages,
+    currentSceneLabel,
+    etaSeconds,
     isGenerating,
     error,
     generate,
+    cancelGeneration,
     setStep,
   } = usePhotoshoot();
   const setJob = useJobUiStore((s) => s.setJob);
@@ -66,15 +78,60 @@ export function PhotoshootGeneratingStep() {
     );
   }
 
+  const detailLines = [
+    `Generating ${numImages} image${numImages === 1 ? '' : 's'} · you can leave this page and check the progress pill.`,
+  ];
+  if (currentSceneLabel && isGenerating) {
+    detailLines.unshift(`Now: ${currentSceneLabel}`);
+  }
+
   return (
     <GeneratingSurface
       stage={statusMessage || 'Creating your photoshoot…'}
-      detail={`Often 1–2 minutes for ${numImages} image${numImages === 1 ? '' : 's'}. You can leave this page — check the progress pill.`}
-      progress={typeof progress === 'number' && progress >= 100 ? 100 : null}
+      detail={detailLines.join(' ')}
+      progress={typeof progress === 'number' ? progress : null}
       previewUrls={photoPreviewUrls}
       previewLabel="Your reference photos"
       isActive={isGenerating}
       onBackground={() => navigate('/dashboard')}
-    />
+      onCancel={isGenerating ? () => void cancelGeneration() : undefined}
+    >
+      {/* Live gallery — fills with thumbnails as images complete */}
+      {generatedImages.length > 0 && (
+        <div className="pt-1">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-medium text-muted-foreground">
+              Generated so far
+            </p>
+            {etaSeconds !== null && etaSeconds > 0 && (
+              <p className="text-xs font-medium text-muted-foreground">
+                {formatEta(etaSeconds)}
+              </p>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {generatedImages.map((image) => (
+              <div
+                key={image.id}
+                className="aspect-[3/4] rounded-lg overflow-hidden bg-muted border border-border"
+              >
+                <img
+                  src={
+                    image.image_url ??
+                    (image.image_base64
+                      ? `data:image/png;base64,${image.image_base64}`
+                      : undefined)
+                  }
+                  alt={image.label ? `Generated: ${image.label}` : `Generated image ${image.index + 1}`}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </GeneratingSurface>
   );
 }

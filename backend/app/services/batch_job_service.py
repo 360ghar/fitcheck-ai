@@ -385,10 +385,17 @@ class BatchJobService:
             if active >= MAX_CONCURRENT_BATCH_JOBS:
                 raise RateLimitError(
                     message=(
-                        f"Server is busy processing {active} batch jobs. "
-                        "Please retry in a minute."
+                        "We're processing a lot of requests right now. "
+                        "Please try again in a minute."
                     ),
                     retry_after=60,
+                    # Distinct from RATE_LIMIT_EXCEEDED: this is SERVER
+                    # capacity, not the user's own plan limit. The web client
+                    # treats RATE_LIMIT_EXCEEDED as deterministic (never
+                    # retry, show the upgrade prompt) and must not show an
+                    # upgrade prompt for a transient server-busy condition
+                    # (observed 2026-08-03).
+                    error_code="SERVER_BUSY",
                 )
 
         job_id = str(uuid4())
@@ -429,10 +436,13 @@ class BatchJobService:
             if active >= MAX_CONCURRENT_BATCH_JOBS:
                 raise RateLimitError(
                     message=(
-                        f"Server is busy processing {active} batch jobs. "
-                        "Please retry in a minute."
+                        "We're processing a lot of requests right now. "
+                        "Please try again in a minute."
                     ),
                     retry_after=60,
+                    # Server capacity, not the user's plan limit - see the
+                    # create_job pre-check for the client-behavior rationale.
+                    error_code="SERVER_BUSY",
                 )
             cls._jobs[job_id] = job
 

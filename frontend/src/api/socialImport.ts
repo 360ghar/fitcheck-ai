@@ -1,10 +1,18 @@
 import { apiClient, getAccessToken, getApiError } from './client'
+import { createSSEConnection, type SSEMessage } from '@/lib/sse'
 import type { SocialImportJobData, SocialImportItem, SocialImportSSEEvent } from '@/types'
 
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
   'http://localhost:8000'
+
+/** Social import terminal event names (note: `job_completed`, not `job_complete`). */
+const SOCIAL_IMPORT_TERMINAL_EVENTS: ReadonlySet<string> = new Set([
+  'job_completed',
+  'job_failed',
+  'job_cancelled',
+])
 
 interface ApiEnvelope<T> {
   data: T
@@ -153,7 +161,13 @@ export function createSocialImportSSEConnection(
   onError?: (error: Error) => void,
   lastEventId?: number
 ): () => void {
-  const controller = new AbortController()
+  const token = getAccessToken()
+  if (!token) {
+    // Historical behavior: fail the connection instead of streaming with no
+    // credentials (the shared client never calls fetch in this case).
+    onError?.(new Error('Authentication required to receive social import updates'))
+    return () => {}
+  }
 
   const search = new URLSearchParams()
   if (lastEventId !== undefined) {
@@ -162,119 +176,20 @@ export function createSocialImportSSEConnection(
   const suffix = search.toString() ? `?${search.toString()}` : ''
   const url = `${API_BASE_URL}/api/v1/ai/social-import/jobs/${jobId}/events${suffix}`
 
-  const connect = async () => {
-    try {
-      const token = getAccessToken()
-      if (!token) {
-        throw new Error('Authentication required to receive social import updates')
+  return createSSEConnection({
+    url,
+    // Runtime shape matches: { type, data, id? }. The cast bridges the shared
+    // SSEMessage type (string union) to the narrower SocialImportSSEEvent.
+    onMessage: onMessage as (message: SSEMessage) => void,
+    onError,
+    terminalEvents: SOCIAL_IMPORT_TERMINAL_EVENTS,
+    headers: { Authorization: `Bearer ${token}` },
+    onClose: (sawTerminal) => {
+      // Preserve the historical "unexpected disconnect" error: a stream that
+      // ends without a terminal event is treated as a failure here.
+      if (!sawTerminal) {
+        onError?.(new Error('Social import live updates disconnected unexpectedly'))
       }
-
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'text/event-stream',
-        },
-        signal: controller.signal,
-      })
-
-      if (!response.ok) {
-        throw new Error(`SSE connection failed: ${response.status}`)
-      }
-
-      const reader = response.body?.getReader()
-      if (!reader) {
-        throw new Error('No SSE response body')
-      }
-
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let currentEvent = ''
-      let currentEventId = ''
-      let dataLines: string[] = []
-      let sawTerminalEvent = false
-      const terminalEvents: ReadonlySet<SocialImportSSEEvent['type']> = new Set([
-        'job_completed',
-        'job_failed',
-        'job_cancelled',
-      ])
-
-      const dispatch = () => {
-        if (!currentEvent && dataLines.length === 0) return
-
-        const payload = dataLines.join('\n')
-        const type = currentEvent || 'message'
-        if (terminalEvents.has(type as SocialImportSSEEvent['type'])) {
-          sawTerminalEvent = true
-        }
-
-        try {
-          const parsed = payload ? JSON.parse(payload) : null
-          const numericId = Number(currentEventId)
-          onMessage({
-            type: type as SocialImportSSEEvent['type'],
-            data: parsed,
-            id: Number.isFinite(numericId) ? numericId : undefined,
-          })
-        } catch {
-          const numericId = Number(currentEventId)
-          onMessage({
-            type: type as SocialImportSSEEvent['type'],
-            data: payload,
-            id: Number.isFinite(numericId) ? numericId : undefined,
-          })
-        }
-
-        currentEvent = ''
-        currentEventId = ''
-        dataLines = []
-      }
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const rawLine of lines) {
-          const line = rawLine.replace(/\r$/, '')
-
-          if (line.startsWith('event:')) {
-            currentEvent = line.slice(6).trim()
-            continue
-          }
-
-          if (line.startsWith('id:')) {
-            currentEventId = line.slice(3).trim()
-            continue
-          }
-
-          if (line.startsWith('data:')) {
-            dataLines.push(line.slice(5).trimStart())
-            continue
-          }
-
-          if (line === '') {
-            dispatch()
-          }
-        }
-      }
-
-      dispatch()
-      if (!controller.signal.aborted && !sawTerminalEvent) {
-        throw new Error('Social import live updates disconnected unexpectedly')
-      }
-    } catch (error) {
-      if ((error as Error).name !== 'AbortError') {
-        onError?.(error as Error)
-      }
-    }
-  }
-
-  connect()
-
-  return () => {
-    controller.abort()
-  }
+    },
+  })
 }

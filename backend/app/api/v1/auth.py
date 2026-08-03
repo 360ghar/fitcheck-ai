@@ -26,6 +26,7 @@ from app.core.exceptions import (
 from app.core.ip_rate_limit import auth_rate_limited_operation
 from app.utils.db import execute_with_reconnect, run_sync_with_reconnect
 from app.services.referral_service import ReferralService
+from app.models.subscription import RedeemReferralResponse
 from supabase import Client
 from supabase_auth.errors import AuthApiError
 from postgrest.exceptions import APIError as PostgrestAPIError
@@ -134,18 +135,15 @@ async def _upsert_user_profile(
 class RegisterRequest(BaseModel):
     """User registration request."""
     email: EmailStr
+    # Length-gated only, matching the shipped web form (strength checklist is
+    # guidance, not a hard gate) and mobile signup (direct Supabase, no
+    # strength rule). Before 2026-08-04 this required upper+lower+digit+special
+    # while the clients did not, so every such signup 422'd. Full strength is
+    # still enforced on password RESET (ConfirmResetRequest), where clients
+    # gate on it client-side.
     password: str = Field(..., min_length=8, max_length=100)
     full_name: Optional[str] = Field(None, max_length=255)
     referral_code: Optional[str] = Field(None, max_length=50)
-
-    @field_validator('password')
-    @classmethod
-    def validate_password_strength(cls, v):
-        """Ensure password meets strength requirements."""
-        is_valid, error_msg = verify_password_strength(v)
-        if not is_valid:
-            raise ValueError(error_msg)
-        return v
 
 
 class LoginRequest(BaseModel):
@@ -339,8 +337,32 @@ async def register(
                                 user_id=user_id,
                                 code=register_request.referral_code,
                             )
+                        else:
+                            # Definitive rejection (invalid/own code). The
+                            # retry hook was already cleared by the service.
+                            logger.warning(
+                                "Referral code rejected during registration",
+                                user_id=user_id,
+                                code=register_request.referral_code,
+                                message=referral_result.message,
+                            )
                     except Exception as e:
+                        # Transient failure (missing RPC from an unapplied
+                        # migration, dead pooled connection). The code was
+                        # persisted on users.referred_by_code before the RPC,
+                        # so process_pending_referral completes the grant on
+                        # the user's next login. Surface it in the response
+                        # so the client shows a "will retry" message instead
+                        # of silence (RCA 2026-08-04).
                         logger.warning(f"Failed to redeem referral code during registration: {e}")
+                        referral_result = RedeemReferralResponse(
+                            success=False,
+                            message=(
+                                "We couldn't apply your referral right now. "
+                                "It will be applied automatically on your next sign-in."
+                            ),
+                            credit_months=0,
+                        )
 
             except PostgrestAPIError as e:
                 error_info = getattr(e, 'json', lambda: {})() or {}
@@ -526,6 +548,21 @@ async def login(
                     "full_name": user.user_metadata.get("full_name") if user.user_metadata else None,
                     "avatar_url": None,
                 }
+
+            # Process any pending referral code: a redemption that failed at
+            # signup (missing RPC from an unapplied migration, dead pooled
+            # connection) leaves users.referred_by_code set; complete the
+            # grant here on the next sign-in. Idempotent - the atomic RPC
+            # reports already-redeemed instead of double-granting (RCA
+            # 2026-08-04).
+            try:
+                await ReferralService.process_pending_referral(user.id, db)
+            except Exception as e:
+                logger.warning(
+                    "Failed to process pending referral on login",
+                    user_id=user.id,
+                    error=str(e),
+                )
 
             logger.info("User logged in successfully", user_id=user.id)
             return {
@@ -807,8 +844,26 @@ async def oauth_sync(
                     )
                     if referral_result.success:
                         logger.info("Referral code redeemed during OAuth sync", user_id=user_id, code=request.referral_code)
+                    else:
+                        logger.warning(
+                            "Referral code rejected during OAuth sync",
+                            user_id=user_id,
+                            code=request.referral_code,
+                            message=referral_result.message,
+                        )
                 except Exception as e:
+                    # Transient failure - the code was persisted on
+                    # users.referred_by_code before the RPC, so the next
+                    # login/oauth_sync retries it (RCA 2026-08-04).
                     logger.warning(f"Failed to redeem referral code during OAuth sync: {e}")
+                    referral_result = RedeemReferralResponse(
+                        success=False,
+                        message=(
+                            "We couldn't apply your referral right now. "
+                            "It will be applied automatically on your next sign-in."
+                        ),
+                        credit_months=0,
+                    )
 
             logger.info("Created user profile via OAuth sync", user_id=user_id)
 
@@ -831,7 +886,20 @@ async def oauth_sync(
 
             user_data = existing.data[0] if (existing.data and len(existing.data) > 0) else {}
             logger.info("OAuth sync for existing user", user_id=user_id)
-            referral_result = None  # No referral processing for existing users
+            referral_result = None  # No new-code redemption for existing users
+
+            # Process any pending referral code from a failed signup-time
+            # redemption (missing RPC migration, dead connection): the code
+            # was persisted on users.referred_by_code, complete the grant now.
+            # Idempotent via the atomic RPC (RCA 2026-08-04).
+            try:
+                await ReferralService.process_pending_referral(user_id, db)
+            except Exception as e:
+                logger.warning(
+                    "Failed to process pending referral on OAuth sync",
+                    user_id=user_id,
+                    error=str(e),
+                )
 
         response_data = {
             "user": {

@@ -16,9 +16,11 @@ same AIProviderClient interface every other provider does.
 
 import asyncio
 import base64
+import hashlib
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from google import genai
@@ -39,6 +41,85 @@ from app.services.ai_provider_interface import (
 )
 
 logger = get_context_logger(__name__)
+
+
+# =============================================================================
+# Daily-quota circuit breaker
+# =============================================================================
+# Free-tier Gemini keys (observed: limit 20/day on gemini-3.6-flash) exhaust
+# their DAILY cap for hours at a time. Once the provider tells us the daily
+# quota is gone, every further request is guaranteed to 429 until the cap
+# resets, so attempting the call is pure waste: the hybrid vision leg should
+# fall over to Agnes immediately (zero wasted Gemini calls) and other callers
+# should fail fast with a friendly "try again later" instead of hammering
+# Google for the rest of the day.
+#
+# The latch is keyed by API-key hash so one BYOK user's free-tier key cannot
+# trip the latch for users on a different (paid) key. It is a process-local
+# optimization only: a wrong latch at worst skips Gemini for one day, and the
+# first call after the reset re-trips it if the cap is still exhausted.
+_daily_quota_reset_at: Dict[str, float] = {}
+_daily_quota_lock: Optional[asyncio.Lock] = None
+
+
+def _hash_api_key(api_key: str) -> str:
+    """Short SHA-256 of the API key for latch keys (never log the key)."""
+    return hashlib.sha256(api_key.encode()).hexdigest()[:16]
+
+
+def _daily_quota_reset_epoch() -> float:
+    """Epoch seconds of the next daily-quota reset.
+
+    Google's free-tier daily quotas reset at midnight Pacific Time; fall back
+    to midnight UTC if the system has no IANA timezone data. An early/late
+    unlatch is self-healing: the next real 429 simply re-trips the latch.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+
+        tz = ZoneInfo("America/Los_Angeles")
+    except Exception:
+        tz = timezone.utc
+    now = datetime.now(tz)
+    nxt = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return nxt.timestamp()
+
+
+async def _is_daily_quota_latched(api_key: str) -> bool:
+    """True when this key's daily quota is latched and the reset has not
+    passed. Expired latches are cleared lazily on read."""
+    global _daily_quota_lock
+    if _daily_quota_lock is None:
+        _daily_quota_lock = asyncio.Lock()
+    key = _hash_api_key(api_key)
+    async with _daily_quota_lock:
+        reset_at = _daily_quota_reset_at.get(key)
+        if reset_at is None:
+            return False
+        if time.time() >= reset_at:
+            _daily_quota_reset_at.pop(key, None)
+            return False
+        return True
+
+
+async def _latch_daily_quota(api_key: str) -> None:
+    """Record that this key's daily quota is exhausted until the next reset."""
+    global _daily_quota_lock
+    if _daily_quota_lock is None:
+        _daily_quota_lock = asyncio.Lock()
+    key = _hash_api_key(api_key)
+    reset_at = _daily_quota_reset_epoch()
+    async with _daily_quota_lock:
+        _daily_quota_reset_at[key] = reset_at
+
+
+def clear_daily_quota_latch(api_key: Optional[str] = None) -> None:
+    """Clear the daily-quota latch for one key (or all keys when omitted).
+    Exposed for tests and for ops after a key is upgraded to a paid tier."""
+    if api_key is None:
+        _daily_quota_reset_at.clear()
+        return
+    _daily_quota_reset_at.pop(_hash_api_key(api_key), None)
 
 
 # Default Gemini model names. Referenced from the GeminiConfig field defaults
@@ -330,6 +411,18 @@ class GeminiProvider:
         response_modalities: Optional[List[str]] = None,
         response_format: Optional[Dict[str, Any]] = None,
     ) -> AIResponse:
+        # Fail fast (before building a request) when this key's DAILY quota is
+        # known-exhausted: the call is guaranteed to 429, and the hybrid
+        # vision leg will fall back to Agnes with zero wasted Gemini calls.
+        # Per-minute quota is NOT latched - it clears in seconds and the rate
+        # limiter + retry metadata already handle it.
+        if await _is_daily_quota_latched(self.config.api_key):
+            raise AIServiceError(
+                "Gemini daily quota exhausted; using the configured fallback "
+                "provider until the quota resets",
+                retryable=False,
+                error_kind="upstream_quota",
+            )
         await self._wait_for_rate_slot()
         client = self._get_client()
         use_model = model or self.config.chat_model
@@ -376,12 +469,20 @@ class GeminiProvider:
             )
         except genai_errors.APIError as e:
             retryable, error_kind, retry_after = classify_gemini_error(e)
+            # A DAILY-quota failure (non-retryable upstream_quota) means every
+            # subsequent call this day will also 429: latch it so later calls
+            # fail fast without touching the network (see module docstring).
+            if error_kind == "upstream_quota" and not retryable:
+                await _latch_daily_quota(self.config.api_key)
             # Handled upstream failures (quota 429 / 5xx overload) that the
             # hybrid vision leg will absorb via the Agnes fallback are WARN
             # level - error-level logging here turned every free-tier burst
             # into a log-drain flood. Hard failures (auth/blocked/parse) stay
-            # at error level.
-            log_fn = logger.error if not retryable else logger.warning
+            # at error level. Quota failures are WARN even when classified
+            # non-retryable: a latched daily cap is expected, not an error.
+            log_fn = logger.warning if error_kind == "upstream_quota" else (
+                logger.error if not retryable else logger.warning
+            )
             log_fn(
                 f"Gemini request failed: {e}",
                 model=use_model,

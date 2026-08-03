@@ -304,6 +304,26 @@ class ReferralService:
         normalized_code = ReferralService._normalize_code(code)
         try:
             credit_months = settings.REFERRAL_CREDIT_MONTHS
+
+            # Durable retry hook (RCA 2026-08-04): persist the intent BEFORE
+            # the RPC so a transient failure (missing RPC from an unapplied
+            # migration, dead pooled connection - both observed in
+            # production) can be retried by process_pending_referral on the
+            # next login instead of being lost forever. Best-effort: a write
+            # failure here must not fail the redemption itself. The RPC
+            # re-writes the same field inside its transaction on success.
+            try:
+                await asyncio.to_thread(
+                    db.table("users")
+                    .update({"referred_by_code": normalized_code})
+                    .eq("id", referred_user_id)
+                    .execute
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to persist pending referral code for user {referred_user_id}: {e}"
+                )
+
             # The RPC is one transaction (row locks + writes), so a reconnect
             # retry after a lost response cannot double-grant: the second
             # attempt simply reports the already-redeemed state.
@@ -320,6 +340,41 @@ class ReferralService:
             if not isinstance(data, dict):
                 raise DatabaseError("Referral redemption returned no result")
 
+            if data.get("success") is False:
+                # Definitive rejection (invalid code / own code): drop the
+                # retry hook so process_pending_referral does not retry a
+                # code that can never succeed. Transient failures raise
+                # instead and keep the hook for the next login.
+                try:
+                    await asyncio.to_thread(
+                        db.table("users")
+                        .update({"referred_by_code": None})
+                        .eq("id", referred_user_id)
+                        .execute
+                    )
+                except Exception as e:
+                    logger.debug(
+                        f"Failed to clear rejected referral code for user {referred_user_id}: {e}"
+                    )
+            elif data.get("success") is True:
+                # Grant complete (fresh or already-redeemed): the hook has
+                # served its purpose - clear it so a later login does not
+                # re-scan the user and the repair script's candidate set
+                # stays clean. The RPC writes the field inside its
+                # transaction; this clear just converges the row sooner
+                # (process_pending_referral would clear it anyway).
+                try:
+                    await asyncio.to_thread(
+                        db.table("users")
+                        .update({"referred_by_code": None})
+                        .eq("id", referred_user_id)
+                        .execute
+                    )
+                except Exception as e:
+                    logger.debug(
+                        f"Failed to clear redeemed referral code for user {referred_user_id}: {e}"
+                    )
+
             return RedeemReferralResponse(
                 success=bool(data.get("success")),
                 message=data.get("message") or "Referral code applied",
@@ -332,26 +387,53 @@ class ReferralService:
 
     @staticmethod
     async def process_pending_referral(user_id: str, db: Client) -> Optional[RedeemReferralResponse]:
-        """Process any pending referral code stored on the user record."""
+        """Process any pending referral code stored on the user record.
+
+        Durable retry for a redemption that failed at signup (RCA 2026-08-04):
+        redeem_referral persists ``users.referred_by_code`` before calling the
+        RPC, so a transient failure leaves the code on the row and this
+        function - wired into login and oauth_sync - completes the grant on
+        the user's next sign-in. Idempotent: the atomic RPC reports
+        already-redeemed instead of double-granting, and the hook is cleared
+        on success or definitive rejection.
+        """
         try:
-            # Check if user has a pending referral code
-            result = await asyncio.to_thread(
-                db.table("users")
+            # Check if user has a pending referral code (reads rebuild +
+            # retry once on a dead pooled connection, same policy as the rest
+            # of the referral service).
+            result = await execute_with_reconnect(
+                lambda d: d.table("users")
                 .select("referred_by_code")
                 .eq("id", user_id)
                 .maybe_single()
-                .execute
+                .execute(),
+                db,
+                extra={"operation": "process_pending_referral", "user_id": user_id},
             )
 
             if not result or not result.data or not result.data.get("referred_by_code"):
                 return None
 
             # Check if already redeemed
-            existing = await asyncio.to_thread(db.table("referral_redemptions").select("id").eq("referred_user_id", user_id).execute)
+            existing = await execute_with_reconnect(
+                lambda d: d.table("referral_redemptions")
+                .select("id")
+                .eq("referred_user_id", user_id)
+                .execute(),
+                db,
+                extra={"operation": "process_pending_referral_check_redeemed", "user_id": user_id},
+            )
 
             if existing.data:
                 # Already redeemed, clear the field
-                await asyncio.to_thread(db.table("users").update({"referred_by_code": None}).eq("id", user_id).execute)
+                await execute_with_reconnect(
+                    lambda d: d.table("users")
+                    .update({"referred_by_code": None})
+                    .eq("id", user_id)
+                    .execute(),
+                    db,
+                    extra={"operation": "process_pending_referral_clear", "user_id": user_id},
+                )
                 return None
 
             # Redeem the code

@@ -191,6 +191,26 @@ void main() {
       expect(result, isA<RateLimitException>());
     });
 
+    test('429 with SERVER_BUSY code preserves code and message', () {
+      // Server capacity is NOT the user's plan limit: the backend code +
+      // message must survive the Dio mapping so the UI routes it to the
+      // "AI busy" dialog, never the paywall CTA (2026-08-04).
+      final result = handleDioException(
+        dioError(
+          type: DioExceptionType.badResponse,
+          statusCode: 429,
+          responseData: {
+            'code': 'SERVER_BUSY',
+            'error':
+                "We're processing a lot of requests right now. Please try again in a minute.",
+          },
+        ),
+      );
+      expect(result, isA<RateLimitException>());
+      expect(result.errorCode, 'SERVER_BUSY');
+      expect(result.message, contains('try again in a minute'));
+    });
+
     test('500 maps to ServerException', () {
       final result = handleDioException(
         dioError(type: DioExceptionType.badResponse, statusCode: 500),

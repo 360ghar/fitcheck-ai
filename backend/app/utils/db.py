@@ -395,6 +395,61 @@ def missing_quota_rpcs(db) -> list:
                 missing.append(name)
     return missing
 
+
+# ============================================================================
+# Boot-time referral/billing RPC presence probe (non-mutating)
+#
+# RCA 2026-08-04: referral redemptions silently failed for every signup when
+# migrations 022/026 were never applied to the hosted project (the same
+# migration gap that broke quota RPCs on 2026-07-31) - a missing
+# redeem_referral_atomic raises PGRST202, which register/oauth_sync swallow
+# and the new user + referrer stay free with no visible error. This probe
+# closes the blind spot so the gap is logged with the runbook hint at boot.
+#
+# Both probes are non-mutating:
+#   - redeem_referral_atomic with a code that cannot exist (real codes are
+#     "{slug}-{hex}") returns success=FALSE 'Referral code not found' before
+#     touching any row (no code row is found and locked).
+#   - apply_referral_credit_atomic with the nil user UUID fails the
+#     users(id) FK (23503) on its subscription insert before writing
+#     anything (a missing row is never mutated).
+# A missing function raises PGRST202; anything else (permissions, the FK
+# rejection above) means the function EXISTS and is reported as present - it
+# is not a migration gap.
+# ============================================================================
+
+# A code that no generated referral code can equal (generation is
+# lowercase-alphanumeric slug + '-' + hex, and lookup is LOWER(TRIM(code))).
+_BOOT_PROBE_NONEXISTENT_CODE = "__boot_probe_nonexistent__"
+
+REFERRAL_RPC_PROBES = {
+    "redeem_referral_atomic": {
+        "p_referred_user_id": _NIL_USER_UUID,
+        "p_code": _BOOT_PROBE_NONEXISTENT_CODE,
+        "p_credit_months": 1,
+    },
+    "apply_referral_credit_atomic": {
+        "p_user_id": _NIL_USER_UUID,
+        "p_months": 1,
+    },
+}
+
+
+def missing_referral_rpcs(db) -> list:
+    """Return the referral RPC names absent from the hosted schema (migration gap).
+
+    Same policy as missing_quota_rpcs: a PGRST202 means the function (and its
+    migration) is missing; any other error means the function exists.
+    """
+    missing = []
+    for name, args in REFERRAL_RPC_PROBES.items():
+        try:
+            db.rpc(name, args).execute()
+        except Exception as error:
+            if is_pgrst202_missing_rpc(error):
+                missing.append(name)
+    return missing
+
 # ============================================================================
 # Boot-time valid_batch_size bound probe (non-mutating)
 #

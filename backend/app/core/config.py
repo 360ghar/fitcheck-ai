@@ -247,7 +247,12 @@ class Settings(BaseSettings):
     PLAN_FREE_DAILY_PHOTOSHOOT_IMAGES: int = 10
     PLAN_PLUS_DAILY_PHOTOSHOOT_IMAGES: int = 30
     PLAN_PRO_DAILY_PHOTOSHOOT_IMAGES: int = 50
-    PHOTOSHOOT_CONCURRENCY_LIMIT: int = 2  # Max concurrent image generations (lower = fewer protocol/OOM failures)
+    # Max concurrent image generations within a single photoshoot job.
+    # Raised 2 -> 4 on 2026-08-03 (photoshoot speed pass) to cut image-gen
+    # wall time roughly in half; the process-wide AI_GENERATION_CONCURRENCY
+    # cap (image_gen_slot) and per-image durable-URL upload + payload release
+    # bound worst-case memory (2 jobs x 4 = 8 in-flight generations).
+    PHOTOSHOOT_CONCURRENCY_LIMIT: int = 4
 
     # Process-wide asyncio.Semaphore caps for the batch extract+generate
     # pipeline (batch_extraction_service.py) and the variation fan-out

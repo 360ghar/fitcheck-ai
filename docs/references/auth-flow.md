@@ -63,9 +63,9 @@ supabase: Client = create_client(
 
 @router.post("/auth/register")
 async def register_user(user: UserCreate):
-    # Validate password strength
-    if not is_password_strong(user.password):
-        raise HTTPException(400, "Password too weak")
+    # Length-gated only (min 8 chars, enforced by Pydantic min_length);
+    # full strength rules apply to password RESET, not registration
+    # (see Password Validation below).
 
     # Create user in Supabase
     auth_response = supabase.auth.sign_up({
@@ -99,6 +99,8 @@ import re
 
 def is_password_strong(password: str) -> bool:
     """
+    Full-strength rule, enforced on PASSWORD RESET (ConfirmResetRequest,
+    `verify_password_strength` in app/core/security.py):
     Password must be at least 8 characters and contain:
     - At least one uppercase letter
     - At least one lowercase letter
@@ -126,6 +128,14 @@ def is_password_strong(password: str) -> bool:
 
     return True
 ```
+
+> **Registration is length-gated only (8+ chars).** Since 2026-08-04
+> `RegisterRequest` no longer applies `verify_password_strength`: the shipped
+> web form treats the strength checklist as guidance (not a hard gate) and
+> mobile signs up via Supabase directly with no strength rule, so a strict
+> backend gate 422'd every such signup. Full strength is still enforced on
+> password RESET (`ConfirmResetRequest`), where the reset page gates
+> client-side.
 
 ---
 
@@ -441,8 +451,9 @@ async def confirm_reset_password(
 
 ### 1. Password Security
 
-- **Minimum length:** 8 characters
-- **Complexity:** Upper, lower, number, special char
+- **Minimum length:** 8 characters (registration; matches web + mobile signup)
+- **Complexity:** Upper, lower, number, special — enforced on password RESET
+  only (the reset page gates client-side; registration is length-gated)
 - **Hashing:** Supabase uses bcrypt
 - **No storage in plaintext**
 
@@ -625,10 +636,10 @@ def test_protected_endpoint_with_token():
 | Feature | Implementation |
 |----------|----------------|
 | **Authentication Provider** | Supabase Auth |
-| **Token Type** | JWT (HS256) |
+| **Token Type** | JWT — ES256/RS256 verified via JWKS (HS256 legacy) |
 | **Access Token Expiry** | 1 hour |
 | **Refresh Token Expiry** | 7 days |
-| **Password Requirements** | 8+ chars, mixed case, number, special |
+| **Password Requirements** | Register: 8+ chars. Reset: 8+ chars, mixed case, number, special |
 | **Data Isolation** | Row-Level Security (RLS) |
 | **Role-Based Access** | Planned for Phase 2 |
 | **Password Reset** | Email-based flow |

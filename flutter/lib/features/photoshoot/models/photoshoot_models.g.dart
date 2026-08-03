@@ -12,6 +12,7 @@ _GeneratedImage _$GeneratedImageFromJson(Map<String, dynamic> json) =>
       index: (json['index'] as num).toInt(),
       imageUrl: json['image_url'] as String?,
       imageBase64: json['image_base64'] as String?,
+      label: json['label'] as String?,
     );
 
 Map<String, dynamic> _$GeneratedImageToJson(_GeneratedImage instance) =>
@@ -20,6 +21,7 @@ Map<String, dynamic> _$GeneratedImageToJson(_GeneratedImage instance) =>
       'index': instance.index,
       'image_url': instance.imageUrl,
       'image_base64': instance.imageBase64,
+      'label': instance.label,
     };
 
 _PhotoshootUsage _$PhotoshootUsageFromJson(Map<String, dynamic> json) =>

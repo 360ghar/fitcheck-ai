@@ -70,6 +70,20 @@ Key tables (non-exhaustive): `users`, `user_preferences`, `user_settings`, `user
 - Supabase Auth issues JWTs; backend verifies with `SUPABASE_JWT_SECRET`.
 - `get_current_user` loads user from `sub` claim.
 - Details: `docs/references/auth-flow.md`.
+- **Referral redemption durability (2026-08-04 RCA):** `redeem_referral`
+  persists `users.referred_by_code` BEFORE calling the atomic RPC
+  `redeem_referral_atomic` (migrations 022/026; service-role only). A
+  transient failure (missing RPC from an unapplied migration, dead pooled
+  connection) leaves the hook set, and `process_pending_referral` — wired
+  into `login` and `oauth/sync` — completes the grant on the next sign-in
+  (the RPC is idempotent). The hook is cleared on definitive rejection
+  (invalid/own code) and on success. register/`oauth/sync` surface a
+  "will be applied on your next sign-in" block on transient failure instead
+  of silence. Boot probe `missing_referral_rpcs` (in `app/utils/db.py`)
+  logs a runbook hint when the referral RPCs are absent. Referral credit
+  semantics (activation/extension/stacking) live in
+  `apply_referral_credit_atomic` (migration 033); repair past silent drops
+  with `backend/scripts/repair_pending_referrals.py`.
 
 ## Errors
 
@@ -216,6 +230,13 @@ TABLES=outfit_images python scripts/backfill_transparent_backgrounds.py       # 
 ```
 
 A JSONL audit (`backend/logs/transparent_backfill.jsonl`) makes the run resumable — rows with a terminal action are skipped, `error` rows stay retryable. A rejected or skipped matte writes **nothing**: no upload, no DB patch. If more than 10% of decoded images are rejected the script says so loudly and names `WHITE_MIN_CHANNEL` — that is the signal the generation prompts drifted from what the algorithm assumes, and it is worth stopping for.
+
+### Photoshoot generation
+1. `POST /api/v1/photoshoot/generate` (async) creates a `PhotoshootJob` and returns `job_id` (202); the pipeline runs in the background and streams SSE on `/{job_id}/events`. `sync=true` remains as a legacy compatibility path (TD-019 closed for the web app 2026-08-03).
+2. **Scene planning** is one multimodal LLM call (`PhotoshootService.generate_prompts`) that produces a subject lock + N scene plans; there is **no caching** of this call (deliberately).
+3. **Image generation** runs in batches (`batch_size` per job) with a per-job fan-out of `PHOTOSHOOT_CONCURRENCY_LIMIT` (default **4** since 2026-08-03; was 2) under the process-wide `image_gen_slot()` cap (`AI_GENERATION_CONCURRENCY`, default 30) shared with try-on/outfit/batch generation. Per-image provider calls take ~30–45s, so 10 images at concurrency 4 run in ~4 waves (~2–2.5 min). Each generated image is uploaded to a durable storage URL at generation time; the job row carries metadata + URLs only, and terminal jobs release base64 payloads.
+4. **SSE progress contract** (clients render a live experience): `batch_started` includes `scene_labels` (string index → short human label built from the prompt's setting/pose, capped at 48 chars), and `image_complete` / `image_failed` include a `label` for the slot. Clients show the next pending scene label, a real progress % (10% upload + 90% completed count), a rolling ETA from per-image latency, and a live thumbnail gallery.
+5. **Demo flow** (anonymous landing page): `POST /api/v1/photoshoot/demo` now returns a `job_id` (202) instead of blocking for the whole run. The job runs under a pseudo-user derived from a SHA-256 hash of the client IP (`demo_<hash>`) with quota reservation skipped (the IP rate limit at creation is the gate); jobs stay **in-memory only** because `photoshoot_jobs.user_id` is FK-constrained to `users`. Progress/results are read via `GET /api/v1/photoshoot/demo/{job_id}/status`, which re-derives the pseudo-user from the request IP to enforce ownership (no auth, no SSE).
 
 ### Recommendations
 

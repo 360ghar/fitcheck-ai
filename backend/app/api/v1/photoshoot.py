@@ -11,8 +11,8 @@ Provides endpoints for:
 """
 
 import asyncio
+import hashlib
 import json
-import uuid
 from app.utils.datetime_util import utcnow_iso
 from typing import Any, Dict
 
@@ -23,15 +23,13 @@ from supabase import Client
 
 from app.api.v1.deps import get_current_user, get_db
 from app.core.exceptions import AIServiceError, FitCheckException, RateLimitError, ValidationError
-from app.core.ip_rate_limit import ip_rate_limited_operation
+from app.core.ip_rate_limit import get_client_ip, ip_rate_limited_operation
 from app.core.logging_config import get_context_logger
 from app.models.photoshoot import (
     StartPhotoshootRequest,
     DemoPhotoshootRequest,
-    DemoPhotoshootResponse,
     UseCasesResponse,
     PhotoshootUseCase,
-    PhotoshootStatus,
     PhotoshootJobStatus,
     PhotoshootJobResponse,
 )
@@ -60,6 +58,30 @@ def _spawn_pipeline(service: PhotoshootStreamingService, job) -> None:
     spawn_background_task(service.run_pipeline(job), _pipeline_tasks)
 
 
+def _client_ip(request: Request) -> str:
+    """Client IP for demo job ownership.
+
+    Delegates to app.core.ip_rate_limit.get_client_ip (request.client.host,
+    resolved by uvicorn's ProxyHeadersMiddleware) so the demo pseudo-user is
+    derived from the SAME value the demo rate limiter keys on. Deliberately
+    NOT hand-parsing X-Forwarded-For here: that header is client-supplied and
+    spoofable, so parsing it would let a caller mint a fresh pseudo-user per
+    request and bypass the per-IP demo limit (see get_client_ip's docstring).
+    """
+    return get_client_ip(request)
+
+
+def _demo_user_id(request: Request) -> str:
+    """Stable pseudo-user id for a demo client, derived from their IP.
+
+    Demo jobs are stored in the shared photoshoot_jobs table; the pseudo-user
+    keeps them out of any real user's rows and lets the status endpoint
+    authorize by re-deriving the same id from the request IP. IPs are hashed
+    so raw client IPs never land in the DB.
+    """
+    return f"demo_{hashlib.sha256(_client_ip(request).encode('utf-8')).hexdigest()[:24]}"
+
+
 # =============================================================================
 # Public Endpoints
 # =============================================================================
@@ -80,17 +102,21 @@ async def get_use_cases():
     }
 
 
-@router.post("/demo", response_model=Dict[str, Any], status_code=status.HTTP_200_OK)
+@router.post("/demo", response_model=Dict[str, Any], status_code=status.HTTP_202_ACCEPTED)
 async def demo_photoshoot(
     request: Request,
     body: DemoPhotoshootRequest,
 ):
     """
-    Generate a demo photoshoot for anonymous users.
+    Start a demo photoshoot for anonymous users (job-based, polling status).
 
     Rate limited to 1 demo per IP per day (generates 2 images).
     Used for landing page trial experience.
     Custom prompts are not allowed in demo mode.
+
+    Returns a job_id immediately; poll GET /demo/{job_id}/status for progress
+    and results. Demo jobs skip daily-quota reservation (the IP rate limit is
+    enforced here at creation time).
     """
     # Validate no custom use case in demo
     if body.use_case == PhotoshootUseCase.CUSTOM:
@@ -98,46 +124,68 @@ async def demo_photoshoot(
 
     try:
         async with ip_rate_limited_operation(request, "photoshoot") as rate_check:
-            # Generate prompts for 2 images
-            prompts = await PhotoshootService.generate_prompts(
-                use_case=body.use_case,
-                num_prompts=2,
-                reference_photo=body.photo,
+            demo_user_id = _demo_user_id(request)
+            job = await PhotoshootJobService.create_job(
+                user_id=demo_user_id,
+                photos=[body.photo],
+                use_case=body.use_case.value,
+                num_images=2,
+                batch_size=2,
+                aspect_ratio="1:1",
+                db=_persistence_db(None),
             )
 
-            # Generate images
-            images, failures = await PhotoshootService.generate_images(
-                reference_photos=[body.photo],
-                prompts=prompts,
-            )
+            # Start processing in background (demo pipeline skips quota)
+            service = PhotoshootStreamingService(user_id=demo_user_id, db=None, is_demo=True)
+            _spawn_pipeline(service, job)
 
-            session_id = f"demo_{uuid.uuid4().hex[:8]}"
+            logger.info("Started demo photoshoot job", extra={
+                "job_id": job.job_id,
+                "demo": True,
+                "remaining": rate_check["remaining"],
+            })
 
-            response = DemoPhotoshootResponse(
-                session_id=session_id,
-                status=PhotoshootStatus.COMPLETE,
-                images=images,
-                generated_count=len(images),
-                failed_count=len(failures),
-                image_failures=failures,
-                partial_success=len(failures) > 0,
-                remaining_today=max(0, rate_check["remaining"] - 1),
-                signup_cta="Sign up for 10 free images per day!",
-            )
-            status_code = (
-                status.HTTP_207_MULTI_STATUS
-                if response.partial_success
-                else status.HTTP_200_OK
-            )
+            response = {
+                "job_id": job.job_id,
+                "status": job.status.value,
+                "message": "Demo photoshoot generation started",
+                "remaining_today": max(0, rate_check["remaining"] - 1),
+                "signup_cta": "Sign up for 10 free images per day!",
+            }
             return JSONResponse(
-                status_code=status_code,
-                content={"data": response.model_dump(mode="json"), "message": "OK"},
+                status_code=status.HTTP_202_ACCEPTED,
+                content={"data": response, "message": "OK"},
             )
     except FitCheckException:
         raise
     except Exception as e:
         logger.exception(f"Demo photoshoot failed: {e}")
-        raise AIServiceError(f"Failed to generate demo photoshoot: {str(e)}")
+        raise AIServiceError(f"Failed to start demo photoshoot: {str(e)}")
+
+
+@router.get("/demo/{job_id}/status", response_model=Dict[str, Any], status_code=status.HTTP_200_OK)
+async def demo_photoshoot_status(
+    job_id: str,
+    request: Request,
+):
+    """
+    Poll status of a demo photoshoot job (no auth).
+
+    Ownership is validated by re-deriving the demo pseudo-user from the
+    request IP, so one visitor cannot read another visitor's demo job.
+    """
+    demo_user_id = _demo_user_id(request)
+    job = await PhotoshootJobService.get_job(job_id, demo_user_id, db=None)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    status_data = await PhotoshootJobService.get_job_status(job_id)
+    if not status_data:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Demo response shape: job status + images, no usage.
+    status_data.pop("usage", None)
+    return {"data": status_data, "message": "OK"}
 
 
 # =============================================================================

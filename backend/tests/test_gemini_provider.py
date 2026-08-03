@@ -7,6 +7,7 @@ provider.
 """
 
 import base64
+import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -16,7 +17,15 @@ from google.genai import types
 
 from app.core.exceptions import AIServiceError
 from app.services.ai_provider_interface import AIProvider, ChatMessage
-from app.services.gemini_provider import GeminiConfig, GeminiProvider, classify_gemini_error
+from app.services.gemini_provider import (
+    GeminiConfig,
+    GeminiProvider,
+    _daily_quota_reset_at,
+    _hash_api_key,
+    _latch_daily_quota,
+    classify_gemini_error,
+    clear_daily_quota_latch,
+)
 
 
 def _make_config(**overrides) -> GeminiConfig:
@@ -55,6 +64,15 @@ def _patched_client(provider: GeminiProvider, generate_content):
     async callable)."""
     mock_client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content)))
     return patch.object(provider, "_get_client", return_value=mock_client)
+
+
+@pytest.fixture(autouse=True)
+def _clear_daily_quota_latch():
+    """A daily-quota 429 in one test latches the shared key and would make
+    every later test fail fast. Clear the latch before and after each test."""
+    clear_daily_quota_latch()
+    yield
+    clear_daily_quota_latch()
 
 
 class TestChat:
@@ -491,6 +509,110 @@ class TestLifecycle:
             with pytest.raises(AIServiceError) as exc_info:
                 await provider.test_connection()
         assert exc_info.value.retryable is False
+
+
+class TestDailyQuotaCircuitBreaker:
+    """Once the DAILY free-tier quota is hit, chat() must fail fast without
+    touching the SDK until the reset (observed 2026-08-03: the 20/day cap
+    exhausted for hours while every request still burned a Gemini call)."""
+
+    def _daily_quota_error(self):
+        return genai_errors.APIError(429, {
+            "status": "RESOURCE_EXHAUSTED",
+            "message": "free_tier limit: 20 GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+        })
+
+    def _per_minute_quota_error(self):
+        return genai_errors.APIError(429, {
+            "status": "RESOURCE_EXHAUSTED",
+            "message": (
+                "Quota exceeded for generativelanguage.googleapis.com/"
+                "generate_content_free_tier_requests, limit: 5. "
+                "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+            ),
+            "details": [{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "10s"}],
+        })
+
+    @pytest.mark.asyncio
+    async def test_daily_quota_429_latches_and_next_chat_fails_fast(self):
+        clear_daily_quota_latch()
+        provider = GeminiProvider(_make_config())
+        gen = AsyncMock(side_effect=self._daily_quota_error())
+        try:
+            with _patched_client(provider, gen):
+                with pytest.raises(AIServiceError):
+                    await provider.chat(messages=[ChatMessage(role="user", content="hi")])
+            assert _hash_api_key("test-key") in _daily_quota_reset_at
+            # Second call must NOT reach the SDK: guaranteed 429, so fail
+            # fast and let the hybrid vision leg fall back to Agnes.
+            with _patched_client(provider, gen):
+                with pytest.raises(AIServiceError) as exc_info:
+                    await provider.chat(messages=[ChatMessage(role="user", content="hi")])
+            assert exc_info.value.error_kind == "upstream_quota"
+            assert exc_info.value.retryable is False
+            assert "quota" in str(exc_info.value).lower()
+            assert gen.await_count == 1  # only the first (real) attempt
+        finally:
+            clear_daily_quota_latch()
+
+    @pytest.mark.asyncio
+    async def test_per_minute_quota_does_not_latch(self):
+        clear_daily_quota_latch()
+        provider = GeminiProvider(_make_config())
+        gen = AsyncMock(side_effect=self._per_minute_quota_error())
+        try:
+            with _patched_client(provider, gen):
+                with pytest.raises(AIServiceError):
+                    await provider.chat(messages=[ChatMessage(role="user", content="hi")])
+            assert _hash_api_key("test-key") not in _daily_quota_reset_at
+        finally:
+            clear_daily_quota_latch()
+
+    @pytest.mark.asyncio
+    async def test_latch_is_keyed_per_api_key(self):
+        clear_daily_quota_latch()
+        try:
+            await _latch_daily_quota("key-A")
+            assert _hash_api_key("key-A") in _daily_quota_reset_at
+            assert _hash_api_key("key-B") not in _daily_quota_reset_at
+            # A different key still reaches the SDK.
+            provider_b = GeminiProvider(_make_config(api_key="key-B"))
+            gen = AsyncMock(return_value=_fake_response(text="ok"))
+            with _patched_client(provider_b, gen):
+                result = await provider_b.chat(messages=[ChatMessage(role="user", content="hi")])
+            assert result.text == "ok"
+        finally:
+            clear_daily_quota_latch()
+
+    @pytest.mark.asyncio
+    async def test_expired_latch_is_cleared_and_does_not_block(self):
+        clear_daily_quota_latch()
+        provider = GeminiProvider(_make_config())
+        try:
+            # Backdate the latch past its reset: the next call must proceed.
+            _daily_quota_reset_at[_hash_api_key("test-key")] = time.time() - 1
+            gen = AsyncMock(return_value=_fake_response(text="ok"))
+            with _patched_client(provider, gen):
+                result = await provider.chat(messages=[ChatMessage(role="user", content="hi")])
+            assert result.text == "ok"
+            assert _hash_api_key("test-key") not in _daily_quota_reset_at
+        finally:
+            clear_daily_quota_latch()
+
+    @pytest.mark.asyncio
+    async def test_latched_chat_with_vision_does_not_call_sdk(self):
+        clear_daily_quota_latch()
+        provider = GeminiProvider(_make_config(vision_fallback_model="gemini-2.5-flash"))
+        gen = AsyncMock(return_value=_fake_response(text="ok"))
+        try:
+            _daily_quota_reset_at[_hash_api_key("test-key")] = time.time() + 3600
+            with _patched_client(provider, gen):
+                with pytest.raises(AIServiceError) as exc_info:
+                    await provider.chat_with_vision("describe", ["aGVsbG8="])
+            assert exc_info.value.error_kind == "upstream_quota"
+            assert gen.await_count == 0
+        finally:
+            clear_daily_quota_latch()
 
 
 class TestRateLimiter:

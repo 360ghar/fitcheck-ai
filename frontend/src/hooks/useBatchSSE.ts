@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createAuthenticatedSSEConnection } from '@/api/batch';
+import { subscribeToBatchJobEvents } from '@/api/batch';
 import type { BatchSSEEventType } from '@/types';
 
 interface UseBatchSSEOptions {
@@ -126,7 +126,7 @@ export function useBatchSSE({
       }
     };
 
-    const disconnect = createAuthenticatedSSEConnection(
+    const disconnect = subscribeToBatchJobEvents(
       jobId,
       (event) => {
         setIsConnected(true);

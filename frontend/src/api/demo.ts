@@ -6,6 +6,7 @@
  */
 
 import axios, { AxiosError } from 'axios';
+import type { GeneratedImage, PhotoshootJobStatusResponse } from './photoshoot';
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
@@ -50,12 +51,7 @@ export interface DemoTryOnResult {
 export interface DemoPhotoshootResult {
   session_id: string;
   status: 'pending' | 'generating' | 'complete' | 'failed';
-  images: Array<{
-    id: string;
-    index: number;
-    image_url?: string;
-    image_base64?: string;
-  }>;
+  images: GeneratedImage[];
   generated_count?: number;
   failed_count?: number;
   image_failures?: Array<{ index: number; error: string }>;
@@ -63,6 +59,23 @@ export interface DemoPhotoshootResult {
   remaining_today: number;
   signup_cta: string;
 }
+
+/** Response from POST /api/v1/photoshoot/demo (job-based, 202). */
+export interface DemoPhotoshootStart {
+  job_id: string;
+  status: string;
+  message: string;
+  remaining_today: number;
+  signup_cta: string;
+}
+
+/**
+ * Response from GET /api/v1/photoshoot/demo/{job_id}/status.
+ *
+ * Same payload as the authenticated job status minus `usage` (the backend
+ * pops it from demo responses).
+ */
+export type DemoPhotoshootStatus = Omit<PhotoshootJobStatusResponse, 'usage'>;
 
 export interface DemoApiError {
   message: string;
@@ -189,21 +202,24 @@ export async function demoTryOn(
 }
 
 /**
- * Generate a demo photoshoot (2 images for anonymous users).
+ * Start a demo photoshoot (2 images for anonymous users, job-based).
+ *
+ * Returns a job_id immediately; poll getDemoPhotoshootStatus for progress
+ * and final results. Demo jobs are rate-limited per IP at creation.
  *
  * @param photo - Single photo file for the demo
  * @param useCase - Optional use case for the photoshoot (defaults to aesthetic on backend)
- * @returns Generated images
+ * @returns Job start payload
  * @throws DemoApiError on failure
  */
 export async function demoPhotoshoot(
   photo: File,
   useCase?: 'linkedin' | 'dating_app' | 'model_portfolio' | 'instagram' | 'aesthetic'
-): Promise<DemoPhotoshootResult> {
+): Promise<DemoPhotoshootStart> {
   try {
     const photoBase64 = await fileToBase64(photo);
 
-    const response = await demoClient.post<{ data: DemoPhotoshootResult }>(
+    const response = await demoClient.post<{ data: DemoPhotoshootStart }>(
       '/api/v1/photoshoot/demo',
       {
         photo: photoBase64,
@@ -211,6 +227,29 @@ export async function demoPhotoshoot(
       }
     );
 
+    return response.data.data;
+  } catch (error) {
+    throw getDemoError(error);
+  }
+}
+
+/**
+ * Poll the status of a demo photoshoot job (no auth; IP-bound ownership).
+ *
+ * @param jobId - The demo job id from demoPhotoshoot()
+ * @param signal - Optional AbortSignal to cancel the in-flight request
+ * @returns Current job status with any completed images
+ * @throws DemoApiError on failure (404 = job not found/expired)
+ */
+export async function getDemoPhotoshootStatus(
+  jobId: string,
+  signal?: AbortSignal
+): Promise<DemoPhotoshootStatus> {
+  try {
+    const response = await demoClient.get<{ data: DemoPhotoshootStatus }>(
+      `/api/v1/photoshoot/demo/${jobId}/status`,
+      { signal }
+    );
     return response.data.data;
   } catch (error) {
     throw getDemoError(error);

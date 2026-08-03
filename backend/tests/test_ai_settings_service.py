@@ -1,6 +1,7 @@
 """
 Tests for AISettingsService's registry-driven provider dispatch
-(get_effective_provider_config, get_ai_service_for_user, test_provider_config).
+(get_effective_provider_config, get_ai_service_for_user, test_provider_config)
+and the user_ai_settings default-row provisioning path.
 
 No dedicated test file existed for this service before this change. Mocks
 AISettingsService.get_user_settings directly (matching the convention already
@@ -9,6 +10,8 @@ db chain, since these tests are about provider-dispatch logic, not persistence
 plumbing.
 """
 
+import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -24,6 +27,118 @@ from app.services.gemini_provider import GeminiConfig, GeminiProvider
 @pytest.fixture(autouse=True)
 def _encryption_key(monkeypatch):
     monkeypatch.setattr(settings, "AI_ENCRYPTION_KEY", "test-encryption-key-not-a-real-secret")
+
+
+class TestGetUserSettingsProvisioning:
+    """Default-row creation must be an exact-once upsert on the PK, not a
+    plain insert: concurrent first admissions (get_user_settings +
+    ensure_ai_settings_row) raced a select-miss into a duplicate-key 23505 ->
+    503 (observed 2026-08-03, GET /api/v1/ai/settings)."""
+
+    @pytest.mark.asyncio
+    async def test_default_row_created_via_upsert_on_conflict(self):
+        upsert_seen = {"seen": False, "kwargs": None}
+        state = {"call": 0}
+        operations = []
+
+        class FakeTable:
+            def __init__(self):
+                self._op = None
+                self._maybe_single = False
+
+            def select(self, *cols):
+                self._op = "select"
+                return self
+
+            def upsert(self, payload, **kwargs):
+                self._op = "upsert"
+                upsert_seen["seen"] = True
+                upsert_seen["kwargs"] = kwargs
+                return self
+
+            def on_conflict(self, col):
+                return self
+
+            def eq(self, col, val):
+                return self
+
+            def maybe_single(self):
+                # postgrest-py's maybe_single returns the row dict (or None)
+                # as `.data`, unlike a plain select's list.
+                self._maybe_single = True
+                return self
+
+            def execute(self):
+                state["call"] += 1
+                if self._op == "select" and self._maybe_single:
+                    # Re-select after the upsert: single row dict.
+                    return SimpleNamespace(data={"user_id": "u1", "default_provider": "custom"})
+                if self._op == "select" and state["call"] == 1:
+                    # First select: row missing (the race scenario).
+                    return SimpleNamespace(data=[])
+                # Upsert result is ignored by the service.
+                return SimpleNamespace(data=[])
+
+        class FakeDb:
+            def table(self, name):
+                return FakeTable()
+
+        async def fake_execute(builder, db, *, extra=None):
+            operations.append(extra["operation"])
+            # Mirror execute_with_reconnect: sync builders run in a thread.
+            return await asyncio.to_thread(builder, db)
+
+        with patch("app.services.ai_settings_service.execute_with_reconnect", new=fake_execute):
+            result = await AISettingsService.get_user_settings("u1", db=FakeDb())
+
+        assert upsert_seen["seen"] is True
+        assert upsert_seen["kwargs"] == {"on_conflict": "user_id"}
+        assert operations == [
+            "get_user_ai_settings.select",
+            "get_user_ai_settings.upsert_default",
+            "get_user_ai_settings.reselect_default",
+        ]
+        assert result["user_id"] == "u1"
+
+    @pytest.mark.asyncio
+    async def test_existing_row_returns_without_writing(self):
+        state = {"call": 0}
+        operations = []
+
+        class FakeTable:
+            def __init__(self):
+                self._op = None
+
+            def select(self, *cols):
+                self._op = "select"
+                return self
+
+            def upsert(self, payload, **kwargs):
+                raise AssertionError("upsert must not run when the row exists")
+
+            def eq(self, col, val):
+                return self
+
+            def maybe_single(self):
+                return self
+
+            def execute(self):
+                state["call"] += 1
+                return SimpleNamespace(data=[{"user_id": "u1", "default_provider": "gemini"}])
+
+        class FakeDb:
+            def table(self, name):
+                return FakeTable()
+
+        async def fake_execute(builder, db, *, extra=None):
+            operations.append(extra["operation"])
+            return await asyncio.to_thread(builder, db)
+
+        with patch("app.services.ai_settings_service.execute_with_reconnect", new=fake_execute):
+            result = await AISettingsService.get_user_settings("u1", db=FakeDb())
+
+        assert result["default_provider"] == "gemini"
+        assert operations == ["get_user_ai_settings.select"]
 
 
 class TestGetEffectiveProviderConfigGemini:

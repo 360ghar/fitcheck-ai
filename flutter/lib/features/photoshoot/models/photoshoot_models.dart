@@ -192,6 +192,8 @@ abstract class GeneratedImage with _$GeneratedImage {
     required int index,
     @JsonKey(name: 'image_url') String? imageUrl,
     @JsonKey(name: 'image_base64') String? imageBase64,
+    /// Human scene label from the backend ("Sunlit cafe, seated upper body")
+    @JsonKey(name: 'label') String? label,
   }) = _GeneratedImage;
 
   factory GeneratedImage.fromJson(Map<String, dynamic> json) =>

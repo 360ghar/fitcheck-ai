@@ -176,6 +176,12 @@ async def upload_item_images(
             initial_delay=1.0,
             backoff_factor=2.0,
             retryable_exceptions=(StorageServiceError, Exception),
+            # A rejected file (invalid image bytes, unsupported type) can
+            # never succeed on retry - fail it once instead of burning 3
+            # extra decode/upload cycles (observed 2026-08-03: "Uploaded
+            # bytes are not a valid image" -> "All 4 attempts failed" per
+            # file). Transient storage errors still retry.
+            should_retry=lambda e: not isinstance(e, UnsupportedMediaTypeError),
         )
 
         # Collect successful uploads

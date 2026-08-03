@@ -1,7 +1,7 @@
 # Reliability
 
 Status: draft  
-Last updated: 2026-07-31
+Last updated: 2026-08-04
 
 The [user-story ledger](./product-specs/user-story-ledger.md) is the source of
 truth for verification status. Current tests are primarily unit/service/widget
@@ -14,6 +14,20 @@ Stripe, browser-E2E, mobile integration, or production-load behavior.
 - `GET /ready` reports schema readiness.
 - Startup should not block indefinitely on optional subsystems; see lifespan tests.
 
+## Referral redemption durability (2026-08-04)
+
+- `redeem_referral` persists `users.referred_by_code` before the atomic RPC;
+  transient failures (missing RPC from unapplied migrations 022/026, dead
+  pooled connections) are retried by `process_pending_referral` on the next
+  login/oauth sync — redemptions are no longer silently lost at signup.
+- Boot probe `missing_referral_rpcs` logs a runbook hint when the referral
+  RPCs are absent (same policy as the quota-RPC probes).
+- Referral credit activation/extension/stacking semantics live in
+  `apply_referral_credit_atomic` (migration 033); banked months for paying
+  subscribers are tracked in TD-062.
+- Repair past silent drops: `backend/scripts/repair_pending_referrals.py`
+  (idempotent; re-calls the atomic RPC per candidate).
+
 ## Long-running AI jobs
 
 - Batch extract, photoshoot, and social import use **job stores + SSE** rather than single multi-minute HTTP requests for multi-image work.
@@ -21,7 +35,13 @@ Stripe, browser-E2E, mobile integration, or production-load behavior.
   - `EXTRACTION_SEMAPHORE = 3` (Agnes-style gateways 429/503 under parallel multi-MB vision POSTs)
   - `GENERATION_SEMAPHORE = 3` (caps peak base64 buffers on the single worker)
 - Job memory caps exist—respect them when adding new in-memory job types (`test_job_memory_caps.py`).
-- Photoshoot concurrency defaults to 2; reference photos are downscaled before gen to limit RAM.
+- Photoshoot concurrency default raised to **4** on 2026-08-03 (was 2, see
+  `docs/exec-plans/active/2026-08-03-photoshoot-speed.md`). Worst case is
+  2 jobs × 4 = 8 in-flight photoshoot generations, bounded by the
+  process-wide `image_gen_slot()` (`AI_GENERATION_CONCURRENCY`, default 30),
+  per-image durable-URL upload at generation time, and terminal payload
+  release. Watch `log_memory` / `/health` RSS (current RSS via VmRSS) after
+  deploy; reference photos are still downscaled before gen to limit RAM.
 - Railway single-worker process: OS `Killed` after AI bursts usually means OOM.
   - Code mitigations: downscale payloads, job caps, HTTP/1.1 AI client, lower AI semaphores, release base64 after use.
   - 2026-08-03 deep pass (see `docs/exec-plans/active/2026-08-03-512mb-memory-budget.md`):

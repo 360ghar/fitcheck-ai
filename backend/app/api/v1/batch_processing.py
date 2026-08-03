@@ -266,9 +266,19 @@ async def _check_batch_rate_limits(
             )
         if isinstance(generation_res, BaseException):
             raise generation_res
+        # Developer hint stays in the logs; the client only ever sees the
+        # user-facing copy (the old message leaked implementation detail
+        # - "auto_generate" - into the API response; observed 2026-08-03).
+        logger.warning(
+            "Batch rejected: daily generation limit would be exceeded",
+            user_id=user_id,
+            estimated_generations=estimated_generations,
+            total_images=total_images,
+            hint="Consider disabling auto_generate",
+        )
         raise RateLimitError(
-            f"Daily generation limit would be exceeded for approximately {estimated_generations} images. "
-            "Consider disabling auto_generate."
+            "This batch needs more AI generations than you have left today. "
+            "Upload fewer photos or try again tomorrow."
         )
 
     reservations["generation"] = estimated_generations

@@ -90,6 +90,22 @@ stores must not import pages
 - `components/wardrobe/BatchExtractionFlow.tsx`
 - Background job UI: `jobUiStore`
 
+### AI Photoshoot (async job + SSE, since 2026-08-03)
+
+- `api/photoshoot.ts` — `startPhotoshootJob` (POST `/generate`, returns
+  `job_id`), `getPhotoshootJobStatus` (poll fallback / retries),
+  `cancelPhotoshootJob`, `subscribeToPhotoshootEvents` (SSE via the shared
+  `createAuthenticatedSSEConnection` from `api/batch.ts`). The legacy
+  `generatePhotoshoot` (`sync=true`) still exists but the web app no longer
+  uses it (TD-019 closed).
+- `stores/photoshootStore.ts` — `generate()` drives the run from SSE events:
+  live `generatedImages` (thumbnail gallery), real `progress` (10% + 90% ·
+  completed/total), `currentSceneLabel` (next pending slot from
+  `batch_started.scene_labels`), rolling `etaSeconds`, `cancelGeneration()`,
+  and a bounded poll fallback when the stream dies silently.
+- `components/landing/PhotoshootDemo.tsx` — anonymous demo polls
+  `GET /photoshoot/demo/{job_id}/status` every 2.5s and shows partial images.
+
 ### Image prep for AI
 
 - `lib/image-compress.ts` before upload when appropriate

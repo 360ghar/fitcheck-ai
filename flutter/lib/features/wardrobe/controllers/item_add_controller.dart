@@ -571,7 +571,9 @@ class ItemAddController extends GetxController {
     error.value = errorMsg;
 
     // Structured signals from the backend (preferred over string matching).
-    // The Dio layer maps HTTP 429 -> RateLimitException(errorCode: RATE_LIMIT_EXCEEDED);
+    // The Dio layer maps HTTP 429 -> RateLimitException with the backend's
+    // errorCode (RATE_LIMIT_EXCEEDED = the user's own plan limit, SERVER_BUSY
+    // = server capacity).
     // SSE/stream failures arrive as a plain Exception wrapping the message, so
     // keep the message fallbacks for those paths.
     final String? code = e is AppException ? e.errorCode : null;
@@ -587,7 +589,8 @@ class ItemAddController extends GetxController {
     // NB: deliberately NOT matching generic "try again" text — validation and
     // detection failures ("No items detected. Please try again.") must keep
     // their dedicated dialogs below, not be routed to the capacity dialog.
-    final bool isCapacity = lower.contains('capacity') ||
+    final bool isCapacity = code == 'SERVER_BUSY' ||
+        lower.contains('capacity') ||
         lower.contains('unavailable') ||
         lower.contains('quota') ||
         lower.contains('resource_exhausted') ||

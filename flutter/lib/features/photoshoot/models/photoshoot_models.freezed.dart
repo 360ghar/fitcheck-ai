@@ -15,7 +15,8 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$GeneratedImage {
 
- String get id; int get index;@JsonKey(name: 'image_url') String? get imageUrl;@JsonKey(name: 'image_base64') String? get imageBase64;
+ String get id; int get index;@JsonKey(name: 'image_url') String? get imageUrl;@JsonKey(name: 'image_base64') String? get imageBase64;/// Human scene label from the backend ("Sunlit cafe, seated upper body")
+@JsonKey(name: 'label') String? get label;
 /// Create a copy of GeneratedImage
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +29,16 @@ $GeneratedImageCopyWith<GeneratedImage> get copyWith => _$GeneratedImageCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is GeneratedImage&&(identical(other.id, id) || other.id == id)&&(identical(other.index, index) || other.index == index)&&(identical(other.imageUrl, imageUrl) || other.imageUrl == imageUrl)&&(identical(other.imageBase64, imageBase64) || other.imageBase64 == imageBase64));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is GeneratedImage&&(identical(other.id, id) || other.id == id)&&(identical(other.index, index) || other.index == index)&&(identical(other.imageUrl, imageUrl) || other.imageUrl == imageUrl)&&(identical(other.imageBase64, imageBase64) || other.imageBase64 == imageBase64)&&(identical(other.label, label) || other.label == label));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,index,imageUrl,imageBase64);
+int get hashCode => Object.hash(runtimeType,id,index,imageUrl,imageBase64,label);
 
 @override
 String toString() {
-  return 'GeneratedImage(id: $id, index: $index, imageUrl: $imageUrl, imageBase64: $imageBase64)';
+  return 'GeneratedImage(id: $id, index: $index, imageUrl: $imageUrl, imageBase64: $imageBase64, label: $label)';
 }
 
 
@@ -48,7 +49,7 @@ abstract mixin class $GeneratedImageCopyWith<$Res>  {
   factory $GeneratedImageCopyWith(GeneratedImage value, $Res Function(GeneratedImage) _then) = _$GeneratedImageCopyWithImpl;
 @useResult
 $Res call({
- String id, int index,@JsonKey(name: 'image_url') String? imageUrl,@JsonKey(name: 'image_base64') String? imageBase64
+ String id, int index,@JsonKey(name: 'image_url') String? imageUrl,@JsonKey(name: 'image_base64') String? imageBase64,@JsonKey(name: 'label') String? label
 });
 
 
@@ -65,12 +66,13 @@ class _$GeneratedImageCopyWithImpl<$Res>
 
 /// Create a copy of GeneratedImage
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? index = null,Object? imageUrl = freezed,Object? imageBase64 = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? index = null,Object? imageUrl = freezed,Object? imageBase64 = freezed,Object? label = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,index: null == index ? _self.index : index // ignore: cast_nullable_to_non_nullable
 as int,imageUrl: freezed == imageUrl ? _self.imageUrl : imageUrl // ignore: cast_nullable_to_non_nullable
 as String?,imageBase64: freezed == imageBase64 ? _self.imageBase64 : imageBase64 // ignore: cast_nullable_to_non_nullable
+as String?,label: freezed == label ? _self.label : label // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }
@@ -156,10 +158,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  int index, @JsonKey(name: 'image_url')  String? imageUrl, @JsonKey(name: 'image_base64')  String? imageBase64)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  int index, @JsonKey(name: 'image_url')  String? imageUrl, @JsonKey(name: 'image_base64')  String? imageBase64, @JsonKey(name: 'label')  String? label)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _GeneratedImage() when $default != null:
-return $default(_that.id,_that.index,_that.imageUrl,_that.imageBase64);case _:
+return $default(_that.id,_that.index,_that.imageUrl,_that.imageBase64,_that.label);case _:
   return orElse();
 
 }
@@ -177,10 +179,10 @@ return $default(_that.id,_that.index,_that.imageUrl,_that.imageBase64);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  int index, @JsonKey(name: 'image_url')  String? imageUrl, @JsonKey(name: 'image_base64')  String? imageBase64)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  int index, @JsonKey(name: 'image_url')  String? imageUrl, @JsonKey(name: 'image_base64')  String? imageBase64, @JsonKey(name: 'label')  String? label)  $default,) {final _that = this;
 switch (_that) {
 case _GeneratedImage():
-return $default(_that.id,_that.index,_that.imageUrl,_that.imageBase64);case _:
+return $default(_that.id,_that.index,_that.imageUrl,_that.imageBase64,_that.label);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -197,10 +199,10 @@ return $default(_that.id,_that.index,_that.imageUrl,_that.imageBase64);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  int index, @JsonKey(name: 'image_url')  String? imageUrl, @JsonKey(name: 'image_base64')  String? imageBase64)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  int index, @JsonKey(name: 'image_url')  String? imageUrl, @JsonKey(name: 'image_base64')  String? imageBase64, @JsonKey(name: 'label')  String? label)?  $default,) {final _that = this;
 switch (_that) {
 case _GeneratedImage() when $default != null:
-return $default(_that.id,_that.index,_that.imageUrl,_that.imageBase64);case _:
+return $default(_that.id,_that.index,_that.imageUrl,_that.imageBase64,_that.label);case _:
   return null;
 
 }
@@ -212,13 +214,15 @@ return $default(_that.id,_that.index,_that.imageUrl,_that.imageBase64);case _:
 @JsonSerializable()
 
 class _GeneratedImage implements GeneratedImage {
-  const _GeneratedImage({required this.id, required this.index, @JsonKey(name: 'image_url') this.imageUrl, @JsonKey(name: 'image_base64') this.imageBase64});
+  const _GeneratedImage({required this.id, required this.index, @JsonKey(name: 'image_url') this.imageUrl, @JsonKey(name: 'image_base64') this.imageBase64, @JsonKey(name: 'label') this.label});
   factory _GeneratedImage.fromJson(Map<String, dynamic> json) => _$GeneratedImageFromJson(json);
 
 @override final  String id;
 @override final  int index;
 @override@JsonKey(name: 'image_url') final  String? imageUrl;
 @override@JsonKey(name: 'image_base64') final  String? imageBase64;
+/// Human scene label from the backend ("Sunlit cafe, seated upper body")
+@override@JsonKey(name: 'label') final  String? label;
 
 /// Create a copy of GeneratedImage
 /// with the given fields replaced by the non-null parameter values.
@@ -233,16 +237,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _GeneratedImage&&(identical(other.id, id) || other.id == id)&&(identical(other.index, index) || other.index == index)&&(identical(other.imageUrl, imageUrl) || other.imageUrl == imageUrl)&&(identical(other.imageBase64, imageBase64) || other.imageBase64 == imageBase64));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _GeneratedImage&&(identical(other.id, id) || other.id == id)&&(identical(other.index, index) || other.index == index)&&(identical(other.imageUrl, imageUrl) || other.imageUrl == imageUrl)&&(identical(other.imageBase64, imageBase64) || other.imageBase64 == imageBase64)&&(identical(other.label, label) || other.label == label));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,index,imageUrl,imageBase64);
+int get hashCode => Object.hash(runtimeType,id,index,imageUrl,imageBase64,label);
 
 @override
 String toString() {
-  return 'GeneratedImage(id: $id, index: $index, imageUrl: $imageUrl, imageBase64: $imageBase64)';
+  return 'GeneratedImage(id: $id, index: $index, imageUrl: $imageUrl, imageBase64: $imageBase64, label: $label)';
 }
 
 
@@ -253,7 +257,7 @@ abstract mixin class _$GeneratedImageCopyWith<$Res> implements $GeneratedImageCo
   factory _$GeneratedImageCopyWith(_GeneratedImage value, $Res Function(_GeneratedImage) _then) = __$GeneratedImageCopyWithImpl;
 @override @useResult
 $Res call({
- String id, int index,@JsonKey(name: 'image_url') String? imageUrl,@JsonKey(name: 'image_base64') String? imageBase64
+ String id, int index,@JsonKey(name: 'image_url') String? imageUrl,@JsonKey(name: 'image_base64') String? imageBase64,@JsonKey(name: 'label') String? label
 });
 
 
@@ -270,12 +274,13 @@ class __$GeneratedImageCopyWithImpl<$Res>
 
 /// Create a copy of GeneratedImage
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? index = null,Object? imageUrl = freezed,Object? imageBase64 = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? index = null,Object? imageUrl = freezed,Object? imageBase64 = freezed,Object? label = freezed,}) {
   return _then(_GeneratedImage(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,index: null == index ? _self.index : index // ignore: cast_nullable_to_non_nullable
 as int,imageUrl: freezed == imageUrl ? _self.imageUrl : imageUrl // ignore: cast_nullable_to_non_nullable
 as String?,imageBase64: freezed == imageBase64 ? _self.imageBase64 : imageBase64 // ignore: cast_nullable_to_non_nullable
+as String?,label: freezed == label ? _self.label : label // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }

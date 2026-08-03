@@ -268,12 +268,21 @@ export const useAuthStore = create<AuthState>()(
           authApi.storeUser(user);
           resetForcedLogoutFlag();
 
-          // Show toast for successful referral redemption
-          if (referral?.success) {
-            toast({
-              title: 'Referral bonus applied!',
-              description: referral.message || 'You both get 1 month of Pro free.',
-            });
+          // Show toast for referral outcome (success or a transient failure
+          // that the backend will retry on next sign-in - RCA 2026-08-04).
+          if (referral) {
+            if (referral.success) {
+              toast({
+                title: 'Referral bonus applied!',
+                description: referral.message || 'You both get 1 month of Pro free.',
+              });
+            } else {
+              toast({
+                title: 'Referral not applied',
+                description: referral.message || 'Your referral could not be applied right now.',
+                variant: 'destructive',
+              });
+            }
           }
 
           return { ...tokens, user, is_new_user };

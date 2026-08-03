@@ -182,3 +182,34 @@ Post-review hardening of the reconnect/retry changes above:
   the wrap (release is `GREATEST(0, …)`-bounded, so retry is harmless).
   Revisit with an idempotency-key RPC if the dead-connection reserve bursts
   recur (TD candidate).
+
+## Third pass (2026-08-03 evening window, 17:49–20:24 UTC)
+
+A new log window surfaced the failure modes below. The Stripe-env and
+Gemini-free-tier items were already documented as **ops** (runbook still
+unapplied) — this pass adds the code fixes that were still missing, plus
+regression tests and tech-debt entries (TD-054–TD-061).
+
+| # | Log signature | Root cause | Fix |
+|---|---------------|------------|-----|
+| 1 | `Gemini request failed: 429 RESOURCE_EXHAUSTED ... limit: 20` then `Native Gemini vision call failed, falling back to Agnes` (17:49–20:24, the dominant volume) | Free-tier key's 20/day cap exhausted; EVERY request still burned one Gemini call + an `[err]`-level log line before the Agnes fallback, and retry loops amplified the latency. | **Code**: `gemini_provider.py` gains a process-local daily-quota circuit breaker keyed by API-key hash — once a `perday` 429 is seen, `chat()` fails fast with `upstream_quota` until the next midnight reset, so the hybrid leg falls to Agnes with zero wasted calls. Quota failures log at WARN (expected once the cap is hit, not errors). Tests: `test_gemini_provider.py`. **Ops still applies**: paid key or `AI_VISION_FALLBACK_API_KEY` / `AI_IMAGE_FALLBACK_API_KEY`. |
+| 2 | `POST /auth/register \| 422` (~40× across 18:01–20:00) | Web form gates only on 8+ chars ("strength checklist is guidance"); mobile signs up via Supabase with no rule; backend hard-required upper+lower+digit+special. | **Code**: `RegisterRequest` length-gated only (password RESET keeps full strength). Tests: `test_auth.py`. |
+| 3 | `Failed to get user AI settings ... duplicate key value violates unique constraint "user_ai_settings_pkey"` -> `/ai/settings 503` (20:02:24) | `get_user_settings` created the default row with a plain `insert` while `ensure_ai_settings_row` upserted; concurrent first admissions raced a select-miss into 23505. | **Code**: default-row creation is now `upsert(on_conflict="user_id")` + re-select. Tests: `test_ai_settings_service.py`. |
+| 4 | `Asymmetric JWT verify failed (will refresh JWKS once) ... Signature has expired` + `Token verification failed` bursts (18:06/18:39/19:23/19:53) | Every expired access token triggered a JWKS re-fetch (cannot help — expiry is checked against `exp`) plus two warn lines per request on app resume. | **Code**: `_decode_asymmetric` skips the JWKS reset for `ExpiredSignatureError`; expiry logs at DEBUG. Unknown-kid still re-fetches once. Tests: `test_auth.py`. |
+| 5 | `Uploaded bytes are not a valid image` -> `All 4 attempts failed` -> `Failed to upload file after retries` (18:10) | `parallel_with_retry` retried every exception type, so a permanent 415 (`UnsupportedMediaTypeError`) ran 3 extra decode/upload cycles per file. | **Code**: `parallel_with_retry` accepts `should_retry`; the items upload excludes `UnsupportedMediaTypeError`. Tests: `test_parallel_retry.py`. |
+| 6 | `RATE_LIMIT_EXCEEDED - Server is busy processing 2 batch jobs` -> `/batch-extract-multipart 429` (18:08/18:26) + `Daily generation limit would be exceeded for approximately 39 images. Consider disabling auto_generate.` (18:26/18:27) | (a) Server-capacity 429 shared the user-plan-limit code, so the web client treated it as deterministic + upgrade prompt. (b) Developer copy ("auto_generate") leaked into the API response. | **Code**: the cap raises the new `SERVER_BUSY` code (429, retry_after=60, user-facing message); web retries it with backoff; Flutter Dio mapper preserves backend code/message on 429 and routes `SERVER_BUSY` to the capacity dialog (never the paywall CTA). Daily-limit rejection message is user-facing; the hint moved to a structured log line. Tests: `test_batch_job_memory_lifecycle.py`. |
+| 7 | `POST /subscription/portal \| 503`, `/checkout \| 503` — `Stripe is not configured` (18:02/18:03/18:31) | Ops env gap (runbook still unapplied) — fail-closed is correct. But `/checkout`/`/portal` only checked the secret key while `/plans` required 5 vars, and the message said "contact support" for an env gap. | **Code**: shared `_stripe_billing_configured()` gates `/plans`, `/checkout`, `/portal`; 503 message points at promo codes as the working path. **Ops still applies** (the five Stripe vars). |
+| 8 | `POST /promo/validate \| 422` (18:38) | `ValidatePromoRequest.code` `min_length=3` while pages validate as the user types; the service already returns a friendly `valid=False`. | **Code**: `min_length=1`. Test: `test_promo_api.py`. |
+| 9 | `Refresh token already used` -> `AUTH_REFRESH_FAILED`; `GET /items \| 422` (1×); `GET /wordpress \| 404` scans | Expected one-time refresh-token semantics (client force-logouts on refresh failure; server dedups in-flight refreshes); single stray/legacy client; WordPress scanner bots. | **No code change** — documented behavior. |
+| 10 | `Empty response from AI for item extraction`, `Failed to parse item extraction response`, `Extraction failed for image` | Symptoms of the Gemini storm (#1): the fallback leg is slower/less reliable under load, and extraction responses time out/come back empty. | Covered by #1 (circuit breaker) + the ops fallback-key items. |
+| 11 | Referral redemption transient failures (missing RPC migration, dead pooled connection) | `redeem_referral` persists `users.referred_by_code` before the RPC, so a transient failure leaves a pending grant. Registration/`oauth/sync` now build a "will retry on next sign-in" fallback response, and login/`oauth/sync` call `ReferralService.process_pending_referral` to complete it (idempotent atomic RPC). | **Code**: `auth.py` import `RedeemReferralResponse` (was referenced without importing — the fallback path raised NameError → 500; found by ruff during verification, fixed 2026-08-04). Regression test: `test_register_transient_referral_failure_returns_will_retry_message` (endpoint-level, mocks Supabase auth + `redeem_referral` raising). |
+
+### Verification (third pass)
+
+```bash
+cd backend && source .venv/bin/activate
+python -m pytest -q
+ruff check app tests
+cd ../frontend && npm run lint && npm run build
+cd .. && python scripts/check_architecture.py && python scripts/check_docs_structure.py
+```

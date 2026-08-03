@@ -11,23 +11,24 @@ from app.services.photoshoot_job_service import PhotoshootJobService, Photoshoot
 from app.models.photoshoot import PhotoshootJobStatus
 from app.core.exceptions import AIServiceError
 from app.models.subscription import PlanType
+from app.utils.json_utils import extract_json_block
 
 
 class TestPromptJsonExtraction:
     def test_extract_json_object_from_prose(self):
         text = 'Sure! Here you go:\n{"subject_lock": "adult", "prompts": []}\nThanks'
-        out = PhotoshootService._extract_json_object(text)
+        out = extract_json_block(text)
         assert out.startswith("{")
         assert "subject_lock" in out
 
     def test_extract_json_from_fence(self):
         text = '```json\n{"prompts": [{"index": 0}]}\n```'
-        out = PhotoshootService._extract_json_object(text)
+        out = extract_json_block(text)
         assert '"prompts"' in out
 
     def test_extract_json_missing_raises(self):
-        with pytest.raises(AIServiceError, match="did not contain JSON"):
-            PhotoshootService._extract_json_object("no structured data here")
+        with pytest.raises(ValueError, match="did not contain JSON"):
+            extract_json_block("no structured data here")
 
     def test_fallback_prompts_count(self):
         prompts = PhotoshootService._fallback_prompts(
@@ -380,3 +381,285 @@ class TestPhotoshootUsageTracking:
             await PhotoshootService.increment_usage("user-123", 3, mock_db)
 
         reserve.assert_awaited_once_with("user-123", 3, mock_db)
+
+
+class TestSceneLabels:
+    """Scene labels broadcast in SSE events so clients show what's generating."""
+
+    def test_prefers_setting_and_pose(self):
+        from app.services.photoshoot_service import _scene_label
+        from app.models.photoshoot import PhotoshootPrompt
+
+        prompt = PhotoshootPrompt(
+            index=0,
+            setting="Sunlit cafe",
+            outfit="linen shirt",
+            pose="Seated upper body",
+            lighting="window light",
+            style="lifestyle",
+            mood="approachable",
+            full_prompt="x",
+        )
+        label = _scene_label(prompt)
+        assert "Sunlit cafe" in label
+        assert "Seated upper body" in label
+
+    def test_truncates_long_label(self):
+        from app.services.photoshoot_service import _scene_label
+        from app.models.photoshoot import PhotoshootPrompt
+
+        prompt = PhotoshootPrompt(
+            index=1,
+            setting="A very long and descriptive setting name that keeps going past the limit",
+            pose="Standing mid-step with the face clearly toward the camera in soft golden light",
+            outfit="x",
+            lighting="x",
+            style="editorial",
+            mood="bold",
+            full_prompt="x",
+        )
+        assert len(_scene_label(prompt)) <= 55
+
+    def test_falls_back_to_style(self):
+        from app.services.photoshoot_service import _scene_label
+        from app.models.photoshoot import PhotoshootPrompt
+
+        prompt = PhotoshootPrompt(
+            index=2,
+            setting="",
+            outfit="x",
+            pose="",
+            lighting="x",
+            style="editorial",
+            mood="",
+            full_prompt="x",
+        )
+        assert _scene_label(prompt) == "editorial"
+
+
+class TestPhotoshootStreamingEvents:
+    """Streaming pipeline broadcasts scene labels with batch/image events."""
+
+    @pytest.fixture
+    def fake_ai_service(self):
+        class FakeChatResponse:
+            images = ["SGVsbG8="]  # "Hello" - valid base64 payload
+            model = "fake-image-model"
+            provider = "fake"
+
+        service = Mock()
+        service.get_image_gen_model = Mock(return_value="fake-image-model")
+        service.chat = AsyncMock(return_value=FakeChatResponse())
+        service.close = AsyncMock()
+        return service
+
+    @pytest.mark.asyncio
+    async def test_batch_and_image_events_carry_labels(self, fake_ai_service):
+        from app.models.photoshoot import PhotoshootPrompt
+        from app.services.photoshoot_service import PhotoshootStreamingService
+
+        # Pipeline pulls the AI service through AISettingsService; the
+        # per-photo downscale must not touch PIL on a fake payload.
+        with (
+            patch(
+                "app.services.ai_settings_service.AISettingsService.get_ai_service_for_user",
+                new_callable=AsyncMock,
+                return_value=fake_ai_service,
+            ),
+            patch(
+                "app.core.image_executor.run_image_op",
+                new_callable=AsyncMock,
+                side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs),
+            ),
+            patch(
+                "app.utils.image_processing.downscale_base64_image",
+                side_effect=lambda raw: raw,
+            ),
+        ):
+            job = await PhotoshootJobService.create_job(
+                user_id="user-123",
+                photos=["data:image/jpeg;base64,SGVsbG8="],
+                use_case="linkedin",
+                num_images=2,
+                batch_size=2,
+            )
+            prompts = [
+                PhotoshootPrompt(
+                    index=i,
+                    setting=f"Setting {i}",
+                    outfit="o",
+                    pose=f"Pose {i}",
+                    lighting="l",
+                    style="s",
+                    mood="m",
+                    full_prompt="fp",
+                )
+                for i in range(2)
+            ]
+
+            service = PhotoshootStreamingService(user_id="user-123", db=Mock())
+            await service._generate_images_streaming(job, prompts)
+
+            history = await PhotoshootJobService.get_event_history(job.job_id)
+
+            batch_started = next(e for e in history if e["type"] == "batch_started")
+            assert "scene_labels" in batch_started["data"]
+            assert batch_started["data"]["scene_labels"]["0"] == "Setting 0, Pose 0"
+
+            image_events = [e for e in history if e["type"] == "image_complete"]
+            assert len(image_events) == 2
+            for event in image_events:
+                assert event["data"]["label"]  # non-empty scene label
+
+            # Cleanup the in-memory job
+            async with PhotoshootJobService._lock:
+                PhotoshootJobService._jobs.pop(job.job_id, None)
+
+
+class TestDemoPhotoshootJob:
+    """Demo jobs run under an IP-derived pseudo-user and skip quota."""
+
+    @staticmethod
+    def _fake_request(host: str):
+        from types import SimpleNamespace
+
+        class FakeRequest:
+            def __init__(self, host):
+                self.client = SimpleNamespace(host=host)
+                self.headers = {}
+
+        return FakeRequest(host)
+
+    def test_demo_user_id_is_ip_derived_and_stable(self):
+        from app.api.v1.photoshoot import _demo_user_id
+
+        user_a = _demo_user_id(self._fake_request("203.0.113.7"))
+        user_b = _demo_user_id(self._fake_request("203.0.113.7"))
+        assert user_a == user_b
+        assert user_a.startswith("demo_")
+        assert "203.0.113.7" not in user_a  # raw IP never lands in the id
+
+    def test_demo_user_id_differs_per_ip(self):
+        from app.api.v1.photoshoot import _demo_user_id
+
+        assert _demo_user_id(self._fake_request("203.0.113.7")) != _demo_user_id(
+            self._fake_request("198.51.100.3")
+        )
+
+    def test_demo_user_id_uses_trusted_client_host_not_xff(self):
+        """The pseudo-user must key on request.client.host (uvicorn proxy-
+        resolved), never the client-supplied X-Forwarded-For header — parsing
+        the header would let a caller mint a fresh pseudo-user per request and
+        bypass the per-IP demo limit."""
+        from app.api.v1.photoshoot import _demo_user_id
+        from types import SimpleNamespace
+
+        class SpoofedRequest:
+            client = SimpleNamespace(host="198.51.100.3")
+            headers = {"x-forwarded-for": "203.0.113.7"}
+
+        assert _demo_user_id(SpoofedRequest()) == _demo_user_id(
+            self._fake_request("198.51.100.3")
+        )
+        assert _demo_user_id(SpoofedRequest()) != _demo_user_id(
+            self._fake_request("203.0.113.7")
+        )
+
+    @pytest.mark.asyncio
+    async def test_demo_pipeline_skips_quota_reservation(self):
+        from app.services.photoshoot_service import PhotoshootStreamingService
+
+        job = await PhotoshootJobService.create_job(
+            user_id="demo_abc",
+            photos=["data:image/jpeg;base64,SGVsbG8="],
+            use_case="aesthetic",
+            num_images=2,
+            batch_size=2,
+        )
+
+        with (
+            patch.object(
+                PhotoshootService,
+                "generate_prompts",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch.object(
+                PhotoshootService,
+                "reserve_daily_usage",
+                new_callable=AsyncMock,
+                return_value=(True, Mock()),
+            ) as reserve,
+            patch.object(
+                PhotoshootService,
+                "release_daily_usage",
+                new_callable=AsyncMock,
+            ) as release,
+            patch.object(
+                PhotoshootStreamingService,
+                "_generate_images_streaming",
+                new_callable=AsyncMock,
+            ),
+        ):
+            service = PhotoshootStreamingService(user_id="demo_abc", db=None, is_demo=True)
+            await service.run_pipeline(job)
+
+            reserve.assert_not_awaited()
+            release.assert_not_awaited()
+
+        async with PhotoshootJobService._lock:
+            PhotoshootJobService._jobs.pop(job.job_id, None)
+
+    @pytest.mark.asyncio
+    async def test_non_demo_pipeline_still_reserves_quota(self):
+        from app.services.photoshoot_service import PhotoshootStreamingService
+
+        job = await PhotoshootJobService.create_job(
+            user_id="user-123",
+            photos=["data:image/jpeg;base64,SGVsbG8="],
+            use_case="linkedin",
+            num_images=2,
+            batch_size=2,
+        )
+
+        with (
+            patch.object(
+                PhotoshootService,
+                "generate_prompts",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch.object(
+                PhotoshootService,
+                "reserve_daily_usage",
+                new_callable=AsyncMock,
+                return_value=(True, Mock()),
+            ) as reserve,
+            patch.object(
+                PhotoshootService,
+                "release_daily_usage",
+                new_callable=AsyncMock,
+            ) as release,
+            patch.object(
+                PhotoshootStreamingService,
+                "_generate_images_streaming",
+                new_callable=AsyncMock,
+            ),
+        ):
+            service = PhotoshootStreamingService(user_id="user-123", db=Mock())
+            await service.run_pipeline(job)
+
+            reserve.assert_awaited_once()
+            # No images were produced by the mocked streaming step, so the
+            # full reservation (2) is handed back for the user to retry.
+            release.assert_awaited_once()
+
+        async with PhotoshootJobService._lock:
+            PhotoshootJobService._jobs.pop(job.job_id, None)
+
+
+class TestPhotoshootConcurrencyConfig:
+    def test_photoshooot_concurrency_default_raised_to_4(self):
+        from app.core.config import settings
+
+        assert settings.PHOTOSHOOT_CONCURRENCY_LIMIT == 4

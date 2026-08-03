@@ -512,16 +512,17 @@ class SchemaNotInitializedError(DatabaseError):
 
 class RateLimitError(FitCheckException):
     """Raised when rate limit is exceeded."""
-    
+
     status_code = status.HTTP_429_TOO_MANY_REQUESTS
     error_code = "RATE_LIMIT_EXCEEDED"
-    
+
     def __init__(
         self,
         message: str = "Too many requests. Please try again later.",
         retry_after: Optional[int] = None,
+        error_code: Optional[str] = None,
     ):
         details = {}
         if retry_after:
             details["retry_after_seconds"] = retry_after
-        super().__init__(message, details)
+        super().__init__(message, details, error_code)

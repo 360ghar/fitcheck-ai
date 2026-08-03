@@ -30,6 +30,7 @@ from app.utils.db import (
     QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
     execute_with_reconnect,
     is_pgrst202_missing_rpc,
+    maybe_single_data,
     missing_rpc_log_hint,
     unwrap_rpc_bool,
 )
@@ -221,15 +222,31 @@ class AISettingsService:
 
                 return settings_row
 
-            # Create default settings if not exists
+            # Create default settings if not exists. Must be an upsert (not a
+            # plain insert): get_user_settings and ensure_ai_settings_row run
+            # concurrently on a user's first admission (observed 2026-08-03:
+            # duplicate key user_ai_settings_pkey 23505 -> 503 from a
+            # select-miss race). The upsert is exact-once on the PK; re-select
+            # so the row reflects whatever the winning writer stored.
             default_settings = _default_settings_row(user_id)
 
             await execute_with_reconnect(
-                lambda d: d.table("user_ai_settings").insert(default_settings).execute(),
+                lambda d: d.table("user_ai_settings")
+                .upsert(default_settings, on_conflict="user_id")
+                .execute(),
                 db,
-                extra={"operation": "get_user_ai_settings.insert_default", "user_id": user_id},
+                extra={"operation": "get_user_ai_settings.upsert_default", "user_id": user_id},
             )
-            return default_settings
+            row = await execute_with_reconnect(
+                lambda d: d.table("user_ai_settings")
+                .select("*")
+                .eq("user_id", user_id)
+                .maybe_single()
+                .execute(),
+                db,
+                extra={"operation": "get_user_ai_settings.reselect_default", "user_id": user_id},
+            )
+            return maybe_single_data(row) or default_settings
 
         except Exception as e:
             logger.error("Failed to get user AI settings", user_id=user_id, error=str(e))

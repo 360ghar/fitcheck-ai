@@ -2,12 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getPhotoshootUsage: vi.fn(),
-  generatePhotoshoot: vi.fn(),
+  startPhotoshootJob: vi.fn(),
+  getPhotoshootJobStatus: vi.fn(),
+  cancelPhotoshootJob: vi.fn(),
+  subscribeToPhotoshootEvents: vi.fn(),
 }))
 
 vi.mock('@/api/photoshoot', () => ({
   getPhotoshootUsage: mocks.getPhotoshootUsage,
-  generatePhotoshoot: mocks.generatePhotoshoot,
+  startPhotoshootJob: mocks.startPhotoshootJob,
+  getPhotoshootJobStatus: mocks.getPhotoshootJobStatus,
+  cancelPhotoshootJob: mocks.cancelPhotoshootJob,
+  subscribeToPhotoshootEvents: mocks.subscribeToPhotoshootEvents,
 }))
 
 import { selectCanGenerate, usePhotoshootStore } from '../photoshootStore'
@@ -15,7 +21,10 @@ import { selectCanGenerate, usePhotoshootStore } from '../photoshootStore'
 describe('photoshoot usage safety', () => {
   beforeEach(() => {
     mocks.getPhotoshootUsage.mockReset()
-    mocks.generatePhotoshoot.mockReset()
+    mocks.startPhotoshootJob.mockReset()
+    mocks.getPhotoshootJobStatus.mockReset()
+    mocks.cancelPhotoshootJob.mockReset()
+    mocks.subscribeToPhotoshootEvents.mockReset()
     // reset() refreshes usage in the background. Keep that refresh pending so
     // it cannot race the state under test and reintroduce an entitlement.
     mocks.getPhotoshootUsage.mockImplementation(() => new Promise(() => undefined))
@@ -39,7 +48,7 @@ describe('photoshoot usage safety', () => {
 
     expect(result).toBeNull()
     expect(usePhotoshootStore.getState().error).toContain('could not confirm')
-    expect(mocks.generatePhotoshoot).not.toHaveBeenCalled()
+    expect(mocks.startPhotoshootJob).not.toHaveBeenCalled()
   })
 
   it('does not enable the generate action without confirmed usage', () => {
@@ -57,7 +66,7 @@ describe('photoshoot usage safety', () => {
     const result = await usePhotoshootStore.getState().generate()
 
     expect(result).toBeNull()
-    expect(mocks.generatePhotoshoot).not.toHaveBeenCalled()
+    expect(mocks.startPhotoshootJob).not.toHaveBeenCalled()
   })
 
   it('disables generate while a generation is in flight', () => {
@@ -76,7 +85,7 @@ describe('photoshoot usage safety', () => {
       remaining: 0,
       plan_type: 'free',
     })
-    mocks.generatePhotoshoot.mockRejectedValue({
+    mocks.startPhotoshootJob.mockRejectedValue({
       isAxiosError: true,
       message: 'Request failed with status code 429',
       response: {

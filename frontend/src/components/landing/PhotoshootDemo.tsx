@@ -5,19 +5,35 @@
  * - Single photo upload
  * - Generates 2 free aesthetic-style images for anonymous users
  * - IP-based rate limiting (2 images/day)
+ * - Job-based: POST returns a job_id, the card polls status every ~2.5s and
+ *   shows partial images as they complete (no long-held HTTP request).
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Camera, Loader2, Download, AlertCircle, CheckCircle2, ArrowRight, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { logger } from '@/lib/logger';
 import { EditorialPanel } from './EditorialPanel';
 import { LoginPromptModal } from './LoginPromptModal';
-import { demoPhotoshoot, DemoPhotoshootResult, DemoApiError } from '@/api/demo';
+import {
+  demoPhotoshoot,
+  getDemoPhotoshootStatus,
+  DemoPhotoshootResult,
+  DemoPhotoshootStatus,
+  DemoApiError,
+} from '@/api/demo';
 import { ensureSessionRecording, trackEvent } from '@/lib/analytics';
 
 type DemoState = 'idle' | 'processing' | 'results' | 'error';
+
+const DEMO_POLL_INTERVAL_MS = 2500;
+const DEMO_POLL_MAX_ATTEMPTS = 120; // ~5 minutes
+
+/** True when two image lists hold the same images in the same order (id-based). */
+function sameImageList(a: Array<{ id: string }>, b: Array<{ id: string }>) {
+  return a.length === b.length && a.every((img, i) => img.id === b[i]?.id);
+}
 
 function isDemoApiError(err: unknown): err is DemoApiError {
   return (
@@ -45,10 +61,31 @@ async function handleDownload(imageData: string, index: number) {
   }
 }
 
-function getImageSrc(img: DemoPhotoshootResult['images'][number]) {
+function getImageSrc(img: { image_url?: string; image_base64?: string }) {
   if (img.image_url) return img.image_url
   if (img.image_base64) return `data:image/png;base64,${img.image_base64}`
   return ''
+}
+
+/**
+ * Poll a demo job until a terminal state, streaming partial images via onProgress.
+ * Pass an AbortSignal to stop polling (and the in-flight request) on unmount/reset.
+ */
+async function pollDemoJob(
+  jobId: string,
+  onProgress: (status: DemoPhotoshootStatus) => void,
+  signal?: AbortSignal
+): Promise<DemoPhotoshootStatus> {
+  for (let attempt = 0; attempt < DEMO_POLL_MAX_ATTEMPTS; attempt++) {
+    const status = await getDemoPhotoshootStatus(jobId, signal);
+    onProgress(status);
+    if (status.status === 'complete' || status.status === 'failed' || status.status === 'cancelled') {
+      return status;
+    }
+    await new Promise((resolve) => setTimeout(resolve, DEMO_POLL_INTERVAL_MS));
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  }
+  throw new Error('Demo generation timed out. Please try again.');
 }
 
 export function PhotoshootDemo() {
@@ -59,10 +96,17 @@ export function PhotoshootDemo() {
   const [error, setError] = useState<string | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [retryingFailedIndex, setRetryingFailedIndex] = useState<number | null>(null);
+  // Live progress while the job runs: partial images + count.
+  const [partialImages, setPartialImages] = useState<DemoPhotoshootStatus['images']>([]);
+  // Guards a stale poll from overwriting a newer run's state.
+  const runIdRef = useRef(0);
+  // Aborts the in-flight poll's network requests on reset/unmount.
+  const abortRef = useRef<AbortController | null>(null);
 
-  // Cleanup object URL when photo changes or component unmounts
+  // Cleanup object URL + stop any in-flight poll when photo changes or component unmounts
   useEffect(() => {
     return () => {
+      abortRef.current?.abort();
       if (photoPreview) {
         URL.revokeObjectURL(photoPreview);
       }
@@ -92,8 +136,13 @@ export function PhotoshootDemo() {
   const handleGenerate = async () => {
     if (!photo) return;
 
+    const runId = ++runIdRef.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setState('processing');
     setError(null);
+    setPartialImages([]);
     ensureSessionRecording();
     trackEvent('photoshoot_session_started', {
       use_case: 'aesthetic',
@@ -103,7 +152,36 @@ export function PhotoshootDemo() {
     });
 
     try {
-      const response = await demoPhotoshoot(photo);
+      const start = await demoPhotoshoot(photo);
+
+      const final = await pollDemoJob(start.job_id, (status) => {
+        if (runIdRef.current !== runId) return; // stale run
+        // Skip no-op updates so unchanged ticks don't re-render the card.
+        setPartialImages((prev) => {
+          const next = status.images ?? [];
+          return sameImageList(prev, next) ? prev : next;
+        });
+      }, controller.signal);
+
+      if (runIdRef.current !== runId) return;
+
+      if (final.status === 'failed') {
+        throw new Error(final.error ?? 'Generation failed');
+      }
+
+      const failedIndices = final.failed_indices ?? [];
+      const response: DemoPhotoshootResult = {
+        session_id: final.job_id,
+        status: final.status === 'complete' ? 'complete' : 'failed',
+        images: (final.images ?? []).sort((a, b) => a.index - b.index),
+        generated_count: final.generated_count,
+        failed_count: final.failed_count,
+        image_failures: failedIndices.map((index) => ({ index, error: '' })),
+        partial_success: final.partial_success,
+        remaining_today: start.remaining_today,
+        signup_cta: start.signup_cta,
+      };
+
       setResult(response);
       setState('results');
       trackEvent('photoshoot_session_completed', {
@@ -116,6 +194,7 @@ export function PhotoshootDemo() {
         source: 'web_demo',
       });
     } catch (err) {
+      if (runIdRef.current !== runId || controller.signal.aborted) return;
       const errorMessage = isDemoApiError(err)
         ? err.isRateLimit
           ? 'Daily demo limit reached. Sign up for 10 free images per day!'
@@ -134,6 +213,8 @@ export function PhotoshootDemo() {
   };
 
   const handleReset = () => {
+    runIdRef.current++; // invalidate any in-flight poll
+    abortRef.current?.abort(); // ...and stop its network requests
     // Revoke object URL before clearing
     if (photoPreview) {
       URL.revokeObjectURL(photoPreview);
@@ -144,6 +225,7 @@ export function PhotoshootDemo() {
     setResult(null);
     setError(null);
     setRetryingFailedIndex(null);
+    setPartialImages([]);
   };
 
   const failedIndices = result?.image_failures?.map((f) => f.index).sort((a, b) => a - b) ?? [];
@@ -152,12 +234,27 @@ export function PhotoshootDemo() {
   const retryFailedSlot = async (failedIndex: number) => {
     if (!photo) return;
 
+    const runId = ++runIdRef.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setRetryingFailedIndex(failedIndex);
     setError(null);
 
     try {
-      const retryResult = await demoPhotoshoot(photo);
-      const replacement = retryResult.images[0];
+      const start = await demoPhotoshoot(photo);
+
+      const final = await pollDemoJob(
+        start.job_id,
+        () => {
+          // No live progress needed for the single-slot retry.
+        },
+        controller.signal
+      );
+
+      if (runIdRef.current !== runId) return;
+
+      const replacement = (final.images ?? []).sort((a, b) => a.index - b.index)[0];
 
       if (replacement && result) {
         const nextImages = [...result.images, { ...replacement, index: failedIndex }]
@@ -172,10 +269,13 @@ export function PhotoshootDemo() {
           failed_count: nextFailed.length,
           partial_success: nextFailed.length > 0,
           image_failures: nextFailed.map((index) => ({ index, error: '' })),
-          remaining_today: retryResult.remaining_today,
+          remaining_today: start.remaining_today,
         });
+      } else {
+        setError('Could not generate replacement image');
       }
     } catch (err) {
+      if (runIdRef.current !== runId || controller.signal.aborted) return;
       const errorMessage = isDemoApiError(err)
         ? err.isRateLimit
           ? 'Daily demo limit reached. Sign up for 10 free images per day!'
@@ -262,23 +362,36 @@ export function PhotoshootDemo() {
           </div>
         )}
 
-      {/* Processing State */}
+      {/* Processing State — live progress + partial images */}
       {state === 'processing' && (
         <div className="h-full flex flex-col items-center justify-center">
           {photoPreview && (
             <img
               src={photoPreview}
               alt="Preview"
-              className="max-h-48 rounded-lg mb-4 object-contain"
+              className="max-h-40 rounded-lg mb-4 object-contain"
             />
           )}
           <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
           <p className="text-gray-600 dark:text-gray-400">
-            Creating your AI photos...
+            {partialImages.length > 0 ? `${partialImages.length}/2 images ready…` : 'Creating your AI photos...'}
           </p>
           <p className="text-xs text-gray-400 mt-1">
             Generation time can vary. You can keep exploring while this runs.
           </p>
+
+          {partialImages.length > 0 && (
+            <div className="grid grid-cols-2 gap-2 mt-4 w-full max-w-xs">
+              {partialImages.map((img) => (
+                <img
+                  key={img.id}
+                  src={getImageSrc(img)}
+                  alt="Generated preview"
+                  className="w-full aspect-[3/4] object-cover rounded-lg"
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 

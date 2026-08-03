@@ -34,6 +34,11 @@ class PhotoshootController extends GetxController {
   // SSE subscription for real-time progress
   StreamSubscription<ServerSentEvent>? _sseSubscription;
 
+  // Guards the bounded poll fallback so SSE error, silent stream end, and the
+  // synthetic `error` event (SSEService fires all three for one failure) can
+  // never start overlapping poll loops.
+  bool _pollStarted = false;
+
   // Current step in the flow
   final Rx<PhotoshootStep> currentStep = PhotoshootStep.upload.obs;
 
@@ -62,6 +67,13 @@ class PhotoshootController extends GetxController {
   final RxString jobId = ''.obs;
   final RxInt currentBatch = 0.obs;
   final RxInt totalBatches = 0.obs;
+
+  // Live generation visibility (photoshoot speed pass, 2026-08-03)
+  final RxInt etaSeconds = 0.obs;
+  final RxString currentSceneLabel = ''.obs;
+  final Map<int, String> _sceneLabels = {};
+  final List<int> _latencySamples = [];
+  DateTime _lastImageAt = DateTime.now();
 
   // Results state
   final RxList<GeneratedImage> generatedImages = <GeneratedImage>[].obs;
@@ -275,6 +287,8 @@ class PhotoshootController extends GetxController {
 
     // Cancel any existing SSE subscription
     _sseSubscription?.cancel();
+    // A fresh run may poll again; clear the previous run's fallback guard.
+    _pollStarted = false;
 
     isGenerating.value = true;
     error.value = '';
@@ -285,6 +299,12 @@ class PhotoshootController extends GetxController {
     failedIndices.clear();
     failedCount.value = 0;
     partialSuccess.value = false;
+    // Live-generation visibility state
+    etaSeconds.value = 0;
+    currentSceneLabel.value = '';
+    _sceneLabels.clear();
+    _latencySamples.clear();
+    _lastImageAt = DateTime.now();
 
     AnalyticsService.instance.track(
       'photoshoot_session_started',
@@ -349,6 +369,32 @@ class PhotoshootController extends GetxController {
     }
   }
 
+  /// Update the ETA from rolling per-image latency (needs >= 2 samples).
+  void _updateEta() {
+    final remaining = numImages.value - generatedImages.length;
+    if (_latencySamples.length < 2 || remaining <= 0) {
+      etaSeconds.value = 0;
+      return;
+    }
+    final avgMs =
+        _latencySamples.reduce((a, b) => a + b) / _latencySamples.length;
+    etaSeconds.value = ((avgMs * remaining) / 1000).round();
+  }
+
+  /// Show the label of the next scene whose slot has not produced an image.
+  void _updateCurrentScene() {
+    final done = generatedImages.map((img) => img.index).toSet();
+    final entries = _sceneLabels.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    for (final entry in entries) {
+      if (!done.contains(entry.key)) {
+        currentSceneLabel.value = entry.value;
+        return;
+      }
+    }
+    currentSceneLabel.value = '';
+  }
+
   /// Subscribe to SSE events for real-time progress
   void _subscribeToEvents(String id) {
     _sseSubscription?.cancel();
@@ -359,17 +405,26 @@ class PhotoshootController extends GetxController {
           onError: (e) {
             debugPrint('SSE error: $e');
             // Fallback to polling if SSE fails
-            _pollJobStatus(id);
+            _startPollFallback(id);
           },
           onDone: () {
             debugPrint('SSE stream ended');
             // If still generating, stream ended unexpectedly - fallback to polling
             if (isGenerating.value &&
                 currentStep.value == PhotoshootStep.generating) {
-              _pollJobStatus(id);
+              _startPollFallback(id);
             }
           },
         );
+  }
+
+  /// Start the bounded poll fallback once per run. SSE errors surface through
+  /// several channels (stream onError, a synthetic `error` event, silent
+  /// onDone), so the `_pollStarted` guard keeps exactly one poll loop alive.
+  void _startPollFallback(String id) {
+    if (_pollStarted) return;
+    _pollStarted = true;
+    _pollJobStatus(id);
   }
 
   /// Handle incoming SSE events
@@ -390,18 +445,42 @@ class PhotoshootController extends GetxController {
         currentBatch.value = event.data?['batch_index'] ?? 0;
         generationStatus.value =
             'Processing batch ${currentBatch.value + 1}/${totalBatches.value}...';
+        // Scene labels for the batch's slots: show which scene is generating.
+        final labels = event.data?['scene_labels'];
+        if (labels is Map) {
+          _sceneLabels.clear();
+          for (final entry in labels.entries) {
+            final index = int.tryParse(entry.key.toString());
+            final label = entry.value?.toString();
+            if (index != null && label != null && label.isNotEmpty) {
+              _sceneLabels[index] = label;
+            }
+          }
+          _updateCurrentScene();
+        }
         break;
 
       case 'image_complete':
         final imageData = event.data;
         if (imageData != null) {
           final image = GeneratedImage.fromJson(imageData);
-          generatedImages.add(image);
-          // Update progress: 10% for upload, 90% for generation
-          generationProgress.value =
-              10 + ((generatedImages.length / numImages.value) * 90).toInt();
-          generationStatus.value =
-              'Generated ${generatedImages.length}/${numImages.value} images...';
+          // Replay-safe: SSEService reconnects and the backend replays event
+          // history, so a duplicate id must not re-append or re-roll ETA.
+          if (!generatedImages.any((g) => g.id == image.id)) {
+            generatedImages.add(image);
+            // Update progress: 10% for upload, 90% for generation
+            generationProgress.value =
+                10 + ((generatedImages.length / numImages.value) * 90).toInt();
+            generationStatus.value =
+                'Generated ${generatedImages.length}/${numImages.value} images...';
+            // Rolling latency for the ETA; the first sample is the planning
+            // phase + first image, so the ETA only kicks in from image 2+.
+            final now = DateTime.now();
+            _latencySamples.add(now.difference(_lastImageAt).inMilliseconds);
+            _lastImageAt = now;
+            _updateEta();
+            _updateCurrentScene();
+          }
         }
         break;
 
@@ -413,6 +492,7 @@ class PhotoshootController extends GetxController {
         }
         failedCount.value = event.data?['failed_count'] ?? failedIndices.length;
         partialSuccess.value = failedCount.value > 0;
+        _updateCurrentScene();
         debugPrint('Image generation failed at index: $failedIndex');
         break;
 
@@ -425,6 +505,10 @@ class PhotoshootController extends GetxController {
 
       case 'job_failed':
         error.value = event.data?['error'] ?? 'Generation failed';
+        etaSeconds.value = 0;
+        currentSceneLabel.value = '';
+        _sceneLabels.clear();
+        _latencySamples.clear();
         AnalyticsService.instance.track(
           'photoshoot_session_failed',
           properties: {
@@ -449,8 +533,9 @@ class PhotoshootController extends GetxController {
         break;
 
       case 'error':
-        // SSE connection error, fallback to polling
-        _pollJobStatus(jobId.value);
+        // SSE connection error, fallback to polling (guarded: the stream's
+        // onError callback fires for the same failure).
+        _startPollFallback(jobId.value);
         break;
     }
   }
@@ -459,6 +544,10 @@ class PhotoshootController extends GetxController {
   void _handleJobComplete(Map<String, dynamic>? data) {
     generationProgress.value = 100;
     generationStatus.value = 'Complete!';
+    etaSeconds.value = 0;
+    currentSceneLabel.value = '';
+    _sceneLabels.clear();
+    _latencySamples.clear();
 
     if (data?['session_id'] != null) {
       sessionId.value = data!['session_id'];
@@ -530,14 +619,29 @@ class PhotoshootController extends GetxController {
     try {
       final status = await _repository.getJobStatus(id);
 
-      generatedImages.assignAll(status.images);
-      failedIndices.assignAll(List<int>.from(status.failedIndices)..sort());
-      failedCount.value = status.failedCount;
-      partialSuccess.value = status.partialSuccess;
-      if (status.totalCount > 0) {
-        generationProgress.value =
-            10 + ((status.generatedCount / status.totalCount) * 90).toInt();
+      // Skip no-op updates: RxList.assignAll notifies even when identical,
+      // and a changed-value check keeps the UI quiet on unchanged ticks.
+      if (!listEquals(generatedImages, status.images)) {
+        generatedImages.assignAll(status.images);
       }
+      final failed = List<int>.from(status.failedIndices)..sort();
+      if (!listEquals(failedIndices, failed)) {
+        failedIndices.assignAll(failed);
+      }
+      if (failedCount.value != status.failedCount) {
+        failedCount.value = status.failedCount;
+      }
+      if (partialSuccess.value != status.partialSuccess) {
+        partialSuccess.value = status.partialSuccess;
+      }
+      if (status.totalCount > 0) {
+        final progress =
+            10 + ((status.generatedCount / status.totalCount) * 90).toInt();
+        if (generationProgress.value != progress) {
+          generationProgress.value = progress;
+        }
+      }
+      _updateCurrentScene();
 
       switch (status.status) {
         case 'pending':
@@ -769,10 +873,16 @@ class PhotoshootController extends GetxController {
     );
   }
 
-  /// Reset to initial state for new generation
-  void reset() {
+  /// Reset to the initial state. With `keepPhotos: true` the selected photos
+  /// are kept and the flow returns to the configure step (used after a
+  /// completed generation for "New Style"); otherwise everything clears and
+  /// the flow returns to upload ("New Photos").
+  void reset({bool keepPhotos = false}) {
     _sseSubscription?.cancel();
-    selectedPhotos.clear();
+    _pollStarted = false;
+    if (!keepPhotos) {
+      selectedPhotos.clear();
+    }
     customPrompt.value = '';
     customPromptController.clear();
     selectedUseCase.value = PhotoshootUseCase.linkedin;
@@ -791,34 +901,12 @@ class PhotoshootController extends GetxController {
     generationStatus.value = '';
     isDownloading.value = false;
     downloadingIndex.value = -1;
-    currentStep.value = PhotoshootStep.upload;
-    fetchUsage();
-  }
-
-  /// Reset for new generation with same photos
-  /// Clears results and config but keeps selected photos
-  void resetForNewGeneration() {
-    _sseSubscription?.cancel();
-    // Keep selectedPhotos - don't clear
-    customPrompt.value = '';
-    customPromptController.clear();
-    selectedUseCase.value = PhotoshootUseCase.linkedin;
-    selectedAspectRatio.value = PhotoshootAspectRatio.square;
-    numImages.value = effectiveMaxImages.clamp(minImages, maxImages);
-    generatedImages.clear();
-    failedIndices.clear();
-    failedCount.value = 0;
-    partialSuccess.value = false;
-    sessionId.value = '';
-    jobId.value = '';
-    currentBatch.value = 0;
-    totalBatches.value = 0;
-    error.value = '';
-    generationProgress.value = 0;
-    generationStatus.value = '';
-    isDownloading.value = false;
-    downloadingIndex.value = -1;
-    currentStep.value = PhotoshootStep.configure;
+    etaSeconds.value = 0;
+    currentSceneLabel.value = '';
+    _sceneLabels.clear();
+    _latencySamples.clear();
+    currentStep.value =
+        keepPhotos ? PhotoshootStep.configure : PhotoshootStep.upload;
     fetchUsage();
   }
 }

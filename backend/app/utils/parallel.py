@@ -45,6 +45,7 @@ async def parallel_with_retry(
     jitter: bool = True,
     retryable_exceptions: Tuple[Type[Exception], ...] = (Exception,),
     on_item_complete: Optional[Callable[[int, "ParallelResult"], None]] = None,
+    should_retry: Optional[Callable[[Exception], bool]] = None,
 ) -> List[ParallelResult]:
     """
     Process items in parallel with individual retry logic for each.
@@ -62,6 +63,13 @@ async def parallel_with_retry(
         jitter: Add random jitter to delays
         retryable_exceptions: Exception types that trigger retry
         on_item_complete: Optional callback when each item completes (success or failure)
+        should_retry: Optional predicate; when it returns False for an error
+            the item fails immediately without further retries (mirrors
+            with_retry). Use it to keep permanent 4xx errors (invalid image
+            bytes, auth failures) from burning retry cycles - observed
+            2026-08-03: "Uploaded bytes are not a valid image" retried 3
+            extra times per file ("All 4 attempts failed") even though the
+            error could never clear.
 
     Returns:
         List of ParallelResult objects in the same order as input items
@@ -77,6 +85,7 @@ async def parallel_with_retry(
                 backoff_factor=backoff_factor,
                 jitter=jitter,
                 retryable_exceptions=retryable_exceptions,
+                should_retry=should_retry,
             )
             pr = ParallelResult(success=True, data=result, index=index)
         except Exception as e:

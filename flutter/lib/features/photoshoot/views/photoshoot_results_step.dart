@@ -56,7 +56,7 @@ class PhotoshootResultsStep extends GetView<PhotoshootController> {
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: controller.resetForNewGeneration,
+                      onPressed: () => controller.reset(keepPhotos: true),
                       icon: const Icon(Icons.refresh),
                       label: const Text('New Style'),
                       style: ElevatedButton.styleFrom(

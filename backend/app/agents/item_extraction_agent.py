@@ -11,7 +11,6 @@ Features:
 """
 
 import json
-import re
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -19,6 +18,7 @@ from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
 from app.services.ai_provider_service import AIProviderService
 from app.services.ai_settings_service import AISettingsService
+from app.utils.json_utils import safe_extract_json_array, safe_extract_json_object
 
 logger = get_context_logger(__name__)
 
@@ -268,28 +268,6 @@ def _normalize_category(value: str) -> str:
     return v if v in VALID_CATEGORIES else "other"
 
 
-def _safe_json_extract(text: str) -> Optional[Dict[str, Any]]:
-    """Extract JSON object from text response."""
-    match = re.search(r"\{[\s\S]*\}", text)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
-
-
-def _safe_json_array_extract(text: str) -> Optional[List[Any]]:
-    """Extract JSON array from text response."""
-    match = re.search(r"\[[\s\S]*\]", text)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
-
-
 def _generate_temp_id() -> str:
     """Generate a temporary ID for detected items."""
     return f"item-{uuid.uuid4().hex[:8]}"
@@ -513,7 +491,7 @@ class ItemExtractionAgent:
         except json.JSONDecodeError:
             pass
 
-        return _safe_json_extract(stripped)
+        return safe_extract_json_object(stripped)
 
     def _process_multi_item_result(
         self,
@@ -776,7 +754,7 @@ class ItemExtractionAgent:
             if not response.text:
                 return []
 
-            parsed = _safe_json_array_extract(response.text)
+            parsed = safe_extract_json_array(response.text)
 
             if isinstance(parsed, list):
                 return [str(c).lower() for c in parsed]

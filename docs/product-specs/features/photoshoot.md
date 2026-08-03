@@ -105,10 +105,12 @@ The AI Photoshoot Generator creates professional-style images of users based on 
 - Display results in gallery format
 
 **Progress Tracking:**
-- Progress bar with percentage
+- Progress bar with percentage (real, from completed image count — 10% upload, 90% generation)
 - Image count: "3/10 images generated"
-- Estimated time remaining
-- Cancel option
+- Current scene label ("Now: Sunlit cafe, seated upper body") from SSE `batch_started.scene_labels` / `image_complete.label`
+- Estimated time remaining (rolling average of per-image latency, shown once ≥2 images complete)
+- Live thumbnail gallery that fills as each image completes
+- Cancel option (visible button on the generating step; best-effort server-side)
 
 ---
 
@@ -217,6 +219,12 @@ POST /api/v1/photoshoot/generate
 POST /api/v1/photoshoot/demo
 ```
 
+Starts a job-based demo (202). Poll `GET /api/v1/photoshoot/demo/{job_id}/status`
+for progress and results (IP-bound ownership, no auth). Demo jobs skip daily
+quota reservation — the IP rate limit (1 demo/day, 2 images) is enforced at
+creation. Demo remains single photo, fixed use case (custom coerced to
+aesthetic), 2 images.
+
 **Request:**
 ```json
 {
@@ -225,25 +233,23 @@ POST /api/v1/photoshoot/demo
 }
 ```
 
-**Response (200):**
+**Response (202):**
 ```json
 {
   "data": {
-    "session_id": "ps_demo_xyz",
-    "status": "complete",
-    "images": [
-      {
-        "id": "img_1",
-        "index": 0,
-        "image_base64": "base64...",
-        "image_url": "https://..."
-      }
-    ],
-    "remaining_today": 0,
+    "job_id": "ps_...",
+    "status": "pending",
+    "message": "Demo photoshoot generation started",
+    "remaining_today": 1,
     "signup_cta": "Sign up for 10 free images per day!"
   }
 }
 ```
+
+**Status (GET /api/v1/photoshoot/demo/{job_id}/status)** returns the same
+shape as the authenticated job status (status, generated_count, failed_count,
+failed_indices, partial_success, total_count, current_batch, total_batches,
+images with image_url/image_base64/label, error) minus `usage`.
 
 ### Get Usage Stats
 
@@ -353,7 +359,7 @@ DEMO_RATE_LIMITS = {
 ## Success Metrics
 
 - **Generation Success Rate:** >95%
-- **Generation Speed:** <60 seconds for 10 images
+- **Generation Speed:** <2.5 minutes for 10 images at `PHOTOSHOOT_CONCURRENCY_LIMIT=4` (per-image provider calls are 30–45s; concurrency 4 runs 10 images in ~4 waves)
 - **User Satisfaction:** 4.0/5 stars
 - **Demo Conversion Rate:** 15% of demo users sign up
 - **Daily Active Users:** Track Photoshoot tab usage

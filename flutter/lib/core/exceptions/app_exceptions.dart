@@ -308,9 +308,20 @@ AppException handleDioException(DioException error) {
             message: responseMessage() ?? 'Validation error',
           );
         case 429:
+          // Preserve the backend's structured code + message: a 429 can be
+          // the user's OWN plan limit (RATE_LIMIT_EXCEEDED -> upgrade CTA) or
+          // SERVER capacity (SERVER_BUSY -> transient, never an upgrade
+          // prompt; observed 2026-08-03 batch-extract 429s). Falling back to
+          // the default errorCode misrouted server-busy into the paywall
+          // dialog.
           final retryAfter = error.response?.headers['retry-after']?.first;
-          return RateLimitException.defaultError(
-            retryAfter: retryAfter != null ? int.tryParse(retryAfter) : null,
+          return RateLimitException(
+            message: responseMessage() ??
+                (retryAfter != null
+                    ? 'Too many requests. Please try again in $retryAfter seconds.'
+                    : 'Too many requests. Please try again later.'),
+            retryAfterSeconds: retryAfter != null ? int.tryParse(retryAfter) : null,
+            errorCode: responseCode() ?? 'RATE_LIMIT_EXCEEDED',
           );
         case 500:
           return ServerException(

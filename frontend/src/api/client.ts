@@ -268,8 +268,13 @@ function notifyApiError(error: AxiosError) {
       'AI busy'
     );
   } else if (error.response.status === 429) {
-    // Rate limit error - show as warning
-    showWarning(apiError.message || 'Too many requests. Please slow down.', 'Rate Limited');
+    // Rate limit error - show as warning. SERVER_BUSY is server capacity
+    // (never an upgrade prompt; already retried with backoff before landing
+    // here), so give it its own title instead of "Rate Limited".
+    showWarning(
+      apiError.message || 'Too many requests. Please slow down.',
+      apiError.code === 'SERVER_BUSY' ? 'Server Busy' : 'Rate Limited'
+    );
   } else {
     // Other API errors - show with appropriate styling
     showApiError(apiError);

@@ -8,11 +8,11 @@ and usage tracking for daily limits.
 import asyncio
 import base64
 import json
-import re
 import uuid
 from datetime import datetime, date, timedelta, timezone
 from app.utils.datetime_util import utcnow, utcnow_iso, utc_today
 from app.utils.db import execute_with_reconnect, unwrap_rpc_bool
+from app.utils.json_utils import extract_json_block
 from app.core.concurrency import image_gen_slot
 from app.utils.image_processing import to_data_url
 from typing import Any, List, Optional, Tuple
@@ -524,10 +524,10 @@ RULES:
                             continue
                         raise last_parse_error
                     try:
-                        json_str = PhotoshootService._extract_json_object(content)
+                        json_str = extract_json_block(content)
                         response_data = json.loads(json_str)
                         break
-                    except (AIServiceError, json.JSONDecodeError) as parse_err:
+                    except (AIServiceError, ValueError, json.JSONDecodeError) as parse_err:
                         last_parse_error = parse_err
                         if attempt == 0:
                             logger.warning(
@@ -657,48 +657,6 @@ RULES:
                 custom_prompt=custom_prompt,
                 subject_hint=subject_hint,
             )
-
-    @staticmethod
-    def _extract_json_object(text: str) -> str:
-        """
-        Extract the first top-level JSON object or array from a model response.
-
-        Handles responses wrapped in markdown fences or with extra prose.
-        """
-        if not text:
-            raise AIServiceError("Empty prompt generation response")
-
-        # Remove markdown code fences if present
-        fenced = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE)
-        if fenced:
-            text = fenced.group(1)
-
-        # Try to find JSON object first, then array
-        obj_start = text.find("{")
-        arr_start = text.find("[")
-
-        if obj_start < 0 and arr_start < 0:
-            raise AIServiceError("Prompt generation response did not contain JSON")
-
-        # Use whichever comes first (object or array)
-        if obj_start >= 0 and (arr_start < 0 or obj_start < arr_start):
-            start = obj_start
-            open_char, close_char = "{", "}"
-        else:
-            start = arr_start
-            open_char, close_char = "[", "]"
-
-        depth = 0
-        for i in range(start, len(text)):
-            ch = text[i]
-            if ch == open_char:
-                depth += 1
-            elif ch == close_char:
-                depth -= 1
-                if depth == 0:
-                    return text[start : i + 1]
-
-        raise AIServiceError("Unterminated JSON in prompt generation response")
 
     @staticmethod
     def _fallback_prompts(
@@ -1083,6 +1041,23 @@ RULES:
 # =============================================================================
 
 
+def _scene_label(prompt: PhotoshootPrompt) -> str:
+    """Short human label for a scene prompt ("sunlit cafe, seated upper body").
+
+    Sent in SSE batch/image events so clients can show which scene is being
+    generated instead of a bare percent. Prefer setting+pose, fall back to
+    style/mood.
+    """
+    parts = [part for part in (prompt.setting, prompt.pose) if part]
+    if parts:
+        label = ", ".join(parts)
+        if len(label) > 48:
+            label = label[:48].rsplit(",", 1)[0] + ", …"
+        return label
+    fallback = prompt.style or prompt.mood or f"Scene {prompt.index + 1}"
+    return fallback
+
+
 class PhotoshootStreamingService:
     """Service for streaming photoshoot generation with SSE updates.
 
@@ -1090,9 +1065,10 @@ class PhotoshootStreamingService:
     progress events to SSE subscribers via PhotoshootJobService.
     """
 
-    def __init__(self, user_id: str, db: Client):
+    def __init__(self, user_id: str, db: Client, is_demo: bool = False):
         self.user_id = user_id
         self.db = db
+        self.is_demo = is_demo
 
     async def run_pipeline(self, job: PhotoshootJob) -> None:
         """Run the photoshoot generation pipeline with SSE updates.
@@ -1111,16 +1087,18 @@ class PhotoshootStreamingService:
         try:
             await PhotoshootJobService.update_status(job.job_id, PhotoshootJobStatus.PROCESSING)
 
-            # Check daily limit
-            allowed, usage = await PhotoshootService.reserve_daily_usage(
-                self.user_id, job.num_images, self.db
-            )
-            if not allowed:
-                raise RateLimitError(
-                    message=f"Daily limit exceeded. You have {usage.remaining} images remaining today.",
-                    retry_after=86400,
+            # Check daily limit. Demo jobs are quota-exempt: the IP rate limit
+            # was enforced at job creation (demo path), so no reservation.
+            if not self.is_demo:
+                allowed, usage = await PhotoshootService.reserve_daily_usage(
+                    self.user_id, job.num_images, self.db
                 )
-            reservation_made = True
+                if not allowed:
+                    raise RateLimitError(
+                        message=f"Daily limit exceeded. You have {usage.remaining} images remaining today.",
+                        retry_after=86400,
+                    )
+                reservation_made = True
 
             # Broadcast generation started
             await PhotoshootJobService.broadcast_event(job.job_id, "generation_started", {
@@ -1148,7 +1126,7 @@ class PhotoshootStreamingService:
             # failed and cancelled images must not consume daily quota so the
             # user can retry them.
             unused = job.num_images - job.generated_count
-            if unused > 0:
+            if not self.is_demo and unused > 0:
                 await PhotoshootService.release_daily_usage(self.user_id, unused, self.db)
 
             # Check cancellation
@@ -1157,9 +1135,11 @@ class PhotoshootStreamingService:
 
             # The reservation RPC already reflects today's usage; reuse the
             # usage object returned by reserve_daily_usage instead of paying a
-            # redundant read after generation.
-            updated_usage = usage
-            usage_dict = updated_usage.model_dump(mode="json")
+            # redundant read after generation. Demo jobs have no usage.
+            usage_dict = None
+            if not self.is_demo:
+                updated_usage = usage
+                usage_dict = updated_usage.model_dump(mode="json")
             await PhotoshootJobService.set_usage(job.job_id, usage_dict)
 
             # Mark complete
@@ -1221,8 +1201,14 @@ class PhotoshootStreamingService:
         from app.services.ai_settings_service import AISettingsService
         from app.services.photoshoot_job_service import PhotoshootJobService
 
-        # Get AI service
-        ai_service = await AISettingsService.get_ai_service_for_user(self.user_id, self.db)
+        # Demo jobs have no DB-backed user AI settings; use the system
+        # default provider config (same as the old demo endpoint path).
+        if self.is_demo or self.db is None:
+            from app.services.ai_provider_service import get_ai_service
+
+            ai_service = await get_ai_service()
+        else:
+            ai_service = await AISettingsService.get_ai_service_for_user(self.user_id, self.db)
 
         try:
             # Normalize + downscale reference photos (see generate_images).
@@ -1259,6 +1245,8 @@ class PhotoshootStreamingService:
                 # Update current batch
                 await PhotoshootJobService.update_current_batch(job.job_id, batch_num + 1)
 
+                scene_labels = {str(p.index): _scene_label(p) for p in batch_prompts}
+
                 # Broadcast batch start
                 await PhotoshootJobService.broadcast_event(job.job_id, "batch_started", {
                     "job_id": job.job_id,
@@ -1266,6 +1254,7 @@ class PhotoshootStreamingService:
                     "batch_number": batch_num + 1,
                     "total_batches": job.total_batches,
                     "images_in_batch": len(batch_prompts),
+                    "scene_labels": scene_labels,
                     "timestamp": utcnow_iso(),
                 })
 
@@ -1389,6 +1378,7 @@ class PhotoshootStreamingService:
                 "job_id": job.job_id,
                 "id": image_id,
                 "index": prompt.index,
+                "label": _scene_label(prompt),
                 "image_base64": image_base64,
                 "image_url": image_url,
                 "generated_count": generated_count,
@@ -1421,6 +1411,7 @@ class PhotoshootStreamingService:
             await PhotoshootJobService.broadcast_event(job.job_id, "image_failed", {
                 "job_id": job.job_id,
                 "index": prompt.index,
+                "label": _scene_label(prompt),
                 "error": str(e),
                 "generated_count": generated_count,
                 "failed_count": failed_count,

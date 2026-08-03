@@ -218,7 +218,12 @@ class RedeemReferralResponse(BaseModel):
 
 class ValidatePromoRequest(BaseModel):
     """Request to validate a promo code without redeeming it."""
-    code: str = Field(..., min_length=3, max_length=50)
+    # min_length=1 (not 3): the public /promo/validate endpoint is used by
+    # landing/register pages that validate as the user types, and the service
+    # already normalizes + returns a friendly valid=False for short/unknown
+    # codes. A min_length of 3 turned partial input into a 422 (observed
+    # 2026-08-03).
+    code: str = Field(..., min_length=1, max_length=50)
 
 
 class ValidatePromoResponse(BaseModel):

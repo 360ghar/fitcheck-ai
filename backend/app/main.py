@@ -18,7 +18,7 @@ from app.core.exceptions import FitCheckException
 from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, get_correlation_id
 from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog, promo
 from app.db.connection import SupabaseDB
-from app.utils.db import missing_quota_rpcs, probe_valid_batch_size_bound
+from app.utils.db import missing_quota_rpcs, missing_referral_rpcs, probe_valid_batch_size_bound
 from postgrest.exceptions import APIError as PostgrestAPIError
 
 REQUIRED_TABLES = (
@@ -250,11 +250,12 @@ async def _seed_schema_status_in_thread() -> None:
         return (
             _schema_missing(db),
             missing_quota_rpcs(db),
+            missing_referral_rpcs(db),
             probe_valid_batch_size_bound(db),
         )
 
     try:
-        missing, missing_rpcs, (bound_level, bound_message) = await asyncio.to_thread(
+        missing, missing_rpcs, missing_referral_rpcs_list, (bound_level, bound_message) = await asyncio.to_thread(
             _check
         )
         _SCHEMA_STATUS_CACHE["missing"] = missing
@@ -267,6 +268,14 @@ async def _seed_schema_status_in_thread() -> None:
                 "022_wave_b_hardening.sql, 024_atomic_daily_quota_reservations.sql "
                 "and 026_harden_rpc_privileges.sql to restore AI admission "
                 "(every quota-backed request fails closed until then)."
+            )
+        if missing_referral_rpcs_list:
+            log.error(
+                "Referral redemption RPCs missing from hosted Supabase: "
+                f"{', '.join(sorted(missing_referral_rpcs_list))}. Apply migrations "
+                "022_wave_b_hardening.sql and 026_harden_rpc_privileges.sql to "
+                "restore referral grants (every redemption fails silently and "
+                "the user + referrer stay on free until then)."
             )
         if bound_level == "critical":
             log.error(f"AI job persistence will fail for every job: {bound_message}")

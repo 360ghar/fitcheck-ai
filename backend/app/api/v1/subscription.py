@@ -72,6 +72,22 @@ def _absolute_checkout_url(url: str) -> str:
     return f"{settings.FRONTEND_URL.rstrip('/')}/{url.lstrip('/')}"
 
 
+def _stripe_billing_configured() -> bool:
+    """True only when web billing is fully configured (secret + all four
+    price IDs). Single source of truth shared by /plans, /checkout and
+    /portal so the advertised state and the fail-closed gates can never
+    drift (observed 2026-08-03: /plans said billing_configured=false while
+    /checkout only checked the secret key, so a half-configured env could
+    still 503 on checkout with a misleading "contact support" message)."""
+    return bool(
+        settings.STRIPE_SECRET_KEY
+        and settings.STRIPE_PLUS_MONTHLY_PRICE_ID
+        and settings.STRIPE_PLUS_YEARLY_PRICE_ID
+        and settings.STRIPE_PRO_MONTHLY_PRICE_ID
+        and settings.STRIPE_PRO_YEARLY_PRICE_ID
+    )
+
+
 # =============================================================================
 # Subscription Endpoints
 # =============================================================================
@@ -137,13 +153,7 @@ async def get_plans():
             # missing vars at boot), so clients must not offer upgrade buttons
             # that only produce error toasts - promo codes stay the working
             # path for free users.
-            "billing_configured": bool(
-                settings.STRIPE_SECRET_KEY
-                and settings.STRIPE_PLUS_MONTHLY_PRICE_ID
-                and settings.STRIPE_PLUS_YEARLY_PRICE_ID
-                and settings.STRIPE_PRO_MONTHLY_PRICE_ID
-                and settings.STRIPE_PRO_YEARLY_PRICE_ID
-            ),
+            "billing_configured": _stripe_billing_configured(),
             # Per-variant store product IDs (null when the store rail is not
             # configured). The mobile clients use these to query/purchase via
             # StoreKit / Play Billing; values are never hardcoded client-side.
@@ -243,8 +253,13 @@ async def create_checkout_session(
 
     Returns a checkout URL to redirect the user to.
     """
-    if not settings.STRIPE_SECRET_KEY:
-        raise ServiceError("Stripe is not configured. Please contact support.")
+    if not _stripe_billing_configured():
+        # Missing env, not a support issue - fail closed with a message that
+        # points at the working path (promo codes) instead of "contact
+        # support" (observed 2026-08-03: repeated 503s at 18:02/18:31).
+        raise ServiceError(
+            "Web billing is not available yet. Use a promo code to upgrade."
+        )
 
     # Validate plan type
     if request.plan_type == PlanType.FREE:
@@ -413,8 +428,12 @@ async def create_portal_session(
 
     Allows users to update payment method, view invoices, and cancel subscription.
     """
-    if not settings.STRIPE_SECRET_KEY:
-        raise ServiceError("Stripe is not configured")
+    if not _stripe_billing_configured():
+        # Same fail-closed gate as /checkout: missing env, not a support
+        # issue (observed 2026-08-03: repeated portal 503s at 18:02/18:03).
+        raise ServiceError(
+            "Web billing is not available yet. Use a promo code to upgrade."
+        )
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
 

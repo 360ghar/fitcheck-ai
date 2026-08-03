@@ -126,6 +126,15 @@ def _decode_asymmetric(token: str, *, alg: str, kid: Optional[str]) -> Dict[str,
             audience="authenticated",
             issuer=_expected_issuer(),
         )
+    except jwt.ExpiredSignatureError:
+        # Expired access token - the normal app-resume refresh flow, NOT a
+        # JWKS problem. Re-fetching JWKS cannot help (expiry is checked
+        # against the token's exp claim, not the signing key) and costs a
+        # network round-trip per request, so propagate immediately. Observed
+        # 2026-08-03: an app resume fired ~6 parallel requests, each warning
+        # + one JWKS re-fetch - pure log/network noise on a client-side
+        # refresh the interceptor handles.
+        raise
     except Exception as first_error:
         # Unknown kid or stale cache: force one JWKS re-fetch, then retry once.
         logger.warning(
@@ -195,12 +204,24 @@ async def verify_token(
     except HTTPException:
         raise
     except jwt.PyJWTError as e:
-        logger.warning(
-            "Token verification failed: %s (alg=%s kid=%s)",
-            e,
-            token_alg,
-            token_kid,
-        )
+        if isinstance(e, jwt.ExpiredSignatureError):
+            # Expired access token - the normal app-resume refresh flow, not
+            # a fault. The client refreshes and retries, so log at DEBUG:
+            # a burst of parallel requests on app launch must not warn-flood
+            # the drain (observed 2026-08-03, ~6 warns in one second).
+            logger.debug(
+                "Token verification failed (expired signature, refresh flow): %s (alg=%s kid=%s)",
+                e,
+                token_alg,
+                token_kid,
+            )
+        else:
+            logger.warning(
+                "Token verification failed: %s (alg=%s kid=%s)",
+                e,
+                token_alg,
+                token_kid,
+            )
         raise _unauthorized() from e
     except Exception as e:
         # JWKS fetch / unexpected crypto errors
