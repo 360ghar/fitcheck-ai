@@ -164,6 +164,7 @@ class RecommendationsController extends GetxController
       weatherController.recommendations;
   RxBool get isLoadingWeather => weatherController.isLoading;
   RxString get weatherError => weatherController.error;
+  String get weatherDisplayTemperature => weatherController.displayTemperature;
 
   Future<void> fetchWeatherRecommendations() =>
       weatherController.fetchRecommendations(availableItems);

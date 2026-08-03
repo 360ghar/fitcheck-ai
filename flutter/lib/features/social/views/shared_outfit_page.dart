@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/persistence_service.dart';
 import '../../../core/widgets/app_ui.dart';
@@ -229,7 +230,7 @@ class _SharedOutfitPageState extends State<SharedOutfitPage> {
                                     ),
                                     ElevatedButton.icon(
                                       onPressed: () =>
-                                          Get.offAllNamed('/login'),
+                                          Get.offAllNamed(Routes.login),
                                       icon: const Icon(Icons.checkroom),
                                       label: const Text('Get FitCheck AI'),
                                     ),

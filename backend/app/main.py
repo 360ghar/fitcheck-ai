@@ -54,9 +54,11 @@ REQUIRED_TABLES = (
     "promo_redemptions",
     # Support tickets
     "support_tickets",
-    # Store webhook event ledgers (mobile IAP, migration 030): without these
-    # tables the App Store / Play notification endpoints fail every delivery,
-    # so readiness fails closed until the migration is applied.
+    # Store webhook event ledgers: without these tables the App Store / Play /
+    # Stripe webhook endpoints fail every delivery (500 on the webhook insert),
+    # so readiness fails closed until the migration is applied. stripe_webhook_events
+    # comes from migration 027; apple_iap_events / google_rtdn_events from 030.
+    "stripe_webhook_events",
     "apple_iap_events",
     "google_rtdn_events",
 )
@@ -336,6 +338,14 @@ async def _background_startup(logger: logging.Logger) -> None:
             log_memory("background_startup_complete", force=True)
         except Exception:
             pass
+        # One full collection after the import-time + startup churn settles:
+        # frees any cyclic garbage the frozen threshold tuning left behind so
+        # the steady-state RSS baseline is measured on clean ground.
+        try:
+            import gc
+            gc.collect()
+        except Exception:
+            pass
         logger.info(
             "Background startup finished",
             extra={"commit": settings.RAILWAY_GIT_COMMIT_SHA},
@@ -355,6 +365,19 @@ async def lifespan(app: FastAPI):
     task so a slow Supabase/Pinecone call cannot delay deploy healthchecks.
     """
     import asyncio
+
+    # GC tuning for the single-worker memory budget (512 MB Railway):
+    # - gc.freeze() moves import-time objects into the permanent generation so
+    #   the collector never rescans them (they are static and never collected).
+    # - Lower gen1/gen2 thresholds collect older generations more often, so
+    #   short-lived request/job objects do not accumulate between full cycles.
+    # Best-effort; a GC API change must never block startup.
+    import gc
+    try:
+        gc.freeze()
+        gc.set_threshold(700, 5, 5)
+    except Exception:
+        pass
 
     # Initialize session logging first
     log_file = setup_session_logging()
@@ -414,6 +437,20 @@ async def lifespan(app: FastAPI):
     try:
         from app.utils.process_metrics import log_memory
         log_memory("shutdown", force=True)
+    except Exception:
+        pass
+
+    # Stop the bounded image executor (see app/core/image_executor.py).
+    try:
+        from app.core.image_executor import shutdown as shutdown_image_executor
+        shutdown_image_executor()
+    except Exception:
+        pass
+
+    # Release the pooled storage download client (see storage_service.py).
+    try:
+        from app.services.storage_service import close_download_client
+        await close_download_client()
     except Exception:
         pass
 

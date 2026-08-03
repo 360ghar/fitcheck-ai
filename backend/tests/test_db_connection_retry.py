@@ -46,6 +46,42 @@ def test_is_db_connection_error_rejects_unrelated_errors():
     assert not is_db_connection_error(RuntimeError("PGRST202 could not find the function"))
 
 
+def test_is_db_connection_error_matches_deque_mutation():
+    """httpcore's HTTP/2 pool raises `RuntimeError: deque mutated during
+    iteration` when the same shared Supabase client is used concurrently (one
+    coroutine iterating the pool's deque while another pops/extends it). It is
+    transient - the retry through a fresh client heals it. Observed 2026-08-03
+    as "Error checking limit for user ... deque mutated during iteration"
+    turning into a generate-outfit 500."""
+    assert is_db_connection_error(RuntimeError("deque mutated during iteration"))
+    assert is_db_connection_error(RuntimeError("list changed size during iteration"))
+
+
+def test_is_db_connection_error_matches_protocol_state_machine_errors():
+    """h2 ProtocolError state text seen on 2026-08-03 when a dead connection
+    receives frames after a gateway restart: SEND_HEADERS/RECV_DATA/RECV_HEADERS
+    in an invalid state. Also the plain "Server disconnected" bursts."""
+    assert is_db_connection_error(
+        RuntimeError("Invalid input StreamInputs.SEND_HEADERS in state 5")
+    )
+    assert is_db_connection_error(
+        RuntimeError("Invalid input ConnectionInputs.RECV_DATA in state ConnectionState.CLOSED")
+    )
+    assert is_db_connection_error(
+        RuntimeError("Invalid input ConnectionInputs.RECV_HEADERS in state ConnectionState.CLOSED")
+    )
+    assert is_db_connection_error(RuntimeError("Server disconnected"))
+
+
+def test_is_db_connection_error_matches_bare_numeric_error_code():
+    """Some h2/httpcore versions collapse ConnectionTerminated to the bare
+    error code with no message (observed 2026-08-03: "Error getting subscription
+    for user ...: 11" / "41" / "45" / "79" / "81"). A numeric-only error text
+    must be treated as connection-class so the retry can heal it."""
+    for code in ("11", "41", "45", "79", "81"):
+        assert is_db_connection_error(RuntimeError(code))
+
+
 # ---------------------------------------------------------------------------
 # execute_with_reconnect (async)
 # ---------------------------------------------------------------------------
@@ -160,3 +196,62 @@ def test_run_sync_with_reconnect_rethrows_non_connection_errors(monkeypatch):
     with pytest.raises(ValueError, match="boom"):
         run_sync_with_reconnect(lambda d: (_ for _ in ()).throw(ValueError("boom")), object())
     assert "reset" not in events
+
+
+# ---------------------------------------------------------------------------
+# Hot-path wiring: get_subscription (the shared choke point behind /subscription,
+# /referral/* and /users/dashboard) now runs its reads through
+# execute_with_reconnect, so a dead pooled connection retries once instead of
+# 500ing every request until a process restart.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_subscription_retries_on_dead_connection(monkeypatch):
+    from unittest.mock import Mock
+
+    from app.db.connection import SupabaseDB
+    from app.models.subscription import PlanType
+    from app.services.subscription_service import SubscriptionService
+
+    USER_ID = "11111111-1111-1111-1111-111111111111"
+    dead_db = Mock()
+    dead_chain = (
+        dead_db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    )
+    dead_chain.execute.side_effect = httpx.RemoteProtocolError(
+        "Server disconnected without sending a response."
+    )
+
+    fresh_db = Mock()
+    row = {
+        "id": "22222222-2222-2222-2222-222222222222",
+        "user_id": USER_ID,
+        "plan_type": "plus_monthly",
+        "status": "active",
+        "current_period_start": "2026-08-01T00:00:00+00:00",
+        # A paid plan without a current_period_end is not entitled
+        # (effective_plan_type downgrades it) - give it a future end so the
+        # row is treated as an active Plus subscription.
+        "current_period_end": "2026-08-31T00:00:00+00:00",
+        "cancel_at_period_end": False,
+        "trial_end": None,
+        "referral_credit_months": 0,
+        "created_at": "2026-08-01T00:00:00+00:00",
+        "updated_at": "2026-08-01T00:00:00+00:00",
+    }
+    result = Mock()
+    result.data = row
+    fresh_chain = (
+        fresh_db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    )
+    fresh_chain.execute.return_value = result
+
+    monkeypatch.setattr(SupabaseDB, "reset", staticmethod(lambda: None))
+    monkeypatch.setattr(SupabaseDB, "get_service_client", staticmethod(lambda: fresh_db))
+
+    sub = await SubscriptionService.get_subscription(USER_ID, dead_db)
+
+    assert sub.plan_type == PlanType.PLUS_MONTHLY
+    # The dead client was hit exactly once, then rebuilt and retried on fresh.
+    dead_chain.execute.assert_called_once()

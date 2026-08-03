@@ -56,6 +56,16 @@ class AppDateUtils {
     return '${months[date.month - 1]} ${date.year}';
   }
 
+  /// Format like "Jul 28, 2026" (short month name + day + year).
+  static String formatMonthDayYear(DateTime date) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final local = date.toLocal();
+    return '${months[local.month - 1]} ${local.day}, ${local.year}';
+  }
+
   /// Format time only, e.g. "02:30".
   static String formatTimeOnly(DateTime time) {
     final local = time.toLocal();

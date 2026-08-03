@@ -328,8 +328,8 @@ export function FilterPanel({
                       'flex items-center gap-2 px-4 py-3 rounded-xl w-full',
                       'border transition-colors duration-200',
                       filters.isFavorite
-                        ? 'border-pink-500 bg-pink-500/10 text-pink-500'
-                        : 'border-border hover:border-pink-500/50'
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border hover:border-primary/50'
                     )}
                   >
                     <Heart className={cn('h-5 w-5', filters.isFavorite && 'fill-current')} />
@@ -509,7 +509,7 @@ export function FilterPanel({
             aria-pressed={filters.isFavorite}
             onClick={() => onFilterChange('isFavorite', !filters.isFavorite)}
             className={cn(
-              filters.isFavorite && 'bg-pink-500 hover:bg-pink-500/90 border-pink-500 text-white'
+              filters.isFavorite && 'bg-primary hover:bg-primary/90 border-primary text-primary-foreground'
             )}
           >
             <Heart className={cn('h-5 w-5', filters.isFavorite && 'fill-current')} />
@@ -645,7 +645,7 @@ export function FilterPanel({
               </Badge>
             )}
             {filters.isFavorite && (
-              <Badge variant="secondary" className="gap-1 shrink-0 text-pink-500">
+              <Badge variant="secondary" className="gap-1 shrink-0 text-primary">
                 <Heart className="h-3 w-3 fill-current" />
                 Favorites
                 <button

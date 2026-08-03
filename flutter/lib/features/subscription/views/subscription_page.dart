@@ -46,6 +46,15 @@ class SubscriptionPage extends GetView<SubscriptionController> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // When the entitlement fetch failed, the plan card would
+              // otherwise silently render as "Free". Surface the failure and
+              // a retry instead of showing an unknown plan as a real one.
+              if (controller.error.value.isNotEmpty &&
+                  controller.subscription.value == null) ...[
+                _buildLoadErrorCard(context, theme),
+                const SizedBox(height: 24),
+              ],
+
               // Current plan card
               _buildCurrentPlanCard(context, theme),
               const SizedBox(height: 24),
@@ -77,6 +86,43 @@ class SubscriptionPage extends GetView<SubscriptionController> {
           ),
         );
       }),
+    );
+  }
+
+  Widget _buildLoadErrorCard(BuildContext context, ThemeData theme) {
+    return AppGlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.orange, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Could not load your plan',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            controller.error.value.replaceAll('Exception: ', ''),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withAlpha(153),
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: controller.fetchSubscription,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Retry'),
+          ),
+        ],
+      ),
     );
   }
 

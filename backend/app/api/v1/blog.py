@@ -6,7 +6,6 @@ and admin-only write access.
 """
 
 import asyncio
-import re
 from typing import Any, Dict, Literal
 
 from fastapi import APIRouter, Depends, Query, status
@@ -24,6 +23,7 @@ from app.models.blog import (
     BlogPostUpdate,
 )
 from app.utils import maybe_single_data
+from app.utils.db import safe_search_term
 
 logger = get_context_logger(__name__)
 
@@ -421,7 +421,7 @@ async def list_all_posts(
             # `(`, `)`, the `*` wildcard) or break the ilike value (`.` and
             # `:` are PostgREST-reserved separators) while keeping % and _ as
             # the intended ilike wildcards.
-            safe_term = re.sub(r"[(),*.:]", "", search)
+            safe_term = safe_search_term(search)
             search_term = f"%{safe_term}%"
             query = query.or_(
                 f"title.ilike.{search_term},excerpt.ilike.{search_term},author.ilike.{search_term}"

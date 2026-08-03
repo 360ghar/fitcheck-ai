@@ -12,7 +12,10 @@ import 'persistence_service.dart';
 /// [PersistenceService] (modeled on [ThemeService]).
 class AiConsentService extends GetxController {
   /// Versioned key so we can re-prompt if the disclosure materially changes.
-  static const String _consentKey = '**********************';
+  /// Restored from the pre-DI-refactor value (`fitcheck_ai_consent_v1`) so
+  /// users who granted consent before that change keep it (a mangled key
+  /// silently re-prompted them and, worse, re-consented under a garbage key).
+  static const String _consentKey = 'fitcheck_ai_consent_v1';
 
   PersistenceService get _persistence => Get.find<PersistenceService>();
 

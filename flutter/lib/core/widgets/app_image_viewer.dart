@@ -108,8 +108,10 @@ class _AppImageViewerState extends State<AppImageViewer> {
 
   void _handleVerticalDragEnd(DragEndDetails details) {
     _isDragging = false;
-    // Dismiss if dragged down more than 100 pixels or with high velocity
-    if (_dragDistance > 100 || details.primaryVelocity! > 300) {
+    // Dismiss if dragged down more than 100 pixels or with high velocity.
+    // primaryVelocity can be null in tests; treat null as 0.
+    final primaryVelocity = details.primaryVelocity ?? 0;
+    if (_dragDistance > 100 || primaryVelocity > 300) {
       _close();
     } else {
       setState(() {

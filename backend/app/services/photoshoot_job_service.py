@@ -17,7 +17,12 @@ from app.core.logging_config import get_context_logger
 from app.models.photoshoot import PhotoshootJobStatus
 from app.services.job_persistence import JobPersistenceStore
 from app.utils.process_metrics import estimate_base64_mb, log_memory
-from app.utils.sse_queue import fanout
+from app.utils.sse_queue import (
+    EVENT_HISTORY_MAX,
+    discard_subscriber,
+    fanout,
+    strip_history_base64,
+)
 from app.utils.db import (
     QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
     job_persistence_migration_hint,
@@ -366,6 +371,30 @@ class PhotoshootJobService:
         )
 
     @classmethod
+    async def release_generated_payloads(cls, job_id: str) -> None:
+        """Free generated-image base64 once the pipeline ends.
+
+        Every generated image is also persisted to a durable storage URL at
+        generation time (photoshoot_service uploads via
+        upload_temp_generated_image); images WITH a URL drop their base64 so
+        a finished job no longer pins multi-MB payloads for the whole
+        finished TTL. Images whose upload failed keep base64 — memory is the
+        price of delivering their image. Status polls return the URL.
+        """
+        async with cls._lock:
+            job = cls._jobs.get(job_id)
+            if not job:
+                return
+            for image in job.generated_images:
+                if isinstance(image, dict) and image.get("image_url"):
+                    image.pop("image_base64", None)
+        log_memory(
+            "photoshoot_generated_payloads_released",
+            force=True,
+            extra={"job_id": job_id},
+        )
+
+    @classmethod
     async def get_job(cls, job_id: str, user_id: str, db: Any = None) -> Optional[PhotoshootJob]:
         """Get a job by ID, validating user ownership.
 
@@ -551,8 +580,14 @@ class PhotoshootJobService:
 
             event = {"type": event_type, "data": data}
 
-            # Always store in event history for late-connecting subscribers
-            job.event_history.append(event)
+            # Always store in event history for late-connecting subscribers.
+            # History is STRIPPED of base64 payloads (see strip_history_base64)
+            # and length-bounded, so a finished job never pins multi-MB copies
+            # of every generated image; live subscribers still get the full
+            # event.
+            job.event_history.append(strip_history_base64(event))
+            if len(job.event_history) > EVENT_HISTORY_MAX:
+                del job.event_history[:-EVENT_HISTORY_MAX]
 
             subscribers = list(job.subscribers)
 
@@ -596,11 +631,18 @@ class PhotoshootJobService:
 
     @classmethod
     async def remove_subscriber(cls, job_id: str, queue: asyncio.Queue) -> None:
-        """Remove an SSE subscriber from a job."""
+        """Remove an SSE subscriber from a job.
+
+        The queue is drained and its byte-ledger entry dropped (see
+        sse_queue.discard_subscriber): a disconnected client's buffered
+        events — potentially multi-MB generated base64 — must not stay
+        pinned by the ledger's strong reference until job TTL.
+        """
         async with cls._lock:
             job = cls._jobs.get(job_id)
             if job and queue in job.subscribers:
                 job.subscribers.remove(queue)
+            discard_subscriber(queue)
 
     @classmethod
     async def get_event_history(cls, job_id: str, up_to_index: int | None = None) -> List[Dict[str, Any]]:

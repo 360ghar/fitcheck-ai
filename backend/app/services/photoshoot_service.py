@@ -12,7 +12,8 @@ import re
 import uuid
 from datetime import datetime, date, timedelta, timezone
 from app.utils.datetime_util import utcnow, utcnow_iso, utc_today
-from app.utils.db import unwrap_rpc_bool
+from app.utils.db import execute_with_reconnect, unwrap_rpc_bool
+from app.core.concurrency import image_gen_slot
 from app.utils.image_processing import to_data_url
 from typing import Any, List, Optional, Tuple
 
@@ -196,26 +197,36 @@ class PhotoshootService:
             # Ensure monthly usage record exists
             await SubscriptionService.get_or_create_usage_record(user_id, db)
 
-            # Prefer DB-side reset for correctness/atomicity (migration 010)
+            # Prefer DB-side reset for correctness/atomicity (migration 010).
+            # Read-only/idempotent (resets the daily counter when stale), so
+            # rebuilding + retrying once on a dead pooled connection is
+            # exact-once safe (observed 2026-08-03: "Error getting daily usage
+            # for user ...: 45" -> photoshoot generate 500).
             try:
-                await asyncio.to_thread(db.rpc(
-                    "reset_daily_photoshoot_if_needed",
-                    {
-                        "p_user_id": user_id,
-                        "p_period_start": period_start.isoformat(),
-                    },
-                ).execute)
+                await execute_with_reconnect(
+                    lambda d: d.rpc(
+                        "reset_daily_photoshoot_if_needed",
+                        {
+                            "p_user_id": user_id,
+                            "p_period_start": period_start.isoformat(),
+                        },
+                    ).execute(),
+                    db,
+                    extra={"operation": "reset_daily_photoshoot_if_needed", "user_id": user_id},
+                )
             except Exception as e:
                 # Migration may not be applied yet; fall back to app-side reset in get_usage().
                 logger.debug(f"RPC reset_daily_photoshoot_if_needed not available: {e}")
 
-            result = await asyncio.to_thread(
-                db.table("subscription_usage")
+            result = await execute_with_reconnect(
+                lambda d: d.table("subscription_usage")
                 .select("*")
                 .eq("user_id", user_id)
                 .eq("period_start", period_start.isoformat())
                 .single()
-                .execute
+                .execute(),
+                db,
+                extra={"operation": "get_daily_usage", "user_id": user_id},
             )
 
             return result.data or {}
@@ -466,16 +477,24 @@ RULES:
                 )
             return base
 
-        def _build_user_content(strict_json: bool):
-            if not reference_photo:
-                return _user_text(strict_json)
+        # Downscale the reference photo ONCE, before the 2-attempt parse-retry
+        # loop below (both attempts reuse the same reference image). CPU-bound
+        # decode + re-encode; run on the bounded image executor so it never
+        # stalls the event loop (see app/core/image_executor).
+        ref_url: Optional[str] = None
+        if reference_photo:
+            from app.core.image_executor import run_image_op
             from app.utils.image_processing import downscale_base64_image
 
             photo = reference_photo
             if "," in photo and photo.strip().lower().startswith("data:"):
                 photo = photo.split(",", 1)[1]
-            photo = downscale_base64_image(photo)
-            ref_url = to_data_url(photo)
+            downscaled = await run_image_op(downscale_base64_image, photo)
+            ref_url = to_data_url(downscaled)
+
+        async def _build_user_content(strict_json: bool):
+            if ref_url is None:
+                return _user_text(strict_json)
             return [
                 {"type": "image_url", "image_url": {"url": ref_url}},
                 {"type": "text", "text": _user_text(strict_json)},
@@ -492,7 +511,7 @@ RULES:
                     response = await ai_service.chat(
                         messages=[
                             ChatMessage(role="system", content=system_prompt),
-                            ChatMessage(role="user", content=_build_user_content(strict)),
+                            ChatMessage(role="user", content=await _build_user_content(strict)),
                         ],
                         temperature=0.3,
                         response_format={"type": "json_object"},
@@ -823,6 +842,9 @@ RULES:
 
         # Normalize + downscale reference photos (cut multi-MB base64 payloads that
         # drive LocalProtocolError and OOM under concurrent generation).
+        # Downscale runs on the bounded image executor: PIL decode is CPU-bound
+        # and can allocate tens of MB per photo.
+        from app.core.image_executor import run_image_op
         from app.utils.image_processing import downscale_base64_image
 
         normalized_refs = []
@@ -832,7 +854,13 @@ RULES:
             else:
                 raw = photo.strip() if photo else ""
             if raw:
-                normalized_refs.append(downscale_base64_image(raw))
+                normalized_refs.append(raw)
+        if normalized_refs:
+            normalized_refs = list(
+                await asyncio.gather(
+                    *(run_image_op(downscale_base64_image, raw) for raw in normalized_refs)
+                )
+            )
 
         if not normalized_refs:
             raise ServiceError("At least one reference photo is required")
@@ -888,12 +916,16 @@ RULES:
                     image_url=None,
                 )
 
-            # Process with concurrency control (configurable via settings)
+            # Process with concurrency control. The LOCAL semaphore keeps the
+            # photoshoot fan-out at PHOTOSHOOT_CONCURRENCY_LIMIT; the SHARED
+            # image_gen_slot() (GENERATION_SEMAPHORE, reentrant) adds the
+            # process-wide ceiling so photoshoot + try-on + outfit + batch
+            # generation share ONE budget (2026-08-03 container OOM - TD-044).
             concurrency_limit = settings.PHOTOSHOOT_CONCURRENCY_LIMIT
             semaphore = asyncio.Semaphore(concurrency_limit)
 
             async def generate_with_semaphore(prompt: PhotoshootPrompt) -> Optional[GeneratedImage]:
-                async with semaphore:
+                async with image_gen_slot(), semaphore:
                     try:
                         return await generate_single(prompt)
                     except Exception as e:
@@ -1146,8 +1178,11 @@ class PhotoshootStreamingService:
                 "timestamp": utcnow_iso(),
             })
             # Keep generated images for GET status / poll fallback; drop
-            # the SSE replay buffer which duplicates base64 payloads.
+            # the SSE replay buffer which duplicates base64 payloads. Images
+            # with a durable URL also drop their base64 now — a finished job
+            # no longer pins multi-MB payloads for the whole finished TTL.
             await PhotoshootJobService.clear_event_history(job.job_id)
+            await PhotoshootJobService.release_generated_payloads(job.job_id)
 
         except RateLimitError as e:
             from app.services.photoshoot_job_service import PhotoshootJobService
@@ -1159,6 +1194,7 @@ class PhotoshootStreamingService:
             })
             await PhotoshootJobService.release_reference_photos(job.job_id)
             await PhotoshootJobService.clear_event_history(job.job_id)
+            await PhotoshootJobService.release_generated_payloads(job.job_id)
         except Exception as e:
             from app.services.photoshoot_job_service import PhotoshootJobService
             logger.exception(f"Photoshoot pipeline failed: {e}")
@@ -1174,6 +1210,7 @@ class PhotoshootStreamingService:
             })
             await PhotoshootJobService.release_reference_photos(job.job_id)
             await PhotoshootJobService.clear_event_history(job.job_id)
+            await PhotoshootJobService.release_generated_payloads(job.job_id)
 
     async def _generate_images_streaming(
         self,
@@ -1188,7 +1225,10 @@ class PhotoshootStreamingService:
         ai_service = await AISettingsService.get_ai_service_for_user(self.user_id, self.db)
 
         try:
-            # Normalize + downscale reference photos (see generate_images)
+            # Normalize + downscale reference photos (see generate_images).
+            # Downscale runs on the bounded image executor: PIL decode is
+            # CPU-bound and can allocate tens of MB per photo.
+            from app.core.image_executor import run_image_op
             from app.utils.image_processing import downscale_base64_image
 
             normalized_refs = []
@@ -1198,7 +1238,13 @@ class PhotoshootStreamingService:
                 else:
                     raw = photo.strip() if photo else ""
                 if raw:
-                    normalized_refs.append(downscale_base64_image(raw))
+                    normalized_refs.append(raw)
+            if normalized_refs:
+                normalized_refs = list(
+                    await asyncio.gather(
+                        *(run_image_op(downscale_base64_image, raw) for raw in normalized_refs)
+                    )
+                )
 
             # Process in batches
             batch_size = job.batch_size
@@ -1223,12 +1269,15 @@ class PhotoshootStreamingService:
                     "timestamp": utcnow_iso(),
                 })
 
-                # Generate batch images concurrently
+                # Generate batch images concurrently. Local semaphore =
+                # photoshoot fan-out cap; shared image_gen_slot() = process-
+                # wide generation budget shared with try-on/outfit/batch
+                # (2026-08-03 container OOM - TD-044).
                 concurrency_limit = settings.PHOTOSHOOT_CONCURRENCY_LIMIT
                 semaphore = asyncio.Semaphore(concurrency_limit)
 
                 async def generate_single(prompt: PhotoshootPrompt):
-                    async with semaphore:
+                    async with image_gen_slot(), semaphore:
                         if job.is_cancelled():
                             return None
                         return await self._generate_single_image(

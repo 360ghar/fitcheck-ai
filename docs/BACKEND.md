@@ -46,11 +46,16 @@ Forbidden: services/models/core importing `app.api`. See `scripts/check_architec
 ## Database
 
 - Hosted Supabase via `supabase-py`. The sync client's singleton pool can
-  die on gateway restarts/idles (`ConnectionTerminated`); `app/utils/db.py`
-  `is_db_connection_error` + `execute_with_reconnect`/`run_sync_with_reconnect`
-  rebuild the client and retry once on the hot paths (2026-08-01 incident:
-  `/items`, `/auth/oauth/sync`, `/outfits`, usage increments 500'd until a
-  redeploy).
+  die on gateway restarts/idles (`ConnectionTerminated`), and httpcore's HTTP/2
+  pool can throw `RuntimeError: deque mutated during iteration` under
+  concurrent shared-client use; `app/utils/db.py` `is_db_connection_error` +
+  `execute_with_reconnect`/`run_sync_with_reconnect` detect both classes and
+  rebuild the client and retry once on the hot paths. Covered so far:
+  `/items`, `/auth/oauth/sync`, `/outfits` (list + create), `get_subscription`
+  (also the shared choke point behind `/subscription`, `/referral/*`,
+  `/users/dashboard`), usage check/increment + `reserve/release_ai_usage`,
+  AI settings, `/users/me` + `/settings` + `/preferences`, referral service,
+  and Supabase Storage uploads (2026-08-01 + 2026-08-03 incidents).
 - `get_service_client()` for elevated route work; `get_client()` for some auth flows.
 - Migrations: `backend/db/supabase/migrations/` (baseline `001_full_schema.sql`).
 - Generated overview: `docs/generated/db-schema.md`.

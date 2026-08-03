@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useIsAuthenticated, useHasHydrated } from './stores/authStore'
+import { getSafeReturnTo } from './pages/auth/authRedirect'
 import { memo, lazy, Suspense } from 'react'
 
 // Analytics
@@ -94,6 +95,7 @@ function LoadingSpinner() {
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useIsAuthenticated()
   const hasHydrated = useHasHydrated()
+  const location = useLocation()
 
   // Wait for hydration before making auth decisions
   if (!hasHydrated) {
@@ -101,7 +103,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/auth/login" replace />
+    // Preserve the requested page so a deep link (or an expired session) that
+    // bounces the user to login returns them to where they were after signing
+    // back in, instead of dumping them on /dashboard. Mirrors forceLogout().
+    const returnTo = getSafeReturnTo(location.pathname + location.search)
+    const target = returnTo
+      ? `/auth/login?returnTo=${encodeURIComponent(returnTo)}`
+      : '/auth/login'
+    return <Navigate to={target} replace />
   }
 
   return <>{children}</>
@@ -111,6 +120,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useIsAuthenticated()
   const hasHydrated = useHasHydrated()
+  const location = useLocation()
 
   // Wait for hydration before making auth decisions
   if (!hasHydrated) {
@@ -118,7 +128,13 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />
+    // Honor ?returnTo= so an already-signed-in user who lands on an auth page
+    // (e.g. a "Sign in" link that carried a destination) is taken back to
+    // where they were going instead of always being dumped on /dashboard.
+    // /auth/* destinations are skipped to avoid bouncing between auth pages.
+    const returnTo = getSafeReturnTo(new URLSearchParams(location.search).get('returnTo'))
+    const target = returnTo && !returnTo.startsWith('/auth/') ? returnTo : '/dashboard'
+    return <Navigate to={target} replace />
   }
 
   return <>{children}</>
@@ -248,7 +264,7 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/dashboard" element={<FeatureErrorBoundary featureName="Dashboard"><DashboardPage /></FeatureErrorBoundary>} />
             <Route path="/wardrobe" element={<FeatureErrorBoundary featureName="Wardrobe"><WardrobePage /></FeatureErrorBoundary>} />
             <Route path="/wardrobe/:id" element={<FeatureErrorBoundary featureName="Wardrobe"><WardrobePage /></FeatureErrorBoundary>} />
             <Route path="/outfits" element={<FeatureErrorBoundary featureName="Outfits"><OutfitsPage /></FeatureErrorBoundary>} />
@@ -275,7 +291,7 @@ function App() {
                 }
               />
             )}
-            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/profile" element={<FeatureErrorBoundary featureName="Profile & settings"><ProfilePage /></FeatureErrorBoundary>} />
             <Route path="/settings" element={<SettingsRedirect />} />
           </Route>
 

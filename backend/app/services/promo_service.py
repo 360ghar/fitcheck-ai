@@ -6,8 +6,6 @@ grant itself happens inside the `redeem_promo_atomic` SECURITY DEFINER RPC
 (migration 031) so validation, usage caps, and the subscription write are one
 transaction; this service only marshals requests and maps errors.
 """
-import asyncio
-
 from supabase import Client
 
 from app.core.config import settings
@@ -20,6 +18,7 @@ from app.models.subscription import (
 from app.services.subscription_service import SubscriptionService
 from app.utils import maybe_single_data
 from app.utils.db import (
+    execute_with_reconnect,
     is_pgrst202_missing_rpc,
     unwrap_rpc_result,
 )
@@ -62,12 +61,17 @@ class PromoService:
         """
         normalized = PromoService._normalize_code(code)
         try:
-            result = await asyncio.to_thread(
-                db.table("promo_codes")
+            # Read-only; rebuild + retry once on a dead pooled connection so a
+            # gateway restart cannot 500 the public landing/register pages
+            # (same incident class as the referral reads, 2026-08-03).
+            result = await execute_with_reconnect(
+                lambda d: d.table("promo_codes")
                 .select("*")
                 .ilike("code", normalized)
                 .maybe_single()
-                .execute
+                .execute(),
+                db,
+                extra={"operation": "validate_promo", "code": normalized},
             )
             data = maybe_single_data(result)
             if not data:
@@ -156,19 +160,35 @@ class PromoService:
         """
         normalized = PromoService._normalize_code(code)
         try:
-            result = await asyncio.to_thread(
-                db.rpc("redeem_promo_atomic", {
+            # The RPC is one transaction (row locks + writes), so a reconnect
+            # retry after a lost response cannot double-grant: the second
+            # attempt returns already_redeemed, which is benign (the user IS
+            # entitled by then).
+            result = await execute_with_reconnect(
+                lambda d: d.rpc("redeem_promo_atomic", {
                     "p_user_id": user_id,
                     "p_code": normalized,
-                }).execute
+                }).execute(),
+                db,
+                extra={"operation": "redeem_promo", "user_id": user_id},
             )
             data = unwrap_rpc_result(result)
             if not isinstance(data, dict):
                 raise DatabaseError("Promo redemption returned no result")
 
+            # The RPC returns success=FALSE + already_redeemed=TRUE on a
+            # replay (reconnect retry after a committed-but-lost response, or
+            # a genuine repeat redemption). Either way the user IS entitled by
+            # then, so surface it as success — today a committed redemption
+            # would otherwise report failure to the client.
+            already_redeemed = bool(data.get("already_redeemed"))
             return RedeemPromoResponse(
-                success=bool(data.get("success")),
-                message=data.get("message") or "Promo code applied",
+                success=bool(data.get("success")) or already_redeemed,
+                message=(
+                    "Promo code already applied — your plan is active"
+                    if already_redeemed and not data.get("success")
+                    else (data.get("message") or "Promo code applied")
+                ),
                 plan_type=data.get("plan_type") or None,
                 months=int(data.get("months") or 0),
             )

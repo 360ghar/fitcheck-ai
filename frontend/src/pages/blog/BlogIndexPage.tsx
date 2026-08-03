@@ -9,7 +9,10 @@ import { useBlogPosts, useBlogCategories } from '@/hooks/useBlog'
 export default function BlogIndexPage() {
   const { category } = useParams<{ category: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
-  const page = parseInt(searchParams.get('page') || '1', 10)
+  // Clamp malformed pagination (?page=abc / 1.5 / -2): the backend's
+  // `page: Field(ge=1)` would 422 the whole grid on a NaN or negative value.
+  const rawPage = parseInt(searchParams.get('page') || '1', 10)
+  const page = Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1
   const searchQuery = searchParams.get('search')?.trim() || ''
   const pageSize = 12
   const [searchValue, setSearchValue] = useState(searchQuery)
@@ -81,11 +84,11 @@ export default function BlogIndexPage() {
 
       <div className="pt-20">
         {/* Hero Section */}
-        <section className="py-16 md:py-24 bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-950">
+        <section className="py-16 md:py-24 bg-stone-50 dark:bg-stone-950">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center max-w-3xl mx-auto">
-                <Badge className="mb-4 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border-0">
+                <Badge className="mb-4 bg-secondary text-primary border-0">
                   {category ? categoryFilter || category : 'Blog'}
                 </Badge>
                 <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-6">
@@ -107,9 +110,9 @@ export default function BlogIndexPage() {
                     value={searchValue}
                     onChange={(event) => setSearchValue(event.target.value)}
                     placeholder="Search articles…"
-                    className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                   />
-                  <button type="submit" className="rounded-lg bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-700">
+                  <button type="submit" className="rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary-pressed">
                     Search
                   </button>
                   {searchQuery && (
@@ -125,8 +128,8 @@ export default function BlogIndexPage() {
                     <Link
                       to="/blog"
                       className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${!category
-                        ? 'bg-indigo-600 text-white border-indigo-600'
-                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400 border-gray-200 dark:border-gray-700'
+                        ? 'bg-stone-900 text-white border-stone-900 dark:bg-white dark:text-stone-900 dark:border-white'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-primary dark:hover:text-primary border-gray-200 dark:border-gray-700'
                         }`}
                     >
                       All
@@ -139,8 +142,8 @@ export default function BlogIndexPage() {
                           key={cat}
                           to={`/blog/category/${catSlug}`}
                           className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${isActive
-                            ? 'bg-indigo-600 text-white border-indigo-600'
-                            : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400 border-gray-200 dark:border-gray-700'
+                            ? 'bg-stone-900 text-white border-stone-900 dark:bg-white dark:text-stone-900 dark:border-white'
+                            : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-primary dark:hover:text-primary border-gray-200 dark:border-gray-700'
                             }`}
                         >
                           {cat}
@@ -178,7 +181,7 @@ export default function BlogIndexPage() {
                 <p className="text-stone-600 dark:text-stone-400">
                   {categoriesError ? 'Unable to load blog categories.' : 'That blog category was not found.'}
                 </p>
-                <Link to="/blog" className="text-indigo-600 hover:underline inline-block">
+                <Link to="/blog" className="text-primary hover:underline inline-block">
                   View all posts
                 </Link>
               </div>
@@ -190,7 +193,7 @@ export default function BlogIndexPage() {
                 <button
                   type="button"
                   onClick={() => window.location.reload()}
-                  className="inline-flex items-center px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+                  className="inline-flex items-center px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-pressed"
                 >
                   Try again
                 </button>
@@ -201,7 +204,7 @@ export default function BlogIndexPage() {
                   No blog posts found{category ? ` in ${categoryFilter || category}` : ''}{searchQuery ? ` matching “${searchQuery}”` : ''}. Check back soon!
                 </p>
                 {category && (
-                  <Link to="/blog" className="text-indigo-600 hover:underline mt-4 inline-block">
+                  <Link to="/blog" className="text-primary hover:underline mt-4 inline-block">
                     View all posts
                   </Link>
                 )}
@@ -214,7 +217,7 @@ export default function BlogIndexPage() {
                       <Link to={`/blog/${post.slug}`} className="group block h-full">
                         <article className="flex h-full flex-col overflow-hidden rounded-lg border border-gray-100 bg-gray-50 transition-[border-color] duration-300 dark:border-gray-800 dark:bg-gray-900">
                           {/* Image Placeholder */}
-                          <div className="aspect-[16/9] bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center relative overflow-hidden">
+                          <div className="aspect-[16/9] bg-stone-200 dark:bg-stone-800 flex items-center justify-center relative overflow-hidden">
                             {post.featured_image_url ? (
                               <img
                                 src={post.featured_image_url}
@@ -237,7 +240,7 @@ export default function BlogIndexPage() {
                           <div className="p-6 flex-1 flex flex-col">
                             {/* Meta */}
                             <div className="flex items-center gap-3 mb-3 text-sm">
-                              <span className="font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2.5 py-1 rounded">
+                              <span className="font-medium text-stone-600 dark:text-stone-400 bg-stone-100 dark:bg-stone-800 px-2.5 py-1 rounded">
                                 {post.category}
                               </span>
                               <span className="flex items-center text-gray-500 dark:text-gray-400">
@@ -247,7 +250,7 @@ export default function BlogIndexPage() {
                             </div>
 
                             {/* Title */}
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3 group-hover:text-primary dark:group-hover:text-primary transition-colors line-clamp-2">
                               {post.title}
                             </h2>
 
@@ -262,7 +265,7 @@ export default function BlogIndexPage() {
                                 <Calendar className="w-3.5 h-3.5 mr-1.5" />
                                 {formatDate(post.date)}
                               </span>
-                              <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400 group-hover:underline flex items-center">
+                              <span className="text-sm font-medium text-primary dark:text-primary flex items-center">
                                 Read more
                                 <ArrowRight className="w-4 h-4 ml-1 transform group-hover:translate-x-1 transition-transform" />
                               </span>
@@ -304,18 +307,18 @@ export default function BlogIndexPage() {
         </section>
 
         {/* CTA Section */}
-        <section className="py-16 md:py-24 bg-gradient-to-br from-indigo-600 to-purple-600">
+        <section className="py-16 md:py-24 bg-stone-900">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <AnimatedSection>
               <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
                 Ready to transform your wardrobe?
               </h2>
-              <p className="text-xl text-indigo-100 mb-8">
+              <p className="text-xl text-stone-300 mb-8">
                 Join thousands using AI to organize, plan, and optimize their style
               </p>
               <Link
                 to="/auth/register"
-                className="inline-flex items-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-colors"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-on-image px-8 py-4 text-lg font-semibold text-on-image-foreground hover:opacity-90 transition-opacity"
               >
                 Get Started Free
                 <ArrowRight className="w-5 h-5" />

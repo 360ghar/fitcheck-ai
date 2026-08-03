@@ -34,7 +34,12 @@ void main() async {
   // Must be registered before FitCheckApp builds GetMaterialApp, since its
   // themeMode argument reads Get.find<ThemeService>() eagerly - InitialBinding
   // runs too late (inside GetMaterialApp's own initState).
-  Get.put(ThemeService());
+  final themeService = Get.put(ThemeService());
+  // Block until the persisted theme is read so the first frame never renders
+  // the default light theme for a moment before switching to the user's saved
+  // dark theme. (ThemeService.onInit kicks off the async load; ready resolves
+  // when it lands.)
+  await themeService.ready;
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -57,18 +62,23 @@ void main() async {
   // Sentry.isEnabled so a capture before (or entirely without) SentryFlutter
   // .init is a safe no-op. One implementation, shared with every other capture
   // site in the app.
+  //
+  // NOTE on ownership: SentryFlutter.init installs its own FlutterError.onError
+  // and PlatformDispatcher.onError integrations that capture the SAME errors
+  // this handler forwards to. Routing them through captureToSentry as well
+  // would double-report every framework/platform error. So those two paths
+  // only record telemetry and preserve default presentation; the zone guard in
+  // the appRunner below keeps captureToSentry because Sentry's outer
+  // runZonedGuarded can never see errors the inner zone already consumed.
 
   // Capture framework errors (widget build, layout, gesture, animation).
   // Without this, FlutterError details are only printed in debug mode and
-  // never reach Sentry/telemetry in release builds.
+  // never reach PostHog telemetry in release builds. (Sentry's own
+  // FlutterErrorIntegration captures these when Sentry is enabled.)
   FlutterError.onError = (FlutterErrorDetails details) {
     AnalyticsService.instance.recordError(
       details.exception,
       details.stack,
-    );
-    ErrorHandler.captureToSentry(
-      details.exception,
-      stackTrace: details.stack ?? StackTrace.current,
     );
     // Preserve default behaviour: dump full details in debug, minimal in
     // release, so developer ergonomics don't regress.
@@ -76,9 +86,9 @@ void main() async {
   };
 
   // Capture async / platform-dispatcher errors that escape the widget tree.
+  // (Sentry's own OnErrorIntegration captures these when Sentry is enabled.)
   PlatformDispatcher.instance.onError = (error, stack) {
     AnalyticsService.instance.recordError(error, stack);
-    ErrorHandler.captureToSentry(error, stackTrace: stack);
     return true;
   };
 

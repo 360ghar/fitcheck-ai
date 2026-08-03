@@ -273,3 +273,26 @@ async def test_approve_photo_continues_when_one_item_save_fails(monkeypatch):
     assert failed_item["updates"]["status"] == "failed"
     saved_item = next(call for call in update_item_calls if call["item_id"] == "item-2")
     assert saved_item["updates"]["status"] == "saved"
+
+
+@pytest.mark.asyncio
+async def test_spawn_background_holds_strong_reference_and_completes():
+    """_spawn_background must keep the one-shot background task alive until it
+    finishes (the event loop only holds weak references to tasks). Regression
+    for the capacity-exhaustion retry task that was created without a strong
+    reference and could be GC'd mid-sleep, stranding a paused job."""
+    import asyncio
+
+    ran = asyncio.Event()
+
+    async def _background():
+        await asyncio.sleep(0)
+        ran.set()
+
+    task = SocialImportPipelineService._spawn_background(_background())
+    await asyncio.wait_for(ran.wait(), timeout=2.0)
+    await task
+    # Let the task's done-callback (which discards it from the strong-reference
+    # set) run on the next loop iteration before asserting.
+    await asyncio.sleep(0)
+    assert task not in SocialImportPipelineService._background_tasks

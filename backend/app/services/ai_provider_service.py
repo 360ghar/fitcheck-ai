@@ -421,6 +421,28 @@ class AIProviderService:
         return count
 
     @staticmethod
+    def _content_for_wire(content: Any) -> Any:
+        """Serialize multimodal content for the OpenAI-compatible wire.
+
+        Messages carry images as BARE base64 (see build_user_multimodal_messages
+        and generate_image) to avoid a full-size data-URL copy per image for
+        the lifetime of the request; the OpenAI-compatible contract requires
+        `data:` URLs for inline images, so wrap here — at wire time — one
+        transient copy per image that lives only for the request body.
+        Data URLs (from legacy callers) pass through unchanged.
+        """
+        if not isinstance(content, list):
+            return content
+        wired = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "image_url":
+                url = part.get("image_url", {}).get("url", "")
+                if url and not url.startswith("data:"):
+                    part = {**part, "image_url": {"url": to_data_url(url)}}
+            wired.append(part)
+        return wired
+
+    @staticmethod
     def _format_exception_message(exc: Exception) -> str:
         detail = str(exc).strip()
         if detail:
@@ -476,6 +498,23 @@ class AIProviderService:
     @classmethod
     def _is_transient_http_status(cls, status_code: int) -> bool:
         return status_code in cls._TRANSIENT_HTTP_STATUS_CODES
+
+    @classmethod
+    def _is_content_policy_rejection(cls, status_code: int, error_detail: str) -> bool:
+        """True for a provider content-policy refusal of the prompt.
+
+        Agnes (agnes-image-2.1-flash) answers prompt refusals with HTTP 400
+        "Unable to generate this content. Please modify your prompt and try
+        again." (observed 2026-08-03: every /ai/try-on 503'd after ~25s). A
+        400 means nothing was generated or billed server-side, so falling
+        through to the configured fallback model is safe - the refusal is
+        model-specific (content policy), not a request-shape error that would
+        fail identically everywhere.
+        """
+        if status_code != 400:
+            return False
+        lowered = (error_detail or "").lower()
+        return "unable to generate this content" in lowered or "content policy" in lowered
 
     @staticmethod
     def _retry_delay_seconds(attempt: int) -> float:
@@ -725,11 +764,14 @@ class AIProviderService:
                     )
                 except AIServiceError as e:
                     # Only fall through to the next model for errors documented
-                    # as transient (429/503/timeout/no-images) - anything else
-                    # (bad key, content policy, parse failure after a possibly
+                    # as transient (429/503/timeout/no-images) or as a prompt
+                    # content-policy refusal (fallback_eligible - a 400 where
+                    # nothing was generated, so the fallback attempt cannot
+                    # double-bill and can succeed where the primary refuses).
+                    # Anything else (bad key, parse failure after a possibly
                     # successful generation) would either fail identically or
                     # risk a second billable request, so it should propagate.
-                    if i == len(attempts) - 1 or not e.retryable:
+                    if i == len(attempts) - 1 or not (e.retryable or e.fallback_eligible):
                         raise
                     logger.warning(
                         "Image generation failed, trying fallback model",
@@ -751,7 +793,7 @@ class AIProviderService:
         payload: Dict[str, Any] = {
             "model": use_model,
             "messages": [
-                {"role": m.role, "content": m.content}
+                {"role": m.role, "content": self._content_for_wire(m.content)}
                 for m in messages
             ],
             "max_tokens": max_tokens or self.config.max_tokens,
@@ -1313,11 +1355,13 @@ class AIProviderService:
 
         # Build message content
         if reference_image:
-            # Image-to-image: include reference image with the prompt. The mime
-            # type is sniffed, not assumed - a hardcoded image/jpeg prefix
-            # propagates a wrong mime_type into Gemini's Part.from_bytes.
+            # Image-to-image: include reference image with the prompt. The
+            # image travels BARE (or as a data URL if the caller wrapped it);
+            # chat() wraps at the wire boundary, and GeminiProvider's
+            # _decode_image_part sniffs the mime from the first decoded bytes,
+            # so no full-size data-URL copy is created here.
             content: List[Dict[str, Any]] = [
-                {"type": "image_url", "image_url": {"url": to_data_url(reference_image)}},
+                {"type": "image_url", "image_url": {"url": reference_image}},
                 {"type": "text", "text": prompt},
             ]
             messages = [ChatMessage(role="user", content=content)]
@@ -1453,6 +1497,12 @@ class AIProviderService:
         except httpx.HTTPStatusError as e:
             error_detail = self._http_error_detail(e.response)
             status = e.response.status_code
+            # A content-policy refusal is NOT retryable at the agent level
+            # (retrying the whole call would multiply multi-second generation
+            # latency), but it IS eligible for the fallback MODEL: nothing was
+            # generated, so the fallback attempt is safe and can succeed.
+            content_policy = self._is_content_policy_rejection(status, error_detail)
+            retryable = self._is_transient_http_status(status)
             # Status + model embedded in the message line itself (parity with
             # chat()) so message-only log views (Railway) can diagnose
             # image-gen failures without structured extras.
@@ -1461,15 +1511,17 @@ class AIProviderService:
                 status_code=status,
                 model=model,
                 error=error_detail,
-                retryable=self._is_transient_http_status(status),
+                retryable=retryable,
+                fallback_eligible=content_policy,
                 exc_info=False,
             )
             # Permanent 4xx (or any status that escaped the transient branch).
             raise AIServiceError(
                 f"AI image request failed ({status}): {error_detail}",
-                retryable=self._is_transient_http_status(status),
+                retryable=retryable,
                 provider_status=status,
                 provider_error_detail=error_detail,
+                fallback_eligible=content_policy,
             )
         except self._TRANSIENT_TRANSPORT_ERRORS as e:
             # Timeout/connection error that exhausted with_retry's internal

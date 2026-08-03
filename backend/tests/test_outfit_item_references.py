@@ -97,12 +97,29 @@ def stub_download(monkeypatch):
     """Map url -> base64 (or None to simulate a failed download)."""
 
     def _install(by_url: Dict[str, Optional[str]]):
-        async def fake_download(url: str, timeout: float = 10.0):
-            return by_url.get(url)
+        from app.utils.image_processing import (
+            DEFAULT_MAX_EDGE,
+            DEFAULT_QUALITY,
+            downscale_base64_image,
+        )
+
+        async def fake_download(
+            url: str,
+            max_edge: int = DEFAULT_MAX_EDGE,
+            quality: int = DEFAULT_QUALITY,
+            timeout: float = 10.0,
+        ):
+            payload = by_url.get(url)
+            if payload is None:
+                return None
+            # The production path downsizes during the download (see
+            # StorageService.download_and_downscale_to_base64); mirror that so
+            # size assertions (test_references_are_downscaled) hold.
+            return downscale_base64_image(payload, max_edge=max_edge, quality=quality)
 
         monkeypatch.setattr(
             item_reference_service.StorageService,
-            "download_to_base64",
+            "download_and_downscale_to_base64",
             staticmethod(fake_download),
         )
 
@@ -259,7 +276,12 @@ async def test_downloads_are_concurrency_bounded(monkeypatch):
     in_flight = 0
     peak = 0
 
-    async def fake_download(url: str, timeout: float = 10.0):
+    async def fake_download(
+        url: str,
+        max_edge: int = 1568,
+        quality: int = 85,
+        timeout: float = 10.0,
+    ):
         nonlocal in_flight, peak
         in_flight += 1
         peak = max(peak, in_flight)
@@ -272,7 +294,7 @@ async def test_downloads_are_concurrency_bounded(monkeypatch):
 
     monkeypatch.setattr(
         item_reference_service.StorageService,
-        "download_to_base64",
+        "download_and_downscale_to_base64",
         staticmethod(fake_download),
     )
 

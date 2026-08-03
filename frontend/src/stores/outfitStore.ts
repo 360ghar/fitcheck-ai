@@ -9,9 +9,10 @@ import type { Outfit, OutfitImage, Style, Season, OutfitFilters as ApiOutfitFilt
 import * as outfitsApi from '../api/outfits';
 import { generateOutfit, type OutfitItemInput } from '../api/ai';
 import { skipToast } from '../api/client';
-import { getApiError, type ApiError } from '../lib/errors';
+import { getApiError, RATE_LIMIT_EXCEEDED, type ApiError } from '../lib/errors';
 import { withRetry } from '../lib/retry';
 import { logger } from '../lib/logger';
+import { useUpgradePromptStore } from '../stores/upgradePromptStore';
 
 // ============================================================================
 // OUTFIT STATE INTERFACE
@@ -650,9 +651,17 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
     );
 
     if (!aiResult.success || !aiResult.data) {
+      const previewApiError = getApiError(aiResult.error);
+      // The request went through `skipToast`, so the axios interceptor's
+      // global handling (including the RATE_LIMIT_EXCEEDED upgrade prompt)
+      // never fires. Surface the prompt here for the user's OWN plan limit —
+      // the one case a bare inline error string under-serves.
+      if (previewApiError.code === RATE_LIMIT_EXCEEDED) {
+        useUpgradePromptStore.getState().open('rate_limit', previewApiError.message);
+      }
       set({
         previewStatus: 'failed',
-        previewError: getApiError(aiResult.error).message || 'Could not render this look',
+        previewError: previewApiError.message || 'Could not render this look',
       });
       return;
     }
@@ -862,6 +871,12 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
             pose: mapPoseToPrompt(options.pose),
             lighting: options.lighting || 'studio',
             include_model: true,
+            // Match the auto-generation options (`startGenerationForNewOutfit`)
+            // so a Regenerate from the detail pane produces the same style of
+            // look (avatar face + body profile) as the original create/upload
+            // render, instead of a faceless generic model.
+            include_user_face: true,
+            use_body_profile: true,
           }),
         {
           maxRetries: 3,
@@ -911,6 +926,13 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         return { ...o, images };
       });
 
+      // A successful manual generation must also clear this outfit's
+      // fire-and-forget map entry: without this, a look that auto-gen had
+      // marked `failed` stays a "Generation failed" card (and pane notice)
+      // forever, even after the user successfully regenerates from the pane.
+      const successMap = new Map(current.generatingOutfits);
+      successMap.delete(outfitId);
+
       set({
         outfits: updatedOutfits,
         selectedOutfit:
@@ -920,6 +942,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         generatedImageUrl: uploaded.image_url,
         generationStatus: 'completed',
         isGenerating: false,
+        generatingOutfits: successMap,
       });
       try {
         const { useJobUiStore } = await import('@/stores/jobUiStore');
@@ -929,7 +952,11 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       }
     } catch (error) {
       const apiError = getApiError(error);
-      set({ error: apiError, isGenerating: false, generationStatus: 'failed' });
+      // Mirror the failure into the map so the grid card (and the pane notice
+      // built from `generatingOutfits`) shows the retry state consistently.
+      const failedMap = new Map(get().generatingOutfits);
+      failedMap.set(outfitId, { status: 'failed', error: apiError.message });
+      set({ error: apiError, isGenerating: false, generationStatus: 'failed', generatingOutfits: failedMap });
       try {
         const { useJobUiStore } = await import('@/stores/jobUiStore');
         useJobUiStore.getState().clearJob('outfit-generate');

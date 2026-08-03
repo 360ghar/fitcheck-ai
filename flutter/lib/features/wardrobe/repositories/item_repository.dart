@@ -226,13 +226,62 @@ class ItemRepository {
     try {
       // Convert base64 string to bytes
       final bytes = base64Decode(base64Image);
+      return await _uploadBytes(
+        itemId,
+        bytes,
+        filename: 'generated_image.png',
+        contentType: 'image/png',
+      );
+    } on DioException {
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
 
+  /// Upload an image from an HTTP(S) URL (for AI-generated product images
+  /// saved by URL after a job completes). Downloads the bytes, then reuses
+  /// the same multipart upload as [uploadImageFromBase64]. Best-effort:
+  /// returns null on any download/upload failure so callers can fall back.
+  Future<ItemImage?> uploadImageFromUrl(
+    String itemId,
+    String imageUrl,
+  ) async {
+    try {
+      final response = await _apiClient.get(
+        imageUrl,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      final bytes = response.data;
+      if (bytes is! List<int> || bytes.isEmpty) {
+        return null;
+      }
+      return await _uploadBytes(
+        itemId,
+        bytes,
+        filename: 'generated_image.png',
+        contentType: 'image/png',
+      );
+    } on DioException {
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<ItemImage?> _uploadBytes(
+    String itemId,
+    List<int> bytes, {
+    required String filename,
+    required String contentType,
+  }) async {
+    try {
       // Create multipart form data with 'file' field (backend expects this name)
       final formData = FormData.fromMap({
         'file': MultipartFile.fromBytes(
           bytes,
-          filename: 'generated_image.png',
-          contentType: DioMediaType.parse('image/png'),
+          filename: filename,
+          contentType: DioMediaType.parse(contentType),
         ),
       });
 

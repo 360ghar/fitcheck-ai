@@ -386,6 +386,12 @@ class TryOnController extends GetxController {
 
     if (image != null) {
       final file = File(image.path);
+      // Remember the last good avatar so a failed upload can restore it
+      // instead of leaving a broken local path + isAvatarReady=false, which
+      // would also block try-on generation with a misleading "still uploading".
+      final previousAvatar = userAvatarUrl.value;
+      final previousReady = isAvatarReady.value;
+
       userAvatarUrl.value = file.path;
       isAvatarReady.value = false;
       isUploadingAvatar.value = true;
@@ -412,6 +418,10 @@ class TryOnController extends GetxController {
         ErrorHandler.showSuccess('Profile photo updated', title: 'Success');
       } catch (e) {
         error.value = ErrorHandler.extractMessage(e);
+        // Restore the previous avatar so the screen reflects what is actually
+        // usable (and generation stays unlocked when it was before).
+        userAvatarUrl.value = previousAvatar;
+        isAvatarReady.value = previousReady;
         ErrorHandler.showError(
           'Server is taking too long to respond. Please try again later or use a smaller image.',
           title: 'Upload Failed',

@@ -36,6 +36,7 @@ from app.services.storage_service import StorageService
 from app.services.vector_service import get_vector_service
 from app.utils.image_processing import resolve_product_reference_image
 from app.utils.retry import with_retry
+from app.utils.tasks import spawn_background_task
 
 logger = get_context_logger(__name__)
 
@@ -46,6 +47,12 @@ class SocialImportPipelineService:
     _tasks: Dict[str, asyncio.Task] = {}
     _locks: Dict[str, asyncio.Lock] = {}
     _task_lock: asyncio.Lock = asyncio.Lock()
+    # Strong references to one-shot background tasks (the capacity-exhaustion
+    # retry sleep). The event loop only keeps weak references, so a discarded
+    # create_task() result can be GC'd mid-sleep and the retry never fires,
+    # leaving a capacity-paused job stuck in `processing` with queued photos.
+    # Same pattern as batch_processing._pipeline_tasks / photoshoot._pipeline_tasks.
+    _background_tasks: "set[asyncio.Task]" = set()
 
     # Pagination safeguards to prevent infinite loops
     MAX_DISCOVERY_ITERATIONS = 100  # Max pages to fetch per job
@@ -109,6 +116,11 @@ class SocialImportPipelineService:
         async with cls._task_lock:
             cls._tasks.pop(job_id, None)
             cls._locks.pop(job_id, None)
+
+    @classmethod
+    def _spawn_background(cls, coro: "Any") -> asyncio.Task:
+        """Kick off a one-shot background task while holding a strong reference."""
+        return spawn_background_task(coro, cls._background_tasks)
 
     @classmethod
     def _cleanup_all_finished_tasks(cls) -> None:
@@ -538,7 +550,9 @@ class SocialImportPipelineService:
                 # in `processing` with queued photos and no retry would strand
                 # it indefinitely, so schedule a bounded automatic retry.
                 await self._sync_job_counters(job_id)
-                asyncio.create_task(self._schedule_capacity_retry(job_id))
+                # The task is strongly referenced (see _background_tasks) so it
+                # cannot be GC'd mid-sleep before the retry fires.
+                self._spawn_background(self._schedule_capacity_retry(job_id))
                 return
             job = await SocialImportJobStore.get_job(
                 self.db, job_id=job_id, user_id=self.user_id

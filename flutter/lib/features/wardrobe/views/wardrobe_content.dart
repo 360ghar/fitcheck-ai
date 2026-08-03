@@ -38,6 +38,20 @@ class _WardrobeContentState extends State<WardrobeContent> {
                   // Category filter chips
                   SliverToBoxAdapter(child: _buildCategoryChips()),
 
+                  // Offline / error banner (persistent context, so an offline
+                  // user never sees a misleading "empty closet" state).
+                  Obx(() {
+                    if (controller.error.value.isEmpty ||
+                        controller.isLoading.value) {
+                      return const SliverToBoxAdapter(
+                        child: SizedBox.shrink(),
+                      );
+                    }
+                    return SliverToBoxAdapter(
+                      child: AppErrorBanner(message: controller.error.value),
+                    );
+                  }),
+
                   // Content
                   SliverPadding(
                     // Extra bottom inset so extended FAB + bottom nav don't cover last row
@@ -217,7 +231,7 @@ class _WardrobeContentState extends State<WardrobeContent> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          '${controller.items.length}',
+                          '${controller.totalItems.value}',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,

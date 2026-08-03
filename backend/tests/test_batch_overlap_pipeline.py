@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.core.exceptions import AIServiceError
 from app.services.batch_job_service import (
     BatchImageData,
     BatchJob,
@@ -417,5 +418,69 @@ async def test_generate_single_item_falls_back_when_source_unavailable():
     assert captured_kwargs["reference_image"] is None
     # No bounding box is forwarded to generation.
     assert "bounding_box" not in captured_kwargs
+
+    await _unregister(job.job_id)
+
+
+@pytest.mark.asyncio
+async def test_generation_consumer_crash_marks_job_failed_not_completed():
+    """If the generation consumer dies on an unexpected error AFTER the
+    extraction phase finishes, the job must be marked FAILED (and emit
+    job_failed) rather than falsely COMPLETED with items silently ungenerated.
+
+    Regression for the stop_consumer() bare-except that swallowed the consumer's
+    exception on the happy path.
+    """
+    from app.services.batch_extraction_service import BatchExtractionService
+
+    job = _make_job(["img-a"], auto_generate=True)
+    await _register(job)
+
+    events: List[str] = []
+    real_broadcast = BatchJobService.broadcast_event
+
+    async def track_broadcast(job_id, event_type, data):
+        events.append(event_type)
+        return await real_broadcast(job_id, event_type, data)
+
+    async def fake_extract_phase(self, job_arg, consumer_task=None, on_items_ready=None):
+        # Complete extraction, enqueue one item for generation, and return.
+        # The consumer is left alive and processing; it crashes when it tries
+        # to build the generation agent below.
+        await BatchJobService.update_status(job_arg.job_id, BatchJobStatus.EXTRACTING)
+        added = await BatchJobService.add_detected_items(
+            job_arg.job_id,
+            "img-a",
+            [
+                {
+                    "temp_id": "item-1",
+                    "category": "tops",
+                    "colors": ["black"],
+                    "confidence": 0.9,
+                }
+            ],
+        )
+        if on_items_ready:
+            await on_items_ready(added)
+
+    service = BatchExtractionService(user_id="user-1", db=MagicMock())
+
+    with (
+        patch.object(BatchExtractionService, "_run_extraction_phase", fake_extract_phase),
+        patch.object(BatchExtractionService, "_fetch_user_avatar_base64", AsyncMock(return_value=None)),
+        patch(
+            "app.services.batch_extraction_service.get_image_generation_agent",
+            AsyncMock(side_effect=AIServiceError("boom", retryable=False)),
+        ),
+        patch.object(BatchJobService, "broadcast_event", side_effect=track_broadcast),
+        patch.object(BatchJobService, "release_image_payloads", AsyncMock()),
+        patch.object(BatchJobService, "clear_event_history", AsyncMock()),
+    ):
+        await service.run_pipeline(job)
+
+    assert job.status == BatchJobStatus.FAILED
+    assert "job_failed" in events
+    assert "job_complete" not in events
+    assert job.error_message and "boom" in job.error_message
 
     await _unregister(job.job_id)

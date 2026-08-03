@@ -33,7 +33,16 @@ export function forceLogout(): void {
   localStorage.removeItem(AUTH_STORAGE_KEY);
   localStorage.removeItem(USER_STORAGE_KEY);
   if (typeof window !== 'undefined') {
-    window.location.href = '/auth/login';
+    // Preserve the current path as returnTo so a re-login returns the user to
+    // where they were instead of dumping them on the dashboard. Guard against
+    // /auth/* paths (e.g. a 401 on the OAuth callback) to avoid a redirect loop.
+    const currentPath = window.location.pathname + window.location.search;
+    const isAuthPage = currentPath.startsWith('/auth/');
+    if (!isAuthPage && currentPath && currentPath !== '/') {
+      window.location.href = `/auth/login?returnTo=${encodeURIComponent(currentPath)}`;
+    } else {
+      window.location.href = '/auth/login';
+    }
   }
 }
 

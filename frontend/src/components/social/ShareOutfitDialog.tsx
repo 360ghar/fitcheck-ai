@@ -87,9 +87,21 @@ export function ShareOutfitDialog({
 
   const { toast } = useToast()
 
+  // A share belongs to one outfit and one option set. Reset BOTH when the
+  // outfit changes — the old `shareOptions` (caption, privacy) leaking into the
+  // next outfit's share was silent and wrong.
   useEffect(() => {
     setShareLinkUrl(null)
+    setShareOptions({ isPublic: true, allowFeedback: true, caption: '', tags: [] })
   }, [outfit?.id])
+
+  // The backend link is minted from the CURRENT options. If the user toggles
+  // privacy/feedback or edits the caption after a link already exists, the
+  // cached URL no longer describes what they are about to share — invalidate it
+  // so the next action mints a fresh one.
+  useEffect(() => {
+    setShareLinkUrl(null)
+  }, [shareOptions.isPublic, shareOptions.allowFeedback, shareOptions.caption])
 
   const ensureShareUrl = async (): Promise<string> => {
     if (!outfit) throw new Error('No outfit selected')
@@ -178,21 +190,39 @@ export function ShareOutfitDialog({
     }
   }
 
-  const handleDownloadImage = () => {
+  const handleDownloadImage = async () => {
     if (!outfit?.images?.length) return
 
     const primary = outfit.images.find((img) => img.is_primary) || outfit.images[0]
     if (!primary?.image_url) return
 
-    const link = document.createElement('a')
-    link.href = primary.image_url
-    link.download = `outfit-${outfit.name.toLowerCase().replace(/\s+/g, '-')}.png`
-    link.click()
+    try {
+      // The `download` attribute is ignored for cross-origin URLs (Supabase
+      // storage is cross-origin), so a plain anchor click would NAVIGATE the
+      // app tab to the raw image. Fetch it as a blob and download that instead.
+      const resp = await fetch(primary.image_url)
+      if (!resp.ok) throw new Error('Image fetch failed')
+      const blob = await resp.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `outfit-${outfit.name.toLowerCase().replace(/\s+/g, '-')}.png`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
 
-    toast({
-      title: 'Image downloaded',
-      description: 'Outfit image has been saved',
-    })
+      toast({
+        title: 'Image downloaded',
+        description: 'Outfit image has been saved',
+      })
+    } catch {
+      toast({
+        title: 'Download failed',
+        description: 'Could not download the outfit image',
+        variant: 'destructive',
+      })
+    }
   }
 
   const shareUrl = shareLinkUrl || (outfit ? `${window.location.origin}/shared/outfits/${outfit.id}` : '')

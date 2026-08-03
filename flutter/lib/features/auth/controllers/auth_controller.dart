@@ -74,12 +74,45 @@ class AuthController extends GetxController {
         await _loadUserData();
         // Check for pending referral code from OAuth flow
         await _referralService.handleOAuthCallback();
+        // Google OAuth completes through a deep link that restores the app
+        // with a session but performs no explicit navigation (unlike email
+        // login / Apple sign-in, which navigate themselves). Land the user on
+        // home when that happens on a guest screen.
+        _navigateHomeIfOnGuestRoute();
       }),
     );
   }
 
-  /// Initialize authentication state
-  Future<void> initializeAuth() async {
+  /// If authentication completed while the user is still on a guest-only
+  /// screen (e.g. Google OAuth deep-link callback), move them into the shell.
+  /// No-op on any non-guest route, so explicit navigations stay in charge.
+  void _navigateHomeIfOnGuestRoute() {
+    const guestRoutes = <String>{
+      Routes.onboarding,
+      Routes.login,
+      Routes.register,
+      Routes.forgotPassword,
+    };
+    if (guestRoutes.contains(Get.currentRoute)) {
+      Get.offAllNamed(Routes.home);
+    }
+  }
+
+  /// Initialize authentication state.
+  ///
+  /// Concurrent callers share one in-flight run: [onInit] kicks this off at
+  /// boot AND SplashPage awaits it again immediately after, so without the
+  /// guard Supabase is initialized and user data loaded twice back to back.
+  /// Re-entrant after completion, so the post-logout splash re-init still runs.
+  Future<void>? _initializeFuture;
+
+  Future<void> initializeAuth() {
+    return _initializeFuture ??= _initializeAuth().whenComplete(() {
+      _initializeFuture = null;
+    });
+  }
+
+  Future<void> _initializeAuth() async {
     if (!await settleBuildPhase(stillAlive: () => !isClosed)) return;
     try {
       isInitialized.value = false;

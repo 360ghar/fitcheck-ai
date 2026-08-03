@@ -13,6 +13,7 @@ import { generateTryOn, TryOnOptions, TryOnResult } from '@/api/ai';
 import { uploadAvatar } from '@/api/users';
 import { tryOnUsedKey } from '@/lib/activation';
 import { fileToReplayablePreview } from '@/lib/replayable-preview';
+import { getTryOnErrorMessage } from '@/lib/try-on-errors';
 import { useElapsedSeconds } from '@/hooks/useElapsedSeconds';
 
 import { Button } from '@/components/ui/button';
@@ -65,6 +66,16 @@ const STEPS = [
   { id: 'result', label: 'Result', shortLabel: '4' },
 ] as const;
 
+/**
+ * Module-level run counter for try-on generation (NOT a per-mount ref): the
+ * shared 'try-on' job pill lives in the store, so a stale in-flight response
+ * must never retire a NEWER run's pill after a remount. Every
+ * generate/cancel/reset bumps the counter; a response only applies its
+ * result (and only clears the pill) while its captured run id still equals
+ * the counter.
+ */
+let tryOnRunSeq = 0;
+
 export default function TryOnPage() {
   const userAvatar = useUserAvatar();
   const setUser = useAuthStore((s) => s.setUser);
@@ -81,8 +92,6 @@ export default function TryOnPage() {
   const isRequestInFlight = useJobUiStore(
     (s) => s.job?.id === 'try-on' && s.job.isActive === true
   );
-  /** Bumped on cancel/restart so a stale response cannot apply to the UI. */
-  const runIdRef = useRef(0);
 
   const [step, setStep] = useState<TryOnStep>('upload');
   const clothingFileRef = useRef<File | null>(null);
@@ -130,10 +139,12 @@ export default function TryOnPage() {
     if (!isRequestInFlight && isGenerating && step === 'generating') {
       // The job was retired without this instance resolving it: cancelled, or
       // the response landed on a previous mount. Unwedge instead of spinning.
+      // The options step requires a clothing preview, which a fresh mount does
+      // not have — land on upload rather than a blank options card.
       setIsGenerating(false);
-      setStep('options');
+      setStep(clothingPreview ? 'options' : 'upload');
     }
-  }, [isRequestInFlight, isGenerating, step]);
+  }, [isRequestInFlight, isGenerating, step, clothingPreview]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -146,7 +157,12 @@ export default function TryOnPage() {
     clothingFileRef.current = file;
     setError(null);
     void fileToReplayablePreview(file).then((url) => {
-      if (clothingFileRef.current !== file) return; // superseded by another pick
+      if (clothingFileRef.current !== file) {
+        // Superseded by another pick (or reset) before the preview resolved.
+        // Data URLs are no-ops to revoke; blob-URL fallbacks would otherwise leak.
+        URL.revokeObjectURL(url);
+        return;
+      }
       previewUrlRef.current = url;
       setClothingPreview(url);
       setStep('options');
@@ -193,7 +209,7 @@ export default function TryOnPage() {
       return;
     }
 
-    const runId = ++runIdRef.current;
+    const runId = ++tryOnRunSeq;
     setIsGenerating(true);
     setStep('generating');
     setError(null);
@@ -213,7 +229,7 @@ export default function TryOnPage() {
       };
 
       const tryOnResult = await generateTryOn(clothingFileRef.current, options);
-      if (runIdRef.current !== runId) return;
+      if (tryOnRunSeq !== runId) return;
       setResult(tryOnResult);
       setStep('result');
       try {
@@ -222,13 +238,14 @@ export default function TryOnPage() {
         // ignore
       }
     } catch (err) {
-      if (runIdRef.current !== runId) return;
-      const errorMessage = err instanceof Error ? err.message : 'Failed to generate try-on image';
-      setError(errorMessage);
+      if (tryOnRunSeq !== runId) return;
+      setError(getTryOnErrorMessage(err));
       setStep('options');
     } finally {
       // Cancelled/superseded runs must not retire a newer request's pill.
-      if (runIdRef.current === runId) {
+      // The check reads the module-level counter so a stale remount's
+      // response cannot clear a newer run's shared pill.
+      if (tryOnRunSeq === runId) {
         // Clear the shared flag before local state so the restore effect above
         // cannot immediately flip us back into `generating`.
         clearJob('try-on');
@@ -239,12 +256,22 @@ export default function TryOnPage() {
 
   const handleCancelGenerate = () => {
     // Abandon the in-flight response (the API call itself keeps running); the
-    // effect above unwinds the local step once the shared flag drops.
-    runIdRef.current += 1;
+    // effect above unwinds the local step once the shared flag drops. The
+    // counter advances so neither this instance nor a stale remount's
+    // response can clear a newer run's pill.
+    tryOnRunSeq += 1;
     clearJob('try-on');
   };
 
   const handleReset = () => {
+    // If the user stepped back to options mid-generation and now resets, the
+    // in-flight response must not land afterwards and surprise them with a
+    // result screen for a flow they just abandoned.
+    if (isGenerating) {
+      tryOnRunSeq += 1;
+      clearJob('try-on');
+      setIsGenerating(false);
+    }
     revokePreviewUrl();
     clothingFileRef.current = null;
     setClothingPreview(null);
@@ -254,13 +281,31 @@ export default function TryOnPage() {
     setStep('upload');
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!result) return;
 
-    const link = document.createElement('a');
-    link.href = result.image_url || `data:image/png;base64,${result.image_base64}`;
-    link.download = `try-on-${Date.now()}.png`;
-    link.click();
+    const src = result.image_url || `data:image/png;base64,${result.image_base64}`;
+    try {
+      // Fetch → blob → object URL so a cross-origin `image_url` (Supabase
+      // storage) actually downloads instead of the browser navigating to the
+      // image (the `download` attribute is ignored cross-origin).
+      const response = await fetch(src);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `try-on-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({
+        title: 'Download failed',
+        description: 'Could not download the image. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleRegenerate = () => {
@@ -330,10 +375,15 @@ export default function TryOnPage() {
         </Card>
       )}
 
+      {/* While a request is in flight the wizard is locked (onStepClick dropped
+          so completed steps render disabled). Cancel on the generating surface
+          is the escape hatch; allowing a step-back mid-flight would fire a
+          second request and let a stale result yank the user to the result
+          screen after they abandoned the flow. */}
       <WizardSteps
         steps={[...STEPS]}
         currentStepId={step}
-        onStepClick={(id) => {
+        onStepClick={isGenerating ? undefined : (id) => {
           const order: TryOnStep[] = ['upload', 'options', 'generating', 'result'];
           const target = order.indexOf(id as TryOnStep);
           const current = order.indexOf(step);

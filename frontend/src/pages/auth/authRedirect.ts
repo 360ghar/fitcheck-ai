@@ -23,11 +23,15 @@ export function getPostAuthDestination(
   const safeReturnTo = getSafeReturnTo(returnTo)
   if (safeReturnTo) return safeReturnTo
   // A promo code from a shared campaign URL lands the user on the plan page
-  // where the code is pre-filled and validated (redemption is one tap).
-  if (promoCode) return '/profile?tab=plan'
-  return planType
-    ? `/profile?tab=plan&plan_type=${encodeURIComponent(planType)}`
-    : '/dashboard'
+  // where the code is pre-filled and validated (redemption is one tap). The
+  // promo itself is consumed from localStorage by the plan page, so it can
+  // coexist with plan_type instead of forcing one or the other.
+  if (promoCode || planType) {
+    return planType
+      ? `/profile?tab=plan&plan_type=${encodeURIComponent(planType)}`
+      : '/profile?tab=plan'
+  }
+  return '/dashboard'
 }
 
 export function persistAuthReturnTo(returnTo: string | null | undefined): void {

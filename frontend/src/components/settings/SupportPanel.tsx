@@ -168,7 +168,7 @@ export function SupportPanel() {
       <Card>
         <CardHeader className="px-4 py-4 md:px-6 md:py-6">
           <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-indigo-500" />
+            <MessageSquare className="h-5 w-5 text-primary" />
             Submit Feedback
           </CardTitle>
           <CardDescription>
@@ -314,7 +314,7 @@ export function SupportPanel() {
         <Card>
           <CardHeader className="px-4 py-4 md:px-6 md:py-6">
             <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-indigo-500" />
+              <Clock className="h-5 w-5 text-primary" />
               Your Submissions
             </CardTitle>
           </CardHeader>
@@ -358,7 +358,7 @@ export function SupportPanel() {
       <Card>
         <CardHeader className="px-4 py-4 md:px-6 md:py-6">
           <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-indigo-500" />
+            <Shield className="h-5 w-5 text-primary" />
             Legal
           </CardTitle>
           <CardDescription>

@@ -158,10 +158,18 @@ export default function CalendarPage() {
   const loadEventsForMonth = useCallback(
     async (month: Date) => {
       const monthKey = `${month.getFullYear()}-${month.getMonth()}`
+      // Remember the most recently REQUESTED month even when this call bails
+      // on the in-flight guard below. The in-flight request's finally block
+      // re-enters for it, so rapid prev/next clicks cannot strand the final
+      // month with events that were never fetched.
+      lastMonthRef.current = month
+
       // Already loaded this month successfully
       if (monthKey === activeMonthKeyRef.current) return
       // Avoid toast-triggered re-entry loops after a failed load of the same month
       if (monthKey === failedMonthKeyRef.current) return
+      // One load at a time: a month requested while another is in flight is
+      // picked up by the finally block below once the current load settles.
       if (loadingMonthRef.current) return
 
       // Navigating to a new month clears the previous failure lock
@@ -169,7 +177,6 @@ export default function CalendarPage() {
         failedMonthKeyRef.current = ''
       }
 
-      lastMonthRef.current = month
       loadingMonthRef.current = true
       setLoadError(null)
       setIsLoadingEvents(true)
@@ -209,6 +216,13 @@ export default function CalendarPage() {
       } finally {
         loadingMonthRef.current = false
         setIsLoadingEvents(false)
+        // A month the user navigated to while this request was in flight was
+        // skipped at the guard above. Load it now so the calendar never sits on
+        // a month whose events were never fetched.
+        const latestKey = `${lastMonthRef.current.getFullYear()}-${lastMonthRef.current.getMonth()}`
+        if (latestKey !== activeMonthKeyRef.current && latestKey !== failedMonthKeyRef.current) {
+          void loadEventsForMonth(lastMonthRef.current)
+        }
       }
     },
     [fetchOutfits]

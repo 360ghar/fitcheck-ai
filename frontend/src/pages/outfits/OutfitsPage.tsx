@@ -86,7 +86,6 @@ export default function OutfitsPage() {
   const fetchOutfits = useOutfitStore((state) => state.fetchOutfits)
   const fetchOutfitById = useOutfitStore((state) => state.fetchOutfitById)
   const startGeneration = useOutfitStore((state) => state.startGeneration)
-  const startGenerationForNewOutfit = useOutfitStore((state) => state.startGenerationForNewOutfit)
   const resetGeneration = useOutfitStore((state) => state.resetGeneration)
   const isGenerating = useOutfitStore((state) => state.isGenerating)
   const generationStatus = useOutfitStore((state) => state.generationStatus)
@@ -147,7 +146,11 @@ export default function OutfitsPage() {
     if (wardrobeItems.length === 0) {
       void fetchItems(true).catch(() => null)
     }
-  }, [fetchOutfits, fetchItems, wardrobeItems.length])
+    // Run once on mount. `wardrobeItems.length` was a dependency before, which
+    // re-ran this whole effect (and re-fetched outfits) the moment the closet
+    // arrived from `fetchItems` — a duplicate network round-trip on every load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchOutfits, fetchItems])
 
   // Deep link only. `getState()` rather than a reactive read so this cannot
   // re-run every time the outfits array is patched.
@@ -157,13 +160,13 @@ export default function OutfitsPage() {
     fetchOutfitById(selectedId).catch(() => null)
   }, [selectedId, fetchOutfitById])
 
-  const openOutfit = (outfit: Outfit, genStatus: string | null) => {
-    // Retry short-circuit stays first: a failed card is a retry affordance, not a
-    // link, and must not navigate.
-    if (genStatus === 'failed') {
-      void startGenerationForNewOutfit(outfit.id)
-      return
-    }
+  const openOutfit = (outfit: Outfit) => {
+    // Every card navigates, including a failed one. The old short-circuit made
+    // a failed card silently re-run an expensive AI generation on ANY click —
+    // a mis-click burned a quota spend — and left no way to open the outfit to
+    // manage it (delete / edit / view items). The pane's "Retry look" action is
+    // the retry affordance now; the failed state and its reason are surfaced
+    // there via `notice` (below) instead of trapping the card in the grid.
     navigate({ pathname: `${LIST_PATH}/${outfit.id}`, search: location.search })
   }
 
@@ -261,6 +264,18 @@ export default function OutfitsPage() {
   const selectionHiddenByFilters =
     isDetailOpen && Boolean(selectedOutfit) && !displayedOutfits.some((o) => o.id === selectedId)
 
+  // The fire-and-forget auto-generation that failed for THIS outfit (the map
+  // entry OutfitCard renders as a failed tile). Threaded into the pane's
+  // `notice` so the reason is visible there too — the card retry affordance now
+  // lives in the pane, not in a click trap on the card.
+  const selectedGenEntry = selectedId ? generatingOutfits.get(selectedId) : undefined
+  const selectedGenFailed = selectedGenEntry?.status === 'failed'
+  const detailNotice = selectionHiddenByFilters
+    ? 'Hidden by the current filters.'
+    : selectedGenFailed
+      ? `Last generation failed${selectedGenEntry?.error ? `: ${selectedGenEntry.error}` : ''}. Use Retry look to try again.`
+      : null
+
   const isGenerationForSelected = Boolean(selectedId) && generationOutfitId === selectedId
 
   const renderCard = (outfit: Outfit, variant: 'default' | 'list') => {
@@ -275,7 +290,7 @@ export default function OutfitsPage() {
           generationStatus={genStatus}
           generationError={genEntry?.error}
           className={isSelected ? 'border-ink' : undefined}
-          onClick={() => openOutfit(outfit, genStatus)}
+          onClick={() => openOutfit(outfit)}
           onToggleFavorite={(e) => {
             e.stopPropagation()
             toggleOutfitFavorite(outfit.id)
@@ -432,7 +447,7 @@ export default function OutfitsPage() {
             isGenerating={isGenerating && isGenerationForSelected}
             generationStatus={isGenerationForSelected ? generationStatus : 'idle'}
             generationStageLabel={generationStageLabel}
-            notice={selectionHiddenByFilters ? 'Hidden by the current filters.' : null}
+            notice={detailNotice}
           />
         }
         detailFooter={

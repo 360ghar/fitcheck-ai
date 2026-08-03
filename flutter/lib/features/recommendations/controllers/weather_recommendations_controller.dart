@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../settings/models/user_preferences_model.dart';
 import '../../settings/repositories/settings_repository.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../repositories/recommendations_repository.dart';
@@ -25,6 +26,11 @@ class WeatherRecommendationsController extends GetxController {
   final Rx<Map<String, dynamic>?> weatherData = Rx<Map<String, dynamic>?>(null);
   final RxList<String> preferredCategories = <String>[].obs;
   final RxList<ItemModel> recommendations = <ItemModel>[].obs;
+
+  /// Display unit for temperatures. The weather API reports Celsius, so a
+  /// Fahrenheit preference is converted on display. Defaults to Celsius,
+  /// matching the app's default preference and the API.
+  final Rx<TemperatureUnit> temperatureUnit = TemperatureUnit.celsius.obs;
 
   /// Backs the tab's location field. Owned here so the saved default is
   /// actually visible in the input rather than being an invisible value the
@@ -66,6 +72,18 @@ class WeatherRecommendationsController extends GetxController {
       // for — the field simply stays empty and fetchRecommendations asks for
       // one. Report it so the failure is not invisible to us.
       ErrorHandler.reportError(e, 'Failed to load saved weather location');
+    }
+
+    // Load the user's temperature-unit preference so the tab renders °C / °F
+    // consistently with Settings. Non-fatal: the API reports Celsius, which is
+    // the fallback unit.
+    try {
+      final prefs = await _settingsRepository.getPreferences();
+      if (isClosed) return;
+      final unit = prefs.temperatureUnit;
+      if (unit != null) temperatureUnit.value = unit;
+    } catch (e) {
+      ErrorHandler.reportError(e, 'Failed to load temperature unit preference');
     }
   }
 
@@ -111,16 +129,25 @@ class WeatherRecommendationsController extends GetxController {
           ?.map((e) => e.toString())
           .toList();
 
+      // The backend reports Celsius and derives preferred_categories from
+      // Celsius thresholds; mirror those thresholds so a client-side fallback
+      // agrees with what the server would have returned.
       if (recommended != null && recommended.isNotEmpty) {
         preferredCategories.value = recommended;
-      } else if (temperature < 50) {
-        preferredCategories.value = ['outerwear', 'tops', 'bottoms'];
-      } else if (temperature < 70) {
-        preferredCategories.value = ['tops', 'bottoms', 'outerwear'];
-      } else if (temperature < 85) {
-        preferredCategories.value = ['tops', 'bottoms', 'shoes', 'accessories'];
+      } else if (temperature < 5) {
+        preferredCategories.value = [
+          'outerwear',
+          'tops',
+          'bottoms',
+          'shoes',
+          'accessories',
+        ];
+      } else if (temperature < 12) {
+        preferredCategories.value = ['outerwear', 'tops', 'bottoms', 'shoes'];
+      } else if (temperature < 27) {
+        preferredCategories.value = ['tops', 'bottoms', 'shoes'];
       } else {
-        preferredCategories.value = ['tops', 'bottoms', 'shoes', 'activewear'];
+        preferredCategories.value = ['tops', 'bottoms', 'shoes', 'accessories'];
       }
 
       // Get items from preferred categories
@@ -138,15 +165,29 @@ class WeatherRecommendationsController extends GetxController {
     }
   }
 
+  /// Whether temperatures should render in Fahrenheit (user preference).
+  /// The API reports Celsius, so Fahrenheit values are converted on display.
+  bool get isFahrenheit => temperatureUnit.value == TemperatureUnit.fahrenheit;
+
+  /// Temperature with its unit, honoring the user's unit preference.
+  /// Returns '--' before weather data has loaded.
+  String get displayTemperature {
+    final raw = weatherData.value?['temperature'];
+    if (raw is! num) return '--';
+    if (isFahrenheit) {
+      return '${(raw * 9 / 5 + 32).round()} F';
+    }
+    return '${raw.round()} C';
+  }
+
   /// Get weather description
   String get weatherDescription {
     if (weatherData.value == null) return '';
 
-    final temp = weatherData.value!['temperature'];
     final condition = weatherData.value!['condition'] ?? 'Unknown';
-
-    if (temp != null) {
-      return '$condition, $temp°';
+    final temp = displayTemperature;
+    if (temp != '--') {
+      return '$condition, $temp';
     }
     return condition.toString();
   }

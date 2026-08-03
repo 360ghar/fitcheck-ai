@@ -43,7 +43,7 @@ from app.services.ai_service import AIService
 from app.services.ai_settings_service import AISettingsService
 from app.services.storage_service import MAX_FILE_SIZE, StorageService
 from app.services.vector_service import get_vector_service
-from app.utils.db import execute_with_reconnect
+from app.utils.db import execute_with_reconnect, safe_search_term
 from app.utils.parallel import parallel_with_retry
 
 logger = get_context_logger(__name__)
@@ -393,7 +393,7 @@ async def list_items(
             if occasion_filter:
                 q = q.contains("occasion_tags", [occasion_filter])
             if search:
-                like = f"%{search}%"
+                like = f"%{safe_search_term(search)}%"
                 q = q.or_(f"name.ilike.{like},brand.ilike.{like}")
             return q
 
@@ -443,7 +443,7 @@ async def list_items(
         raise DatabaseError("Failed to fetch items", operation="select")
 
 
-@router.get("/{item_id}", response_model=Dict[str, Any])
+@router.get("/{item_id:uuid}", response_model=Dict[str, Any])
 async def get_item(
     item_id: UUID,
     user_id: str = Depends(get_current_user_id),
@@ -914,7 +914,7 @@ async def search_items(
 ):
     """Search items by name/brand (best-effort; Supabase full-text can be added later)."""
     try:
-        like = f"%{q}%"
+        like = f"%{safe_search_term(q)}%"
         res = await asyncio.to_thread(
             db.table("items")
             .select("*, item_images(*)")
@@ -1198,14 +1198,19 @@ async def check_duplicates(
                 "message": "No duplicates found"
             }
 
-        # Fetch full item details for matches
+        # Fetch full item details for matches (read-only; rebuild + retry once
+        # on a dead pooled connection - the 2026-08-03 /items/check-duplicates
+        # 500s happened during the same gateway-restart window as the other
+        # ConnectionTerminated bursts).
         item_ids = [item["item_id"] for item in similar_items]
-        items_result = await asyncio.to_thread(
-            db.table("items")
+        items_result = await execute_with_reconnect(
+            lambda d: d.table("items")
             .select("*, item_images(*)")
             .in_("id", item_ids)
             .eq("user_id", user_id)
-            .execute
+            .execute(),
+            db,
+            extra={"operation": "check_duplicates_items", "user_id": user_id},
         )
 
         items_by_id = {item["id"]: _normalize_item_images(item) for item in (items_result.data or [])}

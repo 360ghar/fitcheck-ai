@@ -2,7 +2,7 @@
  * Subscription and Referral API endpoints
  */
 
-import { apiClient, getApiError } from './client'
+import { apiClient, getApiError, skipToast } from './client'
 import type {
   ApiEnvelope,
   SubscriptionWithUsage,
@@ -68,11 +68,14 @@ export async function createCheckoutSession(
   cancelUrl: string
 ): Promise<CheckoutSession> {
   try {
+    // The subscriptionStore surfaces checkout failures inline (store `error`
+    // banner + the call site's own catch toast), so keep the global error
+    // interceptor silent for this request to avoid a duplicate toast.
     const response = await apiClient.post<ApiEnvelope<CheckoutSession>>('/api/v1/subscription/checkout', {
       plan_type: planType,
       success_url: successUrl,
       cancel_url: cancelUrl,
-    })
+    }, skipToast)
     return response.data.data
   } catch (error) {
     throw getApiError(error)
@@ -84,8 +87,10 @@ export async function createCheckoutSession(
  */
 export async function createPortalSession(returnUrl?: string): Promise<PortalSession> {
   try {
+    // Same ownership as checkout: the store surfaces the failure inline.
     const response = await apiClient.post<ApiEnvelope<PortalSession>>('/api/v1/subscription/portal', null, {
       params: returnUrl ? { return_url: returnUrl } : undefined,
+      ...skipToast,
     })
     return response.data.data
   } catch (error) {
@@ -98,7 +103,8 @@ export async function createPortalSession(returnUrl?: string): Promise<PortalSes
  */
 export async function cancelSubscription(): Promise<Subscription> {
   try {
-    const response = await apiClient.post<ApiEnvelope<Subscription>>('/api/v1/subscription/cancel')
+    // Same ownership as checkout: the store surfaces the failure inline.
+    const response = await apiClient.post<ApiEnvelope<Subscription>>('/api/v1/subscription/cancel', null, skipToast)
     return response.data.data
   } catch (error) {
     throw getApiError(error)
@@ -158,9 +164,11 @@ export async function validateReferralCode(code: string): Promise<ValidateReferr
  */
 export async function validatePromoCode(code: string): Promise<ValidatePromoResponse> {
   try {
+    // The store surfaces validation failures inline (promoError), so keep the
+    // global interceptor silent to avoid a duplicate toast.
     const response = await apiClient.post<ApiEnvelope<ValidatePromoResponse>>('/api/v1/promo/validate', {
       code,
-    })
+    }, skipToast)
     return response.data.data
   } catch (error) {
     throw getApiError(error)
@@ -173,9 +181,10 @@ export async function validatePromoCode(code: string): Promise<ValidatePromoResp
  */
 export async function redeemPromoCode(code: string): Promise<RedeemPromoResponse> {
   try {
+    // Same ownership as validate: redemption failures surface inline.
     const response = await apiClient.post<ApiEnvelope<RedeemPromoResponse>>('/api/v1/promo/redeem', {
       promo_code: code,
-    })
+    }, skipToast)
     return response.data.data
   } catch (error) {
     throw getApiError(error)

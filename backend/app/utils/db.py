@@ -5,11 +5,24 @@ Helpers for working with postgrest-py query results.
 import asyncio
 import inspect
 import logging
+import re
 from typing import Any, Callable, Dict, Optional, Tuple
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+def safe_search_term(term: str) -> str:
+    """Strip characters that break postgrest's .or_() filter syntax.
+
+    The term is interpolated into `name.ilike.<term>`; PostgREST reserves
+    `,` `(` `)` `*` as logical operators and `.` `:` as value separators.
+    Stripping them keeps `%`/`_` as the intended ilike wildcards while
+    preventing a crafted query from injecting extra filter clauses or 500ing
+    the route. Shared by the items/outfits/blog search routes.
+    """
+    return re.sub(r"[(),*.:]", "", term)
 
 
 def persistence_db(db: Any) -> Any:
@@ -55,7 +68,22 @@ _DB_CONNECTION_TEXT_MARKERS = (
     "connection reset by peer",
     "connection closed by peer",
     "peer closed connection",
+    "server disconnected",
     "goaway",
+    # Python `RuntimeError` from httpcore's HTTP/2 connection pool when the
+    # SAME shared Supabase client is used concurrently: a coroutine iterating
+    # the pool's deque while another pops/extends it. Transient - a retry
+    # through a freshly built client heals it (observed 2026-08-03:
+    # "Error checking limit for user ... deque mutated during iteration" ->
+    # generate-outfit 500).
+    "deque mutated during iteration",
+    "list changed size during iteration",
+    # h2 ProtocolError state-machine text when a dead connection receives
+    # frames: "Invalid input StreamInputs.SEND_HEADERS in state 5" and
+    # "Invalid input ConnectionInputs.RECV_DATA in state ConnectionState.CLOSED"
+    # (observed 2026-08-03 on /referral/* and /subscription after a gateway
+    # restart). Also covers the 2026-08-03 "Server disconnected" bursts.
+    "invalid input",
 )
 
 
@@ -64,7 +92,15 @@ def is_db_connection_error(exc: Exception) -> bool:
     operation is worth one retry through a fresh client."""
     if isinstance(exc, _DB_TRANSIENT_ERRORS):
         return True
-    text = str(exc).lower()
+    text = str(exc).lower().strip()
+    if text.isdigit():
+        # Some h2/httpcore versions collapse a ConnectionTerminated to the
+        # bare error code with no message text (observed 2026-08-03:
+        # "Error getting subscription for user ...: 11" / "41" / "45" / "79"
+        # / "81" - all ConnectionTerminated error_codes). A numeric-only
+        # error text has no other meaning at these call sites; retry once
+        # through a freshly built client.
+        return True
     return any(marker in text for marker in _DB_CONNECTION_TEXT_MARKERS)
 
 

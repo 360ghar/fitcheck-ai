@@ -453,7 +453,7 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
           style: TextStyle(color: tokens.textPrimary),
         ),
         content: Text(
-          'This item will not be saved to your wardrobe.',
+          'This item will not be saved to your closet.',
           style: TextStyle(color: tokens.textSecondary),
         ),
         actions: [
@@ -504,7 +504,7 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
 
       if (savedItems.isNotEmpty) {
         // Show success and go back to wardrobe
-        ErrorHandler.showSuccess('${savedItems.length} items added to your wardrobe', title: 'Success');
+        ErrorHandler.showSuccess('${savedItems.length} items added to your closet', title: 'Success');
 
         controller.reset();
         Get.until((route) => route.isFirst);
@@ -580,7 +580,7 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
               context,
               tokens,
               Icons.save,
-              'Save selected items to your wardrobe',
+              'Save selected items to your closet',
             ),
           ],
         ),

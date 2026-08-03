@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollableTabs, ScrollableTab } from '@/components/ui/scrollable-tabs'
 import { useToast } from '@/components/ui/use-toast'
 import { ItemImage } from '@/components/ui/item-image'
+import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
 import { ActionStatusLabel, ActionErrorNote } from '@/components/ui/action-status'
@@ -67,6 +68,31 @@ function formatScore(score: number | undefined | null): string {
   if (score == null || Number.isNaN(score)) return '—'
   const pct = score <= 1 ? Math.round(score * 100) : Math.round(score)
   return `${pct}%`
+}
+
+/** Skeleton shown while the closet store is still loading its first page. */
+function ClosetLoadingSkeleton() {
+  return (
+    <div className="space-y-4" role="status" aria-label="Loading your closet">
+      <Skeleton className="h-4 w-1/2" />
+      <div className="flex flex-wrap gap-2">
+        <Skeleton className="h-6 w-20 rounded-full" />
+        <Skeleton className="h-6 w-24 rounded-full" />
+        <Skeleton className="h-6 w-28 rounded-full" />
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3 p-2 rounded-lg border border-border bg-card">
+            <Skeleton className="h-10 w-10 rounded-lg" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-3 w-3/4" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function localDateISO(): string {
@@ -151,7 +177,13 @@ export default function RecommendationsPage() {
   const isLoadingItems = useClosetStore((s) => s.isLoading)
   const wardrobeError = useClosetStore((s) => s.error)
   const fetchItems = useClosetStore((s) => s.fetchItems)
-  const closetState = getRecommendationsClosetState(items.length, isLoadingItems, wardrobeError)
+  // The closet store starts at `items: []` / `isLoading: false`, so the very
+  // first render would otherwise flash the "Add clothes first" empty state
+  // before the mount fetch starts. Treat that un-fetched first frame as
+  // loading so the skeleton shows instead of a false empty closet.
+  const [hasRequestedCloset, setHasRequestedCloset] = useState(false)
+  const rawClosetState = getRecommendationsClosetState(items.length, isLoadingItems, wardrobeError)
+  const closetState = rawClosetState === 'empty' && !hasRequestedCloset ? 'loading' : rawClosetState
 
   useEffect(() => {
     if (tabFromUrl && RECOMMENDATIONS_TABS.some((tab) => tab.id === tabFromUrl)) {
@@ -169,6 +201,7 @@ export default function RecommendationsPage() {
 
   useEffect(() => {
     if (items.length === 0) {
+      setHasRequestedCloset(true)
       fetchItems(true).catch(() => null)
     }
   }, [fetchItems, items.length])
@@ -189,20 +222,36 @@ export default function RecommendationsPage() {
     () => items.find((i) => i.id === matchItemId) || null,
     [items, matchItemId]
   )
+  // Guards against a stale in-flight response applying after the selection
+  // changed (same pattern as runAstrology's requestIdRef below).
+  const matchRequestIdRef = useRef(0)
+
+  // Clear stale results when the selected item changes, so "Matching items"
+  // can never display results for a different piece than the one shown as
+  // selected.
+  useEffect(() => {
+    setMatchData(null)
+    setMatchError(null)
+  }, [matchItemId])
 
   const runMatch = async (id: string) => {
     if (!id) return
+    const requestId = ++matchRequestIdRef.current
     setIsLoadingMatch(true)
     setMatchError(null)
     try {
       const data = await findMatchingItems(id, { limit: 12 })
+      if (requestId !== matchRequestIdRef.current) return
       setMatchData(data)
     } catch (err) {
+      if (requestId !== matchRequestIdRef.current) return
       // api/client interceptor already toasts the failure; this note keeps
       // the real message visible past the toast's auto-dismiss.
       setMatchError(getErrorMessage(err))
     } finally {
-      setIsLoadingMatch(false)
+      if (requestId === matchRequestIdRef.current) {
+        setIsLoadingMatch(false)
+      }
     }
   }
 
@@ -226,6 +275,17 @@ export default function RecommendationsPage() {
     })
   }
 
+  // Same stale-response guard as the match tab: selection toggles stay
+  // enabled while a request is in flight, so the response for the previous
+  // selection must not render under the new one.
+  const completeLookRequestIdRef = useRef(0)
+
+  // Clear stale results when the selection changes, mirroring the match tab.
+  useEffect(() => {
+    setCompleteLooks([])
+    setCompleteError(null)
+  }, [completeSelection])
+
   const runCompleteLook = async () => {
     const ids = Array.from(completeSelection)
     if (ids.length === 0) {
@@ -233,6 +293,7 @@ export default function RecommendationsPage() {
       return
     }
 
+    const requestId = ++completeLookRequestIdRef.current
     setIsLoadingComplete(true)
     setHasAttemptedComplete(true)
     setCompleteError(null)
@@ -246,8 +307,10 @@ export default function RecommendationsPage() {
         looks = generateFallbackOutfits(selectedItems, items, 6)
       }
 
+      if (requestId !== completeLookRequestIdRef.current) return
       setCompleteLooks(looks)
     } catch (err) {
+      if (requestId !== completeLookRequestIdRef.current) return
       // On API error, try fallback
       const selectedItems = items.filter((item) => completeSelection.has(item.id))
       const fallbackLooks = generateFallbackOutfits(selectedItems, items, 6)
@@ -264,7 +327,9 @@ export default function RecommendationsPage() {
         })
       }
     } finally {
-      setIsLoadingComplete(false)
+      if (requestId === completeLookRequestIdRef.current) {
+        setIsLoadingComplete(false)
+      }
     }
   }
 
@@ -481,6 +546,8 @@ export default function RecommendationsPage() {
                   actionLabel="Upload photos"
                   onAction={() => navigate('/wardrobe?action=add')}
                 />
+              ) : closetState === 'loading' ? (
+                <ClosetLoadingSkeleton />
               ) : (
                 <>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -550,9 +617,11 @@ export default function RecommendationsPage() {
                         )}
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <Button asChild variant="outline" size="sm">
-                          <Link to={`/outfits/new?items=${weatherSuggestedItems.map((i) => i.id).join(',')}`}>Save as outfit</Link>
-                        </Button>
+                        {weatherSuggestedItems.length > 0 && (
+                          <Button asChild variant="outline" size="sm">
+                            <Link to={`/outfits/new?items=${weatherSuggestedItems.map((i) => i.id).join(',')}`}>Save as outfit</Link>
+                          </Button>
+                        )}
                         <Button asChild variant="outline" size="sm">
                           <Link to="/try-on">Try on</Link>
                         </Button>
@@ -588,6 +657,8 @@ export default function RecommendationsPage() {
                   actionLabel="Add item"
                   onAction={() => navigate('/wardrobe?action=add')}
                 />
+              ) : closetState === 'loading' ? (
+                <ClosetLoadingSkeleton />
               ) : (
                 <>
                   <div className="relative">
@@ -730,6 +801,8 @@ export default function RecommendationsPage() {
               </div>
 
               {completeError && !isLoadingComplete && <ActionErrorNote message={completeError} />}
+
+              {closetState === 'loading' && <ClosetLoadingSkeleton />}
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3 max-h-[40vh] md:max-h-[18rem] overflow-y-auto pr-1">
                 {items.map((item) => {

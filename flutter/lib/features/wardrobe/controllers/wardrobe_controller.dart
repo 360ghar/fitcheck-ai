@@ -50,6 +50,10 @@ class WardrobeController extends GetxController {
   final RxBool hasMore = true.obs;
   final RxInt totalItems = 0.obs;
 
+  // Single-item fetch state (deep links, items beyond the loaded page)
+  final RxBool isFetchingItem = false.obs;
+  final RxString itemFetchError = ''.obs;
+
   // Getters
   bool get hasError => error.value.isNotEmpty;
   bool get isSelectionActive => selectedIds.isNotEmpty;
@@ -213,6 +217,39 @@ class WardrobeController extends GetxController {
         isLoading.value = false;
         isLoadingMore.value = false;
       }
+    }
+  }
+
+  /// Fetch a single item from the server.
+  ///
+  /// Returns the cached item when it is already on the loaded page; otherwise
+  /// fetches it and merges it into [items]. Used by [ItemDetailPage] so a deep
+  /// link to an item on a later page does not strand the user on an infinite
+  /// shimmer.
+  Future<ItemModel?> fetchItemById(String itemId) async {
+    if (!await settleBuildPhase(stillAlive: () => !isClosed)) return null;
+
+    final cached = items.firstWhereOrNull((item) => item.id == itemId);
+    if (cached != null) return cached;
+
+    isFetchingItem.value = true;
+    itemFetchError.value = '';
+    try {
+      final item = await _itemRepository.getItem(itemId);
+      if (isClosed) return null;
+      final index = items.indexWhere((existing) => existing.id == itemId);
+      if (index == -1) {
+        items.add(item);
+      } else {
+        items[index] = item;
+      }
+      return item;
+    } catch (e) {
+      if (isClosed) return null;
+      itemFetchError.value = ErrorHandler.extractMessage(e);
+      return null;
+    } finally {
+      if (!isClosed) isFetchingItem.value = false;
     }
   }
 
@@ -395,7 +432,7 @@ class WardrobeController extends GetxController {
         selectedItem.value = null;
       }
 
-      ErrorHandler.showSuccess('Item removed from wardrobe', title: 'Deleted');
+      ErrorHandler.showSuccess('Item removed from your closet', title: 'Deleted');
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
       rethrow;
@@ -417,7 +454,7 @@ class WardrobeController extends GetxController {
       clearSelection();
       applyFilters();
 
-      ErrorHandler.showSuccess('$count items removed', title: 'Deleted');
+      ErrorHandler.showSuccess('$count items removed from your closet', title: 'Deleted');
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
       rethrow;

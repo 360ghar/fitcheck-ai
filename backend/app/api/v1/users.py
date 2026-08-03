@@ -34,6 +34,7 @@ from app.core.security import get_current_user_id
 from app.core.uploads import read_upload_capped
 from app.db.connection import get_db
 from app.utils import maybe_single_data
+from app.utils.db import execute_with_reconnect, run_sync_with_reconnect
 from app.models.user import (
     BodyProfile,
     BodyProfileCreate,
@@ -146,13 +147,36 @@ def _get_or_create_record(
     Get existing record or create with defaults.
     Returns (record_data, was_created).
     """
-    result = db.table(table).select("*").eq("user_id", user_id).execute()
+    # Read side rebuilds + retries once on a dead pooled Supabase connection
+    # (ConnectionTerminated 500s on GET /users/settings 2026-08-03). The
+    # insert goes through the same wrapper: `user_id` is the PK (migration
+    # 001), so the upsert is exact-once — a lost response after a committed
+    # insert collapses onto the existing row instead of duplicating or 500ing
+    # on the stale dead client.
+    result = run_sync_with_reconnect(
+        lambda d: d.table(table).select("*").eq("user_id", user_id).execute(),
+        db,
+        extra={"operation": f"get_or_create_{table}", "user_id": user_id},
+    )
     if result.data:
         return model_class.model_validate(result.data[0]).model_dump(mode="json"), False
 
     insert_defaults = {**defaults, "user_id": user_id}
-    insert = db.table(table).insert(insert_defaults).execute()
-    row = _first_row(insert.data or [])
+    run_sync_with_reconnect(
+        lambda d: d.table(table)
+        .upsert(insert_defaults, on_conflict="user_id", ignore_duplicates=True)
+        .execute(),
+        db,
+        extra={"operation": f"create_{table}", "user_id": user_id},
+    )
+    # Re-read so the returned row reflects the actual stored record (a
+    # concurrent create could have won the upsert with different values).
+    result = run_sync_with_reconnect(
+        lambda d: d.table(table).select("*").eq("user_id", user_id).execute(),
+        db,
+        extra={"operation": f"get_or_create_{table}_reload", "user_id": user_id},
+    )
+    row = _first_row(result.data or [])
     if not row:
         raise DatabaseError(f"Failed to create {table}")
     return model_class.model_validate(row).model_dump(mode="json"), True
@@ -177,10 +201,18 @@ def _upsert_record(
     if updated_field:
         update_dict[updated_field] = _now()
 
-    existing = db.table(table).select("user_id").eq("user_id", user_id).execute()
+    existing = run_sync_with_reconnect(
+        lambda d: d.table(table).select("user_id").eq("user_id", user_id).execute(),
+        db,
+        extra={"operation": f"upsert_{table}_lookup", "user_id": user_id},
+    )
 
     if existing.data:
-        result = db.table(table).update(update_dict).eq("user_id", user_id).execute()
+        result = run_sync_with_reconnect(
+            lambda d: d.table(table).update(update_dict).eq("user_id", user_id).execute(),
+            db,
+            extra={"operation": f"upsert_{table}_update", "user_id": user_id},
+        )
     else:
         insert = {
             "user_id": user_id,
@@ -191,7 +223,17 @@ def _upsert_record(
             insert[created_field] = _now()
         if updated_field:
             insert[updated_field] = _now()
-        result = db.table(table).insert(insert).execute()
+        # Same reconnect treatment as the update branch: the insert is an
+        # upsert on the user_id PK, so a retry after a lost response
+        # collapses onto the existing row (exact-once) instead of running on
+        # the stale dead client.
+        result = run_sync_with_reconnect(
+            lambda d: d.table(table)
+            .upsert(insert, on_conflict="user_id")
+            .execute(),
+            db,
+            extra={"operation": f"upsert_{table}_insert", "user_id": user_id},
+        )
 
     row = _first_row(result.data or [])
     if not row:
@@ -228,7 +270,11 @@ async def get_current_user(
     db: Client = Depends(get_db),
 ):
     try:
-        result = await asyncio.to_thread(db.table("users").select("*").eq("id", user_id).execute)
+        result = await execute_with_reconnect(
+            lambda d: d.table("users").select("*").eq("id", user_id).execute(),
+            db,
+            extra={"operation": "get_current_user", "user_id": user_id},
+        )
         if not result.data:
             raise UserNotFoundError(user_id=user_id)
 
@@ -856,8 +902,8 @@ async def get_dashboard(
     db: Client = Depends(get_db),
 ):
     """Aggregate endpoint for the dashboard UI."""
-    try:
-        user_row = await asyncio.to_thread(db.table("users").select("*").eq("id", user_id).execute)
+    async def _dashboard_data(d: Any) -> Dict[str, Any]:
+        user_row = await asyncio.to_thread(d.table("users").select("*").eq("id", user_id).execute)
         if not user_row.data:
             raise UserNotFoundError(user_id=user_id)
 
@@ -865,11 +911,11 @@ async def get_dashboard(
         month_start = now_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
 
         # Parallel queries for counts
-        items_count = await asyncio.to_thread(db.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_deleted", False).execute)
-        outfits_count = await asyncio.to_thread(db.table("outfits").select("id", count="exact").eq("user_id", user_id).execute)
+        items_count = await asyncio.to_thread(d.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_deleted", False).execute)
+        outfits_count = await asyncio.to_thread(d.table("outfits").select("id", count="exact").eq("user_id", user_id).execute)
 
         items_added_month = await asyncio.to_thread(
-            db.table("items")
+            d.table("items")
             .select("id", count="exact")
             .eq("user_id", user_id)
             .eq("is_deleted", False)
@@ -877,7 +923,7 @@ async def get_dashboard(
             .execute
         )
         outfits_created_month = await asyncio.to_thread(
-            db.table("outfits")
+            d.table("outfits")
             .select("id", count="exact")
             .eq("user_id", user_id)
             .gte("created_at", month_start)
@@ -885,7 +931,7 @@ async def get_dashboard(
         )
 
         most_worn_item = (await asyncio.to_thread(
-            db.table("items")
+            d.table("items")
             .select("name,usage_times_worn")
             .eq("user_id", user_id)
             .eq("is_deleted", False)
@@ -894,12 +940,12 @@ async def get_dashboard(
             .execute
         )).data or []
 
-        fav_items = await asyncio.to_thread(db.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).eq("is_deleted", False).execute)
-        fav_outfits = await asyncio.to_thread(db.table("outfits").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).execute)
+        fav_items = await asyncio.to_thread(d.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).eq("is_deleted", False).execute)
+        fav_outfits = await asyncio.to_thread(d.table("outfits").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).execute)
 
         # Recent activity
         recent_items = (await asyncio.to_thread(
-            db.table("items")
+            d.table("items")
             .select("id,name,created_at")
             .eq("user_id", user_id)
             .eq("is_deleted", False)
@@ -909,7 +955,7 @@ async def get_dashboard(
         )).data or []
 
         recent_outfits = (await asyncio.to_thread(
-            db.table("outfits")
+            d.table("outfits")
             .select("id,name,created_at")
             .eq("user_id", user_id)
             .order("created_at", desc=True)
@@ -920,33 +966,38 @@ async def get_dashboard(
         recent_activity = _build_recent_activity(recent_items, recent_outfits)
 
         # Weather-based suggestion and outfit of the day
-        weather_based = await _get_weather_suggestion(user_id, db)
-        outfit_of_the_day = await _get_outfit_of_the_day(user_id, db)
+        weather_based = await _get_weather_suggestion(user_id, d)
+        outfit_of_the_day = await _get_outfit_of_the_day(user_id, d)
 
         return {
-            "data": {
-                "user": user_row.data,
-                "statistics": {
-                    "total_items": _get_count_from_result(items_count),
-                    "total_outfits": _get_count_from_result(outfits_count),
-                    "items_added_this_month": _get_count_from_result(items_added_month),
-                    "outfits_created_this_month": _get_count_from_result(outfits_created_month),
-                    "most_worn_item": (
-                        {"name": most_worn_item[0].get("name"), "times_worn": int(most_worn_item[0].get("usage_times_worn") or 0)}
-                        if most_worn_item
-                        else None
-                    ),
-                    "favorite_items_count": _get_count_from_result(fav_items),
-                    "favorite_outfits_count": _get_count_from_result(fav_outfits),
-                },
-                "recent_activity": recent_activity,
-                "suggestions": {
-                    "weather_based": weather_based,
-                    "outfit_of_the_day": outfit_of_the_day,
-                },
+            "user": user_row.data,
+            "statistics": {
+                "total_items": _get_count_from_result(items_count),
+                "total_outfits": _get_count_from_result(outfits_count),
+                "items_added_this_month": _get_count_from_result(items_added_month),
+                "outfits_created_this_month": _get_count_from_result(outfits_created_month),
+                "most_worn_item": (
+                    {"name": most_worn_item[0].get("name"), "times_worn": int(most_worn_item[0].get("usage_times_worn") or 0)}
+                    if most_worn_item
+                    else None
+                ),
+                "favorite_items_count": _get_count_from_result(fav_items),
+                "favorite_outfits_count": _get_count_from_result(fav_outfits),
             },
-            "message": "OK",
+            "recent_activity": recent_activity,
+            "suggestions": {
+                "weather_based": weather_based,
+                "outfit_of_the_day": outfit_of_the_day,
+            },
         }
+
+    try:
+        payload = await execute_with_reconnect(
+            lambda d: _dashboard_data(d),
+            db,
+            extra={"operation": "get_dashboard", "user_id": user_id},
+        )
+        return {"data": payload, "message": "OK"}
 
     except (UserNotFoundError, ValidationError, DatabaseError):
         raise

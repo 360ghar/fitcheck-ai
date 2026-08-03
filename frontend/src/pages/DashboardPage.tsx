@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useClosetStore } from '../stores/wardrobeStore'
 import { useOutfitStore } from '../stores/outfitStore'
 import { useUserAvatar, useUserDisplayName, useCurrentUser } from '../stores/authStore'
-import { useIsNearLimit } from '../stores/subscriptionStore'
+import { useIsNearLimit, useSubscriptionStore } from '../stores/subscriptionStore'
 import { useJobUiStore } from '../stores/jobUiStore'
 import {
   Shirt,
@@ -77,6 +77,10 @@ export default function DashboardPage() {
   const isLoadingOutfits = useOutfitStore((state) => state.isLoading)
   const itemsError = useClosetStore((state) => state.error)
   const outfitsError = useOutfitStore((state) => state.error)
+  // Server-authoritative totals. The dashboard fetch is paginated (page size
+  // 24), so `items.length` / `outfits.length` cap the count cards at one page.
+  const closetTotalItems = useClosetStore((state) => state.totalItems)
+  const outfitTotalCount = useOutfitStore((state) => state.totalOutfits)
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const setJob = useJobUiStore((s) => s.setJob)
@@ -84,7 +88,7 @@ export default function DashboardPage() {
   const lastBatchStatusRef = useRef<BatchJobUiStatus | null>(null)
   const navigate = useNavigate()
 
-  const { isDismissed: isBannerDismissed, dismiss: dismissBanner } = useReferralBannerDismissal()
+  const { isDismissed: isBannerDismissed, dismiss: dismissBanner } = useReferralBannerDismissal(user?.id)
   const nearLimit = useIsNearLimit()
   const isNearLimit = nearLimit.extractions || nearLimit.generations
   const shouldShowReferralBanner = !isBannerDismissed || isNearLimit
@@ -105,10 +109,15 @@ export default function DashboardPage() {
     }
   }, [user?.id])
 
+  const fetchUsage = useSubscriptionStore((s) => s.fetchUsage)
+
   useEffect(() => {
     fetchItems(true)
     fetchOutfits(true)
-  }, [fetchItems, fetchOutfits])
+    // Load usage so the referral banner's "near limit" urgent variant has real
+    // data on a cold dashboard visit (nothing else fetches it on this route).
+    void fetchUsage()
+  }, [fetchItems, fetchOutfits, fetchUsage])
 
   const totalItems = items.length
   const totalOutfits = outfits.length
@@ -146,7 +155,12 @@ export default function DashboardPage() {
   const dataReady = !isLoadingHome || totalItems > 0 || totalOutfits > 0
   const showActivation =
     dataReady && shouldShowActivation(activationInput, activationDismissed)
-  const isEmpty = dataReady && !loadError && totalItems === 0 && totalOutfits === 0
+  const hasContent = totalItems > 0 || totalOutfits > 0
+  const isEmpty = dataReady && !loadError && !hasContent
+  // Greeting/subtext keyed off data, not loading: `isEmpty` is false while the
+  // stores rehydrate, so a brand-new user would otherwise see "Welcome back"
+  // for the loading flash. `isEmpty` still gates the CTA and "How it works".
+  const isWelcomeEmpty = isEmpty || !hasContent
 
   const publishedBatchJobIdRef = useRef<string | null>(null)
 
@@ -212,14 +226,14 @@ export default function DashboardPage() {
   const stats = [
     {
       name: 'Total Items',
-      value: totalItems,
+      value: closetTotalItems,
       icon: Shirt,
       gradient: 'cool' as const,
       link: '/wardrobe',
     },
     {
       name: 'Outfits Created',
-      value: totalOutfits,
+      value: outfitTotalCount,
       icon: Layers,
       gradient: 'primary' as const,
       link: '/outfits',
@@ -266,7 +280,9 @@ export default function DashboardPage() {
       <div className="app-page max-w-7xl">
         <ErrorState
           title="Couldn't load your closet"
-          description={loadError.message}
+          // Friendly copy only: the store error can carry backend detail (SQL
+          // function names, migration numbers) that must not reach the UI.
+          description="We couldn't reach the server. Check your connection and try again."
           onRetry={() => {
             void fetchItems(true)
             void fetchOutfits(true)
@@ -281,10 +297,10 @@ export default function DashboardPage() {
       {/* Welcome header */}
       <div className="mb-3 md:mb-4">
         <h1 className="text-xl md:text-3xl font-bold text-foreground">
-          {isEmpty ? `Welcome, ${userDisplayName}` : `Welcome back, ${userDisplayName}`}
+          {isWelcomeEmpty ? `Welcome, ${userDisplayName}` : `Welcome back, ${userDisplayName}`}
         </h1>
         <p className="mt-1 md:mt-2 text-xs md:text-base text-muted-foreground">
-          {isEmpty
+          {isWelcomeEmpty
             ? 'Start with a few clothing photos. AI finds each item so you can build outfits today.'
             : "Here's what's happening with your closet today."}
         </p>

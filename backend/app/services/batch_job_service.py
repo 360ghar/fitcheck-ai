@@ -18,7 +18,14 @@ from app.core.exceptions import AIServiceError, DatabaseError, RateLimitError
 from app.core.logging_config import get_context_logger
 from app.services.job_persistence import JobPersistenceStore
 from app.utils.process_metrics import estimate_base64_mb, log_memory
-from app.utils.sse_queue import fanout
+from app.utils.sse_queue import (
+    EVENT_HISTORY_MAX,
+    discard_subscriber,
+    event_size_bytes,
+    fanout,
+    note_put,
+    strip_history_base64,
+)
 from app.utils.db import (
     QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
     job_persistence_migration_hint,
@@ -34,6 +41,9 @@ MAX_CONCURRENT_BATCH_JOBS = 2
 _ACTIVE_JOB_TTL = timedelta(minutes=30)
 _FINISHED_JOB_TTL = timedelta(minutes=15)
 _CLEANUP_INTERVAL_S = 60
+
+# Event-history bound lives with the other SSE policy in app/utils/sse_queue.py
+# (EVENT_HISTORY_MAX), so the stores cannot drift.
 
 
 class BatchJobStatus(str, Enum):
@@ -507,6 +517,41 @@ class BatchJobService:
         log_memory("batch_source_images_released", force=True, extra={"job_id": job_id})
 
     @classmethod
+    async def release_single_image_payload(cls, job_id: str, image_id: str) -> None:
+        """Drop ONE image's source base64 once its extraction has finished.
+
+        Runs per-image as extractions complete (see
+        batch_extraction_service._extract_single_image) so early-finishing
+        images of a large batch do not pin tens of MB while later images are
+        still extracting. `release_image_payloads` remains the phase-end
+        backstop for cancelled/never-started images.
+        """
+        async with cls._lock:
+            job = cls._jobs.get(job_id)
+            if job and image_id in job.images:
+                job.images[image_id].image_base64 = ""
+
+    @classmethod
+    async def release_generated_payloads(cls, job_id: str) -> None:
+        """Free generated-image base64 once the pipeline ends.
+
+        Every successfully generated image is also persisted to a durable
+        storage URL at generation time; items WITH a URL drop their base64 so
+        a finished job no longer pins multi-MB payloads for the whole
+        finished TTL. Items whose upload failed keep their base64 — memory is
+        the price of delivering their image. Status polls return the URL; SSE
+        live events already carried the base64 to the client.
+        """
+        async with cls._lock:
+            job = cls._jobs.get(job_id)
+            if not job:
+                return
+            for item in job.detected_items:
+                if item.generated_image_url:
+                    item.generated_image_base64 = None
+        log_memory("batch_generated_payloads_released", force=True, extra={"job_id": job_id})
+
+    @classmethod
     async def clear_event_history(cls, job_id: str) -> None:
         """Drop SSE event history after the pipeline ends.
 
@@ -839,8 +884,13 @@ class BatchJobService:
             if not job:
                 return
 
-            # Store in event history for late-connecting subscribers
-            job.event_history.append(event)
+            # Store in event history for late-connecting subscribers. History
+            # is STRIPPED of base64 payloads (see strip_history_base64) and
+            # length-bounded, so a finished job never pins multi-MB copies of
+            # every generated image; live subscribers still get the full event.
+            job.event_history.append(strip_history_base64(event))
+            if len(job.event_history) > EVENT_HISTORY_MAX:
+                del job.event_history[:-EVENT_HISTORY_MAX]
 
             subscribers = list(job.subscribers)
 
@@ -900,8 +950,13 @@ class BatchJobService:
             event_history = event_history[-replay_budget:]
 
         for historical_event in event_history:
+            # Subscriber queues carry (event, size) tuples so fanout can track
+            # the byte budget; history events are already base64-stripped, so
+            # they are small.
+            historical_size = event_size_bytes(historical_event)
             try:
-                queue.put_nowait(historical_event)
+                queue.put_nowait((historical_event, historical_size))
+                note_put(queue, historical_size)
             except asyncio.QueueFull:
                 logger.debug(
                     "Replay queue full; dropping oldest replay tail",
@@ -915,11 +970,18 @@ class BatchJobService:
 
     @classmethod
     async def remove_subscriber(cls, job_id: str, queue: asyncio.Queue) -> None:
-        """Remove an SSE subscriber from a job."""
+        """Remove an SSE subscriber from a job.
+
+        The queue is drained and its byte-ledger entry dropped (see
+        sse_queue.discard_subscriber): a disconnected client's buffered
+        events — potentially multi-MB generated base64 — must not stay
+        pinned by the ledger's strong reference until job TTL.
+        """
         async with cls._lock:
             job = cls._jobs.get(job_id)
             if job and queue in job.subscribers:
                 job.subscribers.remove(queue)
+            discard_subscriber(queue)
 
     @classmethod
     async def get_job_status(cls, job_id: str) -> Optional[Dict[str, Any]]:

@@ -7,6 +7,7 @@ import '../../wardrobe/models/item_model.dart';
 import '../repositories/outfit_repository.dart';
 import '../../wardrobe/repositories/item_repository.dart';
 import '../../wardrobe/controllers/wardrobe_controller.dart';
+import 'outfit_list_controller.dart';
 import '../../../core/utils/frame_safe.dart';
 import '../../../core/utils/error_handler.dart';
 
@@ -266,6 +267,12 @@ class OutfitBuilderController extends GetxController {
       );
 
       final outfit = await _outfitRepository.createOutfit(request);
+
+      // Keep the outfits list in sync so the new outfit appears in the tab
+      // without a manual pull-to-refresh.
+      if (Get.isRegistered<OutfitListController>()) {
+        Get.find<OutfitListController>().addOutfit(outfit);
+      }
 
       // Upload generated image if available (automatic save like web version)
       // Only upload if it's a data URL (base64), not a remote URL

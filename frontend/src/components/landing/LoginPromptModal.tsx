@@ -33,7 +33,7 @@ export function LoginPromptModal({ isOpen, onClose, feature }: LoginPromptModalP
             Save your work
           </DialogTitle>
           <DialogDescription className="text-center text-stone-600 dark:text-stone-400">
-            Create a free account to {feature}. Your demo result stays ready after you sign up.
+            Create a free account to {feature}. Your uploads and results are saved inside the app, where you can keep building.
           </DialogDescription>
         </DialogHeader>
 

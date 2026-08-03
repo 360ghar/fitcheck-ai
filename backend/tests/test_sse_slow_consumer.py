@@ -51,9 +51,11 @@ def _assert_dropped_cleanly(queue: asyncio.Queue, subscribers) -> None:
     assert queue not in subscribers, "stalled subscriber was not dropped"
     # Drain: the last thing it can read must terminate its generator, so the
     # client sees a close and reconnects instead of hanging forever.
+    # Subscriber queues carry (event, size) tuples (see app/utils/sse_queue).
     tail = None
     while not queue.empty():
-        tail = queue.get_nowait()
+        item = queue.get_nowait()
+        tail = item[0] if isinstance(item, tuple) else item
     assert tail is not None and tail["type"] == STREAM_OVERFLOW, (
         f"expected a terminal {STREAM_OVERFLOW} event, got {tail}"
     )
@@ -103,6 +105,100 @@ async def test_batch_late_subscriber_survives_next_broadcast():
 
     subscribers = BatchJobService._jobs[job.job_id].subscribers
     assert queue in subscribers, "late joiner dropped before reading anything"
+
+
+@pytest.mark.asyncio
+async def test_batch_slow_consumer_dropped_on_byte_budget_before_event_cap(monkeypatch):
+    """The byte budget (SSE_QUEUE_MAX_BUFFERED_BYTES) must drop a stalled
+    subscriber whose BACKLOG is multi-MB — long before the 100-event cap — so
+    one client cannot pin 100 x 5 MB = 500 MB (the 2026-08-03 OOM class)."""
+    from app.utils import sse_queue
+
+    monkeypatch.setattr(sse_queue, "SSE_QUEUE_MAX_BUFFERED_BYTES", 1024 * 1024)
+    job = await BatchJobService.create_job(
+        user_id="u1",
+        images=[{"image_id": "img1", "image_base64": "abc"}],
+    )
+    queue: asyncio.Queue = asyncio.Queue(maxsize=SSE_QUEUE_MAXSIZE)
+    assert await BatchJobService.add_subscriber(job.job_id, queue)
+
+    big = "x" * 300_000  # ~300 KB per event; budget trips at ~1 MB
+    for i in range(20):
+        await BatchJobService.broadcast_event(
+            job.job_id,
+            "item_generation_complete",
+            {"i": i, "generated_image_base64": big},
+        )
+
+    subscribers = BatchJobService._jobs[job.job_id].subscribers
+    assert queue not in subscribers, "byte budget did not drop the subscriber"
+    # Backlog was freed immediately; only the terminal overflow event remains.
+    assert queue.qsize() <= 2
+    tail = None
+    while not queue.empty():
+        item = queue.get_nowait()
+        tail = item[0] if isinstance(item, tuple) else item
+    assert tail is not None and tail["type"] == STREAM_OVERFLOW
+
+
+@pytest.mark.asyncio
+async def test_normal_remove_subscriber_releases_queue_and_byte_ledger():
+    """A client that disconnects normally with events still buffered must not
+    leak: remove_subscriber drains the queue and drops the byte-ledger entry,
+    whose strong reference would otherwise pin the queue + its multi-MB
+    events until process exit."""
+    from app.utils import sse_queue
+    from app.utils.sse_queue import buffered_bytes, note_put
+
+    job = await BatchJobService.create_job(
+        user_id="u1",
+        images=[{"image_id": "img1", "image_base64": "abc"}],
+    )
+    queue: asyncio.Queue = asyncio.Queue(maxsize=SSE_QUEUE_MAXSIZE)
+    assert await BatchJobService.add_subscriber(job.job_id, queue)
+
+    # Simulate buffered, unconsumed events (client stopped reading).
+    big = "y" * 200_000
+    for i in range(5):
+        event = {"type": "item_generation_complete", "data": {"i": i, "generated_image_base64": big}}
+        note_put(queue, sse_queue.event_size_bytes(event))
+        queue.put_nowait((event, sse_queue.event_size_bytes(event)))
+    assert buffered_bytes(queue) > 0
+    assert queue.qsize() == 5
+
+    await BatchJobService.remove_subscriber(job.job_id, queue)
+
+    assert queue not in BatchJobService._jobs[job.job_id].subscribers
+    assert queue.qsize() == 0, "buffered events must be drained on disconnect"
+    assert buffered_bytes(queue) == 0, "byte-ledger entry must be dropped"
+    assert queue not in sse_queue._buffered_bytes
+
+
+@pytest.mark.asyncio
+async def test_photoshoot_remove_subscriber_releases_queue_and_byte_ledger():
+    from app.utils import sse_queue
+    from app.utils.sse_queue import buffered_bytes, note_put
+
+    job = await PhotoshootJobService.create_job(
+        user_id="u1",
+        photos=["abc"],
+        use_case="aesthetic",
+        num_images=1,
+    )
+    ok, _ = await PhotoshootJobService.add_subscriber(job.job_id, queue := asyncio.Queue(maxsize=SSE_QUEUE_MAXSIZE))
+    assert ok
+
+    event = {"type": "image_complete", "data": {"image_base64": "z" * 100_000}}
+    note_put(queue, sse_queue.event_size_bytes(event))
+    queue.put_nowait((event, sse_queue.event_size_bytes(event)))
+    assert buffered_bytes(queue) > 0
+
+    await PhotoshootJobService.remove_subscriber(job.job_id, queue)
+
+    assert queue not in PhotoshootJobService._jobs[job.job_id].subscribers
+    assert queue.qsize() == 0
+    assert buffered_bytes(queue) == 0
+    assert queue not in sse_queue._buffered_bytes
 
 
 # ---------------------------------------------------------------------------

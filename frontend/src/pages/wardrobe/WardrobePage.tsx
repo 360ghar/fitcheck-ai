@@ -77,7 +77,11 @@ export default function WardrobePage() {
   const items = useClosetStore((state) => state.items)
   const filteredItems = useClosetStore((state) => state.filteredItems)
   const isLoading = useClosetStore((state) => state.isLoading)
+  const hasLoaded = useClosetStore((state) => state.hasLoaded)
+  const isLoadingMore = useClosetStore((state) => state.isLoadingMore)
   const isDetailLoading = useClosetStore((state) => state.isDetailLoading)
+  const totalItems = useClosetStore((state) => state.totalItems)
+  const hasMore = useClosetStore((state) => state.hasMore)
   const error = useClosetStore((state) => state.error)
   // Subscribe so multi-select checkboxes re-render when selection changes
   const selectedItems = useClosetStore((state) => state.selectedItems)
@@ -85,6 +89,7 @@ export default function WardrobePage() {
 
   // Store actions
   const fetchItems = useClosetStore((state) => state.fetchItems)
+  const fetchMore = useClosetStore((state) => state.fetchMore)
   const fetchItemById = useClosetStore((state) => state.fetchItemById)
   const toggleItemFavorite = useClosetStore((state) => state.toggleItemFavorite)
   const updateItem = useClosetStore((state) => state.updateItem)
@@ -120,6 +125,7 @@ export default function WardrobePage() {
   const hasActiveFilters = Boolean(
     filters.search ||
       filters.category !== 'all' ||
+      filters.color ||
       filters.condition !== 'all' ||
       filters.occasion ||
       filters.isFavorite
@@ -236,15 +242,28 @@ export default function WardrobePage() {
   // ============================================================================
 
   const handleFilterChange = useCallback(<K extends keyof ItemFilters>(key: K, value: ItemFilters[K]) => {
+    // Favorites is URL-driven (Dashboard links to /wardrobe?favorites=true).
+    // Sync the URL so the toggle survives remounts; the searchParams effect
+    // below re-applies the filter and refetches exactly once, so no fetch here.
+    if (key === 'isFavorite') {
+      const params = new URLSearchParams(location.search)
+      if (value) params.set('favorites', 'true')
+      else params.delete('favorites')
+      const qs = params.toString()
+      navigate({ pathname: location.pathname, search: qs ? `?${qs}` : '' }, { replace: true })
+      return
+    }
     setFilters((prev) => ({ ...prev, [key]: value }))
     // Update store filters
     useClosetStore.getState().setFilter(key, value)
-    // Favorites uses server-side is_favorite and can leave `items` as a subset;
-    // re-fetch when it flips so "all items" is restored when cleared.
-    if (key === 'isFavorite') {
-      void useClosetStore.getState().fetchItems(true)
-    }
-  }, [])
+    // Server-side filters (category/color/occasion/condition) must re-fetch so
+    // the result set is authoritative and pagination stays in step — without
+    // this, a filter only narrows the already-loaded page(s), so e.g. the
+    // "Shoes" chip can report "No items match" on a big closet. Search stays
+    // client-side for instant feedback over loaded items.
+    if (key === 'search') return
+    void useClosetStore.getState().fetchItems(true)
+  }, [location, navigate])
 
   const handleSortChange = useCallback(<K extends keyof SortOptions>(key: K, value: SortOptions[K]) => {
     setSort((prev) => ({ ...prev, [key]: value }))
@@ -261,6 +280,10 @@ export default function WardrobePage() {
   }, [])
 
   const handleResetFilters = useCallback(() => {
+    const params = new URLSearchParams(location.search)
+    const hadFavorites = params.has('favorites')
+    params.delete('favorites')
+    // Reset the non-URL filters immediately.
     setFilters({
       search: '',
       category: 'all',
@@ -270,8 +293,18 @@ export default function WardrobePage() {
       isFavorite: false,
     })
     useClosetStore.getState().resetFilters()
-    void useClosetStore.getState().fetchItems(true)
-  }, [])
+    if (hadFavorites) {
+      // Dropping the URL param makes the searchParams effect re-apply
+      // isFavorite=false and refetch exactly once.
+      const qs = params.toString()
+      navigate(
+        { pathname: location.pathname, search: qs ? `?${qs}` : '' },
+        { replace: true }
+      )
+    } else {
+      void useClosetStore.getState().fetchItems(true)
+    }
+  }, [location, navigate])
 
   const handleCardClick = (item: Item) => {
     // Deliberate behaviour change: while a bulk selection is live, a card-body tap
@@ -289,6 +322,18 @@ export default function WardrobePage() {
     // cleared, which is the fix for "the same card cannot be reopened".
     navigate({ pathname: LIST_PATH, search: location.search })
   }
+
+  const closeUploadModal = useCallback(() => {
+    setIsUploadModalOpen(false)
+    // Drop the `?action=add` the job pill / deep link pushed, so browser Back
+    // cannot re-open the modal on a later visit. `replace` keeps history clean.
+    const params = new URLSearchParams(location.search)
+    if (params.has('action')) {
+      params.delete('action')
+      const qs = params.toString()
+      navigate({ pathname: location.pathname, search: qs ? `?${qs}` : '' }, { replace: true })
+    }
+  }, [location, navigate])
 
   const handleToggleFavorite = async (itemId: string) => {
     if (favoritingIdsRef.current.has(itemId)) return
@@ -358,6 +403,7 @@ export default function WardrobePage() {
   const confirmBulkDelete = async () => {
     const count = selectedItems.size
     if (count === 0) return
+    const deletedTheOpenItem = selectedId != null && selectedItems.has(selectedId)
     setIsDeleting(true)
     try {
       await deleteSelectedItems()
@@ -366,6 +412,11 @@ export default function WardrobePage() {
         description: `${count} item${count === 1 ? '' : 's'} removed from your closet`,
       })
       setIsBulkDeleteOpen(false)
+      if (deletedTheOpenItem) {
+        // The pane's item is gone; drop the selection from the URL so the
+        // pane cannot keep showing a deleted garment.
+        navigate({ pathname: LIST_PATH, search: location.search }, { replace: true })
+      }
     } catch {
       // api/client interceptor already toasts the failure.
     } finally {
@@ -446,6 +497,11 @@ export default function WardrobePage() {
     Boolean(selectedItemDetail) &&
     !filteredItems.some((i) => i.id === selectedId)
 
+  // Header count: the server total when the list is not being narrowed
+  // client-side by search (search filters only the loaded pages); otherwise the
+  // number of visible matches. Without this a 100-item closet read "24 items".
+  const displayCount = filters.search ? filteredItems.length : totalItems
+
   const renderCard = (item: Item, variant: 'default' | 'list') => {
     const isMultiSelected = selectedItems.has(item.id)
     const isOpenInPane = item.id === selectedId
@@ -470,7 +526,10 @@ export default function WardrobePage() {
     )
   }
 
-  const listContent = isLoading ? (
+  // First frame: `isLoading` is false until the fetch actually starts, so an
+  // un-fetched store would otherwise flash the "Your closet is empty" state.
+  // Treat `!hasLoaded` as loading (the error banner still renders above it).
+  const listContent = isLoading || !hasLoaded ? (
     <LoadingGrid
       count={14}
       variant={showMasonry ? 'masonry' : 'list'}
@@ -478,13 +537,32 @@ export default function WardrobePage() {
     />
   ) : filteredItems.length === 0 ? (
     hasActiveFilters ? (
-      <EmptyState
-        icon={Shirt}
-        title="No items match"
-        description="Try adjusting your filters or search query"
-        actionLabel="Clear filters"
-        onAction={handleResetFilters}
-      />
+      <>
+        <EmptyState
+          icon={Shirt}
+          title="No items match"
+          description="Try adjusting your filters or search query"
+          actionLabel="Clear filters"
+          onAction={handleResetFilters}
+        />
+        {/* Search is client-side over the loaded pages only: when matches may
+            live on unloaded pages, keep the Load-more affordance visible so
+            the empty state is not a dead end (a false "no match" for a
+            closet larger than one page). */}
+        {filters.search && hasMore && (
+          <div className="mt-6 flex justify-center">
+            <Button
+              variant="outline"
+              onClick={() => void fetchMore()}
+              disabled={isLoadingMore}
+              aria-busy={isLoadingMore}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              {isLoadingMore ? 'Loading…' : 'Load more'}
+            </Button>
+          </div>
+        )}
+      </>
     ) : (
       <EmptyState
         icon={Shirt}
@@ -494,14 +572,35 @@ export default function WardrobePage() {
         onAction={() => setIsUploadModalOpen(true)}
       />
     )
-  ) : showMasonry ? (
-    <PinGrid className={isDetailOpen ? SPLIT_COLUMNS : undefined}>
-      {filteredItems.map((item) => renderCard(item, 'default'))}
-    </PinGrid>
   ) : (
-    <div className="grid grid-cols-1 gap-2">
-      {filteredItems.map((item) => renderCard(item, 'list'))}
-    </div>
+    <>
+      {showMasonry ? (
+        <PinGrid className={isDetailOpen ? SPLIT_COLUMNS : undefined}>
+          {filteredItems.map((item) => renderCard(item, 'default'))}
+        </PinGrid>
+      ) : (
+        <div className="grid grid-cols-1 gap-2">
+          {filteredItems.map((item) => renderCard(item, 'list'))}
+        </div>
+      )}
+      {hasMore && (
+        <div className="mt-6 flex justify-center">
+          <Button
+            variant="outline"
+            onClick={() => void fetchMore()}
+            disabled={isLoadingMore}
+            aria-busy={isLoadingMore}
+          >
+            {isLoadingMore ? (
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            {isLoadingMore ? 'Loading…' : 'Load more'}
+          </Button>
+        </div>
+      )}
+    </>
   )
 
   return (
@@ -511,7 +610,7 @@ export default function WardrobePage() {
         <div>
           <h1 className="type-heading-xl text-foreground">Closet</h1>
           <p className="type-body-sm text-muted-foreground">
-            {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
+            {displayCount} {displayCount === 1 ? 'item' : 'items'}
           </p>
         </div>
         <Button onClick={() => setIsUploadModalOpen(true)} className="hidden md:flex">
@@ -646,7 +745,7 @@ export default function WardrobePage() {
       {/* Modals — destructive confirms and the upload flow only */}
       <BatchExtractionFlow
         isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
+        onClose={closeUploadModal}
         onUploadComplete={handleUploadComplete}
         onRequestOpen={() => setIsUploadModalOpen(true)}
         onJobStatusChange={(status) => publishBatchJob(status, isUploadModalOpen)}

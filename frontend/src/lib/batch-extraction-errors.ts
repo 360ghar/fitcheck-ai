@@ -8,7 +8,7 @@
  * the error's machine fields (code / status / errorKind) to friendly,
  * stable copy instead.
  */
-import { getApiError } from '@/lib/errors';
+import { getApiError, isAxiosLike } from '@/lib/errors';
 
 export const BATCH_START_ERROR_FALLBACK = 'Failed to start extraction. Please try again.'
 export const BATCH_START_ERROR_NETWORK =
@@ -44,9 +44,4 @@ export function getBatchExtractionErrorMessage(error: unknown): string {
   }
 
   return BATCH_START_ERROR_FALLBACK
-}
-
-/** True for Axios errors (duck-typed via the `isAxiosError` flag), matching `getApiError`. */
-function isAxiosLike(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'isAxiosError' in error
 }

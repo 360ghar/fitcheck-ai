@@ -166,9 +166,10 @@ class _ItemEditPageState extends State<ItemEditPage> {
         description: _descriptionController.text.trim().isEmpty
             ? null
             : _descriptionController.text.trim(),
-        category: _nameController.text.trim() != _item!.name
-            ? selectedCategory.value
-            : null,
+        // Always send the category: `_normalizeUpdateItemPayload` strips
+        // null values, so gating this on the name having changed silently
+        // dropped a category-only edit.
+        category: selectedCategory.value,
         colors: selectedColors.isEmpty ? null : selectedColors.toList(),
         brand: _brandController.text.trim().isEmpty
             ? null
@@ -768,7 +769,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
       AlertDialog(
         title: const Text('Delete Item?'),
         content: const Text(
-          'This action cannot be undone. The item will be permanently removed from your wardrobe.',
+          'This action cannot be undone. The item will be permanently removed from your closet.',
         ),
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
@@ -779,7 +780,7 @@ class _ItemEditPageState extends State<ItemEditPage> {
                 await _itemRepository.deleteItem(widget.itemId);
                 _wardrobeController.fetchItems(refresh: true);
                 Get.back(); // Close edit page
-                ErrorHandler.showSuccess('Item removed from wardrobe', title: 'Deleted');
+                ErrorHandler.showSuccess('Item removed from your closet', title: 'Deleted');
               } catch (e) {
                 ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
               }

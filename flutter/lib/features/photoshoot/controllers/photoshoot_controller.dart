@@ -111,8 +111,11 @@ class PhotoshootController extends GetxController {
         numImages.value = remainingToday.clamp(minImages, maxImages);
       }
     } catch (e) {
-      // Non-blocking, default to free limits
-      usage.value = const PhotoshootUsage();
+      // Non-blocking, default to free limits. Keep usage null (rather than a
+      // PhotoshootUsage with remaining: 0) so the computed remainingToday
+      // falls back to the free default and the user isn't locked out of
+      // generating because a usage fetch failed.
+      usage.value = null;
     } finally {
       isLoadingUsage.value = false;
     }
@@ -510,7 +513,7 @@ class PhotoshootController extends GetxController {
 
   /// Fallback polling if SSE fails
   Future<void> _pollJobStatus(String id, {int attempt = 0}) async {
-    if (id.isEmpty) return;
+    if (id.isEmpty || isClosed) return;
 
     // Bound the polling loop so a permanently unreachable job status endpoint
     // cannot spin forever (previously this recursion had no max-attempts cap).
@@ -540,7 +543,7 @@ class PhotoshootController extends GetxController {
         case 'pending':
         case 'processing':
           await Future.delayed(const Duration(seconds: 2));
-          if (isGenerating.value) {
+          if (isGenerating.value && !isClosed) {
             _pollJobStatus(id, attempt: attempt + 1);
           }
           break;
@@ -573,7 +576,7 @@ class PhotoshootController extends GetxController {
         ErrorHandler.reportError(e, 'Photoshoot polling exhausted');
       }
       await Future.delayed(const Duration(seconds: 3));
-      if (isGenerating.value) {
+      if (isGenerating.value && !isClosed) {
         _pollJobStatus(id, attempt: attempt + 1);
       }
     }

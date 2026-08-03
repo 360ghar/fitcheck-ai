@@ -5,6 +5,7 @@
 import { apiClient, getTokens, setTokens, clearTokens, getApiError } from './client';
 import { logger } from '@/lib/logger';
 import { ENDPOINTS } from '@/lib/endpoints';
+import type { AxiosRequestConfig } from 'axios';
 import type { ApiEnvelope, AuthTokens, LoginRequest, RegisterRequest, AuthResponse, User } from '../types';
 
 // ============================================================================
@@ -153,6 +154,19 @@ export async function syncOAuthProfile(accessToken: string, referralCode?: strin
     credit_months: number;
   };
 }> {
+  // `_skipAuth` opts this request out of the client's 401 refresh/retry (and
+  // forced-logout). A 401 here means the Supabase OAuth session token is
+  // invalid/expired, not that the app's own token needs refreshing — retrying
+  // would swap in the app's localStorage token and sync the WRONG user's
+  // profile. Skip handling so the error surfaces to the auth callback's own
+  // error state instead.
+  const config = {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    _skipAuth: true,
+  } as AxiosRequestConfig & { _skipAuth?: boolean };
+
   const response = await apiClient.post<ApiEnvelope<{
     user: User;
     is_new_user: boolean;
@@ -164,11 +178,7 @@ export async function syncOAuthProfile(accessToken: string, referralCode?: strin
   }>>(
     ENDPOINTS.AUTH.OAUTH_SYNC,
     { referral_code: referralCode },
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    }
+    config,
   );
   return response.data.data;
 }

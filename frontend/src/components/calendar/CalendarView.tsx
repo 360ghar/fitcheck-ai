@@ -28,12 +28,12 @@ import {
   Grid3x3,
   Plus,
   Wand2,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/components/ui/use-toast'
 import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
@@ -979,9 +979,9 @@ export function CalendarView({
 
       {/* Weather loading indicator */}
       {isLoadingWeather && onGetWeather && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Progress value={66} className="h-2 w-24" />
-          <span>Loading weather...</span>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status" aria-live="polite">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Loading weather…</span>
         </div>
       )}
     </div>

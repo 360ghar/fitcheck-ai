@@ -41,11 +41,20 @@ class TokenRefreshInterceptor extends Interceptor {
 
   TokenRefreshInterceptor(this._dio);
 
+  /// Marks a retried request so a second 401 on the replayed request does not
+  /// start another refresh (which would loop: refresh -> fetch -> 401 ->
+  /// refresh...). The original 401 then propagates to the caller, which is the
+  /// correct terminal behaviour for a token that refresh cannot fix.
+  static const String _retryMarkerKey = 'fitcheck_retried_after_refresh';
+
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
-    // If it's a 401 and not a public endpoint
+    // If it's a 401 and not a public endpoint, and this request has not
+    // already been retried after a refresh.
+    final alreadyRetried = err.requestOptions.extra[_retryMarkerKey] == true;
     if (err.response?.statusCode == 401 &&
-        !_isPublicEndpoint(err.requestOptions.path)) {
+        !_isPublicEndpoint(err.requestOptions.path) &&
+        !alreadyRetried) {
       try {
         _refreshFuture ??= _supabase.refreshSession();
         await _refreshFuture;
@@ -57,17 +66,28 @@ class TokenRefreshInterceptor extends Interceptor {
         }
 
         final opts = err.requestOptions;
+        opts.extra[_retryMarkerKey] = true;
         opts.headers['Authorization'] = 'Bearer $newToken';
 
         final response = await _dio.fetch(opts);
         return handler.resolve(response);
       } catch (e) {
+        // Only a FAILED REFRESH is a session problem. A failure of the
+        // replayed request itself (transient 5xx, network blip, or the
+        // second 401 the retry marker intends to propagate to the caller)
+        // must NOT force a sign-out — the marker's terminal behaviour is
+        // "the original 401 propagates to the caller". Throwing out of
+        // `_dio.fetch` lands here, so distinguish the two: wrap only the
+        // refresh in the sign-out path.
+        final isRefreshFailure = _refreshFuture != null;
         _refreshFuture = null;
-        if (kDebugMode) {
-          debugPrint('Token refresh failed: $e');
+        if (isRefreshFailure) {
+          if (kDebugMode) {
+            debugPrint('Token refresh failed: $e');
+          }
+          await _supabase.signOut();
+          getx.Get.offAllNamed(Routes.splash);
         }
-        await _supabase.signOut();
-        getx.Get.offAllNamed(Routes.splash);
         return handler.next(err);
       } finally {
         _refreshFuture = null;

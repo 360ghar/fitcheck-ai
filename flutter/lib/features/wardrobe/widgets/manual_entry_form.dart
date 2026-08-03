@@ -9,6 +9,7 @@ import '../../../domain/enums/category.dart';
 import '../../../domain/enums/condition.dart' as domain;
 import '../models/item_model.dart';
 import '../repositories/item_repository.dart';
+import '../services/wardrobe_sync_service.dart';
 import '../../../core/utils/error_handler.dart';
 
 /// Manual entry form for adding items
@@ -132,9 +133,16 @@ class _ManualEntryFormState extends State<ManualEntryForm> {
         }
       }
 
+      // Keep the closet list in sync (FL5 pattern — go through
+      // WardrobeSyncService, not Get.find on the controller directly).
+      final sync = Get.isRegistered<WardrobeSyncService>()
+          ? Get.find<WardrobeSyncService>()
+          : WardrobeSyncService();
+      sync.addItem(created);
+
       Get.back(); // Close form
       Get.back(); // Close item add page
-      ErrorHandler.showSuccess('"${created.name}" added to your wardrobe', title: 'Success');
+      ErrorHandler.showSuccess('"${created.name}" added to your closet', title: 'Success');
     } catch (e) {
       ErrorHandler.showError(ErrorHandler.extractMessage(e), title: 'Error');
     } finally {

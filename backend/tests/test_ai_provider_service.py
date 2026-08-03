@@ -186,11 +186,54 @@ async def test_generate_image_routes_reference_image_through_images_api_when_sty
     ) as mock_images_api:
         result = await service.generate_image(prompt="a cat", reference_image="abc123")
 
+    # Images flow BARE to the wire boundary; _generate_image_via_images_api
+    # wraps each reference at serialization time (see its "extra_body.image"
+    # construction), so no full-size data-URL copy is created in generate_image.
     mock_images_api.assert_awaited_once_with(
-        "a cat", model="image-model", reference_images=["data:image/jpeg;base64,abc123"],
+        "a cat", model="image-model", reference_images=["abc123"],
         api_url="https://image.example.com/v1", api_key="image-key",
     )
     assert result == "sentinel"
+
+
+@pytest.mark.asyncio
+async def test_chat_wraps_bare_base64_to_data_url_at_wire_boundary():
+    """Regression for the 2026-08-03 bare-base64 message shape: chat() must
+    wrap bare base64 image_url entries to data URLs at wire serialization
+    (one transient copy per image that lives only for the request body),
+    while existing data URLs pass through unchanged. This is the entire point
+    of avoiding a full-size copy per image per request."""
+    config = _make_config()
+    service = AIProviderService(config)
+
+    class _ChatCapturingClient:
+        def __init__(self):
+            self.payloads = []
+        async def post(self, url, json=None, headers=None):
+            self.payloads.append(json)
+            return _FakeResponse({"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]})
+
+    fake_client = _ChatCapturingClient()
+    content = [
+        {"type": "image_url", "image_url": {"url": "YmFyZQ=="}},  # bare base64
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,Zm9v"}},  # already wrapped
+        {"type": "text", "text": "describe these"},
+    ]
+    messages = [ChatMessage(role="user", content=content)]
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
+         patch("app.services.ai_provider_health_service.get_health_service") as mock_health:
+        mock_health.return_value.check_provider_health = AsyncMock(
+            return_value=HealthStatus(available=True, last_check=0, consecutive_failures=0)
+        )
+        await service.chat(messages=messages, model="chat-model")
+
+    sent_content = fake_client.payloads[0]["messages"][0]["content"]
+    image_parts = [p for p in sent_content if p.get("type") == "image_url"]
+    # Bare base64 was wrapped to a data URL with the correct sniffed mime.
+    assert image_parts[0]["image_url"]["url"].startswith("data:")
+    # Existing data URL passed through unchanged (no double-wrap).
+    assert image_parts[1]["image_url"]["url"] == "data:image/png;base64,Zm9v"
 
 
 @pytest.mark.asyncio
@@ -1231,3 +1274,91 @@ class TestMaxOutputTokensConfig:
 
         native = service._get_native_vision_provider()
         assert native.config.max_tokens == 20480
+
+
+# =============================================================================
+# Content-policy 400 fallback (2026-08-03 try-on outage class)
+# =============================================================================
+
+
+def _make_config_with_image_fallback() -> ProviderConfig:
+    return ProviderConfig(
+        api_url="https://llm.example.com/v1",
+        api_key="llm-key",
+        model="llm-model",
+        image_api_url="https://image.example.com/v1",
+        image_api_key="image-key",
+        image_gen_model="image-model",
+        image_api_style="images",
+        image_fallback_api_url="https://image-fallback.example.com/v1",
+        image_fallback_api_key="image-fallback-key",
+        image_fallback_model="fallback-model",
+    )
+
+
+class _ContentRefusalClient:
+    """Primary model answers with Agnes's content-policy 400; the fallback
+    host answers with a real image."""
+
+    def __init__(self):
+        self.urls = []
+
+    async def post(self, url, json=None, headers=None):
+        self.urls.append(url)
+        if len(self.urls) == 1:
+            return httpx.Response(
+                400,
+                json={"error": {"message": "Unable to generate this content. Please modify your prompt and try again."}},
+                request=httpx.Request("POST", url),
+            )
+        return _FakeResponse({"data": [{"b64_json": "ZmFrZQ=="}]})
+
+
+def test_is_content_policy_rejection_matches_agnes_refusal():
+    service = AIProviderService(_make_config())
+    assert (
+        service._is_content_policy_rejection(
+            400, "Unable to generate this content. Please modify your prompt and try again."
+        )
+        is True
+    )
+    assert service._is_content_policy_rejection(400, "Some other provider error") is False
+    assert service._is_content_policy_rejection(429, "Unable to generate this content") is False
+
+
+@pytest.mark.asyncio
+async def test_content_policy_400_marks_fallback_eligible_but_not_retryable():
+    """A prompt refusal must reach the fallback MODEL (safe - nothing was
+    generated/billed) without making the whole agent call retryable (which
+    would multiply multi-second generation latency)."""
+    service = AIProviderService(_make_config())
+    fake_client = _ContentRefusalClient()
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)):
+        with pytest.raises(AIServiceError) as exc_info:
+            await service._generate_image_via_images_api("a cat", model="image-model")
+
+    assert exc_info.value.retryable is False
+    assert exc_info.value.fallback_eligible is True
+
+
+@pytest.mark.asyncio
+async def test_chat_falls_through_to_fallback_model_on_content_policy_400():
+    """Regression for the 2026-08-03 /ai/try-on outage: agnes-image-2.1-flash
+    refused the prompt with a 400, and because 400 is not transient the
+    fallback model was never tried - every try-on 503'd after ~25s. The
+    refusal is model-specific, so the fallback attempt is both safe and
+    potentially successful."""
+    service = AIProviderService(_make_config_with_image_fallback())
+    fake_client = _ContentRefusalClient()
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)):
+        result = await service.chat(
+            messages=[ChatMessage(role="user", content="a cat")],
+            response_modalities=["TEXT", "IMAGE"],
+        )
+
+    assert len(fake_client.urls) == 2
+    assert fake_client.urls[0].startswith("https://image.example.com")
+    assert fake_client.urls[1].startswith("https://image-fallback.example.com")
+    assert result.images == ["ZmFrZQ=="]

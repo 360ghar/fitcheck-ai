@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../../app/routes/app_routes.dart';
+import '../../../app/themes/app_colors.dart';
 import '../auth/controllers/auth_controller.dart';
 
 class SplashPage extends StatefulWidget {
@@ -99,12 +100,10 @@ class _SplashPageState extends State<SplashPage>
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final backgroundColor = isDarkMode ? const Color(0xFF0A0A0A) : const Color(0xFFFAFAFA);
     final primaryColor = isDarkMode ? Colors.white : Colors.black;
-    final secondaryColor = isDarkMode
-        ? const Color(0xFF6366F1)  // Indigo for dark mode
-        : const Color(0xFF6366F1); // Indigo for light mode
-    final accentColor = isDarkMode
-        ? const Color(0xFFEC4899)  // Pink for dark mode
-        : const Color(0xFFF43F5E); // Rose for light mode
+    // Brand accents (Wardrobe Studio red + editorial purple) instead of the
+    // previous off-brand indigo/pink/rose that matched nothing in the app.
+    final secondaryColor = AppColors.secondary;
+    final accentColor = AppColors.primary;
 
     final overlayStyle = isDarkMode
         ? SystemUiOverlayStyle.light
@@ -199,9 +198,11 @@ class _AnimatedLetter extends StatelessWidget {
         final scale = animation.value;
         final opacity = animation.value.clamp(0.0, 1.0);
 
-        // Use accent color for special letters (F, C, A)
+        // Use accent color for special letters (F, C, A). "FitCheck AI" maps
+        // F=0, C=3, A=9 -- the C was previously keyed to index 5 ('e'), so it
+        // silently never rendered in the accent color.
         final isAccentLetter = letter == 'F' && index == 0 ||
-                               letter == 'C' && index == 5 ||
+                               letter == 'C' && index == 3 ||
                                letter == 'A' && index == 9;
 
         final letterColor = isAccentLetter ? accentColor : primaryColor;

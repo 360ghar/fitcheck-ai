@@ -37,6 +37,11 @@ export function UpgradePromptDialog() {
     setCheckoutError(null);
     try {
       await startCheckout('pro_monthly');
+      // Success path: a NEW checkout redirects the page (window.location),
+      // which unmounts the dialog anyway; an in-place upgrade (session.updated)
+      // resolves without navigating, so close the prompt rather than leave it
+      // open on an already-upgraded user.
+      close();
     } catch {
       setCheckoutError('Could not start checkout. Please try again.');
     }

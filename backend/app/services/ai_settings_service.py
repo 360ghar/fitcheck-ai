@@ -488,6 +488,17 @@ class AISettingsService:
         # fails closed when the hosted migration or row is unavailable.
         await AISettingsService.ensure_ai_settings_row(user_id, db)
         try:
+            # Deliberately NOT wrapped in execute_with_reconnect: reserve_ai_usage
+            # is a non-idempotent conditional counter increment. If the first
+            # call committed server-side but the response was lost on the dead
+            # pooled connection, an automatic retry would reserve the same
+            # admission twice (double daily quota + inflated totals) or return
+            # false against the now-inflated counter while the first
+            # reservation stays consumed. Fail closed instead: the connection
+            # error below becomes the friendly retryable 503, and callers
+            # (batch/photoshoot/try-on routes) already retry admission at a
+            # higher layer. release_usage KEEPS the reconnect wrap because
+            # release is GREATEST(0, …)-bounded — a retry there is harmless.
             result = await asyncio.to_thread(
                 db.rpc(
                     "reserve_ai_usage",
@@ -532,15 +543,17 @@ class AISettingsService:
         """Compensate a reservation when a multi-quota admission fails."""
         operation = getattr(operation_type, "value", operation_type)
         try:
-            await asyncio.to_thread(
-                db.rpc(
+            await execute_with_reconnect(
+                lambda d: d.rpc(
                     "release_ai_usage",
                     {
                         "p_user_id": user_id,
                         "p_operation": operation,
                         "p_count": count,
                     },
-                ).execute
+                ).execute(),
+                db,
+                extra={"operation": "release_ai_usage", "user_id": user_id},
             )
         except Exception as error:
             if is_pgrst202_missing_rpc(error):

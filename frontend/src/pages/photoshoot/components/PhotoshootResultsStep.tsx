@@ -115,7 +115,12 @@ export function PhotoshootResultsStep() {
 
       {/* Image Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        {generatedImages.map((image, index) => (
+        {generatedImages.map((image, index) => {
+          // `image.index` is the true slot number (0-based) — the grid index
+          // drifts from it when earlier slots failed, so labels must use the
+          // slot number or they stop matching the "Failed slot #N" cards.
+          const slotNumber = image.index + 1;
+          return (
           <div
             key={image.id}
             className="relative aspect-[3/4] rounded-lg overflow-hidden bg-muted group"
@@ -124,11 +129,11 @@ export function PhotoshootResultsStep() {
               type="button"
               className="absolute inset-0 h-full w-full cursor-pointer"
               onClick={() => setPreviewIndex(index)}
-              aria-label={`Preview generated image ${index + 1}`}
+              aria-label={`Preview generated image ${slotNumber}`}
             >
               <img
                 src={getImageSrc(index) || PLACEHOLDER_IMAGE}
-                alt={`Generated ${index + 1}`}
+                alt={`Generated ${slotNumber}`}
                 width={768}
                 height={1024}
                 className="w-full h-full object-cover"
@@ -137,13 +142,13 @@ export function PhotoshootResultsStep() {
 
             {/* Index Badge */}
             <div className="absolute top-2 left-2 px-2 py-1 bg-black/50 rounded-full">
-              <span className="text-xs text-white font-medium">{index + 1}</span>
+              <span className="text-xs text-white font-medium">{slotNumber}</span>
             </div>
 
             {/* Download Button — always visible on touch/mobile; hover-reveal on md+ */}
             <button
               type="button"
-              aria-label={`Download image ${index + 1}`}
+              aria-label={`Download image ${slotNumber}`}
               onClick={(e) => {
                 e.stopPropagation();
                 downloadImage(index, true);
@@ -153,7 +158,8 @@ export function PhotoshootResultsStep() {
               <Download className="w-4 h-4" />
             </button>
           </div>
-        ))}
+          );
+        })}
 
         {failedIndices.map((failedIndex) => (
           <div
@@ -198,7 +204,7 @@ export function PhotoshootResultsStep() {
             <div className="relative">
               <img
                 src={getImageSrc(previewIndex) || PLACEHOLDER_IMAGE}
-                alt={`Preview ${previewIndex + 1}`}
+                alt={`Preview ${generatedImages[previewIndex].index + 1}`}
                 width={1536}
                 height={2048}
                 className="w-full h-auto max-h-[80vh] object-contain"

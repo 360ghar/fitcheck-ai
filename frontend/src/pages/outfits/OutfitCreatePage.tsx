@@ -123,7 +123,13 @@ export default function OutfitCreatePage() {
   const canSave = creationName.trim().length > 0 && creationItems.size > 0 && !isRendering && !isSaving
 
   const handleGenerate = useCallback(async () => {
+    // `item_id` is load-bearing: the backend resolves the item's stored image
+    // server-side and sends it to the model as a garment reference. Without it
+    // the render invents a lookalike from the text attributes instead of
+    // reproducing the real piece — the preview would depict clothes the user
+    // does not own. Mirrors `startGeneration` / `startGenerationForNewOutfit`.
     const promptItems: OutfitItemInput[] = selectedItems.map((item) => ({
+      item_id: item.id,
       name: item.name,
       category: item.category,
       colors: item.colors,

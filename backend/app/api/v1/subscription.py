@@ -132,6 +132,18 @@ async def get_plans():
 
     return {
         "data": {
+            # True only when web billing is fully configured. When false, every
+            # /checkout and /portal call 503s by design (config_health logs the
+            # missing vars at boot), so clients must not offer upgrade buttons
+            # that only produce error toasts - promo codes stay the working
+            # path for free users.
+            "billing_configured": bool(
+                settings.STRIPE_SECRET_KEY
+                and settings.STRIPE_PLUS_MONTHLY_PRICE_ID
+                and settings.STRIPE_PLUS_YEARLY_PRICE_ID
+                and settings.STRIPE_PRO_MONTHLY_PRICE_ID
+                and settings.STRIPE_PRO_YEARLY_PRICE_ID
+            ),
             # Per-variant store product IDs (null when the store rail is not
             # configured). The mobile clients use these to query/purchase via
             # StoreKit / Play Billing; values are never hardcoded client-side.

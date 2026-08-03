@@ -35,6 +35,19 @@ class _OutfitsContentState extends State<OutfitsContent> {
                 child: CustomScrollView(
                   slivers: [
                     _buildAppBar(),
+                    // Offline / error banner (persistent context, so an offline
+                    // user never sees a misleading "No outfits yet" state).
+                    Obx(() {
+                      if (controller.error.value.isEmpty ||
+                          controller.isLoading.value) {
+                        return const SliverToBoxAdapter(
+                          child: SizedBox.shrink(),
+                        );
+                      }
+                      return SliverToBoxAdapter(
+                        child: AppErrorBanner(message: controller.error.value),
+                      );
+                    }),
                     // Extra bottom inset so extended FAB + bottom nav don't cover last row
                     SliverPadding(
                       padding: const EdgeInsets.fromLTRB(
@@ -350,7 +363,7 @@ class _OutfitsContentState extends State<OutfitsContent> {
               ),
               const SizedBox(height: AppConstants.spacing8),
               Text(
-                'Create your first outfit from your wardrobe',
+                'Create your first outfit from your closet',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: tokens.textMuted,
                     ),

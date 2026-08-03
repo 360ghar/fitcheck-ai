@@ -28,7 +28,7 @@ export default function BlogPostPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen pt-32 flex justify-center" role="status" aria-live="polite">
-        <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
       </div>
     )
   }
@@ -49,7 +49,7 @@ export default function BlogPostPage() {
         {isNotFound ? (
           <Link
             to="/blog"
-            className="inline-flex items-center text-indigo-600 hover:underline font-medium"
+            className="inline-flex items-center text-primary hover:underline font-medium"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to blog
@@ -58,7 +58,7 @@ export default function BlogPostPage() {
           <button
             type="button"
             onClick={() => void refetch()}
-            className="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-pressed"
           >
             Try again
           </button>
@@ -100,20 +100,20 @@ export default function BlogPostPage() {
 
       <div className="pt-20">
         {/* Hero Section */}
-        <section className="py-12 md:py-20 bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-950">
+        <section className="py-12 md:py-20 bg-stone-50 dark:bg-stone-950">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               {/* Back Link */}
               <Link
                 to="/blog"
-                className="inline-flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 mb-6 transition-colors"
+                className="inline-flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary mb-6 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4 mr-1" />
                 Back to Blog
               </Link>
 
               {/* Category */}
-              <Badge className="mb-4 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border-0">
+              <Badge className="mb-4 bg-secondary text-primary border-0">
                 {post.category}
               </Badge>
 
@@ -150,7 +150,7 @@ export default function BlogPostPage() {
         <section className="pb-12 md:pb-16">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
-              <div className="aspect-[21/9] bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center overflow-hidden relative">
+              <div className="aspect-[21/9] bg-stone-200 dark:bg-stone-800 rounded-2xl flex items-center justify-center overflow-hidden relative">
                 {post.featured_image_url ? (
                   <img
                     src={post.featured_image_url}
@@ -293,7 +293,7 @@ export default function BlogPostPage() {
                       className="group block"
                     >
                       <article className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden transition-shadow">
-                        <div className="aspect-video bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center overflow-hidden relative">
+                        <div className="aspect-video bg-stone-200 dark:bg-stone-800 flex items-center justify-center overflow-hidden relative">
                           {relatedPost.featured_image_url ? (
                             <img
                               src={relatedPost.featured_image_url}
@@ -308,10 +308,10 @@ export default function BlogPostPage() {
                           )}
                         </div>
                         <div className="p-4">
-                          <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                          <span className="text-xs font-medium text-primary dark:text-primary">
                             {relatedPost.category}
                           </span>
-                          <h3 className="font-semibold text-gray-900 dark:text-white mt-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2">
+                          <h3 className="font-semibold text-gray-900 dark:text-white mt-1 group-hover:text-primary dark:group-hover:text-primary transition-colors line-clamp-2">
                             {relatedPost.title}
                           </h3>
                           <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">
@@ -328,18 +328,18 @@ export default function BlogPostPage() {
         )}
 
         {/* CTA Section */}
-        <section className="py-16 md:py-24 bg-gradient-to-br from-indigo-600 to-purple-600">
+        <section className="py-16 md:py-24 bg-stone-900">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <AnimatedSection>
               <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
                 Transform your wardrobe with AI
               </h2>
-              <p className="text-xl text-indigo-100 mb-8">
+              <p className="text-xl text-stone-300 mb-8">
                 Join thousands organizing, planning, and optimizing their style
               </p>
               <Link
                 to="/auth/register"
-                className="inline-flex items-center gap-2 bg-white text-indigo-600 px-8 py-4 rounded-full font-semibold text-lg hover:bg-gray-100 transition-colors"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-on-image px-8 py-4 text-lg font-semibold text-on-image-foreground hover:opacity-90 transition-opacity"
               >
                 Start Free Today
                 <ArrowRight className="w-5 h-5" />
@@ -361,7 +361,7 @@ function formatInlineText(text: string): string {
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     // Links: [text](url)
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, url) =>
-      `<a href="${sanitizeMarkdownUrl(url)}" class="text-indigo-600 dark:text-indigo-400 hover:underline">${label}</a>`
+      `<a href="${sanitizeMarkdownUrl(url)}" class="text-primary dark:text-primary hover:underline">${label}</a>`
     )
 }
 

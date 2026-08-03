@@ -221,13 +221,13 @@ PATH_EXEMPT = {
 RULE4_BUDGETS: dict[str, tuple[int, str]] = {
     "components/landing": (9, "marketing surfaces; dark mode already ~90% functional, out of active scope. Ratcheted 11 -> 9 after tokenizing shared panels and CTA surfaces; the remainder are on-color CTA pills that are correct as-is"),
     "components/seo": (2, "editorial template; same deferral as landing"),
-    "pages/blog": (4, "editorial pages; same deferral as landing"),
+    "pages/blog": (0, "editorial pages; CTA light-on-dark now tokenized via bg-on-image (2026-08-03), budget pinned at zero"),
     "pages/public": (0, "marketing/legal pages; FAQPage cleared, budget pins it at zero"),
     "pages/features": (0, "SEO feature pages; already clean, budget pins it there"),
     "layouts/PublicLayout.tsx": (0, "public shell; already clean, budget pins it there"),
     "components/gamification": (
-        1,
-        "gated behind a default-off flag; Leaderboard.tsx is the only survivor "
+        0,
+        "gated behind a default-off flag; Leaderboard rank tokens switched to bg-muted/border-muted (2026-08-03), budget pinned at zero "
         "and its owner clears this to 0",
     ),
 }

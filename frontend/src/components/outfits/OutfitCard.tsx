@@ -213,7 +213,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
             <Sparkles className="h-8 w-8 text-destructive/50" />
             <p className="text-xs font-medium text-foreground mt-2">Generation failed</p>
             <p className="text-[10px] text-muted-foreground text-center line-clamp-2">
-              {generationError || 'Tap to retry'}
+              {generationError || 'Tap to open, retry from the detail pane'}
             </p>
           </div>
         ) : imageSrc ? (

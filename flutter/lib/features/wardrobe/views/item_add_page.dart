@@ -67,6 +67,17 @@ class _ItemAddPageState extends State<ItemAddPage> {
       body: AppPageBackground(
         child: SafeArea(
           child: Obx(() {
+            // "Enter Manually" takes precedence: the user explicitly chose to
+            // skip AI, so the manual form must appear even while a photo is
+            // selected. (Previously the AI branch below required
+            // selectedImage == null, so the manual form never showed when a
+            // photo was picked — a dead-end loop on the AI screen.)
+            if (controller.showManualEntry.value) {
+              return ManualEntryForm(
+                imageFile: controller.selectedImage.value,
+              );
+            }
+
             // Show AI extraction when processing or when we have results to display
             if (controller.selectedImage.value != null &&
                 (controller.isProcessing.value ||
@@ -74,8 +85,7 @@ class _ItemAddPageState extends State<ItemAddPage> {
                     controller.isGeneratingImages.value ||
                     (controller.extractionResult.value != null &&
                         controller.extractionResult.value!.items.isNotEmpty) ||
-                    controller.generatedItems.isNotEmpty ||
-                    controller.showManualEntry.value)) {
+                    controller.generatedItems.isNotEmpty)) {
               return AIExtractionWidget(
                 imageFile: controller.selectedImage.value!,
                 extractionResult: controller.extractionResult.value,
@@ -91,12 +101,6 @@ class _ItemAddPageState extends State<ItemAddPage> {
                 onSaveGenerated: () => controller.saveGeneratedItems(),
                 onManualEntry: () => controller.proceedToManualEntry(),
               );
-            }
-
-            // Show manual entry form when user skipped AI
-            if (controller.showManualEntry.value &&
-                controller.selectedImage.value == null) {
-              return ManualEntryForm(imageFile: controller.selectedImage.value);
             }
 
             // Show initial options

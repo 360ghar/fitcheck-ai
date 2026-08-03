@@ -52,6 +52,16 @@ export function isApiError(error: unknown): error is ApiError {
 }
 
 /**
+ * True for Axios errors (duck-typed via the `isAxiosError` flag), matching
+ * the check inside `getApiError`. Shared so error-copy helpers that need to
+ * distinguish "transport-level failure with no response" from plain local
+ * Errors don't each re-implement the same duck-typing.
+ */
+export function isAxiosLike(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'isAxiosError' in error
+}
+
+/**
  * Extract a normalized API error from an Axios error or unknown error.
  *
  * Duck-types Axios errors via `isAxiosError` flag so this module stays
@@ -63,7 +73,7 @@ export function getApiError(error: unknown): ApiError {
   // Must check BEFORE the generic isApiError guard because AxiosError already
   // has a `message` property which would match isApiError and bypass the
   // response-metadata extraction below.
-  if (typeof error === 'object' && error !== null && 'isAxiosError' in error) {
+  if (isAxiosLike(error)) {
     const resp = (error as { response?: { status?: number; data?: Record<string, unknown>; headers?: Record<string, string> } }).response
     const status = resp?.status
     const data = resp?.data as

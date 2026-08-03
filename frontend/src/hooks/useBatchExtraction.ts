@@ -4,13 +4,14 @@
  * Orchestrates the multi-image upload, extraction, and generation process.
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { useBatchSSE } from './useBatchSSE';
 import {
   startBatchExtractionMultipart,
   cancelBatchJob,
   getBatchJobStatus,
 } from '@/api/batch';
+import { initialState, useBatchExtractionStore } from '@/stores/batchExtractionStore';
 import { compressImageFile } from '@/lib/image-compress';
 import { getBatchExtractionErrorMessage } from '@/lib/batch-extraction-errors';
 import { cropImageFromBoundingBox } from '@/lib/crop-from-bounding-box';
@@ -32,27 +33,6 @@ import type {
   JobCompleteData,
   Category,
 } from '@/types';
-
-const initialState: BatchExtractionState = {
-  step: 'select',
-  images: [],
-  jobId: null,
-  allDetectedItems: [],
-  uploadProgress: 0,
-  extractionProgress: 0,
-  generationProgress: 0,
-  currentBatch: 0,
-  totalBatches: 0,
-  isGenerationRunning: false,
-  generationEtaSeconds: null,
-  imagesCompleted: 0,
-  imagesFailed: 0,
-  itemsGenerated: 0,
-  itemsFailed: 0,
-  generationTotalItems: 0,
-  capacityExhausted: false,
-  error: null,
-};
 
 /**
  * Estimate remaining generation time from rolling average.
@@ -268,6 +248,50 @@ function mergeServerItems(
 }
 
 /**
+ * True when two item lists are observably identical (same ids, order, and
+ * field values). Used by the recovery poll's no-op guard: the poll ticks
+ * every 5s (bounded 2 min) and must not re-render subscribers when the
+ * server state has not actually changed.
+ */
+function sameDetectedItems(a: DetectedItem[], b: DetectedItem[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (x === y) continue;
+    if (
+      x.tempId !== y.tempId ||
+      x.sourceImageId !== y.sourceImageId ||
+      x.sourcePreviewUrl !== y.sourcePreviewUrl ||
+      x.sourceImageUrl !== y.sourceImageUrl ||
+      x.sourceImageStoragePath !== y.sourceImageStoragePath ||
+      x.personId !== y.personId ||
+      x.personLabel !== y.personLabel ||
+      x.isCurrentUserPerson !== y.isCurrentUserPerson ||
+      x.includeInWardrobe !== y.includeInWardrobe ||
+      x.category !== y.category ||
+      x.sub_category !== y.sub_category ||
+      (x.colors || []).join(',') !== (y.colors || []).join(',') ||
+      x.material !== y.material ||
+      x.pattern !== y.pattern ||
+      x.brand !== y.brand ||
+      x.confidence !== y.confidence ||
+      JSON.stringify(x.boundingBox) !== JSON.stringify(y.boundingBox) ||
+      x.detailedDescription !== y.detailedDescription ||
+      x.status !== y.status ||
+      x.generatedImageUrl !== y.generatedImageUrl ||
+      x.generationError !== y.generationError ||
+      x.name !== y.name ||
+      (x.tags || []).join(',') !== (y.tags || []).join(',') ||
+      (x.occasion_tags || []).join(',') !== (y.occasion_tags || []).join(',')
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Upsert newly extracted items into the existing list by tempId.
  * Makes SSE event-history replay on reconnect idempotent.
  */
@@ -366,18 +390,14 @@ export interface UseBatchExtractionReturn {
  * Hook for managing the batch extraction flow.
  */
 export function useBatchExtraction(): UseBatchExtractionReturn {
-  const [state, setState] = useState<BatchExtractionState>(initialState);
-  const totalImagesRef = useRef(0);
-  const totalItemsRef = useRef(0);
-  // Latest job id (state.jobId is stale inside the [] deps SSE callbacks).
-  const jobIdRef = useRef<string | null>(null);
+  // State is store-backed (module-scoped) so navigating away mid-job does not
+  // orphan the in-flight job: the job pill's cross-route reopen restores it and
+  // `useBatchSSE` reconnects on remount. See `stores/batchExtractionStore.ts`.
+  const state = useBatchExtractionStore();
   // Guards reconcile polling against running twice.
   const reconcilingRef = useRef(false);
   // Generation ETA: wall clock when generation_started fired.
   const generationStartedAtRef = useRef<number | null>(null);
-  // Mirror of images for SSE handlers (setState updaters are not sync in React 18).
-  const imagesRef = useRef(state.images);
-  imagesRef.current = state.images;
 
   /**
    * Attach per-item crops from bounding boxes so review shows the right garment
@@ -406,7 +426,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
         })
       );
 
-      setState((prev) => {
+      useBatchExtractionStore.setState((prev) => {
         const cropById = new Map(cropped.map((c) => [c.tempId, c.sourcePreviewUrl]));
         return {
           ...prev,
@@ -450,7 +470,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           break;
 
         case 'extraction_started':
-          setState((prev) => ({
+          useBatchExtractionStore.setState((prev) => ({
             ...prev,
             step: 'extracting',
           }));
@@ -458,7 +478,6 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
 
         case 'image_extraction_complete': {
           const data = event.data as ImageExtractionCompleteData;
-          totalImagesRef.current = data.total_images;
 
           // Convert API items to frontend format
           const baseItems: DetectedItem[] = data.items.map((item) =>
@@ -468,11 +487,11 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           // Resolve preview outside setState — React 18 does not run updaters
           // synchronously, so reading inside the updater then using it after
           // would leave sourcePreviewUrl undefined and skip bbox crops.
-          const sourcePreviewUrl = imagesRef.current.find(
-            (img) => img.imageId === data.image_id
-          )?.previewUrl;
+          const sourcePreviewUrl = useBatchExtractionStore
+            .getState()
+            .images.find((img) => img.imageId === data.image_id)?.previewUrl;
 
-          setState((prev) => {
+          useBatchExtractionStore.setState((prev) => {
             // Attach the uploaded photo's preview so review can show each item
             // before its studio photo is generated (decoupling).
             // Under overlap, gen may already be running — mark new items generating.
@@ -512,7 +531,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
 
         case 'image_extraction_failed': {
           const data = event.data as ImageExtractionFailedData;
-          setState((prev) => ({
+          useBatchExtractionStore.setState((prev) => ({
             ...prev,
             // A failed image itself can carry the upstream-capacity bucket
             // when the standalone capacity event was missed (SSE reconnect).
@@ -543,7 +562,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           // prompt, never an upgrade. Remaining images will arrive as failed.
           const data = event.data as ExtractionCapacityExhaustedData;
           useUpgradePromptStore.getState().open('capacity', data?.error);
-          setState((prev) => ({ ...prev, capacityExhausted: true }));
+          useBatchExtractionStore.setState((prev) => ({ ...prev, capacityExhausted: true }));
           break;
         }
 
@@ -551,7 +570,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           // Extraction is done - show results NOW. Studio photos keep streaming
           // in via item_generation_complete; we no longer hold the UI hostage
           // for the (slow) generation phase.
-          setState((prev) => {
+          useBatchExtractionStore.setState((prev) => {
             const hasItems = prev.allDetectedItems.length > 0;
             // An empty result from a capacity outage is NOT "no items found"
             // (that would blame the user's photo). The capacity prompt already
@@ -571,10 +590,9 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
 
         case 'generation_started': {
           const data = event.data as GenerationStartedData;
-          totalItemsRef.current = data.total_items;
           generationStartedAtRef.current = Date.now();
 
-          setState((prev) => {
+          useBatchExtractionStore.setState((prev) => {
             const hasItems = prev.allDetectedItems.length > 0;
             // Prefer review whenever items exist. Only use the full generating
             // screen when there is nothing to review yet (rare race).
@@ -606,7 +624,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
 
         case 'batch_generation_started': {
           const data = event.data as BatchGenerationStartedData;
-          setState((prev) => ({
+          useBatchExtractionStore.setState((prev) => ({
             ...prev,
             currentBatch: data.batch_number,
             isGenerationRunning: true,
@@ -616,7 +634,6 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
 
         case 'item_generation_complete': {
           const data = event.data as ItemGenerationCompleteData;
-          totalItemsRef.current = data.total_items;
           const now = Date.now();
           const eta = estimateGenerationEtaSeconds(
             data.completed_count,
@@ -626,7 +643,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
             now
           );
 
-          setState((prev) => {
+          useBatchExtractionStore.setState((prev) => {
             const itemsFailed = prev.itemsFailed;
             const refinedEta = estimateGenerationEtaSeconds(
               data.completed_count,
@@ -678,7 +695,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           const data = event.data as ItemGenerationFailedData;
           const now = Date.now();
 
-          setState((prev) => {
+          useBatchExtractionStore.setState((prev) => {
             const completed = data.completed_count ?? prev.itemsGenerated;
             const failed = data.failed_count;
             const total = data.total_items ?? prev.generationTotalItems;
@@ -715,7 +732,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
         }
 
         case 'all_generations_complete':
-          setState((prev) => ({
+          useBatchExtractionStore.setState((prev) => ({
             ...prev,
             generationProgress: 100,
             isGenerationRunning: false,
@@ -731,7 +748,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
             convertToDetectedItem(item, item.image_id)
           );
 
-          setState((prev) => {
+          useBatchExtractionStore.setState((prev) => {
             // Merge over local items so edits/toggles/deletes made during the
             // (now-decoupled) review survive the terminal event.
             const merged = mergeServerItems(prev.allDetectedItems, finalItems);
@@ -771,7 +788,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
           // Leave the loading screen: show whatever was extracted, or return to
           // select with the error. Never strand the user on a spinner. Never
           // interrupt an in-progress save.
-          setState((prev) => ({
+          useBatchExtractionStore.setState((prev) => ({
             ...prev,
             step: resolveStepWithItems(
               prev.step,
@@ -786,7 +803,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
 
         case 'job_cancelled':
           generationStartedAtRef.current = null;
-          setState((prev) => ({
+          useBatchExtractionStore.setState((prev) => ({
             ...prev,
             step: 'select',
             isGenerationRunning: false,
@@ -810,7 +827,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
    * OOM/redeploy -> the status endpoint 404s). Bounded by a 2-minute deadline.
    */
   const reconcileJobStatus = useCallback(async () => {
-    const jobId = jobIdRef.current;
+    const jobId = useBatchExtractionStore.getState().jobId;
     if (!jobId || reconcilingRef.current) return;
     reconcilingRef.current = true;
 
@@ -823,52 +840,75 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
 
       try {
         const status = await getBatchJobStatus(jobId);
+        // The job may have been cancelled/restarted while this request was
+        // in flight (cancel()/startExtraction reset reconcilingRef and swap
+        // the store jobId). A stale response must not write terminal/step
+        // state for the OLD job onto the NEW job's UI.
+        const current = useBatchExtractionStore.getState();
+        if (!reconcilingRef.current || current.jobId !== jobId) return;
         const serverItems = (status.items || []).map((item) =>
           convertToDetectedItem(item, item.image_id, status.status)
         );
         terminal = TERMINAL.has(status.status);
 
-        setState((prev) => {
+        useBatchExtractionStore.setState((prev) => {
           const merged = mergeServerItems(prev.allDetectedItems, serverItems);
           const hasItems = merged.length > 0;
-          if (status.status === 'completed') {
-            return {
-              ...prev,
-              allDetectedItems: merged,
-              step: resolveStepWithItems(prev.step, hasItems, 'terminal'),
-              generationProgress: 100,
-              isGenerationRunning: false,
-              generationEtaSeconds: 0,
-              error: null,
-            };
+          const nextStep = resolveStepWithItems(
+            prev.step,
+            hasItems,
+            terminal ? 'terminal' : 'in_flight'
+          );
+          const nextError =
+            status.status === 'completed'
+              ? null
+              : status.status === 'failed' || status.status === 'cancelled'
+                ? status.error || 'Job failed'
+                : hasItems
+                  ? null
+                  : prev.error;
+          const nextGenerationRunning = terminal
+            ? false
+            : status.status === 'generating';
+          const nextProgress =
+            status.status === 'completed' ? 100 : prev.generationProgress;
+          const nextEta =
+            status.status === 'completed' ? 0 : prev.generationEtaSeconds;
+
+          // No-op guard: the recovery poll ticks every 5s and must not
+          // re-render subscribers when the server state is unchanged —
+          // returning `prev` makes zustand skip the notification.
+          if (
+            prev.step === nextStep &&
+            prev.isGenerationRunning === nextGenerationRunning &&
+            prev.error === nextError &&
+            prev.generationProgress === nextProgress &&
+            prev.generationEtaSeconds === nextEta &&
+            sameDetectedItems(prev.allDetectedItems, merged)
+          ) {
+            return prev;
           }
-          if (status.status === 'failed' || status.status === 'cancelled') {
-            return {
-              ...prev,
-              allDetectedItems: merged,
-              step: resolveStepWithItems(prev.step, hasItems, 'terminal'),
-              isGenerationRunning: false,
-              error: status.error || 'Job failed',
-            };
-          }
-          // Still running: backfill items and promote to review as soon as
-          // anything exists (mirrors Flutter). Don't strand on extracting.
-          // Never interrupt saving.
           return {
             ...prev,
             allDetectedItems: merged,
-            step: resolveStepWithItems(prev.step, hasItems, 'in_flight'),
-            isGenerationRunning: status.status === 'generating',
-            error: hasItems ? null : prev.error,
+            step: nextStep,
+            isGenerationRunning: nextGenerationRunning,
+            error: nextError,
+            generationProgress: nextProgress,
+            generationEtaSeconds: nextEta,
           };
         });
       } catch (err) {
+        // Same stale-response guard as the success path: cancel/restart while
+        // this poll was in flight must not write the old job's recovery state.
+        const current = useBatchExtractionStore.getState();
+        if (!reconcilingRef.current || current.jobId !== jobId) return;
         const is404 =
           (err as { response?: { status?: number } })?.response?.status === 404;
         if (is404) {
           // Job gone (OOM/redeploy): recover with whatever already arrived.
           terminal = true;
-          setState((prev) => {
+          useBatchExtractionStore.setState((prev) => {
             const hasItems = prev.allDetectedItems.length > 0;
             return {
               ...prev,
@@ -888,7 +928,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
       }
       if (Date.now() > deadline) {
         reconcilingRef.current = false;
-        setState((prev) => {
+        useBatchExtractionStore.setState((prev) => {
           const hasItems = prev.allDetectedItems.length > 0;
           return {
             ...prev,
@@ -935,7 +975,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
       status: 'pending' as const,
     }));
 
-    setState((prev) => ({
+    useBatchExtractionStore.setState((prev) => ({
       ...prev,
       images: [...prev.images, ...newImages].slice(0, 50), // Max 50 images
       error: null,
@@ -950,7 +990,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
       previewUrl: await fileToReplayablePreview(img.file),
     })).then((previews) => {
       const byId = new Map(previews.map((p) => [p.imageId, p.previewUrl]));
-      setState((prev) => ({
+      useBatchExtractionStore.setState((prev) => ({
         ...prev,
         images: prev.images.map((img) => {
           const url = byId.get(img.imageId);
@@ -964,7 +1004,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
    * Remove an image from selection
    */
   const removeImage = useCallback((imageId: string) => {
-    setState((prev) => {
+    useBatchExtractionStore.setState((prev) => {
       const image = prev.images.find((img) => img.imageId === imageId);
       if (image) {
         URL.revokeObjectURL(image.previewUrl);
@@ -980,7 +1020,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
    * Clear all selected images
    */
   const clearImages = useCallback(() => {
-    setState((prev) => {
+    useBatchExtractionStore.setState((prev) => {
       prev.images.forEach((img) => URL.revokeObjectURL(img.previewUrl));
       return {
         ...prev,
@@ -993,11 +1033,12 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
    * Start the extraction process
    */
   const startExtraction = useCallback(async () => {
-    if (state.images.length === 0) return;
+    const currentImages = useBatchExtractionStore.getState().images;
+    if (currentImages.length === 0) return;
 
     reconcilingRef.current = false;
     generationStartedAtRef.current = null;
-    setState((prev) => ({
+    useBatchExtractionStore.setState((prev) => ({
       ...prev,
       step: 'uploading',
       uploadProgress: 0,
@@ -1018,7 +1059,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
     try {
       // Compress for upload size; original File stays in state for save fallback.
       // Multipart sends binary (no base64 bloat). Pool decode for mobile safety.
-      const compressed = await mapPool(state.images, 3, async (img) => ({
+      const compressed = await mapPool(currentImages, 3, async (img) => ({
         imageId: img.imageId,
         file: await compressImageFile(img.file),
       }));
@@ -1027,11 +1068,10 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
         autoGenerate: true,
         generationBatchSize: 5,
         onUploadProgress: (percent) =>
-          setState((prev) => ({ ...prev, uploadProgress: percent })),
+          useBatchExtractionStore.setState((prev) => ({ ...prev, uploadProgress: percent })),
       });
 
-      jobIdRef.current = job.job_id;
-      setState((prev) => ({
+      useBatchExtractionStore.setState((prev) => ({
         ...prev,
         jobId: job.job_id,
         step: 'extracting',
@@ -1041,21 +1081,22 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
         })),
       }));
     } catch (error) {
-      setState((prev) => ({
+      useBatchExtractionStore.setState((prev) => ({
         ...prev,
         step: 'select',
         error: getBatchExtractionErrorMessage(error),
       }));
     }
-  }, [state.images]);
+  }, []);
 
   /**
    * Cancel the current job
    */
   const cancel = useCallback(async () => {
-    if (state.jobId) {
+    const current = useBatchExtractionStore.getState();
+    if (current.jobId) {
       try {
-        await cancelBatchJob(state.jobId);
+        await cancelBatchJob(current.jobId);
       } catch {
         // Ignore errors when cancelling
       }
@@ -1063,35 +1104,34 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
     }
 
     // Cleanup preview URLs
-    state.images.forEach((img) => URL.revokeObjectURL(img.previewUrl));
+    current.images.forEach((img) => URL.revokeObjectURL(img.previewUrl));
 
-    jobIdRef.current = null;
     reconcilingRef.current = false;
     generationStartedAtRef.current = null;
-    setState(initialState);
-  }, [state.jobId, state.images, disconnect]);
+    useBatchExtractionStore.setState(initialState);
+  }, [disconnect]);
 
   /**
    * Reset to initial state
    */
   const reset = useCallback(() => {
-    if (state.jobId) {
+    const current = useBatchExtractionStore.getState();
+    if (current.jobId) {
       disconnect();
     }
 
-    state.images.forEach((img) => URL.revokeObjectURL(img.previewUrl));
+    current.images.forEach((img) => URL.revokeObjectURL(img.previewUrl));
 
-    jobIdRef.current = null;
     reconcilingRef.current = false;
     generationStartedAtRef.current = null;
-    setState(initialState);
-  }, [state.jobId, state.images, disconnect]);
+    useBatchExtractionStore.setState(initialState);
+  }, [disconnect]);
 
   /**
    * Update a detected item
    */
   const updateItem = useCallback((tempId: string, updates: Partial<DetectedItem>) => {
-    setState((prev) => ({
+    useBatchExtractionStore.setState((prev) => ({
       ...prev,
       allDetectedItems: prev.allDetectedItems.map((item) =>
         item.tempId === tempId ? { ...item, ...updates } : item
@@ -1103,7 +1143,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
    * Delete a detected item (mark as deleted)
    */
   const deleteItem = useCallback((tempId: string) => {
-    setState((prev) => ({
+    useBatchExtractionStore.setState((prev) => ({
       ...prev,
       allDetectedItems: prev.allDetectedItems.map((item) =>
         item.tempId === tempId ? { ...item, status: 'deleted' as const } : item
@@ -1115,7 +1155,7 @@ export function useBatchExtraction(): UseBatchExtractionReturn {
    * Proceed to saving step
    */
   const proceedToSaving = useCallback(() => {
-    setState((prev) => ({
+    useBatchExtractionStore.setState((prev) => ({
       ...prev,
       step: 'saving',
     }));

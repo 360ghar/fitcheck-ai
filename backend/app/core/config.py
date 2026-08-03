@@ -326,6 +326,27 @@ class Settings(BaseSettings):
     # ai_provider_service.py. Do not re-add settings mirrors of those here -
     # nothing reads them, so an operator who sets them is silently ignored.
 
+    # ==========================================================================
+    # Internal resource bounds (memory-budget knobs — NOT user-facing limits)
+    # ==========================================================================
+    #
+    # These bound PROCESS-internal resources so the single Railway worker stays
+    # under its 512 MB budget. They do not change any API contract, quota, or
+    # concurrency cap exposed to clients; they only cap internal buffering.
+    #
+    # Dedicated thread-pool width for CPU-bound Pillow work (downscale, crop,
+    # matte, upload validation). asyncio.to_thread's default executor allows
+    # min(32, host_cpu+4) concurrent decodes — Railway exposes the HOST's core
+    # count to the guest, so a 32-core host gave this process up to 32
+    # concurrent full-res decodes, each buffering tens of MB. Bounding the
+    # pool caps the multiplier while preserving all existing behavior.
+    IMAGE_PROCESS_WORKERS: int = 4
+    # Max buffered bytes per SSE subscriber queue. Events carrying generated
+    # base64 are multi-MB; the event-count cap alone lets one stalled client
+    # pin 100 x 5 MB = 500 MB. Crossing this budget drops the subscriber with
+    # the existing stream_overflow terminal event (client reconnects + replays).
+    SSE_QUEUE_MAX_BUFFERED_BYTES: int = 16 * 1024 * 1024
+
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = "logs"

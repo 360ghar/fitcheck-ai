@@ -25,6 +25,15 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH=/home/appuser/.local/bin:$PATH
 
+# Memory-budget tuning for the single 512 MB Railway worker:
+# - MALLOC_ARENA_MAX=2: glibc creates one arena per thread (up to 8x cores);
+#   each arena reserves its own heap, so a multi-threaded Python process on a
+#   many-core host wastes RSS. Capping arenas bounds that fragmentation.
+# - MALLOC_TRIM_THRESHOLD_=0: return freed memory to the OS promptly so RSS
+#   falls back to baseline after AI bursts instead of staying inflated.
+ENV MALLOC_ARENA_MAX=2 \
+    MALLOC_TRIM_THRESHOLD_=0
+
 # Create a non-root user with home directory
 RUN groupadd -r appuser && useradd -r -g appuser -m appuser
 

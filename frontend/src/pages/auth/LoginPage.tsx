@@ -38,6 +38,14 @@ export default function LoginPage() {
     stashPromoCode(promoCode)
   }, [promoCode])
 
+  // The store error is global across auth pages. A failed login on this page
+  // would otherwise still be shown after navigating to /auth/register (and an
+  // OAuth failure shown on the callback page would linger here). Clear it once
+  // on mount so each auth page starts clean.
+  useEffect(() => {
+    clearError()
+  }, [clearError])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     clearError()
@@ -62,8 +70,14 @@ export default function LoginPage() {
     setGoogleLoading(true)
     clearError()
     try {
+      // Keep `pending_plan_type` idempotent: set it when the URL carries a plan
+      // intent, remove it when it does not. A stale value left behind by an
+      // aborted Google attempt would otherwise hijack a later plain Google
+      // sign-in into the plan page.
       if (selectedPlan) {
         localStorage.setItem('pending_plan_type', selectedPlan)
+      } else {
+        localStorage.removeItem('pending_plan_type')
       }
       // A promo code from a shared URL must survive the OAuth round-trip.
       stashPromoCode(promoCode)

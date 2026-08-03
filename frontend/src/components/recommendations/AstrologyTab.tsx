@@ -20,6 +20,12 @@ interface AstrologyTabProps {
   onRun: () => Promise<void> | void
 }
 
+function formatScore(score: number | undefined | null): string {
+  if (score == null || Number.isNaN(score)) return '—'
+  const pct = score <= 1 ? Math.round(score * 100) : Math.round(score)
+  return `${pct}%`
+}
+
 function normalizeItem(item: Item): Item {
   const rawItem = item as Item & {
     item_images?: Array<{
@@ -181,7 +187,7 @@ export function AstrologyTab({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 px-4 pb-4 md:px-6 md:pb-6">
-                {data.lucky_colors.map((color) => (
+                {(data.lucky_colors || []).map((color) => (
                   <div key={color.name} className="flex items-center justify-between gap-3 p-3 border border-border rounded-md">
                     <div className="flex items-center gap-3 min-w-0">
                       <div
@@ -204,10 +210,10 @@ export function AstrologyTab({
                 <CardTitle className="text-base md:text-lg">Lower-Priority Colors</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 px-4 pb-4 md:px-6 md:pb-6">
-                {data.avoid_colors.length === 0 ? (
+                {(data.avoid_colors || []).length === 0 ? (
                   <div className="text-sm text-muted-foreground">No avoid colors for this day.</div>
                 ) : (
-                  data.avoid_colors.map((color) => (
+                  (data.avoid_colors || []).map((color) => (
                     <div key={color.name} className="flex items-center justify-between gap-3 p-3 border border-border rounded-md">
                       <div className="flex items-center gap-3 min-w-0">
                         <div
@@ -232,12 +238,12 @@ export function AstrologyTab({
               <CardTitle className="text-base md:text-lg">Closet Picks</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
-              {data.wardrobe_picks.length === 0 ? (
+              {(data.wardrobe_picks || []).length === 0 ? (
                 <div className="text-sm text-muted-foreground">
                   No matching wardrobe items found. Add more tagged items and try again.
                 </div>
               ) : (
-                data.wardrobe_picks.map((group) => (
+                (data.wardrobe_picks || []).map((group) => (
                   <div key={group.category} className="space-y-2">
                     <div className="text-sm font-semibold text-foreground capitalize">{group.category}</div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -262,14 +268,14 @@ export function AstrologyTab({
               <CardTitle className="text-base md:text-lg">Suggested Outfits</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 px-4 pb-4 md:px-6 md:pb-6">
-              {data.suggested_outfits.length === 0 ? (
+              {(data.suggested_outfits || []).length === 0 ? (
                 <div className="text-sm text-muted-foreground">No complete outfit could be assembled yet.</div>
               ) : (
-                data.suggested_outfits.map((outfit) => (
+                (data.suggested_outfits || []).map((outfit) => (
                   <div key={outfit.item_ids.join('-')} className="p-3 border border-border rounded-md">
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-sm font-medium text-foreground">{outfit.description}</div>
-                      <Badge>{outfit.match_score}</Badge>
+                      <Badge>{formatScore(outfit.match_score)}</Badge>
                     </div>
                     <div className="mt-2 text-xs text-muted-foreground">
                       {outfit.item_ids.map((id) => outfitNameById.get(id) || id).join(' • ')}

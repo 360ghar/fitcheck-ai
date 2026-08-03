@@ -88,4 +88,39 @@ describe('auth destination preservation', () => {
     await waitFor(() => expect(signInWithGoogle).toHaveBeenCalled())
     expect(localStorage.getItem('pending_promo_code')).toBe('LAUNCH30')
   })
+
+  it('clears a stale plan intent when Google is started without a plan param', async () => {
+    // A failed OAuth attempt can leave `pending_plan_type` behind. A later
+    // plain Google sign-in must not be hijacked into the plan page by it.
+    localStorage.setItem('pending_plan_type', 'pro_monthly')
+
+    render(
+      <MemoryRouter initialEntries={['/auth/login'] }>
+        <LoginPage />
+      </MemoryRouter>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Continue with Google/i }))
+
+    await waitFor(() => expect(signInWithGoogle).toHaveBeenCalled())
+    expect(localStorage.getItem('pending_plan_type')).toBeNull()
+  })
+
+  it('keeps plan_type alongside a promo when both are in the URL', async () => {
+    render(
+      <MemoryRouter initialEntries={['/auth/login?plan_type=pro_monthly&promo=LAUNCH30'] }>
+        <LoginPage />
+      </MemoryRouter>
+    )
+
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } })
+    fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }).closest('form')!)
+
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith('/profile?tab=plan&plan_type=pro_monthly')
+    )
+    // The promo survives so the plan page can pre-fill and redeem it.
+    expect(localStorage.getItem('pending_promo_code')).toBe('LAUNCH30')
+  })
 })

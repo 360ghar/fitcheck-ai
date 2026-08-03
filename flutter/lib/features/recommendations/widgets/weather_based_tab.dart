@@ -87,7 +87,6 @@ class WeatherBasedTab extends StatelessWidget {
               return const SizedBox.shrink();
             }
 
-            final temperature = weather['temperature'] as num? ?? 0;
             final condition = weather['condition']?.toString() ?? 'Unknown';
             final icon = _getWeatherIcon(condition);
 
@@ -111,7 +110,7 @@ class WeatherBasedTab extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${temperature.toInt()} F',
+                        controller.weatherDisplayTemperature,
                         style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),

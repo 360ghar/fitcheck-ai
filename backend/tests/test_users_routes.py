@@ -356,7 +356,7 @@ async def test_get_user_preferences_creates_defaults_on_first_read():
 
     result = await users_module.get_user_preferences(user_id=USER_ID, db=db)
 
-    assert db.ops("user_preferences") == ["select", "insert"]
+    assert db.ops("user_preferences") == ["select", "insert", "select"]
     assert result["data"]["favorite_colors"] == []
     assert result["data"]["data_points_collected"] == 0
     assert db.tables["user_preferences"][0]["user_id"] == USER_ID
@@ -444,7 +444,7 @@ async def test_get_user_settings_creates_defaults_on_first_read():
 
     result = await users_module.get_user_settings(user_id=USER_ID, db=db)
 
-    assert db.ops("user_settings") == ["select", "insert"]
+    assert db.ops("user_settings") == ["select", "insert", "select"]
     assert result["data"]["language"] == "en"
     assert result["data"]["measurement_units"] == "imperial"
 

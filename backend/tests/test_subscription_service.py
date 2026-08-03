@@ -90,6 +90,36 @@ async def test_get_subscription_raises_if_still_missing_after_creation():
 
 
 @pytest.mark.asyncio
+async def test_get_or_create_usage_record_uses_insert_only_upsert_and_reloads():
+    """The usage-record create must use an insert-only upsert (DO NOTHING) so a
+    concurrent caller's increments are never wiped, and must re-select the
+    authoritative row instead of returning the local zeroed dict."""
+    db = Mock()
+    row = {
+        "user_id": USER_ID,
+        "period_start": "2026-08-01",
+        "monthly_extractions": 4,
+        "monthly_generations": 2,
+        "monthly_embeddings": 0,
+    }
+    result = Mock()
+    result.data = row
+    # First select: no row. Upsert: no-op. Re-select: the (already
+    # incremented) authoritative row.
+    chain = (
+        db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value
+    )
+    chain.execute.side_effect = [Mock(data=None), result]
+
+    usage = await SubscriptionService.get_or_create_usage_record(USER_ID, db)
+
+    assert usage["monthly_extractions"] == 4
+    upsert_call = db.table.return_value.upsert.call_args
+    assert upsert_call.kwargs["on_conflict"] == "user_id,period_start"
+    assert upsert_call.kwargs["ignore_duplicates"] is True
+
+
+@pytest.mark.asyncio
 async def test_upgrade_to_pro_upserts_and_returns_pro_subscription():
     db = Mock()
     _mock_maybe_single(db, _subscription_row(

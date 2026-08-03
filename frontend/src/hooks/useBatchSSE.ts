@@ -199,6 +199,10 @@ export function useBatchSSE({
   // Auto-connect when jobId changes
   useEffect(() => {
     if (autoConnect && jobId) {
+      // A new job gets a fresh reconnect budget: reconnectAttempts is a module
+      // ref that survives across jobs, so without this a job that exhausted its
+      // 3 attempts would make every later job give up on its first drop.
+      reconnectAttempts.current = 0;
       connect();
     }
 

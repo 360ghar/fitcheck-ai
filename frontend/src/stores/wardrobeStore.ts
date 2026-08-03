@@ -38,6 +38,19 @@ interface ClosetState {
   // UI state
   isLoading: boolean;
   /**
+   * True once the first `fetchItems` resolves (success or failure). Consumers
+   * use this to distinguish "not yet loaded" (first frame, `isLoading` is
+   * false until the request actually starts) from "genuinely empty" — without
+   * it the wardrobe renders a misleading "Your closet is empty" flash before
+   * the first fetch completes.
+   */
+  hasLoaded: boolean;
+  /**
+   * Append-page fetch for the Load-more control. Deliberately separate from
+   * `isLoading`: appending a page must NOT swap the whole grid for a skeleton.
+   */
+  isLoadingMore: boolean;
+  /**
    * Detail-pane fetch, deliberately separate from `isLoading`.
    * `isLoading` swaps the whole grid for a skeleton; a deep link to
    * /wardrobe/:id must not blank the list it is being shown beside.
@@ -59,6 +72,8 @@ interface ClosetState {
 
   // Actions
   fetchItems: (refresh?: boolean) => Promise<void>;
+  /** Append the next page (Load-more). No-op while a fetch is in flight or the list is exhausted. */
+  fetchMore: () => Promise<void>;
   fetchItemById: (id: string) => Promise<void>;
   setSelectedItem: (item: Item | null) => void;
   toggleItemSelected: (itemId: string) => void;
@@ -93,8 +108,27 @@ const initialFilters: ClosetState['filters'] = {
 };
 
 // ============================================================================
-// HELPER FUNCTION
+// HELPER FUNCTIONS
 // ============================================================================
+
+/** Build the server-side filter query from current client filters + pagination. */
+function buildItemApiFilters(
+  filters: ClosetState['filters'],
+  page: number,
+  pageSize: number
+): ApiItemFilters {
+  const apiFilters: ApiItemFilters = {
+    page,
+    page_size: pageSize,
+  };
+  if (filters.category !== 'all') apiFilters.category = filters.category;
+  if (filters.color !== 'all') apiFilters.color = filters.color;
+  if (filters.occasion) apiFilters.occasion = filters.occasion;
+  if (filters.condition !== 'all') apiFilters.condition = filters.condition;
+  if (filters.search) apiFilters.search = filters.search;
+  if (filters.isFavorite) apiFilters.is_favorite = true;
+  return apiFilters;
+}
 
 function applyFiltersAndSort(
   items: Item[],
@@ -191,6 +225,8 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
   selectedItems: new Set(),
   filters: initialFilters,
   isLoading: false,
+  hasLoaded: false,
+  isLoadingMore: false,
   isDetailLoading: false,
   isGridView: true,
   viewMode: 'all',
@@ -212,19 +248,7 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const apiFilters: ApiItemFilters = {
-        page: newPage,
-        page_size: pageSize,
-      };
-
-      if (filters.category !== 'all') apiFilters.category = filters.category;
-      if (filters.color !== 'all') apiFilters.color = filters.color;
-      if (filters.occasion) apiFilters.occasion = filters.occasion;
-      if (filters.condition !== 'all') apiFilters.condition = filters.condition;
-      if (filters.search) apiFilters.search = filters.search;
-      if (filters.isFavorite) apiFilters.is_favorite = true;
-
-      const response = await itemsApi.getItems(apiFilters);
+      const response = await itemsApi.getItems(buildItemApiFilters(filters, newPage, pageSize));
 
       set({
         items: refresh || newPage === 1 ? response.items : [...items, ...response.items],
@@ -232,6 +256,7 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         hasMore: response.has_next,
         page: newPage,
         isLoading: false,
+        hasLoaded: true,
       });
 
       // Apply filters and sort after items are set
@@ -247,6 +272,42 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
     } catch (error) {
       const apiError = getApiError(error);
       set({ error: apiError, isLoading: false });
+    }
+  },
+
+  // Append the next page of the current query. Used by the Load-more control;
+  // keeps the loaded grid intact (no skeleton) while more items stream in.
+  fetchMore: async () => {
+    const state = get();
+    if (state.isLoading || state.isLoadingMore || !state.hasMore) return;
+
+    set({ isLoadingMore: true, error: null });
+    try {
+      const nextPage = state.page + 1;
+      // Search is a client-side narrowing over the loaded universe, so paging
+      // must NOT send it to the server — otherwise page 2 offsets against a
+      // search-filtered set and the list can strand mid-search.
+      const apiFilters = buildItemApiFilters(state.filters, nextPage, state.pageSize);
+      delete apiFilters.search;
+      const response = await itemsApi.getItems(apiFilters);
+      const newItems = [...state.items, ...response.items];
+      const currentState = get();
+      set({
+        items: newItems,
+        totalItems: response.total,
+        hasMore: response.has_next,
+        page: nextPage,
+        isLoadingMore: false,
+        filteredItems: applyFiltersAndSort(
+          newItems,
+          currentState.filters,
+          currentState.sortBy,
+          currentState.sortOrder
+        ),
+      });
+    } catch (error) {
+      const apiError = getApiError(error);
+      set({ error: apiError, isLoadingMore: false });
     }
   },
 
@@ -271,9 +332,11 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         isDetailLoading: false,
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
       });
-    } catch (error) {
-      const apiError = getApiError(error);
-      set({ error: apiError, isDetailLoading: false });
+    } catch {
+      // Deliberately NOT stored in the global `error`: a bad deep link (404)
+      // would otherwise hoist a full-page "Try again" banner over the whole
+      // closet. The detail pane shows its own "This item isn't available" line.
+      set({ isDetailLoading: false });
     }
   },
 
@@ -464,6 +527,12 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
         items: newItems,
         filteredItems: applyFiltersAndSort(newItems, state.filters, state.sortBy, state.sortOrder),
         selectedItems: new Set(),
+        // If the open detail item was bulk-deleted, clear the pane selection
+        // too — otherwise the detail surface keeps showing a deleted garment.
+        selectedItem:
+          state.selectedItem && selectedItems.has(state.selectedItem.id)
+            ? null
+            : state.selectedItem,
       });
     } catch (error) {
       const apiError = getApiError(error);

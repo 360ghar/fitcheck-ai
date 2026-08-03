@@ -158,9 +158,11 @@ async def test_outfit_sends_avatar_plus_numbered_garment_references():
         "image_url",
         "text",
     ]
-    assert content[0]["image_url"]["url"] == "data:image/jpeg;base64,YXZhdGFy"
-    assert content[1]["image_url"]["url"] == "data:image/jpeg;base64,c3dlYXRlcg=="
-    assert content[2]["image_url"]["url"] == "data:image/jpeg;base64,Ym9vdHM="
+    # Images travel BARE in message content (the provider wraps at its own
+    # wire boundary — see ai_provider_interface.build_user_multimodal_messages).
+    assert content[0]["image_url"]["url"] == "YXZhdGFy"
+    assert content[1]["image_url"]["url"] == "c3dlYXRlcg=="
+    assert content[2]["image_url"]["url"] == "Ym9vdHM="
 
     prompt = content[3]["text"]
     assert "IMAGE 1 = the person" in prompt
@@ -241,7 +243,8 @@ async def test_flat_lay_numbers_garments_from_image_one_and_forbids_collage():
 
     content = _captured_chat_content(agent)
     assert [part["type"] for part in content] == ["image_url", "text"]
-    assert content[0]["image_url"]["url"] == "data:image/jpeg;base64,c3dlYXRlcg=="
+    # Bare base64 in content; the provider wraps at the wire.
+    assert content[0]["image_url"]["url"] == "c3dlYXRlcg=="
 
     prompt = content[1]["text"]
     assert 'IMAGE 1 = Item 1 "Cream ribbed knit sweater" (tops)' in prompt

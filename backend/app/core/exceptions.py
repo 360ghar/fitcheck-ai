@@ -324,6 +324,7 @@ class AIServiceError(ServiceError):
         retry_after_seconds: Optional[float] = None,
         provider_status: Optional[int] = None,
         provider_error_detail: Optional[str] = None,
+        fallback_eligible: bool = False,
     ):
         # retryable: true only for transient failures (429/503/timeout) worth
         # retrying against a fallback model; false for auth/content-policy/parse
@@ -337,11 +338,20 @@ class AIServiceError(ServiceError):
         # or billing quota), "transient" (overload/timeout), "hard"
         # (auth/parse/content-policy). retry_after_seconds (parsed from the
         # provider's RetryInfo) lets a caller back off for the advised window.
+        #
+        # fallback_eligible: a prompt-level refusal (HTTP 400 content policy -
+        # "Unable to generate this content") where nothing was generated or
+        # billed, so trying the configured fallback MODEL is safe and can
+        # succeed. Deliberately NOT the same as retryable: retrying the whole
+        # agent call on a refusal would amplify latency (each attempt is a
+        # multi-second generation), so only the model-fallback loop consults
+        # this flag, never with_retry.
         self.retryable = retryable
         self.error_kind = error_kind
         self.retry_after_seconds = retry_after_seconds
         self.provider_status = provider_status
         self.provider_error_detail = provider_error_detail
+        self.fallback_eligible = fallback_eligible
         super().__init__(message, "ai")
 
     def to_dict(self) -> Dict[str, Any]:

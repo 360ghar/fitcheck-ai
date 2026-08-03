@@ -52,7 +52,7 @@ class DuplicateDetectionWidget extends StatelessWidget {
                     ),
                     const SizedBox(height: AppConstants.spacing4),
                     Text(
-                      'We found ${duplicates.length} similar item(s) in your wardrobe',
+                      'We found ${duplicates.length} similar item(s) in your closet',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Colors.orange[600],
                           ),

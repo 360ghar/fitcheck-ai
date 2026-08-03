@@ -10,7 +10,6 @@ Features:
 - Generate variations
 """
 
-import asyncio
 import base64
 import re
 import uuid
@@ -27,8 +26,9 @@ from app.agents.prompt_fidelity import (
 )
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError
-from app.core.concurrency import GENERATION_SEMAPHORE
+from app.core.concurrency import image_gen_slot
 from app.core.config import settings
+from app.core.image_executor import run_image_op
 from app.services.ai_provider_service import AIProviderService, ChatMessage
 from app.services.ai_settings_service import AISettingsService
 from app.services.storage_service import StorageService
@@ -40,7 +40,6 @@ from app.utils.background_removal import (
 from app.utils.image_processing import (
     EXTENSION_BY_MIME,
     sniff_image_mime,
-    to_data_url,
 )
 from app.utils.parallel import parallel_with_retry
 
@@ -171,15 +170,17 @@ class ImageGenerationAgent:
 
     @staticmethod
     def _as_data_url(image_base64: str) -> str:
-        """Normalize bare base64 to the data URL the content parts expect.
+        """Normalize a reference image for the content parts.
 
-        The mime type is SNIFFED, not assumed. This used to hardcode
-        `image/jpeg` for every reference image, and
-        `GeminiProvider._decode_image_part` parses that header straight into
-        `Part.from_bytes(mime_type=...)` - so a PNG or WebP reference reached the
-        model labelled as a JPEG.
+        Pass-through: messages now carry images BARE (see
+        ai_provider_interface.build_user_multimodal_messages) so no full-size
+        data-URL copy is created per image; each provider wraps or sniffs at
+        its own wire boundary (AIProviderService wraps the OpenAI-compatible
+        body, GeminiProvider sniffs the mime from the first bytes). Data URLs
+        from legacy callers pass through unchanged. Kept as a single choke
+        point so a future wire change is one edit.
         """
-        return to_data_url(image_base64)
+        return image_base64
 
     @staticmethod
     async def _matte(generated: "GeneratedImage", *, context: str) -> "GeneratedImage":
@@ -193,9 +194,10 @@ class ImageGenerationAgent:
         the guards would NOT catch it (a full-body figure lands ~0.70-0.80
         transparent, under MAX_TRANSPARENT_FRACTION, so bad hair would ship).
 
-        Runs on a worker thread: the matte is ~110ms of GIL-held C work and must
-        not sit on the event loop while a batch SSE stream is being served.
-        Never raises - on any failure the original image is returned untouched.
+        Runs on the bounded image executor: the matte is ~110ms of GIL-held C
+        work and must not sit on the event loop while a batch SSE stream is
+        being served. Never raises - on any failure the original image is
+        returned untouched.
         """
         def _run() -> tuple[str, MatteResult]:
             result = remove_white_background(base64.b64decode(generated.image_base64))
@@ -204,7 +206,7 @@ class ImageGenerationAgent:
             return base64.b64encode(result.image_bytes).decode("utf-8"), result
 
         try:
-            image_base64, result = await asyncio.to_thread(_run)
+            image_base64, result = await run_image_op(_run)
         except Exception as e:
             logger.warning(
                 "Background matte failed",
@@ -817,10 +819,12 @@ Specs:
         )
 
         # Gate the per-style fan-out through the process-wide
-        # GENERATION_SEMAPHORE so variations share the same concurrency
-        # budget as batch product-image generation (AI_GENERATION_CONCURRENCY).
+        # GENERATION_SEMAPHORE (via image_gen_slot, reentrant - the inner
+        # generate_outfit call re-acquires it as a no-op) so variations share
+        # the same concurrency budget as try-on/outfit/product/photoshoot
+        # generation (AI_GENERATION_CONCURRENCY).
         async def _generate_one_style(style, _):
-            async with GENERATION_SEMAPHORE:
+            async with image_gen_slot():
                 return await self.generate_outfit(items=items, style=style)
 
         # Process all styles in parallel with retry
@@ -903,11 +907,15 @@ Specs:
             ]
             content.append({"type": "text", "text": prompt})
 
-            response = await self.ai_service.chat(
-                messages=[ChatMessage(role="user", content=content)],
-                model=self.ai_service.get_image_gen_model(),
-                response_modalities=["TEXT", "IMAGE"],
-            )
+            # Shared process-wide slot (reentrant): a caller that already
+            # holds it (variations -> generate_outfit) passes through as a
+            # no-op; a direct route call takes the slot here.
+            async with image_gen_slot():
+                response = await self.ai_service.chat(
+                    messages=[ChatMessage(role="user", content=content)],
+                    model=self.ai_service.get_image_gen_model(),
+                    response_modalities=["TEXT", "IMAGE"],
+                )
 
             if not response.images:
                 # 200-with-no-images is usually a transient silent moderation
@@ -951,9 +959,12 @@ Specs:
             GeneratedImage with the result
         """
         try:
-            response = await self.ai_service.generate_image(
-                prompt, reference_image=reference_image
-            )
+            # Shared process-wide slot (reentrant): a caller that already
+            # holds it (batch/variations) passes through as a no-op.
+            async with image_gen_slot():
+                response = await self.ai_service.generate_image(
+                    prompt, reference_image=reference_image
+                )
 
             if not response.images:
                 # Transient silent refusal - retryable (see avatar path comment).
@@ -1047,11 +1058,16 @@ Output one cohesive image of THIS same person wearing that exact garment."""
 
             messages = [ChatMessage(role="user", content=content)]
 
-            response = await self.ai_service.chat(
-                messages=messages,
-                model=self.ai_service.get_image_gen_model(),
-                response_modalities=["TEXT", "IMAGE"],
-            )
+            # Shared process-wide image-generation slot: try-on previously ran
+            # unbounded (TD-044 - the 2026-08-03 OOM). The provider call
+            # buffers multi-MB base64, so every image-gen caller must share one
+            # budget with outfit/product/photoshoot generation.
+            async with image_gen_slot():
+                response = await self.ai_service.chat(
+                    messages=messages,
+                    model=self.ai_service.get_image_gen_model(),
+                    response_modalities=["TEXT", "IMAGE"],
+                )
 
             if not response.images:
                 # Transient silent refusal - retryable (see avatar path comment).

@@ -62,6 +62,11 @@ def test_upload_options_carry_content_type_and_cache_control():
     assert options == {
         "content-type": "image/png",
         "cache-control": DEFAULT_CACHE_CONTROL,
+        # upsert makes the reconnect retry exact-once: a retry after a
+        # committed-but-lost response overwrites the same path instead of
+        # 409ing "Duplicate" (paths are unique uuid4 keys, so upsert never
+        # clobbers a foreign object).
+        "upsert": "true",
     }
 
 

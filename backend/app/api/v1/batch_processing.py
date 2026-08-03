@@ -32,9 +32,10 @@ from app.models.subscription import OperationType
 from app.services.ai_settings_service import AISettingsService
 from app.services.batch_job_service import BatchJobService, BatchJobStatus
 from app.services.batch_extraction_service import BatchExtractionService
-from app.utils.sse_queue import SSE_QUEUE_MAXSIZE, STREAM_OVERFLOW
+from app.utils.sse_queue import SSE_QUEUE_MAXSIZE, STREAM_OVERFLOW, note_consumed
 from app.utils.image_processing import make_base64_image_validator, validate_image_bytes
 from app.utils.db import persistence_db as _persistence_db
+from app.utils.tasks import spawn_background_task
 
 logger = get_context_logger(__name__)
 
@@ -66,9 +67,7 @@ _TERMINAL_SSE_EVENTS = ("job_complete", "job_failed", "job_cancelled", STREAM_OV
 
 def _spawn_pipeline(service: BatchExtractionService, job) -> None:
     """Kick off a pipeline task while holding a strong reference to it."""
-    task = asyncio.create_task(service.run_pipeline(job))
-    _pipeline_tasks.add(task)
-    task.add_done_callback(_pipeline_tasks.discard)
+    spawn_background_task(service.run_pipeline(job), _pipeline_tasks)
 
 
 async def _release_usage_best_effort(
@@ -636,10 +635,12 @@ async def batch_job_events(
                     }
                 return
 
-            # Stream events from queue
+            # Stream events from queue (items are (event, size) tuples;
+            # report consumption so the byte budget tracks only buffered data)
             while True:
                 try:
-                    event = await asyncio.wait_for(queue.get(), timeout=30)
+                    event, event_size = await asyncio.wait_for(queue.get(), timeout=30)
+                    note_consumed(queue, event_size)
                     yield {
                         "event": event["type"],
                         "data": json.dumps(event["data"]),

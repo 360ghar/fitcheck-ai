@@ -11,6 +11,8 @@ from typing import Optional, List
 from datetime import datetime
 from urllib.parse import urlparse, urljoin
 
+from app.utils.db import execute_with_reconnect
+
 import httpx
 from supabase import Client
 from app.core.config import settings
@@ -21,11 +23,15 @@ from app.core.exceptions import (
     UnsupportedMediaTypeError,
 )
 from app.utils.image_processing import (
+    DEFAULT_MAX_EDGE,
+    DEFAULT_QUALITY,
     EXTENSION_BY_MIME,
     SUPPORTED_UPLOAD_MIME_TYPES,
+    downscale_image_bytes_to_base64,
     sniff_image_mime,
     validate_image_bytes,
 )
+from app.core.image_executor import run_image_op
 
 logger = get_context_logger(__name__)
 
@@ -46,6 +52,36 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 # storage3/_sync/file_api.py). Matches storage3's own default; kept explicit
 # because passing ANY file_options replaces the defaults wholesale.
 DEFAULT_CACHE_CONTROL = "3600"
+
+# Pooled client for server-to-server image downloads (download_to_base64 and
+# download_and_downscale_to_base64). One pool instead of a fresh TLS handshake
+# per download: an N-photo batch pays one connection setup, not N. Created
+# lazily on first use (httpx clients bind to the running event loop) and
+# closed at app shutdown via close_download_client().
+_download_client: Optional[httpx.AsyncClient] = None
+
+
+def _get_download_client() -> httpx.AsyncClient:
+    global _download_client
+    if _download_client is None:
+        _download_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(10.0),
+            limits=httpx.Limits(max_connections=10),
+            follow_redirects=False,
+        )
+    return _download_client
+
+
+async def close_download_client() -> None:
+    """Release the pooled download client (app shutdown; idempotent)."""
+    global _download_client
+    client = _download_client
+    _download_client = None
+    if client is not None:
+        try:
+            await client.aclose()
+        except Exception:  # pragma: no cover - defensive, shutdown path
+            pass
 
 
 class StorageService:
@@ -103,10 +139,18 @@ class StorageService:
         A FRESH dict every call: storage3 mutates what it is handed (it pops
         cache-control and upsert out of it), so a shared constant would be
         emptied after the first upload.
+
+        `upsert: "true"` is what makes the reconnect retry exact-once: every
+        item/outfit path is a unique uuid4 key, so upsert never overwrites a
+        foreign object — it only lets a retry after a committed-but-lost
+        response overwrite the SAME path instead of raising 409 "Duplicate"
+        (which would surface as "Failed to upload item image" while the
+        object actually exists).
         """
         return {
             "content-type": StorageService._sniff_content_type(file_data, filename),
             "cache-control": DEFAULT_CACHE_CONTROL,
+            "upsert": "true",
         }
 
     @staticmethod
@@ -189,8 +233,10 @@ class StorageService:
         """
         # Validate the image (raises on failure)
         # Pillow decode is CPU-bound (up to ~7MB per image); never block the
-        # event loop during request handling.
-        await asyncio.to_thread(StorageService._validate_image, file_data, filename)
+        # event loop during request handling. Runs on the bounded image
+        # executor so concurrent decodes cannot multiply past
+        # IMAGE_PROCESS_WORKERS (see app/core/image_executor.py).
+        await run_image_op(StorageService._validate_image, file_data, filename)
 
         # Generate unique filename
         storage_path = StorageService._generate_filename(user_id, filename, "item")
@@ -198,12 +244,21 @@ class StorageService:
         try:
             # Upload to Supabase Storage
             bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_ITEMS
+            # Storage rides the same pooled Supabase client as the DB; a dead
+            # connection fails every upload in a burst (observed 2026-08-03:
+            # 4x "Failed to upload item image" while the gateway restarted).
+            # Rebuild + retry once; a retried upload to the same path
+            # overwrites, so it stays exact-once even on a lost response.
             storage = db.storage.from_(bucket)
-            await asyncio.to_thread(
-                storage.upload,
-                path=storage_path,
-                file=file_data,
-                file_options=StorageService._upload_options(file_data, filename),
+            upload_options = StorageService._upload_options(file_data, filename)
+            await execute_with_reconnect(
+                lambda d: d.storage.from_(bucket).upload(
+                    path=storage_path,
+                    file=file_data,
+                    file_options=upload_options,
+                ),
+                db,
+                extra={"operation": "upload_item_image", "user_id": user_id},
             )
 
             # Get public URL
@@ -267,19 +322,25 @@ class StorageService:
         """
         # Validate the image (raises on failure)
         # Pillow decode is CPU-bound (up to ~7MB per image); never block the
-        # event loop during request handling.
-        await asyncio.to_thread(StorageService._validate_image, file_data, filename)
+        # event loop during request handling. Runs on the bounded image
+        # executor so concurrent decodes cannot multiply past
+        # IMAGE_PROCESS_WORKERS (see app/core/image_executor.py).
+        await run_image_op(StorageService._validate_image, file_data, filename)
 
         storage_path = StorageService._generate_filename(user_id, filename, "outfit")
 
         try:
             bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_OUTFITS
             storage = db.storage.from_(bucket)
-            await asyncio.to_thread(
-                storage.upload,
-                path=storage_path,
-                file=file_data,
-                file_options=StorageService._upload_options(file_data, filename),
+            upload_options = StorageService._upload_options(file_data, filename)
+            await execute_with_reconnect(
+                lambda d: d.storage.from_(bucket).upload(
+                    path=storage_path,
+                    file=file_data,
+                    file_options=upload_options,
+                ),
+                db,
+                extra={"operation": "upload_outfit_image", "user_id": user_id},
             )
 
             image_url = storage.get_public_url(storage_path)
@@ -341,8 +402,10 @@ class StorageService:
         """
         # Validate the image (raises on failure)
         # Pillow decode is CPU-bound (up to ~7MB per image); never block the
-        # event loop during request handling.
-        await asyncio.to_thread(StorageService._validate_image, file_data, filename)
+        # event loop during request handling. Runs on the bounded image
+        # executor so concurrent decodes cannot multiply past
+        # IMAGE_PROCESS_WORKERS (see app/core/image_executor.py).
+        await run_image_op(StorageService._validate_image, file_data, filename)
 
         storage_path = StorageService._generate_filename(user_id, filename, "avatar")
 
@@ -657,8 +720,10 @@ class StorageService:
         """
         # Validate the image (raises on failure)
         # Pillow decode is CPU-bound (up to ~7MB per image); never block the
-        # event loop during request handling.
-        await asyncio.to_thread(StorageService._validate_image, file_data, filename)
+        # event loop during request handling. Runs on the bounded image
+        # executor so concurrent decodes cannot multiply past
+        # IMAGE_PROCESS_WORKERS (see app/core/image_executor.py).
+        await run_image_op(StorageService._validate_image, file_data, filename)
 
         storage_path = StorageService._generate_filename(user_id, filename, "feedback")
 
@@ -703,7 +768,7 @@ class StorageService:
         file_path: str,
         content_type: str = "application/octet-stream",
         bucket: Optional[str] = None,
-        upsert: bool = False,
+        upsert: bool = True,
         cache_control: Optional[str] = None,
     ) -> dict:
         """Upload raw bytes to Supabase Storage with an explicit destination path.
@@ -712,24 +777,32 @@ class StorageService:
         `cache-control: max-age=<v>`. Defaults to DEFAULT_CACHE_CONTROL. Pass a
         short value (e.g. "60") when overwriting an existing key so a CDN cannot
         keep serving the old bytes for an hour.
+
+        `upsert` defaults to True: callers pass unique uuid4 paths, so upsert
+        never clobbers a foreign object — it only makes the reconnect retry
+        exact-once (a retry after a committed-but-lost response overwrites the
+        same path instead of 409ing on a now-existing key).
         """
         if bucket is None:
             bucket = settings.SUPABASE_STORAGE_BUCKET
 
         try:
-            storage = db.storage.from_(bucket)
-            await asyncio.to_thread(
-                storage.upload,
-                path=file_path,
-                file=file_data,
-                file_options={
-                    "content-type": content_type,
-                    "cache-control": cache_control or DEFAULT_CACHE_CONTROL,
-                    "upsert": str(upsert).lower(),
-                },
+            file_options = {
+                "content-type": content_type,
+                "cache-control": cache_control or DEFAULT_CACHE_CONTROL,
+                "upsert": str(upsert).lower(),
+            }
+            await execute_with_reconnect(
+                lambda d: d.storage.from_(bucket).upload(
+                    path=file_path,
+                    file=file_data,
+                    file_options=file_options,
+                ),
+                db,
+                extra={"operation": "upload_file", "bucket": bucket},
             )
             return {
-                "public_url": storage.get_public_url(file_path),
+                "public_url": db.storage.from_(bucket).get_public_url(file_path),
                 "storage_path": file_path,
                 "bucket": bucket,
             }
@@ -759,8 +832,9 @@ class StorageService:
         """
         ext = extension if extension.startswith(".") else f".{extension}"
         # Pillow decode is CPU-bound (up to ~7MB per image); never block the
-        # event loop during request handling.
-        await asyncio.to_thread(StorageService._validate_image, file_data, ext)
+        # event loop during request handling. Runs on the bounded image
+        # executor (see app/core/image_executor.py).
+        await run_image_op(StorageService._validate_image, file_data, ext)
         content_type = StorageService._sniff_content_type(file_data, ext)
         ext = EXTENSION_BY_MIME.get(content_type, ext)
         temp_name = f"{user_id}/tmp/{source}/{uuid.uuid4().hex}{ext}"
@@ -794,8 +868,9 @@ class StorageService:
         """
         ext = extension if extension.startswith(".") else f".{extension}"
         # Pillow decode is CPU-bound (up to ~7MB per image); never block the
-        # event loop during request handling.
-        await asyncio.to_thread(StorageService._validate_image, file_data, ext)
+        # event loop during request handling. Runs on the bounded image
+        # executor (see app/core/image_executor.py).
+        await run_image_op(StorageService._validate_image, file_data, ext)
         # Sniffed from the bytes, with the caller's extension only as a fallback:
         # the previous ext-based mapping labelled every non-.jpg source photo
         # `image/png`, so a .webp upload was served as PNG.
@@ -813,6 +888,87 @@ class StorageService:
         }
 
     @staticmethod
+    async def _download_bytes(
+        url: str, timeout: float = 10.0, purpose: str = "storage image"
+    ) -> Optional[bytes]:
+        """Download a stored image URL to raw bytes. None on any failure.
+
+        Shared core of ``download_to_base64`` and
+        ``download_and_downscale_to_base64``: only server-owned Supabase
+        Storage URLs are fetched (SSRF guard in ``_validate_storage_url``),
+        redirects are followed one hop at a time with each hop re-validated,
+        and the body is accumulated with a hard size cap (``MAX_FILE_SIZE``).
+        Uses the module-level pooled client so an N-photo batch pays one
+        connection setup, not N.
+        """
+        if not url:
+            return None
+        try:
+            current_url = StorageService._validate_storage_url(url)
+            for _ in range(4):
+                async with _get_download_client().stream(
+                    "GET", current_url, timeout=httpx.Timeout(timeout)
+                ) as response:
+                    if response.status_code in {301, 302, 303, 307, 308}:
+                        location = response.headers.get("location")
+                        if not location:
+                            return None
+                        current_url = StorageService._validate_storage_url(
+                            urljoin(current_url, location)
+                        )
+                        continue
+                    response.raise_for_status()
+                    content = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        if len(content) + len(chunk) > MAX_FILE_SIZE:
+                            return None
+                        content.extend(chunk)
+                    if not content:
+                        return None
+                    return bytes(content)
+            return None
+        except Exception as e:
+            logger.warning(
+                f"Failed to download {purpose}",
+                url=url[:120],
+                error=str(e),
+            )
+            return None
+
+    @staticmethod
+    async def download_and_downscale_to_base64(
+        url: str,
+        max_edge: int = DEFAULT_MAX_EDGE,
+        quality: int = DEFAULT_QUALITY,
+        timeout: float = 10.0,
+    ) -> Optional[str]:
+        """Download a stored image and return a DOWNSIZED base64 JPEG in one pass.
+
+        Memory: unlike ``download_to_base64`` (full-size base64 in, then a
+        separate downscale), the response bytes go straight to a reduced-size
+        draft decode and re-encode, so a 12 MP reference never exists in
+        memory as full-size base64 + full-size decoded pixels. Peak per
+        reference: raw response bytes + small JPEG — instead of raw bytes +
+        full base64 + full decode + downscaled base64.
+
+        Same SSRF guard and failure contract as ``download_to_base64``
+        (returns None on any failure so callers degrade gracefully).
+        """
+        content = await StorageService._download_bytes(
+            url, timeout, purpose="source image for reference"
+        )
+        if content is None:
+            return None
+        # Downscale is CPU-bound and can allocate tens of MB transiently;
+        # run it on the bounded image executor.
+        return await run_image_op(
+            downscale_image_bytes_to_base64,
+            content,
+            max_edge,
+            quality,
+        )
+
+    @staticmethod
     async def download_to_base64(url: str, timeout: float = 10.0) -> Optional[str]:
         """Download a stored image URL back to base64 for image-gen reference.
 
@@ -823,43 +979,13 @@ class StorageService:
         Returns base64-encoded, decoded image bytes (no data: prefix) or None
         on any failure so callers can fall back gracefully.
         """
-        if not url:
+        content = await StorageService._download_bytes(
+            url, timeout, purpose="source image for reference"
+        )
+        if content is None:
             return None
-        try:
-            current_url = StorageService._validate_storage_url(url)
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(timeout),
-                limits=httpx.Limits(max_connections=10),
-                follow_redirects=False,
-            ) as client:
-                for _ in range(4):
-                    async with client.stream("GET", current_url) as response:
-                        if response.status_code in {301, 302, 303, 307, 308}:
-                            location = response.headers.get("location")
-                            if not location:
-                                return None
-                            current_url = StorageService._validate_storage_url(
-                                urljoin(current_url, location)
-                            )
-                            continue
-                        response.raise_for_status()
-                        content = bytearray()
-                        async for chunk in response.aiter_bytes():
-                            if len(content) + len(chunk) > MAX_FILE_SIZE:
-                                return None
-                            content.extend(chunk)
-                        if not content:
-                            return None
-                        validate_image_bytes(bytes(content), max_bytes=MAX_FILE_SIZE)
-                        return base64.b64encode(bytes(content)).decode("utf-8")
-                return None
-        except Exception as e:
-            logger.warning(
-                "Failed to download source image for reference",
-                url=url[:120],
-                error=str(e),
-            )
-            return None
+        validate_image_bytes(content, max_bytes=MAX_FILE_SIZE)
+        return base64.b64encode(content).decode("utf-8")
 
     @staticmethod
     def _validate_storage_url(url: str) -> str:

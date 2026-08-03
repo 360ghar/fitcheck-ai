@@ -4,7 +4,7 @@ Referral service for managing referral codes and redemptions.
 import asyncio
 import re
 from app.utils.datetime_util import utcnow
-from app.utils.db import unwrap_rpc_result
+from app.utils.db import unwrap_rpc_result, execute_with_reconnect
 from typing import Any, Dict, Optional
 
 from supabase import Client
@@ -66,13 +66,16 @@ class ReferralService:
     ) -> ReferralCodeResponse:
         """Get user's referral code, creating one if it doesn't exist."""
         try:
-            # Try to get existing code
-            result = await asyncio.to_thread(
-                db.table("referral_codes")
+            # Try to get existing code (read-only; safe to rebuild the client
+            # and retry once when the pooled connection is dead)
+            result = await execute_with_reconnect(
+                lambda d: d.table("referral_codes")
                 .select("*")
                 .eq("user_id", user_id)
                 .maybe_single()
-                .execute
+                .execute(),
+                db,
+                extra={"operation": "get_referral_code", "user_id": user_id},
             )
 
             if result and result.data:
@@ -129,23 +132,29 @@ class ReferralService:
     async def get_referral_stats(user_id: str, db: Client) -> ReferralStats:
         """Get detailed referral statistics for a user."""
         try:
-            # Get user's referral code
-            code_result = await asyncio.to_thread(
-                db.table("referral_codes")
+            # Get user's referral code (reads rebuild + retry on a dead
+            # pooled connection - ConnectionTerminated 500s observed on
+            # /referral/code and /referral/stats 2026-08-03)
+            code_result = await execute_with_reconnect(
+                lambda d: d.table("referral_codes")
                 .select("*")
                 .eq("user_id", user_id)
                 .maybe_single()
-                .execute
+                .execute(),
+                db,
+                extra={"operation": "get_referral_stats_code", "user_id": user_id},
             )
 
             if not code_result or not code_result.data:
                 # Create one
-                user_result = await asyncio.to_thread(
-                    db.table("users")
+                user_result = await execute_with_reconnect(
+                    lambda d: d.table("users")
                     .select("full_name")
                     .eq("id", user_id)
                     .maybe_single()
-                    .execute
+                    .execute(),
+                    db,
+                    extra={"operation": "get_referral_stats_user", "user_id": user_id},
                 )
                 full_name = user_result.data.get("full_name") if user_result and user_result.data else None
                 code_response = await ReferralService.get_or_create_referral_code(user_id, full_name, db)
@@ -160,9 +169,13 @@ class ReferralService:
             total_credits = 0
             successful_referrals = 0
 
-            redemptions = await asyncio.to_thread(db.table("referral_redemptions").select(
-                "referred_user_id, redeemed_at, referrer_credit_applied"
-            ).eq("referrer_user_id", user_id).execute)
+            redemptions = await execute_with_reconnect(
+                lambda d: d.table("referral_redemptions").select(
+                    "referred_user_id, redeemed_at, referrer_credit_applied"
+                ).eq("referrer_user_id", user_id).execute(),
+                db,
+                extra={"operation": "get_referral_stats_redemptions", "user_id": user_id},
+            )
 
             if redemptions.data:
                 # One batched lookup instead of a query per redemption
@@ -172,11 +185,13 @@ class ReferralService:
                 ]
                 referred_users: Dict[str, Dict[str, Any]] = {}
                 if referred_ids:
-                    users_result = await asyncio.to_thread(
-                        db.table("users")
+                    users_result = await execute_with_reconnect(
+                        lambda d: d.table("users")
                         .select("id, email, full_name")
                         .in_("id", referred_ids)
-                        .execute
+                        .execute(),
+                        db,
+                        extra={"operation": "get_referral_stats_users", "user_id": user_id},
                     )
                     referred_users = {
                         str(u["id"]): u
@@ -228,10 +243,16 @@ class ReferralService:
         """Validate a referral code without redeeming it."""
         normalized_code = ReferralService._normalize_code(code)
         try:
-            # Case-insensitive lookup
-            result = await asyncio.to_thread(db.table("referral_codes").select(
-                "*, users(full_name)"
-            ).eq("code", normalized_code).maybe_single().execute)
+            # Case-insensitive lookup (read-only; rebuild + retry once on a
+            # dead pooled connection - observed 2026-08-03: "Error validating
+            # referral code ony-77ee88: <ConnectionTerminated ...>").
+            result = await execute_with_reconnect(
+                lambda d: d.table("referral_codes").select(
+                    "*, users(full_name)"
+                ).eq("code", normalized_code).maybe_single().execute(),
+                db,
+                extra={"operation": "validate_referral_code", "code": normalized_code},
+            )
 
             if not result or not result.data:
                 return ValidateReferralResponse(
@@ -245,12 +266,14 @@ class ReferralService:
                 referrer_name = result.data["users"].get("full_name", "A friend")
             else:
                 # Fallback: query user separately
-                user_result = await asyncio.to_thread(
-                    db.table("users")
+                user_result = await execute_with_reconnect(
+                    lambda d: d.table("users")
                     .select("full_name")
                     .eq("id", result.data["user_id"])
                     .maybe_single()
-                    .execute
+                    .execute(),
+                    db,
+                    extra={"operation": "validate_referral_code_user", "user_id": result.data["user_id"]},
                 )
                 if user_result and user_result.data:
                     referrer_name = user_result.data.get("full_name", "A friend")
@@ -281,11 +304,18 @@ class ReferralService:
         normalized_code = ReferralService._normalize_code(code)
         try:
             credit_months = settings.REFERRAL_CREDIT_MONTHS
-            result = await asyncio.to_thread(db.rpc("redeem_referral_atomic", {
-                "p_referred_user_id": referred_user_id,
-                "p_code": normalized_code,
-                "p_credit_months": credit_months,
-            }).execute)
+            # The RPC is one transaction (row locks + writes), so a reconnect
+            # retry after a lost response cannot double-grant: the second
+            # attempt simply reports the already-redeemed state.
+            result = await execute_with_reconnect(
+                lambda d: d.rpc("redeem_referral_atomic", {
+                    "p_referred_user_id": referred_user_id,
+                    "p_code": normalized_code,
+                    "p_credit_months": credit_months,
+                }).execute(),
+                db,
+                extra={"operation": "redeem_referral", "referred_user_id": referred_user_id},
+            )
             data = unwrap_rpc_result(result)
             if not isinstance(data, dict):
                 raise DatabaseError("Referral redemption returned no result")

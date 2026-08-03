@@ -16,6 +16,8 @@ from unittest.mock import Mock
 
 import pytest
 
+import httpx
+
 from app.api.v1.outfits import get_outfit, list_outfits
 from app.models.common import DataResponse
 from app.models.outfit import OutfitCreate, OutfitListResponse, OutfitResponse
@@ -149,6 +151,51 @@ async def test_list_outfits_validates_against_response_model():
     assert validated.data.total == 1
     assert len(validated.data.outfits) == 1
     assert validated.data.outfits[0].items == []
+
+
+@pytest.mark.asyncio
+async def test_list_outfits_retries_once_on_dead_connection(monkeypatch):
+    """list_outfits runs its count + page queries through
+    execute_with_reconnect, so a dead pooled Supabase connection (the
+    2026-08-03 /outfits 500s, one taking 121 s) is healed by rebuilding the
+    client and retrying once instead of failing the whole list."""
+    from app.db.connection import SupabaseDB
+
+    dead_db = Mock()
+    dead_chain = dead_db.table.return_value.select.return_value.eq.return_value
+    dead_chain.execute.side_effect = httpx.RemoteProtocolError(
+        "Server disconnected without sending a response."
+    )
+
+    fresh_db = Mock()
+    fresh_chain = fresh_db.table.return_value.select.return_value.eq.return_value
+    count_result = Mock()
+    count_result.count = 1
+    count_result.data = []
+    fresh_chain.execute.return_value = count_result
+    page_result = Mock()
+    page_result.data = [_outfit_row(item_ids=[])]
+    fresh_chain.order.return_value.range.return_value.execute.return_value = page_result
+
+    monkeypatch.setattr(SupabaseDB, "reset", staticmethod(lambda: None))
+    monkeypatch.setattr(SupabaseDB, "get_service_client", staticmethod(lambda: fresh_db))
+
+    result = await list_outfits(
+        page=1,
+        page_size=20,
+        is_favorite=None,
+        style=None,
+        season=None,
+        search=None,
+        tags=None,
+        user_id=USER_ID,
+        db=dead_db,
+    )
+
+    validated = DataResponse[OutfitListResponse].model_validate(result)
+    assert validated.data.total == 1
+    assert len(validated.data.outfits) == 1
+    assert validated.data.outfits[0].name == "Weekend Casual"
 
 
 def test_outfit_create_still_rejects_empty_item_ids():

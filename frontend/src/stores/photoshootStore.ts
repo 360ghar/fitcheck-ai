@@ -11,7 +11,7 @@ import {
   PhotoshootUseCase,
   GeneratedImage,
 } from '@/api/photoshoot';
-import { getApiError } from '@/lib/errors';
+import { getApiError, RATE_LIMIT_EXCEEDED } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { fileToReplayablePreview } from '@/lib/replayable-preview';
 import { ensureSessionRecording, setPersonProperties, trackEvent } from '@/lib/analytics';
@@ -146,7 +146,14 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
   },
 
   generate: async () => {
-    const { photos, useCase, customPrompt, numImages, usage } = get();
+    const { photos, useCase, customPrompt, numImages, usage, isGenerating } = get();
+
+    // Guard against a second run while one is already in flight. The wizard
+    // lets the user step back to configure during generation, and the Generate
+    // button is gated on `isGenerating` via `selectCanGenerate` — this store
+    // guard is the backstop so a double-click / re-entry can never burn the
+    // daily quota twice or race the results.
+    if (isGenerating) return null;
 
     if (photos.length === 0) {
       set({ error: 'Please add at least one photo' });
@@ -168,9 +175,9 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
       return null;
     }
 
-    // Build previews for the wait surface (revoke any prior ones). Previews
-    // are replay-safe data URLs (downscaled) so they survive PostHog session
-    // recordings — blob URLs would render blank at replay time.
+    // Revoke prior previews for the wait surface (they are replay-safe data
+    // URLs, downscaled, so they survive PostHog session recordings — blob URLs
+    // would render blank at replay time).
     get().photoPreviewUrls.forEach((url) => {
       try {
         URL.revokeObjectURL(url);
@@ -178,16 +185,21 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
         // ignore
       }
     });
-    const photoPreviewUrls = await Promise.all(photos.map(fileToReplayablePreview));
 
+    // Set isGenerating BEFORE the async preview build. The `isGenerating` guard
+    // above is only meaningful once this flag is set; leaving it until after the
+    // `await` would leave a window where a double-click passes the guard and
+    // starts a second request (double quota burn).
     set({
       isGenerating: true,
       error: null,
       progress: null,
       statusMessage: 'Preparing your photos…',
-      photoPreviewUrls,
       currentStep: 'generating',
     });
+
+    const photoPreviewUrls = await Promise.all(photos.map(fileToReplayablePreview));
+    set({ photoPreviewUrls });
 
     ensureSessionRecording();
     trackEvent('photoshoot_session_started', {
@@ -270,13 +282,27 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
     } catch (error) {
       const apiError = getApiError(error);
       set({
-        error: apiError.message,
+        // Friendly copy only — the backend logs the diagnostic detail. The
+        // user's own plan limit and upstream capacity failures must not be
+        // conflated: the former is a quota wall, the latter "try again".
+        error:
+          apiError.code === RATE_LIMIT_EXCEEDED
+            ? 'You have reached your daily photoshoot limit. It resets at midnight UTC.'
+            : apiError.errorKind === 'upstream_quota' || apiError.errorKind === 'transient'
+              ? 'Our AI service is busy. Please try again in a few minutes.'
+              : apiError.message,
         isGenerating: false,
         progress: null,
         statusMessage: 'Generation failed',
         // Stay on generating surface so user can retry without losing photos
         currentStep: 'generating',
       });
+      // A hard quota wall means the stored `usage.remaining` is now stale —
+      // refresh it so the configure step renders the real 0-remaining wall and
+      // the "Try again" button cannot loop into another 429.
+      if (apiError.code === RATE_LIMIT_EXCEEDED) {
+        void get().fetchUsage();
+      }
       trackEvent('photoshoot_session_failed', {
         use_case: useCase,
         num_images: numImages,
@@ -346,7 +372,17 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
       }
     } catch (error) {
       const apiError = getApiError(error);
-      set({ error: apiError.message, retryingFailedIndex: null });
+      set({
+        error:
+          apiError.code === RATE_LIMIT_EXCEEDED
+            ? 'You have reached your daily photoshoot limit. It resets at midnight UTC.'
+            : apiError.message,
+        retryingFailedIndex: null,
+      });
+      // Same stale-usage refresh as `generate`: don't let a retry loop into 429s.
+      if (apiError.code === RATE_LIMIT_EXCEEDED) {
+        void get().fetchUsage();
+      }
     }
   },
 
@@ -370,7 +406,8 @@ export const usePhotoshootStore = create<PhotoshootState>()((set, get) => ({
 
 // Selectors
 export const selectCanGenerate = (state: PhotoshootState) => {
-  const { photos, useCase, customPrompt, numImages, usage } = state;
+  const { photos, useCase, customPrompt, numImages, usage, isGenerating } = state;
+  if (isGenerating) return false;
   if (photos.length === 0) return false;
   if (useCase === 'custom' && !customPrompt.trim()) return false;
   if (!usage) return false;

@@ -665,7 +665,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _formatWearDate(entry.wornAt),
+                      AppDateUtils.formatMonthDayYear(entry.wornAt),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: tokens.textPrimary,
                             fontWeight: FontWeight.w500,
@@ -688,11 +688,6 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
           Divider(height: 1, indent: 36, color: tokens.cardBorderColor),
       ],
     );
-  }
-
-  String _formatWearDate(DateTime date) {
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 
   void _showFullWearHistory(BuildContext context, List<WearHistoryEntry> history, AppUiTokens tokens) {

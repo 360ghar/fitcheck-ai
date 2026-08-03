@@ -131,8 +131,20 @@ class AiSettingsController extends GetxController {
     final apiKey = apiKeyController.text.trim();
     final chatModel = chatModelController.text.trim();
 
-    if (apiUrl.isEmpty || apiKey.isEmpty || chatModel.isEmpty) {
-      ErrorHandler.showInfo('API URL, key, and chat model are required to test', title: 'Missing Info');
+    if (apiUrl.isEmpty || chatModel.isEmpty) {
+      ErrorHandler.showInfo('API URL and chat model are required to test', title: 'Missing Info');
+      return;
+    }
+    if (apiKey.isEmpty) {
+      // The saved key is never echoed into the field, so a blank field with a
+      // saved key is normal. The test endpoint still needs a key, so ask the
+      // user to enter it (or save with a key first).
+      ErrorHandler.showInfo(
+        apiKeySet
+            ? 'Enter your API key to test the connection (your saved key is kept private).'
+            : 'API key is required to test the connection.',
+        title: 'API Key Needed',
+      );
       return;
     }
 

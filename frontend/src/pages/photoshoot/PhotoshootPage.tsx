@@ -26,7 +26,7 @@ const WIZARD_STEPS = [
 ] as const;
 
 export default function PhotoshootPage() {
-  const { currentStep, fetchUsage, setStep } = usePhotoshoot();
+  const { currentStep, fetchUsage, setStep, isGenerating } = usePhotoshoot();
 
   useEffect(() => {
     fetchUsage();
@@ -51,8 +51,13 @@ export default function PhotoshootPage() {
         variant="bars"
         steps={[...WIZARD_STEPS]}
         currentStepId={currentStep}
-        onStepClick={(id) => {
-          // Allow going back to completed steps only
+        // Allow going back to completed steps only. While a generation is in
+        // flight the wizard is locked (onStepClick dropped so every step
+        // renders disabled): stepping back would let the user re-enter
+        // configure and fire a second request (double quota burn) before the
+        // first resolves. The pill + "Continue in background" are the escape
+        // hatches during generation.
+        onStepClick={isGenerating ? undefined : (id) => {
           const order = ['upload', 'configure', 'generating', 'results'] as const;
           const target = order.indexOf(id as (typeof order)[number]);
           const current = order.indexOf(currentStep);

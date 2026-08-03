@@ -17,16 +17,23 @@ interface ReferralBannerProps {
 const DISMISSAL_KEY = 'fitcheck_referral_banner_dismissed_at'
 const WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000
 
-export function useReferralBannerDismissal() {
+/**
+ * Per-user 7-day dismissal. Scoped by userId so one account's dismiss does not
+ * hide the banner for another account signed in on the same browser. The
+ * unkeyed key is kept as a fallback for callers without a user id.
+ */
+export function useReferralBannerDismissal(userId?: string | null) {
+  const storageKey = userId ? `${DISMISSAL_KEY}_${userId}` : DISMISSAL_KEY
+
   const [isDismissed, setIsDismissed] = useState(() => {
-    const dismissedAt = localStorage.getItem(DISMISSAL_KEY)
+    const dismissedAt = localStorage.getItem(storageKey)
     if (!dismissedAt) return false
     const weekAgo = Date.now() - WEEK_IN_MS
     return parseInt(dismissedAt, 10) > weekAgo
   })
 
   const dismiss = () => {
-    localStorage.setItem(DISMISSAL_KEY, Date.now().toString())
+    localStorage.setItem(storageKey, Date.now().toString())
     setIsDismissed(true)
   }
 

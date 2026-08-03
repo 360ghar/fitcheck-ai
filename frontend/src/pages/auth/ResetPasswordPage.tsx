@@ -22,6 +22,20 @@ function getSearchParams(): URLSearchParams {
   return new URLSearchParams(search)
 }
 
+/**
+ * Mirror of the backend `verify_password_strength` policy so a weak password
+ * gets a clear inline reason instead of a generic "Failed to reset password"
+ * 422. Returns the first unmet requirement, or null when the password is valid.
+ */
+function getPasswordStrengthError(pwd: string): string | null {
+  if (pwd.length < 8) return 'Password must be at least 8 characters'
+  if (!/[A-Z]/.test(pwd)) return 'Password must contain at least one uppercase letter'
+  if (!/[a-z]/.test(pwd)) return 'Password must contain at least one lowercase letter'
+  if (!/\d/.test(pwd)) return 'Password must contain at least one digit'
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(pwd)) return 'Password must contain at least one special character'
+  return null
+}
+
 export default function ResetPasswordPage() {
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
@@ -54,6 +68,10 @@ export default function ResetPasswordPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // A success already scheduled the redirect to /auth/login; a second click
+    // during that window would re-POST the same (now-signed-out) recovery
+    // session and overwrite the success banner with an error.
+    if (success) return
     setError(null)
     setSuccess(null)
 
@@ -64,6 +82,12 @@ export default function ResetPasswordPage() {
 
     if (!passwordsMatch) {
       setError('Passwords do not match.')
+      return
+    }
+
+    const strengthError = getPasswordStrengthError(password)
+    if (strengthError) {
+      setError(strengthError)
       return
     }
 
@@ -127,6 +151,7 @@ export default function ResetPasswordPage() {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
+                  minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="block w-full h-12 pl-10 pr-12 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
@@ -157,6 +182,7 @@ export default function ResetPasswordPage() {
                   type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
+                  minLength={8}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="block w-full h-12 pl-10 pr-10 text-base border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary"
@@ -188,10 +214,10 @@ export default function ResetPasswordPage() {
             <div>
               <Button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || !!success}
                 className="w-full h-12"
               >
-                {isLoading ? 'Updating…' : 'Update password'}
+                {isLoading ? 'Updating…' : success ? 'Updated!' : 'Update password'}
               </Button>
             </div>
           </form>

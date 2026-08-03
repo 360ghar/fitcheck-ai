@@ -329,7 +329,7 @@ export function AISettingsPanel() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -340,7 +340,7 @@ export function AISettingsPanel() {
       <Card>
         <CardHeader className="px-4 py-4 md:px-6 md:py-6">
           <CardTitle className="flex items-center gap-2">
-            <Cpu className="h-5 w-5 text-indigo-500" />
+            <Cpu className="h-5 w-5 text-primary" />
             Default AI Provider
           </CardTitle>
           <CardDescription>
@@ -374,7 +374,7 @@ export function AISettingsPanel() {
       <Card>
         <CardHeader className="px-4 py-4 md:px-6 md:py-6">
           <CardTitle className="flex items-center gap-2">
-            <Key className="h-5 w-5 text-indigo-500" />
+            <Key className="h-5 w-5 text-primary" />
             Provider Configuration
           </CardTitle>
           <CardDescription>
@@ -654,7 +654,7 @@ export function AISettingsPanel() {
         <Card>
           <CardHeader className="px-4 py-4 md:px-6 md:py-6">
             <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-indigo-500" />
+              <BarChart3 className="h-5 w-5 text-primary" />
               Usage Statistics
             </CardTitle>
             <CardDescription>Your AI usage and rate limits</CardDescription>

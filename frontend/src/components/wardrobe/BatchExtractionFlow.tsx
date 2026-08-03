@@ -401,9 +401,22 @@ export function BatchExtractionFlow({
     await cancel();
   }, [cancel]);
 
-  const handleBack = useCallback(() => {
-    reset();
-  }, [reset]);
+  const handleBack = useCallback(async () => {
+    // "Upload Different Images" from review. If the job is still running
+    // (studio photos generating, or extractions still landing), the local
+    // reset alone would orphan the backend job — it would keep burning quota
+    // with no client to cancel it. Cancel server-side first.
+    const current = state.jobId
+    const stillRunning =
+      state.isGenerationRunning ||
+      isStillExtracting ||
+      ['extracting', 'generating', 'uploading'].includes(state.step)
+    if (current && stillRunning) {
+      await cancel()
+    } else {
+      reset()
+    }
+  }, [cancel, isStillExtracting, reset, state.isGenerationRunning, state.jobId, state.step]);
 
   const handleClose = useCallback(() => {
     // Soft-close preserves in-flight jobs AND unsaved review (early review
@@ -560,20 +573,34 @@ export function BatchExtractionFlow({
       itemsToSave,
       async (item) => {
         // Studio photo if ready, otherwise the uploaded source photo.
-        const imageFile = item.generatedImageUrl
-          ? dataURLtoFile(item.generatedImageUrl, item.tempId)
+        // `generatedImageUrl` is a data URL for live jobs, but the recovery /
+        // reconcile path can surface a persisted storage URL instead — a URL is
+        // already uploaded, so re-uploading it (or atob-ing it) would fail.
+        const generatedUrl = item.generatedImageUrl;
+        const isDataUrl = generatedUrl?.startsWith('data:');
+        const imageFile = generatedUrl
+          ? isDataUrl
+            ? dataURLtoFile(generatedUrl, item.tempId)
+            : undefined
           : sourceFileFor(item);
 
-        if (!imageFile) {
+        let uploadedImage:
+          | { image_url?: string; thumbnail_url?: string; storage_path?: string }
+          | undefined;
+
+        if (imageFile) {
+          // Upload image to Supabase
+          const formData = new FormData();
+          formData.append('files', imageFile, imageFile.name);
+
+          const upload = await uploadItemImages(formData, skipToast);
+          uploadedImage = upload.images?.[0];
+        } else if (generatedUrl) {
+          // Remote studio photo already persisted: reference it directly.
+          uploadedImage = { image_url: generatedUrl };
+        } else {
           throw new Error('No image available for item');
         }
-
-        // Upload image to Supabase
-        const formData = new FormData();
-        formData.append('files', imageFile, imageFile.name);
-
-        const upload = await uploadItemImages(formData, skipToast);
-        const uploadedImage = upload.images?.[0];
 
         if (!uploadedImage?.image_url) {
           throw new Error('Image upload failed');

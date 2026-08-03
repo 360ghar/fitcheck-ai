@@ -29,6 +29,7 @@ from app.core.exceptions import AIServiceError
 from app.core.logging_config import get_context_logger
 from app.core.config import settings
 from app.models.ai import HealthCheckResult
+from app.utils.image_processing import sniff_image_mime_from_magic
 from app.services.ai_provider_interface import (
     AIProvider,
     AIResponse,
@@ -253,14 +254,29 @@ class GeminiProvider:
     def _decode_image_part(img: str) -> types.Part:
         """Decode a base64 string or `data:<mime>;base64,<b64>` URL (the same
         shape callers already pass to the OpenAI-compatible provider) into a
-        Gemini Part."""
+        Gemini Part.
+
+        Bare base64 is the common case — messages now carry images unwrapped
+        to avoid a full-size data-URL copy per image (see
+        build_user_multimodal_messages). The mime type is then SNIFFED from
+        the first decoded bytes (previously hardcoded to image/jpeg, which
+        labelled every PNG/WebP reference wrong inside Part.from_bytes)."""
         if img.startswith("data:"):
             header, _, b64_data = img.partition(",")
             mime_type = header[5:].split(";")[0] or "image/jpeg"
         else:
             b64_data = img
-            mime_type = "image/jpeg"
-        return types.Part.from_bytes(data=base64.b64decode(b64_data), mime_type=mime_type)
+            mime_type = None
+        data = base64.b64decode(b64_data)
+        if mime_type is None:
+            # Cheap: decode only the first ~96 base64 chars (72 bytes — plenty
+            # for any magic signature) to sniff the real mime.
+            try:
+                head = base64.b64decode(b64_data[:96])
+                mime_type = sniff_image_mime_from_magic(head) or "image/jpeg"
+            except Exception:
+                mime_type = "image/jpeg"
+        return types.Part.from_bytes(data=data, mime_type=mime_type)
 
     @classmethod
     def _messages_to_contents(

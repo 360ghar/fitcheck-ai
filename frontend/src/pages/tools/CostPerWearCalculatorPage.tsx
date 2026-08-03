@@ -42,10 +42,18 @@ function cpwInsight(cpw: number): { label: string; tone: string } {
 
 
 export default function CostPerWearCalculatorPage() {
-  const [price, setPrice] = useState<number>(0)
-  const [wears, setWears] = useState<number>(0)
+  // Keep raw strings in state so a partial entry like "49." or "1.5" is not
+  // destroyed by Number() coercion on every keystroke (a controlled number
+  // input that snaps to an integer makes decimal entry impossible).
+  const [price, setPrice] = useState('')
+  const [wears, setWears] = useState('')
 
-  const cpw = wears > 0 && price > 0 ? price / wears : 0
+  const priceNum = parseFloat(price)
+  const wearsNum = parseInt(wears, 10)
+  const cpw =
+    Number.isFinite(priceNum) && Number.isFinite(wearsNum) && priceNum > 0 && wearsNum > 0
+      ? priceNum / wearsNum
+      : 0
   const insight = cpwInsight(cpw)
   const breadcrumbs = [
     { name: 'Home', url: `${SEO_CONFIG.siteUrl}/` },
@@ -91,8 +99,8 @@ export default function CostPerWearCalculatorPage() {
                     type="number"
                     min={0}
                     step="0.01"
-                    value={price || ''}
-                    onChange={(e) => setPrice(Math.max(0, Number(e.target.value)))}
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
                     placeholder="49.99"
                     className="mt-2 w-full rounded-lg border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-primary dark:border-stone-700 dark:bg-stone-950 dark:text-stone-50"
                     inputMode="decimal"
@@ -106,8 +114,8 @@ export default function CostPerWearCalculatorPage() {
                     type="number"
                     min={0}
                     step="1"
-                    value={wears || ''}
-                    onChange={(e) => setWears(Math.max(0, Math.round(Number(e.target.value))))}
+                    value={wears}
+                    onChange={(e) => setWears(e.target.value)}
                     placeholder="30"
                     className="mt-2 w-full rounded-lg border border-stone-300 bg-white px-4 py-3 text-stone-900 outline-none focus:border-primary dark:border-stone-700 dark:bg-stone-950 dark:text-stone-50"
                     inputMode="numeric"
@@ -160,14 +168,14 @@ export default function CostPerWearCalculatorPage() {
                 </div>
               ))}
             </div>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link to="/guides/what-is-wardrobe-utilization" className="inline-flex text-sm font-medium px-3 py-1.5 rounded-full bg-stone-100 dark:bg-stone-900 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/50">
+            <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2">
+              <Link to="/guides/what-is-wardrobe-utilization" className="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:text-primary-pressed transition-colors">
                 Wardrobe utilization
               </Link>
-              <Link to="/guides/what-is-a-capsule-wardrobe" className="inline-flex text-sm font-medium px-3 py-1.5 rounded-full bg-stone-100 dark:bg-stone-900 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/50">
+              <Link to="/guides/what-is-a-capsule-wardrobe" className="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:text-primary-pressed transition-colors">
                 Capsule wardrobes
               </Link>
-              <Link to="/features/wardrobe-analytics" className="inline-flex text-sm font-medium px-3 py-1.5 rounded-full bg-stone-100 dark:bg-stone-900 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/50">
+              <Link to="/features/wardrobe-analytics" className="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:text-primary-pressed transition-colors">
                 Wardrobe analytics
               </Link>
             </div>

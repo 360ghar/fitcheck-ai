@@ -60,25 +60,28 @@ async def demo_extract_items(
 
             # Get system AI service (no user-specific config)
             ai_service = await get_ai_service()
-            agent = ItemExtractionAgent(ai_service)
+            try:
+                agent = ItemExtractionAgent(ai_service)
 
-            result = await with_retry(
-                lambda: agent.extract_multiple_items(image_base64=request_body.image),
-                max_retries=1,
-                initial_delay=1.0,
-                backoff_factor=2.0,
-                retryable_exceptions=(AIServiceError,),
-                should_retry=is_retryable_error,
-                on_retry=lambda attempt, error, delay: logger.warning(
-                    "Retrying demo extraction",
-                    attempt=attempt,
-                    delay=delay,
-                    error=str(error),
-                    ip=ip,
-                ),
-            )
-
-            await ai_service.close()
+                result = await with_retry(
+                    lambda: agent.extract_multiple_items(image_base64=request_body.image),
+                    max_retries=1,
+                    initial_delay=1.0,
+                    backoff_factor=2.0,
+                    retryable_exceptions=(AIServiceError,),
+                    should_retry=is_retryable_error,
+                    on_retry=lambda attempt, error, delay: logger.warning(
+                        "Retrying demo extraction",
+                        attempt=attempt,
+                        delay=delay,
+                        error=str(error),
+                        ip=ip,
+                    ),
+                )
+            finally:
+                # Close the pooled HTTP client even when the call fails, so a
+                # burst of failed demos cannot leak connections until GC.
+                await ai_service.close()
 
         # Convert to demo response format (remove internal fields like temp_id)
         demo_items = [
@@ -149,34 +152,37 @@ async def demo_try_on(
 
             # Get system AI service
             ai_service = await get_ai_service()
-            agent = ImageGenerationAgent(ai_service)
+            try:
+                agent = ImageGenerationAgent(ai_service)
 
-            # Generate try-on using both provided images
-            result = await with_retry(
-                lambda: agent.generate_try_on(
-                    user_avatar_base64=request_body.person_image,
-                    clothing_image_base64=request_body.clothing_image,
-                    clothing_description=request_body.clothing_description,
-                    style=request_body.style,
-                    background="studio white",
-                    pose="standing front",
-                    lighting="professional studio lighting",
-                ),
-                max_retries=1,
-                initial_delay=2.0,
-                backoff_factor=2.0,
-                retryable_exceptions=(AIServiceError,),
-                should_retry=is_retryable_error,
-                on_retry=lambda attempt, error, delay: logger.warning(
-                    "Retrying demo try-on",
-                    attempt=attempt,
-                    delay=delay,
-                    error=str(error),
-                    ip=ip,
-                ),
-            )
-
-            await ai_service.close()
+                # Generate try-on using both provided images
+                result = await with_retry(
+                    lambda: agent.generate_try_on(
+                        user_avatar_base64=request_body.person_image,
+                        clothing_image_base64=request_body.clothing_image,
+                        clothing_description=request_body.clothing_description,
+                        style=request_body.style,
+                        background="studio white",
+                        pose="standing front",
+                        lighting="professional studio lighting",
+                    ),
+                    max_retries=1,
+                    initial_delay=2.0,
+                    backoff_factor=2.0,
+                    retryable_exceptions=(AIServiceError,),
+                    should_retry=is_retryable_error,
+                    on_retry=lambda attempt, error, delay: logger.warning(
+                        "Retrying demo try-on",
+                        attempt=attempt,
+                        delay=delay,
+                        error=str(error),
+                        ip=ip,
+                    ),
+                )
+            finally:
+                # Close the pooled HTTP client even when the call fails, so a
+                # burst of failed demos cannot leak connections until GC.
+                await ai_service.close()
 
         response = DemoTryOnResponse(
             image_base64=result.image_base64,

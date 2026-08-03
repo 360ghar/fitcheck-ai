@@ -49,14 +49,20 @@ class ExtractionCacheService:
         else:
             image_data = image_base64
 
-        # Run blocking hash computation in thread pool to avoid blocking event loop
-        loop = asyncio.get_event_loop()
-        image_bytes = image_data.encode()
-        hash_hex = await loop.run_in_executor(
-            None,
-            lambda: hashlib.sha256(image_bytes).hexdigest()
-        )
-        return hash_hex
+        # Run blocking hash computation in thread pool to avoid blocking event
+        # loop. Hash INCREMENTALLY: encoding the whole payload to bytes at
+        # once would create a full multi-MB copy (peak = payload + hash); a
+        # 64KB rolling window keeps peak flat regardless of image size.
+        def _hash() -> str:
+            hasher = hashlib.sha256()
+            pos = 0
+            length = len(image_data)
+            while pos < length:
+                hasher.update(image_data[pos : pos + 65536].encode("utf-8"))
+                pos += 65536
+            return hasher.hexdigest()
+
+        return await asyncio.to_thread(_hash)
 
     @classmethod
     async def get_cached_result(

@@ -167,12 +167,14 @@ class SubscriptionService:
     async def get_subscription(user_id: str, db: Client) -> SubscriptionResponse:
         """Get user's current subscription."""
         try:
-            result = await asyncio.to_thread(
-                db.table("subscriptions")
+            result = await execute_with_reconnect(
+                lambda d: d.table("subscriptions")
                 .select("*")
                 .eq("user_id", user_id)
                 .maybe_single()
-                .execute
+                .execute(),
+                db,
+                extra={"operation": "get_subscription", "user_id": user_id},
             )
 
             data = maybe_single_data(result)
@@ -180,12 +182,14 @@ class SubscriptionService:
                 # Create a default free subscription if none exists
                 logger.info(f"Creating default subscription for user {user_id}")
                 await SubscriptionService.create_default_subscription(user_id, db)
-                result = await asyncio.to_thread(
-                    db.table("subscriptions")
+                result = await execute_with_reconnect(
+                    lambda d: d.table("subscriptions")
                     .select("*")
                     .eq("user_id", user_id)
                     .maybe_single()
-                    .execute
+                    .execute(),
+                    db,
+                    extra={"operation": "get_subscription_after_create", "user_id": user_id},
                 )
                 data = maybe_single_data(result)
 
@@ -226,12 +230,18 @@ class SubscriptionService:
     async def create_default_subscription(user_id: str, db: Client) -> None:
         """Create a default free subscription for a user."""
         try:
-            await asyncio.to_thread(db.table("subscriptions").upsert({
-                "user_id": user_id,
-                "plan_type": "free",
-                "status": "active",
-                "current_period_start": utcnow_iso(),
-            }, on_conflict="user_id").execute)
+            # on_conflict upsert is idempotent, so the reconnect retry is
+            # exact-once safe even if the first attempt committed server-side.
+            await execute_with_reconnect(
+                lambda d: d.table("subscriptions").upsert({
+                    "user_id": user_id,
+                    "plan_type": "free",
+                    "status": "active",
+                    "current_period_start": utcnow_iso(),
+                }, on_conflict="user_id").execute(),
+                db,
+                extra={"operation": "create_default_subscription", "user_id": user_id},
+            )
         except Exception as e:
             logger.error(f"Error creating default subscription for user {user_id}: {e}")
             raise DatabaseError(f"Failed to create subscription: {str(e)}")
@@ -638,14 +648,8 @@ class SubscriptionService:
         """Get or create the usage record for the current billing period."""
         period_start = SubscriptionService._get_current_period_start()
 
-        try:
-            result = await asyncio.to_thread(db.table("subscription_usage").select("*").eq("user_id", user_id).eq("period_start", period_start.isoformat()).single().execute)
-
-            if result.data:
-                return result.data
-
-            # Create new usage record for this period
-            new_record = {
+        def _new_record() -> dict:
+            return {
                 "user_id": user_id,
                 "period_start": period_start.isoformat(),
                 "monthly_extractions": 0,
@@ -653,21 +657,61 @@ class SubscriptionService:
                 "monthly_embeddings": 0,
             }
 
-            await asyncio.to_thread(db.table("subscription_usage").insert(new_record).execute)
-            return new_record
+        async def _insert_record() -> dict:
+            # Insert-only upsert on the (user_id, period_start) unique key
+            # (migration 007) so the reconnect retry is exact-once safe even
+            # if the first attempt committed server-side before the response
+            # was lost. `ignore_duplicates` (DO NOTHING) is deliberate: a
+            # merge-upsert would re-apply this zeroed payload as an UPDATE,
+            # wiping any increments a concurrent caller made between our
+            # select-miss and this upsert (TOCTOU on month rollover). We then
+            # re-read the authoritative row instead of returning the local
+            # zeroed dict.
+            await execute_with_reconnect(
+                lambda d: d.table("subscription_usage").upsert(
+                    _new_record(),
+                    on_conflict="user_id,period_start",
+                    ignore_duplicates=True,
+                ).execute(),
+                db,
+                extra={"operation": "create_usage_record", "user_id": user_id},
+            )
+            result = await execute_with_reconnect(
+                lambda d: d.table("subscription_usage")
+                .select("*")
+                .eq("user_id", user_id)
+                .eq("period_start", period_start.isoformat())
+                .single()
+                .execute(),
+                db,
+                extra={"operation": "get_or_create_usage_record_reload", "user_id": user_id},
+            )
+            if not result.data:
+                raise DatabaseError("Failed to create usage record")
+            return result.data
+
+        try:
+            result = await execute_with_reconnect(
+                lambda d: d.table("subscription_usage")
+                .select("*")
+                .eq("user_id", user_id)
+                .eq("period_start", period_start.isoformat())
+                .single()
+                .execute(),
+                db,
+                extra={"operation": "get_or_create_usage_record", "user_id": user_id},
+            )
+
+            if result.data:
+                return result.data
+
+            # Create new usage record for this period
+            return await _insert_record()
 
         except Exception as e:
             if "PGRST116" in str(e):  # No rows returned
                 # Create new usage record
-                new_record = {
-                    "user_id": user_id,
-                    "period_start": period_start.isoformat(),
-                    "monthly_extractions": 0,
-                    "monthly_generations": 0,
-                    "monthly_embeddings": 0,
-                }
-                await asyncio.to_thread(db.table("subscription_usage").insert(new_record).execute)
-                return new_record
+                return await _insert_record()
             raise
 
     @staticmethod

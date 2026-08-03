@@ -27,7 +27,6 @@ from app.core.config import settings
 from app.core.concurrency import REFERENCE_DOWNLOAD_SEMAPHORE
 from app.core.logging_config import get_context_logger
 from app.services.storage_service import StorageService
-from app.utils.image_processing import downscale_base64_image
 from app.utils.parallel import parallel_map_settled
 
 logger = get_context_logger(__name__)
@@ -137,12 +136,12 @@ async def resolve_outfit_item_references(
 
     async def _fetch(item_id: str) -> Optional[str]:
         async with REFERENCE_DOWNLOAD_SEMAPHORE:
-            raw = await StorageService.download_to_base64(url_by_item_id[item_id])
-            if not raw:
-                return None
-            # PIL work is CPU-bound - off the event loop, as in
-            # batch_extraction_service.
-            return await asyncio.to_thread(downscale_base64_image, raw, edge)
+            # Download + downscale in one pass: the raw bytes go straight to
+            # a reduced-size decode, never through full-size base64, and the
+            # PIL work runs on the bounded image executor.
+            return await StorageService.download_and_downscale_to_base64(
+                url_by_item_id[item_id], max_edge=edge
+            )
 
     fetch_ids = list(url_by_item_id.keys())[: max(0, settings.AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES)]
     stats["skipped_references"] = max(0, len(url_by_item_id) - len(fetch_ids))
@@ -308,12 +307,13 @@ async def resolve_outfit_source_reference(
 
     try:
         async with REFERENCE_DOWNLOAD_SEMAPHORE:
-            raw = await StorageService.download_to_base64(best_url)
-        if not raw:
+            # One pass: reduced-size decode, no full-size base64 round-trip.
+            image_base64 = await StorageService.download_and_downscale_to_base64(
+                best_url, max_edge=edge
+            )
+        if not image_base64:
             stats["download_failed"] = True
             return None, stats
-        # PIL work is CPU-bound - off the event loop, as elsewhere.
-        image_base64 = await asyncio.to_thread(downscale_base64_image, raw, edge)
     except Exception as e:
         logger.warning(
             "Outfit source photo reference failed to load",

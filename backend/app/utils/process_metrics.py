@@ -21,7 +21,21 @@ _last_log_at: float = 0.0
 
 
 def get_rss_mb() -> Optional[float]:
-    """Return resident set size in megabytes, or None if unavailable."""
+    """Return CURRENT resident set size in megabytes, or None if unavailable.
+
+    Reads VmRSS from /proc/self/status on Linux (Railway). getrusage's
+    ru_maxrss is the ALL-TIME PEAK and never decreases, so it made RSS look
+    stuck high after AI bursts — useless for verifying that memory is freed.
+    Falls back to ru_maxrss only where /proc does not exist (macOS local dev).
+    """
+    try:
+        with open("/proc/self/status", "r", encoding="utf-8") as status:
+            for line in status:
+                if line.startswith("VmRSS:"):
+                    # Format: "VmRSS:    123456 kB"
+                    return round(int(line.split()[1]) / 1024.0, 1)
+    except (FileNotFoundError, OSError, ValueError, IndexError):
+        pass
     try:
         # ru_maxrss is kilobytes on Linux, bytes on macOS.
         usage = resource.getrusage(resource.RUSAGE_SELF)

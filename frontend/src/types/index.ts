@@ -43,33 +43,33 @@ export interface PaginatedOutfitsResponse<T> {
 // ============================================================================
 
 export type Category =
-  | 'tops'
-  | 'bottoms'
-  | 'shoes'
-  | 'accessories'
-  | 'outerwear'
-  | 'swimwear'
-  | 'activewear'
-  | 'other';
+  | "tops"
+  | "bottoms"
+  | "shoes"
+  | "accessories"
+  | "outerwear"
+  | "swimwear"
+  | "activewear"
+  | "other";
 
-export type Condition = 'clean' | 'dirty' | 'laundry' | 'repair' | 'donate';
+export type Condition = "clean" | "dirty" | "laundry" | "repair" | "donate";
 
 export type Style =
-  | 'casual'
-  | 'formal'
-  | 'business'
-  | 'sporty'
-  | 'bohemian'
-  | 'streetwear'
-  | 'vintage'
-  | 'minimalist'
-  | 'romantic'
-  | 'edgy'
-  | 'preppy'
-  | 'artsy'
-  | 'other';
+  | "casual"
+  | "formal"
+  | "business"
+  | "sporty"
+  | "bohemian"
+  | "streetwear"
+  | "vintage"
+  | "minimalist"
+  | "romantic"
+  | "edgy"
+  | "preppy"
+  | "artsy"
+  | "other";
 
-export type Season = 'spring' | 'summer' | 'fall' | 'winter' | 'all-season';
+export type Season = "spring" | "summer" | "fall" | "winter" | "all-season";
 
 export interface ItemImage {
   id: UUID;
@@ -179,7 +179,7 @@ export interface OutfitImage {
   pose: string;
   lighting?: string;
   body_profile_id?: UUID;
-  generation_type: 'ai' | 'manual' | string;
+  generation_type: "ai" | "manual" | string;
   is_primary: boolean;
   width?: number;
   height?: number;
@@ -209,7 +209,8 @@ export interface Outfit {
   images: OutfitImage[];
 }
 
-export type GenerationStatus = 'pending' | 'processing' | 'completed' | 'failed';
+export type GenerationStatus =
+  "pending" | "processing" | "completed" | "failed";
 
 export interface GenerationRequest {
   pose?: string;
@@ -228,7 +229,7 @@ export interface GenerationResponse {
 // USER TYPES
 // ============================================================================
 
-export type Gender = 'male' | 'female' | 'non_binary' | 'prefer_not_to_say';
+export type Gender = "male" | "female" | "non_binary" | "prefer_not_to_say";
 
 export interface User {
   id: UUID;
@@ -264,7 +265,7 @@ export interface UserSettings {
   default_location?: string;
   timezone?: string;
   language: string;
-  measurement_units: 'imperial' | 'metric';
+  measurement_units: "imperial" | "metric";
   notifications_enabled: boolean;
   email_marketing: boolean;
   dark_mode: boolean;
@@ -371,8 +372,8 @@ export interface WeatherRecommendation {
   color_suggestions: string[];
 }
 
-export type AstrologyRecommendationMode = 'daily' | 'important_meeting';
-export type AstrologyRecommendationStatus = 'ready' | 'profile_required';
+export type AstrologyRecommendationMode = "daily" | "important_meeting";
+export type AstrologyRecommendationStatus = "ready" | "profile_required";
 
 export interface AstrologyColorSuggestion {
   name: string;
@@ -404,7 +405,7 @@ export interface AstrologyRecommendation {
   status: AstrologyRecommendationStatus;
   target_date: string;
   mode: AstrologyRecommendationMode;
-  astrology_mode: 'vedic_full' | 'vedic_lite';
+  astrology_mode: "vedic_full" | "vedic_lite";
   missing_fields: string[];
   context: AstrologyContext;
   lucky_colors: AstrologyColorSuggestion[];
@@ -502,11 +503,7 @@ export interface BoundingBox {
  * Status of a detected item during the extraction flow
  */
 export type DetectedItemStatus =
-  | 'detected'
-  | 'generating'
-  | 'generated'
-  | 'failed'
-  | 'deleted';
+  "detected" | "generating" | "generated" | "failed" | "deleted";
 
 /**
  * Individual item detected during multi-item extraction
@@ -591,7 +588,7 @@ export interface MultiItemDetectionResult {
  */
 export interface MultiItemExtractionState {
   /** Current step in the flow */
-  step: 'upload' | 'detecting' | 'generating' | 'review' | 'saving';
+  step: "upload" | "detecting" | "generating" | "review" | "saving";
   /** Original uploaded file */
   originalFile: File | null;
   /** Original image preview URL */
@@ -613,9 +610,9 @@ export interface MultiItemExtractionState {
  */
 export interface ProductImageGenerationOptions {
   /** Background style */
-  background?: 'white' | 'gray' | 'gradient' | 'transparent';
+  background?: "white" | "gray" | "gradient" | "transparent";
   /** View angle */
-  viewAngle?: 'front' | 'side' | 'flat-lay';
+  viewAngle?: "front" | "side" | "flat-lay";
   /** Include shadows */
   includeShadows?: boolean;
   /** Image size */
@@ -630,22 +627,18 @@ export interface ProductImageGenerationOptions {
  * Status of a batch processing job
  */
 export type BatchJobStatus =
-  | 'pending'
-  | 'extracting'
-  | 'generating'
-  | 'completed'
-  | 'cancelled'
-  | 'failed';
+  | "pending"
+  | "extracting"
+  | "generating"
+  | "completed"
+  | "cancelled"
+  | "failed";
 
 /**
  * Status of a single image in batch processing
  */
 export type BatchImageStatus =
-  | 'pending'
-  | 'uploading'
-  | 'extracting'
-  | 'completed'
-  | 'failed';
+  "pending" | "uploading" | "extracting" | "completed" | "failed";
 
 /**
  * Single image in a batch upload
@@ -685,22 +678,22 @@ export interface BatchJobResponse {
  * SSE event types for batch processing
  */
 export type BatchSSEEventType =
-  | 'connected'
-  | 'heartbeat'
-  | 'extraction_started'
-  | 'image_extraction_complete'
-  | 'image_extraction_failed'
-  | 'extraction_capacity_exhausted'
-  | 'all_extractions_complete'
-  | 'generation_started'
-  | 'batch_generation_started'
-  | 'item_generation_complete'
-  | 'item_generation_failed'
-  | 'batch_generation_complete'
-  | 'all_generations_complete'
-  | 'job_complete'
-  | 'job_failed'
-  | 'job_cancelled';
+  | "connected"
+  | "heartbeat"
+  | "extraction_started"
+  | "image_extraction_complete"
+  | "image_extraction_failed"
+  | "extraction_capacity_exhausted"
+  | "all_extractions_complete"
+  | "generation_started"
+  | "batch_generation_started"
+  | "item_generation_complete"
+  | "item_generation_failed"
+  | "batch_generation_complete"
+  | "all_generations_complete"
+  | "job_complete"
+  | "job_failed"
+  | "job_cancelled";
 
 /**
  * Generic SSE event structure
@@ -890,7 +883,8 @@ export interface JobCompleteData {
  */
 export interface BatchExtractionState {
   /** Current step in the flow */
-  step: 'select' | 'uploading' | 'extracting' | 'generating' | 'review' | 'saving';
+  step:
+    "select" | "uploading" | "extracting" | "generating" | "review" | "saving";
   /** All selected images */
   images: BatchImageInput[];
   /** Current job ID */
@@ -947,7 +941,7 @@ export interface BatchExtractionState {
  */
 export interface BatchJobUiStatus {
   jobId: string | null;
-  step: BatchExtractionState['step'];
+  step: BatchExtractionState["step"];
   isProcessing: boolean;
   isGenerationRunning: boolean;
   imagesCompleted: number;
@@ -964,105 +958,106 @@ export interface BatchJobUiStatus {
 // SOCIAL IMPORT TYPES
 // ============================================================================
 
-export type SocialPlatform = 'instagram' | 'facebook'
+export type SocialPlatform = "instagram" | "facebook";
 
 export type SocialImportJobStatus =
-  | 'created'
-  | 'discovering'
-  | 'awaiting_auth'
-  | 'processing'
-  | 'paused_rate_limited'
-  | 'completed'
-  | 'cancelled'
-  | 'failed'
+  | "created"
+  | "discovering"
+  | "awaiting_auth"
+  | "processing"
+  | "paused_rate_limited"
+  | "completed"
+  | "cancelled"
+  | "failed";
 
 export type SocialImportPhotoStatus =
-  | 'queued'
-  | 'processing'
-  | 'awaiting_review'
-  | 'buffered_ready'
-  | 'approved'
-  | 'rejected'
-  | 'failed'
+  | "queued"
+  | "processing"
+  | "awaiting_review"
+  | "buffered_ready"
+  | "approved"
+  | "rejected"
+  | "failed";
 
-export type SocialImportItemStatus = 'generated' | 'edited' | 'failed' | 'saved' | 'discarded'
+export type SocialImportItemStatus =
+  "generated" | "edited" | "failed" | "saved" | "discarded";
 
 export interface SocialImportItem {
-  id: string
-  temp_id: string
-  name?: string
-  category: Category
-  sub_category?: string
-  colors: string[]
-  material?: string
-  pattern?: string
-  brand?: string
-  confidence: number
-  bounding_box?: BoundingBox
-  detailed_description?: string
-  generated_image_url?: string
-  generated_storage_path?: string
-  generation_error?: string
-  status: SocialImportItemStatus
-  saved_item_id?: string
+  id: string;
+  temp_id: string;
+  name?: string;
+  category: Category;
+  sub_category?: string;
+  colors: string[];
+  material?: string;
+  pattern?: string;
+  brand?: string;
+  confidence: number;
+  bounding_box?: BoundingBox;
+  detailed_description?: string;
+  generated_image_url?: string;
+  generated_storage_path?: string;
+  generation_error?: string;
+  status: SocialImportItemStatus;
+  saved_item_id?: string;
 }
 
 export interface SocialImportPhoto {
-  id: string
-  ordinal: number
-  source_photo_url: string
-  source_thumb_url?: string
-  status: SocialImportPhotoStatus
-  error_message?: string
-  items: SocialImportItem[]
+  id: string;
+  ordinal: number;
+  source_photo_url: string;
+  source_thumb_url?: string;
+  status: SocialImportPhotoStatus;
+  error_message?: string;
+  items: SocialImportItem[];
 }
 
 export interface SocialImportJobData {
-  id: string
-  status: SocialImportJobStatus
-  platform: SocialPlatform
-  source_url: string
-  normalized_url: string
-  total_photos: number
-  discovered_photos: number
-  processed_photos: number
-  approved_photos: number
-  rejected_photos: number
-  failed_photos: number
-  auth_required: boolean
-  discovery_completed: boolean
-  error_message?: string
-  auth_reason?: string
-  two_factor_identifier?: string
-  checkpoint_url?: string
-  awaiting_review_photo?: SocialImportPhoto | null
-  buffered_photo?: SocialImportPhoto | null
-  processing_photo?: SocialImportPhoto | null
-  queued_count: number
+  id: string;
+  status: SocialImportJobStatus;
+  platform: SocialPlatform;
+  source_url: string;
+  normalized_url: string;
+  total_photos: number;
+  discovered_photos: number;
+  processed_photos: number;
+  approved_photos: number;
+  rejected_photos: number;
+  failed_photos: number;
+  auth_required: boolean;
+  discovery_completed: boolean;
+  error_message?: string;
+  auth_reason?: string;
+  two_factor_identifier?: string;
+  checkpoint_url?: string;
+  awaiting_review_photo?: SocialImportPhoto | null;
+  buffered_photo?: SocialImportPhoto | null;
+  processing_photo?: SocialImportPhoto | null;
+  queued_count: number;
 }
 
 export type SocialImportEventType =
-  | 'connected'
-  | 'job_updated'
-  | 'photo_discovered'
-  | 'photo_processing_started'
-  | 'photo_ready_for_review'
-  | 'photo_buffered_ready'
-  | 'photo_approved'
-  | 'photo_rejected'
-  | 'photo_failed'
-  | 'auth_required'
-  | 'auth_accepted'
-  | 'rate_limit_paused'
-  | 'job_completed'
-  | 'job_failed'
-  | 'job_cancelled'
-  | 'heartbeat'
+  | "connected"
+  | "job_updated"
+  | "photo_discovered"
+  | "photo_processing_started"
+  | "photo_ready_for_review"
+  | "photo_buffered_ready"
+  | "photo_approved"
+  | "photo_rejected"
+  | "photo_failed"
+  | "auth_required"
+  | "auth_accepted"
+  | "rate_limit_paused"
+  | "job_completed"
+  | "job_failed"
+  | "job_cancelled"
+  | "heartbeat";
 
 export interface SocialImportSSEEvent<T = unknown> {
-  type: SocialImportEventType
-  data: T
-  id?: number
+  type: SocialImportEventType;
+  data: T;
+  id?: number;
 }
 
 // ============================================================================
@@ -1070,13 +1065,9 @@ export interface SocialImportSSEEvent<T = unknown> {
 // ============================================================================
 
 export type PlanType =
-  | 'free'
-  | 'plus_monthly'
-  | 'plus_yearly'
-  | 'pro_monthly'
-  | 'pro_yearly';
+  "free" | "plus_monthly" | "plus_yearly" | "pro_monthly" | "pro_yearly";
 
-export type SubscriptionStatus = 'active' | 'cancelled' | 'past_due' | 'trial';
+export type SubscriptionStatus = "active" | "cancelled" | "past_due" | "trial";
 
 export interface Subscription {
   id: UUID;
@@ -1187,6 +1178,13 @@ export interface PlanDetails {
 
 export interface PlansResponse {
   plans: PlanDetails[];
+  /**
+   * True when the backend has Stripe billing configured (STRIPE_SECRET_KEY +
+   * all four price IDs). When false, web checkout 503s by design, so the UI
+   * must not offer upgrade buttons that only produce error toasts - promo
+   * codes remain the working path.
+   */
+  billing_configured?: boolean;
 }
 
 // ============================================================================

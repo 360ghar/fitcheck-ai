@@ -10,7 +10,7 @@ import { Mail, Lock, User, AlertCircle, CheckCircle, Loader2, Gift, Check, Eye, 
 import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
 import { validateReferralCode } from '@/api/subscription'
-import { stashPromoCode } from '@/lib/promo'
+import { PENDING_PROMO_KEY, stashPromoCode } from '@/lib/promo'
 import SEO from '@/components/seo/SEO'
 import { getPostAuthDestination, persistAuthReturnTo, withAuthContext } from './authRedirect'
 
@@ -74,6 +74,14 @@ export default function RegisterPage() {
       stashPromoCode(promoCode)
     }
   }, [searchParams, promoCode])
+
+  // The store error is global across auth pages. A failed login on this page
+  // would otherwise still be shown after navigating to /auth/login (and an
+  // OAuth failure shown on the callback page would linger here). Clear it once
+  // on mount so each auth page starts clean.
+  useEffect(() => {
+    clearError()
+  }, [clearError])
 
   // Validate referral code
   const validateReferral = async (code: string) => {
@@ -156,7 +164,11 @@ export default function RegisterPage() {
       // clear any stale key left behind by an aborted Google sign-in so it
       // cannot hijack a later Google login.
       localStorage.removeItem('pending_plan_type')
-      navigate(getPostAuthDestination(returnTo, selectedPlan, promoCode))
+      // A promo may have been stashed earlier (e.g. a failed OAuth attempt
+      // redirected here); carry it into the destination so the plan page is
+      // still reached when the URL no longer has the param. Mirrors LoginPage.
+      const promoFromStorage = localStorage.getItem(PENDING_PROMO_KEY)
+      navigate(getPostAuthDestination(returnTo, selectedPlan, promoCode || promoFromStorage))
     } catch {
       // Registration error is handled by the store and displayed in UI
     }
@@ -166,12 +178,18 @@ export default function RegisterPage() {
     setGoogleLoading(true)
     clearError()
 
-    // Save referral code before OAuth redirect
+    // Save referral code before OAuth redirect. Keep both intent keys
+    // idempotent: set when present, clear when absent, so a stale value from
+    // an aborted attempt can never be applied to a later plain Google sign-in.
     if (referralCode.trim()) {
       localStorage.setItem('pending_referral_code', referralCode.trim())
+    } else {
+      localStorage.removeItem('pending_referral_code')
     }
     if (selectedPlan) {
       localStorage.setItem('pending_plan_type', selectedPlan)
+    } else {
+      localStorage.removeItem('pending_plan_type')
     }
     persistAuthReturnTo(returnTo)
 
@@ -179,8 +197,9 @@ export default function RegisterPage() {
       await signInWithGoogle()
       // User will be redirected to Google
     } catch {
-      // Drop the pending plan/referral so a later plain sign-in cannot be
-      // hijacked by stale intent from this aborted attempt.
+      // Drop the pending plan intent (it survives in the URL) so a later plain
+      // sign-in cannot be hijacked by stale intent from this aborted attempt.
+      // The referral stays stashed so the round-trip restores it into the form.
       localStorage.removeItem('pending_plan_type')
       setGoogleLoading(false)
     }

@@ -150,7 +150,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <CollapsibleTrigger className="flex items-center justify-between w-full p-6 bg-white dark:bg-gray-800 rounded-lg text-left hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors group border border-gray-200 dark:border-gray-700">
+      <CollapsibleTrigger className="flex items-center justify-between w-full p-6 bg-white dark:bg-gray-800 rounded-lg text-left hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors group border border-gray-200 dark:border-gray-700">
         <span className="font-medium text-gray-900 dark:text-white pr-4">{question}</span>
         <ChevronDown
           className={cn(

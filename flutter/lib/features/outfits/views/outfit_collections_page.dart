@@ -554,7 +554,7 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
       AlertDialog(
         title: const Text('Delete Collection?'),
         content: Text(
-          'The collection "$name" will be deleted. Outfits will not be removed from your wardrobe.',
+          'The collection "$name" will be deleted. Outfits will not be removed from your closet.',
         ),
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),

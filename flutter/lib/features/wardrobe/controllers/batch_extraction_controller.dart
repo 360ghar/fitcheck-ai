@@ -1425,6 +1425,16 @@ class BatchExtractionController extends GetxController {
 
         if (generatedBase64 != null && generatedBase64.isNotEmpty) {
           await _itemRepo.uploadImageFromBase64(created.id, generatedBase64);
+        } else if (item.generatedImageUrl != null &&
+            item.generatedImageUrl!.isNotEmpty &&
+            !item.generatedImageUrl!.startsWith('data:')) {
+          // Reload-after-completion edge: the backend frees item base64 at
+          // job end, so only a real storage URL remains. Download and
+          // upload the bytes the same way as in-flow saves.
+          await _itemRepo.uploadImageFromUrl(
+            created.id,
+            item.generatedImageUrl!,
+          );
         } else {
           final sourceImage = selectedImages.firstWhereOrNull(
             (img) => img.id == item.sourceImageId,

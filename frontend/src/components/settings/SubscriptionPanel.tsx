@@ -61,7 +61,7 @@ import type { PlanType, PlansResponse } from "@/types";
 // shows stale compiled prices; PLAN_PRICES is only a loading fallback.
 const offeredTiersFor = (
   plans: PlansResponse | null | undefined,
-  currentPlan: string
+  currentPlan: string,
 ) =>
   (["plus", "pro"] as const)
     .filter((tier) => !currentPlan.startsWith(tier))
@@ -139,9 +139,47 @@ export function SubscriptionPanel() {
     fetchPlans();
   }, [fetchSubscription, fetchReferralCode, fetchReferralStats, fetchPlans]);
 
+  // Stripe Checkout returns here with ?success=true / ?cancelled=true (the
+  // store's success/cancel URLs). Consume the params once on mount so the user
+  // gets feedback, then strip them so a refresh / re-visit doesn't re-toast.
+  useEffect(() => {
+    const isSuccess = searchParams.get("success") === "true";
+    const isCancelled = searchParams.get("cancelled") === "true";
+    if (!isSuccess && !isCancelled) return;
+
+    const next = new URLSearchParams(searchParams);
+    next.delete("success");
+    next.delete("cancelled");
+    const query = next.toString();
+    window.history.replaceState(
+      {},
+      "",
+      query ? `${window.location.pathname}?${query}` : window.location.pathname,
+    );
+
+    // The mount effect's fetchSubscription already refreshed the plan by the
+    // time this runs; the toast is the only piece the user was missing.
+    if (isSuccess) {
+      toast({
+        title: "Payment successful",
+        description: "Welcome! Your new plan is active.",
+      });
+    } else {
+      toast({
+        title: "Checkout cancelled",
+        description: "No changes were made to your plan.",
+      });
+    }
+    // Run once per mount (a full Stripe redirect remounts the page). Refs
+    // intentionally omitted so the toast can never re-fire on a param change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!requestedPlan) return;
-    const target = document.getElementById(`plan-${requestedPlan.split("_")[0]}`);
+    const target = document.getElementById(
+      `plan-${requestedPlan.split("_")[0]}`,
+    );
     target?.scrollIntoView({ behavior: "smooth", block: "center" });
     // plans?.plans gates the upgrade cards' render: for a free user the tier
     // list is empty until /plans resolves, so the scroll must re-fire then.
@@ -232,7 +270,8 @@ export function SubscriptionPanel() {
       await cancelSubscription();
       toast({
         title: "Subscription cancelled",
-        description: "You'll retain access until the end of your billing period.",
+        description:
+          "You'll retain access until the end of your billing period.",
       });
     } catch {
       toast({
@@ -263,7 +302,7 @@ export function SubscriptionPanel() {
   if (isLoading && !subscription) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -285,7 +324,9 @@ export function SubscriptionPanel() {
       <Card>
         <CardHeader className="px-4 py-4 md:px-6 md:py-6">
           <CardTitle className="flex items-center gap-2">
-            <Crown className={`h-5 w-5 ${isPro ? "text-amber-500" : "text-gray-400"}`} />
+            <Crown
+              className={`h-5 w-5 ${isPro ? "text-amber-500" : "text-gray-400"}`}
+            />
             Current Plan
           </CardTitle>
           <CardDescription>
@@ -305,14 +346,20 @@ export function SubscriptionPanel() {
               </div>
               {subscription?.cancel_at_period_end && (
                 <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">
-                  Cancels at end of period ({new Date(subscription.current_period_end!).toLocaleDateString()})
+                  Cancels at end of period (
+                  {new Date(
+                    subscription.current_period_end!,
+                  ).toLocaleDateString()}
+                  )
                 </p>
               )}
-              {subscription?.referral_credit_months && subscription.referral_credit_months > 0 && (
-                <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-                  {subscription.referral_credit_months} referral credit month{subscription.referral_credit_months > 1 ? 's' : ''} active
-                </p>
-              )}
+              {subscription?.referral_credit_months &&
+                subscription.referral_credit_months > 0 && (
+                  <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                    {subscription.referral_credit_months} referral credit month
+                    {subscription.referral_credit_months > 1 ? "s" : ""} active
+                  </p>
+                )}
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -329,20 +376,28 @@ export function SubscriptionPanel() {
                   {!subscription?.cancel_at_period_end && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30">
+                        <Button
+                          variant="ghost"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"
+                        >
                           Cancel Subscription
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Cancel subscription?</AlertDialogTitle>
+                          <AlertDialogTitle>
+                            Cancel subscription?
+                          </AlertDialogTitle>
                           <AlertDialogDescription>
-                            You'll retain access to Pro features until the end of your current billing period.
-                            After that, you'll be downgraded to the Free plan.
+                            You'll retain access to Pro features until the end
+                            of your current billing period. After that, you'll
+                            be downgraded to the Free plan.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>Keep Subscription</AlertDialogCancel>
+                          <AlertDialogCancel>
+                            Keep Subscription
+                          </AlertDialogCancel>
                           <AlertDialogAction
                             onClick={handleCancel}
                             className="bg-red-600 hover:bg-red-700"
@@ -354,11 +409,21 @@ export function SubscriptionPanel() {
                     </AlertDialog>
                   )}
                 </>
+              ) : plans?.billing_configured === false ? (
+                <div className="flex flex-col gap-1 rounded-lg border border-border bg-background/90 px-4 py-3">
+                  <p className="text-sm font-medium">
+                    Card payments are being set up
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Upgrades will be available very soon. If you have a promo
+                    code, you can still redeem it below — no card needed.
+                  </p>
+                </div>
               ) : (
                 <Button
                   onClick={() => handleUpgrade("pro_monthly")}
                   disabled={isCheckingOut}
-                  className="bg-indigo-600 hover:bg-indigo-700"
+                  className="bg-primary hover:bg-primary/90"
                 >
                   {isCheckingOut ? (
                     <>
@@ -385,7 +450,7 @@ export function SubscriptionPanel() {
         <Card>
           <CardHeader className="px-4 py-4 md:px-6 md:py-6">
             <CardTitle className="flex items-center gap-2">
-              <Ticket className="h-5 w-5 text-indigo-500" />
+              <Ticket className="h-5 w-5 text-primary" />
               Have a promo code?
             </CardTitle>
             <CardDescription>
@@ -397,38 +462,46 @@ export function SubscriptionPanel() {
                 from a previous session must not render a redeem button that
                 has no code to redeem. */}
             {promoValidation?.valid && promoInput.trim() ? (
-              <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-3">
-                  <Gift className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-medium text-green-800 dark:text-green-200">
-                      {promoValidation.message}
-                    </p>
-                    <p className="text-sm text-green-700 dark:text-green-300">
-                      Code{" "}
-                      <code className="font-mono">{promoInput.trim()}</code> — apply it
-                      and skip the checkout.
-                    </p>
+              <>
+                <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <Gift className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-green-800 dark:text-green-200">
+                        {promoValidation.message}
+                      </p>
+                      <p className="text-sm text-green-700 dark:text-green-300">
+                        Code{" "}
+                        <code className="font-mono">{promoInput.trim()}</code> —
+                        apply it and skip the checkout.
+                      </p>
+                    </div>
                   </div>
+                  <Button
+                    onClick={handleRedeemPromo}
+                    disabled={isRedeemingPromo}
+                    className="bg-green-600 hover:bg-green-700 shrink-0"
+                  >
+                    {isRedeemingPromo ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Applying...
+                      </>
+                    ) : (
+                      <>
+                        <Gift className="h-4 w-4 mr-2" />
+                        Get {promoValidation.plan_name} free
+                      </>
+                    )}
+                  </Button>
                 </div>
-                <Button
-                  onClick={handleRedeemPromo}
-                  disabled={isRedeemingPromo}
-                  className="bg-green-600 hover:bg-green-700 shrink-0"
-                >
-                  {isRedeemingPromo ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Applying...
-                    </>
-                  ) : (
-                    <>
-                      <Gift className="h-4 w-4 mr-2" />
-                      Get {promoValidation.plan_name} free
-                    </>
-                  )}
-                </Button>
-              </div>
+                {/* A redemption can fail server-side even though the code
+                    validated (e.g. already redeemed, grant exhausted): surface
+                    the failure inline instead of leaving the banner silent. */}
+                {promoError && (
+                  <p className="mt-2 text-sm text-destructive">{promoError}</p>
+                )}
+              </>
             ) : (
               <>
                 <div className="flex flex-col gap-2 sm:flex-row">
@@ -484,7 +557,7 @@ export function SubscriptionPanel() {
         <Card>
           <CardHeader className="px-4 py-4 md:px-6 md:py-6">
             <CardTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-indigo-500" />
+              <CreditCard className="h-5 w-5 text-primary" />
               {isPro ? "Upgrade your plan" : "Choose a plan"}
             </CardTitle>
             <CardDescription>
@@ -494,96 +567,117 @@ export function SubscriptionPanel() {
             </CardDescription>
           </CardHeader>
           <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
-            <div
-              className={
-                offeredTiers.length > 1
-                  ? "grid items-stretch gap-4 md:grid-cols-2"
-                  : "grid items-stretch gap-4"
-              }
-            >
-              {offeredTiers.map(
-                ({
-                  tier,
-                  name,
-                  recommended,
-                  limits,
-                  prices,
-                  savings,
-                  monthlyPlanType,
-                  yearlyPlanType,
-                }) => (
-                  <div
-                    key={tier}
-                    id={`plan-${tier}`}
-                    className={
-                      recommended
-                        ? "relative flex h-full flex-col rounded-lg border-2 border-indigo-500 p-4"
-                        : "relative flex h-full flex-col rounded-lg border p-4 transition-colors hover:border-indigo-300 dark:hover:border-indigo-700"
-                    }
-                  >
-                    {recommended && (
-                      <Badge className="absolute -top-2.5 left-4 bg-indigo-500">
-                        Most popular
-                      </Badge>
-                    )}
-                    <div className="mb-4">
-                      <h3 className="font-semibold text-lg">{name}</h3>
-                      <p className="text-3xl font-bold mt-1">
-                        ${prices.monthly}
-                        <span className="text-base font-normal text-muted-foreground">/mo</span>
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        or ${prices.yearly}/yr — saves ${savings}
-                      </p>
+            {/* Web billing not configured server-side: checkout/portal 503 by
+                design, so never render buttons that only produce error
+                toasts. Promo codes (card above) remain the working upgrade
+                path; the notice keeps the section discoverable. */}
+            {plans.billing_configured === false ? (
+              <div className="flex flex-col items-start gap-3 rounded-lg border border-border bg-background/90 p-4">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-muted-foreground" />
+                  <p className="font-medium">Card payments are being set up</p>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  We're finishing our payment setup and upgrades will be
+                  available very soon. If you have a promo code, you can still
+                  redeem it above — no card needed.
+                </p>
+              </div>
+            ) : (
+              <div
+                className={
+                  offeredTiers.length > 1
+                    ? "grid items-stretch gap-4 md:grid-cols-2"
+                    : "grid items-stretch gap-4"
+                }
+              >
+                {offeredTiers.map(
+                  ({
+                    tier,
+                    name,
+                    recommended,
+                    limits,
+                    prices,
+                    savings,
+                    monthlyPlanType,
+                    yearlyPlanType,
+                  }) => (
+                    <div
+                      key={tier}
+                      id={`plan-${tier}`}
+                      className={
+                        recommended
+                          ? "relative flex h-full flex-col rounded-lg border-2 border-primary p-4"
+                          : "relative flex h-full flex-col rounded-lg border p-4 transition-colors hover:border-primary/40 dark:hover:border-primary/50"
+                      }
+                    >
+                      {recommended && (
+                        <Badge className="absolute -top-2.5 left-4 bg-primary">
+                          Most popular
+                        </Badge>
+                      )}
+                      <div className="mb-4">
+                        <h3 className="font-semibold text-lg">{name}</h3>
+                        <p className="text-3xl font-bold mt-1">
+                          ${prices.monthly}
+                          <span className="text-base font-normal text-muted-foreground">
+                            /mo
+                          </span>
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          or ${prices.yearly}/yr — saves ${savings}
+                        </p>
+                      </div>
+                      <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400 mb-4 flex-1">
+                        <li className="flex items-center gap-2">
+                          <Check className="h-4 w-4 text-green-500 shrink-0" />
+                          {limits.monthlyExtractions} item extractions/month
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="h-4 w-4 text-green-500 shrink-0" />
+                          {limits.monthlyGenerations.toLocaleString()} outfit
+                          visualizations/month
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="h-4 w-4 text-green-500 shrink-0" />
+                          {limits.dailyPhotoshootImages} AI photoshoot
+                          images/day
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="h-4 w-4 text-green-500 shrink-0" />
+                          Virtual try-on, analytics &amp; priority support
+                        </li>
+                      </ul>
+                      <div className="mt-auto grid grid-cols-2 gap-2">
+                        <Button
+                          onClick={() => handleUpgrade(monthlyPlanType)}
+                          disabled={isCheckingOut}
+                          variant="outline"
+                          className="w-full"
+                        >
+                          {isCheckingOut ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            "Monthly"
+                          )}
+                        </Button>
+                        <Button
+                          onClick={() => handleUpgrade(yearlyPlanType)}
+                          disabled={isCheckingOut}
+                          className="w-full bg-primary hover:bg-primary/90"
+                        >
+                          {isCheckingOut ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            "Yearly"
+                          )}
+                        </Button>
+                      </div>
                     </div>
-                    <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400 mb-4 flex-1">
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-500 shrink-0" />
-                        {limits.monthlyExtractions} item extractions/month
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-500 shrink-0" />
-                        {limits.monthlyGenerations.toLocaleString()} outfit
-                        visualizations/month
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-500 shrink-0" />
-                        {limits.dailyPhotoshootImages} AI photoshoot images/day
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-500 shrink-0" />
-                        Virtual try-on, analytics &amp; priority support
-                      </li>
-                    </ul>
-                    <div className="mt-auto grid grid-cols-2 gap-2">
-                      <Button
-                        onClick={() => handleUpgrade(monthlyPlanType)}
-                        disabled={isCheckingOut}
-                        variant="outline"
-                        className="w-full"
-                      >
-                        {isCheckingOut ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          "Monthly"
-                        )}
-                      </Button>
-                      <Button
-                        onClick={() => handleUpgrade(yearlyPlanType)}
-                        disabled={isCheckingOut}
-                        className="w-full bg-indigo-600 hover:bg-indigo-700"
-                      >
-                        {isCheckingOut ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          "Yearly"
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                )
-              )}
-            </div>
+                  ),
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -593,11 +687,12 @@ export function SubscriptionPanel() {
         <Card>
           <CardHeader className="px-4 py-4 md:px-6 md:py-6">
             <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-indigo-500" />
+              <BarChart3 className="h-5 w-5 text-primary" />
               Monthly Usage
             </CardTitle>
             <CardDescription>
-              {new Date(usage.period_start).toLocaleDateString()} - {new Date(usage.period_end).toLocaleDateString()}
+              {new Date(usage.period_start).toLocaleDateString()} -{" "}
+              {new Date(usage.period_end).toLocaleDateString()}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 px-4 pb-4 md:px-6 md:pb-6">
@@ -606,11 +701,16 @@ export function SubscriptionPanel() {
               <div className="flex items-center justify-between">
                 <span className="font-medium">Item Extractions</span>
                 <span className="text-sm text-gray-500 dark:text-gray-400">
-                  {usage.monthly_extractions} / {usage.monthly_extractions_limit}
+                  {usage.monthly_extractions} /{" "}
+                  {usage.monthly_extractions_limit}
                 </span>
               </div>
               <Progress
-                value={(usage.monthly_extractions / usage.monthly_extractions_limit) * 100}
+                value={
+                  (usage.monthly_extractions /
+                    usage.monthly_extractions_limit) *
+                  100
+                }
                 className={`h-2 ${nearLimit.extractions ? "[&>div]:bg-amber-500" : ""}`}
               />
               <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -628,11 +728,16 @@ export function SubscriptionPanel() {
               <div className="flex items-center justify-between">
                 <span className="font-medium">Outfit Visualizations</span>
                 <span className="text-sm text-gray-500 dark:text-gray-400">
-                  {usage.monthly_generations} / {usage.monthly_generations_limit}
+                  {usage.monthly_generations} /{" "}
+                  {usage.monthly_generations_limit}
                 </span>
               </div>
               <Progress
-                value={(usage.monthly_generations / usage.monthly_generations_limit) * 100}
+                value={
+                  (usage.monthly_generations /
+                    usage.monthly_generations_limit) *
+                  100
+                }
                 className={`h-2 ${nearLimit.generations ? "[&>div]:bg-amber-500" : ""}`}
               />
               <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -651,11 +756,16 @@ export function SubscriptionPanel() {
                 <div className="flex items-center justify-between">
                   <span className="font-medium">Similarity Searches</span>
                   <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {usage.monthly_embeddings} / {usage.monthly_embeddings_limit}
+                    {usage.monthly_embeddings} /{" "}
+                    {usage.monthly_embeddings_limit}
                   </span>
                 </div>
                 <Progress
-                  value={(usage.monthly_embeddings / usage.monthly_embeddings_limit) * 100}
+                  value={
+                    (usage.monthly_embeddings /
+                      usage.monthly_embeddings_limit) *
+                    100
+                  }
                   className="h-2"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -671,7 +781,7 @@ export function SubscriptionPanel() {
       <Card>
         <CardHeader className="px-4 py-4 md:px-6 md:py-6">
           <CardTitle className="flex items-center gap-2">
-            <Gift className="h-5 w-5 text-indigo-500" />
+            <Gift className="h-5 w-5 text-primary" />
             Refer a Friend
           </CardTitle>
           <CardDescription>
@@ -682,17 +792,18 @@ export function SubscriptionPanel() {
           {!referralCode && (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Could not load your referral link. Check your connection and try again.
+                Could not load your referral link. Check your connection and try
+                again.
               </p>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={async () => {
-                  setIsLoadingReferral(true)
+                  setIsLoadingReferral(true);
                   try {
-                    await fetchReferralCode()
+                    await fetchReferralCode();
                   } finally {
-                    setIsLoadingReferral(false)
+                    setIsLoadingReferral(false);
                   }
                 }}
                 disabled={isLoadingReferral}
@@ -703,7 +814,7 @@ export function SubscriptionPanel() {
                     Loading…
                   </>
                 ) : (
-                  'Retry'
+                  "Retry"
                 )}
               </Button>
             </div>
@@ -749,7 +860,10 @@ export function SubscriptionPanel() {
                   size="sm"
                   onClick={() => {
                     const text = `Check out FitCheck AI - the smart wardrobe app! Use my referral link to get 1 month of Pro free: ${referralCode.share_url}`;
-                    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
+                    window.open(
+                      `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`,
+                      "_blank",
+                    );
                   }}
                 >
                   <Share2 className="h-4 w-4 mr-2" />
@@ -760,7 +874,10 @@ export function SubscriptionPanel() {
                   size="sm"
                   onClick={() => {
                     const text = `Check out FitCheck AI - the smart wardrobe app! Use my referral link to get 1 month of Pro free: ${referralCode.share_url}`;
-                    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                    window.open(
+                      `https://wa.me/?text=${encodeURIComponent(text)}`,
+                      "_blank",
+                    );
                   }}
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
@@ -787,15 +904,21 @@ export function SubscriptionPanel() {
                     <div className="flex items-center gap-2">
                       <Users className="h-4 w-4 text-gray-400" />
                       <span>
-                        <span className="font-semibold">{referralStats.times_used}</span>{" "}
-                        friend{referralStats.times_used !== 1 ? "s" : ""} referred
+                        <span className="font-semibold">
+                          {referralStats.times_used}
+                        </span>{" "}
+                        friend{referralStats.times_used !== 1 ? "s" : ""}{" "}
+                        referred
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Gift className="h-4 w-4 text-gray-400" />
                       <span>
-                        <span className="font-semibold">{referralStats.credits_earned}</span>{" "}
-                        month{referralStats.credits_earned !== 1 ? "s" : ""} earned
+                        <span className="font-semibold">
+                          {referralStats.credits_earned}
+                        </span>{" "}
+                        month{referralStats.credits_earned !== 1 ? "s" : ""}{" "}
+                        earned
                       </span>
                     </div>
                   </div>

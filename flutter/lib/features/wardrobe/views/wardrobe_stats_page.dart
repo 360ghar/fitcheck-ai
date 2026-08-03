@@ -245,7 +245,7 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
             spacing: AppConstants.spacing8,
             runSpacing: AppConstants.spacing8,
             children: Category.values.map((category) {
-              final count = itemsByCategory[category.displayName] as int? ?? 0;
+              final count = itemsByCategory[category.name] as int? ?? 0;
               if (count == 0) return const SizedBox.shrink();
               return _buildCategoryChip(category, count, tokens);
             }).toList(),
@@ -350,7 +350,7 @@ class _WardrobeStatsPageState extends State<WardrobeStatsPage> {
           ),
           const SizedBox(height: AppConstants.spacing16),
           ...Category.values.map((category) {
-            final count = itemsByCategory[category.displayName] as int? ?? 0;
+            final count = itemsByCategory[category.name] as int? ?? 0;
             if (count == 0) return const SizedBox.shrink();
             return _buildCategoryBar(category, count, totalItems, tokens);
           }),

@@ -22,10 +22,29 @@ import { getAllBlogPosts, getBlogCategories } from '@/api/blog';
 export default function BlogDashboardPage() {
   const navigate = useNavigate();
 
-  // Fetch posts
+  // Fetch posts. The Published/Drafts stat cards must count ALL posts, not just
+  // the 5 shown in "Recent Posts", so page through the backend's max
+  // page_size (100) until the whole catalogue is fetched (summaries only — no
+  // content bodies — so this stays cheap) and derive the counts from the
+  // full set. Requesting page_size > 100 would 422 against the backend's
+  // `page_size: Query(..., le=100)`.
   const { data: postsData, isLoading: isLoadingPosts } = useQuery({
-    queryKey: ['blog-posts', 'admin', 1],
-    queryFn: () => getAllBlogPosts(1, 5, true),
+    queryKey: ['blog-posts', 'admin', 'all'],
+    queryFn: async () => {
+      const PAGE_SIZE = 100
+      const first = await getAllBlogPosts(1, PAGE_SIZE, true)
+      const posts = [...(first.posts || [])]
+      let total = first.total ?? posts.length
+      let page = 2
+      // Guard against runaway loops if the backend ever under-reports total.
+      while (posts.length < total && page <= 20) {
+        const next = await getAllBlogPosts(page, PAGE_SIZE, true)
+        posts.push(...(next.posts || []))
+        total = next.total ?? total
+        page += 1
+      }
+      return { posts, total }
+    },
   });
 
   // Fetch categories
@@ -34,10 +53,12 @@ export default function BlogDashboardPage() {
     queryFn: getBlogCategories,
   });
 
-  const recentPosts = postsData?.posts.slice(0, 5) || [];
+  const allPosts = postsData?.posts || [];
+  const recentPosts = allPosts.slice(0, 5);
   const totalPosts = postsData?.total || 0;
-  const publishedPosts = postsData?.posts.filter((p) => p.is_published).length || 0;
-  const draftPosts = totalPosts - publishedPosts;
+  // Every post is published XOR draft, so the draft count is total − published.
+  const publishedPosts = allPosts.filter((p) => p.is_published).length;
+  const draftPosts = Math.max(totalPosts - publishedPosts, 0);
 
   return (
     <div className="p-8">
@@ -118,8 +139,8 @@ export default function BlogDashboardPage() {
                   )}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-purple-600" />
+              <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-primary" />
               </div>
             </div>
           </CardContent>
@@ -172,7 +193,7 @@ export default function BlogDashboardPage() {
                     onClick={() => navigate(`/admin/blog/edit/${post.slug}`)}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-lg">
+                      <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center text-lg">
                         {post.emoji}
                       </div>
                       <div>

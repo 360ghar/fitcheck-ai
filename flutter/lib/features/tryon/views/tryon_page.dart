@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../core/widgets/report_content_sheet.dart';
 import '../controllers/tryon_controller.dart';
 
 /// Try-On Page - Virtual try-on feature
@@ -472,29 +473,67 @@ class TryOnPage extends StatelessWidget {
           controller.generatedImageBase64.value.isNotEmpty) {
         return AppGlassCard(
           padding: const EdgeInsets.all(AppConstants.spacing8),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppConstants.radius12),
-            child: Image.memory(
-              base64Decode(controller.generatedImageBase64.value),
-              fit: BoxFit.cover,
-            ),
+          child: Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppConstants.radius12),
+                child: Image.memory(
+                  base64Decode(controller.generatedImageBase64.value),
+                  fit: BoxFit.cover,
+                ),
+              ),
+              _buildReportBadge(context),
+            ],
           ),
         );
       }
 
       return AppGlassCard(
         padding: const EdgeInsets.all(AppConstants.spacing8),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppConstants.radius12),
-          child: Image.network(
-            controller.generatedImageUrl.value,
-            fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => const Center(
-              child: Icon(Icons.broken_image_outlined, size: 48),
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppConstants.radius12),
+              child: Image.network(
+                controller.generatedImageUrl.value,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const Center(
+                  child: Icon(Icons.broken_image_outlined, size: 48),
+                ),
+              ),
             ),
-          ),
+            _buildReportBadge(context),
+          ],
         ),
       );
     });
+  }
+
+  /// Small overlay button so users can report a generated try-on result
+  /// (Apple Guideline 1.2).
+  Widget _buildReportBadge(BuildContext context) {
+    final controller = Get.find<TryOnController>();
+    return Positioned(
+      top: AppConstants.spacing8,
+      right: AppConstants.spacing8,
+      child: Material(
+        color: Colors.black54,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () {
+            final url = controller.generatedImageUrl.value;
+            showReportContentSheet(
+              contentType: 'AI try-on image',
+              contentId: url.isNotEmpty ? url : 'tryon-result',
+            );
+          },
+          child: const Padding(
+            padding: EdgeInsets.all(6),
+            child: Icon(Icons.flag_outlined, color: Colors.white, size: 16),
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -13,6 +13,7 @@ from app.utils.image_processing import (
     MAX_BBOX_AREA_RATIO,
     MIN_BBOX_CONFIDENCE,
     crop_base64_image_to_box,
+    downscale_base64_image,
     resolve_product_reference_image,
 )
 
@@ -22,6 +23,59 @@ def _make_image_b64(size=(1000, 800), color=(255, 0, 0), fmt="JPEG") -> str:
     buf = io.BytesIO()
     img.save(buf, format=fmt, quality=90)
     return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+# =============================================================================
+# downscale_base64_image (draft-decode path)
+# =============================================================================
+
+
+def test_downscale_large_jpeg_uses_reduced_size_decode():
+    """A 6000x4000 JPEG (~24 MP) must downscale to <= max_edge with the
+    reduced-size DCT decode path (Image.draft) — the full-size pixel buffer
+    never exists, which is the point of the 2026-08-03 memory fix."""
+    original = _make_image_b64(size=(6000, 4000))
+
+    out = downscale_base64_image(original, max_edge=1568)
+
+    assert out != original
+    assert len(out) < len(original)
+    with Image.open(io.BytesIO(base64.b64decode(out))) as img:
+        assert img.format == "JPEG"
+        assert max(img.size) <= 1568
+        assert min(img.size) > 0
+
+
+def test_downscale_preserves_exif_orientation():
+    """EXIF transpose runs on the reduced image, so a rotated phone photo
+    comes out with correct final dimensions and no exception."""
+    img = Image.new("RGB", (3000, 2000), (0, 255, 0))
+    buf = io.BytesIO()
+    exif = img.getexif()
+    exif[0x0112] = 6  # rotate 270
+    img.save(buf, format="JPEG", exif=exif)
+
+    out = downscale_base64_image(base64.b64encode(buf.getvalue()).decode("utf-8"))
+    with Image.open(io.BytesIO(base64.b64decode(out))) as result:
+        assert max(result.size) <= 1568
+        assert min(result.size) > 0
+
+
+def test_downscale_passthrough_shortcut_for_small_jpeg():
+    """Images already within bounds and already JPEG pass through unchanged
+    (no pointless re-encode)."""
+    small = _make_image_b64(size=(800, 600))
+    assert downscale_base64_image(small) == small
+
+
+def test_downscale_garbage_input_falls_back():
+    not_an_image = base64.b64encode(b"not an image at all").decode("utf-8")
+    assert downscale_base64_image(not_an_image) == not_an_image
+
+
+def test_downscale_data_url_passthrough():
+    data_url = "data:image/jpeg;base64," + base64.b64encode(b"x").decode("utf-8")
+    assert downscale_base64_image(data_url) == data_url
 
 
 # =============================================================================

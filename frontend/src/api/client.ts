@@ -190,7 +190,11 @@ apiClient.interceptors.request.use(
       }
     }
 
-    if (token && config.headers) {
+    // Only attach the stored token when the caller did not already set an
+    // explicit Authorization header (e.g. oauth/sync passes the fresh OAuth
+    // token). Overwriting an explicit header here would swap in a stale
+    // localStorage token and sync the WRONG user's profile.
+    if (token && config.headers && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;

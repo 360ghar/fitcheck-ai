@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../features/settings/models/user_preferences_model.dart';
@@ -12,6 +14,17 @@ class ThemeService extends GetxController {
   PersistenceService get _persistence => Get.find<PersistenceService>();
 
   final Rx<AppThemeMode> _themeMode = _defaultTheme.obs;
+
+  final Completer<void> _ready = Completer<void>();
+
+  /// Completes once the cached theme has been read from storage.
+  ///
+  /// `main()` awaits this before `runApp`, so the very first build already
+  /// reflects the persisted theme. Without it, a dark-mode user sees a
+  /// light splash/frame flash until the async SharedPreferences read lands
+  /// (previously the load only won the race against `runApp` because of
+  /// incidental `await`s in `main()`).
+  Future<void> get ready => _ready.future;
 
   AppThemeMode get appThemeMode => _themeMode.value;
 
@@ -49,6 +62,9 @@ class ThemeService extends GetxController {
     } catch (e) {
       // Silently fail, use default theme
       debugPrint('Failed to load cached theme: $e');
+    } finally {
+      // Always resolve `ready` so `main()`'s await can never deadlock.
+      if (!_ready.isCompleted) _ready.complete();
     }
   }
 

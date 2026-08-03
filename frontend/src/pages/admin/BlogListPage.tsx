@@ -328,7 +328,7 @@ export default function BlogListPage() {
                 <TableRow key={post.id} className="group">
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-lg">
+                      <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center text-lg">
                         {post.emoji}
                       </div>
                       <div className="min-w-0">

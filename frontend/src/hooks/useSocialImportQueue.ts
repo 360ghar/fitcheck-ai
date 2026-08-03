@@ -441,7 +441,11 @@ export function useSocialImportQueue(): UseSocialImportQueue {
           isLoading: false,
           error: error instanceof Error ? error.message : 'Failed to resume social import job',
         }))
-        setActiveJobId(null)
+        // Only a definitive "job gone" (404) should drop the resume marker — a
+        // transient network blip must not make a live job unreachable next mount.
+        if ((error as { status?: number } | undefined)?.status === 404) {
+          setActiveJobId(null)
+        }
       })
   }, [applyJobData, connect])
 

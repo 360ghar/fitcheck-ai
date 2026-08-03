@@ -16,9 +16,10 @@ import httpx
 
 from app.agents.item_extraction_agent import get_item_extraction_agent
 from app.agents.image_generation_agent import get_image_generation_agent
-from app.core.concurrency import EXTRACTION_SEMAPHORE, GENERATION_SEMAPHORE
+from app.core.concurrency import EXTRACTION_SEMAPHORE, image_gen_slot
 from app.core.config import settings
 from app.core.exceptions import AIServiceError
+from app.core.image_executor import run_image_op
 from app.services.batch_job_service import (
     BatchJob,
     BatchJobService,
@@ -109,6 +110,19 @@ class BatchExtractionService:
             # Drain generation to completion (the consumer exits early on cancel).
             await stop_consumer(cancel=False)
 
+            # The consumer exits normally only by draining the sentinel. If it
+            # died on an unexpected error (agent construction, storage, a bug),
+            # stop_consumer's bare `except` would swallow the exception and this
+            # job would be marked COMPLETED with items silently never generated
+            # and no terminal failure event for the client. Surface it so the
+            # pipeline marks FAILED and emits job_failed instead.
+            if (
+                consumer_task is not None
+                and not consumer_task.cancelled()
+                and consumer_task.exception() is not None
+            ):
+                raise consumer_task.exception()
+
             if not job.is_cancelled():
                 await BatchJobService.update_status(job.job_id, BatchJobStatus.COMPLETED)
                 await self._broadcast_job_complete(job)
@@ -116,11 +130,21 @@ class BatchExtractionService:
                 # GET status / Flutter poll fallback still works. Free the
                 # SSE replay buffer which duplicates those payloads.
                 await BatchJobService.clear_event_history(job.job_id)
+                # Every successfully generated image was also persisted to a
+                # durable storage URL; drop the in-memory base64 so a finished
+                # job no longer pins multi-MB payloads for the whole finished
+                # TTL. Items whose upload failed keep their base64 (the URL is
+                # absent), so they still render from status polls.
+                await BatchJobService.release_generated_payloads(job.job_id)
 
         except asyncio.CancelledError:
             # Shutdown / task cancellation: stop the consumer (which cancels its
             # in-flight generation tasks and awaits them) before unwinding.
             await stop_consumer(cancel=True)
+            # Best-effort: free whatever completed generation payloads have
+            # durable URLs so a shutdown-triggered cancellation does not leave
+            # the job store pinning multi-MB base64 until its TTL.
+            await BatchJobService.release_generated_payloads(job.job_id)
             raise
         except Exception as e:
             logger.error(
@@ -147,6 +171,7 @@ class BatchExtractionService:
             })
             await BatchJobService.release_image_payloads(job.job_id)
             await BatchJobService.clear_event_history(job.job_id)
+            await BatchJobService.release_generated_payloads(job.job_id)
 
     async def _run_extraction_phase(
         self,
@@ -207,13 +232,10 @@ class BatchExtractionService:
         ):
             raise consumer_task.exception()
 
-        # Cache extraction results for single-image jobs (24-hour TTL)
-        if job.total_images == 1 and job.detected_items:
-            await self._cache_extraction_results(job)
-
-        # Source base64 is only needed for extraction (and the single-image
-        # cache key above). Drop it immediately so concurrent jobs do not
-        # pin tens of MB of RAM until the job TTL expires.
+        # Source base64 is only needed for extraction. Per-image release in
+        # _extract_single_image already freed each finished image (including
+        # the single-image cache write, which runs there before the release);
+        # this is the phase-end backstop for cancelled/never-started images.
         await BatchJobService.release_image_payloads(job.job_id)
 
     async def _skip_due_to_capacity(self, job: BatchJob, image_id: str) -> bool:
@@ -303,11 +325,11 @@ class BatchExtractionService:
                     )
 
             # ponytail: shrink the photo before the vision call. Off the event
-            # loop because PIL decode is CPU-bound and would stall heartbeats.
+            # loop because PIL decode is CPU-bound and would stall heartbeats,
+            # and on the bounded image executor so concurrent decodes cannot
+            # multiply past IMAGE_PROCESS_WORKERS (see app/core/image_executor).
             # Cache keys use the original payload (route looks up before this).
-            image_base64 = await asyncio.to_thread(
-                downscale_base64_image, image_base64
-            )
+            image_base64 = await run_image_op(downscale_base64_image, image_base64)
 
             try:
                 result = await with_retry(
@@ -349,6 +371,12 @@ class BatchExtractionService:
                             "Failed to enqueue items for generation",
                             extra={"job_id": job.job_id, "error": str(enqueue_err)},
                         )
+
+                # Cache extraction results for single-image jobs (24-hour TTL).
+                # Runs HERE, before the payload release below, because the
+                # cache key is hashed from the ORIGINAL input bytes.
+                if job.total_images == 1 and job.detected_items:
+                    await self._cache_extraction_results(job)
 
                 return items
 
@@ -404,6 +432,15 @@ class BatchExtractionService:
                 })
 
                 return []
+
+            finally:
+                # This image's extraction is done (success, failure, or
+                # cancellation): free its input base64 NOW instead of pinning
+                # it until every image in the batch finishes. The source photo
+                # is already persisted (generation re-fetches it by URL) and
+                # the single-image cache write above consumed the original
+                # bytes, so nothing downstream needs them.
+                await BatchJobService.release_single_image_payload(job.job_id, image_id)
 
     async def _fetch_user_avatar_base64(self) -> Optional[str]:
         """
@@ -485,25 +522,32 @@ class BatchExtractionService:
         """
         Consume detected-item batches and generate product images continuously.
 
-        Uses GENERATION_SEMAPHORE (process-wide ceiling, configurable via
-        AI_GENERATION_CONCURRENCY) for concurrency. A per-job local semaphore
-        (job.generation_batch_size) can only tighten below that ceiling.
-        Items are processed as they arrive rather than waiting for all extracts.
+        Uses the shared GENERATION_SEMAPHORE via image_gen_slot() (process-wide
+        ceiling, configurable via AI_GENERATION_CONCURRENCY) for concurrency. A
+        per-job local semaphore (job.generation_batch_size) can only tighten
+        below that ceiling. Items are processed as they arrive rather than
+        waiting for all extracts.
         """
         agent = None
         generation_started = False
         in_flight: set[asyncio.Task] = set()
         # Local semaphore so generation_batch_size can tighten below the
-        # process-wide GENERATION_SEMAPHORE ceiling when a caller passes a
-        # smaller value. The global cap (AI_GENERATION_CONCURRENCY, default
-        # 30) is the effective maximum; this local sem only narrows further.
+        # process-wide GENERATION_SEMAPHORE ceiling (acquired via
+        # image_gen_slot(), reentrant) when a caller passes a smaller value.
+        # The global cap (AI_GENERATION_CONCURRENCY, default 30) is the
+        # effective maximum; this local sem only narrows further.
         ceiling = max(1, settings.AI_GENERATION_CONCURRENCY)
         concurrent_cap = max(1, min(ceiling, job.generation_batch_size or ceiling))
         local_sem = asyncio.Semaphore(concurrent_cap)
         # Consumer-scoped cache of source-photo downloads, keyed by URL.
-        # Sibling items detected across one or more batches share a photo, so
-        # this turns N downloads of one multi-MB JPEG into one per unique photo.
+        # Sibling items within a batch share a photo, so this turns N
+        # downloads of one multi-MB JPEG into one per unique photo per batch.
+        # Refcounted: an entry is dropped as soon as the last pending item
+        # referencing it has been dispatched (see the dispatch loop), so a
+        # 50-photo job never pins every source photo for the whole
+        # generation phase.
         photo_cache: Dict[str, Optional[str]] = {}
+        photo_refcounts: Dict[str, int] = {}
 
         async def run_one(item: DetectedItemData, reference_image_base64: Optional[str]) -> None:
             async with local_sem:
@@ -552,22 +596,50 @@ class BatchExtractionService:
                         },
                     )
 
+                # Pass 1 — count how many sibling items in this batch share
+                # each source photo, so one download serves all of them (the
+                # entry survives until the LAST sibling has been dispatched,
+                # see the dispatch loop). No downloads yet: each item's photo
+                # resolves right before its own task is dispatched, so the
+                # previous item's generation overlaps this download instead of
+                # the whole batch serializing on pass 1.
+                for item in batch:
+                    src_url = getattr(item, "source_image_url", None)
+                    if src_url:
+                        photo_refcounts[src_url] = photo_refcounts.get(src_url, 0) + 1
+
                 for item in batch:
                     if job.is_cancelled():
                         break
-                    # Resolve this item's source photo via the shared cache
-                    # before dispatch, so sibling items on the same photo share
-                    # one download instead of each re-GETting it under the
-                    # generation semaphore.
                     src_url = getattr(item, "source_image_url", None)
-                    reference_image_base64: Optional[str] = None
+                    reference_image_base64 = None
                     if src_url:
                         if src_url not in photo_cache:
-                            photo_cache[src_url] = await StorageService.download_to_base64(src_url)
+                            # Download + downscale in one pass: the raw bytes
+                            # go straight to a reduced-size decode (never a
+                            # full-size base64 round-trip), and the PIL work
+                            # runs on the bounded image executor. A miss
+                            # re-downloads: refcounts are per batch, so the
+                            # entry was already dropped when the previous
+                            # batch's last sibling dispatched.
+                            photo_cache[src_url] = (
+                                await StorageService.download_and_downscale_to_base64(
+                                    src_url
+                                )
+                            )
                         reference_image_base64 = photo_cache[src_url]
                     task = asyncio.create_task(run_one(item, reference_image_base64))
                     in_flight.add(task)
                     task.add_done_callback(in_flight.discard)
+                    # Release the cache entry as soon as the last item
+                    # referencing it has been dispatched (the dispatched task
+                    # holds its own reference), so a 50-photo job never pins
+                    # every source photo for the whole generation phase.
+                    if src_url:
+                        photo_refcounts[src_url] = photo_refcounts[src_url] - 1
+                        if photo_refcounts[src_url] <= 0:
+                            photo_cache.pop(src_url, None)
+                            photo_refcounts.pop(src_url, None)
 
             # Wait for all in-flight generations
             if in_flight:
@@ -612,7 +684,10 @@ class BatchExtractionService:
         if job.is_cancelled():
             return None
 
-        async with GENERATION_SEMAPHORE:
+        # image_gen_slot() is the reentrant wrapper over GENERATION_SEMAPHORE
+        # (shared process-wide with try-on/outfit/photoshoot); the generation
+        # entry point re-acquires it internally, which is a no-op here.
+        async with image_gen_slot():
             if job.is_cancelled():
                 return None
 
@@ -649,7 +724,11 @@ class BatchExtractionService:
                 sibling_count = sum(
                     1 for i in job.detected_items if i.image_id == item.image_id
                 )
-                reference_image_base64, reference_strategy = resolve_product_reference_image(
+                # Runs on the bounded image executor: the crop branch decodes
+                # and re-encodes the full source photo (tens of MB transient)
+                # and must not sit on the event loop.
+                reference_image_base64, reference_strategy = await run_image_op(
+                    resolve_product_reference_image,
                     reference_image_base64,
                     item.bounding_box,
                     item.confidence,
@@ -695,10 +774,41 @@ class BatchExtractionService:
 
                 image_base64 = result.image_base64
 
+                # Persist a durable URL so the item's base64 can be freed at
+                # job end (see release_generated_payloads), status polls and
+                # SSE history stay base64-free, and a recovered/reloaded job
+                # still returns the image. Best-effort: a failed upload
+                # degrades to base64-only delivery, exactly like photoshoot.
+                image_url = None
+                if getattr(job, "persistence_db", None) is not None:
+                    try:
+                        raw = (
+                            image_base64.split("base64,", 1)[-1]
+                            if "base64," in image_base64
+                            else image_base64
+                        )
+                        upload = await StorageService.upload_temp_generated_image(
+                            db=job.persistence_db,
+                            user_id=job.user_id,
+                            file_data=base64.b64decode(raw),
+                            source="batch",
+                        )
+                        image_url = upload.get("image_url")
+                    except Exception as upload_error:
+                        logger.warning(
+                            "Generated image upload failed; keeping base64 in memory",
+                            extra={
+                                "job_id": job.job_id,
+                                "temp_id": item.temp_id,
+                                "error": str(upload_error),
+                            },
+                        )
+
                 await BatchJobService.update_item_generation(
                     job.job_id,
                     item.temp_id,
                     generated_image_base64=image_base64,
+                    generated_image_url=image_url,
                 )
 
                 await BatchJobService.broadcast_event(job.job_id, "item_generation_complete", {
@@ -783,7 +893,13 @@ class BatchExtractionService:
             )
 
     async def _broadcast_job_complete(self, job: BatchJob) -> None:
-        """Broadcast job completion with full results."""
+        """Broadcast job completion with full results.
+
+        Items with a persisted storage URL ship without their base64 (the URL
+        is authoritative and already uploaded; clients render URL-first). Items
+        whose upload failed keep base64 so their image still reaches the
+        client — see release_generated_payloads for the matching memory rule.
+        """
         await BatchJobService.broadcast_event(job.job_id, "job_complete", {
             "job_id": job.job_id,
             "total_images": job.total_images,
@@ -792,6 +908,13 @@ class BatchExtractionService:
             "failed_extractions": len(job.extraction_failed),
             "successful_generations": len(job.generation_completed),
             "failed_generations": len(job.generation_failed),
-            "items": [item.to_dict() for item in job.detected_items],
+            "items": [
+                (
+                    {**item.to_dict(), "generated_image_base64": None}
+                    if item.generated_image_url
+                    else item.to_dict()
+                )
+                for item in job.detected_items
+            ],
             "timestamp": utcnow_iso(),
         })

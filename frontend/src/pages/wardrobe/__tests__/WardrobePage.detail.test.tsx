@@ -84,6 +84,7 @@ describe('WardrobePage detail selection is driven by the URL', () => {
       selectedItem: null,
       selectedItems: new Set(),
       isLoading: false,
+      hasLoaded: false,
       isDetailLoading: false,
       error: null,
     })
@@ -119,5 +120,28 @@ describe('WardrobePage detail selection is driven by the URL', () => {
     await waitFor(() => expect(screen.getByTestId('pathname')).toHaveTextContent('/wardrobe'))
     expect(screen.getByTestId('pathname').textContent).toBe('/wardrobe')
     expect(getItems).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not flash "Your closet is empty" before the first fetch resolves', async () => {
+    // A pending fetch: the store has not loaded yet, so the grid must read as
+    // loading, NOT as an empty closet.
+    vi.mocked(getItems).mockReturnValue(new Promise(() => undefined))
+    renderPage()
+
+    expect(screen.queryByText('Your closet is empty')).not.toBeInTheDocument()
+  })
+
+  it('shows "Your closet is empty" only once a genuinely-empty fetch has resolved', async () => {
+    vi.mocked(getItems).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      total_pages: 0,
+      has_prev: false,
+      has_next: false,
+    })
+    renderPage()
+
+    expect(await screen.findByText('Your closet is empty')).toBeInTheDocument()
   })
 })

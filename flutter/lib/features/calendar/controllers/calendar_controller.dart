@@ -116,11 +116,12 @@ class CalendarController extends GetxController {
   void _groupEventsByDate() {
     eventsByDate.clear();
     for (final event in events) {
-      final key = DateTime(
-        event.startTime.year,
-        event.startTime.month,
-        event.startTime.day,
-      );
+      // Normalize to the local calendar day. The API may return UTC
+      // timestamps (Z suffix); grouping on the raw UTC fields would shift
+      // evening events onto the next day for timezones behind UTC, which
+      // would not match the grid's local-day keys.
+      final local = event.startTime.toLocal();
+      final key = DateTime(local.year, local.month, local.day);
       eventsByDate[key] = [...eventsByDate[key] ?? [], event];
     }
   }

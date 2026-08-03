@@ -38,7 +38,7 @@ from app.services.social_import_job_store import SocialImportJobStore
 from app.services.social_import_pipeline_service import SocialImportPipelineService
 from app.services.social_oauth_service import SocialOAuthService
 from app.services.social_url_service import SocialURLService
-from app.utils.sse_queue import SSE_QUEUE_MAXSIZE, STREAM_OVERFLOW
+from app.utils.sse_queue import SSE_QUEUE_MAXSIZE, STREAM_OVERFLOW, note_consumed
 
 router = APIRouter()
 
@@ -328,7 +328,10 @@ async def social_import_events(
 
             while True:
                 try:
-                    event = await asyncio.wait_for(queue.get(), timeout=30)
+                    # Items are (event, size) tuples; report consumption so
+                    # the byte budget tracks only buffered data.
+                    event, event_size = await asyncio.wait_for(queue.get(), timeout=30)
+                    note_consumed(queue, event_size)
                     max_replayed_id = event.get("id") or max_replayed_id
                     payload = {
                         "event": event["type"],

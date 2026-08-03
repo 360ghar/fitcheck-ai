@@ -6,6 +6,9 @@ import '../constants/app_constants.dart';
 export 'app_image.dart';
 export 'app_image_viewer.dart';
 
+// Export offline/error banner
+export 'app_error_banner.dart';
+
 // Export shimmer/skeleton widgets
 export 'shimmer_widgets.dart';
 

@@ -11,7 +11,7 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 from app.utils.datetime_util import utcnow, utcnow_iso
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
@@ -46,7 +46,7 @@ from app.models.outfit import (
     OutfitCollectionUpdate,
 )
 from app.services.storage_service import MAX_FILE_SIZE, StorageService
-from app.utils.db import execute_with_reconnect
+from app.utils.db import execute_with_reconnect, safe_search_term
 
 logger = get_context_logger(__name__)
 
@@ -312,7 +312,6 @@ async def list_outfits(
     db: Client = Depends(get_db),
 ):
     try:
-        query = db.table("outfits").select("*, outfit_images(*)").eq("user_id", user_id)
         styles_value = styles if isinstance(styles, str) else None
         seasons_value = seasons if isinstance(seasons, str) else None
         favorites_value = favorites_only if isinstance(favorites_only, bool) else None
@@ -324,61 +323,81 @@ async def list_outfits(
             effective_styles = [style]
         if season:
             effective_seasons = [season]
-        if effective_favorite is not None:
-            query = query.eq("is_favorite", effective_favorite)
-        if effective_styles:
-            query = query.in_("style", effective_styles)
-        if effective_seasons:
-            query = query.in_("season", effective_seasons)
-        if drafts_value is not None:
-            query = query.eq("is_draft", drafts_value)
-        if tags:
-            tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-            if tag_list:
-                query = query.contains("tags", tag_list)
-        if search:
-            like = f"%{search}%"
-            query = query.or_(f"name.ilike.{like},description.ilike.{like}")
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
 
-        count_q = db.table("outfits").select("id", count="exact").eq("user_id", user_id)
-        if effective_favorite is not None:
-            count_q = count_q.eq("is_favorite", effective_favorite)
-        if effective_styles:
-            count_q = count_q.in_("style", effective_styles)
-        if effective_seasons:
-            count_q = count_q.in_("season", effective_seasons)
-        if drafts_value is not None:
-            count_q = count_q.eq("is_draft", drafts_value)
-        if tags:
-            tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+        # Shared filter application for both the count and the page query.
+        # Rebuilding from the passed client `d` lets execute_with_reconnect
+        # replay the whole query through a fresh client when the pooled
+        # Supabase connection is dead (ConnectionTerminated 500s observed on
+        # /outfits 2026-08-03; one list took 121s before failing).
+        def _apply_outfit_filters(q: Any) -> Any:
+            if effective_favorite is not None:
+                q = q.eq("is_favorite", effective_favorite)
+            if effective_styles:
+                q = q.in_("style", effective_styles)
+            if effective_seasons:
+                q = q.in_("season", effective_seasons)
+            if drafts_value is not None:
+                q = q.eq("is_draft", drafts_value)
             if tag_list:
-                count_q = count_q.contains("tags", tag_list)
-        if search:
-            like = f"%{search}%"
-            count_q = count_q.or_(f"name.ilike.{like},description.ilike.{like}")
-        count_res = await asyncio.to_thread(count_q.execute)
-        total = getattr(count_res, "count", len(count_res.data or []))
+                q = q.contains("tags", tag_list)
+            if search:
+                like = f"%{safe_search_term(search)}%"
+                q = q.or_(f"name.ilike.{like},description.ilike.{like}")
+            return q
 
+        def _build_list_query(d: Any, *, count_only: bool = False, page_range: bool = False) -> Any:
+            if count_only:
+                q = d.table("outfits").select("id", count="exact").eq("user_id", user_id)
+            else:
+                q = d.table("outfits").select("*, outfit_images(*)").eq("user_id", user_id)
+            q = _apply_outfit_filters(q)
+            if page_range:
+                q = q.order("created_at", desc=True).range(start, end)
+            return q
+
+        # The whole read (count + page + item batch) runs in ONE wrapped
+        # coroutine so a dead pooled Supabase connection triggers a single
+        # client rebuild and the retry replays every query through the fresh
+        # client - instead of each query self-healing separately (which would
+        # leave the later queries on the original dead client for one more
+        # failed round-trip). ConnectionTerminated 500s observed on /outfits
+        # 2026-08-03 (one list took 121s before failing).
         start = (page - 1) * page_size
         end = start + page_size - 1
-        res = await asyncio.to_thread(query.order("created_at", desc=True).range(start, end).execute)
-        outfits = [_normalize_outfit_images(o) for o in (res.data or [])]
 
-        # Fetch all items for all outfits in a single batch query
-        all_item_ids: List[str] = []
-        for outfit in outfits:
-            all_item_ids.extend(outfit.get("item_ids") or [])
-        all_item_ids = list(set(all_item_ids))  # dedupe
+        async def _list_outfits_data(d: Any) -> Tuple[Any, int, Dict[str, Dict[str, Any]]]:
+            count_res = await asyncio.to_thread(_build_list_query(d, count_only=True).execute)
+            total = getattr(count_res, "count", len(count_res.data or []))
 
-        items_map: Dict[str, Dict[str, Any]] = {}
-        if all_item_ids:
-            items_res = await asyncio.to_thread(db.table("items").select("*, item_images(*)").in_("id", all_item_ids).execute)
-            for item in (items_res.data or []):
-                # Transform item_images to have 'url' field for Flutter compatibility
-                item_images = item.get("item_images") or []
-                for img in item_images:
-                    img["url"] = img.get("image_url") or img.get("thumbnail_url") or ""
-                items_map[str(item["id"])] = item
+            res = await asyncio.to_thread(_build_list_query(d, page_range=True).execute)
+            outfits = [_normalize_outfit_images(o) for o in (res.data or [])]
+
+            # Fetch all items for all outfits in a single batch query
+            all_item_ids: List[str] = []
+            for outfit in outfits:
+                all_item_ids.extend(outfit.get("item_ids") or [])
+            all_item_ids = list(set(all_item_ids))  # dedupe
+
+            items_map: Dict[str, Dict[str, Any]] = {}
+            if all_item_ids:
+                items_res = await asyncio.to_thread(
+                    d.table("items").select("*, item_images(*)").in_("id", all_item_ids).execute
+                )
+                for item in (items_res.data or []):
+                    # Transform item_images to have 'url' field for Flutter compatibility
+                    item_images = item.get("item_images") or []
+                    for img in item_images:
+                        img["url"] = img.get("image_url") or img.get("thumbnail_url") or ""
+                    items_map[str(item["id"])] = item
+
+            return outfits, total, items_map
+
+        outfits, total, items_map = await execute_with_reconnect(
+            lambda d: _list_outfits_data(d),
+            db,
+            extra={"operation": "list_outfits", "user_id": user_id},
+        )
 
         # Attach items to each outfit
         for outfit in outfits:
@@ -441,7 +460,7 @@ async def available_items(
         raise DatabaseError("Failed to fetch available items", operation="select")
 
 
-@router.get("/{outfit_id}", response_model=DataResponse[OutfitResponse])
+@router.get("/{outfit_id:uuid}", response_model=DataResponse[OutfitResponse])
 async def get_outfit(
     outfit_id: UUID,
     user_id: str = Depends(get_current_user_id),

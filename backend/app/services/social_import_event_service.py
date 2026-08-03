@@ -8,7 +8,7 @@ import asyncio
 from typing import Any, Dict, List, Optional
 
 from app.services.social_import_job_store import SocialImportJobStore
-from app.utils.sse_queue import fanout
+from app.utils.sse_queue import discard_subscriber, fanout
 
 
 class SocialImportEventService:
@@ -32,6 +32,11 @@ class SocialImportEventService:
                 queues.remove(queue)
             if not queues:
                 cls._subscribers.pop(job_id, None)
+            # Drain the queue and drop its byte-ledger entry (see
+            # sse_queue.discard_subscriber): a disconnected client's
+            # buffered events must not stay pinned by the ledger's strong
+            # reference.
+            discard_subscriber(queue)
 
     @classmethod
     async def publish(

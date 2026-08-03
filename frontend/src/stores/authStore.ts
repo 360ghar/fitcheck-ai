@@ -232,17 +232,22 @@ export const useAuthStore = create<AuthState>()(
           if (error) throw error;
           if (!session) throw new Error('No session found');
 
-          // Get pending referral code from localStorage (saved before OAuth redirect)
+          // Get pending referral code from localStorage (saved before OAuth
+          // redirect). It stays stashed until the sync actually succeeds so a
+          // failed callback (transient getSession/sync error) can be retried
+          // without silently dropping the referral.
           const pendingReferralCode = localStorage.getItem('pending_referral_code');
-          if (pendingReferralCode) {
-            localStorage.removeItem('pending_referral_code');
-          }
 
           // Sync profile with backend
           const { user, is_new_user, referral } = await authApi.syncOAuthProfile(
             session.access_token,
             pendingReferralCode || undefined
           );
+
+          // Consumed once the sync succeeded (whether the code was valid or not).
+          if (pendingReferralCode) {
+            localStorage.removeItem('pending_referral_code');
+          }
 
           const tokens = {
             access_token: session.access_token,

@@ -765,7 +765,7 @@ class ItemAddController extends GetxController {
       if (savedCount > 0) {
         _wardrobeSync.addItems(createdItems.toList());
         Get.back(); // Close item add page
-        ErrorHandler.showSuccess('$savedCount of ${includedItems.length} item(s) added to your wardrobe', title: 'Success');
+        ErrorHandler.showSuccess('$savedCount of ${includedItems.length} item(s) added to your closet', title: 'Success');
       } else {
         ErrorHandler.showError('Could not save items. Please try again.', title: 'Failed');
       }
@@ -847,7 +847,7 @@ class ItemAddController extends GetxController {
       if (savedCount > 0) {
         _wardrobeSync.addItems(createdItems.toList());
         Get.back(); // Close item add page
-        ErrorHandler.showSuccess('$savedCount of ${itemsToSave.length} item(s) added to your wardrobe', title: 'Success');
+        ErrorHandler.showSuccess('$savedCount of ${itemsToSave.length} item(s) added to your closet', title: 'Success');
       } else {
         ErrorHandler.showError('Could not save items. Please try again.', title: 'Failed');
       }

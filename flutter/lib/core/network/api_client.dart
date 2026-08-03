@@ -12,8 +12,15 @@ class ApiClient {
   static ApiClient get instance => _instance;
 
   Dio? _dio;
+  bool _interceptorsAdded = false;
 
   /// Initialize the API client
+  ///
+  /// Idempotent: the first access to [dio] may already have initialized the
+  /// instance (lazily), and [InitialBinding] calls this again on boot. Without
+  /// the guard, re-running would append a second copy of every interceptor,
+  /// so each request would carry the auth header twice and 401-refresh could
+  /// recurse.
   void initialize({String? baseUrl}) {
     _dio ??= Dio(
       BaseOptions(
@@ -28,6 +35,8 @@ class ApiClient {
       ),
     );
 
+    if (_interceptorsAdded) return;
+    _interceptorsAdded = true;
     _addInterceptors();
   }
 

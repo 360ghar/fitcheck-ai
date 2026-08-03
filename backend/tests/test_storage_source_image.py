@@ -3,7 +3,7 @@ Tests for StorageService.upload_source_image and download_to_base64.
 """
 
 import io
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from PIL import Image
@@ -95,6 +95,8 @@ async def test_download_to_base64_round_trips_bytes_through_httpx():
     """download_to_base64 should base64-encode the fetched body."""
     import base64
 
+    from app.services import storage_service
+
     payload = _image_bytes("PNG")
 
     fake_response = MagicMock()
@@ -105,10 +107,8 @@ async def test_download_to_base64_round_trips_bytes_through_httpx():
 
     fake_client = MagicMock()
     fake_client.stream = MagicMock(return_value=_Stream(fake_response))
-    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
-    fake_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("app.services.storage_service.httpx.AsyncClient", return_value=fake_client):
+    with patch.object(storage_service, "_download_client", fake_client):
         result = await StorageService.download_to_base64(
             f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/public/items/img.png"
         )
@@ -121,6 +121,8 @@ async def test_download_to_base64_returns_none_on_http_error():
     """download_to_base64 must never raise — it returns None so callers can
     gracefully fall back to text-only generation."""
 
+    from app.services import storage_service
+
     fake_response = MagicMock()
     fake_response.status_code = 404
     fake_response.headers = {}
@@ -128,10 +130,8 @@ async def test_download_to_base64_returns_none_on_http_error():
 
     fake_client = MagicMock()
     fake_client.stream = MagicMock(return_value=_Stream(fake_response))
-    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
-    fake_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("app.services.storage_service.httpx.AsyncClient", return_value=fake_client):
+    with patch.object(storage_service, "_download_client", fake_client):
         result = await StorageService.download_to_base64(
             f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/public/items/missing.png"
         )

@@ -10,14 +10,39 @@ import '../controllers/wardrobe_controller.dart';
 import '../models/item_model.dart';
 
 /// Detail page for a single wardrobe item
-class ItemDetailPage extends StatelessWidget {
+class ItemDetailPage extends StatefulWidget {
   final String itemId;
 
   const ItemDetailPage({super.key, required this.itemId});
 
   @override
+  State<ItemDetailPage> createState() => _ItemDetailPageState();
+}
+
+class _ItemDetailPageState extends State<ItemDetailPage> {
+  @override
+  void initState() {
+    super.initState();
+    _loadItem();
+  }
+
+  /// If the item is not already on the loaded closet page (deep link, or an
+  /// item on a later page), fetch it so we never strand the user on an
+  /// infinite shimmer.
+  Future<void> _loadItem() async {
+    final controller = Get.find<WardrobeController>();
+    final item = controller.items.firstWhereOrNull(
+      (i) => i.id == widget.itemId,
+    );
+    if (item == null) {
+      await controller.fetchItemById(widget.itemId);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final tokens = AppUiTokens.of(context);
+    final String itemId = widget.itemId;
     final WardrobeController wardrobeController =
         Get.find<WardrobeController>();
 
@@ -31,6 +56,11 @@ class ItemDetailPage extends StatelessWidget {
                 final item = wardrobeController.items.firstWhereOrNull(
                   (i) => i.id == itemId,
                 );
+
+                if (item == null &&
+                    wardrobeController.itemFetchError.value.isNotEmpty) {
+                  return _buildItemError(wardrobeController, tokens);
+                }
 
                 if (item == null) {
                   return const ShimmerDetailPage();
@@ -266,6 +296,47 @@ class ItemDetailPage extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildItemError(
+    WardrobeController wardrobeController,
+    AppUiTokens tokens,
+  ) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.spacing24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: tokens.textMuted),
+            const SizedBox(height: AppConstants.spacing16),
+            Text(
+              'Failed to load item',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: tokens.textPrimary,
+              ),
+            ),
+            const SizedBox(height: AppConstants.spacing8),
+            Text(
+              wardrobeController.itemFetchError.value,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: tokens.textMuted,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppConstants.spacing16),
+            ElevatedButton.icon(
+              onPressed: () {
+                wardrobeController.itemFetchError.value = '';
+                _loadItem();
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
         ),
       ),
     );
@@ -535,7 +606,7 @@ class ItemDetailPage extends StatelessWidget {
                 onPressed: () {
                   // Navigate to edit page
                   Get.toNamed(
-                    Routes.wardrobeItemEdit.replaceFirst(':id', itemId),
+                    Routes.wardrobeItemEdit.replaceFirst(':id', widget.itemId),
                   );
                 },
                 icon: const Icon(Icons.edit),
@@ -546,10 +617,10 @@ class ItemDetailPage extends StatelessWidget {
             Expanded(
               child: Obx(
                 () => ElevatedButton.icon(
-                  onPressed: controller.isMarkingWorn(itemId)
+                  onPressed: controller.isMarkingWorn(widget.itemId)
                       ? null
-                      : () => controller.markAsWorn(itemId),
-                  icon: controller.isMarkingWorn(itemId)
+                      : () => controller.markAsWorn(widget.itemId),
+                  icon: controller.isMarkingWorn(widget.itemId)
                       ? const SizedBox(
                           width: 18,
                           height: 18,
@@ -557,7 +628,7 @@ class ItemDetailPage extends StatelessWidget {
                         )
                       : const Icon(Icons.checkroom),
                   label: Text(
-                    controller.isMarkingWorn(itemId)
+                    controller.isMarkingWorn(widget.itemId)
                         ? 'Marking...'
                         : 'Mark Worn',
                   ),

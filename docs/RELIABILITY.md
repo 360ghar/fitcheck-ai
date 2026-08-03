@@ -24,6 +24,35 @@ Stripe, browser-E2E, mobile integration, or production-load behavior.
 - Photoshoot concurrency defaults to 2; reference photos are downscaled before gen to limit RAM.
 - Railway single-worker process: OS `Killed` after AI bursts usually means OOM.
   - Code mitigations: downscale payloads, job caps, HTTP/1.1 AI client, lower AI semaphores, release base64 after use.
+  - 2026-08-03 deep pass (see `docs/exec-plans/active/2026-08-03-512mb-memory-budget.md`):
+    - `/health` and `log_memory` report **current RSS** (`VmRSS` from
+      `/proc/self/status`; getrusage fallback on macOS) — `ru_maxrss` was the
+      all-time peak and never decreased, so it hid whether memory actually
+      returned to baseline.
+    - CPU-bound image work (downscale, bbox crop, matte, storage validation)
+      runs on a **bounded executor** (`app/core/image_executor.py`,
+      `IMAGE_PROCESS_WORKERS`, default 4). `asyncio.to_thread` uses the
+      default pool sized to host cores (up to 32 on Railway), which let that
+      many full-res decodes run concurrently.
+    - Reference images travel **bare base64** through multimodal messages;
+      the OpenAI-compatible path wraps to a data URL only at wire
+      serialization and Gemini sniffs the mime from the first bytes. No
+      full-size data-URL copy per image per call.
+    - Job lifecycle frees payloads at the right time: per-image source base64
+      is released as each extraction finishes, generated images are uploaded
+      to a storage URL at generation time, and terminal job state drops
+      `generated_image_base64` (upload failure keeps it). SSE live events
+      still carry base64; history/status are URL-only.
+    - SSE subscriber queues enforce a **byte budget**
+      (`SSE_QUEUE_MAX_BUFFERED_BYTES`, default 16 MB) on top of the 100-event
+      cap; `event_history` stores base64-stripped, bounded events.
+    - Stored exceptions drop their tracebacks (`__traceback__ = None`) so
+      `ParallelResult.error` cannot pin multi-MB frame locals.
+    - Allocator + GC: `MALLOC_ARENA_MAX=2`, `MALLOC_TRIM_THRESHOLD_=0`,
+      `gc.freeze()` + `gc.set_threshold(700, 5, 5)` at startup, one
+      `gc.collect()` after background startup.
+  - Memory targets: baseline ≤ ~250 MB, storm peak < ~450 MB on the 512 MB
+    instance, RSS returns to baseline after jobs finish.
   - If kills continue after those: **raise Railway instance memory**.
   - Idle RSS above ~350 MB after completed jobs is a smell; check unreleased job maps / caches.
 

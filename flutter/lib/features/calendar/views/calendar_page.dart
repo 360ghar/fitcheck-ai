@@ -84,7 +84,13 @@ class _CalendarPageState extends State<CalendarPage> {
             : const SizedBox.shrink()),
         IconButton(
           icon: const Icon(Icons.today),
-          onPressed: () => controller.selectDate(DateTime.now()),
+          onPressed: () {
+            // Jump both the month grid and the selected day to today, so the
+            // button visibly works from any displayed month.
+            final now = DateTime.now();
+            controller.selectDate(now);
+            controller.changeFocusedDate(now);
+          },
           tooltip: 'Go to Today',
         ),
       ],

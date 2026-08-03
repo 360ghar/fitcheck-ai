@@ -262,7 +262,9 @@ class SocialScraperService:
                 error_message=f"Network error: {str(e)}",
             )
         except Exception as e:
-            cls._logger.error(
+            # Keep the full traceback so production failures are diagnosable,
+            # not just the stringified message (SIMPLIFY B1).
+            cls._logger.exception(
                 "Unexpected error during Instagram login",
                 extra={"error": str(e)},
             )

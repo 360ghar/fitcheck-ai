@@ -80,6 +80,16 @@ async def parallel_with_retry(
             )
             pr = ParallelResult(success=True, data=result, index=index)
         except Exception as e:
+            # Drop the traceback chain before storing: a retained exception
+            # pins every frame in __traceback__ and their locals — which in
+            # the image pipeline hold multi-MB base64 strings — for as long as
+            # the ParallelResult lives (potentially the whole job). The
+            # exception TYPE, message, and attributes (retryable/error_kind)
+            # are all callers ever inspect.
+            try:
+                e.__traceback__ = None
+            except Exception:
+                pass
             logger.warning(
                 "Item failed after all retries",
                 extra={
@@ -160,6 +170,14 @@ async def parallel_map_settled(
             result = await fn(item)
             return ParallelResult(success=True, data=result, index=index)
         except Exception as e:
+            # Drop the traceback chain before storing: a retained exception
+            # pins its frames' locals (multi-MB base64 strings) for as long as
+            # the ParallelResult lives. Type/message/attributes are all
+            # callers inspect.
+            try:
+                e.__traceback__ = None
+            except Exception:
+                pass
             return ParallelResult(success=False, error=e, index=index)
 
     tasks = [process_item(item, i) for i, item in enumerate(items)]

@@ -255,6 +255,104 @@ def to_data_url(image_base64: str) -> str:
     return f"data:{mime or 'image/jpeg'};base64,{image_base64}"
 
 
+# Formats whose decoders support reduced-size draft decode (Pillow
+# ``Image.draft``). Everything else decodes fully — draft() is a no-op there.
+_DRAFTABLE_FORMATS = frozenset({"JPEG", "MPO"})
+
+
+def _downscale_bytes(
+    raw: bytes,
+    max_edge: int,
+    quality: int,
+) -> Tuple[Optional[bytes], bool]:
+    """Return (jpeg_bytes, had_alpha) for raw image bytes, or (None, False)
+    on passthrough/failure.
+
+    MEMORY (the reason this exists): a 12-48 MP phone photo decodes to
+    36-144 MB of RGB before it is shrunk, and the old code added a second
+    full-size copy for EXIF transpose and alpha flatten. For JPEG sources we
+    request a reduced-size DCT decode (`Image.draft`) up front and materialize
+    it with `load()`, so the full-size pixel buffer never exists. EXIF
+    transpose and alpha flatten then run on the already-reduced image.
+
+    Passthrough (returns None) when the input is already a small JPEG — the
+    caller keeps its original bytes and skips the re-encode entirely.
+    """
+    try:
+        with Image.open(io.BytesIO(raw)) as img:
+            src_format = img.format
+            src_size = img.size
+            if src_format in _DRAFTABLE_FORMATS:
+                try:
+                    # Reduced-size decode; .size then reflects the loaded
+                    # (reduced) dimensions, so all downstream geometry
+                    # (transpose, thumbnail, size comparison) is consistent.
+                    img.draft("RGB", (max_edge, max_edge))
+                    img.load()
+                except Exception:
+                    pass
+            img = ImageOps.exif_transpose(img)  # honour phone orientation
+
+            # Flatten transparency onto white so JPEG has no alpha channel.
+            had_alpha = img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info
+            # had_alpha (not a mode whitelist): a palette+alpha (PA) image or
+            # a P-mode image with a transparency key must also flatten, or
+            # transparent pixels render with their source palette/L values
+            # instead of white.
+            if had_alpha:
+                background = Image.new("RGB", img.size, (255, 255, 255))
+                rgba = img.convert("RGBA")
+                background.paste(rgba, mask=rgba.getchannel("A"))
+                img = background
+            elif img.mode != "RGB":
+                img = img.convert("RGB")
+
+            # thumbnail() is a no-op when already smaller (never upscales).
+            img.thumbnail((max_edge, max_edge))
+
+            # Already within bounds and already a JPEG - nothing to gain, and
+            # skipping the re-encode keeps CPU off images that are fine as-is.
+            # Only when no alpha was flattened: a transparent source MUST be
+            # re-encoded (flattening is load-bearing, see downscale_base64_image).
+            if not had_alpha and img.size == src_size and src_format == "JPEG":
+                return None, False
+
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=quality, optimize=True)
+            return buf.getvalue(), had_alpha
+    except Exception:
+        return None, False
+
+
+def downscale_image_bytes_to_base64(
+    raw: bytes,
+    max_edge: int = DEFAULT_MAX_EDGE,
+    quality: int = DEFAULT_QUALITY,
+) -> str:
+    """Downscale raw image bytes to an opaque JPEG base64. Never raises.
+
+    Core used by ``downscale_base64_image`` AND by
+    ``StorageService.download_and_downscale_to_base64`` so a downloaded
+    reference image never round-trips through full-size base64. On failure or
+    passthrough, returns the raw bytes as base64 so callers still have a
+    usable (if large) image.
+    """
+    jpeg, had_alpha = _downscale_bytes(raw, max_edge, quality)
+    if jpeg is None:
+        return base64.b64encode(raw).decode("utf-8")
+    result = base64.b64encode(jpeg).decode("utf-8")
+    if had_alpha:
+        return result
+    raw_b64 = base64.b64encode(raw).decode("utf-8")
+    # ponytail: if re-encoding somehow made it bigger, keep the original -
+    # UNLESS the source carried alpha. A lossy WebP cutout from
+    # background_removal.py is routinely SMALLER than its flattened JPEG
+    # (measured 10KB vs 27KB), so without this exemption the size check
+    # would hand the model back the transparent original and quietly undo
+    # the flatten this function exists to guarantee.
+    return result if len(result) < len(raw_b64) else raw_b64
+
+
 def downscale_base64_image(
     image_base64: str,
     max_edge: int = DEFAULT_MAX_EDGE,
@@ -281,51 +379,22 @@ def downscale_base64_image(
     `background_removal.py` is the inverse operation and the only place alpha
     is ever created. Keep the two apart.
     """
+    # Data URLs were never processed historically (b64decode would fail) and
+    # were returned unchanged; preserve that contract exactly.
+    if image_base64.startswith("data:"):
+        return image_base64
     try:
         raw = base64.b64decode(image_base64)
-        with Image.open(io.BytesIO(raw)) as img:
-            src_format = img.format
-            src_size = img.size
-            img = ImageOps.exif_transpose(img)  # honour phone orientation
-
-            # Flatten transparency onto white so JPEG has no alpha channel.
-            had_alpha = img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info
-            # had_alpha (not a mode whitelist): a palette+alpha (PA) image or
-            # a P-mode image with a transparency key must also flatten, or
-            # transparent pixels render with their source palette/L values
-            # instead of white.
-            if had_alpha:
-                background = Image.new("RGB", img.size, (255, 255, 255))
-                rgba = img.convert("RGBA")
-                background.paste(rgba, mask=rgba.getchannel("A"))
-                img = background
-            elif img.mode != "RGB":
-                img = img.convert("RGB")
-
-            # thumbnail() is a no-op when already smaller (never upscales).
-            img.thumbnail((max_edge, max_edge))
-
-            # Already within bounds and already a JPEG - nothing to gain, and
-            # skipping the re-encode keeps CPU off images that are fine as-is.
-            if img.size == src_size and src_format == "JPEG":
-                return image_base64
-
-            buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=quality, optimize=True)
-            result = base64.b64encode(buf.getvalue()).decode("utf-8")
-
-        # ponytail: if re-encoding somehow made it bigger, keep the original -
-        # UNLESS the source carried alpha. A lossy WebP cutout from
-        # background_removal.py is routinely SMALLER than its flattened JPEG
-        # (measured 10KB vs 27KB), so without this exemption the size check
-        # would hand the model back the transparent original and quietly undo
-        # the flatten this function exists to guarantee.
-        if had_alpha:
-            return result
-        return result if len(result) < len(image_base64) else image_base64
     except Exception:
-        # ponytail: best-effort - vision call works with the raw bytes.
+        # Not valid base64 - best-effort: return the input unchanged.
         return image_base64
+    jpeg, had_alpha = _downscale_bytes(raw, max_edge, quality)
+    if jpeg is None:
+        return image_base64
+    result = base64.b64encode(jpeg).decode("utf-8")
+    if had_alpha:
+        return result
+    return result if len(result) < len(image_base64) else image_base64
 
 
 def crop_base64_image_to_box(
@@ -365,6 +434,18 @@ def crop_base64_image_to_box(
 
         raw = base64.b64decode(image_base64)
         with Image.open(io.BytesIO(raw)) as img:
+            # Memory: reduced-size decode for JPEG sources (see
+            # _downscale_bytes). The bbox percentages are scale-invariant, so
+            # cropping on the reduced image yields the same region; a
+            # full-size phone photo never materializes as a full-res buffer.
+            # The 2048 cap keeps generous detail for the model (which tiles at
+            # ~1024-1568) while bounding decode memory.
+            if img.format in _DRAFTABLE_FORMATS:
+                try:
+                    img.draft("RGB", (2048, 2048))
+                    img.load()
+                except Exception:
+                    pass
             img = ImageOps.exif_transpose(img)
             if img.mode != "RGB":
                 img = img.convert("RGB")
