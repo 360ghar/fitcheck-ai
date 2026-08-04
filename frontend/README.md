@@ -45,7 +45,9 @@ Template: `frontend/.env.example`
 Common keys:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
-- `VITE_API_BASE_URL`
+- `VITE_API_BASE_URL` (optional — leave empty so the client uses same-origin
+  `/api/v1/...` through the Vite proxy / Netlify redirect, avoiding CORS
+  preflights; set a full origin only for standalone builds)
 - `VITE_ENABLE_SOCIAL_IMPORT`
 - `VITE_PUBLIC_POSTHOG_KEY`
 - `VITE_PUBLIC_POSTHOG_HOST`

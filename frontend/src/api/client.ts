@@ -14,7 +14,8 @@ import {
   setTokens,
 } from '@/lib/auth';
 import { logger } from '@/lib/logger';
-import { RATE_LIMIT_EXCEEDED, getApiError as getBaseApiError, isRateLimitExhausted, type ApiError } from '@/lib/errors';
+import { API_BASE_URL } from '@/lib/apiBaseUrl';
+import { RATE_LIMIT_EXCEEDED, getApiError as getBaseApiError, isRateLimitExhausted, isTransientHttpStatus, type ApiError } from '@/lib/errors';
 import { ENDPOINTS, LONG_RUNNING_PREFIXES } from '@/lib/endpoints';
 import { useUpgradePromptStore } from '@/stores/upgradePromptStore';
 
@@ -31,6 +32,14 @@ declare module 'axios' {
   export interface InternalAxiosRequestConfig {
     _retry?: boolean;
     _retryCount?: number;
+    /**
+     * Opts a request out of the axios transport retry interceptor. Set by
+     * callers that own their own retry loop (e.g. AI calls wrapped in
+     * `withRetry`) so the two layers cannot multiply: a withRetry attempt
+     * that fails must surface to withRetry, not be retried again by the
+     * interceptor.
+     */
+    _skipTransportRetry?: boolean;
   }
 }
 
@@ -43,10 +52,8 @@ const SILENT_ERROR_CODES = new Set([
   'AUTH_TOKEN_EXPIRED',
 ]);
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
-  'http://localhost:8000';
+// Same-origin by default (empty base). See lib/apiBaseUrl.ts.
+// Absolute override via VITE_API_BASE_URL still works for standalone builds.
 
 // ============================================================================
 // TIMEOUTS + RETRY CONFIG
@@ -78,12 +85,10 @@ function isLongRunningRequest(url: string | undefined): boolean {
 }
 
 /**
- * HTTP statuses considered transient and safe to retry automatically.
- * 408 Request Timeout, 429 Too Many Requests, and 5xx server errors.
- * Client errors (400, 401, 403, 404, 409, 422) are never retried.
+ * Maximum transport-level retries for transient failures (network errors +
+ * 408/429/5xx), with exponential backoff. Shared status-code set lives in
+ * lib/errors.ts so the Axios interceptor and `withRetry` never disagree.
  */
-const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
-
 const MAX_RETRIES = 2; // 3 total attempts
 
 // ============================================================================
@@ -227,7 +232,7 @@ function isTransientFailure(error: AxiosError): boolean {
   const isNetworkError = !error.response && !!error.request;
   return (
     !isRateLimitExhausted(error) &&
-    (isNetworkError || (status !== undefined && RETRYABLE_STATUS_CODES.has(status)))
+    (isNetworkError || isTransientHttpStatus(status))
   );
 }
 
@@ -321,6 +326,15 @@ apiClient.interceptors.response.use(
     // Never double-handle a token-refresh retry. A non-401 result is the
     // terminal failure for this refreshed request.
     if (config._retry) {
+      notifyTerminalTransientError(error, config);
+      return Promise.reject(error);
+    }
+
+    // The caller owns retries (e.g. AI calls wrapped in `withRetry`): the
+    // interceptor must not retry again or the two layers multiply wire
+    // attempts. The terminal-failure toast still fires once here so the
+    // caller's own error UI and the global toast do not double-toast.
+    if (config._skipTransportRetry) {
       notifyTerminalTransientError(error, config);
       return Promise.reject(error);
     }

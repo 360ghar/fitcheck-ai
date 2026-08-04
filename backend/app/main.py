@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.core.logging_config import setup_session_logging
 from app.core.exceptions import FitCheckException
 from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, get_correlation_id
-from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog, promo
+from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog, promo, images
 from app.db.connection import SupabaseDB
 from app.utils.db import missing_quota_rpcs, missing_referral_rpcs, probe_valid_batch_size_bound
 from postgrest.exceptions import APIError as PostgrestAPIError
@@ -596,6 +596,9 @@ if settings.ENABLE_SOCIAL_IMPORT:
 
 # Blog routes (public read, admin write)
 app.include_router(blog.router, prefix="/api/v1/blog", tags=["Blog"])
+
+# Presigned-URL read path (auth; caller-owned objects only)
+app.include_router(images.router, prefix="/api/v1/images", tags=["Images"])
 
 
 # ============================================================================

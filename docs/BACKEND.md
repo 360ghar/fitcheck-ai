@@ -1,6 +1,6 @@
 # Backend
 
-Last updated: 2026-07-22
+Last updated: 2026-08-04
 
 Deep guide for the FastAPI app under `backend/`. Architecture layers: root `ARCHITECTURE.md`. Package-local agent entry: `backend/CLAUDE.md` (thin pointer here).
 
@@ -55,7 +55,7 @@ Forbidden: services/models/core importing `app.api`. See `scripts/check_architec
   (also the shared choke point behind `/subscription`, `/referral/*`,
   `/users/dashboard`), usage check/increment + `reserve/release_ai_usage`,
   AI settings, `/users/me` + `/settings` + `/preferences`, referral service,
-  and Supabase Storage uploads (2026-08-01 + 2026-08-03 incidents).
+  and object-storage uploads via the S3 backend (2026-08-01 + 2026-08-03 incidents).
 - `get_service_client()` for elevated route work; `get_client()` for some auth flows.
 - Migrations: `backend/db/supabase/migrations/` (baseline `001_full_schema.sql`).
 - Generated overview: `docs/generated/db-schema.md`.
@@ -64,6 +64,24 @@ Forbidden: services/models/core importing `app.api`. See `scripts/check_architec
 Key tables (non-exhaustive): `users`, `user_preferences`, `user_settings`, `user_ai_settings`, `items`, `item_images`, `outfits`, `outfit_images`, `calendar_events`, `shared_outfits`, subscription/referral tables, photoshoot + social import tables.
 
 `user_streaks` / `user_achievements` exist in the schema but are **read-only in practice** — no code path writes them. They are required by the `/ready` schema check only when `ENABLE_GAMIFICATION=true` (`GAMIFICATION_TABLES` in `app/main.py`), which is off by default.
+
+## Storage
+
+File storage moves off Supabase Storage to a **Railway Bucket** (private S3-compatible). The DB (Postgres) + Auth stay on Supabase; only file storage changes.
+
+- **S3 backend** — `app/services/object_storage.py` implements `S3StorageBackend`, a thin `aioboto3` wrapper (upload / download / copy / delete / delete_many / presigned GET / list_keys / close). `get_storage_backend()` returns a process-wide lazy singleton; `close_storage_backend()` releases it at shutdown.
+- **Service layer** — `app/services/storage_service.py` keeps its existing public method signatures and return shapes so callers change as little as possible; internals now talk to `S3StorageBackend`. `_build_key(user_id, category, ext)` replaces the old filename generator.
+- **Key layout** — `{user_id}/{category}/{uuid4hex}.{ext}` (no timestamps). Categories: `items`, `outfits`, `avatars`, `sources`, `feedback`, and `tmp/{source}`. Extensions derive from sniffed bytes (`EXTENSION_BY_MIME`). `promote_temp_image_to_item` moves `tmp/...` → `items/...` via an S3 server-side copy.
+- **Private buckets, presigned URLs** — the bucket is private. The DB stores `storage_path` (the bucket key), never a URL. `image_url` / `thumbnail_url` / `public_url` are **short-lived presigned GET URLs** materialized at read time (default ~15 min). `build_object_url` exists only as a stable locator for inventory scripts; the app does not serve public URLs.
+- **SSRF-safe downloads** — `download_to_base64` / `download_and_downscale_to_base64` fetch via the S3 backend by bucket key (`key_from_path`), never from arbitrary URLs.
+- **Config** — see `backend/.env.example`:
+  - `STORAGE_BACKEND` (`railway` default, or `supabase` as a cutover fallback)
+  - `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`, `OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`, `OBJECT_STORAGE_BUCKET`
+  - Railway provides these as `BUCKET` / `ENDPOINT` / `REGION` / `ACCESS_KEY_ID` / `SECRET_ACCESS_KEY` (plus `AWS_*` aliases); `config.py` maps them onto the `OBJECT_STORAGE_*` names when the canonical field is unset.
+- **Migration tooling** (completed 2026-08-04 — see `docs/exec-plans/active/2026-08-04-railway-bucket-migration-contract.md` for the live execution log):
+  - `backend/scripts/storage_inventory.py` — orphan / missing report against the Railway bucket (dry-run by default; `--delete` to remove orphans).
+  - `backend/scripts/migrate_storage_to_railway.py` — two-phase copy of objects from Supabase Storage to the Railway bucket (dry-run default; `--apply` to copy). Copies to the SAME key so `storage_path` stays valid; optional `CLEAR_URL_COLUMNS=1` nulls stale public URL columns.
+  - `backend/scripts/cleanup_supabase_orphans.py` — delete orphan / temp objects from Supabase Storage BEFORE/DURING a migration (dry-run default; `--delete` to remove). Use this to purge null rows' leftovers and transient `tmp/`/`generated/` objects.
 
 ## Auth
 
@@ -318,6 +336,8 @@ only becomes safe after the Flutter side is fixed — see TD-034 in
 ## Environment (high level)
 
 Required: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_SECRET`  
+
+Storage: `STORAGE_BACKEND` (default `railway`), `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`, `OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`, `OBJECT_STORAGE_BUCKET` (Railway `BUCKET`/`ENDPOINT`/`REGION`/`ACCESS_KEY_ID`/`SECRET_ACCESS_KEY` aliases map onto these)
 
 AI: `AI_DEFAULT_PROVIDER`, `AI_GEMINI_*` (embeddings), `AI_CHAT_*`/`AI_VISION_*`/`AI_IMAGE_*` (per-leg, see `.env.example`), `AI_OUTFIT_ITEM_REFERENCE_MAX_EDGE` (garment reference size, default 768), `AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES` (default 12), `AI_OUTFIT_ITEM_REFERENCE_DOWNLOAD_CONCURRENCY` (default 8), and `AI_MAX_OUTFIT_ITEMS` (default 100)
 

@@ -248,7 +248,10 @@ export function useSocialImportQueue(): UseSocialImportQueue {
 
       await new Promise<void>((resolve, reject) => {
         let settled = false
-        const expectedOrigin = new URL(API_BASE_URL).origin
+        const expectedOrigin =
+          API_BASE_URL === ''
+            ? window.location.origin
+            : new URL(API_BASE_URL).origin
 
         const cleanup = () => {
           if (settled) return

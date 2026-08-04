@@ -38,6 +38,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { SearchBar } from '@/components/ui/search-bar'
 import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout'
+import { MasonryGrid } from '@/components/ui/masonry-grid'
+import { InfiniteScrollSentinel } from '@/components/ui/infinite-scroll-sentinel'
 import { OutfitCard } from '@/components/outfits/OutfitCard'
 import { OutfitDetailPanel } from '@/components/outfits/OutfitDetailPanel'
 import { OutfitDetailActions } from '@/components/outfits/OutfitDetailActions'
@@ -47,7 +49,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
 import { LoadingGrid } from '@/components/ui/loading-grid'
 import { PageHeader } from '@/components/ui/page-header'
-import { PinGrid } from '@/components/wardrobe/pin-grid'
+import { useColumnCount } from '@/hooks/useColumnCount'
 import type { Outfit } from '@/types'
 
 const LIST_PATH = '/outfits'
@@ -84,6 +86,9 @@ export default function OutfitsPage() {
   const setSelectedOutfit = useOutfitStore((state) => state.setSelectedOutfit)
   const storeSelectedOutfit = useOutfitStore((state) => state.selectedOutfit)
   const fetchOutfits = useOutfitStore((state) => state.fetchOutfits)
+  const fetchMore = useOutfitStore((state) => state.fetchMore)
+  const isLoadingMore = useOutfitStore((state) => state.isLoadingMore)
+  const hasMore = useOutfitStore((state) => state.hasMore)
   const fetchOutfitById = useOutfitStore((state) => state.fetchOutfitById)
   const startGeneration = useOutfitStore((state) => state.startGeneration)
   const resetGeneration = useOutfitStore((state) => state.resetGeneration)
@@ -142,9 +147,13 @@ export default function OutfitsPage() {
   }, [filteredOutfits, favoritesOnly, searchQuery])
 
   useEffect(() => {
-    fetchOutfits(true)
+    // Cache-aware mount load: the outfit store coalesces concurrent identical
+    // requests and reuses fresh data, so navigating back to /outfits does not
+    // re-hit the network for a list already loaded. Closet items are only
+    // requested when the wardrobe store is empty (dashboard already loaded it).
+    fetchOutfits()
     if (wardrobeItems.length === 0) {
-      void fetchItems(true).catch(() => null)
+      void fetchItems().catch(() => null)
     }
     // Run once on mount. `wardrobeItems.length` was a dependency before, which
     // re-ran this whole effect (and re-fetched outfits) the moment the closet
@@ -260,6 +269,11 @@ export default function OutfitsPage() {
   // one cramped masonry column. Compact rows read better in that band.
   const forceListRows = isDetailOpen && isSplitViewport && !isWideViewport
   const showMasonry = isGridView && !forceListRows
+  // JS-masonry column count mirrors the old CSS-columns tables (full vs split).
+  const columnCount = useColumnCount({ isDetailOpen: isDetailOpen })
+  // Changing the result set's ORDER or MEMBERSHIP must re-spread the masonry from
+  // scratch; a pure append (load-more) keeps this stable so cards stay put.
+  const masonryResetKey = `${favoritesOnly}|${searchQuery}|${isGridView}`
 
   const selectionHiddenByFilters =
     isDetailOpen && Boolean(selectedOutfit) && !displayedOutfits.some((o) => o.id === selectedId)
@@ -291,6 +305,11 @@ export default function OutfitsPage() {
           generationError={genEntry?.error}
           className={isSelected ? 'border-ink' : undefined}
           onClick={() => openOutfit(outfit)}
+          onImageError={() => {
+            // A broken image usually means the presigned URL expired; refetch
+            // the current outfit list once to obtain fresh URLs.
+            void fetchOutfits(true)
+          }}
           onToggleFavorite={(e) => {
             e.stopPropagation()
             toggleOutfitFavorite(outfit.id)
@@ -351,13 +370,27 @@ export default function OutfitsPage() {
       }}
     />
   ) : showMasonry ? (
-    <PinGrid className={isDetailOpen ? SPLIT_COLUMNS : undefined}>
-      {displayedOutfits.map((outfit) => renderCard(outfit, 'default'))}
-    </PinGrid>
+    <>
+      <MasonryGrid columnCount={columnCount} resetKey={masonryResetKey}>
+        {displayedOutfits.map((outfit) => renderCard(outfit, 'default'))}
+      </MasonryGrid>
+      <InfiniteScrollSentinel
+        onLoadMore={() => void fetchMore()}
+        hasMore={hasMore}
+        isLoading={isLoadingMore}
+      />
+    </>
   ) : (
-    <div className="grid grid-cols-1 gap-2">
-      {displayedOutfits.map((outfit) => renderCard(outfit, 'list'))}
-    </div>
+    <>
+      <div className="grid grid-cols-1 gap-2">
+        {displayedOutfits.map((outfit) => renderCard(outfit, 'list'))}
+      </div>
+      <InfiniteScrollSentinel
+        onLoadMore={() => void fetchMore()}
+        hasMore={hasMore}
+        isLoading={isLoadingMore}
+      />
+    </>
   )
 
   // Back-compat: creating used to be a dialog opened by `?action=create`.

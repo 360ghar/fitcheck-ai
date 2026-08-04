@@ -8,6 +8,7 @@ PyJWT[crypto]==2.13.0
 passlib[bcrypt]==1.7.4
 httpx==0.28.1
 supabase==2.31.0
+aioboto3==13.4.0
 pinecone==9.1.0
 google-genai==2.11.0
 sse-starlette==3.4.5

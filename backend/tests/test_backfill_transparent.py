@@ -210,43 +210,41 @@ class TestRowUpdate:
         assert "image_url" not in update and "thumbnail_url" not in update
 
 
-class TestUploadOptions:
-    def test_upsert_is_forced_on(self):
-        """`StorageService.upload_file` defaults `upsert` to False; overwriting
-        in place is the entire point here, so the script must override it."""
-        opts = bf.upload_options("image/webp", 60)
-        assert opts["upsert"] == "true"
-        assert opts["content-type"] == "image/webp"
-        assert opts["cache-control"] == "60"
+class TestUploadArgs:
+    def test_returns_content_type_and_cache_control(self):
+        """The S3 overwrite takes (content_type, cache_control); S3 put_object
+        overwrites an existing key by default (no `upsert` flag needed)."""
+        content_type, cache_control = bf.upload_args("image/webp", 60)
+        assert content_type == "image/webp"
+        assert cache_control == "60"
 
 
 class _FakeStorage:
+    """Async stand-in for S3StorageBackend (process_row uses asyncio.run)."""
+
     def __init__(self, original=b"source", download_error=None, upload_error=None):
         self.original = original
         self.download_error = download_error
         self.upload_error = upload_error
         self.uploads = []
 
-    def download(self, key):
+    async def download(self, key):
         if self.download_error:
             raise self.download_error
         return self.original
 
-    def upload(self, **kwargs):
+    async def upload(self, *, key, data, content_type, cache_control):
         if self.upload_error:
             raise self.upload_error
-        self.uploads.append(kwargs)
+        self.uploads.append(
+            {"key": key, "data": data, "content_type": content_type, "cache_control": cache_control}
+        )
 
 
 class _FakeDb:
-    def __init__(self, storage):
-        self.storage = self
-        self.storage_client = storage
+    def __init__(self):
         self.updated = []
         self.update_error = None
-
-    def from_(self, bucket):
-        return self.storage_client
 
     def table(self, table):
         return self
@@ -294,9 +292,10 @@ class TestProcessRowFailures:
     def _row(self):
         return {"id": "row-1", "storage_path": "user-1/item.jpg", "width": None, "height": None}
 
-    def test_download_failure_is_retryable_and_not_decoded(self):
+    def test_download_failure_is_retryable_and_not_decoded(self, monkeypatch):
         storage = _FakeStorage(download_error=RuntimeError("offline"))
-        db = _FakeDb(storage)
+        db = _FakeDb()
+        monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
 
         record = bf.process_row(db, bf.TABLE_SPECS["item_images"], self._row(), _cfg())
 
@@ -307,7 +306,8 @@ class TestProcessRowFailures:
 
     def test_rejection_skips_upload_but_updates_original_dimensions(self, monkeypatch):
         storage = _FakeStorage()
-        db = _FakeDb(storage)
+        db = _FakeDb()
+        monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
         monkeypatch.setattr(bf, "remove_white_background", lambda *_: _matte_result(
             bf.STATUS_REJECTED_ATE_SUBJECT, width=100, height=80
         ))
@@ -321,7 +321,8 @@ class TestProcessRowFailures:
 
     def test_upload_failure_is_retryable(self, monkeypatch):
         storage = _FakeStorage(upload_error=RuntimeError("storage down"))
-        db = _FakeDb(storage)
+        db = _FakeDb()
+        monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
         monkeypatch.setattr(bf, "remove_white_background", lambda *_: _matte_result(bf.STATUS_MATTED))
 
         record = bf.process_row(db, bf.TABLE_SPECS["item_images"], self._row(), _cfg())
@@ -332,7 +333,8 @@ class TestProcessRowFailures:
 
     def test_decode_failure_is_not_counted_as_decoded(self, monkeypatch):
         storage = _FakeStorage()
-        db = _FakeDb(storage)
+        db = _FakeDb()
+        monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
         monkeypatch.setattr(bf, "remove_white_background", lambda *_: _matte_result(bf.STATUS_ERROR))
 
         record = bf.process_row(db, bf.TABLE_SPECS["item_images"], self._row(), _cfg())
@@ -342,8 +344,9 @@ class TestProcessRowFailures:
 
     def test_database_update_failure_is_retryable_after_upload(self, monkeypatch):
         storage = _FakeStorage()
-        db = _FakeDb(storage)
+        db = _FakeDb()
         db.update_error = RuntimeError("database down")
+        monkeypatch.setattr(bf, "get_storage_backend", lambda: storage)
         monkeypatch.setattr(bf, "remove_white_background", lambda *_: _matte_result(bf.STATUS_MATTED))
 
         record = bf.process_row(db, bf.TABLE_SPECS["item_images"], self._row(), _cfg())

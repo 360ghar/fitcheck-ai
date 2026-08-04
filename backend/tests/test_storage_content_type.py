@@ -15,6 +15,7 @@ import pytest
 from PIL import Image
 
 from app.services.storage_service import DEFAULT_CACHE_CONTROL, StorageService
+from tests.storage_test_utils import FakeS3Backend
 
 JPEG_MAGIC = b"\xff\xd8\xff\xe0" + b"0" * 64
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n" + b"0" * 64
@@ -84,14 +85,6 @@ def test_upload_options_builds_a_fresh_dict_each_call():
 # =============================================================================
 
 
-def _fake_storage():
-    storage = MagicMock()
-    storage.get_public_url.return_value = "https://storage.test/o"
-    db = MagicMock()
-    db.storage.from_.return_value = storage
-    return db, storage
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "helper,kwargs",
@@ -102,58 +95,63 @@ def _fake_storage():
         ("upload_feedback_attachment", {"filename": "shot.png"}),
     ],
 )
-async def test_upload_helpers_pass_sniffed_file_options(helper, kwargs):
-    db, storage = _fake_storage()
+async def test_upload_helpers_pass_sniffed_content_type(helper, kwargs):
+    backend = FakeS3Backend()
     webp = _webp_bytes()
 
-    await getattr(StorageService, helper)(db=db, user_id="u1", file_data=webp, **kwargs)
+    with patch("app.services.storage_service.get_storage_backend", return_value=backend):
+        await getattr(StorageService, helper)(db=MagicMock(), user_id="u1", file_data=webp, **kwargs)
 
-    options = storage.upload.call_args.kwargs["file_options"]
+    call = backend.upload_calls[-1]
     # Sniffed from the bytes, NOT from the .png filename the caller supplied.
-    assert options["content-type"] == "image/webp"
-    assert options["cache-control"] == DEFAULT_CACHE_CONTROL
+    assert call["content_type"] == "image/webp"
+    assert call["cache_control"] == DEFAULT_CACHE_CONTROL
+    assert call["key"].endswith(".webp")
 
 
 @pytest.mark.asyncio
-async def test_move_image_resniffs_the_downloaded_bytes():
-    """`promote_temp_image_to_item` (social-import approve) goes through here.
+async def test_move_image_uses_server_side_copy_and_delete():
+    """move_image is now an S3 server-side copy + delete (no byte round-trip).
 
-    Without a re-sniff the move silently discards the content type
-    `upload_temp_generated_image` set and lands back on storage3's text/plain.
+    The old test asserted move_image re-downloaded and re-sniffed the bytes;
+    with the S3 backend the content type is preserved by the copy, so the
+    upload helper under test is the copy itself.
     """
-    db, storage = _fake_storage()
-    storage.download.return_value = _webp_bytes()
+    backend = FakeS3Backend()
+    with patch("app.services.storage_service.get_storage_backend", return_value=backend):
+        moved = await StorageService.move_image(
+            db=MagicMock(), old_path="u/tmp/a.png", new_path="u/items/a.png"
+        )
 
-    with patch("app.services.storage_service.settings") as fake_settings:
-        fake_settings.SUPABASE_STORAGE_BUCKET = "items"
-        await StorageService.move_image(db=db, old_path="u/tmp/a.png", new_path="u/items/a.png")
-
-    assert storage.upload.call_args.kwargs["file_options"]["content-type"] == "image/webp"
+    assert moved is True
+    assert backend.copy_calls == [("u/tmp/a.png", "u/items/a.png")]
+    assert backend.delete_calls == ["u/tmp/a.png"]
 
 
 @pytest.mark.asyncio
 async def test_upload_file_honours_a_custom_cache_control():
-    db, storage = _fake_storage()
+    backend = FakeS3Backend()
+    with patch("app.services.storage_service.get_storage_backend", return_value=backend):
+        await StorageService.upload_file(
+            db=MagicMock(),
+            file_data=PNG_MAGIC,
+            file_path="u/x.png",
+            content_type="image/png",
+            bucket="items",
+            upsert=True,
+            cache_control="60",
+        )
 
-    await StorageService.upload_file(
-        db=db,
-        file_data=PNG_MAGIC,
-        file_path="u/x.png",
-        content_type="image/png",
-        bucket="items",
-        upsert=True,
-        cache_control="60",
-    )
-
-    options = storage.upload.call_args.kwargs["file_options"]
-    assert options["cache-control"] == "60"
-    assert options["upsert"] == "true"
+    call = backend.upload_calls[-1]
+    assert call["cache_control"] == "60"
+    assert call["key"] == "u/x.png"
+    assert call["content_type"] == "image/png"
 
 
 @pytest.mark.asyncio
 async def test_temp_generated_upload_sniffs_format_and_extension():
     """Generated images are no longer always PNG - a matted one is WebP."""
-    db, storage = _fake_storage()
+    db = MagicMock()
     captured: dict = {}
 
     async def fake_upload_file(*, db, file_data, file_path, content_type, **_):

@@ -27,6 +27,7 @@ class FeedbackService:
         user_id: Optional[str],
         attachment_urls: List[str],
         db: Client,
+        attachment_storage_paths: Optional[List[str]] = None,
     ) -> FeedbackResponse:
         """
         Create a new support ticket.
@@ -34,8 +35,11 @@ class FeedbackService:
         Args:
             request: Ticket creation request
             user_id: User ID (None for anonymous)
-            attachment_urls: List of uploaded attachment URLs
+            attachment_urls: List of uploaded attachment URLs (short-lived
+                presigned GET URLs for display only)
             db: Supabase client
+            attachment_storage_paths: List of durable storage_path (bucket keys)
+                for the attachments, used for orphan cleanup / account deletion
 
         Returns:
             Created ticket response
@@ -46,6 +50,7 @@ class FeedbackService:
             "subject": request.subject,
             "description": request.description,
             "attachment_urls": attachment_urls,
+            "attachment_storage_paths": attachment_storage_paths or [],
             "contact_email": request.contact_email if not user_id else None,
             "device_info": request.device_info.model_dump() if request.device_info else None,
             "app_version": request.app_version,

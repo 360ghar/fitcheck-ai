@@ -1,11 +1,9 @@
 import { apiClient, getAccessToken, getApiError } from './client'
+import { API_BASE_URL } from '@/lib/apiBaseUrl'
 import { createSSEConnection, type SSEMessage } from '@/lib/sse'
 import type { SocialImportJobData, SocialImportItem, SocialImportSSEEvent } from '@/types'
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
-  'http://localhost:8000'
+export { API_BASE_URL }
 
 /** Social import terminal event names (note: `job_completed`, not `job_complete`). */
 const SOCIAL_IMPORT_TERMINAL_EVENTS: ReadonlySet<string> = new Set([

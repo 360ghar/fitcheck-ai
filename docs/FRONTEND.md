@@ -1,6 +1,6 @@
 # Frontend
 
-Last updated: 2026-08-01
+Last updated: 2026-08-04
 
 React + TypeScript web app under `frontend/`. Package-local agent entry: `frontend/CLAUDE.md` (thin pointer here). UI direction: `docs/DESIGN.md`.
 
@@ -122,6 +122,14 @@ stores must not import pages
   previews never affects upload fidelity. Landing-page demos are still
   blob-based (out of scope).
 
+### Image URLs are short-lived (presigned)
+
+Image URLs returned by the backend are **short-lived presigned GET URLs** (default
+~15 min) served from the private Railway Bucket. Treat them as ephemeral: do not
+cache them long-term, and re-fetch from the backend as needed (e.g. on re-render or
+when a URL has expired). The DB stores a bucket key, not a URL, so the backend
+materializes a fresh URL at read time.
+
 ### Error copy — never render raw backend bodies
 
 - Backends log the diagnostic detail (which DB RPC / migration is missing,
@@ -137,7 +145,13 @@ stores must not import pages
 
 `frontend/.env.example` / `.env.local`:
 
-- `VITE_API_URL` or `VITE_API_BASE_URL` (default `http://localhost:8000`)
+- `VITE_API_URL` or `VITE_API_BASE_URL` — **leave empty (or omit) for the web
+  app**. The client then uses same-origin `/api/v1/...` paths, which the Vite
+  proxy (dev) and the Netlify redirect (prod) route to the backend. Same-origin
+  means no CORS preflights (`Authorization` is not a safelisted header), so the
+  API never sees the extra OPTIONS round-trip per endpoint that made requests
+  look duplicated. Set a full origin (e.g. `https://api.fitcheckaiapp.com`)
+  only for standalone builds NOT served behind a same-origin proxy.
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY` / publishable key variants
 

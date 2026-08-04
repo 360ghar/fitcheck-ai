@@ -321,6 +321,10 @@ export async function extractItems(imageFile: File): Promise<ExtractItemsResult>
  *
  * `config` lets callers pass `skipToast` when they render their own failure UI
  * (e.g. the create flow's inline preview error) instead of the global toast.
+ *
+ * Transport-level retry is disabled internally (`_skipTransportRetry`) so
+ * callers that wrap this in `withRetry` own all transient retries without
+ * the Axios interceptor multiplying wire attempts.
  */
 export async function generateOutfit(
   items: OutfitItemInput[],
@@ -341,7 +345,12 @@ export async function generateOutfit(
     include_user_face: options.include_user_face ?? true,
     use_body_profile: options.use_body_profile ?? true,
     use_source_photo: options.useSourcePhoto ?? false,
-  }, config);
+  }, {
+    ...config,
+    // App-level retry (withRetry) owns this request's transient retries; see
+    // the interceptor's `_skipTransportRetry` handling.
+    _skipTransportRetry: true,
+  } as AxiosRequestConfig & { _skipTransportRetry?: boolean });
 
   return response.data.data;
 }
@@ -431,7 +440,10 @@ export async function generateProductImage(
       view_angle: options.view_angle ?? 'front',
       include_shadows: options.include_shadows ?? false,
       save_to_storage: options.save_to_storage ?? false,
-    }
+    },
+    // AI generation can be wrapped in withRetry by callers; keep transport
+    // retry out so the two layers cannot multiply (see generateOutfit).
+    { _skipTransportRetry: true } as AxiosRequestConfig & { _skipTransportRetry?: boolean }
   );
 
   return response.data.data;
@@ -461,7 +473,10 @@ export async function generateTryOn(
       pose: options.pose ?? 'standing front',
       lighting: options.lighting ?? 'professional studio lighting',
       save_to_storage: options.save_to_storage ?? false,
-    }
+    },
+    // AI generation can be wrapped in withRetry by callers; keep transport
+    // retry out so the two layers cannot multiply (see generateOutfit).
+    { _skipTransportRetry: true } as AxiosRequestConfig & { _skipTransportRetry?: boolean }
   );
 
   return response.data.data;

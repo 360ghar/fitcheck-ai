@@ -52,6 +52,25 @@ export function isApiError(error: unknown): error is ApiError {
 }
 
 /**
+ * Standardized transport-level retry policy shared by every retry layer.
+ *
+ * Keeping this here (rather than in client.ts) lets `withRetry` and the
+ * Axios interceptor agree on what is retryable without importing the HTTP
+ * client, and gives tests a single source of truth.
+ */
+export const TRANSPORT_RETRYABLE_STATUS_CODES: ReadonlySet<number> = new Set([
+  408, 429, 500, 502, 503, 504,
+])
+
+/**
+ * True when an HTTP status is a transient, transport-level retryable failure
+ * (408/429/5xx). Client errors (400/401/403/404/409/422) are never retried.
+ */
+export function isTransientHttpStatus(status: number | undefined): boolean {
+  return status !== undefined && TRANSPORT_RETRYABLE_STATUS_CODES.has(status)
+}
+
+/**
  * True for Axios errors (duck-typed via the `isAxiosError` flag), matching
  * the check inside `getApiError`. Shared so error-copy helpers that need to
  * distinguish "transport-level failure with no response" from plain local

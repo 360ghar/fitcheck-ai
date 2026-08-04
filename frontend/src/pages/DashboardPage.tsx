@@ -112,8 +112,12 @@ export default function DashboardPage() {
   const fetchUsage = useSubscriptionStore((s) => s.fetchUsage)
 
   useEffect(() => {
-    fetchItems(true)
-    fetchOutfits(true)
+    // Cache-aware loads: the stores coalesce concurrent identical requests
+    // and reuse fresh data, so returning to the dashboard does not re-hit
+    // the network for data the wardrobe/outfits stores already hold. A
+    // user-triggered refresh (pull, retry button) still forces a re-read.
+    fetchItems()
+    fetchOutfits()
     // Load usage so the referral banner's "near limit" urgent variant has real
     // data on a cold dashboard visit (nothing else fetches it on this route).
     void fetchUsage()
@@ -204,6 +208,7 @@ export default function DashboardPage() {
     }
     lastBatchStatusRef.current = null
     setIsUploadModalOpen(false)
+    // Upload added items: force a fresh read so totals/checklist update.
     fetchItems(true)
     if (results.some((r) => r.success)) {
       // Stay on dashboard while activating so the checklist updates;
@@ -284,6 +289,7 @@ export default function DashboardPage() {
           // function names, migration numbers) that must not reach the UI.
           description="We couldn't reach the server. Check your connection and try again."
           onRetry={() => {
+            // Explicit user retry: force a fresh read.
             void fetchItems(true)
             void fetchOutfits(true)
           }}

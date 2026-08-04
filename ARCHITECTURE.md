@@ -1,8 +1,8 @@
 # Architecture
 
-Last updated: 2026-07-22
+Last updated: 2026-08-04
 
-FitCheck AI is a monorepo: React web + Flutter mobile clients call a FastAPI backend. Supabase is the system of record (Postgres, Auth, Storage). AI runs behind backend provider abstractions. Optional vector retrieval uses Pinecone.
+FitCheck AI is a monorepo: React web + Flutter mobile clients call a FastAPI backend. Supabase is the system of record for the DB (Postgres) + Auth; file storage moves to a Railway Bucket (private S3-compatible). AI runs behind backend provider abstractions. Optional vector retrieval uses Pinecone.
 
 This file is the top-level map of domains and **allowed dependency edges**. Deeper runtime detail lives in `docs/BACKEND.md`, `docs/FRONTEND.md`, `docs/FLUTTER.md`, and `docs/references/`.
 
@@ -10,10 +10,12 @@ This file is the top-level map of domains and **allowed dependency edges**. Deep
 
 ```text
 [React web] ──┐
-              ├──► FastAPI /api/v1 ──► services ──► Supabase
-[Flutter]  ───┘         │                 ├──► AI providers
-                        │                 └──► Pinecone (optional)
-                        └── health / OpenAPI
+              ├──► FastAPI /api/v1 ──► services ──► Supabase (DB + Auth)
+[Flutter]  ───┘                       ├──► Railway Bucket (S3) — storage
+                                      ├──► AI providers
+                                      └──► Pinecone (optional)
+
+              └──► health / OpenAPI
 ```
 
 ## Repository domains
@@ -101,7 +103,7 @@ Details: `docs/FLUTTER.md`.
 | AuthN | Supabase JWT; `core/security.py`, `api/v1/deps.py` |
 | Logging | `core/logging_config.py`, correlation middleware |
 | Errors | `core/exceptions.py` + handlers in `main.py` |
-| Storage | `services/storage_service.py` + Supabase buckets |
+| Storage | `services/storage_service.py` + `services/object_storage.py` → Railway Bucket (S3-compatible) |
 | Jobs / SSE | batch, photoshoot, social import job services |
 | Security notes | `docs/SECURITY.md` |
 | Reliability notes | `docs/RELIABILITY.md` |

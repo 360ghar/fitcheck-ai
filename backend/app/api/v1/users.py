@@ -29,7 +29,6 @@ from app.core.exceptions import (
     ValidationError,
 )
 from app.core.logging_config import get_context_logger
-from app.core.config import settings
 from app.core.security import get_current_user_id
 from app.core.uploads import read_upload_capped
 from app.db.connection import get_db
@@ -288,6 +287,19 @@ async def get_current_user(
                 if not user_data.get(field):
                     user_data[field] = meta.get(field)
 
+        # Regenerate a fresh presigned avatar URL at read time. The DB stores a
+        # presigned URL (or a legacy Supabase public URL) that expires (~15 min
+        # for presigned); the bucket key is recovered via key_from_path so a
+        # long-lived client session never serves a broken/expired avatar image.
+        avatar_url = user_data.get("avatar_url")
+        if avatar_url:
+            try:
+                key = StorageService.key_from_path(avatar_url)
+                if key:
+                    user_data["avatar_url"] = await StorageService.get_public_url(key)
+            except Exception as e:
+                logger.warning("Failed to materialize avatar URL", user_id=user_id, error=str(e))
+
         return {"data": user_data, "message": "OK"}
 
     except (UserNotFoundError, ValidationError, DatabaseError):
@@ -382,9 +394,27 @@ async def delete_current_user(
         owned = await StorageService.resolve_owned_storage_paths(db, user_id)
         storage_paths = owned["storage_paths"]
 
+        # Feedback/service-ticket attachments are tracked by their durable
+        # bucket keys (support_tickets.attachment_storage_paths) so their
+        # objects are not orphaned on account deletion. attachment_urls holds
+        # only short-lived presigned URLs and must not be used as the durable
+        # reference.
+        tickets_result = await asyncio.to_thread(
+            db.table("support_tickets")
+            .select("attachment_storage_paths")
+            .eq("user_id", user_id)
+            .execute
+        )
+        for ticket_row in (tickets_result.data or []):
+            for path in (ticket_row.get("attachment_storage_paths") or []):
+                if path:
+                    storage_paths.append(str(path))
+
         # The avatar is referenced only by URL on the user row; resolve it to
         # its storage object so deletion does not orphan it in Storage.
-        avatar_bucket_path = None
+        # `key_from_path` reduces the stored (presigned) URL to its bucket key
+        # (replaces the removed `url_to_storage_path`); the S3 backend uses a
+        # single configured bucket, so the key is appended to the shared list.
         avatar_result = await asyncio.to_thread(
             db.table("users")
             .select("avatar_url")
@@ -393,22 +423,15 @@ async def delete_current_user(
             .execute
         )
         avatar_row = maybe_single_data(avatar_result)
-        avatar_bucket_path = StorageService.url_to_storage_path(
+        avatar_key = StorageService.key_from_path(
             (avatar_row or {}).get("avatar_url")
         )
-        if avatar_bucket_path and avatar_bucket_path[0] == settings.SUPABASE_STORAGE_BUCKET:
-            storage_paths.append(avatar_bucket_path[1])
-            avatar_bucket_path = None
+        if avatar_key:
+            storage_paths.append(avatar_key)
 
         async def _delete_storage() -> None:
             if storage_paths:
                 await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)
-            if avatar_bucket_path:
-                await StorageService.delete_multiple_images(
-                    db=db,
-                    storage_paths=[avatar_bucket_path[1]],
-                    bucket=avatar_bucket_path[0],
-                )
 
         async def _delete_vectors() -> None:
             if hasattr(db.table("items"), "select"):

@@ -4,11 +4,7 @@
 
 import { apiClient, getApiError } from './client';
 import { createAuthenticatedSSEConnection } from './batch';
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
-  'http://localhost:8000';
+import { API_BASE_URL } from '@/lib/apiBaseUrl';
 
 // Types
 export interface GeneratedImage {

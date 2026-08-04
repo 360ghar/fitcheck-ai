@@ -1,6 +1,13 @@
 """
-Storage service for managing file uploads to Supabase Storage.
-Handles item images, outfit images, and user avatars.
+Storage service for managing file uploads to the S3-compatible object store
+(Railway Bucket). Handles item images, outfit images, user avatars, source
+photos, feedback attachments, and temporary generated images.
+
+The service keeps the same public method signatures and return shapes as the
+Supabase Storage implementation so callers change as little as possible; the
+internals now talk to ``S3StorageBackend`` (see ``app/services/object_storage.py``).
+Image URLs returned by uploads are SHORT-LIVED presigned GET URLs materialized
+at read time; the DB stores the ``storage_path`` (bucket key), never a URL.
 """
 
 import asyncio
@@ -9,12 +16,8 @@ import os
 import uuid
 from typing import Optional, List
 from datetime import datetime
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse
 
-from app.utils.db import execute_with_reconnect
-
-import httpx
-from supabase import Client
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import (
@@ -32,12 +35,17 @@ from app.utils.image_processing import (
     validate_image_bytes,
 )
 from app.core.image_executor import run_image_op
+from app.services.object_storage import (
+    get_storage_backend,
+    close_storage_backend,
+)
 
 logger = get_context_logger(__name__)
 
 
-# Storage bucket names (fallbacks).
-# If `SUPABASE_STORAGE_BUCKET` is set, it is used for all uploads by default.
+# Legacy bucket names (fallbacks). With the S3 backend the single configured
+# bucket (OBJECT_STORAGE_BUCKET) is used for every upload; these are kept for
+# backward compatibility with callers that still reference a bucket name.
 BUCKET_ITEMS = "items"
 BUCKET_OUTFITS = "outfits"
 BUCKET_AVATARS = "avatars"
@@ -47,105 +55,57 @@ BUCKET_FEEDBACK = "feedback"
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
-# Browser/CDN cache lifetime stamped on every upload, in seconds. storage3 turns
-# a bare value into `cache-control: max-age=<v>` (see _upload_or_update in
-# storage3/_sync/file_api.py). Matches storage3's own default; kept explicit
-# because passing ANY file_options replaces the defaults wholesale.
+# Browser/CDN cache lifetime stamped on every upload, in seconds. Encoded on
+# the S3 object as `cache-control: max-age=<v>`.
 DEFAULT_CACHE_CONTROL = "3600"
-
-# Pooled client for server-to-server image downloads (download_to_base64 and
-# download_and_downscale_to_base64). One pool instead of a fresh TLS handshake
-# per download: an N-photo batch pays one connection setup, not N. Created
-# lazily on first use (httpx clients bind to the running event loop) and
-# closed at app shutdown via close_download_client().
-_download_client: Optional[httpx.AsyncClient] = None
-
-
-def _get_download_client() -> httpx.AsyncClient:
-    global _download_client
-    if _download_client is None:
-        _download_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(10.0),
-            limits=httpx.Limits(max_connections=10),
-            follow_redirects=False,
-        )
-    return _download_client
 
 
 async def close_download_client() -> None:
-    """Release the pooled download client (app shutdown; idempotent)."""
-    global _download_client
-    client = _download_client
-    _download_client = None
-    if client is not None:
-        try:
-            await client.aclose()
-        except Exception:  # pragma: no cover - defensive, shutdown path
-            pass
+    """Release the S3 backend session (app shutdown; idempotent).
+
+    Kept module-level for the app's shutdown hook (main.py) even though the
+    pooled httpx download client is gone — downloads now go through the S3
+    backend, which is closed here.
+    """
+    await close_storage_backend()
 
 
 class StorageService:
-    """Service for managing Supabase Storage operations."""
+    """Service for managing object-storage operations."""
 
     @staticmethod
-    def _generate_filename(
-        user_id: str,
-        original_filename: str,
-        prefix: str = ""
-    ) -> str:
-        """Generate a unique filename for storage.
+    def _build_key(user_id: str, category: str, ext: str) -> str:
+        """Build a storage key under the new folder layout (no timestamps).
 
-        Args:
-            user_id: User ID for namespacing
-            original_filename: Original file name
-            prefix: Optional prefix for the file
-
-        Returns:
-            Unique filename path
+        Layout: ``{user_id}/{category}/{uuid4hex}.{ext}``. ``ext`` is derived
+        from the sniffed content type (``EXTENSION_BY_MIME``). The ``tmp``
+        category is handled separately by ``upload_temp_generated_image`` (it
+        carries a ``source`` sub-path).
         """
-        ext = os.path.splitext(original_filename)[1].lower()
-        unique_id = str(uuid.uuid4())[:8]
-        timestamp = datetime.now().strftime('%Y%m%d')
-
-        if prefix:
-            return f"{user_id}/{timestamp}/{prefix}_{unique_id}{ext}"
-        return f"{user_id}/{timestamp}/{unique_id}{ext}"
+        ext = ext if ext.startswith(".") else f".{ext}"
+        return f"{user_id}/{category}/{uuid.uuid4().hex}{ext}"
 
     @staticmethod
     def _sniff_content_type(file_data: bytes, filename: str = "") -> str:
         """Resolve the real content type of image bytes. Never raises.
 
-        THIS IS NOT COSMETIC. storage3's `DEFAULT_FILE_OPTIONS` stamps
-        `content-type: text/plain;charset=UTF-8` on any upload that passes no
-        `file_options`, which is how every item, outfit and avatar object in the
-        bucket ended up being served as text/plain.
-
         The bytes decide, not the filename: the batch web client names its
         upload `${tempId}.png` regardless of what the generator actually
         returned, and since `background_removal.py` landed that is frequently a
         WebP. The extension is only consulted when the bytes are unreadable.
-
-        A consequence, and it is fine: the storage KEY may end in `.png` while
-        holding WebP bytes. Supabase serves by stored content type, and browsers
-        and Flutter's `Image.network` honour that over the suffix - so do not
-        "fix" this by renaming keys, which would churn every stored URL.
         """
         return sniff_image_mime(file_data, filename)
 
     @staticmethod
     def _upload_options(file_data: bytes, filename: str = "") -> dict:
-        """`file_options` for `storage.upload()` with a correct content type.
+        """Upload metadata for a stored object (test-compat helper).
 
-        A FRESH dict every call: storage3 mutates what it is handed (it pops
-        cache-control and upsert out of it), so a shared constant would be
-        emptied after the first upload.
-
-        `upsert: "true"` is what makes the reconnect retry exact-once: every
-        item/outfit path is a unique uuid4 key, so upsert never overwrites a
-        foreign object — it only lets a retry after a committed-but-lost
-        response overwrite the SAME path instead of raising 409 "Duplicate"
-        (which would surface as "Failed to upload item image" while the
-        object actually exists).
+        Kept for unit-test compatibility (the returned dict carries a
+        ``content-type`` key). The S3 upload path calls
+        ``S3StorageBackend.upload`` directly with scalar ``content_type`` /
+        ``cache_control``; ``upsert`` is retained for signature compatibility
+        (an S3 PUT is naturally idempotent, so a reconnect retry overwrites the
+        same path instead of erroring on a now-existing key).
         """
         return {
             "content-type": StorageService._sniff_content_type(file_data, filename),
@@ -207,65 +167,92 @@ class StorageService:
             ) from error
 
     @staticmethod
+    def key_from_path(value: Optional[str]) -> Optional[str]:
+        """Extract the bucket object key from a storage key or a served URL.
+
+        Accepts a bare bucket key (``user/items/abc.png``) or a URL that embeds
+        one (a Supabase ``/storage/v1/object/public/<bucket>/<key>`` URL, or an
+        S3 presigned ``/<bucket>/<key>`` URL) and returns the key. Returns None
+        for empty/None input.
+
+        Used by the download helpers so they only ever fetch known bucket keys
+        via the S3 backend (SSRF-safe): a caller-provided string is reduced to
+        a key and then read from the bucket, never from the arbitrary URL.
+        """
+        if not value:
+            return None
+        candidate = value.strip()
+        if not candidate:
+            return None
+        if candidate.startswith(("http://", "https://")):
+            parsed = urlparse(candidate)
+            parts = [part for part in parsed.path.split("/") if part]
+            if len(parts) >= 5 and parts[:4] == ["storage", "v1", "object", "public"]:
+                # Supabase public object URL: /storage/v1/object/public/<bucket>/<key...>
+                return "/".join(parts[5:])
+            if len(parts) >= 2 and parts[0] == settings.SUPABASE_STORAGE_BUCKET:
+                return "/".join(parts[1:])
+            if len(parts) >= 2 and parts[0] == settings.OBJECT_STORAGE_BUCKET:
+                return "/".join(parts[1:])
+            return "/".join(parts)
+        return candidate
+
+    @staticmethod
+    def build_object_url(key: str) -> str:
+        """Build the canonical S3 object URL for a key.
+
+        NOTE: the app does NOT serve public URLs; the read path uses
+        ``get_public_url`` (a short-lived presigned GET URL) instead. This
+        helper exists for callers that need a stable object locator (e.g.
+        inventory scripts) and for URL/key round-tripping.
+        """
+        base = settings.OBJECT_STORAGE_ENDPOINT.rstrip("/")
+        return f"{base}/{settings.OBJECT_STORAGE_BUCKET}/{key.lstrip('/')}"
+
+    @staticmethod
     async def upload_item_image(
-        db: Client,
+        db,
         user_id: str,
         filename: str,
         file_data: bytes,
         is_primary: bool = False
     ) -> dict:
-        """Upload an item image to Supabase Storage.
+        """Upload an item image to the object store.
 
         Args:
-            db: Supabase client
+            db: Supabase client (kept for signature compatibility; unused by S3)
             user_id: User ID who owns the item
             filename: Original filename
             file_data: Raw file bytes
             is_primary: Whether this is the primary image
 
         Returns:
-            Dict with image_url, thumbnail_url, and metadata
+            Dict with image_url (presigned GET), thumbnail_url, storage_path,
+            and metadata
 
         Raises:
             FileTooLargeError: If file exceeds size limit
             UnsupportedMediaTypeError: If file type not allowed
             StorageServiceError: If upload fails
         """
-        # Validate the image (raises on failure)
-        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
-        # event loop during request handling. Runs on the bounded image
-        # executor so concurrent decodes cannot multiply past
-        # IMAGE_PROCESS_WORKERS (see app/core/image_executor.py).
+        # Validate the image (raises on failure). Pillow decode is CPU-bound
+        # (up to ~7MB per image); never block the event loop during request
+        # handling. Runs on the bounded image executor.
         await run_image_op(StorageService._validate_image, file_data, filename)
 
-        # Generate unique filename
-        storage_path = StorageService._generate_filename(user_id, filename, "item")
+        content_type = StorageService._sniff_content_type(file_data, filename)
+        ext = EXTENSION_BY_MIME.get(content_type, os.path.splitext(filename)[1].lower() or ".jpg")
+        storage_path = StorageService._build_key(user_id, "items", ext)
 
         try:
-            # Upload to Supabase Storage
-            bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_ITEMS
-            # Storage rides the same pooled Supabase client as the DB; a dead
-            # connection fails every upload in a burst (observed 2026-08-03:
-            # 4x "Failed to upload item image" while the gateway restarted).
-            # Rebuild + retry once; a retried upload to the same path
-            # overwrites, so it stays exact-once even on a lost response.
-            storage = db.storage.from_(bucket)
-            upload_options = StorageService._upload_options(file_data, filename)
-            await execute_with_reconnect(
-                lambda d: d.storage.from_(bucket).upload(
-                    path=storage_path,
-                    file=file_data,
-                    file_options=upload_options,
-                ),
-                db,
-                extra={"operation": "upload_item_image", "user_id": user_id},
+            backend = get_storage_backend()
+            await backend.upload(
+                key=storage_path,
+                data=file_data,
+                content_type=content_type,
+                cache_control=DEFAULT_CACHE_CONTROL,
             )
-
-            # Get public URL
-            image_url = storage.get_public_url(storage_path)
-
-            # For MVP, thumbnail_url is same as image_url
-            # In production, you'd generate actual thumbnails
+            image_url = await StorageService.get_public_url(storage_path)
             thumbnail_url = image_url
 
             logger.info(
@@ -297,7 +284,7 @@ class StorageService:
 
     @staticmethod
     async def upload_outfit_image(
-        db: Client,
+        db,
         user_id: str,
         filename: str,
         file_data: bytes,
@@ -306,44 +293,39 @@ class StorageService:
         """Upload an outfit image (AI-generated or manual).
 
         Args:
-            db: Supabase client
+            db: Supabase client (kept for signature compatibility; unused by S3)
             user_id: User ID who owns the outfit
             filename: Original filename
             file_data: Raw file bytes
             generation_type: 'ai' or 'manual'
 
         Returns:
-            Dict with image_url and metadata
+            Dict with image_url (presigned GET), thumbnail_url, storage_path,
+            and metadata
 
         Raises:
             FileTooLargeError: If file exceeds size limit
             UnsupportedMediaTypeError: If file type not allowed
             StorageServiceError: If upload fails
         """
-        # Validate the image (raises on failure)
-        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
-        # event loop during request handling. Runs on the bounded image
-        # executor so concurrent decodes cannot multiply past
-        # IMAGE_PROCESS_WORKERS (see app/core/image_executor.py).
+        # Validate the image (raises on failure). Pillow decode is CPU-bound
+        # (up to ~7MB per image); never block the event loop during request
+        # handling. Runs on the bounded image executor.
         await run_image_op(StorageService._validate_image, file_data, filename)
 
-        storage_path = StorageService._generate_filename(user_id, filename, "outfit")
+        content_type = StorageService._sniff_content_type(file_data, filename)
+        ext = EXTENSION_BY_MIME.get(content_type, os.path.splitext(filename)[1].lower() or ".jpg")
+        storage_path = StorageService._build_key(user_id, "outfits", ext)
 
         try:
-            bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_OUTFITS
-            storage = db.storage.from_(bucket)
-            upload_options = StorageService._upload_options(file_data, filename)
-            await execute_with_reconnect(
-                lambda d: d.storage.from_(bucket).upload(
-                    path=storage_path,
-                    file=file_data,
-                    file_options=upload_options,
-                ),
-                db,
-                extra={"operation": "upload_outfit_image", "user_id": user_id},
+            backend = get_storage_backend()
+            await backend.upload(
+                key=storage_path,
+                data=file_data,
+                content_type=content_type,
+                cache_control=DEFAULT_CACHE_CONTROL,
             )
-
-            image_url = storage.get_public_url(storage_path)
+            image_url = await StorageService.get_public_url(storage_path)
 
             logger.info(
                 "Uploaded outfit image",
@@ -379,7 +361,7 @@ class StorageService:
 
     @staticmethod
     async def upload_avatar(
-        db: Client,
+        db,
         user_id: str,
         filename: str,
         file_data: bytes
@@ -387,36 +369,35 @@ class StorageService:
         """Upload a user avatar image.
 
         Args:
-            db: Supabase client
+            db: Supabase client (kept for signature compatibility; unused by S3)
             user_id: User ID
             filename: Original filename
             file_data: Raw file bytes
 
         Returns:
-            Public URL of the uploaded avatar
+            Presigned GET URL of the uploaded avatar
 
         Raises:
             FileTooLargeError: If file exceeds size limit
             UnsupportedMediaTypeError: If file type not allowed
             StorageServiceError: If upload fails
         """
-        # Validate the image (raises on failure)
-        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
-        # event loop during request handling. Runs on the bounded image
-        # executor so concurrent decodes cannot multiply past
-        # IMAGE_PROCESS_WORKERS (see app/core/image_executor.py).
+        # Validate the image (raises on failure). Pillow decode is CPU-bound
+        # (up to ~7MB per image); never block the event loop during request
+        # handling. Runs on the bounded image executor.
         await run_image_op(StorageService._validate_image, file_data, filename)
 
-        storage_path = StorageService._generate_filename(user_id, filename, "avatar")
+        content_type = StorageService._sniff_content_type(file_data, filename)
+        ext = EXTENSION_BY_MIME.get(content_type, os.path.splitext(filename)[1].lower() or ".jpg")
+        storage_path = StorageService._build_key(user_id, "avatars", ext)
 
         try:
-            bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_AVATARS
-            storage = db.storage.from_(bucket)
-            await asyncio.to_thread(
-                storage.upload,
-                path=storage_path,
-                file=file_data,
-                file_options=StorageService._upload_options(file_data, filename),
+            backend = get_storage_backend()
+            await backend.upload(
+                key=storage_path,
+                data=file_data,
+                content_type=content_type,
+                cache_control=DEFAULT_CACHE_CONTROL,
             )
 
             logger.info(
@@ -426,7 +407,7 @@ class StorageService:
                 file_size=len(file_data),
             )
 
-            return storage.get_public_url(storage_path)
+            return await StorageService.get_public_url(storage_path)
 
         except Exception as e:
             logger.error(
@@ -440,16 +421,16 @@ class StorageService:
 
     @staticmethod
     async def delete_image(
-        db: Client,
+        db,
         storage_path: str,
         bucket: Optional[str] = None
     ) -> bool:
-        """Delete an image from Supabase Storage.
+        """Delete an image from the object store.
 
         Args:
-            db: Supabase client
-            storage_path: Path within the bucket
-            bucket: Bucket name (defaults to item images bucket)
+            db: Supabase client (kept for signature compatibility; unused by S3)
+            storage_path: Path (bucket key) within the bucket
+            bucket: Bucket name (unused with S3; kept for signature compatibility)
 
         Returns:
             True if deleted successfully
@@ -457,12 +438,9 @@ class StorageService:
         Raises:
             StorageServiceError: If deletion fails
         """
-        if bucket is None:
-            # Default to the configured bucket used for uploads.
-            bucket = settings.SUPABASE_STORAGE_BUCKET
-
         try:
-            await asyncio.to_thread(db.storage.from_(bucket).remove, [storage_path])
+            backend = get_storage_backend()
+            await backend.delete(storage_path)
             logger.info(
                 "Deleted image",
                 storage_path=storage_path,
@@ -481,16 +459,16 @@ class StorageService:
 
     @staticmethod
     async def delete_multiple_images(
-        db: Client,
+        db,
         storage_paths: List[str],
         bucket: Optional[str] = None
     ) -> int:
-        """Delete multiple images from Supabase Storage.
+        """Delete multiple images from the object store.
 
         Args:
-            db: Supabase client
-            storage_paths: List of paths to delete
-            bucket: Bucket name
+            db: Supabase client (kept for signature compatibility; unused by S3)
+            storage_paths: List of paths (bucket keys) to delete
+            bucket: Bucket name (unused with S3; kept for signature compatibility)
 
         Returns:
             Number of successfully deleted images
@@ -501,17 +479,9 @@ class StorageService:
         if not storage_paths:
             return 0
 
-        if bucket is None:
-            bucket = settings.SUPABASE_STORAGE_BUCKET
-
         try:
-            await asyncio.to_thread(db.storage.from_(bucket).remove, storage_paths)
-            logger.info(
-                "Deleted multiple images",
-                count=len(storage_paths),
-                bucket=bucket,
-            )
-            return len(storage_paths)
+            backend = get_storage_backend()
+            return await backend.delete_many(storage_paths)
 
         except Exception as e:
             logger.error(
@@ -524,7 +494,7 @@ class StorageService:
 
     @staticmethod
     async def resolve_owned_storage_paths(
-        db: Client,
+        db,
         user_id: str,
         *,
         item_ids: Optional[List[str]] = None,
@@ -541,7 +511,8 @@ class StorageService:
 
         Returns ``{"item_ids": [...], "outfit_ids": [...], "storage_paths": [...]}``.
         Callers own the deletion and its error policy (best-effort for batch
-        deletes, fail-loudly for account deletion).
+        deletes, fail-loudly for account deletion). DB query behavior is
+        unchanged (used by account deletion).
         """
         owned_item_ids: List[str] = []
         owned_outfit_ids: List[str] = []
@@ -617,44 +588,37 @@ class StorageService:
         }
 
     @staticmethod
-    def get_public_url(storage_path: str, bucket: Optional[str] = None) -> str:
-        """Get the public URL for a stored file.
+    async def get_public_url(storage_path: str, bucket: Optional[str] = None) -> str:
+        """Return a short-lived presigned GET URL for a stored object.
 
-        Args:
-            storage_path: Path within the bucket
-            bucket: Bucket name
-
-        Returns:
-            Public URL string
+        The DB stores ``storage_path`` (bucket key); URLs are materialized at
+        read time so they are never persisted and never expire server-side.
+        ``bucket`` is kept for signature compatibility (the S3 backend uses the
+        single configured bucket).
         """
-        if bucket is None:
-            bucket = settings.SUPABASE_STORAGE_BUCKET
-
-        from app.db.connection import get_db
-        db = get_db()
-        return db.storage.from_(bucket).get_public_url(storage_path)
+        backend = get_storage_backend()
+        return await backend.presign_get(
+            storage_path, expires=settings.OBJECT_STORAGE_PRESIGN_TTL
+        )
 
     @staticmethod
     async def move_image(
-        db: Client,
+        db,
         old_path: str,
         new_path: str,
         bucket: Optional[str] = None
     ) -> bool:
-        """Move an image within a bucket.
+        """Move an image within the bucket (server-side copy via S3).
 
-        Because Supabase has no server-side move, this downloads and re-uploads,
-        which means the content type has to be RE-SNIFFED from the downloaded
-        bytes. Without that this path (used by `promote_temp_image_to_item`, i.e.
-        social-import approve) silently discards the correct type that
-        `upload_temp_generated_image` set and lands the object back on
-        storage3's `text/plain;charset=UTF-8` default.
+        Unlike Supabase (which had no server-side move), this uses an S3
+        server-side ``copy`` followed by a ``delete`` — no bytes are
+        downloaded/re-uploaded, so the stored content type is preserved.
 
         Args:
-            db: Supabase client
-            old_path: Current path
-            new_path: New path
-            bucket: Bucket name
+            db: Supabase client (kept for signature compatibility; unused by S3)
+            old_path: Current path (bucket key)
+            new_path: New path (bucket key)
+            bucket: Bucket name (unused with S3; kept for signature compatibility)
 
         Returns:
             True if moved successfully
@@ -662,20 +626,10 @@ class StorageService:
         Raises:
             StorageServiceError: If move fails
         """
-        if bucket is None:
-            bucket = settings.SUPABASE_STORAGE_BUCKET
-
         try:
-            # Download and re-upload (Supabase doesn't have direct move)
-            storage = db.storage.from_(bucket)
-            file_data = await asyncio.to_thread(storage.download, old_path)
-            await asyncio.to_thread(
-                storage.upload,
-                path=new_path,
-                file=file_data,
-                file_options=StorageService._upload_options(file_data, new_path),
-            )
-            await asyncio.to_thread(storage.remove, [old_path])
+            backend = get_storage_backend()
+            await backend.copy(old_path, new_path)
+            await backend.delete(old_path)
 
             logger.info(
                 "Moved image",
@@ -697,47 +651,45 @@ class StorageService:
 
     @staticmethod
     async def upload_feedback_attachment(
-        db: Client,
+        db,
         user_id: str,
         filename: str,
         file_data: bytes,
     ) -> dict:
-        """Upload a feedback attachment to Supabase Storage.
+        """Upload a feedback attachment to the object store.
 
         Args:
-            db: Supabase client
+            db: Supabase client (kept for signature compatibility; unused by S3)
             user_id: User ID or 'anonymous'
             filename: Original filename
             file_data: Raw file bytes
 
         Returns:
-            Dict with image_url and metadata
+            Dict with image_url (presigned GET) and storage_path
 
         Raises:
             FileTooLargeError: If file exceeds size limit
             UnsupportedMediaTypeError: If file type not allowed
             StorageServiceError: If upload fails
         """
-        # Validate the image (raises on failure)
-        # Pillow decode is CPU-bound (up to ~7MB per image); never block the
-        # event loop during request handling. Runs on the bounded image
-        # executor so concurrent decodes cannot multiply past
-        # IMAGE_PROCESS_WORKERS (see app/core/image_executor.py).
+        # Validate the image (raises on failure). Pillow decode is CPU-bound
+        # (up to ~7MB per image); never block the event loop during request
+        # handling. Runs on the bounded image executor.
         await run_image_op(StorageService._validate_image, file_data, filename)
 
-        storage_path = StorageService._generate_filename(user_id, filename, "feedback")
+        content_type = StorageService._sniff_content_type(file_data, filename)
+        ext = EXTENSION_BY_MIME.get(content_type, os.path.splitext(filename)[1].lower() or ".jpg")
+        storage_path = StorageService._build_key(user_id, "feedback", ext)
 
         try:
-            bucket = settings.SUPABASE_STORAGE_BUCKET or BUCKET_FEEDBACK
-            storage = db.storage.from_(bucket)
-            await asyncio.to_thread(
-                storage.upload,
-                path=storage_path,
-                file=file_data,
-                file_options=StorageService._upload_options(file_data, filename),
+            backend = get_storage_backend()
+            await backend.upload(
+                key=storage_path,
+                data=file_data,
+                content_type=content_type,
+                cache_control=DEFAULT_CACHE_CONTROL,
             )
-
-            image_url = storage.get_public_url(storage_path)
+            image_url = await StorageService.get_public_url(storage_path)
 
             logger.info(
                 "Uploaded feedback attachment",
@@ -763,7 +715,7 @@ class StorageService:
 
     @staticmethod
     async def upload_file(
-        db: Client,
+        db,
         file_data: bytes,
         file_path: str,
         content_type: str = "application/octet-stream",
@@ -771,40 +723,33 @@ class StorageService:
         upsert: bool = True,
         cache_control: Optional[str] = None,
     ) -> dict:
-        """Upload raw bytes to Supabase Storage with an explicit destination path.
+        """Upload raw bytes to the S3 bucket with an explicit destination path.
 
-        `cache_control` is seconds as a string; storage3 turns it into
-        `cache-control: max-age=<v>`. Defaults to DEFAULT_CACHE_CONTROL. Pass a
-        short value (e.g. "60") when overwriting an existing key so a CDN cannot
-        keep serving the old bytes for an hour.
+        ``cache_control`` is seconds as a string; encoded on the object as
+        ``cache-control: max-age=<v>``. Defaults to DEFAULT_CACHE_CONTROL. Pass
+        a short value (e.g. "60") when overwriting an existing key so a CDN
+        cannot keep serving the old bytes for an hour.
 
-        `upsert` defaults to True: callers pass unique uuid4 paths, so upsert
-        never clobbers a foreign object — it only makes the reconnect retry
-        exact-once (a retry after a committed-but-lost response overwrites the
-        same path instead of 409ing on a now-existing key).
+        ``upsert`` is accepted for signature compatibility (S3 PUT is naturally
+        idempotent — a retry after a committed-but-lost response overwrites the
+        same path instead of erroring on a now-existing key).
+
+        Returns ``{"public_url": <presigned GET URL>, "storage_path": <key>,
+        "bucket": <bucket>}``.
         """
-        if bucket is None:
-            bucket = settings.SUPABASE_STORAGE_BUCKET
-
         try:
-            file_options = {
-                "content-type": content_type,
-                "cache-control": cache_control or DEFAULT_CACHE_CONTROL,
-                "upsert": str(upsert).lower(),
-            }
-            await execute_with_reconnect(
-                lambda d: d.storage.from_(bucket).upload(
-                    path=file_path,
-                    file=file_data,
-                    file_options=file_options,
-                ),
-                db,
-                extra={"operation": "upload_file", "bucket": bucket},
+            backend = get_storage_backend()
+            await backend.upload(
+                key=file_path,
+                data=file_data,
+                content_type=content_type,
+                cache_control=cache_control or DEFAULT_CACHE_CONTROL,
             )
+            public_url = await StorageService.get_public_url(file_path)
             return {
-                "public_url": db.storage.from_(bucket).get_public_url(file_path),
+                "public_url": public_url,
                 "storage_path": file_path,
-                "bucket": bucket,
+                "bucket": bucket or settings.OBJECT_STORAGE_BUCKET,
             }
         except Exception as e:
             logger.error(
@@ -817,7 +762,7 @@ class StorageService:
 
     @staticmethod
     async def upload_temp_generated_image(
-        db: Client,
+        db,
         user_id: str,
         file_data: bytes,
         source: str = "social-import",
@@ -825,10 +770,12 @@ class StorageService:
     ) -> dict:
         """Upload temporary AI-generated image for review workflows.
 
-        `extension` is only a hint: the real format is sniffed from the bytes,
-        because generated images are no longer always PNG (matted product shots
-        come back as WebP) and a mislabelled object is served with the wrong
-        content type for as long as it lives.
+        Behavior is UNCHANGED from the Supabase path: temp images stay under
+        ``{user_id}/tmp/{source}/``. `extension` is only a hint: the real
+        format is sniffed from the bytes, because generated images are no
+        longer always PNG (matted product shots come back as WebP) and a
+        mislabelled object is served with the wrong content type for as long as
+        it lives.
         """
         ext = extension if extension.startswith(".") else f".{extension}"
         # Pillow decode is CPU-bound (up to ~7MB per image); never block the
@@ -852,7 +799,7 @@ class StorageService:
 
     @staticmethod
     async def upload_source_image(
-        db: Client,
+        db,
         user_id: str,
         file_data: bytes,
         extension: str = ".jpg",
@@ -871,11 +818,10 @@ class StorageService:
         # event loop during request handling. Runs on the bounded image
         # executor (see app/core/image_executor.py).
         await run_image_op(StorageService._validate_image, file_data, ext)
-        # Sniffed from the bytes, with the caller's extension only as a fallback:
-        # the previous ext-based mapping labelled every non-.jpg source photo
-        # `image/png`, so a .webp upload was served as PNG.
+        # Sniffed from the bytes, with the caller's extension only as a fallback.
         content_type = StorageService._sniff_content_type(file_data, ext)
-        path = f"{user_id}/sources/source_{uuid.uuid4().hex}{ext}"
+        ext = EXTENSION_BY_MIME.get(content_type, ext)
+        path = StorageService._build_key(user_id, "sources", ext)
         upload = await StorageService.upload_file(
             db=db,
             file_data=file_data,
@@ -891,46 +837,28 @@ class StorageService:
     async def _download_bytes(
         url: str, timeout: float = 10.0, purpose: str = "storage image"
     ) -> Optional[bytes]:
-        """Download a stored image URL to raw bytes. None on any failure.
+        """Download a stored object to raw bytes via the S3 backend. None on failure.
 
-        Shared core of ``download_to_base64`` and
-        ``download_and_downscale_to_base64``: only server-owned Supabase
-        Storage URLs are fetched (SSRF guard in ``_validate_storage_url``),
-        redirects are followed one hop at a time with each hop re-validated,
-        and the body is accumulated with a hard size cap (``MAX_FILE_SIZE``).
-        Uses the module-level pooled client so an N-photo batch pays one
-        connection setup, not N.
+        The input is reduced to a bucket key via ``key_from_path`` and fetched
+        from the bucket — never from an arbitrary URL (SSRF-safe: only known
+        bucket keys are ever read). ``timeout`` is accepted for signature
+        compatibility; the S3 client has its own connect/read timeouts.
         """
         if not url:
             return None
-        try:
-            current_url = StorageService._validate_storage_url(url)
-            for _ in range(4):
-                async with _get_download_client().stream(
-                    "GET", current_url, timeout=httpx.Timeout(timeout)
-                ) as response:
-                    if response.status_code in {301, 302, 303, 307, 308}:
-                        location = response.headers.get("location")
-                        if not location:
-                            return None
-                        current_url = StorageService._validate_storage_url(
-                            urljoin(current_url, location)
-                        )
-                        continue
-                    response.raise_for_status()
-                    content = bytearray()
-                    async for chunk in response.aiter_bytes():
-                        if len(content) + len(chunk) > MAX_FILE_SIZE:
-                            return None
-                        content.extend(chunk)
-                    if not content:
-                        return None
-                    return bytes(content)
+        key = StorageService.key_from_path(url)
+        if not key:
             return None
+        try:
+            backend = get_storage_backend()
+            content = await backend.download(key)
+            if not content or len(content) > MAX_FILE_SIZE:
+                return None
+            return content
         except Exception as e:
             logger.warning(
                 f"Failed to download {purpose}",
-                url=url[:120],
+                url=str(url)[:120],
                 error=str(e),
             )
             return None
@@ -951,8 +879,8 @@ class StorageService:
         reference: raw response bytes + small JPEG — instead of raw bytes +
         full base64 + full decode + downscaled base64.
 
-        Same SSRF guard and failure contract as ``download_to_base64``
-        (returns None on any failure so callers degrade gracefully).
+        Same SSRF-safe contract as ``download_to_base64`` (returns None on any
+        failure so callers degrade gracefully).
         """
         content = await StorageService._download_bytes(
             url, timeout, purpose="source image for reference"
@@ -970,11 +898,12 @@ class StorageService:
 
     @staticmethod
     async def download_to_base64(url: str, timeout: float = 10.0) -> Optional[str]:
-        """Download a stored image URL back to base64 for image-gen reference.
+        """Download a stored image back to base64 for image-gen reference.
 
-        Only server-owned Supabase Storage URLs are fetched. This helper is
-        used on user-controlled item/avatar records, so following arbitrary
-        URLs would turn image generation into an SSRF primitive.
+        Fetches via the S3 backend by bucket key (see ``key_from_path``), never
+        from arbitrary URLs — this keeps the previous SSRF-safe guarantee. This
+        helper is used on user-controlled item/avatar records, so following
+        arbitrary URLs would turn image generation into an SSRF primitive.
 
         Returns base64-encoded, decoded image bytes (no data: prefix) or None
         on any failure so callers can fall back gracefully.
@@ -988,57 +917,24 @@ class StorageService:
         return base64.b64encode(content).decode("utf-8")
 
     @staticmethod
-    def _validate_storage_url(url: str) -> str:
-        """Allow only the configured Supabase Storage origin and object path."""
-        expected = urlparse(settings.SUPABASE_URL)
-        parsed = urlparse(url)
-        if parsed.scheme != "https" or not parsed.hostname:
-            raise ValueError("storage image URL must use HTTPS")
-        if parsed.username or parsed.password:
-            raise ValueError("storage image URL cannot contain credentials")
-        if parsed.hostname.lower() != (expected.hostname or "").lower():
-            raise ValueError("storage image URL host is not trusted")
-        if not parsed.path.startswith("/storage/v1/object/"):
-            raise ValueError("storage image URL is not a Supabase object URL")
-        return url
-
-    @staticmethod
-    def url_to_storage_path(url: Optional[str]) -> Optional[tuple]:
-        """Extract ``(bucket, storage_path)`` from a Supabase Storage URL.
-
-        Returns None for non-Supabase or malformed URLs. Used to resolve
-        objects that are referenced only by URL (e.g. user avatars) so
-        account deletion can remove them from Storage.
-        """
-        if not url:
-            return None
-        try:
-            StorageService._validate_storage_url(url)
-        except ValueError:
-            return None
-        parsed = urlparse(url)
-        parts = [part for part in parsed.path.split("/") if part]
-        # /storage/v1/object/public/<bucket>/<path...>
-        if len(parts) < 5 or parts[:4] != ["storage", "v1", "object", "public"]:
-            return None
-        return parts[4], "/".join(parts[5:])
-
-    @staticmethod
     async def promote_temp_image_to_item(
-        db: Client,
+        db,
         user_id: str,
         temp_storage_path: str,
         filename_hint: str = "generated.png",
     ) -> dict:
-        """Move a temporary generated image into the canonical item image path."""
-        new_path = StorageService._generate_filename(user_id, filename_hint, "item")
+        """Move a temporary generated image into the canonical item image path.
+
+        Uses an S3 server-side copy (``{user_id}/tmp/...`` -> ``{user_id}/items/...``).
+        """
+        ext = os.path.splitext(filename_hint)[1].lower() or ".png"
+        new_path = StorageService._build_key(user_id, "items", ext)
         await StorageService.move_image(
             db=db,
             old_path=temp_storage_path,
             new_path=new_path,
-            bucket=settings.SUPABASE_STORAGE_BUCKET,
         )
-        image_url = db.storage.from_(settings.SUPABASE_STORAGE_BUCKET).get_public_url(new_path)
+        image_url = await StorageService.get_public_url(new_path)
         return {
             "image_url": image_url,
             "thumbnail_url": image_url,
@@ -1047,7 +943,7 @@ class StorageService:
 
     @staticmethod
     async def cleanup_temp_images(
-        db: Client,
+        db,
         storage_paths: List[str],
     ) -> int:
         """Delete temporary generated images (best-effort)."""
@@ -1057,7 +953,6 @@ class StorageService:
             return await StorageService.delete_multiple_images(
                 db=db,
                 storage_paths=storage_paths,
-                bucket=settings.SUPABASE_STORAGE_BUCKET,
             )
         except Exception as e:
             logger.warning(

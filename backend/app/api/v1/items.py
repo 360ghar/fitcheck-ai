@@ -45,6 +45,7 @@ from app.services.storage_service import MAX_FILE_SIZE, StorageService
 from app.services.vector_service import get_vector_service
 from app.utils.db import execute_with_reconnect, safe_search_term
 from app.utils.parallel import parallel_with_retry
+from app.api.v1.images import materialize_parent_images
 
 logger = get_context_logger(__name__)
 
@@ -428,6 +429,9 @@ async def list_items(
             _list_and_count, db, extra={"operation": "list_items", "user_id": user_id}
         )
         items = [_normalize_item_images(i) for i in (res.data or [])]
+        # Private buckets: materialize fresh short-lived presigned URLs from
+        # storage_path at read time (the DB stores keys, not URLs).
+        items = await materialize_parent_images(items)
 
         total_pages = max(1, (total + page_size - 1) // page_size)
         return {
@@ -467,7 +471,10 @@ async def get_item(
         )
         if not result.data:
             raise ItemNotFoundError(item_id=item_id_str)
-        return {"data": _normalize_item_images(result.data), "message": "OK"}
+        item = _normalize_item_images(result.data)
+        # Private buckets: materialize fresh presigned URLs at read time.
+        item = (await materialize_parent_images([item]))[0]
+        return {"data": item, "message": "OK"}
     except (ItemNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:

@@ -89,6 +89,7 @@ async def _create_feedback_ticket(
 
     # Upload attachments
     attachment_urls: List[str] = []
+    attachment_storage_paths: List[str] = []
     for attachment in attachments:
         if attachment.filename:
             # Rejects before buffering past the cap, unlike read()-then-check.
@@ -103,6 +104,12 @@ async def _create_feedback_ticket(
                     file_data=file_data,
                 )
                 attachment_urls.append(result["image_url"])
+                # Record the durable bucket key so the object can be cleaned up
+                # during account deletion / orphan inventory. The URL alone is a
+                # short-lived presigned URL and must NEVER be the durable ref.
+                storage_path = result.get("storage_path")
+                if storage_path:
+                    attachment_storage_paths.append(storage_path)
             except Exception as e:
                 logger.warning(f"Failed to upload attachment: {e}")
                 # Continue without this attachment
@@ -132,6 +139,7 @@ async def _create_feedback_ticket(
         request=request,
         user_id=user_id,
         attachment_urls=attachment_urls,
+        attachment_storage_paths=attachment_storage_paths,
         db=db,
     )
 

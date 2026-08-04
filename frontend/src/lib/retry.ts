@@ -5,7 +5,7 @@
  * exponential backoff and jitter to prevent thundering herd problems.
  */
 
-import { isRateLimitExhausted } from '@/lib/errors'
+import { isRateLimitExhausted, TRANSPORT_RETRYABLE_STATUS_CODES } from '@/lib/errors'
 
 export interface RetryOptions {
   /** Maximum number of retry attempts (default: 3) */
@@ -39,7 +39,8 @@ const DEFAULT_OPTIONS: Required<Omit<RetryOptions, 'onRetry' | 'signal'>> = {
   maxDelayMs: 30000,
   backoffFactor: 2,
   jitter: true,
-  retryableStatusCodes: [429, 500, 502, 503, 504],
+  // Single source of truth with the axios transport interceptor (lib/errors).
+  retryableStatusCodes: [...TRANSPORT_RETRYABLE_STATUS_CODES],
 }
 
 /**

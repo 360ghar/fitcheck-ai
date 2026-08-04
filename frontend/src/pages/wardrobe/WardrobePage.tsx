@@ -34,6 +34,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { LoadingGrid } from '@/components/ui/loading-grid'
+import { MasonryGrid } from '@/components/ui/masonry-grid'
+import { InfiniteScrollSentinel } from '@/components/ui/infinite-scroll-sentinel'
 import { FilterPanel, type ItemFilters, type SortOptions } from '@/components/wardrobe/FilterPanel'
 import { BatchExtractionFlow, type ItemUploadResult } from '@/components/wardrobe/BatchExtractionFlow'
 import { ItemDetailPanel } from '@/components/wardrobe/ItemDetailPanel'
@@ -44,10 +46,10 @@ import { MasterDetailLayout } from '@/components/layout/MasterDetailLayout'
 import { useToast } from '@/components/ui/use-toast'
 import type { BatchJobUiStatus, Category, Item } from '@/types'
 import { useJobUiStore } from '@/stores/jobUiStore'
+import { useColumnCount } from '@/hooks/useColumnCount'
 import { useIsSplitViewport, useIsWideViewport } from '@/hooks/useMediaQuery'
 import { EmptyState } from '@/components/ui/empty-state'
 import { FilterChip } from '@/components/ui/filter-chip'
-import { PinGrid } from '@/components/wardrobe/pin-grid'
 
 // Quick category filter chips (Alta-style), mirror the FilterPanel categories.
 const CATEGORY_CHIPS: { value: Category | 'all'; label: string }[] = [
@@ -225,7 +227,10 @@ export default function WardrobePage() {
     setFilters((prev) => ({ ...prev, isFavorite: favoritesOnly }))
     setFilter('isFavorite', favoritesOnly)
 
-    fetchItems(true)
+    // URL is the source of truth here: a favorites toggle must re-read from
+    // the server (the is_favorite key differs), so force. A plain mount with
+    // no URL change reuses the store cache (fresh within 30s).
+    fetchItems(Boolean(searchParams.get('favorites')))
   }, [fetchItems, searchParams, setFilter])
 
   // Deep link only. Deps are the id and a boolean — NOT `filteredItems`, whose
@@ -491,6 +496,11 @@ export default function WardrobePage() {
   // one cramped masonry column. Compact rows read better in that band.
   const forceListRows = isDetailOpen && isSplitViewport && !isWideViewport
   const showMasonry = sort.isGridView && !forceListRows
+  // JS-masonry column count mirrors the old CSS-columns tables (full vs split).
+  const columnCount = useColumnCount({ isDetailOpen: isDetailOpen })
+  // Changing the result set's ORDER or MEMBERSHIP must re-spread the masonry from
+  // scratch; a pure append (load-more) keeps this stable so cards stay put.
+  const masonryResetKey = `${filters.category}|${filters.color}|${filters.occasion}|${filters.condition}|${filters.isFavorite}|${sort.sortBy}|${sort.sortOrder}|${sort.isGridView}`
 
   const selectionHiddenByFilters =
     isDetailOpen &&
@@ -513,6 +523,11 @@ export default function WardrobePage() {
           isSelected={isMultiSelected}
           className={isOpenInPane ? 'border-ink' : undefined}
           onClick={() => handleCardClick(item)}
+          onImageError={() => {
+            // A broken image usually means the presigned URL expired; refetch
+            // the current list once to obtain fresh URLs.
+            void fetchItems(true)
+          }}
           onToggleFavorite={(e) => {
             e.stopPropagation()
             handleToggleFavorite(item.id)
@@ -546,21 +561,15 @@ export default function WardrobePage() {
           onAction={handleResetFilters}
         />
         {/* Search is client-side over the loaded pages only: when matches may
-            live on unloaded pages, keep the Load-more affordance visible so
-            the empty state is not a dead end (a false "no match" for a
-            closet larger than one page). */}
+            live on unloaded pages, keep the infinite-scroll sentinel visible so
+            the empty state is not a dead end (a false "no match" for a closet
+            larger than one page). */}
         {filters.search && hasMore && (
-          <div className="mt-6 flex justify-center">
-            <Button
-              variant="outline"
-              onClick={() => void fetchMore()}
-              disabled={isLoadingMore}
-              aria-busy={isLoadingMore}
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              {isLoadingMore ? 'Loading…' : 'Load more'}
-            </Button>
-          </div>
+          <InfiniteScrollSentinel
+            onLoadMore={() => void fetchMore()}
+            hasMore={hasMore}
+            isLoading={isLoadingMore}
+          />
         )}
       </>
     ) : (
@@ -575,31 +584,19 @@ export default function WardrobePage() {
   ) : (
     <>
       {showMasonry ? (
-        <PinGrid className={isDetailOpen ? SPLIT_COLUMNS : undefined}>
+        <MasonryGrid columnCount={columnCount} resetKey={masonryResetKey}>
           {filteredItems.map((item) => renderCard(item, 'default'))}
-        </PinGrid>
+        </MasonryGrid>
       ) : (
         <div className="grid grid-cols-1 gap-2">
           {filteredItems.map((item) => renderCard(item, 'list'))}
         </div>
       )}
-      {hasMore && (
-        <div className="mt-6 flex justify-center">
-          <Button
-            variant="outline"
-            onClick={() => void fetchMore()}
-            disabled={isLoadingMore}
-            aria-busy={isLoadingMore}
-          >
-            {isLoadingMore ? (
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
-            {isLoadingMore ? 'Loading…' : 'Load more'}
-          </Button>
-        </div>
-      )}
+      <InfiniteScrollSentinel
+        onLoadMore={() => void fetchMore()}
+        hasMore={hasMore}
+        isLoading={isLoadingMore}
+      />
     </>
   )
 

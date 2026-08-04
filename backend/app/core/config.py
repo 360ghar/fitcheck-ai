@@ -4,6 +4,7 @@ All settings can be overridden via environment variables.
 """
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import List, Optional
@@ -78,6 +79,28 @@ class Settings(BaseSettings):
     SUPABASE_SECRET_KEY: str
     SUPABASE_JWT_SECRET: str
     SUPABASE_STORAGE_BUCKET: str = "fitcheck-images"
+
+    # ==========================================================================
+    # Object storage (Railway S3-compatible Bucket)
+    # ==========================================================================
+    # Primary storage path for the app (DB + Auth stay on Supabase). Railway
+    # provides these as variable references: BUCKET, ENDPOINT, REGION,
+    # ACCESS_KEY_ID, SECRET_ACCESS_KEY (plus AWS_* aliases); the model_validator
+    # below maps them onto the OBJECT_STORAGE_* names when the canonical field
+    # is unset.
+    STORAGE_BACKEND: str = "railway"  # "railway" (S3) or "supabase" (cutover fallback)
+    OBJECT_STORAGE_ENDPOINT: str = "https://storage.railway.app"
+    OBJECT_STORAGE_REGION: str = "auto"
+    OBJECT_STORAGE_ACCESS_KEY_ID: str = ""
+    OBJECT_STORAGE_SECRET_ACCESS_KEY: str = ""
+    OBJECT_STORAGE_BUCKET: str = ""
+    # Presigned GET URL lifetime for served images (seconds). Short-lived URLs
+    # (default 3600s / 1h) keep the bucket private while giving the web/mobile
+    # clients a long enough window that a cached list or an open tab still
+    # renders before the URL rotates on the next refetch. Railway allows up to
+    # 90 days; keep this moderate — it is the access window for anyone holding
+    # the URL.
+    OBJECT_STORAGE_PRESIGN_TTL: int = 3600
 
     # Pinecone
     PINECONE_API_KEY: Optional[str] = None
@@ -380,6 +403,43 @@ class Settings(BaseSettings):
         case_sensitive = True
         enable_decoding = False
         extra = "ignore"
+
+    @model_validator(mode="after")
+    def _resolve_object_storage_from_railway_aliases(self):
+        """Map Railway Bucket's generic env names onto the OBJECT_STORAGE_* fields.
+
+        Railway exposes the bucket credentials as BUCKET / ENDPOINT / REGION /
+        ACCESS_KEY_ID / SECRET_ACCESS_KEY (plus AWS_* aliases). Only fill the
+        canonical OBJECT_STORAGE_* field when it is unset, so a hand-set value
+        always wins.
+        """
+        if not self.OBJECT_STORAGE_ENDPOINT:
+            self.OBJECT_STORAGE_ENDPOINT = (
+                os.getenv("ENDPOINT")
+                or os.getenv("AWS_ENDPOINT_URL")
+                or self.OBJECT_STORAGE_ENDPOINT
+            )
+        if not self.OBJECT_STORAGE_REGION:
+            self.OBJECT_STORAGE_REGION = (
+                os.getenv("REGION") or os.getenv("AWS_REGION") or self.OBJECT_STORAGE_REGION
+            )
+        if not self.OBJECT_STORAGE_ACCESS_KEY_ID:
+            self.OBJECT_STORAGE_ACCESS_KEY_ID = (
+                os.getenv("ACCESS_KEY_ID")
+                or os.getenv("AWS_ACCESS_KEY_ID")
+                or self.OBJECT_STORAGE_ACCESS_KEY_ID
+            )
+        if not self.OBJECT_STORAGE_SECRET_ACCESS_KEY:
+            self.OBJECT_STORAGE_SECRET_ACCESS_KEY = (
+                os.getenv("SECRET_ACCESS_KEY")
+                or os.getenv("AWS_SECRET_ACCESS_KEY")
+                or self.OBJECT_STORAGE_SECRET_ACCESS_KEY
+            )
+        if not self.OBJECT_STORAGE_BUCKET:
+            self.OBJECT_STORAGE_BUCKET = (
+                os.getenv("BUCKET") or os.getenv("AWS_BUCKET") or self.OBJECT_STORAGE_BUCKET
+            )
+        return self
 
     @model_validator(mode="after")
     def _include_frontend_origin(self):

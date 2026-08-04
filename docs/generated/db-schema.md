@@ -52,6 +52,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `031_promo_codes.sql`
 - `032_fix_redeem_promo_atomic_plan_type.sql`
 - `033_fix_referral_credit_stacking.sql`
+- `034_add_support_tickets_storage_paths.sql`
 
 ## Tables (CREATE TABLE)
 
@@ -200,6 +201,7 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `030_mobile_iap.sql` → `google_rtdn_events`
 - `031_promo_codes.sql` → `promo_codes`
 - `031_promo_codes.sql` → `promo_redemptions`
+- `034_add_support_tickets_storage_paths.sql` → `support_tickets`
 
 ## Related
 

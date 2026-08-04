@@ -255,4 +255,33 @@ describe('apiClient global error toasts — one toast per logical failure', () =
     expect(showWarning).not.toHaveBeenCalled()
     expect(showNetworkError).not.toHaveBeenCalled()
   })
+
+  it('does not transport-retry a request marked _skipTransportRetry', async () => {
+    // withRetry-owned AI calls set _skipTransportRetry so the interceptor
+    // does not multiply retry layers. A 500 must surface immediately (the
+    // app-level retry loop handles it) and toast exactly once.
+    mock.onGet('/ai-own-retry').reply(500, { error: 'boom' })
+
+    const promise = apiClient
+      .get('/ai-own-retry', { _skipTransportRetry: true } as never)
+      .catch((e) => e)
+    await vi.advanceTimersByTimeAsync(5000)
+
+    const err = await promise
+    expect(err.response?.status).toBe(500)
+    expect(mock.history.get.length).toBe(1)
+    expect(showApiError).toHaveBeenCalledTimes(1)
+  })
+
+  it('resolves same-origin relative URLs against the shared base (no /api/api)', async () => {
+    // With VITE_API_BASE_URL unset, the client base is '' (same-origin), so
+    // a request to '/api/v1/items' hits exactly that path.
+    mock.onGet('/api/v1/items').reply(200, { ok: true })
+
+    const res = await apiClient.get('/api/v1/items')
+    expect(res.data).toEqual({ ok: true })
+    // Exactly one request for the full path — no doubled prefix.
+    expect(mock.history.get.length).toBe(1)
+    expect(mock.history.get[0].url).toBe('/api/v1/items')
+  })
 })

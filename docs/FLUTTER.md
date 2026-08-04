@@ -1,6 +1,6 @@
 # Flutter
 
-Last updated: 2026-07-22
+Last updated: 2026-08-04
 
 Mobile client under `flutter/` using GetX feature modules.
 
@@ -47,3 +47,11 @@ Prefer backend batch extract JSON base64 start endpoint from Flutter; SSE for pr
 ## Notes
 
 Deep feature behavior should be documented in `product-specs/` and implementation status. Expand this file when mobile-specific architecture decisions accumulate.
+
+### Image URLs are short-lived (presigned)
+
+Image URLs returned by the backend are **short-lived presigned GET URLs** (default
+~15 min) served from the private Railway Bucket. Treat them as ephemeral: do not
+cache them long-term, and re-fetch from the backend as needed (e.g. on re-render or
+when a URL has expired). The DB stores a bucket key, not a URL, so the backend
+materializes a fresh URL at read time.

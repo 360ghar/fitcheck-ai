@@ -21,6 +21,7 @@ vi.mock('@/api/items', () => ({
 }))
 
 import { useClosetStore } from '../wardrobeStore'
+import { clearRequestCache } from '@/lib/requestCache'
 import type { Item } from '@/types'
 
 const item = (overrides: Partial<Item> = {}): Item =>
@@ -56,6 +57,10 @@ function paginated(items: Item[], total = items.length) {
 describe('wardrobe store', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Reset the shared request cache so tests do not leak cached lists
+    // between each other (the store's cache keys are user-scoped to 'anon'
+    // in the test environment).
+    clearRequestCache()
     // Full reset so `hasLoaded` does not leak across tests.
     useClosetStore.setState({
       items: [],
@@ -150,5 +155,54 @@ describe('wardrobe store', () => {
 
     expect(useClosetStore.getState().error).toBeNull()
     expect(useClosetStore.getState().isDetailLoading).toBe(false)
+  })
+
+  it('coalesces concurrent identical list fetches onto one API call', async () => {
+    let resolveFetch: (v: unknown) => void = () => {}
+    mocks.getItems.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve
+        })
+    )
+
+    const p1 = useClosetStore.getState().fetchItems()
+    const p2 = useClosetStore.getState().fetchItems()
+    expect(mocks.getItems).toHaveBeenCalledTimes(1)
+
+    resolveFetch(paginated([item()]))
+    await Promise.all([p1, p2])
+
+    expect(mocks.getItems).toHaveBeenCalledTimes(1)
+    expect(useClosetStore.getState().items).toHaveLength(1)
+    expect(useClosetStore.getState().hasLoaded).toBe(true)
+  })
+
+  it('reuses a fresh cached list instead of re-fetching on a second load', async () => {
+    mocks.getItems.mockResolvedValue(paginated([item()]))
+    await useClosetStore.getState().fetchItems()
+    await useClosetStore.getState().fetchItems()
+
+    expect(mocks.getItems).toHaveBeenCalledTimes(1)
+  })
+
+  it('forces a fresh fetch when refresh=true', async () => {
+    mocks.getItems.mockResolvedValue(paginated([item()]))
+    await useClosetStore.getState().fetchItems()
+    await useClosetStore.getState().fetchItems(true)
+
+    expect(mocks.getItems).toHaveBeenCalledTimes(2)
+  })
+
+  it('a delete invalidates the cached list so the next read re-fetches', async () => {
+    mocks.getItems.mockResolvedValue(paginated([item()]))
+    mocks.deleteItem.mockResolvedValue(undefined)
+
+    await useClosetStore.getState().fetchItems()
+    await useClosetStore.getState().deleteItem('item-1')
+    await useClosetStore.getState().fetchItems()
+
+    // Initial load + post-delete re-read (cache was invalidated).
+    expect(mocks.getItems).toHaveBeenCalledTimes(2)
   })
 })

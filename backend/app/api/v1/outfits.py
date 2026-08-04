@@ -47,6 +47,7 @@ from app.models.outfit import (
 )
 from app.services.storage_service import MAX_FILE_SIZE, StorageService
 from app.utils.db import execute_with_reconnect, safe_search_term
+from app.api.v1.images import materialize_parent_images
 
 logger = get_context_logger(__name__)
 
@@ -399,6 +400,12 @@ async def list_outfits(
             extra={"operation": "list_outfits", "user_id": user_id},
         )
 
+        # Private buckets: materialize fresh short-lived presigned URLs from
+        # storage_path at read time (the DB stores keys, not URLs) for both the
+        # outfit images and the nested item images.
+        await materialize_parent_images(outfits)
+        await materialize_parent_images(list(items_map.values()))
+
         # Attach items to each outfit
         for outfit in outfits:
             outfit["items"] = [
@@ -471,6 +478,8 @@ async def get_outfit(
         outfit = _fetch_outfit(db=db, user_id=user_id, outfit_id=outfit_id_str, include_items=True)
         if not outfit:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
+        # Private buckets: materialize fresh presigned URLs at read time.
+        outfit = (await materialize_parent_images([outfit]))[0]
         return {"data": outfit, "message": "OK"}
 
     except OutfitNotFoundError:

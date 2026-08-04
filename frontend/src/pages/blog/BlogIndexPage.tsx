@@ -4,15 +4,13 @@ import { Badge } from '@/components/ui/badge'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
 import SEO from '@/components/seo/SEO'
 import { Calendar, Clock, ArrowRight } from 'lucide-react'
-import { useBlogPosts, useBlogCategories } from '@/hooks/useBlog'
+import { useBlogCategories } from '@/hooks/useBlog'
+import { useInfiniteBlogPosts } from '@/hooks/useInfiniteBlogPosts'
+import { InfiniteScrollSentinel } from '@/components/ui/infinite-scroll-sentinel'
 
 export default function BlogIndexPage() {
   const { category } = useParams<{ category: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
-  // Clamp malformed pagination (?page=abc / 1.5 / -2): the backend's
-  // `page: Field(ge=1)` would 422 the whole grid on a NaN or negative value.
-  const rawPage = parseInt(searchParams.get('page') || '1', 10)
-  const page = Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1
   const searchQuery = searchParams.get('search')?.trim() || ''
   const pageSize = 12
   const [searchValue, setSearchValue] = useState(searchQuery)
@@ -28,24 +26,20 @@ export default function BlogIndexPage() {
   const categoryIsResolving = Boolean(category && isLoadingCategories)
   const categoryIsInvalid = Boolean(category && !isLoadingCategories && (categoriesError || !categoryFilter))
 
-  const { data: postsData, isLoading: isLoadingPosts, error: postsError } = useBlogPosts(
-    page,
+  const {
+    posts,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isLoadingPosts,
+    isError: postsError,
+    fetchNextPage,
+    refetch: refetchPosts,
+  } = useInfiniteBlogPosts({
+    category: categoryFilter,
+    search: searchQuery,
     pageSize,
-    categoryFilter,
-    searchQuery,
-    { enabled: !categoryIsResolving && !categoryIsInvalid }
-  )
-
-  const posts = postsData?.posts || []
-  const totalPages = postsData?.total_pages || 1
-
-  const handlePageChange = (newPage: number) => {
-    setSearchParams((prev: URLSearchParams) => {
-      prev.set('page', newPage.toString())
-      return prev
-    })
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
+    enabled: !categoryIsResolving && !categoryIsInvalid,
+  })
 
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -192,7 +186,7 @@ export default function BlogIndexPage() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => window.location.reload()}
+                  onClick={() => refetchPosts()}
                   className="inline-flex items-center px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-pressed"
                 >
                   Try again
@@ -277,30 +271,12 @@ export default function BlogIndexPage() {
                   ))}
                 </div>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handlePageChange(page - 1)}
-                      disabled={page === 1}
-                      className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Previous
-                    </button>
-                    <span className="flex items-center px-4 text-sm text-gray-600 dark:text-gray-400">
-                      Page {page} of {totalPages}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handlePageChange(page + 1)}
-                      disabled={page === totalPages}
-                      className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Next
-                    </button>
-                  </div>
-                )}
+                {/* Infinite scroll */}
+                <InfiniteScrollSentinel
+                  onLoadMore={fetchNextPage}
+                  hasMore={hasNextPage}
+                  isLoading={isFetchingNextPage}
+                />
               </>
             )}
           </div>

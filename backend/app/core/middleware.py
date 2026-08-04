@@ -147,12 +147,20 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         "/api/v1/redoc",
         "/api/v1/openapi.json",
     }
-    
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        # CORS preflights are browser transport noise, not application calls.
+        # They are answered identically by Starlette's CORSMiddleware (which
+        # sits OUTSIDE this middleware in the stack) and logging them as
+        # request/response entries made every web API call look duplicated in
+        # logs. Correlation ID and CORS behavior are unchanged.
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         # Skip logging for certain paths
         if request.url.path in self.SKIP_PATHS:
             return await call_next(request)
-        
+
         # Get correlation ID (set by CorrelationIdMiddleware)
         correlation_id = getattr(request.state, "correlation_id", "unknown")
         

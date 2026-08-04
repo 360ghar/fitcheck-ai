@@ -12,6 +12,7 @@ import { getCurrentUser } from '../api/users';
 import { getApiError } from '../lib/errors';
 import { logger } from '../lib/logger';
 import { resetForcedLogoutFlag, setTokens } from '../lib/auth';
+import { clearRequestCache, request } from '../lib/requestCache';
 import { supabase } from '../lib/supabase';
 
 // ============================================================================
@@ -147,6 +148,9 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
           authApi.clearUser();
+          // Drop every cached read (items/outfits/subscription/referral/etc.)
+          // so the next sign-in can never reuse the previous user's data.
+          clearRequestCache();
         }
       },
 
@@ -309,9 +313,16 @@ export const useAuthStore = create<AuthState>()(
           setTokens(state.tokens);
         }
 
-        // Sync user data with server to ensure avatar_url and other fields are fresh
+        // Sync user data with server to ensure avatar_url and other fields are fresh.
+        // Coalesced through the shared request cache: a double rehydration /
+        // StrictMode remount issues exactly one /users/me request, and the
+        // key is user-scoped so a different account's profile can never be
+        // served from the cache.
         if (state?.isAuthenticated && state?.tokens?.access_token) {
-          getCurrentUser()
+          const userId = state.tokens.access_token
+          request(`users:me:${userId}`, () => getCurrentUser(), {
+            label: 'authStore.rehydrate',
+          })
             .then((freshUser) => {
               useAuthStore.setState({ user: freshUser });
               authApi.storeUser(freshUser);

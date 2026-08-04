@@ -13,6 +13,60 @@ import { getApiError, RATE_LIMIT_EXCEEDED, type ApiError } from '../lib/errors';
 import { withRetry } from '../lib/retry';
 import { logger } from '../lib/logger';
 import { useUpgradePromptStore } from '../stores/upgradePromptStore';
+import {
+  request as cacheRequest,
+  invalidateRequest,
+  clearRequestCache,
+  __requestCacheInternals,
+} from '../lib/requestCache';
+import { getAccessToken } from '../lib/auth';
+
+// ============================================================================
+// REQUEST CACHE KEYS
+// ============================================================================
+
+/**
+ * Stable cache key for an outfit list request, scoped to the current user and
+ * covering every server-filter dimension that changes the result set.
+ */
+function outfitListKey(filters: OutfitState['filters'], page: number, pageSize: number): string {
+  const userId = getAccessToken() || 'anon'
+  return [
+    `outfits:list:${userId}`,
+    `page=${page}`,
+    `page_size=${pageSize}`,
+    `style=${filters.style}`,
+    `season=${filters.season}`,
+    `search=${filters.search}`,
+    `fav=${filters.isFavorite}`,
+  ].join('|')
+}
+
+function outfitDetailKey(id: string): string {
+  return `outfits:detail:${getAccessToken() || 'anon'}:${id}`
+}
+
+/**
+ * Drop every cached outfit list key for the current user (mutations change
+ * list-affecting fields / totals).
+ */
+function invalidateOutfitList(): void {
+  const userId = getAccessToken() || 'anon'
+  const { cachedKeys, inFlightKeys } = __requestCacheInternals.debugSnapshot()
+  for (const key of [...cachedKeys, ...inFlightKeys]) {
+    if (key.startsWith(`outfits:list:${userId}|`)) {
+      invalidateRequest(key)
+    }
+  }
+}
+
+/**
+ * Clear all request-cache entries for the outfit domain. Called on logout /
+ * auth user switch.
+ */
+export function resetOutfitRequestCache(): void {
+  clearRequestCache()
+}
 
 // ============================================================================
 // OUTFIT STATE INTERFACE
@@ -81,6 +135,12 @@ interface OutfitState {
   // UI state
   isLoading: boolean;
   /**
+   * Append-page fetch for infinite scroll. Deliberately separate from
+   * `isLoading`: appending a page must NOT swap the whole grid for a skeleton.
+   * (Mirrors the wardrobe store's `isLoadingMore`.)
+   */
+  isLoadingMore: boolean;
+  /**
    * Detail-pane fetch, deliberately separate from `isLoading`.
    * `isLoading` swaps the whole grid for a skeleton; a deep link to
    * /outfits/:id must not blank the list it is being shown beside.
@@ -102,6 +162,8 @@ interface OutfitState {
 
   // Actions
   fetchOutfits: (refresh?: boolean) => Promise<void>;
+  /** Append the next page (infinite scroll). No-op while a fetch is in flight or the list is exhausted. */
+  fetchMore: () => Promise<void>;
   fetchOutfitById: (id: string) => Promise<void>;
   setSelectedOutfit: (outfit: Outfit | null) => void;
   toggleOutfitSelected: (outfitId: string) => void;
@@ -296,6 +358,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
   ...initialPreviewState,
   filters: initialFilters,
   isLoading: false,
+  isLoadingMore: false,
   isDetailLoading: false,
   isGridView: true,
   viewMode: 'all',
@@ -313,21 +376,29 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
     const { filters, page, pageSize, outfits } = state;
 
     const newPage = refresh ? 1 : page;
+    const apiFilters: ApiOutfitFilters = {
+      page: newPage,
+      page_size: pageSize,
+    };
+
+    if (filters.style !== 'all') apiFilters.style = filters.style;
+    if (filters.season !== 'all') apiFilters.season = filters.season;
+    if (filters.search) apiFilters.search = filters.search;
+    if (filters.isFavorite) apiFilters.is_favorite = true;
+
+    const cacheKey = outfitListKey(filters, newPage, pageSize);
 
     set({ isLoading: true, error: null });
 
     try {
-      const apiFilters: ApiOutfitFilters = {
-        page: newPage,
-        page_size: pageSize,
-      };
-
-      if (filters.style !== 'all') apiFilters.style = filters.style;
-      if (filters.season !== 'all') apiFilters.season = filters.season;
-      if (filters.search) apiFilters.search = filters.search;
-      if (filters.isFavorite) apiFilters.is_favorite = true;
-
-      const response = await outfitsApi.getOutfits(apiFilters);
+      // Coalesce concurrent identical fetches (StrictMode double-mount, two
+      // components asking for the same list) onto one wire request, and reuse
+      // a fresh result instead of re-requesting on every mount.
+      const response = await cacheRequest(
+        cacheKey,
+        () => outfitsApi.getOutfits(apiFilters),
+        { force: refresh, label: 'outfitStore.fetchOutfits' }
+      );
 
       set({
         outfits: refresh || newPage === 1 ? response.outfits : [...outfits, ...response.outfits],
@@ -344,12 +415,55 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
     }
   },
 
+  // Append the next page of the current query. Used by infinite scroll; keeps
+  // the loaded grid intact (no skeleton) while more outfits stream in. Mirrors
+  // the wardrobe store: no cache (an append is always fresh), and a hard guard
+  // against concurrent/duplicate fetches.
+  fetchMore: async () => {
+    const state = get();
+    if (state.isLoading || state.isLoadingMore || !state.hasMore) return;
+
+    set({ isLoadingMore: true, error: null });
+    try {
+      const nextPage = state.page + 1;
+      const apiFilters: ApiOutfitFilters = {
+        page: nextPage,
+        page_size: state.pageSize,
+      };
+      const { filters } = state;
+      if (filters.style !== 'all') apiFilters.style = filters.style;
+      if (filters.season !== 'all') apiFilters.season = filters.season;
+      // Search is a client-side narrowing over the loaded universe (the page
+      // filters locally), so paging must NOT send it to the server — otherwise
+      // page 2 offsets against a search-filtered set and the list strands
+      // mid-search. Mirrors the wardrobe store's fetchMore.
+      if (filters.isFavorite) apiFilters.is_favorite = true;
+
+      const response = await outfitsApi.getOutfits(apiFilters);
+      const newOutfits = [...state.outfits, ...response.outfits];
+      set({
+        outfits: newOutfits,
+        totalOutfits: response.total,
+        hasMore: response.has_next,
+        page: nextPage,
+        isLoadingMore: false,
+      });
+    } catch (error) {
+      const apiError = getApiError(error);
+      set({ error: apiError, isLoadingMore: false });
+    }
+  },
+
   // Fetch single outfit by ID
   fetchOutfitById: async (id: string) => {
     // isDetailLoading, not isLoading: see the field comment.
     set({ isDetailLoading: true, error: null });
     try {
-      const outfit = await outfitsApi.getOutfit(id);
+      const outfit = await cacheRequest(
+        outfitDetailKey(id),
+        () => outfitsApi.getOutfit(id),
+        { label: 'outfitStore.fetchOutfitById' }
+      );
       const state = get();
       const index = state.outfits.findIndex((o) => o.id === id);
       const newOutfits = [...state.outfits];
@@ -427,6 +541,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
     try {
       const state = get();
       const updated = await outfitsApi.toggleOutfitFavorite(outfitId);
+      invalidateOutfitList();
+      invalidateRequest(outfitDetailKey(outfitId));
       const newOutfits = state.outfits.map((outfit) =>
         outfit.id === outfitId ? { ...outfit, is_favorite: updated.is_favorite } : outfit
       );
@@ -447,6 +563,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
   markOutfitAsWorn: async (outfitId: string) => {
     try {
       const updated = await outfitsApi.markOutfitAsWorn(outfitId);
+      invalidateOutfitList();
+      invalidateRequest(outfitDetailKey(outfitId));
       const state = get();
       const newOutfits = state.outfits.map((o) =>
         o.id === outfitId
@@ -472,6 +590,7 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
   duplicateOutfit: async (outfitId: string) => {
     try {
       const duplicated = await outfitsApi.duplicateOutfit(outfitId);
+      invalidateOutfitList();
       const state = get();
       const newOutfits = [duplicated, ...state.outfits];
       set({
@@ -489,6 +608,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
   deleteOutfit: async (outfitId: string) => {
     try {
       await outfitsApi.deleteOutfit(outfitId);
+      invalidateOutfitList();
+      invalidateRequest(outfitDetailKey(outfitId));
       const state = get();
       const newOutfits = state.outfits.filter((o) => o.id !== outfitId);
       const newSelected = new Set(state.selectedOutfits);
@@ -514,6 +635,8 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
 
     try {
       await outfitsApi.batchDeleteOutfits(Array.from(selectedOutfits));
+      invalidateOutfitList();
+      Array.from(selectedOutfits).forEach((id) => invalidateRequest(outfitDetailKey(id)));
       const newOutfits = state.outfits.filter((o) => !selectedOutfits.has(o.id));
       set({
         outfits: newOutfits,
@@ -746,6 +869,10 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
     }
 
     set((current) => ({ outfits: [outfit, ...current.outfits], isLoading: false }));
+    // A new outfit changes list totals; drop the cached list so the next
+    // read is authoritative.
+    invalidateOutfitList();
+    invalidateRequest(outfitDetailKey(outfit.id));
 
     // Nothing approved — the outfit exists without a look, on purpose. A
     // preview whose source key no longer matches the live draft must also be
@@ -784,6 +911,10 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
       }
 
       const image = uploaded.data;
+      // Uploading the primary look changes the outfit's images; drop the
+      // cached detail + list so the next read shows the new image.
+      invalidateOutfitList();
+      invalidateRequest(outfitDetailKey(outfit.id));
       set((current) => ({
         outfits: current.outfits.map((o) =>
           o.id === outfit.id
@@ -911,6 +1042,10 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
         body_profile_id: options.body_profile_id,
         generation_id: response.generation_id,
       });
+
+      // A new look changes the outfit's images; drop cached list + detail.
+      invalidateOutfitList();
+      invalidateRequest(outfitDetailKey(outfitId));
 
       // Update local outfits list with the new image
       const current = get();
@@ -1069,6 +1204,9 @@ export const useOutfitStore = create<OutfitState>((set, get) => ({
           isPrimary: true,
           pose: 'front',
         });
+
+        invalidateOutfitList();
+        invalidateRequest(outfitDetailKey(outfitId));
 
         // Update outfits with new image and remove from generatingOutfits
         const current = get();

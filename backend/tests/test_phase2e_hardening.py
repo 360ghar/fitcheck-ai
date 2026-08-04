@@ -331,7 +331,7 @@ def test_feedback_uses_shared_optional_auth_dependency():
 async def test_feedback_accepts_anonymous_submission(monkeypatch):
     seen = {}
 
-    async def fake_create_ticket(*, request, user_id, attachment_urls, db):
+    async def fake_create_ticket(*, request, user_id, attachment_urls, attachment_storage_paths, db):
         seen["user_id"] = user_id
         return SimpleNamespace(model_dump=lambda **_: {"id": "t1"})
 

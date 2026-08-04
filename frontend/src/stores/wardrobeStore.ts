@@ -13,6 +13,74 @@ import type {
 } from '../types';
 import * as itemsApi from '../api/items';
 import { getApiError, type ApiError } from '../lib/errors';
+import {
+  request as cacheRequest,
+  invalidateRequest,
+  clearRequestCache,
+  __requestCacheInternals,
+} from '../lib/requestCache';
+import { getAccessToken } from '../lib/auth';
+
+// ============================================================================
+// REQUEST CACHE KEYS
+// ============================================================================
+
+/**
+ * Stable cache key for a wardrobe list request, scoped to the current user so
+ * one account can never reuse another account's cached items. The key must
+ * cover every server-filter dimension that changes the result set.
+ */
+function closetListKey(filters: ClosetState['filters'], page: number, pageSize: number): string {
+  const userId = getAccessToken() || 'anon'
+  const parts = [
+    `items:list:${userId}`,
+    `page=${page}`,
+    `page_size=${pageSize}`,
+    `category=${filters.category}`,
+    `color=${filters.color}`,
+    `occasion=${filters.occasion}`,
+    `condition=${filters.condition}`,
+    `search=${filters.search}`,
+    `fav=${filters.isFavorite}`,
+  ]
+  return parts.join('|')
+}
+
+function closetDetailKey(id: string): string {
+  return `items:detail:${getAccessToken() || 'anon'}:${id}`
+}
+
+/**
+ * Drop every cached wardrobe list key for the current user. Cache keys embed
+ * the user scope, so calling this for every list-affecting mutation is safe:
+ * it only ever drops entries for the signed-in user.
+ */
+function invalidateClosetList(): void {
+  const userId = getAccessToken() || 'anon'
+  const snapshot = __requestCacheInternals.debugSnapshot().cachedKeys
+  for (const key of snapshot) {
+    if (key.startsWith(`items:list:${userId}|`)) {
+      invalidateRequest(key)
+    }
+  }
+  const inFlightSnapshot = __requestCacheInternals.debugSnapshot().inFlightKeys
+  for (const key of inFlightSnapshot) {
+    if (key.startsWith(`items:list:${userId}|`)) {
+      // A list request in flight when a mutation lands will resolve with
+      // pre-mutation data; drop it so the next read re-fetches.
+      invalidateRequest(key)
+    }
+  }
+}
+
+/**
+ * Clear all request-cache entries for the wardrobe domain. Called on logout
+ * / auth user switch so one account's cached items can never leak into
+ * another account's session.
+ */
+export function resetWardrobeRequestCache(): void {
+  clearRequestCache()
+}
 
 // ============================================================================
 // WARDROBE STATE INTERFACE
@@ -244,11 +312,21 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
     const { filters, page, pageSize, items } = state;
 
     const newPage = refresh ? 1 : page;
+    const apiFilters = buildItemApiFilters(filters, newPage, pageSize);
+    const cacheKey = closetListKey(filters, newPage, pageSize);
 
+    // Coalesce concurrent identical fetches (StrictMode double-mount, two
+    // components asking for the same list) onto one wire request, and reuse a
+    // fresh result instead of re-requesting on every mount. `refresh` (or
+    // invalidate after a mutation) forces one new request.
     set({ isLoading: true, error: null });
 
     try {
-      const response = await itemsApi.getItems(buildItemApiFilters(filters, newPage, pageSize));
+      const response = await cacheRequest(
+        cacheKey,
+        () => itemsApi.getItems(apiFilters),
+        { force: refresh, label: 'wardrobe.fetchItems' }
+      );
 
       set({
         items: refresh || newPage === 1 ? response.items : [...items, ...response.items],
@@ -316,7 +394,13 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
     // isDetailLoading, not isLoading: see the field comment.
     set({ isDetailLoading: true, error: null });
     try {
-      const item = await itemsApi.getItem(id);
+      // Coalesce concurrent detail fetches for the same item (deep link
+      // effect + detail pane) onto one request.
+      const item = await cacheRequest(
+        closetDetailKey(id),
+        () => itemsApi.getItem(id),
+        { label: 'wardrobe.fetchItemById' }
+      );
       const state = get();
       const index = state.items.findIndex((i) => i.id === id);
       const newItems = [...state.items];
@@ -412,6 +496,11 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
   toggleItemFavorite: async (itemId: string) => {
     try {
       const updated = await itemsApi.toggleItemFavorite(itemId);
+      // The favorite filter changes the server result set; drop the cached
+      // list so a favorites-mode visit re-fetches rather than serving a
+      // stale cached page.
+      invalidateClosetList();
+      invalidateRequest(closetDetailKey(itemId));
       // Re-read after await so concurrent list updates are not overwritten
       const state = get();
       const newItems = state.items.map((item) =>
@@ -442,6 +531,10 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
   updateItem: async (itemId: string, data: Partial<ItemFormData>) => {
     try {
       const updated = await itemsApi.updateItem(itemId, data);
+      // A mutation changes list-affecting fields (name/category/colors); drop
+      // the cached list + detail so the next read is authoritative.
+      invalidateClosetList();
+      invalidateRequest(closetDetailKey(itemId));
       // Re-read after await so concurrent list updates are not overwritten.
       const state = get();
       const newItems = state.items.map((item) => (item.id === itemId ? updated : item));
@@ -468,6 +561,7 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
   markItemAsWorn: async (itemId: string) => {
     try {
       const result = await itemsApi.markItemAsWorn(itemId);
+      invalidateRequest(closetDetailKey(itemId));
       const state = get();
       const wornAt = new Date().toISOString();
       const patch = (item: Item): Item => ({
@@ -496,6 +590,8 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
   deleteItem: async (itemId: string) => {
     try {
       await itemsApi.deleteItem(itemId);
+      invalidateClosetList();
+      invalidateRequest(closetDetailKey(itemId));
       const state = get();
       const newItems = state.items.filter((i) => i.id !== itemId);
       const newSelected = new Set(state.selectedItems);
@@ -522,6 +618,8 @@ export const useClosetStore = create<ClosetState>((set, get) => ({
 
     try {
       await itemsApi.batchDeleteItems(Array.from(selectedItems));
+      invalidateClosetList();
+      Array.from(selectedItems).forEach((id) => invalidateRequest(closetDetailKey(id)));
       const newItems = state.items.filter((i) => !selectedItems.has(i.id));
       set({
         items: newItems,

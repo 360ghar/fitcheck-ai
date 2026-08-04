@@ -122,20 +122,34 @@ async def test_batch_hydration_preserves_mixed_per_image_recovery_state():
     assert job.images["pending"].extraction_status == "pending"
 
 
-def test_storage_reference_urls_are_limited_to_configured_supabase_objects(monkeypatch):
-    monkeypatch.setattr(storage_module.settings, "SUPABASE_URL", "https://project.supabase.co")
+def test_storage_reference_paths_are_reduced_to_known_bucket_keys(monkeypatch):
+    """URLs and keys are reduced to a bucket key via key_from_path (SSRF-safe).
 
-    assert StorageService._validate_storage_url(
+    The old `_validate_storage_url` rejected non-Supabase hosts by raising;
+    the new `key_from_path` never raises and never contacts a host — it only
+    extracts a bucket key so the S3 backend can fetch it. An attacker URL is
+    therefore reduced to a path that is looked up in the bucket, never fetched
+    from the attacker's host.
+    """
+    monkeypatch.setattr(storage_module.settings, "SUPABASE_STORAGE_BUCKET", "items")
+    monkeypatch.setattr(storage_module.settings, "OBJECT_STORAGE_BUCKET", "bucket")
+
+    # Supabase public object URL -> key (bucket segment dropped).
+    assert StorageService.key_from_path(
         "https://project.supabase.co/storage/v1/object/public/items/user-a/item.webp"
-    ).startswith("https://project.supabase.co/")
+    ) == "user-a/item.webp"
 
-    for url in (
-        "http://project.supabase.co/storage/v1/object/public/items/item.webp",
-        "https://attacker.example/storage/v1/object/public/items/item.webp",
-        "https://project.supabase.co/rest/v1/users",
-    ):
-        with pytest.raises(ValueError):
-            StorageService._validate_storage_url(url)
+    # A bare key passes through unchanged.
+    assert StorageService.key_from_path("user-a/items/item.webp") == "user-a/items/item.webp"
+
+    # Any host is fine — the function only extracts a key, never fetches the URL.
+    assert StorageService.key_from_path(
+        "https://attacker.example/storage/v1/object/public/items/item.webp"
+    ) == "item.webp"
+
+    # Empty / None -> None.
+    assert StorageService.key_from_path("") is None
+    assert StorageService.key_from_path(None) is None
 
 
 def test_calendar_all_day_contract_is_explicit_and_round_trips():

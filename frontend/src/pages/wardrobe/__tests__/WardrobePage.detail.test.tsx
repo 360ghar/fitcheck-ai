@@ -16,6 +16,7 @@ vi.mock('@/api/items', () => ({
 import { getItems } from '@/api/items'
 import WardrobePage from '@/pages/wardrobe/WardrobePage'
 import { useClosetStore } from '@/stores/wardrobeStore'
+import { clearRequestCache } from '@/lib/requestCache'
 import type { Item } from '@/types'
 
 const item = {
@@ -77,6 +78,10 @@ function renderPage() {
 describe('WardrobePage detail selection is driven by the URL', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Reset the shared request cache so a cached list from a prior test does
+    // not satisfy this test's fetch (the store's cache is user-scoped 'anon'
+    // in the test environment).
+    clearRequestCache()
     stubDesktopViewport()
     useClosetStore.setState({
       items: [],

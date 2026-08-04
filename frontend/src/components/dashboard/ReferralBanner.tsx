@@ -49,7 +49,9 @@ export function ReferralBanner({ variant = 'default', onDismiss }: ReferralBanne
   const fetchReferralCode = useSubscriptionStore((state) => state.fetchReferralCode)
 
   useEffect(() => {
-    // Fetch referral code if not already loaded
+    // Fetch referral code if not already loaded. The store action coalesces
+    // concurrent requests (dashboard banner + profile panel share one wire
+    // call) and reuses fresh data within the freshness window.
     if (!referralCode) {
       fetchReferralCode()
     }

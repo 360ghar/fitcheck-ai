@@ -63,10 +63,11 @@ npm run dev
 Frontend URL:
 - App: `http://localhost:3000`
 
-Frontend env keys commonly used:
+Frontend env keys ******** used:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
-- `VITE_API_BASE_URL`
+- `VITE_API_BASE_URL` (optional — leave empty for dev; the Vite proxy serves
+  same-origin `/api/v1/...`, avoiding CORS preflights)
 - `VITE_ENABLE_SOCIAL_IMPORT`
 
 ## 3. One-Command Web + API Startup

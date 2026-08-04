@@ -10,27 +10,13 @@ from PIL import Image
 
 from app.core.config import settings
 from app.services.storage_service import StorageService
+from tests.storage_test_utils import FakeS3Backend
 
 
 def _image_bytes(format_name: str) -> bytes:
     buffer = io.BytesIO()
     Image.new("RGB", (2, 2), (240, 240, 240)).save(buffer, format=format_name)
     return buffer.getvalue()
-
-
-async def _chunks(payload: bytes):
-    yield payload
-
-
-class _Stream:
-    def __init__(self, response):
-        self.response = response
-
-    async def __aenter__(self):
-        return self.response
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return None
 
 
 @pytest.mark.asyncio
@@ -91,49 +77,50 @@ async def test_download_to_base64_returns_none_on_empty_url():
 
 
 @pytest.mark.asyncio
-async def test_download_to_base64_round_trips_bytes_through_httpx():
-    """download_to_base64 should base64-encode the fetched body."""
+async def test_download_to_base64_round_trips_bytes_through_s3_backend():
+    """download_to_base64 fetches via the S3 backend (no httpx public client)."""
     import base64
 
-    from app.services import storage_service
-
     payload = _image_bytes("PNG")
+    backend = FakeS3Backend(download_bytes=payload)
 
-    fake_response = MagicMock()
-    fake_response.raise_for_status = MagicMock()
-    fake_response.status_code = 200
-    fake_response.headers = {"content-type": "image/png"}
-    fake_response.aiter_bytes = lambda: _chunks(payload)
-
-    fake_client = MagicMock()
-    fake_client.stream = MagicMock(return_value=_Stream(fake_response))
-
-    with patch.object(storage_service, "_download_client", fake_client):
+    with patch("app.services.storage_service.get_storage_backend", return_value=backend):
         result = await StorageService.download_to_base64(
             f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/public/items/img.png"
         )
 
     assert result == base64.b64encode(payload).decode("utf-8")
+    # The URL was reduced to a bucket key and fetched from the backend, never
+    # the public URL.
+    assert backend.download_keys == ["img.png"]
 
 
 @pytest.mark.asyncio
-async def test_download_to_base64_returns_none_on_http_error():
+async def test_download_to_base64_returns_none_when_backend_fails():
     """download_to_base64 must never raise — it returns None so callers can
     gracefully fall back to text-only generation."""
 
-    from app.services import storage_service
+    backend = FakeS3Backend()  # download raises NoSuchKey
 
-    fake_response = MagicMock()
-    fake_response.status_code = 404
-    fake_response.headers = {}
-    fake_response.raise_for_status = MagicMock(side_effect=Exception("404"))
-
-    fake_client = MagicMock()
-    fake_client.stream = MagicMock(return_value=_Stream(fake_response))
-
-    with patch.object(storage_service, "_download_client", fake_client):
+    with patch("app.services.storage_service.get_storage_backend", return_value=backend):
         result = await StorageService.download_to_base64(
             f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/public/items/missing.png"
         )
 
     assert result is None
+    assert backend.download_keys == ["missing.png"]
+
+
+@pytest.mark.asyncio
+async def test_download_bytes_only_fetches_known_bucket_keys_not_arbitrary_urls():
+    """SSRF guard: an arbitrary URL is reduced to a bucket key and fetched from
+    the bucket, never from the URL's host."""
+    payload = _image_bytes("PNG")
+    backend = FakeS3Backend(download_bytes=payload)
+
+    with patch("app.services.storage_service.get_storage_backend", return_value=backend):
+        content = await StorageService._download_bytes("https://attacker.example/private/secret.bin")
+
+    assert content == payload
+    # The attacker host was never contacted — only a bucket key was fetched.
+    assert backend.download_keys == ["private/secret.bin"]

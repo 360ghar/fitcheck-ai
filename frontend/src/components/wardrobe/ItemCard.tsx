@@ -33,6 +33,9 @@ export interface ItemCardProps {
   showSelect?: boolean
   /** Show favorite button */
   showFavorite?: boolean
+  /** Called once when the primary image fails to load (e.g. an expired presigned
+   *  URL). The parent can refetch the list to obtain fresh URLs. */
+  onImageError?: () => void
   /** Additional class names */
   className?: string
 }
@@ -84,6 +87,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
       onClick,
       onToggleFavorite,
       onSelect,
+      onImageError,
       isSelected = false,
       variant = 'default',
       showSelect = true,
@@ -95,6 +99,16 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
     const conditionConfig = getConditionConfig(item.condition)
     const primaryImage = item.images?.[0]
     const [imageError, setImageError] = React.useState(false)
+    const imageErrorRef = React.useRef(false)
+    const handleImageError = React.useCallback(() => {
+      setImageError(true)
+      // Ask the parent for fresh URLs once (an image error usually means the
+      // presigned URL expired); avoid a loop on repeated errors.
+      if (!imageErrorRef.current) {
+        imageErrorRef.current = true
+        onImageError?.()
+      }
+    }, [onImageError])
 
     // Reset error when image source changes
     React.useEffect(() => {
@@ -147,7 +161,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
                 alt={item.name}
                 className="w-full h-full object-contain"
                 loading="lazy"
-                onError={() => setImageError(true)}
+                onError={handleImageError}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
@@ -247,7 +261,7 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
             loading="lazy"
             width={primaryImage?.width}
             height={primaryImage?.height}
-            onError={() => setImageError(true)}
+            onError={handleImageError}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">

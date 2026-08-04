@@ -77,6 +77,23 @@ export default function ProfilePage() {
 
   const [activeTab, setActiveTab] = useState<TabType>(() => resolveTab(searchParams.get('tab')))
   const [isEditing, setIsEditing] = useState(false)
+  // Tracks tabs the user has actually opened so a hidden panel mounts once,
+  // on first activation, and then stays mounted (unsaved edits survive tab
+  // switches without ever fetching for a tab the user never opened).
+  const [hasVisited, setHasVisited] = useState<{ style: boolean; app: boolean }>(() => {
+    const initial = resolveTab(searchParams.get('tab'))
+    return {
+      style: initial === 'style',
+      app: initial === 'app',
+    }
+  })
+
+  // Record first-time activation for lazily-mounted panels.
+  useEffect(() => {
+    if (activeTab === 'style' || activeTab === 'app') {
+      setHasVisited((prev) => (prev[activeTab] ? prev : { ...prev, [activeTab]: true }))
+    }
+  }, [activeTab])
   const [fullName, setFullName] = useState(user?.full_name || '')
   const [gender, setGender] = useState<string>(user?.gender || '')
   const [birthDate, setBirthDate] = useState(user?.birth_date || '')
@@ -345,15 +362,20 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Keep panels mounted (hidden, not unmounted) so unsaved edits
-              survive tab switches instead of being discarded and refetched. */}
-          <div className={activeTab === 'style' ? '' : 'hidden'}>
-            <PreferencesPanel />
-          </div>
+          {/* Panels mount lazily on first tab activation so hidden tabs never
+              issue network reads for a surface the user has not opened.
+              Switching away hides (not unmounts) so unsaved edits survive. */}
+          {activeTab === 'style' || hasVisited.style ? (
+            <div className={activeTab === 'style' ? '' : 'hidden'}>
+              <PreferencesPanel />
+            </div>
+          ) : null}
 
-          <div className={activeTab === 'app' ? '' : 'hidden'}>
-            <AppSettingsPanel />
-          </div>
+          {activeTab === 'app' || hasVisited.app ? (
+            <div className={activeTab === 'app' ? '' : 'hidden'}>
+              <AppSettingsPanel />
+            </div>
+          ) : null}
 
           {activeTab === 'plan' && (
             <SubscriptionPanel />

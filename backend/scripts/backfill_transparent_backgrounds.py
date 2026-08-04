@@ -157,6 +157,7 @@ skipped; `error` stays retryable. Safe to Ctrl-C or lose the host mid-run.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import statistics
@@ -189,6 +190,12 @@ from app.utils.background_removal import (  # noqa: E402
     MatteResult,
     remove_white_background,
 )
+
+# Storage is now the Railway S3-compatible bucket (private). This script talks
+# to the same `S3StorageBackend` the app uses, rather than the Supabase Storage
+# API directly. The DB client (supabase-py) is still used for the row listing /
+# metadata patch — the DB stays on Supabase; only file storage moved.
+from app.services.object_storage import get_storage_backend  # noqa: E402
 
 # --------------------------------------------------------------------------- #
 # audit actions
@@ -355,25 +362,18 @@ def should_upload(action: str) -> bool:
     return action == ACTION_MATTED
 
 
-def upload_options(content_type: str, cache_control: int) -> dict[str, str]:
-    """`file_options` for the overwrite, mirroring StorageService.upload_file.
+def upload_args(content_type: str, cache_control: int) -> tuple[str, str]:
+    """Return ``(content_type, cache_control)`` for the S3 overwrite.
 
-    `upsert` defaults to **False** in both `StorageService.upload_file` and
-    storage3's `upload()`, so overwriting an existing key REQUIRES passing it
-    explicitly or the request 409s. storage3 wraps `cache-control` into
-    `Cache-Control: max-age=<value>`, so the value is seconds-as-a-string.
+    S3 ``put_object`` overwrites an existing key by default (no `upsert` flag,
+    unlike storage3). ``cache-control`` is encoded on the object as
+    ``Cache-Control: max-age=<seconds>`` by ``S3StorageBackend.upload``.
 
-    We call storage3 directly rather than `StorageService.upload_file` because
-    the latter is `async` and importing it would drag `app.core.config.Settings`
-    and the whole service layer into a standalone script. The contract mirrored
-    here is three header keys wide; the matte algorithm, which is the part that
-    would actually rot if duplicated, is imported.
+    We call the backend directly rather than ``StorageService.upload_file``
+    because the matte algorithm (the part that would actually rot if
+    duplicated) is imported already; the upload is a thin, header-wide call.
     """
-    return {
-        "content-type": content_type,
-        "cache-control": str(cache_control),
-        "upsert": "true",
-    }
+    return (content_type, str(cache_control))
 
 
 def build_row_update(
@@ -759,12 +759,13 @@ def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config) -> d
             decoded=False,
         )
 
-    storage = db.storage.from_(cfg.bucket)
+    storage = get_storage_backend()
     try:
-        # Downloading through the authenticated object API rather than the
-        # public URL deliberately bypasses the CDN, so we always matte the
-        # authoritative bytes and never a stale cached copy.
-        original = storage.download(key)
+        # Downloading through the S3 backend (not a public URL) deliberately
+        # bypasses any CDN, so we always matte the authoritative bytes and never
+        # a stale cached copy. S3 read-after-write is strongly consistent, so the
+        # bytes here are the latest write.
+        original = asyncio.run(storage.download(key))
     except Exception as exc:
         return make_record(
             table=spec.table,
@@ -797,10 +798,19 @@ def process_row(db: Any, spec: TableSpec, row: dict[str, Any], cfg: Config) -> d
 
     if should_upload(action):
         try:
-            storage.upload(
-                path=key,
-                file=result.image_bytes,
-                file_options=upload_options(result.content_type, cfg.cache_control),
+            content_type, cache_control = upload_args(
+                result.content_type, cfg.cache_control
+            )
+            # S3 put_object overwrites the existing key by default. The matte
+            # may have changed the content type (opaque JPEG -> transparent
+            # WebP); the new type is sniffed from the bytes by the matte result.
+            asyncio.run(
+                storage.upload(
+                    key=key,
+                    data=result.image_bytes,
+                    content_type=content_type,
+                    cache_control=cache_control,
+                )
             )
         except Exception as exc:
             record["action"] = ACTION_ERROR

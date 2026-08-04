@@ -17,6 +17,47 @@ import type {
 import * as subscriptionApi from '../api/subscription';
 import { logger } from '../lib/logger';
 import { getApiError } from '../lib/errors';
+import {
+  request as cacheRequest,
+  invalidateRequest,
+  clearRequestCache,
+  __requestCacheInternals,
+} from '../lib/requestCache';
+import { getAccessToken } from '../lib/auth';
+
+// ============================================================================
+// REQUEST CACHE KEYS
+// ============================================================================
+
+/**
+ * Stable, user-scoped cache keys for subscription/referral reads. Multiple
+ * components (dashboard referral banner, profile SubscriptionPanel) request
+ * the same resources; coalescing + freshness make them share one request.
+ */
+const subKey = (resource: string) => `subscription:${resource}:${getAccessToken() || 'anon'}`
+const referralKey = (resource: string) => `referral:${resource}:${getAccessToken() || 'anon'}`
+
+/** Freshness: subscription data changes rarely; 60s is safe and cuts refetch churn. */
+const SUB_FRESHNESS_MS = 60_000
+
+/**
+ * Drop cached subscription reads (subscription/usage/plans) for the current
+ * user. Call after entitlement-changing mutations (checkout, cancel, redeem).
+ */
+function invalidateSubscriptionDomain(): void {
+  const userId = getAccessToken() || 'anon'
+  const { cachedKeys, inFlightKeys } = __requestCacheInternals.debugSnapshot()
+  for (const key of [...cachedKeys, ...inFlightKeys]) {
+    if (key.startsWith(`subscription:`) && key.endsWith(`:${userId}`)) {
+      invalidateRequest(key)
+    }
+  }
+}
+
+/** Clear all subscription/referral request-cache entries (logout / user switch). */
+export function resetSubscriptionRequestCache(): void {
+  clearRequestCache()
+}
 
 // ============================================================================
 // SUBSCRIPTION STATE INTERFACE
@@ -86,7 +127,11 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
   fetchSubscription: async () => {
     set({ isLoading: true, error: null });
     try {
-      const data = await subscriptionApi.getSubscription();
+      const data = await cacheRequest(
+        subKey('subscription'),
+        () => subscriptionApi.getSubscription(),
+        { freshnessMs: SUB_FRESHNESS_MS, label: 'subscription.fetchSubscription' }
+      );
       set({
         subscription: data.subscription,
         usage: data.usage,
@@ -101,7 +146,11 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
   // Fetch just usage (for lightweight updates)
   fetchUsage: async () => {
     try {
-      const usage = await subscriptionApi.getUsage();
+      const usage = await cacheRequest(
+        subKey('usage'),
+        () => subscriptionApi.getUsage(),
+        { freshnessMs: SUB_FRESHNESS_MS, label: 'subscription.fetchUsage' }
+      );
       set({ usage });
     } catch (error) {
       logger.error('Failed to fetch usage:', error);
@@ -111,7 +160,11 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
   // Fetch available plans
   fetchPlans: async () => {
     try {
-      const plans = await subscriptionApi.getPlans();
+      const plans = await cacheRequest(
+        subKey('plans'),
+        () => subscriptionApi.getPlans(),
+        { freshnessMs: SUB_FRESHNESS_MS, label: 'subscription.fetchPlans' }
+      );
       set({ plans });
     } catch (error) {
       logger.error('Failed to fetch plans:', error);
@@ -121,7 +174,11 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
   // Fetch referral code
   fetchReferralCode: async () => {
     try {
-      const referralCode = await subscriptionApi.getReferralCode();
+      const referralCode = await cacheRequest(
+        referralKey('code'),
+        () => subscriptionApi.getReferralCode(),
+        { freshnessMs: SUB_FRESHNESS_MS, label: 'subscription.fetchReferralCode' }
+      );
       set({ referralCode });
     } catch (error) {
       logger.error('Failed to fetch referral code:', error);
@@ -131,7 +188,11 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
   // Fetch referral stats
   fetchReferralStats: async () => {
     try {
-      const referralStats = await subscriptionApi.getReferralStats();
+      const referralStats = await cacheRequest(
+        referralKey('stats'),
+        () => subscriptionApi.getReferralStats(),
+        { freshnessMs: SUB_FRESHNESS_MS, label: 'subscription.fetchReferralStats' }
+      );
       set({ referralStats });
     } catch (error) {
       logger.error('Failed to fetch referral stats:', error);
@@ -152,6 +213,9 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
       );
 
       if (session.updated) {
+        // Entitlement changed server-side; drop the cache so fetchSubscription
+        // re-reads instead of serving the pre-checkout snapshot.
+        invalidateSubscriptionDomain();
         await get().fetchSubscription();
         // fetchSubscription swallows its own failure into store `error`;
         // surface it so the caller (upgrade prompt) does not silently
@@ -195,6 +259,7 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const subscription = await subscriptionApi.cancelSubscription();
+      invalidateSubscriptionDomain();
       set({ subscription, isLoading: false });
     } catch (error) {
       const message = getApiError(error).message || 'Failed to cancel subscription';
@@ -245,6 +310,8 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
       const result = await subscriptionApi.redeemPromoCode(code);
       if (result.success) {
         set({ promoValidation: null, isRedeemingPromo: false });
+        // Entitlement changed; force a fresh read.
+        invalidateSubscriptionDomain();
         await get().fetchSubscription();
       } else {
         set({
@@ -273,6 +340,9 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
   // Reset store (on logout)
   reset: () => {
     set(initialState);
+    // Drop every cached subscription/referral read so the next user cannot
+    // reuse the previous user's cached data.
+    clearRequestCache();
   },
 }));
 

@@ -35,6 +35,9 @@ export interface OutfitCardProps {
   variant?: 'default' | 'compact' | 'list'
   /** Show favorite button */
   showFavorite?: boolean
+  /** Called once when the primary image fails to load (e.g. an expired presigned
+   *  URL). The parent can refetch the list to obtain fresh URLs. */
+  onImageError?: () => void
   /** Additional class names */
   className?: string
 }
@@ -49,6 +52,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
       outfit,
       onClick,
       onToggleFavorite,
+      onImageError,
       generationStatus,
       generationError,
       variant = 'default',
@@ -62,6 +66,16 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
     const isGenerating = generationStatus === 'pending' || generationStatus === 'processing'
     const generationFailed = generationStatus === 'failed'
     const [imageError, setImageError] = React.useState(false)
+    const imageErrorRef = React.useRef(false)
+    const handleImageError = React.useCallback(() => {
+      setImageError(true)
+      // Ask the parent for fresh URLs once (an expired presigned URL usually);
+      // avoid a loop on repeated errors.
+      if (!imageErrorRef.current) {
+        imageErrorRef.current = true
+        onImageError?.()
+      }
+    }, [onImageError])
     // Only surface elapsed time once the wait is long enough to matter — a
     // tiny grid tile doesn't need a "1s" flicker for near-instant generations.
     const elapsedSeconds = useElapsedSeconds(isGenerating)
@@ -117,7 +131,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
                 src={imageSrc}
                 alt={outfit.name}
                 className="w-full h-full object-cover"
-                onError={() => setImageError(true)}
+                onError={handleImageError}
                 loading="lazy"
               />
             ) : (
@@ -233,7 +247,7 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
             loading="lazy"
             width={primaryImage?.width}
             height={primaryImage?.height}
-            onError={() => setImageError(true)}
+            onError={handleImageError}
           />
         ) : (
           // Flat `bg-secondary`, not a red-to-neutral wash. This is the empty

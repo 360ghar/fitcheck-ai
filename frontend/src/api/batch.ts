@@ -5,14 +5,10 @@
  */
 
 import { apiClient, getAccessToken } from './client';
+import { API_BASE_URL } from '@/lib/apiBaseUrl';
 import { ENDPOINTS } from '@/lib/endpoints';
 import { createSSEConnection } from '@/lib/sse';
 import type { BatchJobResponse } from '@/types';
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
-  'http://localhost:8000';
 
 // =============================================================================
 // TYPES

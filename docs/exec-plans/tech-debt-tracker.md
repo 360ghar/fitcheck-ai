@@ -1,6 +1,6 @@
 # Tech debt tracker
 
-Last updated: 2026-08-04 (TD-030–TD-062)
+Last updated: 2026-08-04 (TD-030–TD-063)
 
 | ID | Item | Severity | Domain | Notes |
 |----|------|----------|--------|-------|
@@ -70,6 +70,7 @@ Last updated: 2026-08-04 (TD-030–TD-062)
 | TD-060 | ~~Stripe checkout/portal gate drifted from /plans~~ | low | backend | `/checkout` and `/portal` only checked `STRIPE_SECRET_KEY` while `/plans` required the key + all four price IDs, and the 503 said "contact support" for what is an env gap. **Fixed 2026-08-04** — shared `_stripe_billing_configured()` gates all three; the 503 message points at promo codes as the working path. The real fix remains ops: set the five Stripe vars (runbook in the 08-03 RCA plan, still unapplied). Found 2026-08-03 |
 | TD-061 | ~~`/promo/validate` 422 on partial codes~~ | low | backend | `ValidatePromoRequest.code` had `min_length=3` while the landing/register pages validate as the user types; the service already normalizes and returns a friendly `valid=False`. **Fixed 2026-08-04** — `min_length=1`. Test in `test_promo_api.py`. Found 2026-08-03 |
 | TD-062 | Banked `referral_credit_months` are never consumed after a paid period ends | medium | backend | Migration 033's `apply_referral_credit_atomic` banks months (`referral_credit_months += p_months`) for paying subscribers and never overwrites them, but nothing ever converts the bank into trial time when the paid period later ends — a paying user who referred friends gets the months recorded but no entitlement after their subscription lapses. Decide a consumption rule (e.g. on downgrade-to-free, grant `trial_end = now + referral_credit_months` and zero the bank) or document banking as purely informational. Found 2026-08-04 (referral-redemption RCA, docs/exec-plans/active/2026-08-04-referral-redemption-rca.md) |
+| TD-063 | Storage migration: old-style keys still in bucket until folder hardening; presigned URLs are short-lived | medium | backend | Railway Bucket migration (contract: docs/exec-plans/active/2026-08-04-railway-bucket-migration-contract.md). New key layout is `{user_id}/{category}/{uuid}.{ext}`; legacy Supabase keys (`{bucket}/{uuid}.{ext}`) remain in the bucket until `scripts/migrate_storage_to_railway.py` (planned) + `backend/scripts/storage_inventory.py` clean them up. Image URLs are short-lived presigned GET URLs (~15 min), so clients must re-fetch as they expire; `STORAGE_BACKEND=supabase` remains as a cutover fallback flag. Found 2026-08-04 |
 
 ## Process
 

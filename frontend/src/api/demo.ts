@@ -6,12 +6,8 @@
  */
 
 import axios, { AxiosError } from 'axios';
+import { API_BASE_URL } from '@/lib/apiBaseUrl';
 import type { GeneratedImage, PhotoshootJobStatusResponse } from './photoshoot';
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
-  'http://localhost:8000';
 
 // Create a separate axios instance for demo (no auth interceptors)
 const demoClient = axios.create({

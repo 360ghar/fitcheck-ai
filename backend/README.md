@@ -7,7 +7,7 @@ FastAPI backend for FitCheck AI.
 - Exposes versioned REST API under `/api/v1/*`
 - Handles authentication and token verification
 - Orchestrates wardrobe, outfit, recommendation, photoshoot, social, referral, and subscription flows
-- Integrates with Supabase (Postgres + storage)
+- Integrates with Supabase (Postgres + auth) and a Railway Bucket (S3-compatible storage)
 - Integrates with configurable AI providers (OpenAI/custom)
 - Supports optional vector search and social import flows
 
@@ -43,9 +43,15 @@ Template: `backend/.env.example`
 
 Core keys:
 - Supabase: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_SECRET`
+- Storage (Railway Bucket, S3-compatible): `STORAGE_BACKEND` (default `railway`), `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`, `OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`, `OBJECT_STORAGE_BUCKET` (Railway `BUCKET`/`ENDPOINT`/`REGION`/`ACCESS_KEY_ID`/`SECRET_ACCESS_KEY` aliases map onto these)
 - AI provider config: `AI_DEFAULT_PROVIDER`, `AI_OPENAI_*`, `AI_CHAT_*`/`AI_VISION_*`/`AI_IMAGE_*` (per-leg)
 - Embeddings (separate from the provider config above): `AI_GEMINI_API_KEY`, `AI_GEMINI_EMBEDDING_MODEL`
 - Optional integrations: `PINECONE_*`, `STRIPE_*`, `WEATHER_API_KEY`, `META_OAUTH_*`
+
+All file uploads/downloads go through the private Railway S3-compatible bucket via
+`app/services/object_storage.py` (`S3StorageBackend`, `aioboto3`), wrapped by
+`app/services/storage_service.py`. The DB stores bucket keys; clients receive
+short-lived presigned GET URLs. See `docs/BACKEND.md` → Storage.
 
 ## Route Domains
 
@@ -97,6 +103,8 @@ Railway **Config-as-Code does not follow Root Directory**. Set service settings 
 If Config as Code is left as `railway.json`, Railway looks at the **repo root** and fails with `service config at 'railway.json' not found` even though `backend/railway.json` exists.
 
 Required env vars on the service (no defaults): `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_SECRET`.
+
+Storage: attach a Railway Bucket as a reference on the service. Railway surfaces `BUCKET`, `ENDPOINT`, `REGION`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY` (plus `AWS_*` aliases), which the backend maps onto the `OBJECT_STORAGE_*` config fields. `STORAGE_BACKEND` defaults to `railway` (S3). See the Storage section above.
 
 ### Health probes
 
