@@ -68,6 +68,11 @@ export interface UseCaseInfo {
 export type PhotoshootUseCase = 'linkedin' | 'dating_app' | 'model_portfolio' | 'instagram' | 'custom';
 
 export interface PhotoshootRequest {
+  /**
+   * Legacy base64 transport accepted by the current backend contract. New
+   * direct-storage endpoints can supply storage URLs/IDs as strings without
+   * changing the surrounding job/SSE API.
+   */
   photos: string[];
   use_case: PhotoshootUseCase;
   custom_prompt?: string;

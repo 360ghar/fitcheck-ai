@@ -148,22 +148,35 @@ abstract class StoreProductsModel with _$StoreProductsModel {
 
 extension StoreProductsModelX on StoreProductsModel {
   /// The store product ID for a plan type on the given store
-  /// ("apple" | "google"). Falls back to the plan type itself only when the
-  /// backend published no store product map at all (dev environments).
+  /// ("apple" | "google").
+  ///
+  /// Falls back to the plan type itself when the backend published no store
+  /// product map for this store at all (every entry null/empty) — dev /
+  /// sandbox environments where store products are exercised via an Xcode
+  /// StoreKit configuration file or a store that mirrors the plan type.
+  /// Note the backend always sends the full map (with null values when the
+  /// store rail is unconfigured), so "no map" must mean "all values
+  /// null/empty", not "empty map".
   String? productIdFor(String store, String planType) {
     final map = store == 'google' ? google : apple;
     final id = map[planType];
-    if (id != null) return id;
-    return map.isEmpty ? planType : null;
+    if (id != null && id.isNotEmpty) return id;
+    final hasAnyConfigured = map.values.any((v) => v != null && v.isNotEmpty);
+    return hasAnyConfigured ? null : planType;
   }
 }
 
-/// The `/plans` response: display plans plus store product ID maps.
+/// The `/plans` response: display plans, web-billing readiness, and store
+/// product ID maps.
 @freezed
 abstract class PlansResponse with _$PlansResponse {
   const factory PlansResponse({
     @Default([]) List<PlanDetailsModel> plans,
     @JsonKey(name: 'store_products') @Default(StoreProductsModel()) StoreProductsModel storeProducts,
+    /// True only when web (Stripe) billing is fully configured server-side.
+    /// When false, web checkout/portal fail closed by design, so web clients
+    /// must not offer upgrade CTAs that only produce error toasts.
+    @JsonKey(name: 'billing_configured') @Default(false) bool billingConfigured,
   }) = _PlansResponse;
 
   factory PlansResponse.fromJson(Map<String, dynamic> json) =>

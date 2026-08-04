@@ -125,6 +125,7 @@ class PhotoshootJob:
 
     # Event history for replay on late subscriber connect
     event_history: List[Dict[str, Any]] = field(default_factory=list)
+    next_event_id: int = 1
 
     # Error info
     error_message: Optional[str] = None
@@ -578,7 +579,8 @@ class PhotoshootJobService:
             if not job:
                 return
 
-            event = {"type": event_type, "data": data}
+            event = {"type": event_type, "data": data, "id": job.next_event_id}
+            job.next_event_id += 1
 
             # Always store in event history for late-connecting subscribers.
             # History is STRIPPED of base64 payloads (see strip_history_base64)

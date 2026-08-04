@@ -568,7 +568,11 @@ async def update_item(
                 if reserved and not embedding_stored:
                     await _release_embedding_reservation(user_id, db, reserved_on=reserved_on)
 
-        return {"data": _normalize_item_images(item or {}), "message": "Updated"}
+        # Private buckets: materialize fresh presigned URLs at read time so the
+        # update response never carries a stale/expired URL.
+        item = _normalize_item_images(item or {})
+        item = (await materialize_parent_images([item]))[0]
+        return {"data": item, "message": "Updated"}
 
     except (ItemNotFoundError, ValidationError, StorageServiceError, DatabaseError):
         raise
@@ -916,6 +920,8 @@ async def get_items_by_category(
             .execute
         )
         items = [_normalize_item_images(i) for i in (res.data or [])]
+        # Private buckets: materialize fresh presigned URLs at read time.
+        items = await materialize_parent_images(items)
         return {"data": {"items": items}, "message": "OK"}
     except (ValidationError, DatabaseError):
         raise
@@ -943,6 +949,8 @@ async def search_items(
             .execute
         )
         items = [_normalize_item_images(i) for i in (res.data or [])]
+        # Private buckets: materialize fresh presigned URLs at read time.
+        items = await materialize_parent_images(items)
         return {"data": {"items": items}, "message": "OK"}
     except (ValidationError, DatabaseError):
         raise
@@ -1066,7 +1074,10 @@ async def update_item_categories(
             .single()
             .execute
         )
-        return {"data": _normalize_item_images(item.data or {}), "message": "Updated"}
+        # Private buckets: materialize fresh presigned URLs at read time.
+        item = _normalize_item_images(item.data or {})
+        item = (await materialize_parent_images([item]))[0]
+        return {"data": item, "message": "Updated"}
     except (ItemNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
@@ -1232,7 +1243,12 @@ async def check_duplicates(
             extra={"operation": "check_duplicates_items", "user_id": user_id},
         )
 
-        items_by_id = {item["id"]: _normalize_item_images(item) for item in (items_result.data or [])}
+        normalized_items = [
+            _normalize_item_images(item) for item in (items_result.data or [])
+        ]
+        # Private buckets: materialize fresh presigned URLs at read time.
+        await materialize_parent_images(normalized_items)
+        items_by_id = {item["id"]: item for item in normalized_items}
 
         # Build duplicate response with details
         duplicates = []
@@ -1394,7 +1410,12 @@ async def find_similar_items(
             .execute
         )
 
-        items_by_id = {item["id"]: _normalize_item_images(item) for item in (items_result.data or [])}
+        normalized_items = [
+            _normalize_item_images(item) for item in (items_result.data or [])
+        ]
+        # Private buckets: materialize fresh presigned URLs at read time.
+        await materialize_parent_images(normalized_items)
+        items_by_id = {item["id"]: item for item in normalized_items}
 
         # Build response with scores
         response_items = []
@@ -1449,10 +1470,12 @@ async def _fallback_duplicate_check(
             .execute
         )
 
-        duplicates = []
-        for item in (items_result.data or []):
-            item = _normalize_item_images(item)
+        rows = [_normalize_item_images(item) for item in (items_result.data or [])]
+        # Private buckets: materialize fresh presigned URLs at read time.
+        await materialize_parent_images(rows)
 
+        duplicates = []
+        for item in rows:
             # Calculate a basic similarity score
             score = _calculate_text_similarity(request, item)
 

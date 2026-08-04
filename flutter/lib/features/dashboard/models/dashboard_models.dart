@@ -60,11 +60,13 @@ class DashboardActivity {
   final String type;
   final String description;
   final DateTime? timestamp;
+  final String? imageUrl;
 
   const DashboardActivity({
     required this.type,
     required this.description,
     required this.timestamp,
+    this.imageUrl,
   });
 
   factory DashboardActivity.fromJson(Map<String, dynamic> json) {
@@ -73,6 +75,7 @@ class DashboardActivity {
       type: (json['type'] ?? '').toString(),
       description: (json['description'] ?? '').toString(),
       timestamp: timestampRaw != null ? DateTime.tryParse(timestampRaw) : null,
+      imageUrl: json['image_url']?.toString(),
     );
   }
 }

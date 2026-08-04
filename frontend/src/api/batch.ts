@@ -141,15 +141,17 @@ export async function getBatchJobStatus(jobId: string): Promise<BatchJobStatusRe
  */
 export function createAuthenticatedSSEConnection(
   url: string,
-  onMessage: (event: { type: string; data: unknown }) => void,
+  onMessage: (event: { type: string; data: unknown; id?: number }) => void,
   onError?: (error: Error) => void,
-  onClose?: (sawTerminal: boolean) => void
+  onClose?: (sawTerminal: boolean) => void,
+  lastEventId?: number
 ): () => void {
   return createSSEConnection({
     url,
     onMessage,
     onError,
     onClose,
+    lastEventId,
     headers: { Authorization: `Bearer ${getAccessToken()}` },
   });
 }
@@ -166,14 +168,16 @@ export function createAuthenticatedSSEConnection(
  */
 export function subscribeToBatchJobEvents(
   jobId: string,
-  onMessage: (event: { type: string; data: unknown }) => void,
+  onMessage: (event: { type: string; data: unknown; id?: number }) => void,
   onError?: (error: Error) => void,
-  onClose?: (sawTerminal: boolean) => void
+  onClose?: (sawTerminal: boolean) => void,
+  lastEventId?: number
 ): () => void {
   return createAuthenticatedSSEConnection(
     `${API_BASE_URL}${ENDPOINTS.AI.BATCH_EXTRACT_BASE}/${jobId}/events`,
     onMessage,
     onError,
-    onClose
+    onClose,
+    lastEventId
   );
 }

@@ -82,6 +82,13 @@ File storage moves off Supabase Storage to a **Railway Bucket** (private S3-comp
   - `backend/scripts/storage_inventory.py` — orphan / missing report against the Railway bucket (dry-run by default; `--delete` to remove orphans).
   - `backend/scripts/migrate_storage_to_railway.py` — two-phase copy of objects from Supabase Storage to the Railway bucket (dry-run default; `--apply` to copy). Copies to the SAME key so `storage_path` stays valid; optional `CLEAR_URL_COLUMNS=1` nulls stale public URL columns.
   - `backend/scripts/cleanup_supabase_orphans.py` — delete orphan / temp objects from Supabase Storage BEFORE/DURING a migration (dry-run default; `--delete` to remove). Use this to purge null rows' leftovers and transient `tmp/`/`generated/` objects.
+  - `backend/scripts/migrate_legacy_keys_to_new_layout.py` — rewrite pre-migration keys (`{user}/{YYYYMMDD}/{prefix}_{uuid8}.{ext}`, `{user}/sources/source_{32hex}.{ext}`) to the new layout in the bucket (server-side copy) AND in every DB storage column (`item_images`, `outfit_images`, `items.source_image_*`, `users.avatar_url`, `support_tickets.attachment_storage_paths`). Deterministic key mapping makes re-runs no-ops; dry-run default, `--apply` to migrate, `--cleanup` to delete old keys after a successful copy + DB rewrite. Required before strict ownership validators can serve legacy rows.
+
+### AI provider image input
+
+- Request models accept an owned `storage_path` in place of inline base64 (`ExtractItemsRequest`, `ExtractSingleItemRequest`, `GenerateProductImageRequest`, `TryOnRequest`); the route validates ownership (`_owned_storage_path`, canonical layout only) and materializes a fresh presigned URL (`_materialize_image_source`).
+- Stored avatar URLs (`users.avatar_url`) are re-materialized from their bucket key before being sent to providers (`_provider_ready_avatar_url`) — the DB holds expiring presigned URLs; external https OAuth avatars pass through, non-https/non-owned URLs are refused.
+- `GeminiProvider._decode_image_part` downloads http(s) image URLs server-side with a 10 MB byte cap and an SSRF guard that refuses loopback / link-local / RFC1918 / multicast / reserved / metadata hosts before any fetch.
 
 ## Auth
 

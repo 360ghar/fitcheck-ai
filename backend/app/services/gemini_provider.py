@@ -17,8 +17,12 @@ same AIProviderClient interface every other provider does.
 import asyncio
 import base64
 import hashlib
+import ipaddress
 import re
 import time
+from urllib.parse import urlparse
+
+import httpx
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -41,6 +45,59 @@ from app.services.ai_provider_interface import (
 )
 
 logger = get_context_logger(__name__)
+
+# Remote image references are downloaded only at this provider boundary because
+# google-genai's Part.from_uri accepts provider-managed file URIs (for example
+# gs://), not arbitrary presigned HTTPS URLs. Keep this bounded so a malformed
+# or hostile URL cannot make a request consume unbounded memory.
+_MAX_REMOTE_IMAGE_BYTES = 10 * 1024 * 1024
+_REMOTE_IMAGE_TIMEOUT = httpx.Timeout(20.0, connect=5.0)
+
+# Host suffixes that must never be fetched from the backend: cloud metadata
+# (``*.internal``), mDNS (``*.local``) and the loopback name itself.
+_PRIVATE_URL_HOST_SUFFIX_RE = re.compile(r"(?:^|\.)(?:local|internal|localhost)$", re.IGNORECASE)
+
+
+def _is_safe_remote_url(url: str) -> bool:
+    """Refuse provider fetches of URLs that could target internal networks.
+
+    This boundary downloads http(s) image URLs (avatars, chat image parts).
+    A caller-supplied URL must never make the backend reach loopback,
+    link-local (``169.254.x``), RFC1918 private ranges, multicast or cloud
+    metadata hosts. Literal IP addresses are range-checked; bare hostnames are
+    allowed (DNS-rebinding protection is out of scope for this guard). The
+    configured object-storage endpoint is always allowed: it serves our own
+    presigned URLs, and local development points it at a private MinIO-like
+    endpoint.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return False
+    host = parsed.hostname or ""
+    if not host:
+        return False
+    # The configured object-storage endpoint is always allowed: it serves our
+    # own presigned URLs, and local development points it at a private
+    # MinIO-like endpoint. Compared on full netloc (host[:port]) so a
+    # look-alike on another port of the same host is still refused.
+    storage_netloc = urlparse(settings.OBJECT_STORAGE_ENDPOINT).netloc
+    if storage_netloc and parsed.netloc == storage_netloc:
+        return True
+    if _PRIVATE_URL_HOST_SUFFIX_RE.search(host):
+        return False
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        # A DNS name, not a literal address.
+        return True
+    return not (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
 
 
 # =============================================================================
@@ -332,20 +389,38 @@ class GeminiProvider:
         return self._client
 
     @staticmethod
-    def _decode_image_part(img: str) -> types.Part:
-        """Decode a base64 string or `data:<mime>;base64,<b64>` URL (the same
-        shape callers already pass to the OpenAI-compatible provider) into a
-        Gemini Part.
+    async def _decode_image_part(img: str) -> types.Part:
+        """Build a Gemini Part from legacy base64 or a remote HTTP(S) URL.
 
-        Bare base64 is the common case — messages now carry images unwrapped
-        to avoid a full-size data-URL copy per image (see
-        build_user_multimodal_messages). The mime type is then SNIFFED from
-        the first decoded bytes (previously hardcoded to image/jpeg, which
-        labelled every PNG/WebP reference wrong inside Part.from_bytes).
+        ``Part.from_uri`` is for URIs already understood by Google's file API;
+        it does not fetch arbitrary presigned HTTPS URLs. Download those here,
+        asynchronously and with a hard byte limit, then send inline bytes.
+        """
+        parsed = urlparse(img)
+        if parsed.scheme in ("http", "https") and parsed.netloc:
+            if not _is_safe_remote_url(img):
+                raise ValueError("Remote image URL is not fetchable by the provider boundary")
+            data = bytearray()
+            async with httpx.AsyncClient(timeout=_REMOTE_IMAGE_TIMEOUT, follow_redirects=True) as client:
+                async with client.stream("GET", img) as response:
+                    response.raise_for_status()
+                    content_length = response.headers.get("content-length")
+                    if content_length and int(content_length) > _MAX_REMOTE_IMAGE_BYTES:
+                        raise ValueError("Remote image exceeds Gemini provider size limit")
+                    async for chunk in response.aiter_bytes():
+                        data.extend(chunk)
+                        if len(data) > _MAX_REMOTE_IMAGE_BYTES:
+                            raise ValueError("Remote image exceeds Gemini provider size limit")
+            raw = bytes(data)
+            mime_type = sniff_image_mime_from_magic(raw[:96]) or response.headers.get("content-type", "").split(";", 1)[0] or "image/jpeg"
+            # Keep the existing AVIF/HEIF provider safety behavior. This path
+            # necessarily makes transient base64 copies only for those formats.
+            if mime_type in ("image/avif", "image/heif", "image/heic"):
+                safe = ensure_provider_safe_base64(base64.b64encode(raw).decode())
+                raw = base64.b64decode(safe.partition(",")[-1] if safe.startswith("data:") else safe)
+                mime_type = "image/jpeg"
+            return types.Part.from_bytes(data=raw, mime_type=mime_type)
 
-        AVIF/HEIF bytes are re-encoded to JPEG first (ensure_provider_safe_base64):
-        Gemini rejects those mime types, and uploads of them have been
-        accepted since 2026-08-04 (iOS Safari 16+)."""
         img = ensure_provider_safe_base64(img)
         if img.startswith("data:"):
             header, _, b64_data = img.partition(",")
@@ -355,8 +430,6 @@ class GeminiProvider:
             mime_type = None
         data = base64.b64decode(b64_data)
         if mime_type is None:
-            # Cheap: decode only the first ~96 base64 chars (72 bytes — plenty
-            # for any magic signature) to sniff the real mime.
             try:
                 head = base64.b64decode(b64_data[:96])
                 mime_type = sniff_image_mime_from_magic(head) or "image/jpeg"
@@ -365,7 +438,7 @@ class GeminiProvider:
         return types.Part.from_bytes(data=data, mime_type=mime_type)
 
     @classmethod
-    def _messages_to_contents(
+    async def _messages_to_contents(
         cls, messages: List[ChatMessage]
     ) -> "tuple[Optional[str], List[types.Content]]":
         """Translate the shared ChatMessage shape (str or list of
@@ -395,7 +468,7 @@ class GeminiProvider:
                     elif part.get("type") == "image_url":
                         url = part.get("image_url", {}).get("url", "")
                         if url:
-                            parts.append(cls._decode_image_part(url))
+                            parts.append(await cls._decode_image_part(url))
 
             if message.role == "system":
                 system_parts.extend(t for t in text_parts if t)
@@ -431,7 +504,7 @@ class GeminiProvider:
         await self._wait_for_rate_slot()
         client = self._get_client()
         use_model = model or self.config.chat_model
-        system_instruction, contents = self._messages_to_contents(messages)
+        system_instruction, contents = await self._messages_to_contents(messages)
 
         is_image_request = bool(response_modalities and "IMAGE" in response_modalities)
         # No response_schema translation in v1 - every current caller passes

@@ -34,6 +34,7 @@ from app.models.user import (
     UserSettingsUpdate,
     UserUpdate,
 )
+from app.services.storage_service import StorageService
 
 USER_ID = "11111111-1111-1111-1111-111111111111"
 PROFILE_ID = "22222222-2222-2222-2222-222222222222"
@@ -657,8 +658,13 @@ async def test_get_dashboard_aggregates_counts_and_recent_activity():
         "type": "outfit_created",
         "description": "Created Weekend",
         "timestamp": "2026-01-03T00:00:00",
+        # No storage_path on the legacy row -> the stored thumbnail is kept.
+        "image_url": "https://cdn/x-t.jpg",
     }
     assert len(activity) == 3
+    # Items without any images degrade to a null image_url, never an error.
+    assert activity[1]["type"] == "item_created"
+    assert activity[1]["image_url"] is None
 
     assert result["data"]["suggestions"]["weather_based"] is None
     assert result["data"]["suggestions"]["outfit_of_the_day"] == {
@@ -666,6 +672,66 @@ async def test_get_dashboard_aggregates_counts_and_recent_activity():
         "name": "Weekend",
         "image_url": "https://cdn/x-t.jpg",
     }
+
+
+@pytest.mark.asyncio
+async def test_get_dashboard_materializes_presigned_image_urls(monkeypatch):
+    """storage_path rows must come back as fresh presigned URLs, not the stale
+    stored values, for both the activity feed and the outfit of the day."""
+    db = _FakeDB(
+        {
+            "users": [_user_row()],
+            "items": [
+                {
+                    "id": "i1",
+                    "name": "Linen shirt",
+                    "created_at": "2026-01-02T00:00:00",
+                    "usage_times_worn": 9,
+                    "item_images": [
+                        {
+                            "storage_path": "u1/items/i1.jpg",
+                            "image_url": "https://stale/1.jpg",
+                            "thumbnail_url": "https://stale/1-t.jpg",
+                            "is_primary": True,
+                        }
+                    ],
+                }
+            ],
+            "outfits": [
+                {
+                    "id": "o1",
+                    "name": "Weekend",
+                    "created_at": "2026-01-03T00:00:00",
+                    "outfit_images": [
+                        {
+                            "storage_path": "u1/outfits/o1.jpg",
+                            "image_url": "https://stale/o.jpg",
+                            "thumbnail_url": "https://stale/o-t.jpg",
+                            "is_primary": True,
+                        }
+                    ],
+                }
+            ],
+            # No default_location -> the weather suggestion opts out.
+            "user_settings": [_settings_row()],
+        }
+    )
+
+    async def _fake_presign(key):
+        return f"https://presigned.example/{key}"
+
+    monkeypatch.setattr(StorageService, "get_public_url", staticmethod(_fake_presign))
+
+    result = await users_module.get_dashboard(user_id=USER_ID, db=db)
+
+    activity = result["data"]["recent_activity"]
+    by_type = {a["type"]: a for a in activity}
+    assert by_type["item_created"]["image_url"] == "https://presigned.example/u1/items/i1.jpg"
+    assert by_type["outfit_created"]["image_url"] == "https://presigned.example/u1/outfits/o1.jpg"
+
+    assert result["data"]["suggestions"]["outfit_of_the_day"]["image_url"] == (
+        "https://presigned.example/u1/outfits/o1.jpg"
+    )
 
 
 @pytest.mark.asyncio
@@ -698,3 +764,59 @@ async def test_get_dashboard_includes_a_weather_suggestion_when_a_location_is_se
     weather = result["data"]["suggestions"]["weather_based"]
     assert weather["temperature"] == 35.0
     assert "breathable" in weather["recommendation"]
+
+
+@pytest.mark.asyncio
+async def test_available_items_materializes_presigned_image_urls(monkeypatch):
+    """GET /outfits/available-items must return fresh presigned URLs from
+    storage_path (same contract as the list endpoints), never stale stored
+    values, so outfit-builder picker grids render on mobile."""
+    from app.api.v1 import outfits as outfits_module
+
+    db = _FakeDB(
+        {
+            "items": [
+                {
+                    "id": "i1",
+                    "name": "Linen shirt",
+                    "category": "tops",
+                    "colors": ["white"],
+                    "is_deleted": False,
+                    "item_images": [
+                        {
+                            "storage_path": "u1/items/i1.jpg",
+                            "image_url": "https://stale/1.jpg",
+                            "thumbnail_url": "https://stale/1-t.jpg",
+                            "is_primary": True,
+                        }
+                    ],
+                },
+                {
+                    "id": "i2",
+                    "name": "Denim jacket",
+                    "category": "outerwear",
+                    "colors": ["blue"],
+                    "is_deleted": False,
+                    "item_images": [
+                        {
+                            "image_url": "https://cdn/2.jpg",
+                            "thumbnail_url": "https://cdn/2-t.jpg",
+                            "is_primary": True,
+                        }
+                    ],
+                },
+            ]
+        }
+    )
+
+    async def _fake_presign(key):
+        return f"https://presigned.example/{key}"
+
+    monkeypatch.setattr(StorageService, "get_public_url", staticmethod(_fake_presign))
+
+    result = await outfits_module.available_items(user_id=USER_ID, db=db)
+    items = {item["id"]: item for item in result["data"]}
+    # storage_path row -> fresh presigned URL (thumbnail slot).
+    assert items["i1"]["image_url"] == "https://presigned.example/u1/items/i1.jpg"
+    # Legacy row without storage_path keeps its stored thumbnail.
+    assert items["i2"]["image_url"] == "https://cdn/2-t.jpg"

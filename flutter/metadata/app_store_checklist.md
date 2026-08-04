@@ -94,14 +94,52 @@
 
 ### In-App Purchase (monetization)
 
+**Product IDs.** Single source of truth for the env vars: `backend/.env.example`.
+The suggested IDs follow `com.fitcheckaiapp.fitcheckai.<plan>.<period>` and must
+match **exactly** across all three surfaces: App Store Connect products, the
+`APPLE_*_PRODUCT_ID` env vars, and the local StoreKit config
+(`ios/StoreKit/FitCheck.storekit`). Display prices below mirror web
+`PLAN_PRICES`; actual store prices are set per territory in ASC.
+
+| Plan | Monthly product ID | Yearly product ID | Display price (monthly / yearly) |
+|---|---|---|---|
+| Plus | `com.fitcheckaiapp.fitcheckai.plus.monthly` | `com.fitcheckaiapp.fitcheckai.plus.yearly` | $10 / $100 |
+| Pro | `com.fitcheckaiapp.fitcheckai.pro.monthly` | `com.fitcheckaiapp.fitcheckai.pro.yearly` | $20 / $200 |
+
 - [ ] **In-App Purchase capability** enabled for the app ID in ASC (entitlement already in `Runner.entitlements`)
-- [ ] **4 auto-renewable subscription products** created in ASC > Monetization > Subscriptions, matching `APPLE_*_PRODUCT_ID` in backend env:
-  - `plus_monthly` / `plus_yearly` / `pro_monthly` / `pro_yearly` (choose the store-facing names; the IDs must match backend env exactly)
-- [ ] Prices set per territory; review the "Save X%" yearly badge against actual store prices
+- [ ] **4 auto-renewable subscription products** created in ASC > Monetization > Subscriptions with the exact IDs above (all in one subscription group); prices set per territory; review the "Save X%" yearly badge against actual store prices
 - [ ] **App Store Server API key** created (ASC > Users and Access > Integrations > App Store Connect API, "In-App Purchase" permission) and its issuer ID / key ID / `.p8` contents set in backend env: `APPLE_ISSUER_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`
 - [ ] **Sandbox tester** created in ASC (Users and Access > Sandbox) for TestFlight sandbox purchases
 - [ ] TestFlight sandbox purchase verified end-to-end (buy → backend grants entitlement → renew/expire via App Store Server Notifications)
 - [ ] Backend migration `030_mobile_iap.sql` applied on hosted Supabase
+
+**Backend env vars** (Railway production + local `backend/.env`; the backend
+fails closed without the three credentials — every iOS purchase registration
+errors at request time and the startup config health check logs it):
+
+| Var | Value |
+|---|---|
+| `APPLE_ISSUER_ID` | Issuer ID shown next to the App Store Connect API key |
+| `APPLE_KEY_ID` | Key ID of the App Store Connect API key (e.g. `3K9F2B7X4A`) |
+| `APPLE_PRIVATE_KEY` | Full `.p8` file contents (multi-line PEM — wrap in double quotes in `.env` so newlines survive dotenv parsing; paste raw in Railway) |
+| `APPLE_ENV` | `production` (default; automatically falls back to the sandbox API for TestFlight purchases) |
+| `APPLE_PLUS_MONTHLY_PRODUCT_ID` / `APPLE_PLUS_YEARLY_PRODUCT_ID` / `APPLE_PRO_MONTHLY_PRODUCT_ID` / `APPLE_PRO_YEARLY_PRODUCT_ID` | Exact ASC product IDs from the table above |
+| `APPLE_BUNDLE_ID` | `com.fitcheckaiapp.fitcheckai` (already the default) |
+
+**App Store Server Notifications V2** is configured in ASC > Monetization >
+App Store Server Notifications (no backend env var):
+`https://api.fitcheckaiapp.com/api/v1/subscription/apple/notifications`
+
+**Local IAP testing (iOS simulator).** `ios/StoreKit/FitCheck.storekit` is
+wired into the shared Runner scheme (`Runner.xcscheme` → `LaunchAction` →
+`StoreKitConfigurationFileReference`). To use it: open `ios/Runner.xcworkspace`
+in Xcode → Product > Scheme > Edit Scheme > Run > Options > StoreKit
+Configuration → `FitCheck.storekit`, then launch from Xcode (a CLI
+`flutter run` may not apply the scheme's StoreKit config). Keep the file's 4
+product IDs in sync with the table above. Note: local StoreKit transactions
+are generated on-device only and are invisible to the App Store Server API,
+so the full buy → backend verification → entitlement loop still requires the
+TestFlight sandbox path.
 
 ### Auth / backend ops
 

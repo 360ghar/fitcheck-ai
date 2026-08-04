@@ -82,7 +82,12 @@ def strip_history_base64(event: Dict[str, Any]) -> Dict[str, Any]:
             return [_strip(value) for value in node]
         return node
 
-    return {"type": event.get("type"), "data": _strip(data)}
+    # Keep SSE metadata (especially the monotonic ``id``) alongside the
+    # stripped payload so replay filtering and EventSourceResponse can emit it.
+    history_event = {key: value for key, value in event.items() if key != "data"}
+    history_event["type"] = event.get("type")
+    history_event["data"] = _strip(data)
+    return history_event
 
 
 def event_size_bytes(event: Dict[str, Any]) -> int:

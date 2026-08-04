@@ -396,10 +396,13 @@ async def photoshoot_job_events(
             # Only replay up to replay_up_to index to avoid duplicates with live queue
             event_history = await PhotoshootJobService.get_event_history(job_id, up_to_index=replay_up_to)
             for event in event_history:
-                yield {
+                payload = {
                     "event": event["type"],
                     "data": json.dumps(event["data"]),
                 }
+                if event.get("id") is not None:
+                    payload["id"] = str(event["id"])
+                yield payload
 
                 # If we replayed a terminal event, we're done
                 if event["type"] in _TERMINAL_SSE_EVENTS:
@@ -411,10 +414,13 @@ async def photoshoot_job_events(
                 try:
                     event, event_size = await asyncio.wait_for(queue.get(), timeout=30)
                     note_consumed(queue, event_size)
-                    yield {
+                    payload = {
                         "event": event["type"],
                         "data": json.dumps(event["data"]),
                     }
+                    if event.get("id") is not None:
+                        payload["id"] = str(event["id"])
+                    yield payload
 
                     # Check for terminal events
                     if event["type"] in _TERMINAL_SSE_EVENTS:

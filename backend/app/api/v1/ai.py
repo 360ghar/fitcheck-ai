@@ -8,6 +8,7 @@ All AI processing is done server-side using configurable providers.
 from typing import Any, Dict, List, Optional
 
 import asyncio
+import re
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from supabase import Client
@@ -50,6 +51,67 @@ from app.utils.image_processing import downscale_base64_image
 logger = get_context_logger(__name__)
 
 router = APIRouter()
+
+
+_STORAGE_PATH_RE = re.compile(
+    r"^[^/\\]+/(?:items|outfits|avatars|sources|feedback|tmp/[^/\\]+)/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif)$"
+)
+
+
+def _owned_storage_path(storage_path: str, user_id: str) -> bool:
+    """Accept only canonical, user-scoped storage keys."""
+    return bool(
+        isinstance(storage_path, str)
+        and isinstance(user_id, str)
+        and storage_path == storage_path.strip()
+        and not any(char in storage_path for char in "\\\r\n")
+        and _STORAGE_PATH_RE.fullmatch(storage_path)
+        and storage_path.split("/", 1)[0] == user_id
+    )
+
+
+async def _materialize_image_source(
+    image: Optional[str], storage_path: Optional[str], user_id: str
+) -> str:
+    """Return legacy inline data or a fresh URL for an owned storage key."""
+    if image:
+        return image
+    if not storage_path or not _owned_storage_path(storage_path, user_id):
+        raise HTTPException(status_code=403, detail="Image storage path is not owned by the current user")
+    return await StorageService.get_public_url(storage_path)
+
+
+# Storage keys are scoped by user id (a UUID), so a key whose first segment is
+# not UUID-shaped cannot belong to our bucket — it is an external URL and must
+# never be refreshed against our presigner.
+_USER_ID_KEY_RE = re.compile(
+    r"^[0-9a-f]{32}$|^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
+
+
+async def _provider_ready_avatar_url(avatar_url: str) -> str:
+    """Return a fresh, provider-readable URL for a stored profile avatar.
+
+    ``users.avatar_url`` holds either a bucket key, a presigned GET URL that
+    expires after ``OBJECT_STORAGE_PRESIGN_TTL``, a legacy public Supabase URL,
+    or an external (OAuth) URL. Keys and our-bucket URLs are reduced to their
+    bucket key and re-materialized so providers never receive a stale URL;
+    external URLs are passed through only over https (the Gemini download
+    boundary enforces its own SSRF guard for the actual fetch).
+    """
+    key = StorageService.key_from_path(avatar_url)
+    if key and _USER_ID_KEY_RE.fullmatch(key.split("/", 1)[0]):
+        return await StorageService.get_public_url(key)
+    if avatar_url.startswith("https://"):
+        return avatar_url
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={
+            "error": "Invalid avatar URL",
+            "code": "AVATAR_URL_INVALID",
+            "message": "Profile avatar must be an owned image or a public https URL",
+        },
+    )
 
 
 async def _fetch_user_avatar_base64(user_id: str, db: Client) -> Optional[str]:
@@ -99,11 +161,12 @@ async def extract_items(
             # Get extraction agent
             agent = await get_item_extraction_agent(user_id=user_id, db=db)
             user_avatar_base64 = await _fetch_user_avatar_base64(user_id=user_id, db=db)
+            image_source = await _materialize_image_source(request.image, request.storage_path, user_id)
 
             # Extract items with retry
             result = await with_retry(
                 lambda: agent.extract_multiple_items(
-                    image_base64=request.image,
+                    image_base64=image_source,
                     user_profile_image_base64=user_avatar_base64,
                 ),
                 max_retries=2,
@@ -124,6 +187,8 @@ async def extract_items(
             "message": "Items extracted successfully",
         }
 
+    except HTTPException:
+        raise
     except FitCheckException:
         raise
     except Exception as e:
@@ -150,11 +215,12 @@ async def extract_single_item(
         async with rate_limited_operation(user_id, OperationType.EXTRACTION, db):
             # Get extraction agent
             agent = await get_item_extraction_agent(user_id=user_id, db=db)
+            image_source = await _materialize_image_source(request.image, request.storage_path, user_id)
 
             # Extract single item with retry
             result = await with_retry(
                 lambda: agent.extract_single_item(
-                    image_base64=request.image,
+                    image_base64=image_source,
                     category_hint=request.category_hint,
                 ),
                 max_retries=2,
@@ -175,6 +241,8 @@ async def extract_single_item(
             "message": "Item extracted successfully",
         }
 
+    except HTTPException:
+        raise
     except FitCheckException:
         raise
     except Exception as e:
@@ -337,7 +405,10 @@ async def generate_outfit(
                 storage_path = saved.get("storage_path")
 
         response = GenerateOutfitResponse(
-            image_base64=result.image_base64,
+            # Once persisted, the durable URL is the canonical payload. Keep
+            # the legacy field present but empty to avoid duplicating a large
+            # base64 image in the response; unsaved legacy callers retain it.
+            image_base64="" if image_url else result.image_base64,
             image_url=image_url,
             storage_path=storage_path,
             prompt=result.prompt,
@@ -378,6 +449,11 @@ async def generate_product_image(
             agent = await get_image_generation_agent(user_id=user_id, db=db)
 
             # Generate product image with retry
+            reference_image = None
+            if request.reference_image or request.reference_storage_path:
+                reference_image = await _materialize_image_source(
+                    request.reference_image, request.reference_storage_path, user_id
+                )
             result = await with_retry(
                 lambda: agent.generate_product_image(
                     item_description=request.item_description,
@@ -388,7 +464,7 @@ async def generate_product_image(
                     background=request.background,
                     view_angle=request.view_angle,
                     include_shadows=request.include_shadows,
-                    reference_image=request.reference_image,
+                    reference_image=reference_image,
                 ),
                 max_retries=2,
                 initial_delay=2.0,
@@ -417,7 +493,7 @@ async def generate_product_image(
                 storage_path = saved.get("storage_path")
 
         response = GenerateProductImageResponse(
-            image_base64=result.image_base64,
+            image_base64="" if image_url else result.image_base64,
             image_url=image_url,
             storage_path=storage_path,
             prompt=result.prompt,
@@ -430,6 +506,8 @@ async def generate_product_image(
             "message": "Product image generated successfully",
         }
 
+    except HTTPException:
+        raise
     except FitCheckException:
         raise
     except Exception as e:
@@ -464,7 +542,6 @@ async def generate_try_on(
         # 1. Fetch user's avatar_url from database
         user_result = await asyncio.to_thread(db.table("users").select("avatar_url").eq("id", user_id).single().execute)
         if not user_result or not user_result.data:
-            from fastapi import HTTPException
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={
@@ -475,8 +552,7 @@ async def generate_try_on(
             )
         user_data = user_result.data
 
-        if not user_data.get("avatar_url"):
-            from fastapi import HTTPException
+        if not user_data.get("avatar_url") and not request.avatar_storage_path:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
@@ -486,13 +562,19 @@ async def generate_try_on(
                 }
             )
 
-        avatar_url = user_data["avatar_url"]
+        avatar_url = user_data.get("avatar_url")
+        if request.avatar_storage_path:
+            if not _owned_storage_path(request.avatar_storage_path, user_id):
+                raise HTTPException(status_code=403, detail="Avatar storage path is not owned by the current user")
+            avatar_url = await StorageService.get_public_url(request.avatar_storage_path)
+        elif avatar_url:
+            # Stored avatar URLs expire (OBJECT_STORAGE_PRESIGN_TTL); reduce to
+            # the bucket key and re-materialize so providers get a fresh URL.
+            avatar_url = await _provider_ready_avatar_url(avatar_url)
 
         async with rate_limited_operation(user_id, OperationType.GENERATION, db):
-            # 2. Fetch avatar image and convert to base64
-            avatar_base64 = await StorageService.download_to_base64(
-                avatar_url, timeout=30.0
-            )
+            # Providers receive the URL directly; legacy base64 clients remain accepted for clothing input.
+            avatar_base64 = avatar_url
             if not avatar_base64:
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
@@ -503,10 +585,13 @@ async def generate_try_on(
             agent = await get_image_generation_agent(user_id=user_id, db=db)
 
             # 4. Generate try-on image with retry
+            clothing_image = await _materialize_image_source(
+                request.clothing_image, request.clothing_storage_path, user_id
+            )
             result = await with_retry(
                 lambda: agent.generate_try_on(
                     user_avatar_base64=avatar_base64,
-                    clothing_image_base64=request.clothing_image,
+                    clothing_image_base64=clothing_image,
                     clothing_description=request.clothing_description,
                     style=request.style,
                     background=request.background,
@@ -540,7 +625,7 @@ async def generate_try_on(
                 storage_path = saved.get("storage_path")
 
         response_data = TryOnResponse(
-            image_base64=result.image_base64,
+            image_base64="" if image_url else result.image_base64,
             image_url=image_url,
             storage_path=storage_path,
             prompt=result.prompt,
@@ -553,6 +638,8 @@ async def generate_try_on(
             "message": "Try-on image generated successfully",
         }
 
+    except HTTPException:
+        raise
     except FitCheckException:
         raise
     except Exception as e:

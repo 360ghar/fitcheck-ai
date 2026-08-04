@@ -33,6 +33,7 @@ from app.services.ai_settings_service import AISettingsService
 from app.services.astrology_service import get_astrology_service
 from app.services.vector_service import get_vector_service
 from app.services.weather_service import get_weather_service
+from app.api.v1.images import materialize_image_urls
 
 logger = get_context_logger(__name__)
 
@@ -341,6 +342,19 @@ def _get_primary_image_url(item: Dict[str, Any]) -> Optional[str]:
     return (primary or {}).get("thumbnail_url") or (primary or {}).get("image_url")
 
 
+async def _materialize_item_images(items: List[Dict]) -> List[Dict]:
+    """Regenerate fresh short-lived presigned URLs for each row's nested images.
+
+    Private buckets store durable ``storage_path`` keys, never URLs; every read
+    path that surfaces ``image_url`` must materialize at read time (same
+    contract as the items/outfits list endpoints). Legacy rows without
+    ``storage_path`` keep their stored URL.
+    """
+    for item in items or []:
+        await materialize_image_urls(item.get("item_images") or [])
+    return items
+
+
 def _prepare_item_for_response(item: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize item_images → images and set convenience image_url for clients."""
     if not isinstance(item, dict):
@@ -486,7 +500,10 @@ async def match_items(
         .in_("id", source_ids)
         .execute
     )
-    sources = [_prepare_item_for_response(i) for i in (sources_res.data or [])]
+    sources = [
+        _prepare_item_for_response(i)
+        for i in await _materialize_item_images(sources_res.data or [])
+    ]
     if not sources:
         raise ItemNotFoundError()
 
@@ -503,7 +520,10 @@ async def match_items(
     # Exclude laundry/repair/donate by default (docs)
     candidates_q = candidates_q.not_.in_("condition", ["laundry", "repair", "donate"])
     candidates_res = await asyncio.to_thread(candidates_q.limit(500).execute)
-    candidates = [_prepare_item_for_response(i) for i in (candidates_res.data or [])]
+    candidates = [
+        _prepare_item_for_response(i)
+        for i in await _materialize_item_images(candidates_res.data or [])
+    ]
 
     matches: List[Dict[str, Any]] = []
     for source in sources:
@@ -579,7 +599,10 @@ async def complete_look(
         .in_("id", seed_ids)
         .execute
     )
-    seeds = [_prepare_item_for_response(i) for i in (seed_res.data or [])]
+    seeds = [
+        _prepare_item_for_response(i)
+        for i in await _materialize_item_images(seed_res.data or [])
+    ]
     if not seeds:
         raise ItemNotFoundError()
 
@@ -623,32 +646,32 @@ async def personalized(
     db: Client = Depends(get_db),
 ):
     """Return simple personalized recommendations (favorites + least worn)."""
+    items_fav_res = await asyncio.to_thread(
+        db.table("items")
+        .select("*, item_images(*)")
+        .eq("user_id", user_id)
+        .eq("is_deleted", False)
+        .eq("is_favorite", True)
+        .limit(limit)
+        .execute
+    )
     items_fav = [
         _prepare_item_for_response(i)
-        for i in (await asyncio.to_thread(
-            db.table("items")
-            .select("*, item_images(*)")
-            .eq("user_id", user_id)
-            .eq("is_deleted", False)
-            .eq("is_favorite", True)
-            .limit(limit)
-            .execute
-        )).data
-        or []
+        for i in await _materialize_item_images(items_fav_res.data or [])
     ]
 
+    items_least_res = await asyncio.to_thread(
+        db.table("items")
+        .select("*, item_images(*)")
+        .eq("user_id", user_id)
+        .eq("is_deleted", False)
+        .order("usage_times_worn", desc=False)
+        .limit(limit)
+        .execute
+    )
     items_least = [
         _prepare_item_for_response(i)
-        for i in (await asyncio.to_thread(
-            db.table("items")
-            .select("*, item_images(*)")
-            .eq("user_id", user_id)
-            .eq("is_deleted", False)
-            .order("usage_times_worn", desc=False)
-            .limit(limit)
-            .execute
-        )).data
-        or []
+        for i in await _materialize_item_images(items_least_res.data or [])
     ]
 
     logger.debug(
@@ -882,7 +905,10 @@ async def astrology_recommendations(
             .limit(600)
             .execute
         )
-        items = [_prepare_item_for_response(i) for i in (items_res.data or [])]
+        items = [
+            _prepare_item_for_response(i)
+            for i in await _materialize_item_images(items_res.data or [])
+        ]
     except Exception:
         # Keep astrology colors usable even if related tables/columns are incomplete.
         items = []
@@ -968,7 +994,8 @@ async def similar_items(
                 match_ids = [m["item_id"] for m in matches if m.get("item_id")]
                 if match_ids:
                     items_res = await asyncio.to_thread(db.table("items").select("*, item_images(*)").in_("id", match_ids).execute)
-                    by_id = {r["id"]: r for r in (items_res.data or [])}
+                    materialized = await _materialize_item_images(items_res.data or [])
+                    by_id = {r["id"]: r for r in materialized}
                     results = [
                         _build_similar_item_response(m, by_id[m["item_id"]])
                         for m in matches
@@ -1010,14 +1037,16 @@ async def similar_items(
 
     # Fallback: same category + color overlap
     if not results:
-        candidates = (await asyncio.to_thread(
-            db.table("items")
-            .select("*, item_images(*)")
-            .eq("user_id", user_id)
-            .neq("id", item_id)
-            .limit(200)
-            .execute
-        )).data or []
+        candidates = await _materialize_item_images(
+            (await asyncio.to_thread(
+                db.table("items")
+                .select("*, item_images(*)")
+                .eq("user_id", user_id)
+                .neq("id", item_id)
+                .limit(200)
+                .execute
+            )).data or []
+        )
         src_colors = set((source.data.get("colors") or []))
         scored = []
         for cand in candidates:
@@ -1181,7 +1210,7 @@ async def capsule_wardrobe(
     """Return a simple capsule wardrobe suggestion from existing favorites."""
     items_res = await asyncio.to_thread(
         db.table("items")
-        .select("id,name,category,colors,brand,item_images(image_url,thumbnail_url,is_primary)")
+        .select("id,name,category,colors,brand,item_images(storage_path,image_url,thumbnail_url,is_primary)")
         .eq("user_id", user_id)
         .eq("is_deleted", False)
         .order("is_favorite", desc=True)
@@ -1189,7 +1218,10 @@ async def capsule_wardrobe(
         .limit(item_count)
         .execute
     )
-    items = [_build_complete_look_response(it, 0) for it in items_res.data or []]
+    items = [
+        _build_complete_look_response(it, 0)
+        for it in await _materialize_item_images(items_res.data or [])
+    ]
 
     logger.debug(
         "Capsule wardrobe generated",

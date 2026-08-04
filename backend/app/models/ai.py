@@ -4,7 +4,7 @@ AI Pydantic models for validation and serialization.
 Models for AI operations including item extraction and image generation.
 """
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -14,6 +14,17 @@ from app.utils.image_processing import make_base64_image_validator
 _MAX_INLINE_IMAGE_BYTES = 7 * 1024 * 1024
 
 _validate_inline_image = make_base64_image_validator(_MAX_INLINE_IMAGE_BYTES)
+
+
+def _validate_optional_inline_image(value: Optional[str]) -> Optional[str]:
+    """Validate legacy inline data only when a value was actually supplied.
+
+    Empty legacy fields are treated as omitted so callers can migrate to a
+    storage path without being rejected by the legacy base64 validator.
+    """
+    if not value:
+        return value
+    return _validate_inline_image(value)
 
 
 # =============================================================================
@@ -62,10 +73,17 @@ class DetectedPerson(BaseModel):
 
 
 class ExtractItemsRequest(BaseModel):
-    """Request to extract items from an image."""
-    image: str = Field(..., description="Base64-encoded image data")
+    """Request to extract items from an image (inline or stored)."""
+    image: Optional[str] = Field(None, description="Legacy base64-encoded image data")
+    storage_path: Optional[str] = Field(None, description="Owned storage key for the image")
 
-    _validate_image = field_validator("image")(_validate_inline_image)
+    _validate_image = field_validator("image")(_validate_optional_inline_image)
+
+    @model_validator(mode="after")
+    def require_image_source(self):
+        if not self.image and not self.storage_path:
+            raise ValueError("image or storage_path is required")
+        return self
 
 
 class ExtractItemsResponse(BaseModel):
@@ -81,11 +99,18 @@ class ExtractItemsResponse(BaseModel):
 
 
 class ExtractSingleItemRequest(BaseModel):
-    """Request to extract a single item from an image."""
-    image: str = Field(..., description="Base64-encoded image data")
+    """Request to extract a single item from an image (inline or stored)."""
+    image: Optional[str] = Field(None, description="Legacy base64-encoded image data")
+    storage_path: Optional[str] = Field(None, description="Owned storage key for the image")
     category_hint: Optional[str] = None
 
-    _validate_image = field_validator("image")(_validate_inline_image)
+    _validate_image = field_validator("image")(_validate_optional_inline_image)
+
+    @model_validator(mode="after")
+    def require_image_source(self):
+        if not self.image and not self.storage_path:
+            raise ValueError("image or storage_path is required")
+        return self
 
 
 class ExtractSingleItemResponse(BaseModel):
@@ -201,10 +226,11 @@ class GenerateProductImageRequest(BaseModel):
     reference_image: Optional[str] = Field(
         None,
         max_length=10_000_000,
-        description="Optional base64 source photo",
+        description="Optional legacy base64 source photo",
     )
+    reference_storage_path: Optional[str] = Field(None, description="Owned source photo storage key")
 
-    _validate_reference_image = field_validator("reference_image")(_validate_inline_image)
+    _validate_reference_image = field_validator("reference_image")(_validate_optional_inline_image)
 
 
 class GenerateProductImageResponse(BaseModel):
@@ -339,11 +365,13 @@ class RateLimitCheckResponse(BaseModel):
 
 class TryOnRequest(BaseModel):
     """Request for virtual try-on generation."""
-    clothing_image: str = Field(
-        ...,
+    clothing_image: Optional[str] = Field(
+        None,
         max_length=10_000_000,
-        description="Base64-encoded clothing image",
+        description="Legacy base64-encoded clothing image",
     )
+    clothing_storage_path: Optional[str] = Field(None, description="Owned clothing image storage key")
+    avatar_storage_path: Optional[str] = Field(None, description="Owned avatar storage key; defaults to profile avatar")
     clothing_description: Optional[str] = Field(None, description="Optional description to improve accuracy")
     style: str = "casual"
     background: str = "studio white"
@@ -351,7 +379,13 @@ class TryOnRequest(BaseModel):
     lighting: str = "professional studio lighting"
     save_to_storage: bool = False
 
-    _validate_image = field_validator("clothing_image")(_validate_inline_image)
+    _validate_image = field_validator("clothing_image")(_validate_optional_inline_image)
+
+    @model_validator(mode="after")
+    def require_clothing_source(self):
+        if not self.clothing_image and not self.clothing_storage_path:
+            raise ValueError("clothing_image or clothing_storage_path is required")
+        return self
 
 
 class TryOnResponse(BaseModel):

@@ -296,3 +296,123 @@ async def test_profile_lookup_failure_does_not_trigger_auto_provisioning():
 def test_validate_image_rejects_non_image_bytes_with_allowed_extension():
     with pytest.raises(UnsupportedMediaTypeError):
         StorageService._validate_image(b"not an image", "photo.png")
+
+
+# --------------------------------------------------------------------------- #
+# ai.py storage-path ownership + avatar URL refresh
+# --------------------------------------------------------------------------- #
+from app.api.v1 import ai as ai_module  # noqa: E402
+from app.api.v1.ai import _owned_storage_path, _provider_ready_avatar_url  # noqa: E402
+
+
+def test_owned_storage_path_accepts_canonical_keys_only():
+    assert _owned_storage_path("user-a/items/0123456789abcdef0123456789abcdef.jpg", "user-a")
+    assert _owned_storage_path("user-a/tmp/social-import/0123456789abcdef0123456789abcdef.png", "user-a")
+    assert _owned_storage_path("user-a/sources/0123456789abcdef0123456789abcdef.webp", "user-a")
+    # Foreign user
+    assert not _owned_storage_path("user-b/items/0123456789abcdef0123456789abcdef.jpg", "user-a")
+    # Legacy (pre-migration) layouts are not canonical keys
+    assert not _owned_storage_path("user-a/20250314/item_3f2a9c1d.jpg", "user-a")
+    assert not _owned_storage_path("user-a/sources/source_0123456789abcdef0123456789abcdef.jpg", "user-a")
+    # Traversal / encoded separators
+    assert not _owned_storage_path("user-a/items/../user-b/0123456789abcdef0123456789abcdef.jpg", "user-a")
+    assert not _owned_storage_path("user-a/items/0123456789abcdef0123456789abcdef.jpg ", "user-a")
+
+
+@pytest.mark.asyncio
+async def test_provider_ready_avatar_url_refreshes_stored_presigned_url(monkeypatch):
+    """A stored (expiring) presigned URL must be reduced to its bucket key and
+    re-materialized so providers never receive a stale URL."""
+    user_id = "01234567-89ab-cdef-0123-456789abcdef"
+    key = f"{user_id}/avatars/0123456789abcdef0123456789abcdef.jpg"
+    fresh = f"https://storage.example/{key}?fresh=1"
+
+    async def _fake_presign(k):
+        return f"https://storage.example/{k}?fresh=1"
+
+    monkeypatch.setattr(StorageService, "get_public_url", staticmethod(_fake_presign))
+    stored = f"https://storage.example/{key}?X-Amz-Expires=3600&Signature=deadbeef"
+    assert await _provider_ready_avatar_url(stored) == fresh
+
+
+@pytest.mark.asyncio
+async def test_provider_ready_avatar_url_passes_https_external_urls(monkeypatch):
+    monkeypatch.setattr(
+        StorageService,
+        "get_public_url",
+        staticmethod(lambda key: pytest.fail(f"must not presign external key {key}")),
+    )
+    url = "https://lh3.googleusercontent.com/a/AA123456"
+    assert await _provider_ready_avatar_url(url) == url
+
+
+@pytest.mark.asyncio
+async def test_provider_ready_avatar_url_rejects_non_https_external_url(monkeypatch):
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(
+        StorageService,
+        "get_public_url",
+        staticmethod(lambda key: pytest.fail(f"must not presign external key {key}")),
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        await _provider_ready_avatar_url("http://169.254.169.254/latest/meta-data/")
+    assert exc_info.value.status_code == 400
+
+
+class _UserDB:
+    """Minimal users-table fake for the try-on route (avatar_url lookup only)."""
+
+    def __init__(self, avatar_url):
+        self.avatar_url = avatar_url
+
+    def table(self, _name):
+        outer = self
+
+        class _Query:
+            def select(self, *_args, **_kwargs):
+                return self
+
+            def eq(self, *_args, **_kwargs):
+                return self
+
+            def single(self):
+                return self
+
+            def execute(self):
+                data = {"avatar_url": outer.avatar_url} if outer.avatar_url else {}
+                return SimpleNamespace(data=data)
+
+        return _Query()
+
+
+@pytest.mark.asyncio
+async def test_try_on_surfaces_http_exception_for_non_https_avatar_url():
+    """The route must propagate HTTPException (400) instead of wrapping it in a
+    500 AIServiceError — regression for the swallowed-400 pattern."""
+    from fastapi import HTTPException
+    from app.models.ai import TryOnRequest
+
+    db = _UserDB("http://169.254.169.254/latest/meta-data/")
+    request = TryOnRequest(
+        clothing_storage_path="01234567-89ab-cdef-0123-456789abcdef/items/0123456789abcdef0123456789abcdef.jpg"
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        await ai_module.generate_try_on(request=request, user_id=USER_ID, db=db)
+    assert exc_info.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_try_on_surfaces_http_exception_for_foreign_avatar_storage_path():
+    """403 ownership failures must reach the client as 403, not 500."""
+    from fastapi import HTTPException
+    from app.models.ai import TryOnRequest
+
+    db = _UserDB("https://lh3.googleusercontent.com/a/AA123456")
+    request = TryOnRequest(
+        clothing_storage_path="01234567-89ab-cdef-0123-456789abcdef/items/0123456789abcdef0123456789abcdef.jpg",
+        avatar_storage_path="foreign-user/avatars/0123456789abcdef0123456789abcdef.jpg",
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        await ai_module.generate_try_on(request=request, user_id=USER_ID, db=db)
+    assert exc_info.value.status_code == 403

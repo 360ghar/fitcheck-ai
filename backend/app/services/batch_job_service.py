@@ -236,6 +236,7 @@ class BatchJob:
     # SSE subscribers (queues for sending events)
     subscribers: List[asyncio.Queue] = field(default_factory=list)
     event_history: List[Dict[str, Any]] = field(default_factory=list)
+    next_event_id: int = 1
 
     # Error info
     error_message: Optional[str] = None
@@ -898,6 +899,10 @@ class BatchJobService:
             # is STRIPPED of base64 payloads (see strip_history_base64) and
             # length-bounded, so a finished job never pins multi-MB copies of
             # every generated image; live subscribers still get the full event.
+            # IDs are per-job and monotonic, allowing clients to resume after
+            # a dropped connection without replaying already handled events.
+            event["id"] = job.next_event_id
+            job.next_event_id += 1
             job.event_history.append(strip_history_base64(event))
             if len(job.event_history) > EVENT_HISTORY_MAX:
                 del job.event_history[:-EVENT_HISTORY_MAX]
@@ -940,8 +945,10 @@ class BatchJobService:
             )
 
     @classmethod
-    async def add_subscriber(cls, job_id: str, queue: asyncio.Queue) -> bool:
-        """Add an SSE subscriber to a job."""
+    async def add_subscriber(
+        cls, job_id: str, queue: asyncio.Queue, last_event_id: int = 0
+    ) -> bool:
+        """Add a subscriber and replay only events after ``last_event_id``."""
         async with cls._lock:
             job = cls._jobs.get(job_id)
             if not job:
@@ -949,7 +956,10 @@ class BatchJobService:
             job.subscribers.append(queue)
 
             # Replay event history to new subscriber
-            event_history = list(job.event_history)
+            event_history = [
+                event for event in job.event_history
+                if int(event.get("id", 0)) > last_event_id
+            ]
 
         # Replay outside the lock, bounded by queue capacity to avoid blocking
         # attach. Leave half the queue free: filling it to the brim would make

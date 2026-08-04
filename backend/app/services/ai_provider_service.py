@@ -437,7 +437,10 @@ class AIProviderService:
         for part in content:
             if isinstance(part, dict) and part.get("type") == "image_url":
                 url = part.get("image_url", {}).get("url", "")
-                if url and not url.startswith("data:"):
+                # Remote storage URLs are already provider-readable and must
+                # not be interpreted as base64. Inline callers still use the
+                # transient data-URL conversion at this wire boundary.
+                if url and not url.startswith(("data:", "http://", "https://")):
                     part = {**part, "image_url": {"url": to_data_url(url)}}
             wired.append(part)
         return wired
@@ -1427,7 +1430,10 @@ class AIProviderService:
         if reference_images:
             # Sniffed mime per image; see to_data_url. A PNG/WebP reference
             # announced as JPEG is a lie the provider may act on.
-            payload["extra_body"]["image"] = [to_data_url(img) for img in reference_images]
+            payload["extra_body"]["image"] = [
+                img if img.startswith(("data:", "http://", "https://")) else to_data_url(img)
+                for img in reference_images
+            ]
 
         logger.info(
             "AI image generation request started",

@@ -43,6 +43,9 @@ class FakeIapService extends IapService {
   Set<String>? lastQueriedIds;
   List<ProductDetails> productsToReturn = const [];
   bool startPurchaseResult = true;
+  /// When set, fetchProducts waits on it before returning so tests can
+  /// observe the in-flight checkout state.
+  Completer<void>? fetchGate;
 
   @override
   bool get isStoreBillingAvailable => _storeBillingAvailable;
@@ -61,6 +64,8 @@ class FakeIapService extends IapService {
   Future<List<ProductDetails>> fetchProducts(Set<String> productIds) async {
     fetchProductsCalls++;
     lastQueriedIds = productIds;
+    final gate = fetchGate;
+    if (gate != null) await gate.future;
     return productsToReturn;
   }
 
@@ -321,9 +326,73 @@ void main() {
       final controller = buildController();
 
       await controller.startCheckout('pro_yearly');
+      await tester.pump();
 
       expect(iapService.startPurchaseCalls, 0);
       expect(controller.error.value, contains('not available'));
+      // The Upgrade tap must never look like it did nothing.
+      expect(Get.isSnackbarOpen, isTrue);
+      // Drain the snackbar animation before the tree is disposed, or its
+      // controller leaks into the next test.
+      await settle(tester);
+      controller.onClose();
+    });
+
+    testWidgets('billing unavailable surfaces a snackbar', (tester) async {
+      await pumpApp(tester);
+      iapService = FakeIapService(storeBillingAvailable: false);
+      repository = FakeSubscriptionRepository();
+      final controller = buildController();
+
+      await controller.startCheckout('plus_monthly');
+
+      expect(iapService.fetchProductsCalls, 0);
+      expect(controller.error.value, contains('not available'));
+      expect(Get.isSnackbarOpen, isTrue);
+      await settle(tester);
+      controller.onClose();
+    });
+
+    testWidgets('only the tapped plan card shows the checkout spinner', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      iapService.productsToReturn = [_product('plus_monthly')];
+      iapService.fetchGate = Completer<void>();
+      final controller = buildController();
+
+      final checkout = controller.startCheckout('plus_monthly');
+      await tester.pump();
+
+      expect(controller.isCheckingOut.value, isTrue);
+      expect(controller.isCheckingOutPlan('plus_monthly'), isTrue);
+      expect(controller.isCheckingOutPlan('plus_yearly'), isFalse);
+
+      iapService.fetchGate!.complete();
+      await checkout;
+      expect(controller.isCheckingOutPlan('plus_monthly'), isFalse);
+      expect(controller.isCheckingOut.value, isFalse);
+      await settle(tester);
+      controller.onClose();
+    });
+
+    testWidgets('localized store price resolves by plan type for real product IDs', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      // Real store product IDs (e.g. the FitCheck.storekit scheme): the
+      // price must still resolve for the plan type the UI asks for.
+      final productId = 'com.fitcheckaiapp.fitcheckai.plus.monthly';
+      iapService.productsToReturn = [_product(productId)];
+      final controller = buildController();
+      controller.storeProducts.value = StoreProductsModel.fromJson({
+        'google': {'plus_monthly': productId},
+      });
+
+      await controller.refreshStoreProducts();
+
+      expect(iapService.lastQueriedIds, {productId});
+      expect(controller.storePriceFor('plus_monthly'), r'$9.99');
       controller.onClose();
     });
 

@@ -39,6 +39,10 @@ class SubscriptionController extends GetxController {
   final RxMap<String, ProductDetails> storeProductDetails = <String, ProductDetails>{}.obs;
   final RxBool isLoading = false.obs;
   final RxBool isCheckingOut = false.obs;
+  /// The plan variant currently launching a store checkout ('' when none).
+  /// Drives the per-card loading state so only the tapped plan card spins
+  /// instead of every card in the tier.
+  final RxString checkingOutPlanType = ''.obs;
   final RxBool isLoadingReferral = false.obs;
   final RxString error = ''.obs;
   final RxString referralError = ''.obs;
@@ -113,6 +117,11 @@ class SubscriptionController extends GetxController {
   /// Localized store price for a plan type ("plus_monthly", ...), or null
   /// when the store product details have not loaded yet.
   String? storePriceFor(String planType) => storeProductDetails[planType]?.price;
+
+  /// Whether a checkout is in flight for exactly [planType]; drives the
+  /// per-card loading state so only the tapped card shows a spinner.
+  bool isCheckingOutPlan(String planType) =>
+      checkingOutPlanType.value == planType;
 
   @override
   void onInit() {
@@ -193,18 +202,31 @@ class SubscriptionController extends GetxController {
   Future<void> refreshStoreProducts() async {
     if (!iapService.isStoreBillingAvailable) return;
     try {
-      final ids = <String>{};
-      for (final planType in const [
+      const planTypes = [
         'plus_monthly', 'plus_yearly', 'pro_monthly', 'pro_yearly',
-      ]) {
-        final id = storeProducts.value.productIdFor(iapService.storeName, planType);
-        if (id != null) ids.add(id);
+      ];
+      final ids = <String>{};
+      // Reverse lookup from store product ID back to plan type so the map
+      // is keyed by plan type (what storePriceFor / the UI asks for), not
+      // by the store's product ID (e.g. "com.fitcheckaiapp...plus.monthly").
+      final planTypeById = <String, String>{};
+      for (final planType in planTypes) {
+        final id = storeProducts.value.productIdFor(
+          iapService.storeName,
+          planType,
+        );
+        if (id != null) {
+          ids.add(id);
+          planTypeById[id] = planType;
+        }
       }
       if (ids.isEmpty) return;
       final details = await iapService.fetchProducts(ids);
       storeProductDetails
         ..clear()
-        ..addEntries(details.map((d) => MapEntry(d.id, d)));
+        ..addEntries(
+          details.map((d) => MapEntry(planTypeById[d.id] ?? d.id, d)),
+        );
     } catch (e, stackTrace) {
       // Prices fall back to the /plans response; a failed store query must
       // not block the page.
@@ -253,6 +275,7 @@ class SubscriptionController extends GetxController {
     // (e.g. App Review builds). Prevents a stray call during review.
     if (!showPaywall) return;
     isCheckingOut.value = true;
+    checkingOutPlanType.value = planType;
     error.value = '';
     try {
       if (kIsWeb) {
@@ -262,30 +285,45 @@ class SubscriptionController extends GetxController {
       }
     } catch (e, stackTrace) {
       error.value = ErrorHandler.extractMessage(e);
-      ErrorHandler.reportError(e, error.value, stackTrace: stackTrace);
+      // Unexpected failure: report AND surface it. Checkout failures used to
+      // only set [error], which this page renders nowhere when the
+      // subscription loaded, so a failed purchase looked like a dead button.
+      ErrorHandler.showError(
+        error.value,
+        title: 'Purchase failed',
+        stackTrace: stackTrace,
+      );
     } finally {
       isCheckingOut.value = false;
+      checkingOutPlanType.value = '';
     }
   }
 
   Future<void> _startStorePurchase(String planType) async {
     if (!iapService.isStoreBillingAvailable) {
       error.value = 'In-app purchases are not available on this device.';
+      ErrorHandler.showValidation(error.value, title: 'Purchase unavailable');
       return;
     }
-    final productId = storeProducts.value.productIdFor(iapService.storeName, planType);
+    final productId = storeProducts.value.productIdFor(
+      iapService.storeName,
+      planType,
+    );
     if (productId == null) {
       error.value = 'This plan is not available for purchase yet.';
+      ErrorHandler.showValidation(error.value, title: 'Purchase unavailable');
       return;
     }
     final products = await iapService.fetchProducts({productId});
     if (products.isEmpty) {
       error.value = 'This plan is not available in the store yet.';
+      ErrorHandler.showValidation(error.value, title: 'Purchase unavailable');
       return;
     }
     final started = await iapService.startPurchase(products.first);
     if (!started) {
       error.value = 'The purchase could not be started. Please try again.';
+      ErrorHandler.showValidation(error.value, title: 'Purchase unavailable');
     }
     // The purchase result arrives on the purchase stream.
   }
@@ -304,6 +342,7 @@ class SubscriptionController extends GetxController {
     final checkoutUrl = session.checkoutUrl;
     if (checkoutUrl == null || checkoutUrl.isEmpty) {
       error.value = 'Checkout did not return a payment link';
+      ErrorHandler.showValidation(error.value, title: 'Purchase unavailable');
       return;
     }
     final url = Uri.parse(checkoutUrl);
@@ -311,6 +350,7 @@ class SubscriptionController extends GetxController {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     } else {
       error.value = 'Could not open checkout page';
+      ErrorHandler.showValidation(error.value, title: 'Purchase unavailable');
     }
   }
 
@@ -404,6 +444,7 @@ class SubscriptionController extends GetxController {
         final portalUrl = await _repository.createPortalSession();
         if (portalUrl.isEmpty) {
           error.value = 'Could not open billing management.';
+          ErrorHandler.showValidation(error.value, title: 'Could not open');
           return;
         }
         await _launchUrl(Uri.parse(portalUrl));
@@ -424,6 +465,10 @@ class SubscriptionController extends GetxController {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     } else {
       error.value = 'Could not open the link.';
+      // Same silent-dead-button class as checkout: surface instead of
+      // leaving the tap looking like it did nothing (e.g. simulator
+      // without the App Store / Play Store).
+      ErrorHandler.showValidation(error.value, title: 'Could not open');
     }
   }
 

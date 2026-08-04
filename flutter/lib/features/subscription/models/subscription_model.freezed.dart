@@ -1998,7 +1998,10 @@ as Map<String, String?>,
 /// @nodoc
 mixin _$PlansResponse {
 
- List<PlanDetailsModel> get plans;@JsonKey(name: 'store_products') StoreProductsModel get storeProducts;
+ List<PlanDetailsModel> get plans;@JsonKey(name: 'store_products') StoreProductsModel get storeProducts;/// True only when web (Stripe) billing is fully configured server-side.
+/// When false, web checkout/portal fail closed by design, so web clients
+/// must not offer upgrade CTAs that only produce error toasts.
+@JsonKey(name: 'billing_configured') bool get billingConfigured;
 /// Create a copy of PlansResponse
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -2011,16 +2014,16 @@ $PlansResponseCopyWith<PlansResponse> get copyWith => _$PlansResponseCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PlansResponse&&const DeepCollectionEquality().equals(other.plans, plans)&&(identical(other.storeProducts, storeProducts) || other.storeProducts == storeProducts));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is PlansResponse&&const DeepCollectionEquality().equals(other.plans, plans)&&(identical(other.storeProducts, storeProducts) || other.storeProducts == storeProducts)&&(identical(other.billingConfigured, billingConfigured) || other.billingConfigured == billingConfigured));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(plans),storeProducts);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(plans),storeProducts,billingConfigured);
 
 @override
 String toString() {
-  return 'PlansResponse(plans: $plans, storeProducts: $storeProducts)';
+  return 'PlansResponse(plans: $plans, storeProducts: $storeProducts, billingConfigured: $billingConfigured)';
 }
 
 
@@ -2031,7 +2034,7 @@ abstract mixin class $PlansResponseCopyWith<$Res>  {
   factory $PlansResponseCopyWith(PlansResponse value, $Res Function(PlansResponse) _then) = _$PlansResponseCopyWithImpl;
 @useResult
 $Res call({
- List<PlanDetailsModel> plans,@JsonKey(name: 'store_products') StoreProductsModel storeProducts
+ List<PlanDetailsModel> plans,@JsonKey(name: 'store_products') StoreProductsModel storeProducts,@JsonKey(name: 'billing_configured') bool billingConfigured
 });
 
 
@@ -2048,11 +2051,12 @@ class _$PlansResponseCopyWithImpl<$Res>
 
 /// Create a copy of PlansResponse
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? plans = null,Object? storeProducts = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? plans = null,Object? storeProducts = null,Object? billingConfigured = null,}) {
   return _then(_self.copyWith(
 plans: null == plans ? _self.plans : plans // ignore: cast_nullable_to_non_nullable
 as List<PlanDetailsModel>,storeProducts: null == storeProducts ? _self.storeProducts : storeProducts // ignore: cast_nullable_to_non_nullable
-as StoreProductsModel,
+as StoreProductsModel,billingConfigured: null == billingConfigured ? _self.billingConfigured : billingConfigured // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 /// Create a copy of PlansResponse
@@ -2146,10 +2150,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<PlanDetailsModel> plans, @JsonKey(name: 'store_products')  StoreProductsModel storeProducts)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<PlanDetailsModel> plans, @JsonKey(name: 'store_products')  StoreProductsModel storeProducts, @JsonKey(name: 'billing_configured')  bool billingConfigured)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _PlansResponse() when $default != null:
-return $default(_that.plans,_that.storeProducts);case _:
+return $default(_that.plans,_that.storeProducts,_that.billingConfigured);case _:
   return orElse();
 
 }
@@ -2167,10 +2171,10 @@ return $default(_that.plans,_that.storeProducts);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<PlanDetailsModel> plans, @JsonKey(name: 'store_products')  StoreProductsModel storeProducts)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<PlanDetailsModel> plans, @JsonKey(name: 'store_products')  StoreProductsModel storeProducts, @JsonKey(name: 'billing_configured')  bool billingConfigured)  $default,) {final _that = this;
 switch (_that) {
 case _PlansResponse():
-return $default(_that.plans,_that.storeProducts);case _:
+return $default(_that.plans,_that.storeProducts,_that.billingConfigured);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -2187,10 +2191,10 @@ return $default(_that.plans,_that.storeProducts);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<PlanDetailsModel> plans, @JsonKey(name: 'store_products')  StoreProductsModel storeProducts)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<PlanDetailsModel> plans, @JsonKey(name: 'store_products')  StoreProductsModel storeProducts, @JsonKey(name: 'billing_configured')  bool billingConfigured)?  $default,) {final _that = this;
 switch (_that) {
 case _PlansResponse() when $default != null:
-return $default(_that.plans,_that.storeProducts);case _:
+return $default(_that.plans,_that.storeProducts,_that.billingConfigured);case _:
   return null;
 
 }
@@ -2202,7 +2206,7 @@ return $default(_that.plans,_that.storeProducts);case _:
 @JsonSerializable()
 
 class _PlansResponse implements PlansResponse {
-  const _PlansResponse({final  List<PlanDetailsModel> plans = const [], @JsonKey(name: 'store_products') this.storeProducts = const StoreProductsModel()}): _plans = plans;
+  const _PlansResponse({final  List<PlanDetailsModel> plans = const [], @JsonKey(name: 'store_products') this.storeProducts = const StoreProductsModel(), @JsonKey(name: 'billing_configured') this.billingConfigured = false}): _plans = plans;
   factory _PlansResponse.fromJson(Map<String, dynamic> json) => _$PlansResponseFromJson(json);
 
  final  List<PlanDetailsModel> _plans;
@@ -2213,6 +2217,10 @@ class _PlansResponse implements PlansResponse {
 }
 
 @override@JsonKey(name: 'store_products') final  StoreProductsModel storeProducts;
+/// True only when web (Stripe) billing is fully configured server-side.
+/// When false, web checkout/portal fail closed by design, so web clients
+/// must not offer upgrade CTAs that only produce error toasts.
+@override@JsonKey(name: 'billing_configured') final  bool billingConfigured;
 
 /// Create a copy of PlansResponse
 /// with the given fields replaced by the non-null parameter values.
@@ -2227,16 +2235,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PlansResponse&&const DeepCollectionEquality().equals(other._plans, _plans)&&(identical(other.storeProducts, storeProducts) || other.storeProducts == storeProducts));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PlansResponse&&const DeepCollectionEquality().equals(other._plans, _plans)&&(identical(other.storeProducts, storeProducts) || other.storeProducts == storeProducts)&&(identical(other.billingConfigured, billingConfigured) || other.billingConfigured == billingConfigured));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_plans),storeProducts);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_plans),storeProducts,billingConfigured);
 
 @override
 String toString() {
-  return 'PlansResponse(plans: $plans, storeProducts: $storeProducts)';
+  return 'PlansResponse(plans: $plans, storeProducts: $storeProducts, billingConfigured: $billingConfigured)';
 }
 
 
@@ -2247,7 +2255,7 @@ abstract mixin class _$PlansResponseCopyWith<$Res> implements $PlansResponseCopy
   factory _$PlansResponseCopyWith(_PlansResponse value, $Res Function(_PlansResponse) _then) = __$PlansResponseCopyWithImpl;
 @override @useResult
 $Res call({
- List<PlanDetailsModel> plans,@JsonKey(name: 'store_products') StoreProductsModel storeProducts
+ List<PlanDetailsModel> plans,@JsonKey(name: 'store_products') StoreProductsModel storeProducts,@JsonKey(name: 'billing_configured') bool billingConfigured
 });
 
 
@@ -2264,11 +2272,12 @@ class __$PlansResponseCopyWithImpl<$Res>
 
 /// Create a copy of PlansResponse
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? plans = null,Object? storeProducts = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? plans = null,Object? storeProducts = null,Object? billingConfigured = null,}) {
   return _then(_PlansResponse(
 plans: null == plans ? _self._plans : plans // ignore: cast_nullable_to_non_nullable
 as List<PlanDetailsModel>,storeProducts: null == storeProducts ? _self.storeProducts : storeProducts // ignore: cast_nullable_to_non_nullable
-as StoreProductsModel,
+as StoreProductsModel,billingConfigured: null == billingConfigured ? _self.billingConfigured : billingConfigured // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

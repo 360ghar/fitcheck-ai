@@ -57,6 +57,7 @@ export function useBatchSSE({
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const watchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastEventAtRef = useRef(0);
+  const lastEventIdRef = useRef(0);
 
   // Store callbacks in refs to avoid reconnecting on every callback change
   const onEventRef = useRef(onEvent);
@@ -132,6 +133,7 @@ export function useBatchSSE({
         setIsConnected(true);
         reconnectAttempts.current = 0;
         lastEventAtRef.current = Date.now();
+        if (event.id != null) lastEventIdRef.current = event.id;
         onEventRef.current({
           type: event.type as BatchSSEEventType,
           data: event.data,
@@ -151,7 +153,8 @@ export function useBatchSSE({
       (err) => handleDrop(err),
       (sawTerminal) => {
         if (!sawTerminal) handleDrop(null);
-      }
+      },
+      lastEventIdRef.current
     );
 
     disconnectRef.current = disconnect;

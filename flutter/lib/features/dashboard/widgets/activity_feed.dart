@@ -65,15 +65,28 @@ class _ActivityRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: AppConstants.spacing8),
       child: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: tokens.brandColor.withValues(alpha: 0.12),
+          if (activity.imageUrl != null && activity.imageUrl!.isNotEmpty)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppConstants.radius12),
+              child: AppImage(
+                imageUrl: activity.imageUrl!,
+                fit: BoxFit.cover,
+                width: 44,
+                height: 44,
+                enableZoom: false,
+                errorIcon: icon,
+              ),
+            )
+          else
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: tokens.brandColor.withValues(alpha: 0.12),
+              ),
+              child: Icon(icon, size: 18, color: tokens.brandColor),
             ),
-            child: Icon(icon, size: 18, color: tokens.brandColor),
-          ),
           const SizedBox(width: AppConstants.spacing12),
           Expanded(
             child: Column(

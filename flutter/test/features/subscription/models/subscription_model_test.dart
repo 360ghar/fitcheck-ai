@@ -68,6 +68,56 @@ void main() {
     expect(products.productIdFor('apple', 'plus_monthly'), 'plus_monthly');
   });
 
+  test('store products fall back to plan type when every entry is null', () {
+    // The backend always sends the full map (with null values when the store
+    // rail is unconfigured), so "no map" must mean all-null, not empty-map.
+    // Regression: the old `map.isEmpty` check never fired, so dev/sandbox
+    // builds could never reach the plan-type fallback and the Upgrade button
+    // failed silently.
+    final products = StoreProductsModel.fromJson({
+      'apple': {
+        'plus_monthly': null,
+        'plus_yearly': null,
+        'pro_monthly': null,
+        'pro_yearly': null,
+      },
+    });
+
+    expect(products.productIdFor('apple', 'plus_monthly'), 'plus_monthly');
+    expect(products.productIdFor('apple', 'pro_yearly'), 'pro_yearly');
+  });
+
+  test('store products never fall back when only some variants are configured', () {
+    final products = StoreProductsModel.fromJson({
+      'apple': {
+        'plus_monthly': 'com.fitcheck.plus.monthly',
+        'plus_yearly': null,
+      },
+    });
+
+    // A configured rail must not silently use the plan type as a product ID.
+    expect(products.productIdFor('apple', 'plus_monthly'), 'com.fitcheck.plus.monthly');
+    expect(products.productIdFor('apple', 'plus_yearly'), isNull);
+  });
+
+  test('plans response parses billing_configured', () {
+    final response = PlansResponse.fromJson({
+      'plans': <Map<String, dynamic>>[],
+      'store_products': <String, dynamic>{},
+      'billing_configured': true,
+    });
+
+    expect(response.billingConfigured, isTrue);
+  });
+
+  test('plans response defaults billing_configured to false', () {
+    final response = PlansResponse.fromJson({
+      'plans': [],
+    });
+
+    expect(response.billingConfigured, isFalse);
+  });
+
   test('plans response bundles plans with store products', () {
     final response = PlansResponse.fromJson({
       'plans': [

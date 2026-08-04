@@ -1,0 +1,91 @@
+{
+  "products" : [
+    {
+      "displayPrice" : "10.00",
+      "familyShareable" : false,
+      "internalID" : "7657E1A6-6D2F-4C98-9A0A-28F269C11518",
+      "localizations" : [
+        {
+          "description" : "Plus subscription - monthly billing. Unlocks every paid feature (virtual try-on, analytics, calendar planning, priority support) with higher monthly usage limits.",
+          "displayName" : "Plus (Monthly)",
+          "language" : "en_US"
+        }
+      ],
+      "productType" : "Auto-Renewable Subscription",
+      "referenceName" : "Plus Monthly",
+      "subscriptionGroupName" : "FITCHECK_SUBSCRIPTIONS",
+      "subscriptionPeriod" : {
+        "unit" : "MONTH",
+        "value" : 1
+      },
+      "identifier" : "com.fitcheckaiapp.fitcheckai.plus.monthly"
+    },
+    {
+      "displayPrice" : "100.00",
+      "familyShareable" : false,
+      "internalID" : "564BADFB-3E74-4107-8EEE-6581460DA80C",
+      "localizations" : [
+        {
+          "description" : "Plus subscription - yearly billing (2 months free vs monthly). Unlocks every paid feature (virtual try-on, analytics, calendar planning, priority support) with higher monthly usage limits.",
+          "displayName" : "Plus (Yearly)",
+          "language" : "en_US"
+        }
+      ],
+      "productType" : "Auto-Renewable Subscription",
+      "referenceName" : "Plus Yearly",
+      "subscriptionGroupName" : "FITCHECK_SUBSCRIPTIONS",
+      "subscriptionPeriod" : {
+        "unit" : "YEAR",
+        "value" : 1
+      },
+      "identifier" : "com.fitcheckaiapp.fitcheckai.plus.yearly"
+    },
+    {
+      "displayPrice" : "20.00",
+      "familyShareable" : false,
+      "internalID" : "75BA782D-5AD6-4FCB-8ED2-E8EED13EB118",
+      "localizations" : [
+        {
+          "description" : "Pro subscription - monthly billing. Unlocks every paid feature (virtual try-on, analytics, calendar planning, priority support) at the highest usage limits.",
+          "displayName" : "Pro (Monthly)",
+          "language" : "en_US"
+        }
+      ],
+      "productType" : "Auto-Renewable Subscription",
+      "referenceName" : "Pro Monthly",
+      "subscriptionGroupName" : "FITCHECK_SUBSCRIPTIONS",
+      "subscriptionPeriod" : {
+        "unit" : "MONTH",
+        "value" : 1
+      },
+      "identifier" : "com.fitcheckaiapp.fitcheckai.pro.monthly"
+    },
+    {
+      "displayPrice" : "200.00",
+      "familyShareable" : false,
+      "internalID" : "DE27C5AE-6F70-4348-9ECA-7FA94289EFEB",
+      "localizations" : [
+        {
+          "description" : "Pro subscription - yearly billing (2 months free vs monthly). Unlocks every paid feature (virtual try-on, analytics, calendar planning, priority support) at the highest usage limits.",
+          "displayName" : "Pro (Yearly)",
+          "language" : "en_US"
+        }
+      ],
+      "productType" : "Auto-Renewable Subscription",
+      "referenceName" : "Pro Yearly",
+      "subscriptionGroupName" : "FITCHECK_SUBSCRIPTIONS",
+      "subscriptionPeriod" : {
+        "unit" : "YEAR",
+        "value" : 1
+      },
+      "identifier" : "com.fitcheckaiapp.fitcheckai.pro.yearly"
+    }
+  ],
+  "settings" : {
+
+  },
+  "version" : {
+    "major" : 2,
+    "minor" : 0
+  }
+}

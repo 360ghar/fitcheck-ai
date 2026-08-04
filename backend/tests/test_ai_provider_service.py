@@ -197,6 +197,31 @@ async def test_generate_image_routes_reference_image_through_images_api_when_sty
 
 
 @pytest.mark.asyncio
+async def test_images_api_preserves_remote_reference_urls():
+    config = _make_config()
+    service = AIProviderService(config)
+    captured = {}
+
+    class _ImageCapturingClient:
+        async def post(self, url, json=None, headers=None):
+            captured["payload"] = json
+            return _FakeResponse({"data": [{"b64_json": "ZmFrZQ=="}]})
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=_ImageCapturingClient())), \
+         patch("app.services.ai_provider_health_service.get_health_service") as mock_health:
+        mock_health.return_value.check_provider_health = AsyncMock(
+            return_value=HealthStatus(available=True, last_check=0, consecutive_failures=0)
+        )
+        await service._generate_image_via_images_api(
+            "a cat", model="image-model",
+            reference_images=["https://storage.example/item.jpg"],
+            api_url="https://image.example.com/v1", api_key="image-key",
+        )
+
+    assert captured["payload"]["extra_body"]["image"] == ["https://storage.example/item.jpg"]
+
+
+@pytest.mark.asyncio
 async def test_chat_wraps_bare_base64_to_data_url_at_wire_boundary():
     """Regression for the 2026-08-03 bare-base64 message shape: chat() must
     wrap bare base64 image_url entries to data URLs at wire serialization
@@ -234,6 +259,36 @@ async def test_chat_wraps_bare_base64_to_data_url_at_wire_boundary():
     assert image_parts[0]["image_url"]["url"].startswith("data:")
     # Existing data URL passed through unchanged (no double-wrap).
     assert image_parts[1]["image_url"]["url"] == "data:image/png;base64,Zm9v"
+
+
+@pytest.mark.asyncio
+async def test_chat_preserves_remote_storage_image_urls():
+    """Provider wire serialization must pass hosted image URLs through."""
+    config = _make_config()
+    service = AIProviderService(config)
+
+    class _ChatCapturingClient:
+        def __init__(self):
+            self.payloads = []
+
+        async def post(self, url, json=None, headers=None):
+            self.payloads.append(json)
+            return _FakeResponse({"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]})
+
+    fake_client = _ChatCapturingClient()
+    messages = [ChatMessage(
+        role="user",
+        content=[{"type": "image_url", "image_url": {"url": "https://storage.example/item.jpg"}}],
+    )]
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)), \
+         patch("app.services.ai_provider_health_service.get_health_service") as mock_health:
+        mock_health.return_value.check_provider_health = AsyncMock(
+            return_value=HealthStatus(available=True, last_check=0, consecutive_failures=0)
+        )
+        await service.chat(messages=messages, model="chat-model")
+
+    assert fake_client.payloads[0]["messages"][0]["content"][0]["image_url"]["url"] == "https://storage.example/item.jpg"
 
 
 @pytest.mark.asyncio

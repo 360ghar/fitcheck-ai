@@ -862,17 +862,41 @@ Create or update the user's body profile (upsert).
 
 ### GET /users/dashboard
 
-Fetch a lightweight dashboard aggregate (user + stats + recent items/outfits).
+Fetch the dashboard aggregate (stats + recent activity + suggestions). Mobile
+Home is the primary consumer. Image URLs (`image_url` on activity entries and
+on `suggestions.outfit_of_the_day`) are fresh short-lived presigned URLs
+materialized at read time from `storage_path` — never the stored raw values.
 
 **Response (200):**
 ```json
 {
   "data": {
-    "user": { "id": "uuid", "email": "user@example.com", "full_name": "John Doe" },
-    "stats": { "total_items": 10, "total_outfits": 3 },
-    "recent_items": [],
-    "recent_outfits": [],
-    "recommendations": []
+    "user": [{ "id": "uuid", "email": "user@example.com", "full_name": "John Doe" }],
+    "statistics": {
+      "total_items": 10,
+      "total_outfits": 3,
+      "items_added_this_month": 1,
+      "outfits_created_this_month": 1,
+      "favorite_items_count": 2,
+      "favorite_outfits_count": 1,
+      "most_worn_item": { "name": "Linen shirt", "times_worn": 9 }
+    },
+    "recent_activity": [
+      {
+        "type": "outfit_created",
+        "description": "Created Weekend",
+        "timestamp": "2026-01-03T00:00:00",
+        "image_url": "https://presigned.example/u1/outfits/o1.jpg"
+      }
+    ],
+    "suggestions": {
+      "weather_based": { "temperature": 24.4, "recommendation": "Consider light layers." },
+      "outfit_of_the_day": {
+        "id": "outfit_uuid",
+        "name": "Weekend",
+        "image_url": "https://presigned.example/u1/outfits/o1.jpg"
+      }
+    }
   }
 }
 ```

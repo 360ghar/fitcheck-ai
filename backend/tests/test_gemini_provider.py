@@ -22,6 +22,7 @@ from app.services.gemini_provider import (
     GeminiProvider,
     _daily_quota_reset_at,
     _hash_api_key,
+    _is_safe_remote_url,
     _latch_daily_quota,
     classify_gemini_error,
     clear_daily_quota_latch,
@@ -129,6 +130,46 @@ class TestChat:
         assert image_parts[0].inline_data.mime_type == "image/jpeg"  # bare base64 defaults to jpeg
         assert image_parts[1].inline_data.data == b"png-bytes"
         assert image_parts[1].inline_data.mime_type == "image/png"
+
+    @pytest.mark.asyncio
+    async def test_vision_remote_url_downloads_asynchronously(self):
+        provider = GeminiProvider(_make_config())
+        gen = AsyncMock(return_value=_fake_response(text="a shirt"))
+
+        class FakeResponse:
+            headers = {"content-type": "image/png"}
+
+            def raise_for_status(self):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+            async def aiter_bytes(self):
+                yield b"\x89PNG\r\n\x1a\nremote"
+
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+            def stream(self, *args, **kwargs):
+                return FakeResponse()
+
+        with patch("app.services.gemini_provider.httpx.AsyncClient", FakeClient), _patched_client(provider, gen):
+            result = await provider.chat_with_vision("describe", ["https://signed.example/image"])
+        assert result.text == "a shirt"
+        image_part = gen.call_args.kwargs["contents"][0].parts[1]
+        assert image_part.inline_data.data.startswith(b"\x89PNG")
+        assert image_part.inline_data.mime_type == "image/png"
 
     @pytest.mark.asyncio
     async def test_generate_image_sets_response_modalities(self):
@@ -673,3 +714,67 @@ class TestRateLimiter:
         fake_sleep.assert_awaited_once()
         wait = fake_sleep.await_args.args[0]
         assert 4.5 <= wait <= 5.5
+
+
+class TestRemoteUrlSafety:
+    """The provider boundary downloads http(s) image URLs; internal-network
+    targets must be refused before any fetch (SSRF guard)."""
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://storage.example.com/user-a/items/abc.jpg",
+            "http://presigned.internal-host.example/x.png",
+            "https://lh3.googleusercontent.com/a/AA123",
+        ],
+    )
+    def test_accepts_public_urls(self, url):
+        assert _is_safe_remote_url(url)
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "ftp://example.com/x.png",
+            "file:///etc/passwd",
+            "gs://bucket/x.png",
+            "",
+            "not-a-url",
+            "http://localhost:8080/x.png",
+            "http://127.0.0.1/x.png",
+            "http://10.0.0.5/x.png",
+            "http://172.16.4.1/x.png",
+            "http://192.168.1.10/x.png",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://[::1]/x.png",
+            "http://metadata.google.internal/x",
+            "http://router.local/x.png",
+            "http://cache.internal/x.png",
+        ],
+    )
+    def test_rejects_internal_targets(self, url):
+        assert not _is_safe_remote_url(url)
+
+    @pytest.mark.asyncio
+    async def test_decode_image_part_refuses_private_url_before_fetching(self):
+        provider = GeminiProvider(_make_config())
+
+        with pytest.raises(ValueError, match="not fetchable"):
+            await provider._decode_image_part("http://169.254.169.254/latest/meta-data/")
+
+    def test_accepts_configured_storage_endpoint_even_when_private(self, monkeypatch):
+        """Local development points OBJECT_STORAGE_ENDPOINT at a private
+        MinIO-like host; our own presigned URLs there must stay fetchable."""
+        # Patch the settings object the provider module actually holds: other
+        # tests (e.g. test_concurrency_config) reload app.core.config, which
+        # rebinds config.settings to a new instance the provider never sees.
+        import app.services.gemini_provider as provider_module
+
+        monkeypatch.setattr(
+            provider_module.settings, "OBJECT_STORAGE_ENDPOINT", "http://localhost:9000"
+        )
+        assert _is_safe_remote_url(
+            "http://localhost:9000/fitcheck-images/user-a/items/0123456789abcdef0123456789abcdef.jpg"
+        )
+        # An unrelated localhost URL is still refused.
+        assert not _is_safe_remote_url("http://localhost:9001/anything")
+

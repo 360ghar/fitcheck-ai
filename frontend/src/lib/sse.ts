@@ -29,6 +29,8 @@ export interface SSEConnectionOptions {
   terminalEvents?: ReadonlySet<string>;
   /** Extra headers, e.g. `{ Authorization: 'Bearer …' }`. */
   headers?: Record<string, string>;
+  /** Last received event ID, sent to the server for replay on reconnect. */
+  lastEventId?: number;
 }
 
 export function createSSEConnection(options: SSEConnectionOptions): () => void {
@@ -49,6 +51,9 @@ export function createSSEConnection(options: SSEConnectionOptions): () => void {
         headers: {
           Accept: 'text/event-stream',
           ...headers,
+          ...(options.lastEventId != null
+            ? { 'Last-Event-ID': String(options.lastEventId) }
+            : {}),
         },
         signal: controller.signal,
       });

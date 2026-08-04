@@ -189,12 +189,14 @@ _PlansResponse _$PlansResponseFromJson(Map<String, dynamic> json) =>
           : StoreProductsModel.fromJson(
               json['store_products'] as Map<String, dynamic>,
             ),
+      billingConfigured: json['billing_configured'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$PlansResponseToJson(_PlansResponse instance) =>
     <String, dynamic>{
       'plans': instance.plans,
       'store_products': instance.storeProducts,
+      'billing_configured': instance.billingConfigured,
     };
 
 _CheckoutSessionModel _$CheckoutSessionModelFromJson(

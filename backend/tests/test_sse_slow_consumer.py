@@ -24,12 +24,25 @@ import pytest
 from app.services.batch_job_service import BatchJobService
 from app.services.photoshoot_job_service import PhotoshootJobService
 from app.services.social_import_event_service import SocialImportEventService
-from app.utils.sse_queue import SSE_QUEUE_MAXSIZE, STREAM_OVERFLOW
+from app.utils.sse_queue import SSE_QUEUE_MAXSIZE, STREAM_OVERFLOW, strip_history_base64
 
 # Comfortably more events than the queue can hold.
 _FLOOD = SSE_QUEUE_MAXSIZE * 3
 # A producer that is not blocked finishes this in milliseconds.
 _NO_BLOCK_TIMEOUT = 2.0
+
+
+def test_history_strip_preserves_sse_id_and_removes_base64():
+    event = {
+        "type": "image_complete",
+        "id": 7,
+        "data": {"generated_image_base64": "payload", "nested": [{"keep": True}]},
+    }
+    stripped = strip_history_base64(event)
+    assert stripped["id"] == 7
+    assert stripped["type"] == "image_complete"
+    assert stripped["data"]["generated_image_base64"] is None
+    assert stripped["data"]["nested"] == [{"keep": True}]
 
 
 @pytest.fixture(autouse=True)

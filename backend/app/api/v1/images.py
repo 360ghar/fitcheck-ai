@@ -15,6 +15,7 @@ prefix. A request for another user's object is indistinguishable from a missing
 one (404), so we never reveal whether an object exists.
 """
 
+import re
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Query
@@ -29,13 +30,29 @@ logger = get_context_logger(__name__)
 router = APIRouter()
 
 
-def _is_owned_by_user(storage_path: str, user_id: str) -> bool:
-    """Whether ``storage_path`` is scoped to ``user_id`` by the key layout prefix.
+_KEY_RE = re.compile(
+    r"^(?P<user>[^/\\]+)/(?:items|outfits|avatars|sources|feedback)/"
+    r"(?P<name>[0-9a-f]{32})\.(?:jpg|jpeg|png|webp|gif|avif)$"
+)
+_TMP_KEY_RE = re.compile(
+    r"^(?P<user>[^/\\]+?)/tmp/(?P<source>[^/\\]+?)/"
+    r"(?P<name>[0-9a-f]{32})\.(?:jpg|jpeg|png|webp|gif|avif)$"
+)
 
-    Keys follow ``{user_id}/{category}/{uuid}.{ext}`` (see StorageService._build_key),
-    so ownership is a prefix check on the caller's user ID.
+
+def _is_owned_by_user(storage_path: str, user_id: str) -> bool:
+    """Validate a canonical StorageService key and its user ownership.
+
+    Do not use a prefix-only check: encoded separators are decoded by the
+    framework before this function, and ``../`` or a user-id prefix trick must
+    never reach the presigner. Legacy valid keys may include ``tmp/{source}``.
     """
-    return storage_path.startswith(f"{user_id}/")
+    if not isinstance(storage_path, str) or not isinstance(user_id, str):
+        return False
+    if storage_path != storage_path.strip() or any(c in storage_path for c in "\\\r\n"):
+        return False
+    match = _KEY_RE.fullmatch(storage_path) or _TMP_KEY_RE.fullmatch(storage_path)
+    return bool(match and match.group("user") == user_id)
 
 
 async def materialize_image_urls(images: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

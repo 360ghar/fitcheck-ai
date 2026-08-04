@@ -504,10 +504,14 @@ export function BatchExtractionFlow({
           background: 'white',
           view_angle: 'front',
           include_shadows: false,
-          save_to_storage: false,
+          // Persist the generated image server-side so the save phase can pass
+          // its storage URL instead of materializing a base64 data URL.
+          save_to_storage: true,
         });
 
-        const imageUrl = `data:image/png;base64,${result.image_base64}`;
+        const imageUrl = result.image_url ||
+          (result.image_base64 ? `data:image/png;base64,${result.image_base64}` : undefined);
+        if (!imageUrl) throw new Error('Image generation returned no image URL');
 
         updateItem(tempId, {
           status: 'generated',

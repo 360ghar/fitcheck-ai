@@ -12,7 +12,7 @@ from app.utils.datetime_util import utcnow, utcnow_iso
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field, field_validator
 from sse_starlette.sse import EventSourceResponse
 from supabase import Client
@@ -562,6 +562,7 @@ async def batch_job_events(
     job_id: str,
     user_id: str = Depends(get_current_user_id),
     db: Client = Depends(get_db),
+    last_event_id: Optional[str] = Header(default=None, alias="Last-Event-ID"),
 ):
     """
     SSE endpoint for real-time batch job progress.
@@ -586,6 +587,10 @@ async def batch_job_events(
     - job_cancelled: User cancelled job
     """
     persistence_db = _persistence_db(db)
+    try:
+        replay_after = max(0, int(last_event_id or 0))
+    except (TypeError, ValueError):
+        replay_after = 0
     job = await BatchJobService.get_job(job_id, user_id, db=persistence_db)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -594,7 +599,7 @@ async def batch_job_events(
         queue: asyncio.Queue = asyncio.Queue(maxsize=SSE_QUEUE_MAXSIZE)
 
         # Add subscriber
-        if not await BatchJobService.add_subscriber(job_id, queue):
+        if not await BatchJobService.add_subscriber(job_id, queue, replay_after):
             yield {
                 "event": "error",
                 "data": json.dumps({"error": "Job not found"}),
@@ -651,10 +656,15 @@ async def batch_job_events(
                 try:
                     event, event_size = await asyncio.wait_for(queue.get(), timeout=30)
                     note_consumed(queue, event_size)
-                    yield {
+                    payload = {
                         "event": event["type"],
                         "data": json.dumps(event["data"]),
                     }
+                    # Preserve the monotonic ID so browsers send it back as
+                    # Last-Event-ID if the stream reconnects.
+                    if event.get("id") is not None:
+                        payload["id"] = str(event["id"])
+                    yield payload
 
                     # Check for terminal events
                     if event["type"] in _TERMINAL_SSE_EVENTS:

@@ -102,7 +102,8 @@ export interface GenerateOutfitOptions {
 }
 
 export interface GeneratedOutfit {
-  image_base64: string;
+  /** Legacy inline payload; new callers should prefer image_url/storage_path. */
+  image_base64?: string;
   image_url?: string;
   storage_path?: string;
   prompt: string;
@@ -131,7 +132,8 @@ export interface GenerateProductImageOptions {
 }
 
 export interface GeneratedProductImage {
-  image_base64: string;
+  /** Legacy inline payload; new callers should prefer image_url/storage_path. */
+  image_base64?: string;
   image_url?: string;
   storage_path?: string;
   prompt: string;
@@ -150,7 +152,8 @@ export interface TryOnOptions {
 }
 
 export interface TryOnResult {
-  image_base64: string;
+  /** Legacy inline payload; new callers should prefer image_url/storage_path. */
+  image_base64?: string;
   image_url?: string;
   storage_path?: string;
   prompt: string;

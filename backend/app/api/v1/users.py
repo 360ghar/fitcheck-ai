@@ -48,6 +48,7 @@ from app.models.user import (
 from app.services.storage_service import MAX_FILE_SIZE, StorageService
 from app.services.vector_service import get_vector_service
 from app.services.weather_service import get_weather_service
+from app.api.v1.images import materialize_image_urls
 
 logger = get_context_logger(__name__)
 
@@ -857,22 +858,48 @@ def _get_count_from_result(result: Any) -> int:
     return getattr(result, "count", len(result.data or []))
 
 
-def _build_recent_activity(items: List[Dict], outfits: List[Dict]) -> List[Dict[str, Any]]:
-    """Build combined recent activity list from items and outfits."""
+def _primary_image_url(images: List[Dict]) -> Optional[str]:
+    """Pick the primary (else first) image URL, preferring the thumbnail.
+
+    Mirrors the items/outfits list endpoints: ``thumbnail_url`` is sized for
+    grid tiles while ``image_url`` is the full-res asset. The caller must have
+    already materialized fresh presigned URLs (private buckets store durable
+    ``storage_path`` keys, never URLs).
+    """
+    if not images:
+        return None
+    primary = next((i for i in images if i.get("is_primary")), images[0])
+    return (primary or {}).get("thumbnail_url") or (primary or {}).get("image_url")
+
+
+async def _build_recent_activity(items: List[Dict], outfits: List[Dict]) -> List[Dict[str, Any]]:
+    """Build combined recent activity list from items and outfits.
+
+    Rows carry nested ``item_images`` / ``outfit_images``; their ``storage_path``
+    is materialized into a fresh short-lived presigned URL here so activity
+    thumbnails never render an expired URL. Rows without ``storage_path``
+    (legacy) keep their stored URL.
+    """
     activity: List[Dict[str, Any]] = []
 
     for it in items:
+        images = it.get("item_images") or []
+        await materialize_image_urls(images)
         activity.append({
             "type": "item_created",
             "description": f"Added {it.get('name')}",
             "timestamp": it.get("created_at"),
+            "image_url": _primary_image_url(images),
         })
 
     for o in outfits:
+        images = o.get("outfit_images") or []
+        await materialize_image_urls(images)
         activity.append({
             "type": "outfit_created",
             "description": f"Created {o.get('name')}",
             "timestamp": o.get("created_at"),
+            "image_url": _primary_image_url(images),
         })
 
     return sorted(activity, key=lambda a: a.get("timestamp") or "", reverse=True)[:10]
@@ -911,7 +938,7 @@ async def _get_outfit_of_the_day(user_id: str, db: Client) -> Optional[Dict[str,
     try:
         outfit = (await asyncio.to_thread(
             db.table("outfits")
-            .select("id,name,outfit_images(image_url,thumbnail_url,is_primary)")
+            .select("id,name,outfit_images(storage_path,image_url,thumbnail_url,is_primary)")
             .eq("user_id", user_id)
             .order("updated_at", desc=True)
             .limit(1)
@@ -923,6 +950,11 @@ async def _get_outfit_of_the_day(user_id: str, db: Client) -> Optional[Dict[str,
 
         o = outfit[0]
         images = o.get("outfit_images") or []
+        # Private buckets: the DB stores durable storage_path keys, so a fresh
+        # short-lived presigned URL is regenerated at read time (same contract
+        # as the items/outfits list endpoints) — the stored image_url would be
+        # stale/expired and render a broken card image.
+        await materialize_image_urls(images)
         primary = next((i for i in images if i.get("is_primary")), images[0] if images else None)
         return {
             "id": o.get("id"),
@@ -980,10 +1012,12 @@ async def get_dashboard(
         fav_items = await asyncio.to_thread(d.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).eq("is_deleted", False).execute)
         fav_outfits = await asyncio.to_thread(d.table("outfits").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).execute)
 
-        # Recent activity
+        # Recent activity (images are needed so the activity feed can render
+        # thumbnails; storage_path is materialized to a fresh presigned URL in
+        # _build_recent_activity).
         recent_items = (await asyncio.to_thread(
             d.table("items")
-            .select("id,name,created_at")
+            .select("id,name,created_at,item_images(storage_path,image_url,thumbnail_url,is_primary)")
             .eq("user_id", user_id)
             .eq("is_deleted", False)
             .order("created_at", desc=True)
@@ -993,14 +1027,14 @@ async def get_dashboard(
 
         recent_outfits = (await asyncio.to_thread(
             d.table("outfits")
-            .select("id,name,created_at")
+            .select("id,name,created_at,outfit_images(storage_path,image_url,thumbnail_url,is_primary)")
             .eq("user_id", user_id)
             .order("created_at", desc=True)
             .limit(5)
             .execute
         )).data or []
 
-        recent_activity = _build_recent_activity(recent_items, recent_outfits)
+        recent_activity = await _build_recent_activity(recent_items, recent_outfits)
 
         # Weather-based suggestion and outfit of the day
         weather_based = await _get_weather_suggestion(user_id, d)

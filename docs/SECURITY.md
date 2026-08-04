@@ -41,6 +41,15 @@ string to a known bucket key via `key_from_path`
 from the S3 backend, never from an arbitrary URL. `build_object_url` exists only as
 a stable locator for inventory tooling, not as a served endpoint.
 
+The AI provider boundary can fetch image URLs server-side (`GeminiProvider`
+downloads http(s) image parts for vision/try-on). Those fetches are bounded
+(10 MB, 20 s) and gated by an SSRF guard that refuses loopback, link-local
+(`169.254.x`), RFC1918, multicast, reserved and unspecified IP literals plus
+`localhost` / `.local` / `.internal` hostnames before any request is made.
+Route-level input validation additionally requires owned storage paths
+(canonical layout) or public https URLs for try-on avatars, so a stored avatar
+URL can never point the backend at an internal endpoint.
+
 ## Logging and PII
 
 - Correlation IDs on requests; avoid logging raw tokens or full card data.
