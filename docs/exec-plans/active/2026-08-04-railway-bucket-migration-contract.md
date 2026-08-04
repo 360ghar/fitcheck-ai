@@ -129,3 +129,85 @@ throughout. Deploy the new backend (with `STORAGE_BACKEND=railway` + `OBJECT_STO
 to finalize the cutover so new uploads go straight to the Railway bucket.
 
 - Docs updated.
+
+## Post-deploy reconciliation (2026-08-04)
+
+The live migration log above reached "Supabase: 0 objects, Railway: 622, 0
+orphans", but the DEPLOYED app was still writing to Supabase Storage at that
+point (cutover race). Once the new backend (commit `35a1eec`, `STORAGE_BACKEND=railway`)
+shipped, a one-time reconciliation is needed to (a) catch DB-referenced files
+written to Supabase during the window that never reached Railway, (b) clean
+generated-image orphans, and (c) zero Supabase for good.
+
+### Script enhancements for the reconciliation
+
+- `scripts/storage_inventory.py` — **age-based grace window** (`--min-age-hours`
+  / `MIN_AGE_HOURS`, default **2h**). Temp/generated images
+  (`{user_id}/tmp/{source}/...`) are NEVER DB-referenced; they are served only
+  via 1h presigned URLs, so the orphan math previously flagged every temp image
+  as an orphan — including one a user was actively previewing. The script now
+  captures each object's `LastModified` in the listing pass and splits orphans
+  into `deletable` (age ≥ window) vs `protected` (younger); `--delete` never
+  touches a protected key. Unknown mtime ⇒ protected (safe default). Audit log
+  gains `age_hours` + `protected` fields. (`tests/test_storage_inventory_age.py`
+  covers the split logic.)
+- `scripts/cleanup_supabase_orphans.py` — **`--purge-all`** deletes EVERY object
+  in the Supabase bucket (not just orphans), used to zero Supabase once Railway
+  is verified complete. Dry-run by default; prints a warning when it would
+  delete a DB-referenced key.
+
+### Reconciliation runbook (each step: dry-run → review → live)
+
+0. **Verify cutover live** (read-only): deployed backend must be
+   `STORAGE_BACKEND=railway` (`/health` `RAILWAY_GIT_COMMIT_SHA` = `35a1eec`).
+   If still on Supabase, **stop** — reconciliation would keep racing.
+1. `python scripts/cleanup_supabase_orphans.py` → `--delete` (purge window orphans).
+2. `python scripts/migrate_storage_to_railway.py` → `CLEAR_URL_COLUMNS=1 ... --apply`
+   (copy cutover-window DB-referenced objects to Railway + NULL stale
+   `image_url`/`thumbnail_url` on migrated rows). **This is the core
+   "files that didn't migrate" fix.**
+3. `python scripts/storage_inventory.py` (dry-run): inspect MISSING (DB keys with
+   no Railway object). Any still in Supabase → re-run step 2. Known junk (e.g.
+   `a.jpg` example-avatar URL) → leave/note.
+4. **Zero Supabase** *(gated: only after step 3 MISSING=0 for real keys)*:
+   `python scripts/cleanup_supabase_orphans.py --purge-all` → `--purge-all --delete`.
+5. `python scripts/storage_inventory.py --min-age-hours 2` (dry-run; review
+   deletable vs protected) → `--delete --min-age-hours 2` (aged generated
+   orphans only; in-flight previews stay).
+6. Final verify: `python scripts/storage_inventory.py` → deletable ≈ 0, MISSING
+   = known-junk only; Supabase bucket = 0 objects.
+
+### Reconciliation results
+
+| Step | Result |
+|------|--------|
+| 1. Supabase orphan purge | _(fill after run)_ |
+| 2. Objects migrated → Railway + URL columns cleared | _(fill)_ |
+| 3. Railway MISSING (real keys) | _(fill)_ |
+| 4. Supabase purge-all (final count) | _(fill)_ |
+| 5. Railway orphans deleted (deletable / protected) | _(fill)_ |
+| 6. Final verify (Railway deletable / MISSING; Supabase count) | _(fill)_ |
+
+Out of scope: a recurring/automated orphan sweep (chosen one-time), and
+key-layout hardening (old-style `{user}/{ts}/...` keys still coexist with new
+`{user}/{category}/...` keys) — separate passes.
+
+### Reconciliation results (executed 2026-08-04)
+
+| Step | Result |
+|------|--------|
+| 0. Fix | `cleanup_supabase_orphans.py` was missing the `sys.path` bootstrap the other two scripts have (`ModuleNotFoundError: No module named 'app'`); fixed + dry-run verified. |
+| 1. Supabase orphan purge | Deleted 60 orphans (50 temp/generated + 10 other) from `fitcheck-images`. 12 DB-referenced files preserved. Supabase: 72 → 12. |
+| 2. Objects migrated → Railway | Copied 12 cutover-window objects (4.6 MB) Supabase → Railway, 0 errors. **`CLEAR_URL_COLUMNS` failed**: `item_images.image_url` / `outfit_images.image_url` are `NOT NULL` (schema constraint), so the stale-public-URL NULL failed for those tables (avatars/sources/users had no NOT-NULL block). Not serving-impacting — read path regenerates URLs from `storage_path`; the stale columns hold dead Supabase URLs but are ignored. See follow-up note below. |
+| 3. Railway MISSING (real keys) | MISSING = **1** = only `a.jpg` (known `example.com` junk-avatar URL on `users.fa5c0bed…`; never existed as an object). All 12 real files confirmed in Railway (bucket 628 → 648). Gate met. |
+| 4. Supabase purge-all | Deleted the final 12 DB-referenced objects (all duplicated in Railway). `fitcheck-images` → 0. |
+| 5. Final verify | All four Supabase buckets (`fitcheck-images`, `items`, `outfits`, `avatars`) = **0 objects / 0 bytes**. Migrated object fetchable from Railway (266 KB, presigned URL generates). App live on commit `35a1eec`. |
+
+**Final state: Supabase Storage buckets are EMPTY (0 objects) and safe to delete.** Every real
+DB-referenced file is in Railway; the app is on `STORAGE_BACKEND=railway`; no `storage_path`
+resolves to a Supabase bucket; Postgres + Auth untouched. Deleting the empty bucket *containers*
+themselves is a Supabase-dashboard action (the scripts empty buckets, not delete containers).
+
+Follow-up (not blocking): `image_url`/`thumbnail_url` on `item_images`/`outfit_images` are
+`NOT NULL` and still hold dead Supabase public URLs. Either drop the NOT NULL constraint and
+NULL them, or repoint them to Railway presigned URLs — separate from this reconciliation.

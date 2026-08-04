@@ -273,6 +273,7 @@ async def get_current_user(
             lambda d: d.table("users").select("*").eq("id", user_id).execute(),
             db,
             extra={"operation": "get_current_user", "user_id": user_id},
+            max_retries=2,
         )
         if not result.data:
             raise UserNotFoundError(user_id=user_id)
@@ -398,12 +399,16 @@ async def delete_current_user(
         # bucket keys (support_tickets.attachment_storage_paths) so their
         # objects are not orphaned on account deletion. attachment_urls holds
         # only short-lived presigned URLs and must not be used as the durable
-        # reference.
-        tickets_result = await asyncio.to_thread(
-            db.table("support_tickets")
+        # reference. Read-only; routed through execute_with_reconnect so a
+        # dead pooled connection (observed 2026-08-04: "Failed to delete
+        # account" 500s) heals instead of failing the whole deletion.
+        tickets_result = await execute_with_reconnect(
+            lambda d: d.table("support_tickets")
             .select("attachment_storage_paths")
             .eq("user_id", user_id)
-            .execute
+            .execute(),
+            db,
+            extra={"operation": "delete_account.tickets", "user_id": user_id},
         )
         for ticket_row in (tickets_result.data or []):
             for path in (ticket_row.get("attachment_storage_paths") or []):
@@ -415,12 +420,14 @@ async def delete_current_user(
         # `key_from_path` reduces the stored (presigned) URL to its bucket key
         # (replaces the removed `url_to_storage_path`); the S3 backend uses a
         # single configured bucket, so the key is appended to the shared list.
-        avatar_result = await asyncio.to_thread(
-            db.table("users")
+        avatar_result = await execute_with_reconnect(
+            lambda d: d.table("users")
             .select("avatar_url")
             .eq("id", user_id)
             .maybe_single()
-            .execute
+            .execute(),
+            db,
+            extra={"operation": "delete_account.avatar", "user_id": user_id},
         )
         avatar_row = maybe_single_data(avatar_result)
         avatar_key = StorageService.key_from_path(
@@ -444,7 +451,14 @@ async def delete_current_user(
         # row delete stays last so an Auth outage cannot leave a live profile.
         await asyncio.gather(_delete_storage(), _delete_vectors())
 
-        await asyncio.to_thread(db.table("users").delete().eq("id", user_id).execute)
+        # The user-row delete is idempotent (a replayed delete is a no-op), so
+        # it is safe through the reconnect retry: a dead pooled connection
+        # mid-delete rebuilds the client and completes (2026-08-04 RCA).
+        await execute_with_reconnect(
+            lambda d: d.table("users").delete().eq("id", user_id).execute(),
+            db,
+            extra={"operation": "delete_account.user_row", "user_id": user_id},
+        )
 
         admin = getattr(getattr(db, "auth", None), "admin", None)
         if not admin or not hasattr(admin, "delete_user"):
@@ -1019,6 +1033,7 @@ async def get_dashboard(
             lambda d: _dashboard_data(d),
             db,
             extra={"operation": "get_dashboard", "user_id": user_id},
+            max_retries=2,
         )
         return {"data": payload, "message": "OK"}
 

@@ -385,6 +385,75 @@ async def test_register_transient_referral_failure_returns_will_retry_message(mo
 
 
 @pytest.mark.asyncio
+async def test_register_rejected_referral_returns_rejection_not_will_retry(monkeypatch, caplog):
+    """A definitive referral rejection (invalid/own code) must surface the
+    rejection message and log cleanly - NOT crash the logger and fall into
+    the transient "will retry" branch.
+
+    Regression: the rejection log passed ``message=`` to
+    ContextLogger.warning, whose first positional parameter is named
+    ``message``, raising ``TypeError: warning() got multiple values for
+    argument 'message'``; the except-Exception handler then mis-reported the
+    definitive rejection as a transient failure ("will retry on next
+    sign-in") and spammed the log (observed 2026-08-04)."""
+    import inspect
+
+    from app.api.v1 import auth as auth_module
+    from app.models.subscription import RedeemReferralResponse
+
+    anon_db = Mock()
+    anon_db.auth.sign_up.return_value = _FakeAuthResponse()
+
+    @asynccontextmanager
+    async def _noop_rate_limit(_request, _name):
+        yield None
+
+    async def _fake_execute(fn, _db, **_kwargs):
+        outcome = fn(Mock())
+        if inspect.iscoroutine(outcome):
+            outcome = await outcome
+        return outcome
+
+    monkeypatch.setattr(auth_module, "_require_schema", lambda _db: None)
+    monkeypatch.setattr(auth_module, "auth_rate_limited_operation", _noop_rate_limit)
+    monkeypatch.setattr(auth_module, "execute_with_reconnect", _fake_execute)
+    monkeypatch.setattr(
+        auth_module.ReferralService,
+        "redeem_referral",
+        AsyncMock(
+            return_value=RedeemReferralResponse(
+                success=False,
+                message="Invalid referral code",
+                credit_months=0,
+            )
+        ),
+    )
+
+    result = await auth_module.register(
+        auth_module.RegisterRequest(
+            email="rejected@example.com",
+            password="aaaaaaaa",
+            referral_code="FIT-ABC123",
+        ),
+        Mock(),
+        anon_db=anon_db,
+        db=Mock(),
+    )
+
+    assert result["message"] == "Registered"
+    referral = result["data"]["referral"]
+    assert referral["success"] is False
+    # The definitive rejection text, NOT the transient "will retry" message.
+    assert referral["message"] == "Invalid referral code"
+    assert "next sign-in" not in referral["message"]
+    # The logger no longer crashes: no "Failed to redeem referral code" line.
+    assert not any(
+        "Failed to redeem referral code" in record.getMessage()
+        for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
 async def test_login_retries_pending_referral():
     """A redemption that failed at signup leaves users.referred_by_code set;
     login must call process_pending_referral so the grant completes on the

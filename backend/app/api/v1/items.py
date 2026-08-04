@@ -424,9 +424,15 @@ async def list_items(
 
         # A dead pooled HTTP/2 connection (gateway restart/idle) previously
         # turned this endpoint into a permanent 500 until a process restart.
-        # execute_with_reconnect rebuilds the client and retries once.
+        # execute_with_reconnect rebuilds the client and retries; two retries
+        # with a short backoff ride out a 1-2 s gateway blip (2026-08-04:
+        # single-retry bursts still 500ed while the rebuilt client hit the
+        # same dead gateway).
         total, res = await execute_with_reconnect(
-            _list_and_count, db, extra={"operation": "list_items", "user_id": user_id}
+            _list_and_count,
+            db,
+            extra={"operation": "list_items", "user_id": user_id},
+            max_retries=2,
         )
         items = [_normalize_item_images(i) for i in (res.data or [])]
         # Private buckets: materialize fresh short-lived presigned URLs from

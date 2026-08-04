@@ -340,11 +340,15 @@ async def register(
                         else:
                             # Definitive rejection (invalid/own code). The
                             # retry hook was already cleared by the service.
+                            # `rejection_reason` (not `message`) because
+                            # ContextLogger.warning's first positional param
+                            # is named `message` - a keyword `message=` would
+                            # collide and raise TypeError (observed 2026-08-04).
                             logger.warning(
                                 "Referral code rejected during registration",
                                 user_id=user_id,
                                 code=register_request.referral_code,
-                                message=referral_result.message,
+                                rejection_reason=referral_result.message,
                             )
                     except Exception as e:
                         # Transient failure (missing RPC from an unapplied
@@ -849,7 +853,7 @@ async def oauth_sync(
                             "Referral code rejected during OAuth sync",
                             user_id=user_id,
                             code=request.referral_code,
-                            message=referral_result.message,
+                            rejection_reason=referral_result.message,
                         )
                 except Exception as e:
                     # Transient failure - the code was persisted on

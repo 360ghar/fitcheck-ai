@@ -447,14 +447,25 @@ class ItemExtractionAgent:
                 )
 
             parsed = self._parse_json_object(response.text)
+            if not parsed:
+                # Some providers skip the envelope and return the item array
+                # at the top level; normalize it so a valid detection is not
+                # reported as "No items found".
+                bare_items = safe_extract_json_array(response.text or "")
+                if isinstance(bare_items, list):
+                    parsed = {"items": bare_items}
             if not parsed or not isinstance(parsed, dict):
+                raw_text = response.text or ""
+                stripped_text = raw_text.strip()
                 logger.warning(
                     "Failed to parse item extraction response",
-                    response=response.text[:200],
-                    response_length=len(response.text or ""),
+                    response_length=len(raw_text),
+                    first_char=stripped_text[:1],
+                    last_char=stripped_text[-1:],
+                    response_preview=raw_text[:120].replace("\n", "\\n"),
                 )
                 return self._empty_result(
-                    response.text or "Unable to analyze image",
+                    raw_text or "Unable to analyze image",
                     has_profile_reference=has_profile_reference,
                 )
 
@@ -479,7 +490,14 @@ class ItemExtractionAgent:
             )
 
     def _parse_json_object(self, text: str) -> Optional[Dict[str, Any]]:
-        """Parse structured response with JSON-first strategy and regex fallback."""
+        """Parse a JSON object from the model response, or None.
+
+        JSON-first, then a quote/escape-aware block extraction as fallback
+        (survives braces/escaped quotes inside string values, which used to
+        truncate the block and fail extraction on valid photos). Returns
+        only objects; callers that tolerate a bare array handle it
+        themselves.
+        """
         stripped = (text or "").strip()
         if not stripped:
             return None

@@ -25,6 +25,7 @@ from app.core.exceptions import (
     FileTooLargeError,
     UnsupportedMediaTypeError,
 )
+from app.utils.db import execute_with_reconnect
 from app.utils.image_processing import (
     DEFAULT_MAX_EDGE,
     DEFAULT_QUALITY,
@@ -52,7 +53,7 @@ BUCKET_AVATARS = "avatars"
 BUCKET_FEEDBACK = "feedback"
 
 # Allowed file extensions
-ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
+ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 # Browser/CDN cache lifetime stamped on every upload, in seconds. Encoded on
@@ -527,26 +528,37 @@ class StorageService:
             ("outfits", "outfit_images", "outfit_id", outfit_ids),
         )
         # The two parent queries are independent; run them concurrently.
-        parent_queries = []
-        for parent_table, _child_table, _fk_column, scoped_ids in scopes:
-            if scoped_ids is not None and not scoped_ids:
-                continue
-            if not can_query_rows:
-                continue
+        # Both queries are built INSIDE the wrapped callable so a reconnect
+        # retry rebuilds them against the fresh client (a query bound to the
+        # dead client cannot be replayed). Reads only - retry is safe.
+        parent_scopes = [
+            (parent_table, scoped_ids)
+            for parent_table, _child_table, _fk_column, scoped_ids in scopes
+            if (scoped_ids is None or scoped_ids) and can_query_rows
+        ]
+
+        def _run_parent_query(d, parent_table, scoped_ids):
             # Source photos are stored once per photo and referenced from the
             # parent `items` row (not a child image table), so they must be
             # collected from the parent query itself.
             select_cols = "id,source_image_storage_path" if parent_table == "items" else "id"
-            parent_query = db.table(parent_table).select(select_cols).eq("user_id", user_id)
+            query = d.table(parent_table).select(select_cols).eq("user_id", user_id)
             if scoped_ids is not None:
-                parent_query = parent_query.in_("id", scoped_ids)
-            parent_queries.append((parent_table, parent_query))
+                query = query.in_("id", scoped_ids)
+            return query.execute()
 
         parent_results = await asyncio.gather(
-            *(asyncio.to_thread(query.execute) for _table, query in parent_queries)
-        ) if parent_queries else []
+            *(
+                execute_with_reconnect(
+                    lambda d, _t=parent_table, _s=scoped_ids: _run_parent_query(d, _t, _s),
+                    db,
+                    extra={"operation": f"resolve_owned_storage_paths.{parent_table}", "user_id": user_id},
+                )
+                for parent_table, scoped_ids in parent_scopes
+            )
+        ) if parent_scopes else []
 
-        for (parent_table, _query), parent_rows in zip(parent_queries, parent_results):
+        for (parent_table, _scoped_ids), parent_rows in zip(parent_scopes, parent_results):
             rows = getattr(parent_rows, "data", None) or []
             owned_ids = [
                 str(row.get("id"))
@@ -569,11 +581,17 @@ class StorageService:
             if not owned_ids:
                 continue
             # Chunk the IN clause so account deletion (a user's entire
-            # wardrobe) never exceeds PostgREST URL length limits.
+            # wardrobe) never exceeds PostgREST URL length limits. Built
+            # inside the wrapped callable so a reconnect retry rebuilds it
+            # against the fresh client (read-only, safe to retry).
             for start in range(0, len(owned_ids), 500):
                 chunk = owned_ids[start:start + 500]
-                child_rows = await asyncio.to_thread(
-                    db.table(child_table).select("storage_path").in_(fk_column, chunk).execute
+                child_rows = await execute_with_reconnect(
+                    lambda d, _t=child_table, _f=fk_column, _c=chunk: (
+                        d.table(_t).select("storage_path").in_(_f, _c).execute()
+                    ),
+                    db,
+                    extra={"operation": f"resolve_owned_storage_paths.{child_table}", "user_id": user_id},
                 )
                 storage_paths.extend(
                     str(row["storage_path"])

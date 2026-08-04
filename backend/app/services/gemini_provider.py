@@ -31,7 +31,7 @@ from app.core.exceptions import AIServiceError
 from app.core.logging_config import get_context_logger
 from app.core.config import settings
 from app.models.ai import HealthCheckResult
-from app.utils.image_processing import sniff_image_mime_from_magic
+from app.utils.image_processing import ensure_provider_safe_base64, sniff_image_mime_from_magic
 from app.services.ai_provider_interface import (
     AIProvider,
     AIResponse,
@@ -341,7 +341,12 @@ class GeminiProvider:
         to avoid a full-size data-URL copy per image (see
         build_user_multimodal_messages). The mime type is then SNIFFED from
         the first decoded bytes (previously hardcoded to image/jpeg, which
-        labelled every PNG/WebP reference wrong inside Part.from_bytes)."""
+        labelled every PNG/WebP reference wrong inside Part.from_bytes).
+
+        AVIF/HEIF bytes are re-encoded to JPEG first (ensure_provider_safe_base64):
+        Gemini rejects those mime types, and uploads of them have been
+        accepted since 2026-08-04 (iOS Safari 16+)."""
+        img = ensure_provider_safe_base64(img)
         if img.startswith("data:"):
             header, _, b64_data = img.partition(",")
             mime_type = header[5:].split(";")[0] or "image/jpeg"

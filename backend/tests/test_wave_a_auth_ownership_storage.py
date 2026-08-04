@@ -219,6 +219,64 @@ async def test_delete_current_user_reports_public_delete_failure():
 
 
 @pytest.mark.asyncio
+async def test_delete_current_user_heals_dead_pooled_connection(monkeypatch):
+    """Account deletion must survive a dead pooled Supabase connection: the
+    reads/deletes run through execute_with_reconnect, so the first
+    connection-class failure rebuilds the client and completes the deletion
+    instead of 500ing "Failed to delete account" (observed 2026-08-04:
+    three consecutive DELETE /users/me 500s in the same window as the
+    /items pooled-connection bursts)."""
+    import httpx
+
+    from app.db.connection import SupabaseDB
+    from unittest.mock import AsyncMock
+
+    dead_counter = {"n": 0}
+    fresh_counter = {"n": 1}  # fresh client always succeeds
+
+    def _exec(counter):
+        def _run():
+            counter["n"] += 1
+            if counter["n"] == 1:
+                raise httpx.RemoteProtocolError(
+                    "Server disconnected without sending a response."
+                )
+            return SimpleNamespace(data=[])
+
+        return _run
+
+    def _make_db(counter):
+        db = Mock()
+        chain = Mock()
+        chain.execute.side_effect = _exec(counter)
+        chain.eq.return_value = chain
+        chain.maybe_single.return_value = chain
+        chain.in_.return_value = chain
+        # .select() / .delete() on the table query both hand back the chain.
+        db.table.return_value.select.return_value = chain
+        db.table.return_value.delete.return_value = chain
+        return db
+
+    dead_db = _make_db(dead_counter)
+    fresh_db = _make_db(fresh_counter)
+
+    monkeypatch.setattr(SupabaseDB, "reset", staticmethod(lambda: None))
+    monkeypatch.setattr(SupabaseDB, "get_service_client", staticmethod(lambda: fresh_db))
+
+    fake_vectors = Mock()
+    fake_vectors.delete_user_items = AsyncMock(return_value=0)
+    monkeypatch.setattr(users_module, "get_vector_service", lambda: fake_vectors)
+
+    await users_module.delete_current_user(user_id=USER_ID, db=dead_db)
+
+    # The dead client's first read (support_tickets) failed and was retried
+    # on the freshly built client; the deletion then completed.
+    assert dead_counter["n"] >= 1
+    assert fresh_counter["n"] >= 1
+    fake_vectors.delete_user_items.assert_awaited_once_with(USER_ID)
+
+
+@pytest.mark.asyncio
 async def test_profile_lookup_failure_does_not_trigger_auto_provisioning():
     db = Mock()
     db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.side_effect = RuntimeError(

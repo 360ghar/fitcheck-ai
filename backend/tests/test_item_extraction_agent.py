@@ -398,3 +398,126 @@ async def test_extract_multiple_items_avatar_no_match_includes_all_items():
     assert result["has_profile_reference"] is True
     assert result["profile_match_found"] is False
     assert all(item["include_in_wardrobe"] for item in result["items"])
+
+
+# =============================================================================
+# Parser regressions (2026-08-04): braces inside JSON strings + bare arrays
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_extract_multiple_items_braces_inside_description_parse():
+    """A detailedDescription containing braces/escaped quotes must not make
+    the parser cut the JSON block early and fail the whole extraction."""
+    payload = {
+        "items": [
+            {
+                "category": "tops",
+                "sub_category": "tee",
+                "colors": ["black"],
+                "material": "cotton",
+                "pattern": "graphic",
+                "brand": None,
+                "confidence": 0.93,
+                "boundingBox": {"x": 10, "y": 10, "width": 40, "height": 30},
+                "detailedDescription": 'Black tee with a {graphic} chest print and a "v" neckline',
+                "person_id": "p1",
+                "person_label": "Person A",
+                "is_current_user_person": False,
+            }
+        ],
+        "people": [
+            {
+                "person_id": "p1",
+                "person_label": "Person A",
+                "is_current_user_person": False,
+                "confidence": 0.9,
+            }
+        ],
+        "overall_confidence": 0.9,
+        "image_description": "One person",
+        "item_count": 1,
+        "profile_match_found": False,
+    }
+
+    agent = ItemExtractionAgent(FakeAIService(json.dumps(payload)))
+    result = await agent.extract_multiple_items(image_base64="img-data")
+
+    assert len(result["items"]) == 1
+    assert "graphic" in result["items"][0]["detailed_description"]
+    assert result["item_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_extract_multiple_items_bare_array_response():
+    """Some provider responses skip the envelope and return the item array
+    directly; that must be treated as detected items, not 'no items found'."""
+    items = [
+        {
+            "category": "bottoms",
+            "sub_category": "jeans",
+            "colors": ["blue"],
+            "material": "denim",
+            "pattern": "solid",
+            "brand": None,
+            "confidence": 0.9,
+            "boundingBox": {"x": 10, "y": 40, "width": 30, "height": 50},
+            "detailedDescription": "Blue jeans",
+            "person_id": "p1",
+            "person_label": "Person A",
+            "is_current_user_person": False,
+        }
+    ]
+
+    agent = ItemExtractionAgent(FakeAIService(json.dumps(items)))
+    result = await agent.extract_multiple_items(image_base64="img-data")
+
+    assert len(result["items"]) == 1
+    assert result["items"][0]["category"] == "bottoms"
+    assert result["items"][0]["include_in_wardrobe"] is True
+
+
+@pytest.mark.asyncio
+async def test_extract_multiple_items_prose_wrapped_with_braces_in_strings():
+    """Prose around the JSON plus braces inside string values, the shape seen
+    in production parse failures, must still yield the detected item."""
+    payload = {
+        "items": [
+            {
+                "category": "outerwear",
+                "sub_category": "jacket",
+                "colors": ["black"],
+                "material": "leather",
+                "pattern": "solid",
+                "brand": None,
+                "confidence": 0.91,
+                "boundingBox": {"x": 5, "y": 5, "width": 45, "height": 55},
+                "detailedDescription": "Black jacket {moto} with padded shoulders",
+                "person_id": "p1",
+                "person_label": "Person A",
+                "is_current_user_person": False,
+            }
+        ],
+        "people": [
+            {
+                "person_id": "p1",
+                "person_label": "Person A",
+                "is_current_user_person": False,
+                "confidence": 0.9,
+            }
+        ],
+        "overall_confidence": 0.9,
+        "image_description": "One person",
+        "item_count": 1,
+        "profile_match_found": False,
+    }
+
+    text = f'Here is the analysis:\n```json\n{json.dumps(payload)}\n```\nHope that helps'
+    agent = ItemExtractionAgent(FakeAIService(text))
+    result = await agent.extract_multiple_items(image_base64="img-data")
+
+    assert len(result["items"]) == 1
+    assert result["items"][0]["category"] == "outerwear"
+    assert result["items"][0]["detailed_description"] == (
+        "Black jacket {moto} with padded shoulders"
+    )

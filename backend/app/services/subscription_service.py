@@ -175,6 +175,7 @@ class SubscriptionService:
                 .execute(),
                 db,
                 extra={"operation": "get_subscription", "user_id": user_id},
+                max_retries=2,
             )
 
             data = maybe_single_data(result)
@@ -189,7 +190,8 @@ class SubscriptionService:
                     .maybe_single()
                     .execute(),
                     db,
-                    extra={"operation": "get_subscription_after_create", "user_id": user_id},
+                    extra={"operation": "get_subscription.after_create", "user_id": user_id},
+                    max_retries=2,
                 )
                 data = maybe_single_data(result)
 

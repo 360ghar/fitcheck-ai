@@ -61,6 +61,13 @@ SUPPORTED_UPLOAD_MIME_TYPES = frozenset({
     "image/png",
     "image/webp",
     "image/gif",
+    # iOS Safari 16+/modern cameras upload AVIF; it decodes fine (Pillow
+    # AVIF plugin, sniffed via ftypavif) but was rejected here with a 415
+    # "Unsupported decoded image format" (observed 2026-08-04 on
+    # /ai/batch-extract-multipart). Downstream AI reference paths re-encode
+    # to JPEG (downscale_image_bytes_to_base64), so AVIF never reaches
+    # providers that cannot consume it.
+    "image/avif",
 })
 
 # Magic-byte prefixes, so a MIME can be resolved from ~32 bytes with no
@@ -243,7 +250,11 @@ def to_data_url(image_base64: str) -> str:
     when the bytes are unrecognisable: that is the historical value every
     caller hardcoded, so an unknown blob behaves exactly as it did before
     rather than newly breaking a provider that dislikes octet-stream.
+
+    Provider-bound images pass through ``ensure_provider_safe_base64`` first,
+    so an AVIF/HEIF upload is re-encoded to JPEG before any provider sees it.
     """
+    image_base64 = ensure_provider_safe_base64(image_base64)
     if image_base64.startswith("data:"):
         return image_base64
     mime = None
@@ -322,6 +333,63 @@ def _downscale_bytes(
             return buf.getvalue(), had_alpha
     except Exception:
         return None, False
+
+
+# MIME types vision/image providers reject as INPUT (Gemini's supported set is
+# JPEG/PNG/WebP/HEIC/HEIF; the OpenAI-compatible image APIs accept
+# JPEG/PNG/WebP). AVIF became an uploadable format on 2026-08-04 (iOS Safari
+# 16+/modern cameras); HEIC/HEIF are the same family from iOS cameras.
+_PROVIDER_REJECTED_MIME_TYPES = frozenset({"image/avif", "image/heif", "image/heic"})
+
+
+def ensure_provider_safe_base64(
+    image_base64: str,
+    *,
+    max_edge: int = DEFAULT_MAX_EDGE,
+    quality: int = DEFAULT_QUALITY,
+) -> str:
+    """Re-encode AI-bound image bytes that vision providers cannot ingest
+    (AVIF/HEIF) to an opaque JPEG base64; pass every other format through with
+    no decode and no copy.
+
+    AVIF uploads are accepted since 2026-08-04, but neither Gemini nor the
+    OpenAI-compatible image APIs can read the format, so an accepted upload
+    would otherwise 400 at extraction time instead of 415 at upload. Callers
+    run provider-bound bytes through this helper at their wire boundary
+    (``to_data_url``, ``GeminiProvider._decode_image_part``).
+
+    Unlike ``downscale_base64_image`` this ALWAYS re-encodes the rejected
+    formats: avif is usually SMALLER than its JPEG re-encode, so the
+    size-comparison ponytail there would hand the model back the exact bytes
+    it cannot read. Best-effort: a decode failure (e.g. a deployment without
+    an AVIF decoder) returns the input unchanged, preserving today's behavior.
+    """
+    if image_base64.startswith("data:"):
+        header, _, b64_data = image_base64.partition(",")
+        mime = header[5:].split(";")[0] or "image/jpeg"
+        if mime not in _PROVIDER_REJECTED_MIME_TYPES:
+            return image_base64
+        raw = base64.b64decode(b64_data, validate=True)
+        jpeg, _had_alpha = _downscale_bytes(raw, max_edge, quality)
+        if jpeg is None:
+            return image_base64
+        return f"data:image/jpeg;base64,{base64.b64encode(jpeg).decode('utf-8')}"
+
+    try:
+        head = base64.b64decode(image_base64[:96], validate=False)
+        mime = sniff_image_mime_from_magic(head)
+    except Exception:
+        return image_base64
+    if mime not in _PROVIDER_REJECTED_MIME_TYPES:
+        return image_base64
+    try:
+        raw = base64.b64decode(image_base64, validate=True)
+    except Exception:
+        return image_base64
+    jpeg, _had_alpha = _downscale_bytes(raw, max_edge, quality)
+    if jpeg is None:
+        return image_base64
+    return base64.b64encode(jpeg).decode("utf-8")
 
 
 def downscale_image_bytes_to_base64(

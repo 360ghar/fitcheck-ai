@@ -76,6 +76,20 @@ Optional:
     AUDIT_FILE=backend/logs/storage_inventory.jsonl
     MEASURE_BYTES=0                 # 1 = HEAD each object for byte totals
     ORPHAN_LIST=backend/logs/orphans.txt   # optional dump of orphan keys
+    MIN_AGE_HOURS=2                 # grace window before an orphan is deletable
+
+=============================================================================
+AGE-BASED PROTECTION (--min-age-hours / MIN_AGE_HOURS, default 2)
+=============================================================================
+
+Temp/generated images (``{user_id}/tmp/{source}/...``) are NEVER referenced by
+any DB row — they are served only via short-lived presigned GET URLs (default
+1h TTL). The orphan math therefore flags every temp image as an orphan,
+including one a user is actively previewing. The script captures each object's
+``LastModified`` in the listing pass and only treats orphans older than the
+grace window as ``deletable``; younger ones are ``protected`` and left
+untouched this run. ``--delete`` never touches a protected key. The window is
+uniform: it also protects an item/outfit object caught mid upload->DB-insert.
 """
 
 from __future__ import annotations
@@ -85,7 +99,7 @@ import asyncio
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
@@ -125,6 +139,19 @@ def _fmt_bytes(value: int) -> str:
             return f"{size:.1f} {unit}"
         size /= 1024
     return f"{size:.1f} GB"
+
+
+# Default grace window (hours) before an orphan object is considered deletable.
+# Temp/generated images (``{user_id}/tmp/{source}/...`` from photoshoot / batch /
+# social-import / ``save_generated_image``) are NEVER referenced by any DB row:
+# they are served only via short-lived presigned GET URLs (default 1h TTL). The
+# orphan math (``bucket_keys - db_keys``) therefore flags every temp image as
+# an orphan, including one a user is actively previewing. The grace window must
+# exceed the presign TTL so an in-flight preview is never deleted out from under
+# a client. 2h = just past the 1h presign TTL; override via --min-age-hours /
+# MIN_AGE_HOURS. The window is uniform: it also protects an item/outfit object
+# caught mid upload->DB-insert (transient orphan window).
+DEFAULT_MIN_AGE_HOURS = 2.0
 
 
 # --------------------------------------------------------------------------- #
@@ -307,6 +334,79 @@ def _render_usage_table(section: Dict[str, Dict[str, int]], title: str) -> str:
 # --------------------------------------------------------------------------- #
 # async backend helpers
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# age-based protection (grace window)
+# --------------------------------------------------------------------------- #
+async def _list_with_mtime(backend) -> Dict[str, datetime]:
+    """List every bucket key with its ``LastModified`` timestamp (UTC).
+
+    Paginates ``list_objects_v2`` directly so the object mtime is captured in
+    the same listing pass — no per-object HEAD. Uses the backend's aioboto3
+    client via the same script-only reach-in as ``_measure_bytes`` (we must not
+    edit ``app/services/object_storage.py``). On any failure the map is empty,
+    which makes every orphan ``protected`` (nothing is deleted this run) — the
+    safe failure mode for a one-time cleanup.
+    """
+    mtimes: Dict[str, datetime] = {}
+    try:
+        client = await backend._get_client()  # noqa: SLF001 - script-only
+        paginator = client.get_paginator("list_objects_v2")
+        async for page in paginator.paginate(Bucket=backend.bucket, Prefix=""):
+            for obj in page.get("Contents", []):
+                key = obj.get("Key")
+                mtime = obj.get("LastModified")
+                if key and mtime is not None:
+                    mtimes[key] = mtime
+    except Exception as e:  # noqa: BLE001
+        print(
+            f"WARNING: mtime-aware listing failed (age-based protection "
+            f"disabled; all orphans will be protected): {e}",
+            file=sys.stderr,
+        )
+    return mtimes
+
+
+def _to_aware_utc(value: datetime) -> datetime:
+    """Normalize a datetime to tz-aware UTC (defensive; boto3 is already aware)."""
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def split_by_age(
+    keys: List[str],
+    mtimes: Dict[str, datetime],
+    min_age_hours: float,
+    now: datetime,
+) -> Tuple[List[str], List[str]]:
+    """Split ``keys`` into ``(deletable, protected)`` by age.
+
+    A key is ``deletable`` only when its mtime is at least ``min_age_hours``
+    older than ``now``. A key with no known mtime is ``protected`` (never
+    deleted this run) — the conservative choice for a one-time cleanup. Pure
+    function (testable without the bucket).
+    """
+    deletable: List[str] = []
+    protected: List[str] = []
+    cutoff = _to_aware_utc(now) - timedelta(hours=min_age_hours)
+    for key in keys:
+        mtime = mtimes.get(key)
+        if mtime is None:
+            protected.append(key)
+            continue
+        if _to_aware_utc(mtime) <= cutoff:
+            deletable.append(key)
+        else:
+            protected.append(key)
+    return deletable, protected
+
+
+def age_hours(mtime: Optional[datetime], now: datetime) -> Optional[float]:
+    """Age of a key in hours (rounded to 2 dp), or None when mtime is unknown."""
+    if mtime is None:
+        return None
+    delta = _to_aware_utc(now) - _to_aware_utc(mtime)
+    return round(delta.total_seconds() / 3600.0, 2)
+
+
 async def _measure_bytes(backend, keys: List[str]) -> Dict[str, int]:
     """HEAD each key for its size (only when MEASURE_BYTES=1)."""
     sizes: Dict[str, int] = {}
@@ -326,13 +426,19 @@ async def _measure_bytes(backend, keys: List[str]) -> Dict[str, int]:
     return sizes
 
 
-async def _run(delete: bool, audit_path: Path, orphan_list: Optional[Path]) -> int:
+async def _run(
+    delete: bool,
+    audit_path: Path,
+    orphan_list: Optional[Path],
+    min_age_hours: float,
+) -> int:
     backend = get_storage_backend()
     try:
         db = SupabaseDB.get_service_client()
 
-        print("Listing bucket objects...")
-        bucket_keys = await backend.list_keys(prefix="")
+        print("Listing bucket objects (with mtime for age-based protection)...")
+        mtime_map = await _list_with_mtime(backend)
+        bucket_keys = list(mtime_map.keys())
         bucket_set = set(bucket_keys)
         print(f"  {len(bucket_set)} object(s) in bucket")
 
@@ -342,6 +448,15 @@ async def _run(delete: bool, audit_path: Path, orphan_list: Optional[Path]) -> i
 
         orphans = sorted(bucket_set - set(db_keys))
         missing = sorted(set(db_keys) - bucket_set)
+
+        # Age-based protection: a temp/generated image (or an item/outfit
+        # object caught mid upload->DB-insert) shows up as an "orphan" while
+        # its short-lived presigned URL (1h TTL) is still live. Only orphans
+        # older than the grace window are deletable; younger ones are protected
+        # and left untouched this run.
+        now = datetime.now(timezone.utc)
+        deletable, protected = split_by_age(orphans, mtime_map, min_age_hours, now)
+        deletable_set = set(deletable)
 
         # Optional per-object byte sizes.
         sizes: Dict[str, int] = {}
@@ -361,6 +476,8 @@ async def _run(delete: bool, audit_path: Path, orphan_list: Optional[Path]) -> i
         print(f"  bucket objects        : {len(bucket_set)}")
         print(f"  DB storage_path keys  : {len(db_keys)}")
         print(f"  ORPHANS (in bucket, not in DB) : {len(orphans)}")
+        print(f"    deletable (age >= {min_age_hours}h): {len(deletable)}")
+        print(f"    protected (younger)          : {len(protected)}")
         print(f"  MISSING (in DB, not in bucket) : {len(missing)}")
         print()
 
@@ -374,7 +491,10 @@ async def _run(delete: bool, audit_path: Path, orphan_list: Optional[Path]) -> i
         if orphans:
             print(f"  ORPHAN KEY LIST ({len(orphans)}):")
             for key in orphans:
-                print(f"    {key}")
+                age = age_hours(mtime_map.get(key), now)
+                tag = "deletable" if key in deletable_set else "PROTECTED"
+                age_s = f"{age}h" if age is not None else "?"
+                print(f"    [{tag:<9}] {key}  (age {age_s})")
         else:
             print("  No orphan keys.")
 
@@ -398,13 +518,21 @@ async def _run(delete: bool, audit_path: Path, orphan_list: Optional[Path]) -> i
         # ------------------------------------------------------------------ #
         # deletion
         # ------------------------------------------------------------------ #
-        if orphans and delete:
+        if delete and deletable:
             print()
-            print(f"DELETING {len(orphans)} orphan(s)...")
+            print(
+                f"DELETING {len(deletable)} deletable orphan(s) "
+                f"(age >= {min_age_hours}h)..."
+            )
+            if protected:
+                print(
+                    f"  protecting {len(protected)} orphan(s) younger than "
+                    f"{min_age_hours}h (in-flight previews / recent uploads)."
+                )
             audit_path.parent.mkdir(parents=True, exist_ok=True)
-            deleted = await backend.delete_many(orphans)
+            deleted = await backend.delete_many(deletable)
             with audit_path.open("a", encoding="utf-8") as fh:
-                for key in orphans:
+                for key in deletable:
                     fh.write(
                         json.dumps(
                             {
@@ -412,17 +540,41 @@ async def _run(delete: bool, audit_path: Path, orphan_list: Optional[Path]) -> i
                                 "action": "delete",
                                 "key": key,
                                 "category": classify_category(key),
+                                "age_hours": age_hours(mtime_map.get(key), now),
+                                "protected": False,
+                            },
+                            separators=(",", ":"),
+                        )
+                        + "\n"
+                    )
+                for key in protected:
+                    fh.write(
+                        json.dumps(
+                            {
+                                "ts": _utc_now_iso(),
+                                "action": "protect",
+                                "key": key,
+                                "category": classify_category(key),
+                                "age_hours": age_hours(mtime_map.get(key), now),
+                                "protected": True,
                             },
                             separators=(",", ":"),
                         )
                         + "\n"
                     )
             print(f"  deleted={deleted}  audit={audit_path}")
-        elif orphans:
+        elif delete and protected and not deletable:
             print()
             print(
-                f"DRY-RUN: {len(orphans)} orphan(s) would be deleted. "
-                "Re-run with --delete to actually delete them."
+                f"No deletable orphans: all {len(protected)} orphan(s) are "
+                f"younger than {min_age_hours}h and protected."
+            )
+        elif orphans and not delete:
+            print()
+            print(
+                f"DRY-RUN: {len(deletable)} orphan(s) would be deleted, "
+                f"{len(protected)} protected. Re-run with --delete to remove "
+                f"the deletable set."
             )
         else:
             print("\nNo orphans to delete.")
@@ -451,6 +603,14 @@ def main() -> int:
         default=_env("ORPHAN_LIST", "") or None,
         help="Optional path to dump the orphan key list (one per line).",
     )
+    parser.add_argument(
+        "--min-age-hours",
+        type=float,
+        default=float(_env("MIN_AGE_HOURS", str(DEFAULT_MIN_AGE_HOURS))),
+        help="Grace window (hours) before an orphan is deletable; protects "
+        "in-flight temp/generated previews whose presigned URL is still live "
+        "(default 2 = just past the 1h presign TTL).",
+    )
     args = parser.parse_args()
 
     mode = "LIVE (delete)" if args.delete else "DRY-RUN"
@@ -458,6 +618,7 @@ def main() -> int:
     print(f"  audit_file   = {args.audit_file}")
     print(f"  orphan_list  = {args.orphan_list or '(not writing)'}")
     print(f"  measure_bytes= {_env_bool('MEASURE_BYTES', False)}")
+    print(f"  min_age_hours= {args.min_age_hours}")
     print()
 
     return asyncio.run(
@@ -465,6 +626,7 @@ def main() -> int:
             delete=args.delete,
             audit_path=Path(args.audit_file),
             orphan_list=Path(args.orphan_list) if args.orphan_list else None,
+            min_age_hours=args.min_age_hours,
         )
     )
 

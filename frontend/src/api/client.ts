@@ -132,12 +132,34 @@ export function isAuthenticated(): boolean {
 /** Single-flight refresh: concurrent callers share one in-flight request. */
 let refreshPromise: Promise<void> | null = null;
 
+/**
+ * Refresh token whose refresh the server definitively REJECTED (401/400 —
+ * e.g. "Refresh token already used" after a rotation from another tab/session).
+ *
+ * A burst of parallel 401s (app resume fires ~6 requests at once) otherwise
+ * re-presents the same dead token once per 401 handler: the request
+ * interceptor's proactive refresh fails, and the FIRST 401 handler starts a
+ * second refresh before forceLogout latches `hasForcedLogout` — the observed
+ * pairs of "Refresh token already used" 401s ~100-300ms apart (2026-08-04).
+ * The latch makes the whole burst produce exactly ONE refresh attempt; every
+ * later call fails fast.
+ *
+ * Scoped to the specific token (not a boolean): a fresh login issues a new
+ * refresh token, so refresh becomes allowed again, and a successful refresh
+ * clears the latch. A transient network failure during refresh does NOT
+ * latch — only a server-side rejection of the token itself is permanent.
+ */
+let failedRefreshToken: string | null = null;
+
 async function ensureFreshToken(): Promise<void> {
+  const tokens = getTokens();
+  if (failedRefreshToken && tokens?.refresh_token === failedRefreshToken) {
+    throw new Error('Token refresh already failed');
+  }
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
     try {
-      const tokens = getTokens();
       if (!tokens?.refresh_token) {
         throw new Error('No refresh token available');
       }
@@ -162,7 +184,16 @@ async function ensureFreshToken(): Promise<void> {
         refresh_token: refreshed.refresh_token,
       };
 
+      failedRefreshToken = null;
       setTokens(newTokens);
+    } catch (error) {
+      // Only a definitive server rejection of the token (rotated out,
+      // expired, revoked) is permanent; a network blip must stay retryable.
+      const status = (error as AxiosError)?.response?.status;
+      if (status === 401 || status === 400) {
+        failedRefreshToken = tokens?.refresh_token ?? null;
+      }
+      throw error;
     } finally {
       refreshPromise = null;
     }

@@ -170,6 +170,32 @@ async def test_execute_with_reconnect_retry_also_fails_propagates(monkeypatch):
     assert "reset" in events
 
 
+@pytest.mark.asyncio
+async def test_execute_with_reconnect_max_retries_heals_sustained_blip(monkeypatch):
+    """Hot read paths pass max_retries=2 so a 1-2 s gateway blip (where the
+    first rebuilt client hits the SAME dead gateway) heals instead of 500ing
+    - observed 2026-08-04 as /items bursts after a single-retry rebuild."""
+    events = _patch_supabase_db(monkeypatch)
+    dead_client = object()
+    seen_clients = set()
+
+    def builder(d):
+        events.append(d)
+        seen_clients.add(id(d))
+        # The original client AND the first rebuilt client are both dead;
+        # the second rebuilt client succeeds.
+        if len(seen_clients) < 3:
+            raise httpx.RemoteProtocolError("Server disconnected")
+        return "ok"
+
+    result = await execute_with_reconnect(builder, dead_client, max_retries=2, backoff_seconds=0)
+
+    assert result == "ok"
+    # original + 2 rebuilt clients were tried, with a reset before each rebuild.
+    assert len(seen_clients) == 3
+    assert events.count("reset") == 2
+
+
 # ---------------------------------------------------------------------------
 # run_sync_with_reconnect (sync)
 # ---------------------------------------------------------------------------

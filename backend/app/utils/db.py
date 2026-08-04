@@ -6,6 +6,7 @@ import asyncio
 import inspect
 import logging
 import re
+import time
 from typing import Any, Callable, Dict, Optional, Tuple
 
 import httpx
@@ -109,9 +110,11 @@ async def execute_with_reconnect(
     db: Any,
     *,
     extra: Optional[Dict[str, Any]] = None,
+    max_retries: int = 1,
+    backoff_seconds: float = 0.4,
 ) -> Any:
     """Run ``builder(db)`` in a worker thread; on a pooled-connection error,
-    rebuild the Supabase singleton client and retry once with the fresh client.
+    rebuild the Supabase singleton client and retry with the fresh client.
 
     ``builder`` receives the client and returns the query result (a plain
     function is called directly; an ``async def``/coroutine-returning callable
@@ -123,8 +126,16 @@ async def execute_with_reconnect(
             extra={"operation": "list_items", "user_id": user_id},
         )
 
-    The retry only fires for connection-class errors; anything else (missing
-    rows, permissions, RPC errors) propagates unchanged.
+    Up to ``max_retries`` rebuild+retry cycles run with a short
+    ``backoff_seconds`` sleep between them (default: 1 retry, no change from
+    the original behavior). The retry only fires for connection-class errors;
+    anything else (missing rows, permissions, RPC errors) propagates unchanged.
+
+    The default of one immediate retry heals a blip but not a sustained
+    outage; hot read paths (``list_items``, ``get_subscription``, users
+    ``/me``, dashboard) pass ``max_retries=2`` so a 1-2 s gateway blip
+    resolves without surfacing a 500 (observed 2026-08-04: /items 500 bursts
+    where the first rebuilt client hit the same dead gateway).
 
     Note on retry semantics: a connection error can mean the server never got
     the request OR that the response was lost after the server committed it.
@@ -150,18 +161,31 @@ async def execute_with_reconnect(
             outcome = await outcome
         return outcome
 
-    try:
-        return await _attempt(db)
-    except Exception as exc:
-        if not is_db_connection_error(exc):
-            raise
-        logger.warning(
-            "Supabase pooled connection error, rebuilding client and retrying once",
-            extra={"db_error": str(exc)[:300], **(extra or {})},
-        )
-        SupabaseDB.reset()
-        fresh_db = SupabaseDB.get_service_client()
-        return await _attempt(fresh_db)
+    attempt_db = db
+    for attempt_no in range(max_retries + 1):
+        try:
+            return await _attempt(attempt_db)
+        except Exception as exc:
+            if not is_db_connection_error(exc):
+                raise
+            if attempt_no == max_retries:
+                logger.warning(
+                    "Supabase pooled connection error, retries exhausted",
+                    extra={"db_error": str(exc)[:300], "max_retries": max_retries, **(extra or {})},
+                )
+                raise
+            logger.warning(
+                "Supabase pooled connection error, rebuilding client and retrying once",
+                extra={
+                    "db_error": str(exc)[:300],
+                    "attempt": attempt_no + 1,
+                    "max_retries": max_retries,
+                    **(extra or {}),
+                },
+            )
+            SupabaseDB.reset()
+            attempt_db = SupabaseDB.get_service_client()
+            await asyncio.sleep(backoff_seconds)
 
 
 def run_sync_with_reconnect(
@@ -169,23 +193,39 @@ def run_sync_with_reconnect(
     db: Any,
     *,
     extra: Optional[Dict[str, Any]] = None,
+    max_retries: int = 1,
+    backoff_seconds: float = 0.4,
 ) -> Any:
     """Synchronous twin of :func:`execute_with_reconnect` for the few call
     sites that talk to the client directly without ``asyncio.to_thread``
     (e.g. ``auth._require_schema``)."""
     from app.db.connection import SupabaseDB
 
-    try:
-        return fn(db)
-    except Exception as exc:
-        if not is_db_connection_error(exc):
-            raise
-        logger.warning(
-            "Supabase pooled connection error (sync call), rebuilding client and retrying once",
-            extra={"db_error": str(exc)[:300], **(extra or {})},
-        )
-        SupabaseDB.reset()
-        return fn(SupabaseDB.get_service_client())
+    attempt_db = db
+    for attempt_no in range(max_retries + 1):
+        try:
+            return fn(attempt_db)
+        except Exception as exc:
+            if not is_db_connection_error(exc):
+                raise
+            if attempt_no == max_retries:
+                logger.warning(
+                    "Supabase pooled connection error (sync call), retries exhausted",
+                    extra={"db_error": str(exc)[:300], "max_retries": max_retries, **(extra or {})},
+                )
+                raise
+            logger.warning(
+                "Supabase pooled connection error (sync call), rebuilding client and retrying once",
+                extra={
+                    "db_error": str(exc)[:300],
+                    "attempt": attempt_no + 1,
+                    "max_retries": max_retries,
+                    **(extra or {}),
+                },
+            )
+            SupabaseDB.reset()
+            attempt_db = SupabaseDB.get_service_client()
+            time.sleep(backoff_seconds)
 
 
 def maybe_single_data(result: Any) -> Optional[Dict[str, Any]]:
