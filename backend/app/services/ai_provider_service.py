@@ -1444,6 +1444,7 @@ class AIProviderService:
             # is diagnosable from the payload side.
             reference_images=len(reference_images or []),
         )
+        started_at = time.monotonic()
 
         async def _post_image_request() -> httpx.Response:
             nonlocal client
@@ -1585,6 +1586,14 @@ class AIProviderService:
             raise AIServiceError(
                 f"AI image provider returned no images for model {model}", retryable=True
             )
+
+        logger.info(
+            "AI image generation response received",
+            provider_host=urlparse(url).netloc,
+            model=model,
+            latency_ms=round((time.monotonic() - started_at) * 1000, 2),
+            images_count=len(images),
+        )
 
         return AIResponse(
             text=None,

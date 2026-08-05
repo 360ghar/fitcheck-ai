@@ -25,7 +25,11 @@ enum PhotoshootStep { upload, configure, generating, results }
 
 /// Controller for AI Photoshoot Generator feature
 class PhotoshootController extends GetxController {
-  final PhotoshootRepository _repository = PhotoshootRepository();
+  /// Injectable repository for tests; production callers use the default.
+  PhotoshootController({PhotoshootRepository? repository})
+      : _repository = repository ?? PhotoshootRepository();
+
+  final PhotoshootRepository _repository;
   final ImagePicker _imagePicker = ImagePicker();
 
   // TextEditingController for custom prompt field
@@ -540,8 +544,48 @@ class PhotoshootController extends GetxController {
     }
   }
 
+  /// Merge authoritative job status into UI state. Idempotent: images are
+  /// deduped by id and RxList updates are skipped when unchanged, so SSE and
+  /// status reconciliation can never double-append or spam the UI.
+  void _reconcileStatus(PhotoshootJobStatusResponse status) {
+    // Skip no-op updates: RxList.assignAll notifies even when identical,
+    // and a changed-value check keeps the UI quiet on unchanged ticks.
+    if (!listEquals(generatedImages, status.images)) {
+      generatedImages.assignAll(status.images);
+    }
+    final failed = List<int>.from(status.failedIndices)..sort();
+    if (!listEquals(failedIndices, failed)) {
+      failedIndices.assignAll(failed);
+    }
+    if (failedCount.value != status.failedCount) {
+      failedCount.value = status.failedCount;
+    }
+    if (partialSuccess.value != status.partialSuccess) {
+      partialSuccess.value = status.partialSuccess;
+    }
+  }
+
+  /// Fetch the authoritative job status once after completion and merge its
+  /// images/failure state into UI state. The SSE job_complete event carries
+  /// counts but no images, so a results screen must never depend on
+  /// image_complete events alone (flaky streams / reconnects can drop them).
+  Future<void> _reconcileAfterComplete() async {
+    if (jobId.value.isEmpty || isClosed) return;
+    try {
+      final status = await _repository.getJobStatus(jobId.value);
+      _reconcileStatus(status);
+      if (status.usage != null) {
+        usage.value = status.usage;
+      }
+    } catch (e) {
+      // Non-fatal: the results step still opens with whatever images the SSE
+      // stream delivered; the bounded poll fallback covers full stream loss.
+      debugPrint('Photoshoot final status reconcile failed: $e');
+    }
+  }
+
   /// Handle job completion
-  void _handleJobComplete(Map<String, dynamic>? data) {
+  Future<void> _handleJobComplete(Map<String, dynamic>? data) async {
     generationProgress.value = 100;
     generationStatus.value = 'Complete!';
     etaSeconds.value = 0;
@@ -568,6 +612,12 @@ class PhotoshootController extends GetxController {
     }
     failedCount.value = data?['failed_count'] ?? failedIndices.length;
     partialSuccess.value = data?['partial_success'] ?? (failedCount.value > 0);
+
+    // Populate the gallery from the authoritative status BEFORE showing the
+    // results step, so a missed image_complete event can never produce an
+    // empty "0 images generated" results screen.
+    await _reconcileAfterComplete();
+    if (isClosed) return;
 
     currentStep.value = PhotoshootStep.results;
     isGenerating.value = false;
@@ -621,19 +671,7 @@ class PhotoshootController extends GetxController {
 
       // Skip no-op updates: RxList.assignAll notifies even when identical,
       // and a changed-value check keeps the UI quiet on unchanged ticks.
-      if (!listEquals(generatedImages, status.images)) {
-        generatedImages.assignAll(status.images);
-      }
-      final failed = List<int>.from(status.failedIndices)..sort();
-      if (!listEquals(failedIndices, failed)) {
-        failedIndices.assignAll(failed);
-      }
-      if (failedCount.value != status.failedCount) {
-        failedCount.value = status.failedCount;
-      }
-      if (partialSuccess.value != status.partialSuccess) {
-        partialSuccess.value = status.partialSuccess;
-      }
+      _reconcileStatus(status);
       if (status.totalCount > 0) {
         final progress =
             10 + ((status.generatedCount / status.totalCount) * 90).toInt();
@@ -652,7 +690,7 @@ class PhotoshootController extends GetxController {
           }
           break;
         case 'complete':
-          _handleJobComplete({
+          await _handleJobComplete({
             'session_id': status.jobId,
             'failed_count': status.failedCount,
             'failed_indices': status.failedIndices,

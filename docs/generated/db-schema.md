@@ -1,6 +1,6 @@
 # Database schema (generated)
 
-Generated: 2026-08-04
+Generated: 2026-08-05
 
 Source: `backend/db/supabase/migrations/`.
 Regenerate: `python scripts/generate_db_schema_doc.py`.
@@ -53,6 +53,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `032_fix_redeem_promo_atomic_plan_type.sql`
 - `033_fix_referral_credit_stacking.sql`
 - `034_add_support_tickets_storage_paths.sql`
+- `035_add_photoshoot_jobs_image_failures.sql`
 
 ## Tables (CREATE TABLE)
 
@@ -111,6 +112,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `027_stripe_webhook_processing_state.sql` | `stripe_webhook_events` | `status` |
 | `027_stripe_webhook_processing_state.sql` | `stripe_webhook_events` | `attempts` |
 | `030_mobile_iap.sql` | `subscriptions` | `billing_provider` |
+| `035_add_photoshoot_jobs_image_failures.sql` | `photoshoot_jobs` | `image_failures` |
 
 These columns are added after their table's CREATE TABLE and are required (NOT NULL DEFAULT), so inserts rely on the default until a value is supplied.
 
@@ -202,6 +204,7 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `031_promo_codes.sql` → `promo_codes`
 - `031_promo_codes.sql` → `promo_redemptions`
 - `034_add_support_tickets_storage_paths.sql` → `support_tickets`
+- `035_add_photoshoot_jobs_image_failures.sql` → `photoshoot_jobs`
 
 ## Related
 

@@ -76,6 +76,12 @@ def _build_persisted_payload(
         "current_batch": job.current_batch,
         "generated_images": images,
         "failed_indices": sorted(job.failed_indices),
+        # Bounded per-index provider error detail (one entry per requested
+        # slot), so a recovered job can still surface WHY images failed.
+        "image_failures": [
+            {"index": index, "error": error}
+            for index, error in sorted(job.image_failures.items())
+        ],
         "usage": job.usage,
         "error_message": error_message if error_message is not None else job.error_message,
         "reference_photo_count": len(job.photos),
@@ -115,6 +121,10 @@ class PhotoshootJob:
     current_batch: int = 0
     generated_images: List[Dict[str, Any]] = field(default_factory=list)
     failed_indices: Set[int] = field(default_factory=set)
+    # Per-index provider error detail, retained so the job_failed payload and
+    # /status can tell the client (and the operator) exactly why each slot
+    # failed. Bounded: one entry per requested slot.
+    image_failures: Dict[int, str] = field(default_factory=dict)
 
     # Cancellation
     cancelled: bool = False
@@ -192,6 +202,11 @@ class PhotoshootJobService:
                 current_batch=int(row.get("current_batch") or 0),
                 generated_images=generated_images,
                 failed_indices={int(index) for index in row.get("failed_indices") or []},
+                image_failures={
+                    int(entry["index"]): str(entry["error"])
+                    for entry in row.get("image_failures") or []
+                    if isinstance(entry, dict) and "index" in entry
+                },
                 error_message=row.get("error_message"),
                 usage=row.get("usage"),
                 persistence_db=db,
@@ -536,12 +551,31 @@ class PhotoshootJobService:
 
     @classmethod
     async def mark_image_failed(cls, job_id: str, index: int, error: str) -> None:
-        """Mark an image generation as failed."""
+        """Mark an image generation as failed, retaining the error detail.
+
+        The error text is bounded (500 chars) so a provider stack trace can
+        never inflate the durable row; the first (lowest-index) entry is
+        surfaced on the job_failed payload and /status.
+        """
         async with cls._lock:
             job = cls._jobs.get(job_id)
             if job and job.status not in _TERMINAL_STATUSES:
                 job.failed_indices.add(index)
+                job.image_failures[index] = (error or "")[:500]
                 _store.mark_dirty(job)
+
+    @classmethod
+    async def get_first_error(cls, job_id: str) -> Optional[str]:
+        """Return the first (lowest-index) retained per-image failure detail."""
+        async with cls._lock:
+            job = cls._jobs.get(job_id)
+            if not job or not job.image_failures:
+                return None
+            for index in sorted(job.image_failures):
+                detail = job.image_failures[index]
+                if detail:
+                    return detail
+            return None
 
     @classmethod
     async def set_usage(cls, job_id: str, usage: Dict[str, Any]) -> None:
@@ -690,6 +724,12 @@ class PhotoshootJobService:
                 "images": job.generated_images,
                 "usage": job.usage,
                 "error": job.error_message,
+                # First per-image failure detail (provider status/message) so
+                # a polled client can tell the user WHY images failed.
+                "first_error": next(
+                    (job.image_failures[index] for index in sorted(job.image_failures) if job.image_failures[index]),
+                    None,
+                ),
             }
 
     @classmethod

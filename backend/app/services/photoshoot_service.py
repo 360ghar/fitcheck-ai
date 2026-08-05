@@ -1133,14 +1133,54 @@ class PhotoshootStreamingService:
             if job.is_cancelled():
                 return
 
-            # The reservation RPC already reflects today's usage; reuse the
-            # usage object returned by reserve_daily_usage instead of paying a
-            # redundant read after generation. Demo jobs have no usage.
+            # Read the POST-RELEASE usage so completion/failure payloads never
+            # carry the reservation-time numbers. A 0-image run releases the
+            # FULL reservation; broadcasting the stale pre-release usage made
+            # clients report "limit deducted" after a failed run (observed
+            # 2026-08-04: photoshoot 0-images RCA). Demo jobs have no usage.
             usage_dict = None
             if not self.is_demo:
-                updated_usage = usage
+                try:
+                    updated_usage = await PhotoshootService.get_usage(self.user_id, self.db)
+                except Exception:
+                    # A failed usage re-read must not kill the terminal event:
+                    # fall back to the reservation-time snapshot (pre-RCA
+                    # behavior) and let the client refetch usage itself.
+                    # Without this guard the generic pipeline except below
+                    # would broadcast job_failed with the usage error and
+                    # release the FULL reservation on top of the partial
+                    # release already done above (double release).
+                    logger.warning(
+                        "Failed to re-read photoshoot usage after release; "
+                        "falling back to reservation-time snapshot",
+                        exc_info=True,
+                    )
+                    updated_usage = usage
                 usage_dict = updated_usage.model_dump(mode="json")
             await PhotoshootJobService.set_usage(job.job_id, usage_dict)
+
+            if job.generated_count == 0:
+                # A run that produced nothing is a FAILURE, not a partial
+                # success: parity with the sync path (generate_photoshoot
+                # raises ServiceError("All image generations failed")). The
+                # error carries the first retained provider detail so the
+                # client dialog (and the operator) see why every slot failed.
+                first_error = await PhotoshootJobService.get_first_error(job.job_id)
+                error_msg = (
+                    f"No images were generated (0 of {job.num_images})."
+                    + (f" Provider error: {first_error}" if first_error else "")
+                )
+                await PhotoshootJobService.set_error(job.job_id, error_msg)
+                await PhotoshootJobService.broadcast_event(job.job_id, "job_failed", {
+                    "job_id": job.job_id,
+                    "error": error_msg,
+                    "usage": usage_dict,
+                    "failed_indices": sorted(job.failed_indices),
+                    "timestamp": utcnow_iso(),
+                })
+                await PhotoshootJobService.clear_event_history(job.job_id)
+                await PhotoshootJobService.release_generated_payloads(job.job_id)
+                return
 
             # Mark complete
             await PhotoshootJobService.update_status(job.job_id, PhotoshootJobStatus.COMPLETE)

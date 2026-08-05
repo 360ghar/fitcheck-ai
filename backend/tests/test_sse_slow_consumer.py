@@ -45,6 +45,39 @@ def test_history_strip_preserves_sse_id_and_removes_base64():
     assert stripped["data"]["nested"] == [{"keep": True}]
 
 
+def test_history_strip_removes_photoshoot_base64_when_url_present():
+    """Photoshoot image_complete events carry base64 AND a durable URL; the
+    URL alone renders on replay, so the multi-hundred-KB payload must go
+    (regression: oversized replayed events killed mobile SSE streams)."""
+    event = {
+        "type": "image_complete",
+        "id": 9,
+        "data": {
+            "image_base64": "payload",
+            "image_url": "https://cdn.example/x.png",
+            "index": 2,
+            "generated_count": 1,
+        },
+    }
+    stripped = strip_history_base64(event)
+    assert stripped["id"] == 9
+    assert stripped["data"]["image_base64"] is None
+    assert stripped["data"]["image_url"] == "https://cdn.example/x.png"
+    assert stripped["data"]["index"] == 2
+
+
+def test_history_strip_keeps_photoshoot_base64_when_no_url():
+    """A generated image whose durable upload failed has only base64;
+    stripping it would leave a blank, unrenderable image on replay."""
+    event = {
+        "type": "image_complete",
+        "data": {"image_base64": "payload", "image_url": None, "index": 0},
+    }
+    stripped = strip_history_base64(event)
+    assert stripped["data"]["image_base64"] == "payload"
+    assert stripped["data"]["image_url"] is None
+
+
 @pytest.fixture(autouse=True)
 def _clear_job_stores():
     BatchJobService._jobs.clear()

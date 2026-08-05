@@ -65,6 +65,9 @@ def strip_history_base64(event: Dict[str, Any]) -> Dict[str, Any]:
     base64). History exists only for late-join replay, and every successfully
     generated image is also persisted to a durable storage URL at generation
     time, so the stripped copy still carries everything a late joiner needs.
+    The one exception is a generated image whose durable upload FAILED: its
+    base64 is the only copy, so it is retained in history (the cost is
+    bounded — upload failures are rare and images are dropped at job TTL).
     Keeps finished jobs from pinning multi-MB strings for the whole finished
     TTL. Shared by the batch and photoshoot stores so they cannot drift.
     """
@@ -74,10 +77,23 @@ def strip_history_base64(event: Dict[str, Any]) -> Dict[str, Any]:
 
     def _strip(node: Any) -> Any:
         if isinstance(node, dict):
-            return {
-                key: (None if key == "generated_image_base64" else _strip(value))
-                for key, value in node.items()
-            }
+            stripped: Dict[str, Any] = {}
+            for key, value in node.items():
+                if key == "generated_image_base64":
+                    # Batch-store events always carry a durable URL, so the
+                    # base64 copy is redundant for late-join replay.
+                    stripped[key] = None
+                elif key == "image_base64":
+                    # Photoshoot image events carry base64 AND a durable URL;
+                    # the URL alone renders in clients, so replays drop the
+                    # multi-hundred-KB payload (a single oversized event can
+                    # also blow the client-side SSE buffer). URL-less images
+                    # (upload failed) KEEP base64 — stripping it would leave
+                    # a blank image with no way to render it.
+                    stripped[key] = None if node.get("image_url") else _strip(value)
+                else:
+                    stripped[key] = _strip(value)
+            return stripped
         if isinstance(node, list):
             return [_strip(value) for value in node]
         return node

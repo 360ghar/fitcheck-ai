@@ -99,9 +99,13 @@ class SSEService {
 
       String buffer = '';
       // ponytail: cap the buffer so a stalled/malformed stream (no "\n\n"
-      // boundary ever arriving) can't grow it unbounded. 512KB is generous
-      // for real SSE events; bump if legitimate payloads ever exceed it.
-      const maxBufferBytes = 512 * 1024;
+      // boundary ever arriving) can't grow it unbounded. 4MB: live
+      // image_complete events carry full base64 (a 1024px photo at ~85%
+      // quality is roughly 100-600KB raw, ~130-800KB base64 + JSON), and an
+      // event larger than the cap throws mid-event and kills the stream.
+      // The backend strips base64 from replayed history, so the cap only
+      // needs to fit one live event, not a replay burst.
+      const maxBufferBytes = 4 * 1024 * 1024;
 
       await for (final chunk in response.stream.transform(utf8.decoder)) {
         // Normalize line endings because many SSE servers (including

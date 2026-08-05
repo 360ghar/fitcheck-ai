@@ -613,6 +613,7 @@ class TestDemoPhotoshootJob:
     @pytest.mark.asyncio
     async def test_non_demo_pipeline_still_reserves_quota(self):
         from app.services.photoshoot_service import PhotoshootStreamingService
+        from app.models.photoshoot import PhotoshootUsage
 
         job = await PhotoshootJobService.create_job(
             user_id="user-123",
@@ -620,6 +621,14 @@ class TestDemoPhotoshootJob:
             use_case="linkedin",
             num_images=2,
             batch_size=2,
+        )
+
+        post_release_usage = PhotoshootUsage(
+            used_today=0,
+            limit_today=10,
+            remaining=10,
+            plan_type="free",
+            resets_at=datetime.now(timezone.utc),
         )
 
         with (
@@ -641,6 +650,12 @@ class TestDemoPhotoshootJob:
                 new_callable=AsyncMock,
             ) as release,
             patch.object(
+                PhotoshootService,
+                "get_usage",
+                new_callable=AsyncMock,
+                return_value=post_release_usage,
+            ),
+            patch.object(
                 PhotoshootStreamingService,
                 "_generate_images_streaming",
                 new_callable=AsyncMock,
@@ -653,6 +668,276 @@ class TestDemoPhotoshootJob:
             # No images were produced by the mocked streaming step, so the
             # full reservation (2) is handed back for the user to retry.
             release.assert_awaited_once()
+            release.assert_awaited_with("user-123", 2, service.db)
+
+        # A run that produced nothing is FAILED (parity with the sync path),
+        # and the failure payload carries the POST-release usage, never the
+        # reservation-time numbers (stale-quota regression, 2026-08-04).
+        assert job.status == PhotoshootJobStatus.FAILED
+        assert job.error_message and "No images were generated (0 of 2)" in job.error_message
+        assert job.usage == post_release_usage.model_dump(mode="json")
+
+        async with PhotoshootJobService._lock:
+            PhotoshootJobService._jobs.pop(job.job_id, None)
+
+    @pytest.mark.asyncio
+    async def test_usage_reread_failure_falls_back_to_reservation_snapshot(self):
+        """A failed POST-release usage re-read must not kill the terminal
+        event: fall back to the reservation-time snapshot (the client refetches
+        usage itself), instead of hitting the generic pipeline except, which
+        would surface the usage error AND double-release the reservation on
+        top of the partial release already done."""
+        from app.services.photoshoot_service import PhotoshootStreamingService
+        from app.models.photoshoot import PhotoshootUsage
+
+        job = await PhotoshootJobService.create_job(
+            user_id="user-123",
+            photos=["data:image/jpeg;base64,SGVsbG8="],
+            use_case="linkedin",
+            num_images=2,
+            batch_size=2,
+        )
+
+        reservation_usage = PhotoshootUsage(
+            used_today=0,
+            limit_today=10,
+            remaining=10,
+            plan_type="free",
+            resets_at=datetime.now(timezone.utc),
+        )
+
+        with (
+            patch.object(
+                PhotoshootService,
+                "generate_prompts",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch.object(
+                PhotoshootService,
+                "reserve_daily_usage",
+                new_callable=AsyncMock,
+                return_value=(True, reservation_usage),
+            ),
+            patch.object(
+                PhotoshootService,
+                "release_daily_usage",
+                new_callable=AsyncMock,
+            ) as release,
+            patch.object(
+                PhotoshootService,
+                "get_usage",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("usage endpoint down"),
+            ),
+            patch.object(
+                PhotoshootStreamingService,
+                "_generate_images_streaming",
+                new_callable=AsyncMock,
+            ),
+        ):
+            service = PhotoshootStreamingService(user_id="user-123", db=Mock())
+            await service.run_pipeline(job)
+
+            # The zero-image FAILED branch ran (not the generic except):
+            # the payload carries the reservation snapshot, and only the
+            # single partial release (2 of 2) happened - no double release.
+            assert job.status == PhotoshootJobStatus.FAILED
+            assert job.error_message and "No images were generated (0 of 2)" in job.error_message
+            assert job.usage == reservation_usage.model_dump(mode="json")
+            release.assert_awaited_once()
+            release.assert_awaited_with("user-123", 2, service.db)
+
+        async with PhotoshootJobService._lock:
+            PhotoshootJobService._jobs.pop(job.job_id, None)
+
+    @pytest.mark.asyncio
+    async def test_zero_image_run_broadcasts_job_failed_with_first_error(self):
+        """The job_failed event must carry the first retained provider error so
+        the client dialog (and operator logs) show why every slot failed."""
+        from app.services.photoshoot_service import PhotoshootStreamingService
+
+        job = await PhotoshootJobService.create_job(
+            user_id="user-123",
+            photos=["data:image/jpeg;base64,SGVsbG8="],
+            use_case="linkedin",
+            num_images=2,
+            batch_size=2,
+        )
+
+        async def _fail_all_slots(job, prompts):
+            await PhotoshootJobService.mark_image_failed(
+                job.job_id, 1, "AI image request failed (400): bad size"
+            )
+            await PhotoshootJobService.mark_image_failed(
+                job.job_id, 0, "AI image request failed (400): bad size"
+            )
+
+        with (
+            patch.object(
+                PhotoshootService,
+                "generate_prompts",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch.object(
+                PhotoshootService,
+                "reserve_daily_usage",
+                new_callable=AsyncMock,
+                return_value=(True, Mock()),
+            ),
+            patch.object(
+                PhotoshootService,
+                "release_daily_usage",
+                new_callable=AsyncMock,
+            ),
+            patch.object(
+                PhotoshootService,
+                "get_usage",
+                new_callable=AsyncMock,
+                return_value=Mock(),
+            ),
+            patch.object(
+                PhotoshootStreamingService,
+                "_generate_images_streaming",
+                new_callable=AsyncMock,
+                side_effect=_fail_all_slots,
+            ),
+            patch.object(
+                PhotoshootJobService,
+                "broadcast_event",
+                new_callable=AsyncMock,
+            ) as broadcast,
+        ):
+            service = PhotoshootStreamingService(user_id="user-123", db=Mock())
+            await service.run_pipeline(job)
+
+        failed_events = [
+            call.args[1:]
+            for call in broadcast.await_args_list
+            if call.args[0] == job.job_id and call.args[1] == "job_failed"
+        ]
+        assert len(failed_events) == 1
+        event_type, payload = failed_events[0]
+        assert event_type == "job_failed"
+        # Lowest failed index wins as the surfaced provider error.
+        assert "AI image request failed (400)" in payload["error"]
+        assert payload["failed_indices"] == [0, 1]
+        # No job_complete event for a total failure.
+        assert not any(call.args[1] == "job_complete" for call in broadcast.await_args_list)
+
+        async with PhotoshootJobService._lock:
+            PhotoshootJobService._jobs.pop(job.job_id, None)
+
+    @pytest.mark.asyncio
+    async def test_partial_run_reports_complete_with_post_release_usage(self):
+        """A run with SOME images stays COMPLETE, releases only the unused
+        quota, and the job_complete payload carries POST-release usage."""
+        from app.services.photoshoot_service import PhotoshootStreamingService
+        from app.models.photoshoot import PhotoshootUsage
+
+        job = await PhotoshootJobService.create_job(
+            user_id="user-123",
+            photos=["data:image/jpeg;base64,SGVsbG8="],
+            use_case="linkedin",
+            num_images=2,
+            batch_size=2,
+        )
+
+        async def _generate_one(job, prompts):
+            await PhotoshootJobService.add_generated_image(
+                job.job_id,
+                "img_1",
+                0,
+                image_base64="b64",
+                image_url="https://cdn.example/x.png",
+            )
+
+        post_release_usage = PhotoshootUsage(
+            used_today=1,
+            limit_today=10,
+            remaining=9,
+            plan_type="free",
+            resets_at=datetime.now(timezone.utc),
+        )
+
+        with (
+            patch.object(
+                PhotoshootService,
+                "generate_prompts",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch.object(
+                PhotoshootService,
+                "reserve_daily_usage",
+                new_callable=AsyncMock,
+                return_value=(True, Mock()),
+            ),
+            patch.object(
+                PhotoshootService,
+                "release_daily_usage",
+                new_callable=AsyncMock,
+            ) as release,
+            patch.object(
+                PhotoshootService,
+                "get_usage",
+                new_callable=AsyncMock,
+                return_value=post_release_usage,
+            ),
+            patch.object(
+                PhotoshootStreamingService,
+                "_generate_images_streaming",
+                new_callable=AsyncMock,
+                side_effect=_generate_one,
+            ),
+            patch.object(
+                PhotoshootJobService,
+                "broadcast_event",
+                new_callable=AsyncMock,
+            ) as broadcast,
+        ):
+            service = PhotoshootStreamingService(user_id="user-123", db=Mock())
+            await service.run_pipeline(job)
+
+        assert job.status == PhotoshootJobStatus.COMPLETE
+        # Only the one unused slot was handed back.
+        release.assert_awaited_once()
+        release.assert_awaited_with("user-123", 1, service.db)
+        assert job.usage == post_release_usage.model_dump(mode="json")
+
+        complete_events = [
+            call.args[2]
+            for call in broadcast.await_args_list
+            if call.args[1] == "job_complete"
+        ]
+        assert len(complete_events) == 1
+        assert complete_events[0]["generated_count"] == 1
+        assert complete_events[0]["usage"] == job.usage
+        assert not any(call.args[1] == "job_failed" for call in broadcast.await_args_list)
+
+        async with PhotoshootJobService._lock:
+            PhotoshootJobService._jobs.pop(job.job_id, None)
+
+    @pytest.mark.asyncio
+    async def test_mark_image_failed_retains_error_detail(self):
+        """mark_image_failed retains per-index provider detail; first_error
+        surfaces the lowest-index failure (stable regardless of arrival order)."""
+        job = await PhotoshootJobService.create_job(
+            user_id="user-123",
+            photos=["data:image/jpeg;base64,SGVsbG8="],
+            use_case="linkedin",
+            num_images=4,
+            batch_size=2,
+        )
+        await PhotoshootJobService.mark_image_failed(job.job_id, 3, "late failure")
+        await PhotoshootJobService.mark_image_failed(job.job_id, 1, "first slot failure")
+
+        assert await PhotoshootJobService.get_first_error(job.job_id) == "first slot failure"
+
+        status = await PhotoshootJobService.get_job_status(job.job_id)
+        assert status["failed_indices"] == [1, 3]
+        assert status["first_error"] == "first slot failure"
 
         async with PhotoshootJobService._lock:
             PhotoshootJobService._jobs.pop(job.job_id, None)
