@@ -1,5 +1,11 @@
 # Feature: Shopping Integration
 
+> **STATUS: NOT SHIPPED as of 2026-08-08.** Everything below is intended
+> spec, not shipped behaviour — no retailer/search integration, virtual
+> shopping, price tracking, or selling flows exist in the codebase
+> (user-story-ledger §6.1–6.3 are `absent`). AI shopping recommendations
+> are **not** retailer search.
+
 ## Overview
 
 Shopping Integration allows users to find items similar to what they own, try before buying with virtual visualization, track prices, and sell unused items.

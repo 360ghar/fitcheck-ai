@@ -8,18 +8,21 @@ Complete project directory layout for FitCheck AI.
 
 ```text
 fitcheck-ai/
+├── admin/                  # Internal admin console (React 19 SPA, server-enforced RBAC)
 ├── backend/                # FastAPI Application
 │   ├── app/
 │   │   ├── api/            # API Route handlers
 │   │   │   ├── v1/         # Versioned endpoints (incl. batch_processing.py)
-│   │   │   └── deps.py     # Dependencies (Auth, DB)
+│   │   │   └── deps.py     # Dependencies (Auth, DB, admin RBAC)
 │   │   ├── core/           # Config, Security, Logging
 │   │   ├── models/         # Pydantic schemas
 │   │   ├── services/       # Business logic (AI, batch jobs, storage, …)
 │   │   ├── agents/         # Server-side AI agents (extract / image gen)
-│   │   ├── db/             # Database migrations & seeds
+│   │   ├── utils/          # Image processing, retry, process metrics, …
+│   │   ├── db/             # Supabase clients (connection.py)
 │   │   └── main.py         # Entry point
 │   ├── tests/              # Pytest suite
+│   ├── scripts/            # Ops scripts (storage inventory, temp cleanup, thumbnails)
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── .env.example
@@ -32,16 +35,23 @@ fitcheck-ai/
 │   │   │   ├── jobs/       # JobPill, GeneratingSurface
 │   │   │   └── layout/     # Nav, Sidebar, AppLayout
 │   │   ├── hooks/          # useBatchExtraction, useBatchSSE, …
+│   │   ├── layouts/        # Layout shells (PublicLayout)
 │   │   ├── lib/            # image-compress, crop-from-bounding-box, utils
 │   │   ├── pages/          # Page components
-│   │   ├── stores/         # Zustand (auth, wardrobe, jobUiStore, …)
+│   │   ├── routes/         # Route manifests (publicRoutes.ts)
+│   │   ├── stores/         # Zustand (authStore, wardrobeStore, outfitStore,
+│   │   │                   #   photoshootStore, jobUiStore, batchExtractionStore,
+│   │   │                   #   subscriptionStore, upgradePromptStore)
+│   │   ├── test/           # Vitest setup
 │   │   ├── types/          # TypeScript interfaces
+│   │   ├── utils/          # Shared utilities (promiseQueue.ts)
 │   │   ├── App.tsx
 │   │   └── main.tsx
 │   ├── public/
 │   ├── vite.config.ts
 │   └── package.json
 ├── flutter/                # Mobile app (GetX)
+├── infra/                  # Cloudflare images worker (infra/images-worker)
 ├── docs/                   # Knowledge base (system of record)
 │   ├── design-docs/        # Beliefs, design decisions
 │   ├── exec-plans/         # active/, completed/, tech-debt tracker
@@ -74,5 +84,5 @@ fitcheck-ai/
 - **api/**: Domain clients — `ai.ts`, **`batch.ts`** (multipart + JSON job start, SSE helpers), `items.ts`.
 - **hooks/**: `useBatchExtraction`, `useBatchSSE` for wardrobe AI jobs.
 - **lib/**: Supabase config, `image-compress.ts` (AI upload prep), `crop-from-bounding-box.ts`.
-- **stores/**: Domain stores (auth, wardrobe, planning) plus **`jobUiStore`** for the app job pill.
+- **stores/**: Domain stores (authStore, wardrobeStore, outfitStore, photoshootStore, subscriptionStore, upgradePromptStore) plus **`jobUiStore`** (app job pill) and **`batchExtractionStore`** (batch flow).
 - **pages/**: Follows the routing structure.

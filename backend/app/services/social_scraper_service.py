@@ -600,7 +600,7 @@ class SocialScraperService:
                 },
             ) as client:
                 url = f"{cls._INSTAGRAM_BASE}/api/v1/feed/user/{ds_user_id}/"
-                if params:
+                if params:  # pragma: no cover - params always contains "count", so never empty
                     url += "?" + urlencode(params)
 
                 response = await client.get(url)

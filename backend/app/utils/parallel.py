@@ -97,7 +97,7 @@ async def parallel_with_retry(
             # are all callers ever inspect.
             try:
                 e.__traceback__ = None
-            except Exception:
+            except Exception:  # pragma: no cover - clearing traceback never raises
                 pass
             logger.warning(
                 "Item failed after all retries",
@@ -185,7 +185,7 @@ async def parallel_map_settled(
             # callers inspect.
             try:
                 e.__traceback__ = None
-            except Exception:
+            except Exception:  # pragma: no cover - clearing traceback never raises
                 pass
             return ParallelResult(success=False, error=e, index=index)
 

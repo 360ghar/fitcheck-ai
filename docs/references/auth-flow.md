@@ -342,48 +342,24 @@ USING (auth.uid()::text = user_id::text);
 
 ### Role-Based Access Control (RBAC)
 
-For future use with admin roles.
-
-**User Roles Table:**
-
-```sql
-CREATE TABLE user_roles (
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    role VARCHAR(50) NOT NULL,
-    PRIMARY KEY (user_id, role)
-);
-
--- Roles: 'user', 'admin', 'moderator', 'stylist'
-```
-
-**Role Check Middleware:**
+Shipped (migration `037_admin_roles.sql`). Roles live on
+`public.users.role`: `user` (default), `super_admin`, `admin`, `ops`,
+`support`, `content_editor` (plus a legacy fallback — `is_admin` flag or an
+`@fitcheckaiapp.com` email is treated as `admin`). Every `/api/v1/admin/*`
+route sits behind `require_admin` or `require_permission(...)`:
 
 ```python
-async def require_role(role: str):
-    def role_checker(
-        user_claims: dict = Depends(verify_token)
-    ) -> dict:
-        # Fetch user roles from database
-        user_roles = await get_user_roles(user_claims.get("sub"))
+from app.api.v1.deps import require_admin, require_permission
 
-        if role not in user_roles:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Requires {role} role"
-            )
-
-        return user_claims
-
-    return role_checker
-
-# Usage
-@router.get("/admin/dashboard")
-async def admin_dashboard(
-    user_claims: dict = Depends(require_role("admin"))
-):
-    # Only accessible by admins
-    pass
+@router.get("/admin/users")
+async def admin_users(user: dict = Depends(require_permission("users.read"))):
+    ...
 ```
+
+Role → permission mapping is pure data in `backend/app/core/permissions.py`
+(`ROLE_PERMISSIONS`; `*` grants everything for `super_admin`/`admin`). The
+admin console (`admin/`) mirrors roles for UI gating only — the backend
+re-checks on every request.
 
 ---
 
@@ -467,9 +443,11 @@ async def confirm_reset_password(
 
 ### 3. CSRF Protection
 
-- **SameSite cookies:** Prevent cross-site request forgery
-- **CSRF tokens:** Validate for state-changing operations
-- **Origin validation:** Check CORS headers
+Not implemented — the API is Bearer-token based and uses no cookies, so CSRF
+(which targets cookie-authenticated sessions) does not apply.
+- SameSite cookies: N/A (no session cookies are set)
+- CSRF tokens: N/A (state-changing calls carry the Bearer token instead)
+- Origin validation: CORS allowlist only (`BACKEND_CORS_ORIGINS`)
 
 ### 4. SQL Injection Prevention
 
@@ -641,8 +619,8 @@ def test_protected_endpoint_with_token():
 | **Refresh Token Expiry** | 7 days |
 | **Password Requirements** | Register: 8+ chars. Reset: 8+ chars, mixed case, number, special |
 | **Data Isolation** | Row-Level Security (RLS) |
-| **Role-Based Access** | Planned for Phase 2 |
+| **Role-Based Access** | Shipped — `users.role` with `super_admin`/`admin`/`ops`/`support`/`content_editor` (migration 037), enforced via `require_admin`/`require_permission` (`backend/app/api/v1/deps.py:243-267`, `backend/app/core/permissions.py`) |
 | **Password Reset** | Email-based flow |
 | **Token Storage** | httpOnly cookies (future), local storage (current) |
-| **CSRF Protection** | SameSite cookies, CSRF tokens |
+| **CSRF Protection** | Not implemented (Bearer-token auth; no cookies) |
 | **Session Management** | Stateless JWT |

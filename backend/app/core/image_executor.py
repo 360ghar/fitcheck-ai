@@ -45,7 +45,8 @@ def _get_executor() -> ThreadPoolExecutor:
     global _executor
     if _executor is None:
         with _lock:
-            if _executor is None:
+            # False arc only reachable during a concurrent-creation race.
+            if _executor is None:  # pragma: no cover - only a creation race hits this
                 _executor = ThreadPoolExecutor(
                     max_workers=max(1, settings.IMAGE_PROCESS_WORKERS),
                     thread_name_prefix="image-proc",

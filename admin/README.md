@@ -10,9 +10,10 @@ Supabase-backed auth as the other clients. All authorization is
 > library, server-driven data tables, OpenAPI codegen contract, and all
 > feature modules (users, dashboard + revenue/trends, subscriptions + IAP,
 > quotas, content, promo, feedback, ops/storage, audit, search, settings)
-> are in place, with 27 Vitest files / 194 tests. Playwright e2e +
-> token-refresh verification are pending the hardening wave (see "Known
-> advisories / limitations").
+> are in place, with 28 Vitest files / 215 tests. Playwright e2e specs have
+> landed (6 files / 8 critical journeys, `npm run e2e`) but are not yet
+> wired into CI; token-refresh end-to-end verification is still pending
+> (see "Known advisories / limitations").
 
 ## Quickstart
 
@@ -59,6 +60,8 @@ server-enforced, so a non-admin Google account gets 403 and is bounced.
 | `npm test` / `npm run test:watch` | Vitest (jsdom + MSW) |
 | `npm run generate:api` | Regenerate `src/shared/api/schema.d.ts` from `contracts/openapi.json` |
 | `npm run check:schema` | Fail if the checked-in types drifted from the contract (CI) |
+| `npm run e2e` | Playwright critical journeys (chromium; `vite preview` on :4173, `/api` stubbed via route interception) |
+| `npm run check:bundle` | Fail if the production bundle exceeds the size budget (CI) |
 
 ## Stack
 
@@ -205,10 +208,10 @@ src/
 
 | Layer | Tool | Status |
 |-------|------|--------|
-| Unit / integration | Vitest + RTL + MSW | 27 files / 194 tests passing; tests never hit the real network |
+| Unit / integration | Vitest + RTL + MSW | 28 files / 215 tests passing; tests never hit the real network |
 | A11y | vitest-axe | wired into unit tests (axe on shared components + pages) |
 | Contract | `npm run check:schema` | wired (CI drift check) |
-| E2E | Playwright (Chromium) | planned — 6–8 critical journeys; pending the hardening wave |
+| E2E | Playwright (Chromium) | specs landed — 6 files / 8 critical journeys (`npm run e2e`); not wired into CI; verification pending |
 
 `src/test/utils.tsx` renders with all providers (Query, Theme, Router,
 Toaster); MSW handlers live in `src/test/msw/handlers/` and fixtures mirror

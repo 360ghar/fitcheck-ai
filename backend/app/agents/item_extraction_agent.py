@@ -629,7 +629,9 @@ class ItemExtractionAgent:
                 item["include_in_wardrobe"] = True
 
         used_person_ids = {item["person_id"] for item in items}
-        if not used_person_ids and items:
+        # Defensive: ensure_person above always assigns a person_id to every
+        # item, so this fallback can never fire.
+        if not used_person_ids and items:  # pragma: no cover - person_id always assigned
             used_person_ids = {"person_1"}
 
         non_current_counter = 1

@@ -53,3 +53,19 @@ jobs:
           SUPABASE_SECRET_KEY: ci-placeholder-secret-key
           SUPABASE_JWT_SECRET: ci-placeholder-jwt-secret-at-least-32-characters
         run: pytest -v
+
+      - name: API spec drift check
+        working-directory: ${{ github.workspace }}
+        env:
+          # Same dummy values as the Pytest step - the generator only builds
+          # the FastAPI app in-process (TestClient) and reads /api/v1/openapi.json.
+          SUPABASE_URL: https://ci-placeholder.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: ci-placeholder-publishable-key
+          SUPABASE_SECRET_KEY: ci-placeholder-secret-key
+          SUPABASE_JWT_SECRET: ci-placeholder-jwt-secret-at-least-32-characters
+        run: |
+          python scripts/generate_api_spec_doc.py /tmp/api-spec.md
+          if ! diff -q /tmp/api-spec.md docs/references/api-spec.md > /dev/null; then
+            echo "::error::docs/references/api-spec.md is out of date. Run 'cd backend && source .venv/bin/activate && python ../scripts/generate_api_spec_doc.py' and commit the result."
+            exit 1
+          fi

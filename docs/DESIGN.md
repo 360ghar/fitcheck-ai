@@ -47,6 +47,7 @@ inventing its own phrasing per component:
 
 ## Related
 
+- `frontend/DESIGN.md` — token source of truth (theme tokens, contrast rules)
 - `docs/FRONTEND.md`  
 - `docs/references/frontend-components.md`  
 - `docs/store/` for store listing imagery constraints  

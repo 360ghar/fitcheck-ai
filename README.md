@@ -6,14 +6,15 @@ FitCheck AI is a multi-platform wardrobe intelligence product with AI-assisted i
 
 - `backend/` — FastAPI API and business logic
 - `frontend/` — React + TypeScript web app (Vite)
+- `admin/` — Internal admin console (React 19 SPA, server-enforced RBAC)
 - `flutter/` — Flutter mobile app (GetX)
-- `remotion/` — Remotion promo/video compositions
+- `infra/` — Cloudflare images worker
 - `docs/` — Agent-first knowledge base (product, design, plans, quality)
 - `scripts/` — Harness checks (architecture + docs structure)
 
 ## Agent / contributor maps
 
-- **Agents:** `AGENTS.md` and `CLAUDE.md` (identical short maps)
+- **Agents:** `AGENTS.md` (`CLAUDE.md` imports it)
 - **Architecture layers:** `ARCHITECTURE.md`
 - **Knowledge hub:** `docs/README.md`
 
@@ -27,8 +28,9 @@ FitCheck AI is a multi-platform wardrobe intelligence product with AI-assisted i
 - Recommendations (match, complete look, gap-oriented)
 - Photoshoot image generation
 - Social sharing and public outfit links
-- Gamification, referral, subscription flows
+- Referral, subscription, and flag-gated gamification flows
 - Optional social import pipeline
+- Admin console (internal, server-enforced RBAC)
 
 ## High-level architecture
 
@@ -81,6 +83,7 @@ Workspace `.env` values are expected to be provisioned. Templates:
 
 - `backend/.env.example`
 - `frontend/.env.example`
+- `admin/.env.example`
 - `flutter/.env.example`
 
 ## Documentation map
@@ -92,6 +95,7 @@ Workspace `.env` values are expected to be provisioned. Templates:
 | Knowledge hub | `docs/README.md` |
 | Backend depth | `docs/BACKEND.md` |
 | Frontend depth | `docs/FRONTEND.md` |
+| Admin console | `docs/ADMIN.md`, `admin/README.md` |
 | Product specs | `docs/product-specs/` |
 | Setup | `docs/references/local-setup.md` |
 | Quality / debt | `docs/QUALITY_SCORE.md`, `docs/exec-plans/tech-debt-tracker.md` |
@@ -101,8 +105,9 @@ Workspace `.env` values are expected to be provisioned. Templates:
 
 ```bash
 ./scripts/check_all.sh
-cd backend && pytest
-cd frontend && npm run lint && npm run build
+cd backend && source .venv/bin/activate && pytest
+cd frontend && npm run lint && npm test && npm run build
+cd admin && npm run lint && npm run typecheck && npm test && npm run check:schema
 cd flutter && flutter test
 ```
 

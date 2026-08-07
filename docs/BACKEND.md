@@ -1,6 +1,6 @@
 # Backend
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 Deep guide for the FastAPI app under `backend/`. Architecture layers: root `ARCHITECTURE.md`. Package-local agent entry: `backend/CLAUDE.md` (thin pointer here).
 
@@ -18,7 +18,9 @@ ruff check .
 
 - Swagger: `http://localhost:8000/api/v1/docs`
 - ReDoc: `http://localhost:8000/api/v1/redoc`
-- Health: `http://localhost:8000/health`
+- Health: `http://localhost:8000/health` — plus `GET /api/v1/health` as a
+  compatibility alias serving the same cheap liveness payload (probes pointed at
+  the prefixed path stop 404ing; see `app/api/v1/health.py`).
 
 ## Application structure
 
@@ -43,6 +45,14 @@ app/
 
 Forbidden: services/models/core importing `app.api`. See `scripts/check_architecture.py`.
 
+Services not named in their own sections: `social_auth_service.py`,
+`social_oauth_service.py`, `social_scraper_service.py`, `social_url_service.py`
+(social import), `token_refresh_service.py` (OAuth token refresh),
+`job_persistence.py` (durable job mirror rows), `extraction_cache_service.py`
+(extraction result cache), `outfit_service.py` (outfit lifecycle, incl. the
+reconnect-protected delete), `feedback_service.py`, `promo_service.py`,
+`astrology_service.py`.
+
 ## Database
 
 - Hosted Supabase via `supabase-py`. The sync client's singleton pool can
@@ -60,7 +70,9 @@ Forbidden: services/models/core importing `app.api`. See `scripts/check_architec
   filters must use `jsonb_contains()` (JSON array literal) — `contains(list)`
   emits a Postgres array literal (`{a,b}`) that JSONB columns reject. Covered
   so far:
-  `/items`, `/auth/oauth/sync`, `/outfits` (list + create), `get_subscription`
+  `/items`, `/auth/oauth/sync`, `/outfits` (list + create + the delete handlers
+  — `DELETE /{outfit_id}`, `/{outfit_id}/items/{item_id}`,
+  `/{outfit_id}/images/{image_id}`; reconnected 2026-08-07), `get_subscription`
   (also the shared choke point behind `/subscription`, `/referral/*`,
   `/users/dashboard`), usage check/increment + `reserve/release_ai_usage`,
   AI settings, `/users/me` + `/settings` + `/preferences`, referral service,
@@ -89,7 +101,7 @@ File storage is a **private S3-compatible bucket** — Railway Bucket (since the
 - **Config** — see `backend/.env.example`:
   - `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`, `OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`, `OBJECT_STORAGE_BUCKET` — the only storage variables the backend reads (no provider-specific aliases).
   - `IMAGE_SERVING_MODE` (`presigned` default | `worker`), `IMAGE_CDN_BASE_URL` (Worker custom domain), `THUMBNAIL_SERVING` (`false` default; emit `thumbnail_url` → `_thumb` keys).
-- **Migration tooling** (see `docs/exec-plans/active/2026-08-04-railway-bucket-migration-contract.md` and `docs/exec-plans/active/2026-08-05-railway-egress-rca.md` for the live execution logs; the one-time Supabase→Railway→R2 copy scripts have been removed — storage is on R2):
+- **Migration tooling** (see `docs/exec-plans/completed/2026-08-04-railway-bucket-migration-contract.md` and `docs/exec-plans/active/2026-08-05-railway-egress-rca.md` for the live execution logs; the one-time Supabase→Railway→R2 copy scripts have been removed — storage is on R2):
   - `backend/scripts/storage_inventory.py` — orphan / missing report against the active bucket (dry-run by default; `--delete` to remove orphans). Thumb-aware: `_thumb` siblings of referenced keys are never orphans. **Part of the weekly storage routine**: run `--delete` (2h grace protects in-flight uploads) alongside `cleanup_temp_assets.py --delete` so DB-unreferenced objects (replaced avatars, deleted-item leftovers, failed uploads) are removed the same week they appear — measured at 192MB / 296 objects before the leak fixes.
   - `backend/scripts/cleanup_temp_assets.py` — **manual weekly cleanup** of the `tmp/` folder (dry-run default; `--delete` to delete; optional `--source` / `--min-age-hours`; JSONL audit). Temp previews are never DB-referenced and become unreachable once their 1h presigned URL expires, so this script is the only thing that removes them.
   - `backend/scripts/migrate_temp_keys_layout.py` — **optional** one-time rewrite of legacy per-user preview keys (`{user}/tmp/...`, `{user}/generated/...`) to the top-level folders (dry-run default; `--apply` to execute; server-side copy-then-delete; idempotent). Not required for correctness: legacy keys keep serving via the dual-layout allowlists and `cleanup_temp_assets.py` removes old-layout tmp objects regardless. Run it (outside active review flows) only if you want a single-layout bucket or R2 lifecycle rules on the `tmp/` prefix.
@@ -199,8 +211,10 @@ trust boundary** — the UI's permission gating is cosmetic.
   the `BACKEND_CORS_ORIGINS` defaults (`app/core/config.py`) and
   `backend/.env.example`; no wildcard.
 
-Tests: `backend/tests/test_admin_{authz,ops,predicates,commerce,audit,users}.py`
-(85 tests — authz 403s, role predicates, CRUD, suspend, refund, audit rows).
+Tests: `backend/tests/api/test_admin_{authz,ops,commerce,audit,users}.py` +
+`backend/tests/integration/test_admin/test_admin_{predicates,quotas,dashboards,revenue_trends}.py`
+(113 tests across 9 files — authz 403s, role predicates, CRUD, suspend,
+refund, audit rows, quota overrides, dashboard aggregates).
 
 ## Errors
 
@@ -217,9 +231,13 @@ Custom exceptions in `app/core/exceptions.py` (`FitCheckException` hierarchy). H
 
 ## Middleware order
 
-1. `CorrelationIdMiddleware`  
+Registered via `app.add_middleware(...)` in `main.py` — **first added =
+outermost**, so a request traverses the stack in the order below and the
+response flows back out in reverse:
+
+1. `CORSMiddleware` (outermost — added first)  
 2. `RequestLoggingMiddleware`  
-3. `CORSMiddleware`  
+3. `CorrelationIdMiddleware` (innermost — added last, runs closest to the route)
 
 ## AI provider system
 
@@ -232,7 +250,7 @@ Configured in `app/core/config.py` / env:
   Google); fallback is Gemini-model-to-Gemini-model only, not cross-provider. Bypasses
   `ai_provider_health_service` entirely (no pre-flight probe - a bad key/model/quota surfaces
   from the real call itself). See `app/services/gemini_provider.py`.
-- **Hybrid vision leg** (`AI_VISION_PROVIDER=gemini`, opt-in, system-config only - no BYOK):
+- **Hybrid vision leg** (`AI_VISION_PROVIDER=gemini` — the **default**, system-config only - no BYOK):
   keeps chat/image on the Custom provider (Agnes) but routes the vision leg's *primary* call
   directly to Google's native API via an internal `GeminiProvider` instance, falling back to
   Agnes (`AI_VISION_FALLBACK_MODEL`) on **any** failure - not just retryable ones, since the
@@ -255,9 +273,12 @@ Configured in `app/core/config.py` / env:
   pipelines stop grinding remaining items via `capacity_exhausted` events. Full design:
   `docs/exec-plans/active/quota-fallback-and-upgrade-propagation.md`.
 
-Typical custom stack:
+Typical custom stack (`AI_DEFAULT_PROVIDER=custom`, the default):
 
-- Chat/vision: `gemini-3.6-flash` (primary) / `agnes-2.5-flash` (fallback after 1 retry) via `/v1/chat/completions`
+- Chat: `agnes-2.5-flash` (primary, `AI_CHAT_MODEL`) via `/v1/chat/completions`
+- Vision: `gemini-3.6-flash` **primary** via the native Gemini leg (default
+  `AI_VISION_PROVIDER=gemini`) → `agnes-2.5-flash` fallback (`AI_VISION_FALLBACK_MODEL`)
+  on **any** failure, not after a fixed retry count
 - Images: `agnes-image-2.1-flash` primary → `agnes-image-2.0-flash` fallback via `/v1/images/generations`
 - Transient failures (429/503/timeout/empty images) retry fallback; non-transient raise
 - Embeddings: Google `google.genai` via `AI_GEMINI_API_KEY` (not the same code path as the
@@ -419,14 +440,16 @@ Modules wired from `main.py` include: auth, users, items, outfits, shared_outfit
 | `ENABLE_GAMIFICATION` | `false` | **Router stays mounted.** Handlers return `200` with a neutral zeroed payload. |
 
 The gamification asymmetry is deliberate and must not be "made consistent".
-`flutter/lib/features/dashboard/controllers/dashboard_controller.dart:60-67` runs an
-unguarded `Future.wait([fetchDashboard(), fetchStreak()])` under one `catch`, so a
-404 on `/api/v1/gamification/streak` rejects the whole wait, leaves `dashboard.value`
-unassigned, and renders a permanent error banner on the mobile home screen. The flag
-is therefore enforced per handler in `app/api/v1/gamification.py` (which also kills
-the write-on-GET that inserted a zeroed `user_streaks` row). Unmounting the router
-only becomes safe after the Flutter side is fixed — see TD-034 in
-`docs/exec-plans/tech-debt-tracker.md`. Guarded by `backend/tests/test_gamification_flag.py`.
+Unmounting the router would 404 `/api/v1/gamification/streak` while the shipped
+Flutter home screen still calls it (see TD-034 in
+`docs/exec-plans/tech-debt-tracker.md`, **resolved 2026-07-31**:
+`flutter/lib/features/dashboard/controllers/dashboard_controller.dart` now
+attaches a per-future `onError` handler, so a streak failure returns `null`
+instead of rejecting the dashboard load). The flag is therefore enforced per
+handler in `app/api/v1/gamification.py` (which returns a neutral zeroed payload
+and also kills the write-on-GET that inserted a zeroed `user_streaks` row). Keep
+the router mounted while the feature remains flag-gated. Guarded by
+`backend/tests/test_gamification_flag.py`.
 
 ## Adding an endpoint
 
@@ -434,7 +457,27 @@ only becomes safe after the Flutter side is fixed — see TD-034 in
 2. Pydantic models in `app/models/`  
 3. Logic in `app/services/`  
 4. Register router in `main.py`  
-5. Update `docs/references/api-spec.md` if the curated summary is still used; prefer OpenAPI accuracy  
+5. Update `docs/references/api-spec.md` — it is generated from the live OpenAPI document (`scripts/generate_api_spec_doc.py`); regenerate it in the same change set (CI drift-checks it)
+
+## Scripts (ops tooling)
+
+`backend/scripts/` beyond the storage/matte ones above (read each module
+docstring before running):
+
+- `convert_account_to_free.py` — downgrade one account to the free plan
+  app-side, leaving its billing rail untouched (provider dashboard must cancel it).
+- `upgrade_free_users_to_pro.py` — one-off campaign: every still-free user gets a
+  1-month Pro trial + email; conditional writes never overwrite paid/trial rows.
+- `revert_expired_pro_trials.py` — undo expired `grant_free_pro_month` trials
+  (reads the campaign audit file; no auto-expiry exists in the app).
+- `seed_app_store_reviewer.py` — seed an App Store reviewer demo account with a
+  body profile, ~12 items, and outfits via the public API.
+- `girlfriend_day_campaign.py` — emails every user a shareable promo code
+  (redeemed through the standard promo-code machinery; no DB writes).
+- `fix_broken_blog_images.py` / `scan_live_blog_images.py` — remap 404 Unsplash
+  featured images in `blog_posts` / scan the live blog API for broken ones
+  (2026-08-07 PageSpeed RCA).
+- `export_openapi.py` — dump the backend's OpenAPI schema (admin frontend contract).
 
 ## Environment (high level)
 
@@ -457,10 +500,38 @@ Full templates: `backend/.env.example`. Backend also loads repo root `.env`.
 
 ## API surface reference
 
-Curated: `docs/references/api-spec.md`  
+Generated: `docs/references/api-spec.md` (regenerate with `scripts/generate_api_spec_doc.py`; CI drift-checks it)  
 Live: OpenAPI when server runs  
 
 ## Tests
 
-- `backend/tests/`, `pytest` + `pytest-asyncio`
-- CI: `.github/workflows/backend-ci.yml` (ruff + pytest + architecture check)
+`backend/tests/` is a layered pytest suite (pytest + pytest-asyncio, strict mode):
+
+- `tests/unit/` — pure unit tests (models, services, agents, core utils) with
+  in-memory fakes and mocks; no HTTP, no network.
+- `tests/integration/` — route/service behavior via direct handler calls with
+  in-memory fakes (`tests/utils/fake_db.py` FakeDB).
+- `tests/api/` — full-app ASGI contract tests (TestClient / httpx
+  ASGITransport) against the real app: routing, middleware, exception
+  handlers, CORS, correlation IDs, and the real `verify_token` auth wiring
+  (dependency overrides only for the Supabase clients).
+- `tests/factories/` — polyfactory model factories + DB row builders.
+- `tests/utils/` — shared fakes, token/auth helpers, response assertions.
+
+Isolation (see `tests/conftest.py`): every test gets a fresh in-memory
+database, outbound TCP is blocked by an autouse guard (opt out with
+`@pytest.mark.network`), and `app.dependency_overrides` is restored after
+every test.
+
+Single-command run (also what CI runs):
+
+```bash
+cd backend && source .venv/bin/activate && pytest
+```
+
+Bare `pytest` runs the whole suite with branch coverage and enforces the
+**≥90% line+branch gate** (`.coveragerc` → `fail_under = 90`); relax for a
+quick iteration with `pytest --cov-fail-under=0`. Async tests use
+`@pytest.mark.asyncio`; async fixtures use `@pytest_asyncio.fixture`
+(strict `asyncio_mode`). CI: `.github/workflows/backend-ci.yml`
+(ruff + pytest + architecture check).

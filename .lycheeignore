@@ -1,0 +1,16 @@
+# Known-flaky / non-checkable external links (globs).
+# Storefronts often bot-block CI runners; localhost URLs are dev-only.
+https://apps.apple.com/*
+https://play.google.com/*
+http://localhost*
+https://t.co/*
+# Placeholder / example URLs in docs.
+https://example.com/*
+https://presigned.example/*
+https://<*
+https://...*
+# Auth-walled or retired third-party endpoints referenced in docs.
+https://dashboard.stripe.com/*
+https://generativelanguage.googleapis.com/*
+https://apihub.agnes-ai.com/*
+https://storage.railway.app*

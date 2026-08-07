@@ -76,7 +76,7 @@ class AIProviderClient(Protocol):
     implementation passes them.
     """
 
-    async def chat(
+    async def chat(  # pragma: no cover - protocol stub, never executed
         self,
         messages: List[ChatMessage],
         model: Optional[str] = None,
@@ -86,7 +86,7 @@ class AIProviderClient(Protocol):
         response_format: Optional[Dict[str, Any]] = None,
     ) -> AIResponse: ...
 
-    async def chat_with_vision(
+    async def chat_with_vision(  # pragma: no cover - protocol stub, never executed
         self,
         prompt: str,
         images: List[str],
@@ -95,20 +95,20 @@ class AIProviderClient(Protocol):
         response_format: Optional[Dict[str, Any]] = None,
     ) -> AIResponse: ...
 
-    async def generate_image(
+    async def generate_image(  # pragma: no cover - protocol stub, never executed
         self,
         prompt: str,
         reference_image: Optional[str] = None,
         model: Optional[str] = None,
     ) -> AIResponse: ...
 
-    def get_image_gen_model(self) -> str:
+    def get_image_gen_model(self) -> str:  # pragma: no cover - protocol stub, never executed
         """Resolved image-gen model name, without reaching into `.config`."""
         ...
 
-    async def test_connection(self) -> HealthCheckResult: ...
+    async def test_connection(self) -> HealthCheckResult: ...  # pragma: no cover - protocol stub, never executed
 
-    async def close(self) -> None: ...
+    async def close(self) -> None: ...  # pragma: no cover - protocol stub, never executed
 
 
 # Maps AIProvider -> concrete class. Populated by @register_provider decorators

@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Validate knowledge-base structure and relative markdown links.
+"""Validate knowledge-base structure, relative markdown links, and freshness.
 
-Fails when required harness files are missing or internal .md links break.
+Fails when required harness files are missing, CLAUDE.md does not import
+AGENTS.md, internal .md links break, or docs carrying a 'Last updated'
+header are stale relative to their last git commit.
 """
 
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,15 +61,32 @@ def check_required() -> None:
             errors.append(f"missing required file: {path.relative_to(ROOT)}")
 
 
-def check_agents_claude_identical() -> None:
-    agents = ROOT / "AGENTS.md"
+def check_claude_imports_agents() -> None:
+    """CLAUDE.md must exist and import AGENTS.md via a single '@AGENTS.md' line."""
     claude = ROOT / "CLAUDE.md"
-    if agents.is_file() and claude.is_file():
-        if agents.read_text(encoding="utf-8") != claude.read_text(encoding="utf-8"):
-            errors.append(
-                "AGENTS.md and CLAUDE.md must be byte-identical. "
-                "REMEDIATE: copy one to the other after edits."
-            )
+    if not claude.is_file():
+        errors.append(
+            "CLAUDE.md is missing; it must exist and start with '@AGENTS.md' to "
+            "import the shared agent map. "
+            "REMEDIATE: restore CLAUDE.md as a single '@AGENTS.md' import line."
+        )
+        return
+    first_non_empty = next(
+        (
+            line
+            for line in claude.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ),
+        None,
+    )
+    if first_non_empty != "@AGENTS.md":
+        errors.append(
+            f"CLAUDE.md first non-empty line is {first_non_empty!r}, "
+            "expected '@AGENTS.md'. "
+            "REMEDIATE: CLAUDE.md must start with '@AGENTS.md' to import the "
+            "shared agent map."
+        )
+    # AGENTS.md existence is enforced by check_required()
 
 
 def check_schema_doc_freshness() -> None:
@@ -86,6 +107,66 @@ def check_schema_doc_freshness() -> None:
             + ", ".join(sorted(newer))
             + ". REMEDIATE: run `python scripts/generate_db_schema_doc.py`."
         )
+
+
+LAST_UPDATED_RE = re.compile(r"Last updated:\s*(\d{4}-\d{2}-\d{2})")
+FRESHNESS_GRACE_DAYS = 3
+
+
+def _last_commit_date(path: Path) -> date | None:
+    """Return the last commit date (date-only) for a repo file, or None if unknown."""
+    rel = path.relative_to(ROOT).as_posix()
+    try:
+        proc = subprocess.run(
+            ["git", "log", "-1", "--format=%cI", "--", rel],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    stamp = proc.stdout.strip()
+    if not stamp:
+        return None
+    try:
+        return datetime.fromisoformat(stamp).date()
+    except ValueError:
+        return None
+
+
+def check_last_updated_freshness() -> None:
+    """Fail when a doc's 'Last updated' header predates its last commit by >3 days.
+
+    Files without a 'Last updated' header, untracked files, and repos where git
+    is unavailable are skipped. Uncommitted working-tree edits are intentionally
+    measured against the last COMMIT date (the intended behavior: a doc edited
+    today but committed months ago passes as long as its header is newer than
+    the commit date).
+    """
+    for path in sorted(DOCS.rglob("*.md")):
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        match = LAST_UPDATED_RE.search(text)
+        if not match:
+            continue
+        try:
+            header_date = datetime.strptime(match.group(1), "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        commit_date = _last_commit_date(path)
+        if commit_date is None:
+            continue
+        if header_date < commit_date - timedelta(days=FRESHNESS_GRACE_DAYS):
+            errors.append(
+                f"{path.relative_to(ROOT)}: 'Last updated' header ({header_date}) "
+                f"is stale (file last changed {commit_date}). "
+                f"REMEDIATE: bump the Last updated header (or check the last commit) "
+                f"— file was last changed on {commit_date}."
+            )
 
 
 def check_markdown_links() -> None:
@@ -210,8 +291,9 @@ def check_docs_path_references() -> None:
 
 def main() -> int:
     check_required()
-    check_agents_claude_identical()
+    check_claude_imports_agents()
     check_schema_doc_freshness()
+    check_last_updated_freshness()
     check_markdown_links()
     check_docs_path_references()
     if errors:

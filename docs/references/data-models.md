@@ -10,7 +10,7 @@ This document summarizes FitCheck AI’s data model across:
 
 ## Source Of Truth
 
-- **Database DDL:** `backend/db/supabase/migrations/001_full_schema.sql`
+- **Database DDL:** `backend/db/supabase/migrations/` (all files, 001..042 — see "Database Migrations" below)
 - **Backend Pydantic models:** `backend/app/models/user.py`, `backend/app/models/item.py`, `backend/app/models/outfit.py`, `backend/app/models/recommendation.py`
 - **Frontend types:** `frontend/src/types/index.ts`
 
@@ -24,12 +24,22 @@ The docs intentionally avoid duplicating full table DDL in Markdown to prevent d
 - **`public.users`**: Profile table keyed by `id` (FK -> `auth.users(id)`), including:
   - `avatar_url`, `full_name`, `email_verified`, `last_login_at`, `is_active`
   - astrology profile fields: `birth_date` (DATE), `birth_time` (TIME), `birth_place` (VARCHAR)
-  - **AI settings**: `ai_provider`, `ai_model`, `ai_api_key_encrypted`
+  - admin/RBAC columns (migration 037): `is_admin`, `role`
+    (`user` | `super_admin` | `admin` | `ops` | `support` | `content_editor`),
+    `custom_daily_quota`
 
 ### Preferences + Settings
 
 - **`public.user_preferences`**: JSONB arrays for `favorite_colors`, `preferred_styles`, `preferred_occasions`, etc.
 - **`public.user_settings`**: `measurement_units`, `notifications_enabled`, `email_marketing`, `dark_mode`, etc.
+- **`public.user_ai_settings`**: Per-user AI provider configuration (migration
+  `003_remove_puter_add_ai_settings.sql`): `default_provider`
+  (`gemini|openai|custom`), `provider_configs` (JSONB holding per-provider
+  `api_key_encrypted` + model config), daily counters
+  (`daily_extraction_count`, `daily_generation_count`, `last_reset_date`).
+  Read/written by `backend/app/services/ai_settings_service.py` (keys
+  encrypted via `AI_ENCRYPTION_KEY`). `public.users` itself has **no**
+  AI-provider columns.
 
 ### Wardrobe
 
@@ -37,7 +47,9 @@ The docs intentionally avoid duplicating full table DDL in Markdown to prevent d
   - `material`, `pattern`, `style`
   - `materials`, `seasonal_tags`, `occasion_tags` (JSONB arrays)
   - Usage analytics: `usage_times_worn`, `usage_last_worn`, `cost_per_wear`, `is_favorite`
-- **`public.item_images`**: `image_url`, `thumbnail_url`, and `storage_path` for Supabase Storage object tracking
+- **`public.item_images`**: `image_url`, `thumbnail_url`, and `storage_path`
+  (bucket key) for object-storage tracking (S3-compatible/R2; URLs served via
+  short-lived presigned GETs, never stored)
 - **`public.item_colors`**: Optional detailed color analysis (manual or derived)
 
 ### Outfit Management
@@ -48,7 +60,7 @@ The docs intentionally avoid duplicating full table DDL in Markdown to prevent d
   - Usage analytics: `worn_count`, `last_worn_at`, `is_favorite`
 - **`public.outfit_images`**: Supports manual + AI images:
   - `generation_type` (`ai`/`manual`), `generation_metadata`, `is_primary`
-  - `storage_path` for Storage objects
+  - `storage_path` for object-storage objects (S3-compatible/R2)
 - **`public.outfit_collections`** and **`public.outfit_collection_items`**: Group outfits into collections
 - **`public.outfit_wear_history`**: Per-outfit wear log (`worn_at`, `created_at`) written by `POST /outfits/{id}/wear` and read by `GET /outfits/{id}/wear-history` (migration 042)
 
@@ -63,7 +75,7 @@ The docs intentionally avoid duplicating full table DDL in Markdown to prevent d
 
 ### AI Generation Tracking
 
-- **`public.outfit_generations`**: Tracks generation requests (the image is generated server-side via the Backend AI API and stored in Supabase Storage).
+- **`public.outfit_generations`**: Tracks generation requests (the image is generated server-side via the Backend AI API and stored in the S3-compatible object store (R2)).
 
 ### Social + Feedback (MVP scaffolding)
 
@@ -92,7 +104,7 @@ FitCheck AI uses Pinecone for similarity search and recommendation primitives.
 
 - **Index name:** `PINECONE_INDEX_NAME` (default: `fitcheck-items`)
 - **Dimensions:** `PINECONE_DIMENSION` (default: `768`)
-- **Embeddings model:** `GEMINI_EMBEDDING_MODEL` (default: `gemini-embedding-001`)
+- **Embeddings model:** `AI_GEMINI_EMBEDDING_MODEL` (default: `gemini-embedding-001`)
 
 Implementation references:
 - `backend/app/services/ai_service.py` (`EmbeddingService`)
@@ -120,11 +132,44 @@ Astrology recommendations are represented by `AstrologyRecommendation` and relat
 
 ## Database Migrations
 
-This repository uses a single consolidated migration:
-- `backend/db/supabase/migrations/001_full_schema.sql`
-- `backend/db/supabase/migrations/002_astrology_profile.sql`
+Migrations live in `backend/db/supabase/migrations/` and must **all** be
+applied in numeric order — 43 files numbered `001`..`042` (note that `002`
+has two files: `002_astrology_profile.sql` and
+`002_user_profile_trigger.sql`):
 
-Apply it in the Supabase SQL Editor before running the app. The backend `/health` endpoint reports whether the schema is ready and lists missing tables/columns to help diagnose partial setups.
+- `001_full_schema.sql` — core tables (users, wardrobe, outfits, planning,
+  gamification)
+- every later migration (`002`..`042`) builds on top; none may be skipped
+
+Apply the whole sequence in the Supabase SQL Editor (or a migration runner)
+before running the app; a partial schema is treated as broken. The backend
+`GET /ready` endpoint fails closed: it reports `"schema_ready": false` until
+every table in `REQUIRED_TABLES` and every column in `REQUIRED_COLUMNS`
+(see `backend/app/main.py`) exists, and (in DEBUG mode) lists the missing
+tables/columns to help diagnose partial setups. `/health` is liveness-only
+and does NOT report schema state.
+
+## Tables Not Covered Above
+
+The sections above cover the core wardrobe/outfit/planning/gamification
+tables. These additional tables exist in the migrations but are intentionally
+not expanded here — see the DDL for details:
+
+| Table | Migration |
+|------|-----------|
+| `subscriptions`, `subscription_usage` | 007 |
+| `referral_codes`, `referral_redemptions` | 007 |
+| `promo_codes`, `promo_redemptions` | 031 (+ 032 fix) |
+| `support_tickets` | 009 (+ 034, 037) |
+| `extraction_jobs` | 016 (+ 023, 029) |
+| `photoshoot_jobs` | 023 (+ 035) |
+| `stripe_webhook_events` | 022 (+ 027) |
+| `apple_iap_events`, `google_rtdn_events` | 030 |
+| `audit_events` | 038 |
+| `blog_posts` (category is a TEXT column; no separate categories table) | 017 |
+| `waitlist` | 005 |
+| `social_import_jobs`, `social_import_photos`, `social_import_items`, `social_import_auth_sessions`, `social_import_events` | 012 |
+| `trips`, `trip_capsule_items` | 001 |
 
 ## Validation Rules (High-Level)
 

@@ -358,7 +358,7 @@ async def _background_startup(logger: logging.Logger) -> None:
         try:
             from app.utils.process_metrics import log_memory
             log_memory("background_startup_complete", force=True)
-        except Exception:
+        except Exception:  # pragma: no cover - best-effort telemetry
             pass
         # One full collection after the import-time + startup churn settles:
         # frees any cyclic garbage the frozen threshold tuning left behind so
@@ -366,7 +366,7 @@ async def _background_startup(logger: logging.Logger) -> None:
         try:
             import gc
             gc.collect()
-        except Exception:
+        except Exception:  # pragma: no cover - defensive gc guard
             pass
         logger.info(
             "Background startup finished",
@@ -398,7 +398,7 @@ async def lifespan(app: FastAPI):
     try:
         gc.freeze()
         gc.set_threshold(700, 5, 5)
-    except Exception:
+    except Exception:  # pragma: no cover - a GC API change must never block startup
         pass
 
     # Initialize session logging first
@@ -418,7 +418,7 @@ async def lifespan(app: FastAPI):
     try:
         from app.utils.process_metrics import log_memory
         log_memory("startup", force=True)
-    except Exception:
+    except Exception:  # pragma: no cover - best-effort telemetry
         pass
 
     # Surface mis-set production env vars (empty AI_ENCRYPTION_KEY, wrong
@@ -439,7 +439,7 @@ async def lifespan(app: FastAPI):
                     "config_message": issue.message,
                 },
             )
-    except Exception:
+    except Exception:  # pragma: no cover - defensive; config_health never raises
         logger.exception("Config health check itself failed; continuing")
 
     # Schedule heavy init without blocking the accept path
@@ -459,21 +459,21 @@ async def lifespan(app: FastAPI):
     try:
         from app.utils.process_metrics import log_memory
         log_memory("shutdown", force=True)
-    except Exception:
+    except Exception:  # pragma: no cover - best-effort telemetry
         pass
 
     # Stop the bounded image executor (see app/core/image_executor.py).
     try:
         from app.core.image_executor import shutdown as shutdown_image_executor
         shutdown_image_executor()
-    except Exception:
+    except Exception:  # pragma: no cover - defensive teardown
         pass
 
     # Release the pooled storage download client (see storage_service.py).
     try:
         from app.services.storage_service import close_download_client
         await close_download_client()
-    except Exception:
+    except Exception:  # pragma: no cover - defensive teardown
         pass
 
     # Always retrieve the task result so a failed background init cannot
@@ -603,8 +603,10 @@ app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["Feedback"]
 # Photoshoot routes (auth for generate, public for demo and use-cases)
 app.include_router(photoshoot.router, prefix="/api/v1/photoshoot", tags=["Photoshoot"])
 
-# Social import routes (feature-flagged)
-if settings.ENABLE_SOCIAL_IMPORT:
+# Social import routes (feature-flagged); the flag is read once at
+# import time and defaults to on, so the off-arc only exists in
+# deployments that disable the feature via env.
+if settings.ENABLE_SOCIAL_IMPORT:  # pragma: no cover - env-dependent feature flag
     app.include_router(social_import.router, prefix="/api/v1/ai", tags=["Social Import"])
 
 # Blog routes (public read, admin write)

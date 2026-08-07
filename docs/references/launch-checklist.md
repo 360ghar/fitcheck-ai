@@ -1,32 +1,35 @@
-# Development: Launch Checklist
+# Development: Production Hygiene Checklist
 
-## Overview
+> Compact production-hygiene checklist (2026-08-08). Replaces the older
+> detailed pre-launch checklist. For depth see `docs/RELIABILITY.md`
+> (operations) and `docs/SECURITY.md` (security model). Storage is
+> S3-compatible object storage (R2), not Supabase Storage; schema readiness
+> is gated by `GET /ready`.
 
-Pre-launch requirements and deployment checklist for public launch.
+## Production hygiene
 
-## 1. Pre-Launch (Technical)
-- [ ] Environment variables configured in Railway (Backend) and Vercel (Frontend).
-- [ ] Database migrations applied to production Supabase instance.
-- [ ] Row-Level Security (RLS) policies verified for all tables.
-- [ ] Storage buckets created and permissions set to "Private".
-- [ ] Error logging service verified (Console logs reachable).
-- [ ] SSL certificates active for custom domains.
-
-## 2. Pre-Launch (Product)
-- [ ] Privacy Policy and Terms of Service pages published.
-- [ ] AI generation limits configured (Rate limiting).
-- [ ] Email templates (Signup, Password Reset) verified in Supabase.
-- [ ] Onboarding flow tested from scratch.
-- [ ] Responsive design verified on iOS and Android devices.
-
-## 3. Launch Day
-- [ ] Final manual smoke test of the production environment.
-- [ ] Verify Google Analytics / Tracking (if applicable).
-- [ ] Monitor Supabase "API Request" logs for errors.
-- [ ] Monitor Gemini API usage/quotas.
-
-## 4. Post-Launch
-- [ ] Collect initial user feedback.
-- [ ] Fix high-priority bugs discovered by early users.
-- [ ] Review usage statistics (Most popular features).
-- [ ] Plan Phase 2 features based on user requests.
+- [ ] Apply **all** migrations from `backend/db/supabase/migrations/` in
+      numeric order (001..042, 43 files) on the hosted Supabase instance;
+      verify `GET /ready` returns `"schema_ready": true` (it fails closed on
+      gaps).
+- [ ] Check the boot log for config-health issues (startup validation in
+      `backend/app/core/config_health.py` — e.g. missing
+      `AI_ENCRYPTION_KEY`, wrong `FRONTEND_URL`, non-OpenAI
+      `AI_VISION_API_URL`).
+- [ ] Weekly storage routine: dry-run `backend/scripts/storage_inventory.py`
+      (orphan/missing-object report) and `backend/scripts/cleanup_temp_assets.py`
+      (temp-preview cleanup), review the report, then re-run both with
+      `--delete` (both default to dry-run).
+- [ ] Confirm `IMAGE_SERVING_MODE` (`presigned` | `worker`) and thumbnail
+      state: `THUMBNAIL_SERVING` / `THUMBNAILS_BACKFILLED` in
+      `backend/app/core/config.py` — run
+      `backend/scripts/generate_thumbnails.py` to backfill before enabling
+      thumbnail serving.
+- [ ] Sandbox IAP testing per `docs/store/ios-sandbox-testing-runbook.md`.
+- [ ] Env: `OBJECT_STORAGE_*` (R2) configured, `BACKEND_CORS_ORIGINS` and
+      `FRONTEND_URL` correct; RLS policies verified.
+- [ ] AI limits / quotas reviewed (`PLAN_*` in `backend/app/core/config.py`).
+- [ ] Privacy Policy and Terms of Service published; email templates (signup,
+      password reset) verified in Supabase.
+- [ ] Launch day: manual smoke test; monitor backend logs, AI provider
+      usage/quotas, and `GET /ready`.

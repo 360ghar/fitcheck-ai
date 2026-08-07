@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 FitCheck AI is a monorepo: React web + Flutter mobile clients call a FastAPI backend. An internal admin console (`admin/`, React 19 SPA) calls the same backend's `/api/v1/admin/*` surface with server-enforced RBAC. Supabase is the system of record for the DB (Postgres) + Auth; file storage is a private S3-compatible bucket (Railway Bucket → Cloudflare R2 since the 2026-08-05 egress RCA; R2 egress is $0). Images are served to clients either as short-lived presigned URLs (default) or as stable, edge-cached URLs through a Cloudflare Worker (`infra/images-worker/`, `IMAGE_SERVING_MODE=worker`) with `_thumb` siblings for list/grid tiles. AI runs behind backend provider abstractions. Optional vector retrieval uses Pinecone.
 
@@ -21,6 +21,22 @@ This file is the top-level map of domains and **allowed dependency edges**. Deep
               └──► health / OpenAPI
 ```
 
+```mermaid
+flowchart TD
+    Web[Web + Admin SPAs] --> API[FastAPI /api/v1]
+    Mobile[Flutter mobile] --> API
+    API --> SVC[Domain services]
+    SVC --> DB[(Supabase PG)]
+    SVC --> R2[(R2 object store)]
+    SVC --> AI[AI providers]
+    SVC --> VEC[(Pinecone)]
+    SVC --> STR[Stripe]
+    R2 --> IMG[Cloudflare Worker]
+    IMG --> Web
+```
+
+Layer flow: clients → API → services → data/AI/storage; images served from R2 via the Cloudflare Worker.
+
 ## Repository domains
 
 | Path | Role |
@@ -29,7 +45,6 @@ This file is the top-level map of domains and **allowed dependency edges**. Deep
 | `frontend/` | Web client (Vite + React + TypeScript) |
 | `admin/` | Internal admin console (React 19 SPA; backend-enforced RBAC) |
 | `flutter/` | Mobile client (GetX) |
-| `remotion/` | Marketing video compositions |
 | `docs/` | System of record for product/design/plans/quality |
 | `scripts/` | Repo harness checks (docs structure, architecture) |
 

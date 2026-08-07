@@ -1,8 +1,8 @@
 # FitCheck AI knowledge base
 
-Last updated: 2026-07-22
+Last updated: 2026-08-08
 
-This directory is the **system of record** for product intent, design decisions, execution plans, quality grades, and deep technical notes. Agents should start at root `AGENTS.md` / `CLAUDE.md` (identical maps), then `ARCHITECTURE.md`, then the files below.
+This directory is the **system of record** for product intent, design decisions, execution plans, quality grades, and deep technical notes. Agents should start at root `AGENTS.md` (root `CLAUDE.md` imports it), then `ARCHITECTURE.md`, then the files below.
 
 ## Start here
 
@@ -15,6 +15,7 @@ This directory is the **system of record** for product intent, design decisions,
 | Backend depth | `BACKEND.md` |
 | Web depth | `FRONTEND.md` |
 | Mobile depth | `FLUTTER.md` |
+| Admin console | `ADMIN.md` + `../admin/README.md` |
 | Product intent | `PRODUCT_SENSE.md` + `product-specs/` |
 | Quality / debt | `QUALITY_SCORE.md`, `exec-plans/tech-debt-tracker.md` |
 | SEO / GEO / AEO ops | `geo/measurement-and-monitoring.md`, `geo/data-study-blueprint.md` |
@@ -30,15 +31,17 @@ docs/
 ├── product-specs/     # product overview, stories, feature PRDs
 ├── references/        # API, auth, setup, stack, implementation notes
 ├── store/             # app store / play store listing copy
+├── ADMIN.md
 ├── BACKEND.md
-├── FRONTEND.md
-├── FLUTTER.md
 ├── DESIGN.md
+├── FLUTTER.md
+├── FRONTEND.md
 ├── PLANS.md
 ├── PRODUCT_SENSE.md
 ├── QUALITY_SCORE.md
 ├── RELIABILITY.md
-└── SECURITY.md
+├── SECURITY.md
+└── VERIFICATION.md
 ```
 
 ## Maintenance rules
@@ -68,6 +71,11 @@ docs/
 1. `FRONTEND.md` → `DESIGN.md`
 2. `references/frontend-components.md`, `references/workflows.md`
 3. `product-specs/user-story-ledger.md` for story-level evidence and status
+
+**Admin change**
+
+1. `ADMIN.md` → `../admin/README.md`
+2. `../ARCHITECTURE.md` admin sections
 
 **Planning a feature**
 

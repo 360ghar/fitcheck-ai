@@ -28,18 +28,18 @@ content feature of the admin app).
 - [x] Backend: migrations 037 (roles/quota override) + 038 (audit_events) idempotent, applied to hosted Supabase.
 - [x] Backend: `GET /api/v1/admin/me` returns `{ user, role, permissions[] }`; every admin endpoint behind `require_admin` / `require_permission`.
 - [x] Backend: every admin mutation writes an `audit_events` row (actor, action, entity, payload, ip, user-agent).
-- [x] Backend: RBAC unit/route tests (`test_admin_*.py`, 85 tests) cover 403 authz, CRUD, audit, suspend, refund.
+- [x] Backend: RBAC unit/route tests (`tests/api/test_admin_*.py` + `tests/integration/test_admin/*.py`, 113 tests) cover 403 authz, CRUD, audit, suspend, refund.
 - [x] Admin app: skeleton (M2) — login + `/admin/me` bootstrap, guards, layout, theme, i18n, toasts, error boundaries.
 - [x] Admin app: data infra (M3) — openapi-typescript codegen from `contracts/openapi.json`, drift check, typed client, query-key factory, DataTable + URL-synced table state.
 - [x] Admin app: feature modules (M4) — users, dashboard, subscriptions + IAP, quotas, content (blog port), promo, feedback, ops/storage, audit explorer, search palette, settings.
-- [x] Admin app: `npm run lint` / `typecheck` / `test` / `build` green; 17 Vitest files / 122 tests.
+- [x] Admin app: `npm run lint` / `typecheck` / `test` / `build` green; 28 Vitest files / 215 tests.
 - [x] Docs + repo integration: exec plan, `admin/CLAUDE.md`, root map row, `ARCHITECTURE.md` admin domain, `admin/README.md`, `docs/BACKEND.md` admin section, quality + debt entries.
-- [ ] Playwright e2e journeys + token-refresh verification — pending the hardening agent's final report (see §Deferred debt).
+- [x] Playwright e2e journeys — specs landed (6 files, 8 journeys); CI wiring + token-refresh end-to-end verification pending (see §Deferred debt).
 - [ ] `scripts/check_all.sh` green after this wave (docs/architecture/theme/ios checks; pytest + frontend + flutter when toolchains present).
 
 ## Context / links
 
-- Architecture spec (source of truth): `2026-08-06-fitcheckai-admin-panel-enterprise-architecture-spec.md`
+- Architecture spec (source of truth): `admin/README.md` (the standalone `2026-08-06-fitcheckai-admin-panel-enterprise-architecture-spec.md` file does not exist in the repo)
 - Related code:
   - Backend: `backend/app/core/permissions.py` (roles → permissions), `backend/app/api/v1/deps.py` (`require_admin` / `require_permission`), `backend/app/api/v1/admin/*` (13 routers), `backend/app/services/admin_service.py`, `backend/app/services/audit_service.py`, `backend/app/models/admin.py`
   - Migrations: `backend/db/supabase/migrations/037_admin_roles.sql`, `038_audit_events.sql`
@@ -163,11 +163,11 @@ Patterns: query-key factory per feature (single invalidation source); URL search
 
 | Layer | Tool | Count / status |
 |-------|------|----------------|
-| Backend admin unit/route | pytest (`test_admin_{authz,ops,predicates,commerce,audit,users}.py`) | 85 tests: authz 403s, role predicates, CRUD, suspend, refund, audit writes |
-| Admin app unit/integration | Vitest + RTL + MSW | 17 files / 122 tests passing (measured 2026-08-07) |
+| Backend admin unit/route | pytest (`tests/api/test_admin_*.py` + `tests/integration/test_admin/*.py`) | 113 tests: authz 403s, role predicates, CRUD, suspend, refund, audit writes, dashboards, quotas, revenue trends |
+| Admin app unit/integration | Vitest + RTL + MSW | 28 files / 215 tests passing (measured 2026-08-08) |
 | A11y | vitest-axe | wired into unit tests (axe on shared components + pages) |
 | Contract drift | `npm run check:schema` (regenerate → diff vs checked-in `schema.d.ts`) | wired; `contracts/openapi.json` present |
-| E2E | Playwright critical journeys | **not yet landed** — pending hardening agent's final report (debt) |
+| E2E | Playwright critical journeys | **landed 2026-08-08** — 6 files / 8 journeys (auth, billing, palette, roles, storage, users); not wired into CI (TD-082) |
 | CI | hardening agent's `admin-ci.yml` (typecheck/lint/test/build + drift check) | owned by parallel wave |
 
 ## Deployment steps (Netlify)
@@ -207,6 +207,7 @@ Granular field-level permissions; Flutter admin; multi-tenant orgs; realtime das
 | 2026-08-06 | Spec written; backend M1 contract + admin app M2–M4 landed (parallel waves); blog admin removed from `frontend/` |
 | 2026-08-07 | Wave 3 (final): docs + repo integration (exec plan, CLAUDE map, ARCHITECTURE, README, BACKEND.md, quality/debt), schema doc regenerated; hardening agent final report pending |
 | 2026-08-07 | RCA fix: `GET /dashboards/top-users` 42803 — the bare-`count` select shorthand emits SQL without `GROUP BY`, and select-side aggregates are disabled on this project's PostgREST; moved grouped counts to service-role RPCs (migration `040_admin_dashboard_top_users.sql`) with `test_admin_dashboards.py` (4 tests) |
+| 2026-08-08 | Playwright e2e specs landed: 6 files / 8 critical journeys (auth, billing, palette, roles, storage, users) via `npm run e2e` (chromium, `vite preview`, API stubbed with route interception); CI wiring + token-refresh verification remain (TD-082) |
 
 ## Decision log
 
@@ -223,7 +224,7 @@ Items pushed to `docs/exec-plans/tech-debt-tracker.md`:
 - TD-079: placeholder i18n namespace still used for most page titles
 - TD-080: react-router 7 CSRF advisory (GHSA-qwww-vcr4-c8h2) — non-exploitable in this library-mode SPA
 - TD-081: no granular field-level permissions (role-level only)
-- TD-082: Playwright e2e journeys + token-refresh verification pending hardening wave
+- TD-082: Playwright e2e specs landed (6 files / 8 journeys, 2026-08-08); CI wiring + token-refresh end-to-end verification still pending
 
 ## Code-review fixes
 

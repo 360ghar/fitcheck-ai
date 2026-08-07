@@ -64,7 +64,7 @@ outfit). All now materialize fresh presigned URLs at read time.
   (`available_items`), `backend/app/api/v1/images.py` (`materialize_image_urls`),
   `flutter/lib/features/dashboard/models/dashboard_models.dart`,
   `flutter/lib/features/dashboard/widgets/activity_feed.dart`.
-- Related docs: `docs/exec-plans/active/2026-08-04-railway-bucket-migration-contract.md`
+- Related docs: `docs/exec-plans/completed/2026-08-04-railway-bucket-migration-contract.md`
   (storage contract: DB stores `storage_path`, URLs materialized at read time),
   `docs/references/api-spec.md` (dashboard payload).
 - Related issues: user report — Home page Today's Suggestion + Recent Activity

@@ -67,7 +67,9 @@ class Settings(BaseSettings):
             if value.startswith("["):
                 try:
                     parsed = json.loads(value)
-                    if isinstance(parsed, list):
+                    # Dead guard: a value starting with "[" always parses to a
+                    # list when json.loads succeeds.
+                    if isinstance(parsed, list):  # pragma: no cover - "[" implies a list
                         return [str(v).strip() for v in parsed if str(v).strip()]
                 except Exception:
                     pass

@@ -1,11 +1,9 @@
-Welcome to FitCheck AI 1.0!
+Welcome to FitCheck AI 1.0.4!
 
-- Digitize your wardrobe with AI photo extraction (single and batch uploads)
-- Virtual try-on to preview outfits on your body
-- AI Photoshoot Generator for professional headshots
-- Smart, weather-aware outfit recommendations
-- Outfit calendar and planner
-- Wardrobe analytics with cost-per-wear
-- Share outfits and earn style streaks
+- Unlock Plus or Pro with in-app purchase — monthly or yearly, right in the app
+- Redeem promo codes for free months of Plus or Pro
+- Faster AI photoshoot generation for studio-quality headshots
+- Instant over-the-air updates, so improvements reach you sooner
+- Export or delete your account and data anytime from Settings
 
-Thanks for trying FitCheck AI. Tell us what you'd like to see next — feedback is welcome right inside the app.
+Thanks for using FitCheck AI — tell us what you'd like to see next!

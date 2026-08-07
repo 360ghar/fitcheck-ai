@@ -1,5 +1,11 @@
 # User Stories
 
+> **NOTE (2026-08-08):** superseded as the story source of truth by
+> `user-stories-full-audit.md` (current evidence + statuses) and
+> `user-story-ledger.md` (per-story implementation state). This file is kept
+> for the historical journeys and intended scope; verify status against the
+> ledger before relying on it.
+
 ## User Story Categories
 
 This document provides complete user journeys for all FitCheck AI features, organized by category and priority.

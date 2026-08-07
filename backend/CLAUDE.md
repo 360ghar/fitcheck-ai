@@ -1,6 +1,6 @@
 # Backend — agent notes
 
-Deep system-of-record: **`docs/BACKEND.md`**. Layers: **`ARCHITECTURE.md`**. Repo map: root **`AGENTS.md`** / **`CLAUDE.md`** (identical).
+Deep system-of-record: **`docs/BACKEND.md`**. Layers: **`ARCHITECTURE.md`**. Repo map: root **`AGENTS.md`** (root `CLAUDE.md` imports it).
 
 ## Commands
 

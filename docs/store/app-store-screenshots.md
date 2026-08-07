@@ -1,7 +1,7 @@
 # App Store Screenshots — Capture Plan & Spec (FitCheck AI iOS)
 
 **Work stream:** WS6
-**Last updated:** 2026-06-03
+**Last updated:** 2026-08-08
 **Companion:** `flutter/scripts/capture_ios_screenshots.sh` (boots simulators + captures frames).
 
 ---
@@ -59,7 +59,7 @@ the highest-converting, so lead with the differentiated AI features.
 
 | # | Screen | Source view (flutter/lib/features) | Caption idea |
 |---|---|---|---|
-| 1 | **Wardrobe / virtual closet** | `wardrobe/views/wardrobe_page.dart` | "Your whole closet, organized" |
+| 1 | **Wardrobe / virtual closet** | `wardrobe/views/wardrobe_content.dart` | "Your whole closet, organized" |
 | 2 | **AI wardrobe extraction** | `wardrobe/views/batch_item_review_page.dart` (or item add → extraction) | "Snap a photo, AI does the tagging" |
 | 3 | **Virtual try-on** | `tryon/views/tryon_page.dart` | "See the outfit before you wear it" |
 | 4 | **AI photoshoot results** | `photoshoot/views/photoshoot_results_step.dart` | "Studio headshots from your selfies" |
@@ -67,7 +67,7 @@ the highest-converting, so lead with the differentiated AI features.
 | 6 | **Calendar / outfit planner** | `calendar/views/calendar_page.dart` | "Plan your looks ahead" |
 | 7 | **Wardrobe analytics / stats** | `wardrobe/views/wardrobe_stats_page.dart` | "Know your cost-per-wear" |
 | 8 | **Outfit detail / builder** | `outfits/views/outfit_detail_page.dart` or `outfit_builder_page.dart` | "Build and save outfits" |
-| 9 | **Dashboard / home** | `dashboard/views/dashboard_page.dart` | "Everything in one place" |
+| 9 | **Dashboard / home** | `dashboard/views/dashboard_content.dart` | "Everything in one place" |
 | 10 | **Gamification (streaks/achievements)** | `gamification/views/gamification_page.dart` | "Style streaks & rewards" |
 
 If you only ship 8, drop #9 and #10. Keep #1–#5 always (the core value props). Use the **seeded demo

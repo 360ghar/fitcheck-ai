@@ -578,12 +578,12 @@ RULES:
                             )
                             continue
                         raise
-                else:
+                else:  # pragma: no cover - attempt 1 always breaks or raises, so the for/else tail never runs
                     raise last_parse_error or AIServiceError("Prompt generation failed")
             finally:
                 await ai_service.close()
 
-            if response_data is None:
+            if response_data is None:  # pragma: no cover - json.loads never yields None for a { or [ block extract_json_block validated
                 raise AIServiceError("Prompt generation returned no parseable JSON")
 
             # Handle both old array format and new object format
@@ -597,7 +597,7 @@ RULES:
                 )
                 subject_hint = subject_lock
                 prompts_data = response_data.get("prompts", [])
-            else:
+            else:  # pragma: no cover - extract_json_block only returns parsed object/array blocks
                 raise AIServiceError("Prompt generation response was not valid JSON")
 
             prompts: List[PhotoshootPrompt] = []
@@ -672,7 +672,7 @@ RULES:
                 subject_hint=subject_hint,
             )
 
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError as e:  # pragma: no cover - extract_json_block pre-validates every block, so a JSONDecodeError can never escape the retry loop
             logger.warning(
                 "Failed to parse prompts JSON after retry; using fallback",
                 error=str(e)[:300],

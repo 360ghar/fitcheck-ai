@@ -54,8 +54,10 @@ def _expected_issuer() -> str:
     Keep this derived from the existing required setting so no new environment
     variable or deployment change is needed.
     """
+    # The Settings model has no SUPABASE_JWT_ISSUER field, so getattr always
+    # yields None; the issuer is derived from SUPABASE_URL below.
     configured = getattr(settings, "SUPABASE_JWT_ISSUER", None)
-    if configured:
+    if configured:  # pragma: no cover - no such settings field
         return configured.rstrip("/")
     return f"{(settings.SUPABASE_URL or '').rstrip('/')}/auth/v1"
 

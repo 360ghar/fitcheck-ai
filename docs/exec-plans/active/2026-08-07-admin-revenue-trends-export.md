@@ -46,7 +46,7 @@ that lacked it (users, subscriptions, IAP, quotas, promo, feedback). Campaigns
       into users, subscriptions, IAP, quotas, promo, feedback toolbars with
       i18n keys.
 - [x] Backend suite green (1306 passed / 4 skipped), admin suite green
-      (27 files / 194 tests), lint + typecheck + build + `check:schema` clean,
+      (28 files / 215 tests), lint + typecheck + build + `check:schema` clean,
       `docs/generated/db-schema.md` regenerated.
 
 ## Context / links

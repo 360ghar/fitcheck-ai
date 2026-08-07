@@ -1,5 +1,7 @@
 # Google Play Store ASO Optimization Guide
 
+**Last updated:** 2026-08-08
+
 ## App Title (30 characters max)
 **Current:** FitCheck AI
 **Recommended:** FitCheck AI: Wardrobe & Outfits
@@ -47,6 +49,21 @@ Track cost-per-wear, identify underutilized items, and make smarter fashion deci
 • Dating app users wanting better profile photos
 
 Download FitCheck AI today and transform how you dress!
+
+---
+
+## Pricing / Subscriptions
+
+FitCheck AI is free to download and use. Optional **Plus** and **Pro** subscriptions unlock more
+AI extractions, outfit generations, and daily photoshoot images — pick monthly or yearly billing.
+
+- **Plus** — higher AI limits and more daily photoshoot images for everyday styling.
+- **Pro** — the top limits for creators and professionals who style every day.
+
+Subscriptions are purchased securely through **Google Play in-app billing** (product IDs
+`com.fitcheckaiapp.fitcheckai.plus.monthly`, `.plus.yearly`, `.pro.monthly`, `.pro.yearly`),
+renew automatically, and can be managed or cancelled anytime in Play settings. **Restore
+Purchases** re-links your subscription on a new device with one tap.
 
 ---
 

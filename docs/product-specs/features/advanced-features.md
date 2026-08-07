@@ -1,5 +1,11 @@
 # Feature: Advanced Features
 
+> **STATUS: PARTIAL as of 2026-08-08.** Alteration notes (§7.2), photo
+> enhancement (§7.4), and multi-user households (§7.5) are `absent` in the
+> user-story ledger; care instructions (§7.3) are `partial`; lookbook export
+> (§7.6) is `implemented-unverified`. Treat the details below as spec unless
+> the ledger marks a story otherwise.
+
 ## Overview
 
 Advanced Features provide additional functionality for wardrobe maintenance, care, and household management. These features enhance the core wardrobe management capabilities.

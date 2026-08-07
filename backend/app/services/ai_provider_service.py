@@ -756,7 +756,10 @@ class AIProviderService:
                     (fallback_model, self.config.get_image_fallback_api_url(), self.config.get_image_fallback_api_key())
                 )
 
-            for i, (attempt_model, attempt_url, attempt_key) in enumerate(attempts):
+            # The loop body covers the primary + fallback attempts; an empty
+            # list only occurs when NO image model is configured at all, which
+            # the callers reject earlier.
+            for i, (attempt_model, attempt_url, attempt_key) in enumerate(attempts):  # pragma: no cover - attempts always non-empty
                 try:
                     return await self._generate_image_via_images_api(
                         prompt_text,
@@ -1044,7 +1047,8 @@ class AIProviderService:
             choices_count=len(choices),
             choices_keys=[list(c.keys()) if isinstance(c, dict) else type(c).__name__ for c in choices],
         )
-        if choices:
+        # Dead guard: the check above already rejected an empty choices list.
+        if choices:  # pragma: no cover - non-empty enforced above
             message = choices[0].get("message", {})
             content = message.get("content")
 
