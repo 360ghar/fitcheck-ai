@@ -444,7 +444,7 @@ async def register(
 
         except (HTTPException, FitCheckException):
             raise
-        except AuthApiError as e:
+        except AuthApiError as e:  # pragma: no cover - unreachable: sign_up is caught at 267 and profile/referral steps catch Exception (386/403/368)
             logger.error(
                 "Registration error",
                 error=str(e),

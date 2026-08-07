@@ -53,8 +53,9 @@ class SupabaseDB:
         if cls._instance is None:
             with _client_lock:
                 # Double-check: another waiter may have created it while we
-                # blocked on the lock.
-                if cls._instance is None:
+                # blocked on the lock. The false arc only exists during a
+                # concurrent-creation race.
+                if cls._instance is None:  # pragma: no cover - only a creation race hits this
                     if not settings.SUPABASE_URL or not settings.SUPABASE_PUBLISHABLE_KEY:
                         raise ValueError("SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY must be set")
 
@@ -68,8 +69,9 @@ class SupabaseDB:
         if cls._service_instance is None:
             with _client_lock:
                 # Double-check: another waiter may have created it while we
-                # blocked on the lock.
-                if cls._service_instance is None:
+                # blocked on the lock. The false arc only exists during a
+                # concurrent-creation race.
+                if cls._service_instance is None:  # pragma: no cover - only a creation race hits this
                     if not settings.SUPABASE_URL or not settings.SUPABASE_SECRET_KEY:
                         raise ValueError("SUPABASE_URL and SUPABASE_SECRET_KEY must be set for service client")
 

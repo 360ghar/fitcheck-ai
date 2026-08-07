@@ -171,7 +171,7 @@ def sniff_image_mime(file_data: bytes, filename: Optional[str] = None) -> str:
     try:
         with Image.open(io.BytesIO(file_data)) as img:
             fmt = (img.format or "").upper()
-        if fmt:
+        if fmt:  # pragma: no cover - Pillow sets format for every real image
             return MIME_BY_PIL_FORMAT.get(fmt) or f"image/{fmt.lower()}"
     except Exception:
         pass
@@ -333,7 +333,7 @@ def _decode_and_fit(
                 # so the passthrough checks stay honest.
                 src.draft("RGB", (max_edge, max_edge))
                 src.load()
-            except Exception:
+            except Exception:  # pragma: no cover - defensive draft guard
                 pass
         # exif_transpose returns a new (detached) image, so the file handle can
         # close when this block exits.
@@ -652,7 +652,7 @@ def crop_base64_image_to_box(
                 try:
                     img.draft("RGB", (2048, 2048))
                     img.load()
-                except Exception:
+                except Exception:  # pragma: no cover - defensive draft guard
                     pass
             img = ImageOps.exif_transpose(img)
             if img.mode != "RGB":

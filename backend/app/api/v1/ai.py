@@ -554,7 +554,7 @@ async def generate_try_on(
             if not _owned_storage_path(request.avatar_storage_path, user_id):
                 raise HTTPException(status_code=403, detail="Avatar storage path is not owned by the current user")
             avatar_url = await StorageService.get_public_url(request.avatar_storage_path)
-        elif avatar_url:
+        elif avatar_url:  # pragma: no cover - the AVATAR_REQUIRED guard above ensures this is truthy
             # Stored avatar URLs expire (OBJECT_STORAGE_PRESIGN_TTL); reduce to
             # the bucket key and re-materialize so providers get a fresh URL.
             avatar_url = await _provider_ready_avatar_url(avatar_url)

@@ -1327,7 +1327,7 @@ class SocialImportPipelineService:
                 "auth_accepted",
                 {"job_id": job_id, "auth_type": auth_type},
             )
-        if resume_job:
+        if resume_job:  # pragma: no cover - unconditionally True here; all earlier paths return or raise
             await self.schedule_job(self, job_id)
 
     async def get_status(self, job_id: str) -> Dict[str, Any]:

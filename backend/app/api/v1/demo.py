@@ -5,6 +5,7 @@ Public endpoints for landing page demo features.
 No authentication required - uses IP-based rate limiting.
 """
 
+import asyncio
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, Request, status
@@ -29,6 +30,20 @@ from app.services.ai_provider_service import get_ai_service
 logger = get_context_logger(__name__)
 
 router = APIRouter()
+
+
+# Hard ceiling for ONE demo extraction attempt (seconds).
+#
+# The provider layer already retries internally (one in-transport retry per
+# leg plus the Gemini -> Agnes fallback in chat_with_vision), so this budget
+# exists only to stop a single public demo request from holding a worker +
+# proxy connection for minutes while providers hang. Observed 2026-08-07
+# 17:37: POST /api/v1/demo/extract-items took 169 028 ms and ended in a 400
+# (edge rejection of an already-churning request) while Gemini 503'd and the
+# fallback leg crawled against its 120 s read timeout. A healthy demo
+# extraction finishes in 10-40 s, so 90 s is generous; on expiry the caller
+# gets a fast retryable 503 instead of a multi-minute hang.
+DEMO_EXTRACT_TIMEOUT_SECONDS = 90.0
 
 
 # =============================================================================
@@ -63,21 +78,27 @@ async def demo_extract_items(
             try:
                 agent = ItemExtractionAgent(ai_service)
 
-                result = await with_retry(
-                    lambda: agent.extract_multiple_items(image_base64=request_body.image),
-                    max_retries=1,
-                    initial_delay=1.0,
-                    backoff_factor=2.0,
-                    retryable_exceptions=(AIServiceError,),
-                    should_retry=is_retryable_error,
-                    on_retry=lambda attempt, error, delay: logger.warning(
-                        "Retrying demo extraction",
-                        attempt=attempt,
-                        delay=delay,
-                        error=str(error),
-                        ip=ip,
-                    ),
+                # Single attempt under a hard time budget. The provider layer
+                # ALREADY retries internally (one in-transport retry plus the
+                # Gemini -> Agnes fallback in chat_with_vision), so the old
+                # outer with_retry here doubled the worst-case latency of the
+                # whole chain (observed 2026-08-07 17:37: 169 s for a single
+                # failed demo extraction). asyncio.wait_for caps the total;
+                # on expiry the finally still closes the pooled client.
+                result = await asyncio.wait_for(
+                    agent.extract_multiple_items(image_base64=request_body.image),
+                    timeout=DEMO_EXTRACT_TIMEOUT_SECONDS,
                 )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Demo extraction timed out",
+                    timeout_seconds=DEMO_EXTRACT_TIMEOUT_SECONDS,
+                    ip=ip,
+                )
+                raise AIServiceError(
+                    "Demo item extraction timed out. Please try again in a few moments.",
+                    retryable=True,
+                ) from None
             finally:
                 # Close the pooled HTTP client even when the call fails, so a
                 # burst of failed demos cannot leak connections until GC.

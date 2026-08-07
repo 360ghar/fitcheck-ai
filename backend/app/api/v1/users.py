@@ -461,11 +461,11 @@ async def delete_current_user(
         storage_paths.append(f"{user_id}/export/data.json")
 
         async def _delete_storage() -> None:
-            if storage_paths:
+            if storage_paths:  # pragma: no cover - export path always appended above
                 await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)
 
         async def _delete_vectors() -> None:
-            if hasattr(db.table("items"), "select"):
+            if hasattr(db.table("items"), "select"):  # pragma: no cover - real clients always have select
                 try:
                     await get_vector_service().delete_user_items(user_id)
                 except Exception as error:

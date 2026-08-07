@@ -90,7 +90,8 @@ class SocialURLService:
             )
 
         username = first_segment
-        if not username:
+        # Dead guard: first_segment was validated non-empty above.
+        if not username:  # pragma: no cover - validated above
             raise SocialImportInvalidUrlError("Instagram profile URL is missing username")
 
         normalized = f"https://www.instagram.com/{username}/"
@@ -118,7 +119,8 @@ class SocialURLService:
             )
 
         profile_slug = slug
-        if not profile_slug:
+        # Dead guard: slug was validated non-empty above.
+        if not profile_slug:  # pragma: no cover - validated above
             raise SocialImportInvalidUrlError("Facebook profile URL is missing profile slug")
 
         normalized = f"https://www.facebook.com/{profile_slug}/"

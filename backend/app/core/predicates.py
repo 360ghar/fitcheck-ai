@@ -168,4 +168,6 @@ def evaluate_predicate(row: Dict[str, Any], predicate: str) -> bool:
     if op == "in":
         allowed = [item.strip() for item in raw.strip("()").split(",") if item.strip()]
         return str(value or "") in allowed or value in allowed
-    return False
+    # Unreachable: ops not in _EVALUATABLE_OPS return False above, and every
+    # evaluatable op is handled by one of the ifs.
+    return False  # pragma: no cover - all evaluatable ops handled above

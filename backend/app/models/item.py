@@ -121,7 +121,9 @@ class ItemBase(BaseModel):
     def validate_price(cls, v: Optional[float]) -> Optional[float]:
         """Validate price is non-negative."""
         if v is not None and v < 0:
-            raise ValueError('Price must be non-negative')
+            # Unreachable: Field(ge=0) rejects negatives before this
+            # validator runs; kept as a defense-in-depth guard.
+            raise ValueError('Price must be non-negative')  # pragma: no cover - shadowed by Field(ge=0)
         return v
 
     @field_validator('occasion_tags', mode='before')

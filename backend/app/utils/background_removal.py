@@ -148,7 +148,8 @@ def matte_content_type() -> str:
 
 def matte_extension() -> str:
     """File extension matching `matte_content_type()` (e.g. '.webp')."""
-    return EXTENSION_BY_MIME.get(matte_content_type(), f".{MATTE_FORMAT}")
+    # Fallback only fires if the webp MIME entry is ever removed from the map.
+    return EXTENSION_BY_MIME.get(matte_content_type(), f".{MATTE_FORMAT}")  # pragma: no cover - MIME map always has webp
 
 
 # =============================================================================
@@ -216,7 +217,7 @@ def _border_connected(candidate: Image.Image) -> Image.Image:
 def _mask_fraction(mask: Image.Image) -> float:
     """Fraction of an 0/255 mask that is set."""
     total = mask.size[0] * mask.size[1]
-    if total <= 0:
+    if total <= 0:  # pragma: no cover - Pillow rejects zero-size images
         return 0.0
     return mask.histogram()[255] / float(total)
 
@@ -269,7 +270,7 @@ def _existing_alpha_fraction(img: Image.Image) -> float:
         return 0.0
     try:
         alpha = img.convert("RGBA").getchannel("A")
-    except Exception:
+    except Exception:  # pragma: no cover - defensive; convert always succeeds
         return 0.0
     histogram = alpha.histogram()
     total = float(sum(histogram)) or 1.0

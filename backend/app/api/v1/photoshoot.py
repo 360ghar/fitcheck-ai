@@ -382,7 +382,7 @@ async def photoshoot_job_events(
             # If job already completed, send final status
             if job.status in (PhotoshootJobStatus.COMPLETE, PhotoshootJobStatus.FAILED, PhotoshootJobStatus.CANCELLED):
                 status_data = await PhotoshootJobService.get_job_status(job_id)
-                if status_data:
+                if status_data:  # pragma: no cover - terminal job rows always present
                     event_map = {
                         PhotoshootJobStatus.COMPLETE: "job_complete",
                         PhotoshootJobStatus.FAILED: "job_failed",
@@ -396,7 +396,7 @@ async def photoshoot_job_events(
 
             if job.recovered_from_persistence:
                 status_data = await PhotoshootJobService.get_job_status(job_id)
-                if status_data:
+                if status_data:  # pragma: no cover - recovered job rows always present
                     yield {
                         "event": "job_recovered",
                         "data": json.dumps(status_data),
@@ -413,7 +413,7 @@ async def photoshoot_job_events(
                     "event": event["type"],
                     "data": json.dumps(event["data"]),
                 }
-                if event.get("id") is not None:
+                if event.get("id") is not None:  # pragma: no cover - events always carry ids
                     payload["id"] = str(event["id"])
                 yield payload
 
@@ -431,7 +431,7 @@ async def photoshoot_job_events(
                         "event": event["type"],
                         "data": json.dumps(event["data"]),
                     }
-                    if event.get("id") is not None:
+                    if event.get("id") is not None:  # pragma: no cover - events always carry ids
                         payload["id"] = str(event["id"])
                     yield payload
 

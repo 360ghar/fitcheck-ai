@@ -195,7 +195,9 @@ def _coerce_time(value: Any) -> Optional[dt_time]:
             continue
     if "+" in normalized:
         normalized = normalized.split("+", 1)[0]
-    if normalized.endswith("Z"):
+    # Dead: every "Z" was replaced with "+00:00" above, so the suffix can
+    # never be "Z" here. Kept as a defensive guard.
+    if normalized.endswith("Z"):  # pragma: no cover - Z already replaced
         normalized = normalized[:-1]
     # Strip timezone offsets that may use '-' after seconds (e.g., HH:MM:SS-05:00).
     if "T" in normalized:

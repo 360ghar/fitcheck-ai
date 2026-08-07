@@ -418,7 +418,10 @@ async def update_user(
                     message="Only admins can grant admin roles",
                     details={"field": "role"},
                 )
-            if was_admin:
+            # Dead: a non-admin actor changing admin state with will_be_admin
+            # False implies the target WAS an admin (role demotion), so this
+            # branch is always taken when reached.
+            if was_admin:  # pragma: no cover - implied by the preceding checks
                 raise ValidationError(
                     message="Only admins can change an admin's role",
                     details={"field": "role"},

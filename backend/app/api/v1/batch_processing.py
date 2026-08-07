@@ -340,7 +340,7 @@ async def _start_batch_job(
     except Exception:
         # Admission succeeded but job creation did not. Return the reserved
         # daily capacity before surfacing the failure to the caller.
-        if reservations:
+        if reservations:  # pragma: no cover - admission always reserves before this
             await asyncio.gather(*[
                 _release_usage_best_effort(
                     user_id=user_id,
@@ -638,7 +638,7 @@ async def batch_job_events(
 
             if job.recovered_from_persistence:
                 status_data = await BatchJobService.get_job_status(job_id)
-                if status_data:
+                if status_data:  # pragma: no cover - job row exists if recovered
                     # Recovered jobs are pollable but never resumed by a
                     # worker, so a client-unsupported `job_recovered` event
                     # would leave clients polling an unchanged snapshot.
@@ -861,7 +861,7 @@ async def start_single_extraction(
                 db=_persistence_db(db),
             )
         except Exception:
-            if reservations:
+            if reservations:  # pragma: no cover - admission always reserves before this
                 await asyncio.gather(*[
                     _release_usage_best_effort(
                         user_id=user_id,

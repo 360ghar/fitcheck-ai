@@ -114,7 +114,10 @@ async def with_retry(
 
             await asyncio.sleep(delay)
 
-    # This should never be reached, but just in case
-    if last_exception:
+    # Defensive tail. The `raise last_exception` branch is unreachable: every
+    # retryable-exception path raises inside the loop (should_retry veto,
+    # attempt cap, or after the final sleep). The RuntimeError fires only for
+    # an invalid max_retries < 0, which yields an empty attempt loop.
+    if last_exception:  # pragma: no cover - loop always raises before the tail
         raise last_exception
     raise RuntimeError("Unexpected state in retry logic")
