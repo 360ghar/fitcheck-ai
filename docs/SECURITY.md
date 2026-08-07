@@ -1,7 +1,7 @@
 # Security
 
-Status: draft  
-Last updated: 2026-08-04
+Status: verified  
+Last updated: 2026-08-08
 
 ## Authentication and authorization
 

@@ -149,7 +149,7 @@ alpha-preservation tests; rewritten `test_config_storage_aliases.py`;
 
 ## Context / links
 
-- Related docs: `docs/exec-plans/active/2026-08-04-railway-bucket-migration-contract.md`
+- Related docs: `docs/exec-plans/completed/2026-08-04-railway-bucket-migration-contract.md`
   (storage contract + live migration log), `docs/SECURITY.md`, `docs/BACKEND.md`
   (Storage section), `ARCHITECTURE.md`, `docs/FRONTEND.md`, `docs/FLUTTER.md`.
 - Related code: `backend/app/services/object_storage.py`,

@@ -1,7 +1,7 @@
 # Design
 
 Status: draft  
-Last updated: 2026-07-26
+Last updated: 2026-08-08
 
 Visual and interaction direction for FitCheck web (and guidance for mobile parity).
 
@@ -47,6 +47,7 @@ inventing its own phrasing per component:
 
 ## Related
 
+- `frontend/DESIGN.md` — token source of truth (theme tokens, contrast rules)
 - `docs/FRONTEND.md`  
 - `docs/references/frontend-components.md`  
 - `docs/store/` for store listing imagery constraints  

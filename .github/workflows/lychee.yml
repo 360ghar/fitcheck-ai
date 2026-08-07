@@ -1,0 +1,28 @@
+name: Docs link check (lychee)
+
+on:
+  schedule:
+    # Weekly, Monday 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+
+jobs:
+  lychee:
+    name: Check external links
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run lychee
+        uses: lycheeverse/lychee-action@v2
+        with:
+          # --no-fail: broken links are reported (annotations + summary),
+          # not blocking, until the ignore list is dialed in.
+          args: --no-fail --verbose --max-retries 2 --exclude-file .lycheeignore docs README.md AGENTS.md ARCHITECTURE.md
+          fail: false

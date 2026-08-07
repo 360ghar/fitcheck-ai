@@ -1,6 +1,6 @@
 # Flutter
 
-Last updated: 2026-08-06
+Last updated: 2026-08-08
 
 Mobile client under `flutter/` using GetX feature modules.
 
@@ -134,6 +134,16 @@ Account → API Keys (`shorebird login:ci` is deprecated).
 ## Notes
 
 Deep feature behavior should be documented in `product-specs/` and implementation status. Expand this file when mobile-specific architecture decisions accumulate.
+
+### Subscriptions & IAP
+
+`features/subscription/` — `SubscriptionPage`, `ReferralPage` (referral codes),
+and `IapService` (thin wrapper over `in_app_purchase`; iOS StoreKit / Android
+Play Billing, every purchase verified server-side via
+`POST /api/v1/subscription/iap/transaction`). `in_app_purchase: ^3.3.0` in
+`pubspec.yaml`; `PAYWALL_ENABLED` in `flutter/.env.example` gates every
+purchase CTA (default on). Social sharing and body profiles live under
+`features/social/` and `features/profile/` (`body_profiles_page.dart`).
 
 ### iOS minimum deployment target is 15.0
 

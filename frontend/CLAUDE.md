@@ -1,6 +1,6 @@
 # Frontend — agent notes
 
-Deep system-of-record: **`docs/FRONTEND.md`**. Layers: **`ARCHITECTURE.md`**. Repo map: root **`AGENTS.md`** / **`CLAUDE.md`** (identical). UI: **`docs/DESIGN.md`**.
+Deep system-of-record: **`docs/FRONTEND.md`**. Layers: **`ARCHITECTURE.md`**. Repo map: root **`AGENTS.md`** (root `CLAUDE.md` imports it). UI: **`docs/DESIGN.md`**.
 
 ## Commands
 

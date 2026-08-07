@@ -92,3 +92,38 @@ ruff check app/services/admin_service.py app/utils/db.py app/main.py tests/
   postgrest-py's own retry only covers GET/HEAD on 503/520, never DELETE).
   Lambdas call `.execute()` per the repo convention enforced by
   `test_no_parenless_execute_builders_in_app_code`.
+
+## Late-window RCA (16:00–19:01 UTC 2026-08-07) — follow-up pass
+
+A second log window from the same day (16:00–19:01 UTC) was triaged after the
+first pass. Most entries are already fixed by the 19:00 UTC deploy of HEAD
+(378bc72) or are ops-only; exactly one code defect remained.
+
+| # | Log signature | Root cause | Status |
+|---|---------------|------------|--------|
+| 1 | 16:00 `/items` 500 ×3 (~5s apart, `DATABASE_ERROR`, two "rebuilding client" warnings + "retries exhausted" each) | Same symptom class as TD-083: mobile ~3s polls with `?occasion=` sent `contains(list)` on a JSONB column → PostgREST `22P02 invalid input syntax for type jsonb`; the `invalid input` text marker misclassified it as a dead pooled connection, so each request burned 2 client rebuilds + 3 attempts before 500ing. A genuine gateway blip produces the identical log shape; both are now handled (22P02 no longer retries; real gateway 5xx/429s still rebuild+retry once). Ran on the pre-fix deploy (before 19:00 UTC). | **Fixed — deployed 19:00 UTC in 378bc72** (`jsonb_contains()` + APIError-aware `is_db_connection_error`). Verify: no `/items` 500 bursts in post-19:00 logs. |
+| 2 | 17:02 Gemini 503 UNAVAILABLE + 17:59 Gemini 429 free-tier quota (20/day, `gemini-3.6-flash`) → "falling back to Agnes" | Provider overload / free-tier cap. Fallback is by design (WARN); the daily-quota latch (TD-054) fails fast from the first post-exhaustion call. | No code change. Optional ops: paid-tier Gemini key. |
+| 3 | 17:37 `POST /api/v1/demo/extract-items` **400 after 169 028.88ms** | Gemini unhealthy all afternoon; the demo's outer `with_retry(max_retries=1)` doubled the entire Gemini→Agnes chain (each leg up to a 120s read timeout), so a single failed demo held a worker + proxy connection for ~3 minutes. The 400 itself cannot be produced by any version of the demo handler in git history (every error path maps to 503/422/429/500) — most plausibly an edge/ingress rejection of a request that had already been churning for ~169s. The unbounded latency was the defect. | **Fixed (this pass)** — single attempt capped by `DEMO_EXTRACT_TIMEOUT_SECONDS` (90s) via `asyncio.wait_for`; expiry raises a retryable `AIServiceError` → fast 503. Tests in `backend/tests/api/test_demo_extract_latency.py`. Try-on deliberately unchanged (image generation legitimately runs 60–120s). |
+| 4 | 17:44 / 17:52 / 18:26 "Refresh token already used" → `/auth/refresh` 401 + downstream 401 cascades | Supabase rotates refresh tokens; a stale tab/session re-presents a rotated token. Backend dedup + web single-flight (`client.ts`, deployed 09:24 UTC) + Flutter single-flight (`api_interceptors.dart`, landed 08-03) are all live; the 18:26 burst (ONE refresh attempt + 5 fail-fast 401s in <3ms) is the designed behavior — the client bounces to login. | Fixed (TD-084, both clients). No further change. |
+| 5 | 17:52 `GET /api/v1/items` 422 (91.42ms) | FastAPI query-param validation (RequestValidationError → 422) after the ~90ms `get_active_user_id` lookup; an unidentified client sent an out-of-range param (`page`/`page_size` bounds or a non-coercible `is_favorite`). Backend validation is correct. | Tracked as TD-089 (client-side audit). |
+| 6 | 18:47 404s on `/api/v1/settings/sysadmin/connect-to-hub` + `/api/v1/info/server` | The endpoints don't exist anywhere in the repo (zero references across backend/frontend/flutter/docs). A client probes unshipped routes; 404 is correct. | No code change. |
+| 7 | 19:00:57 boot: `AI_ENCRYPTION_KEY - Empty in production`; `STRIPE_SECRET_KEY` + four `STRIPE_*_PRICE_ID` missing | Prod env gaps (same as first-pass item #5). Saving a user AI-provider key raises at request time; every web checkout fails closed 503. | Ops: Railway env (checklist below). |
+| 8 | 19:01:01 `Missing: photoshoot_jobs.image_failures`; schema not initialized | Migration 035 never applied to hosted Supabase (same as first-pass item #2). Readiness now fails closed (code landed). | Ops: apply migrations (checklist below). |
+
+### Code changes (this pass)
+
+1. `backend/app/api/v1/demo.py` — `demo_extract_items` runs ONE attempt of
+   `ItemExtractionAgent.extract_multiple_items` under
+   `asyncio.wait_for(timeout=DEMO_EXTRACT_TIMEOUT_SECONDS)` (90s) instead of
+   `with_retry(max_retries=1)` around the whole Gemini→Agnes chain; a timeout
+   raises a retryable `AIServiceError` (fast 503). The pooled client still
+   closes in `finally`.
+2. `backend/tests/api/test_demo_extract_latency.py` — new: timeout → fast 503
+   + client closed; retryable failure → exactly ONE agent invocation; happy
+   path → 200 envelope.
+
+### Ops checklist (unchanged from first pass; still pending)
+
+Apply migrations 035–042 on hosted Supabase (035 for `photoshoot_jobs.image_failures`
+is the blocker behind the 19:01:01 readiness warning); set Railway env
+`AI_ENCRYPTION_KEY` + the five Stripe vars; optional paid-tier Gemini key.

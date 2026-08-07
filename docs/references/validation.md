@@ -28,23 +28,45 @@ const itemSchema = z.object({
 
 ### Outfit Generation Request
 ```python
-class GenerationRequest(BaseModel):
-    item_ids: List[UUID] = Field(..., min_items=1, max_items=10)
-    pose: str = Field("front", pattern="^(front|side|back)$")
-    lighting: str = Field("natural", pattern="^(natural|office|evening)$")
+class GenerateOutfitRequest(BaseModel):
+    items: List[OutfitItemInput] = Field(..., min_length=1)  # >= 1 item required
+
+    @field_validator("items")
+    def validate_item_count(cls, value):
+        if len(value) > settings.AI_MAX_OUTFIT_ITEMS:  # = 100 (config.py)
+            raise ValueError("Too many items")
 ```
+(Real model: `backend/app/models/ai.py` `GenerateOutfitRequest`; pose/lighting
+are free-form strings with `max_length` on `GenerationRequest` in
+`backend/app/models/outfit.py` — there are no enum `pattern` constraints.)
 
 ## Business Rules
 
 ### Wardrobe Rules
 - Items must belong to the authenticated user.
 - Categories are restricted to a predefined list.
-- Each item can have max 5 images.
+- No backend-enforced cap on images per item — uploads accept up to
+  `MAX_UPLOAD_FILES = 50` files per request and any count can be attached to
+  an item (`backend/app/core/uploads.py`, `backend/app/api/v1/items.py`). The
+  "Up to 5 images, max 5MB each" limit that appears in the UI applies to
+  **support-ticket attachments**, not item images
+  (`frontend/src/components/settings/SupportPanel.tsx:288`,
+  `flutter/lib/features/feedback/views/feedback_page.dart:376`).
 
 ### Outfit Rules
-- An outfit must contain at least 1 item.
-- Max 10 items per outfit.
-- Cannot generate an outfit with items currently marked as "dirty" or "laundry".
+- An outfit must contain at least 1 unique item (`OutfitCreate` validator,
+  `backend/app/models/outfit.py:91-101`).
+- No fixed max item count on outfit creation. The only item-count ceiling is
+  `AI_MAX_OUTFIT_ITEMS = 100` (`backend/app/core/config.py:357`), enforced on
+  AI outfit-generation requests only (`GenerateOutfitRequest` in
+  `backend/app/models/ai.py`).
+
+### Recommendations Rules
+- Items marked `laundry`, `repair`, or `donate` are excluded from
+  recommendation candidates (`backend/app/api/v1/recommendations.py:520-521`
+  and `:904`) and from astrology recommendations
+  (`backend/app/services/astrology_service.py:95, 425`). Outfit generation
+  itself does NOT gate on item condition.
 
 ### AI Limits
 Enforced from `backend/app/core/config.py` (`PLAN_*`); see

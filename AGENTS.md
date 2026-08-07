@@ -20,7 +20,6 @@ FitCheck AI is a monorepo for AI-assisted wardrobe management, outfit generation
 | `frontend/` | React + TypeScript (Vite) web app |
 | `admin/` | Internal admin console (React 19 SPA, server-enforced RBAC) |
 | `flutter/` | Flutter mobile (GetX) |
-| `remotion/` | Marketing video compositions |
 | `docs/` | Knowledge base (product, design, plans, quality) |
 | `scripts/` | Harness checks (docs + architecture) |
 | `ARCHITECTURE.md` | Domains and allowed dependency edges |
@@ -30,7 +29,7 @@ Package-local notes: `backend/CLAUDE.md`, `frontend/CLAUDE.md`, `admin/CLAUDE.md
 
 ## Progressive disclosure (read in order)
 
-1. This map (`AGENTS.md` / `CLAUDE.md` — identical).
+1. This map (`CLAUDE.md` imports `AGENTS.md`).
 2. `ARCHITECTURE.md` — layers and forbidden imports.
 3. Domain doc for the change:
    - Backend / API / AI: `docs/BACKEND.md`
@@ -67,12 +66,12 @@ Package-local notes: `backend/CLAUDE.md`, `frontend/CLAUDE.md`, `admin/CLAUDE.md
 ```bash
 ./run-dev.sh                          # API :8000 + web :3000
 cd backend && source .venv/bin/activate && pytest
-cd frontend && npm run lint && npm run build
-cd admin && npm run lint && npm test   # admin console (typecheck/lint/test/build)
+cd frontend && npm run lint && npm test && npm run build
+cd admin && npm run lint && npm run typecheck && npm test && npm run check:schema   # admin console (lint/typecheck/test/check:schema/build)
 cd flutter && flutter test
 python scripts/check_architecture.py
 python scripts/check_docs_structure.py
-./scripts/check_all.sh                # architecture + docs (+ pytest if venv present)
+./scripts/check_all.sh                # architecture + docs + theme tokens + iOS target + backend ruff/pytest + frontend lint/vitest + images-worker + flutter (skips unavailable tools)
 ```
 
 Backend Swagger: `http://localhost:8000/api/v1/docs`  
@@ -81,7 +80,7 @@ Logs: `backend/logs/` (correlation IDs on requests)
 
 ## Env templates (details in docs)
 
-- `backend/.env.example`, `frontend/.env.example`, `flutter/.env.example`
+- `backend/.env.example`, `frontend/.env.example`, `admin/.env.example`, `flutter/.env.example`
 - Schema: apply `backend/db/supabase/migrations/` on hosted Supabase (start with `001_full_schema.sql`)
 
 ## Commit style

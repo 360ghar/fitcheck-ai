@@ -1,7 +1,7 @@
 # Reliability
 
-Status: draft  
-Last updated: 2026-08-04
+Status: verified  
+Last updated: 2026-08-08
 
 The [user-story ledger](./product-specs/user-story-ledger.md) is the source of
 truth for verification status. Current tests are primarily unit/service/widget

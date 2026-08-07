@@ -7,10 +7,10 @@ Catalog of design and decision documents. Verification status helps agents know 
 | [core-beliefs.md](./core-beliefs.md) | verified | 2026-07-22 | Agent-first operating principles |
 | [ARCHITECTURE.md](../../ARCHITECTURE.md) | verified | 2026-07-22 | Layers and dependency edges |
 | [../PRODUCT_SENSE.md](../PRODUCT_SENSE.md) | verified | 2026-07-22 | Who we build for |
-| [../DESIGN.md](../DESIGN.md) | draft | 2026-07-22 | UI direction (web); expand as product design solidifies |
+| [../DESIGN.md](../DESIGN.md) | draft | 2026-08-08 | UI direction; token source of truth is `frontend/DESIGN.md` |
 | [../PLANS.md](../PLANS.md) | verified | 2026-07-22 | Exec plan policy |
-| [../SECURITY.md](../SECURITY.md) | draft | 2026-07-22 | Security baseline |
-| [../RELIABILITY.md](../RELIABILITY.md) | draft | 2026-07-22 | Jobs, SSE, limits |
+| [../SECURITY.md](../SECURITY.md) | verified | 2026-08-08 | Security baseline |
+| [../RELIABILITY.md](../RELIABILITY.md) | verified | 2026-08-08 | Jobs, SSE, limits |
 
 ## Status meanings
 

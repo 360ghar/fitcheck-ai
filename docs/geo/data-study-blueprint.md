@@ -1,7 +1,7 @@
 # Blueprint: FitCheck AI wardrobe data study (GEO flagship asset)
 
 Status: proposed — needs product sign-off before any numbers are published
-Last updated: 2026-08-01
+Last updated: 2026-08-08
 
 ## Why
 

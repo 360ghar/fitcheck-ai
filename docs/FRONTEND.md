@@ -1,6 +1,6 @@
 # Frontend
 
-Last updated: 2026-08-04
+Last updated: 2026-08-08
 
 React + TypeScript web app under `frontend/`. Package-local agent entry: `frontend/CLAUDE.md` (thin pointer here). UI direction: `docs/DESIGN.md`.
 
@@ -34,6 +34,11 @@ Stage 4 exits non-zero if a route renders empty or if no route renders at all �
 shipping an empty `#root` is the failure it exists to prevent, so it must never
 degrade silently.
 
+The four stages run inside npm lifecycle hooks: `prebuild`
+(`node scripts/generate-sitemap.mjs`) runs first and writes the **tracked**
+`public/sitemap.xml` (plus `dist/sitemap.xml`), and `postbuild`
+(`node scripts/generate-llms.mjs && node scripts/ping-indexnow.mjs`) runs last.
+
 ## Architecture
 
 ### State
@@ -61,11 +66,17 @@ Domain modules: `src/api/*.ts` (auth, items, outfits, ai, batch, etc.).
 
 ### Routing (representative)
 
-- Public: `/`, `/about`, `/terms`, `/privacy`
+- Public: `/`, `/about`, `/terms`, `/privacy`, `/support`, `/faq`
+- Blog: `/blog`, `/blog/:slug` (plus `/blog/category/:category`); the index is
+  prerendered with baked first-page content, post/category pages stay dynamic
 - Auth: `/auth/login`, `/auth/register`, forgot/reset password
-- Protected: dashboard, wardrobe, outfits, calendar, recommendations, try-on, photoshoot, profile
+- Protected: dashboard, wardrobe, outfits (incl. the `/outfits/new` create page), calendar, recommendations, try-on, photoshoot, profile
 - Protected + flag-gated: `/gamification` (only registered when `FEATURES.gamification` is true — see Feature flags below; with the flag off a bookmarked `/gamification` falls through to the catch-all redirect to `/dashboard`)
 - Share: `/shared/outfits/:id`
+- SEO intent pages (one path-driven component, all in `publicRoutes.ts` +
+  `scripts/seo-content.mjs`): `/features/*`, `/best/*`, `/compare/*`,
+  `/alternatives/*`, `/for/*`, `/guides/*`, `/wear/:citySlug`, and
+  `/tools/cost-per-wear-calculator` — not enumerated here
 
 ### Component layout
 
@@ -235,7 +246,11 @@ The DB stores a bucket key, not a URL, so the backend materializes a fresh URL a
   look duplicated. Set a full origin (e.g. `https://api.fitcheckaiapp.com`)
   only for standalone builds NOT served behind a same-origin proxy.
 - `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY` / publishable key variants
+- `VITE_SUPABASE_PUBLISHABLE_KEY` — the only Supabase key the client reads
+  (`src/lib/supabase.ts`); there is no `VITE_SUPABASE_ANON_KEY` in the web app
+- `VITE_PUBLIC_POSTHOG_KEY` / `VITE_PUBLIC_POSTHOG_HOST` — PostHog analytics
+  (`posthog-js`); host defaults to `https://us.i.posthog.com`
+- `VITE_SENTRY_DSN` — Sentry error tracking (optional; empty disables)
 
 ### Feature flags
 
@@ -266,7 +281,12 @@ page chunk. `App.tsx` does both.
 
 ## Testing
 
-No dedicated frontend unit test runner yet (see `QUALITY_SCORE.md` / tech-debt tracker). Validate with `npm run lint` and `npm run build`.
+Vitest (config in `vite.config.ts` `test` block: jsdom, globals,
+`setupFiles: ./src/test/setup.ts`), with ~44 test files under
+`src/**/*.test.{ts,tsx}`. `npm test` runs `vitest run` (non-watch);
+`npm run test:watch` is the watch mode. A full frontend check is
+`npm run lint && npm test && npm run build` (build's prebuild rewrites the
+tracked `public/sitemap.xml` — see the verification matrix in `docs/README.md`).
 
 ## UI QA path
 

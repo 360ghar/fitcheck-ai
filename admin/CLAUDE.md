@@ -1,6 +1,6 @@
 # Admin console — agent notes
 
-Internal admin panel (React 19 + Vite 7 + Tailwind 4 SPA at `admin.fitcheckaiapp.com`). Deep system-of-record: **`admin/README.md`** + the spec (`2026-08-06-fitcheckai-admin-panel-enterprise-architecture-spec.md`). Layers: **`ARCHITECTURE.md`**. Repo map: root **`AGENTS.md`** / **`CLAUDE.md`** (identical). UI tokens: **`DESIGN.md`** (Brand Red on warm neutrals).
+Internal admin panel (React 19 + Vite 7 + Tailwind 4 SPA at `admin.fitcheckaiapp.com`). Deep system-of-record: **`admin/README.md`** + the admin-panel plan (`docs/exec-plans/active/2026-08-07-admin-panel.md`). (The standalone `2026-08-06-fitcheckai-admin-panel-enterprise-architecture-spec.md` never landed in the repo — `admin/README.md` is the spec.) Layers: **`ARCHITECTURE.md`**. Repo map: root **`AGENTS.md`** (root `CLAUDE.md` imports it). UI tokens: **`DESIGN.md`** (Brand Red on warm neutrals).
 
 ## Commands
 
@@ -14,6 +14,8 @@ npm test             # Vitest (jsdom + MSW)
 npm run build        # typecheck + production build
 npm run generate:api # regenerate src/shared/api/schema.d.ts from contracts/openapi.json
 npm run check:schema # fail if the contract drifted since the last codegen
+npm run e2e          # Playwright critical journeys (chromium, vite preview :4173)
+npm run check:bundle # fail if the production bundle exceeds the size budget
 ```
 
 ## Structure (sketch)
@@ -41,7 +43,7 @@ src/test/         MSW handlers + fixtures, setup, render utils
 
 | Topic | Doc |
 |-------|-----|
-| Architecture spec (source of truth) | `2026-08-06-fitcheckai-admin-panel-enterprise-architecture-spec.md` |
+| Admin-panel plan (backend contract + decisions) | `docs/exec-plans/active/2026-08-07-admin-panel.md` |
 | Quickstart, env, deployment, RBAC | `admin/README.md` |
 | Admin API + RBAC on the backend | `docs/BACKEND.md` ("Admin API & RBAC") |
 | Roles → permissions (authoritative) | `backend/app/core/permissions.py` |

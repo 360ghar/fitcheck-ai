@@ -1,6 +1,6 @@
 # SEO / GEO / AEO measurement & monitoring
 
-Last updated: 2026-08-01
+Last updated: 2026-08-08
 
 This is the operational playbook for measuring and maintaining the growth work
 in `docs/exec-plans/active/2026-08-01-seo-geo-aeo.md`. External accounts are

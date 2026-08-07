@@ -3,7 +3,7 @@
 **Work stream:** WS6 — App Store listing metadata, App Privacy, age rating, review notes & screenshot plan
 **Bundle identifier:** `com.fitcheckaiapp.fitcheckai`
 **Privacy Policy URL:** `https://fitcheckaiapp.com/privacy`
-**Last updated:** 2026-06-03
+**Last updated:** 2026-08-08
 
 > This document is the source of truth for everything that goes into App Store Connect (ASC) for
 > the FitCheck AI iOS app. Every field below is drafted and ready to paste. Companion docs:
@@ -121,20 +121,18 @@ closet,outfit,fashion,try-on,clothing,style,planner,organizer,virtual,photoshoot
 ```
 (97 chars including commas. No spaces. No duplication of name/category terms.)
 
-### What's New (Release Notes for v1.0) — `≤ 4000 chars`
+### What's New (Release Notes for v1.0.4) — `≤ 4000 chars`
 
 ```
-Welcome to FitCheck AI 1.0!
+Welcome to FitCheck AI 1.0.4!
 
-- Digitize your wardrobe with AI photo extraction (single and batch uploads)
-- Virtual try-on to preview outfits on your body
-- AI Photoshoot Generator for professional headshots
-- Smart, weather-aware outfit recommendations
-- Outfit calendar and planner
-- Wardrobe analytics with cost-per-wear
-- Share outfits and earn style streaks
+- Unlock Plus or Pro with in-app purchase — monthly or yearly, right in the app
+- Redeem promo codes for free months of Plus or Pro
+- Faster AI photoshoot generation for studio-quality headshots
+- Instant over-the-air updates, so improvements reach you sooner
+- Export or delete your account and data anytime from Settings
 
-Thanks for trying FitCheck AI. Tell us what you'd like to see next — feedback is welcome right inside the app.
+Thanks for using FitCheck AI — tell us what you'd like to see next!
 ```
 
 ### Categories
@@ -303,15 +301,15 @@ be exercised without uploading your own photos.
 
 HOW TO TEST KEY FEATURES
 1. Sign in with the demo account above.
-2. Wardrobe: open the Wardrobe tab to see ~10-15 pre-loaded clothing items with categories/colors.
+2. Wardrobe: open the Closet tab to see ~10-15 pre-loaded clothing items with categories/colors.
 3. AI extraction: tap Add Item -> upload a photo of clothing; the AI detects and tags the item
    (requires backend connectivity).
-4. Virtual try-on: open the Try-On tab, pick items / an outfit; the AI renders the look on the
+4. Virtual try-on: open the More tab, then Try-On, pick items / an outfit; the AI renders the look on the
    body profile (this calls the backend and can take ~10-30 seconds).
 5. AI photoshoot: open the Photoshoot tab, upload 1+ selfie, choose a style, and generate
    studio-style images (backend, async; can take up to ~1 minute).
-6. Recommendations: open the Recommendations tab for weather/occasion-based outfit suggestions.
-7. Calendar: plan an outfit on a date in the Calendar tab.
+6. Recommendations: open the More tab, then Recommendations, for weather/occasion-based outfit suggestions.
+7. Calendar: open the More tab, then Calendar, and plan an outfit on a date.
 
 SUBSCRIPTIONS - HOW TO TEST THE UPGRADE FLOW
 Free to download. Plus and Pro (monthly and yearly) are sold only through
@@ -370,7 +368,7 @@ content. Create it once, keep it seeded, and reuse it across submissions.
 | Data | Quantity | Why |
 |---|---|---|
 | Auth user (email + password) | 1 | Reviewer signs in. Use a dedicated address, e.g. `review@fitcheckaiapp.com`. |
-| Wardrobe items | **10–15** | Populates the Wardrobe tab and makes outfit building / recommendations meaningful. Spread across categories (tops, bottoms, shoes, outerwear, accessories) with colors set. |
+| Wardrobe items | **10–15** | Populates the Closet tab and makes outfit building / recommendations meaningful. Spread across categories (tops, bottoms, shoes, outerwear, accessories) with colors set. |
 | Outfits | **2–3** | Lets the reviewer open outfit detail, try-on, and sharing without building from scratch. |
 | Body profile | **1 (default)** | Required for virtual try-on. Set name, `height_cm`, `weight_kg`, `body_shape`, `skin_tone`. |
 | (Optional) 1 planned calendar entry | 1 | Demonstrates the planner with data already present. |
@@ -413,7 +411,7 @@ Script path: `backend/scripts/seed_app_store_reviewer.py`.
 ### Account deletion (verified in code)
 
 In-app deletion is implemented: **Settings → Delete Account**, which calls
-`DELETE /api/v1/users/me` (`flutter/lib/features/settings/repositories/settings_repository.dart:111`).
+`DELETE /api/v1/users/me` (`flutter/lib/features/settings/repositories/settings_repository.dart:96-100`).
 A data-export path also exists (`POST /api/v1/users/export`). Both satisfy Guideline 5.1.1(v) /
 data-portability expectations.
 

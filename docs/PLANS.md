@@ -1,6 +1,6 @@
 # Plans policy
 
-Last updated: 2026-07-22
+Last updated: 2026-08-08
 
 Execution plans are first-class repository artifacts. They replace tribal memory for multi-step work.
 

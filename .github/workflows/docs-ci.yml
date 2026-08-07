@@ -24,5 +24,13 @@ jobs:
       - name: Check docs structure
         run: python scripts/check_docs_structure.py
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Lint markdown
+        run: npx --yes markdownlint-cli2 --config .markdownlint.json "docs/**/*.md" "AGENTS.md" "ARCHITECTURE.md" "README.md"
+
       - name: Check architecture layers
         run: python scripts/check_architecture.py

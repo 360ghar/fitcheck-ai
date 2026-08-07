@@ -1,6 +1,6 @@
 # Product sense
 
-Last updated: 2026-07-22
+Last updated: 2026-08-08
 
 ## Who it is for
 
