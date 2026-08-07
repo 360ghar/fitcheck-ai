@@ -117,7 +117,13 @@ class _ItemEditPageState extends State<ItemEditPage> {
       final path = image.path.toLowerCase();
       if (path.endsWith('.jpg') ||
           path.endsWith('.jpeg') ||
-          path.endsWith('.png')) {
+          path.endsWith('.png') ||
+          path.endsWith('.webp') ||
+          path.endsWith('.heic') ||
+          path.endsWith('.heif') ||
+          path.endsWith('.bmp') ||
+          path.endsWith('.tif') ||
+          path.endsWith('.tiff')) {
         newImages.add(File(image.path));
         addedCount++;
       }

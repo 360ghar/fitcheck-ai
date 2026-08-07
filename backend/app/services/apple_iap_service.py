@@ -307,12 +307,16 @@ class AppleIAPService:
             )
         if response.status_code == 200:
             return response.json()
+        # Both messages name the base URL: verify_transaction tries production
+        # and sandbox in turn, and without it a bad .p8 produces the same
+        # opaque "HTTP 401" twice with no way to tell which environment failed.
         if response.status_code == 404:
             raise AppleIAPVerificationError(
-                f"Transaction {transaction_id} was not found by the App Store"
+                f"Transaction {transaction_id} was not found by the App Store "
+                f"at {base_url}"
             )
         raise AppleIAPVerificationError(
-            f"App Store Server API returned HTTP {response.status_code}"
+            f"App Store Server API at {base_url} returned HTTP {response.status_code}"
         )
 
     @classmethod
@@ -340,6 +344,20 @@ class AppleIAPService:
                     raise AppleIAPVerificationError("App Store response has no signed transaction info")
                 tx_info = cls.verify_jws(signed)
                 cls.validate_transaction_info(tx_info)
+                # A Sandbox transaction verifying against a production backend
+                # is EXPECTED during App Review and our own sandbox testing —
+                # it is never rejected. Logged so reviewer/tester activity is
+                # greppable and distinguishable from real revenue.
+                logger.info(
+                    "Apple transaction verified",
+                    extra={
+                        "environment": tx_info.get("environment"),
+                        "api_base_url": base_url,
+                        "transaction_id": transaction_id,
+                        "original_transaction_id": tx_info.get("originalTransactionId"),
+                        "product_id": tx_info.get("productId"),
+                    },
+                )
                 return tx_info
             except AppleIAPVerificationError as exc:
                 # 404/401/403 on the primary URL just means "wrong
@@ -387,13 +405,56 @@ class AppleIAPService:
         except (TypeError, ValueError, OSError):
             return None
 
+    @staticmethod
+    def _auto_renew_disabled(
+        tx_info: Dict[str, Any], renewal_info: Optional[Dict[str, Any]]
+    ) -> Optional[bool]:
+        """Whether verified renewal info says auto-renew is off, or None if unknown.
+
+        Only the renewal info carries autoRenewStatus; a transaction alone never
+        does. ``None`` therefore means "this payload does not say", which callers
+        must treat as "leave the stored flag alone" rather than "auto-renew is
+        on". Returning False here instead would make Restore Purchases clear a
+        cancellation the user really made: the restore re-registers the same
+        transaction with no renewal info attached.
+
+        The originalTransactionId must match when both payloads state one — a
+        notification's renewal info always describes the same subscription, but
+        refusing a mismatch keeps a malformed payload from cancelling an
+        unrelated plan.
+        """
+        if not renewal_info:
+            return None
+        renewal_original = renewal_info.get("originalTransactionId")
+        tx_original = tx_info.get("originalTransactionId") or tx_info.get("transactionId")
+        if renewal_original and tx_original and renewal_original != tx_original:
+            return None
+        try:
+            # Apple sends an int (0 = off, 1 = on); tolerate a string.
+            return int(renewal_info.get("autoRenewStatus", 1)) == 0
+        except (TypeError, ValueError):
+            # Never 500 a webhook over an unexpected claim shape.
+            return None
+
     @classmethod
-    def transaction_to_entitlement(cls, tx_info: Dict[str, Any]) -> Dict[str, Any]:
+    def transaction_to_entitlement(
+        cls,
+        tx_info: Dict[str, Any],
+        renewal_info: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """Normalize verified transaction info into persistable entitlement state.
 
         Returns a dict with keys: plan_type (PlanType), status
         (SubscriptionStatus), current_period_start, current_period_end,
         cancel_at_period_end, revoked (bool).
+
+        ``renewal_info`` is the verified ``signedRenewalInfo`` claims from an
+        App Store Server Notification, when the caller has them. Without it
+        ``cancel_at_period_end`` is ``None`` — "unknown", which
+        sync_iap_subscription leaves untouched. Apple sends
+        DID_CHANGE_RENEWAL_STATUS (which does carry renewal info) whenever the
+        user toggles auto-renew, so the webhook is the authority on that flag
+        and the register path must never overwrite it.
         """
         plan_type = cls.plan_for_product(tx_info.get("productId", ""))
         revoked = bool(tx_info.get("revocationDate"))
@@ -402,7 +463,7 @@ class AppleIAPService:
             "status": "free" if revoked else "active",
             "current_period_start": cls._ms_timestamp(tx_info.get("purchaseDate")),
             "current_period_end": cls._ms_timestamp(tx_info.get("expiresDate")),
-            "cancel_at_period_end": False,
+            "cancel_at_period_end": cls._auto_renew_disabled(tx_info, renewal_info),
             "revoked": revoked,
             "product_id": tx_info.get("productId"),
             "original_transaction_id": tx_info.get("originalTransactionId")

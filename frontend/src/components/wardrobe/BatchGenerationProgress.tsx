@@ -213,7 +213,7 @@ export function BatchGenerationProgress({
             >
               {/* Show generated image or placeholder */}
               {item.generatedImageUrl ? (
-                <img
+                <img loading="lazy" decoding="async"
                   src={item.generatedImageUrl}
                   alt={item.name || item.category}
                   className="w-full h-full object-cover"

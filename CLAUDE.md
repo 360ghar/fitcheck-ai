@@ -18,6 +18,7 @@ FitCheck AI is a monorepo for AI-assisted wardrobe management, outfit generation
 |------|------|
 | `backend/` | FastAPI API, services, AI, tests |
 | `frontend/` | React + TypeScript (Vite) web app |
+| `admin/` | Internal admin console (React 19 SPA, server-enforced RBAC) |
 | `flutter/` | Flutter mobile (GetX) |
 | `remotion/` | Marketing video compositions |
 | `docs/` | Knowledge base (product, design, plans, quality) |
@@ -25,7 +26,7 @@ FitCheck AI is a monorepo for AI-assisted wardrobe management, outfit generation
 | `ARCHITECTURE.md` | Domains and allowed dependency edges |
 | `run-dev.sh` | Backend `:8000` + frontend `:3000` |
 
-Package-local notes: `backend/CLAUDE.md`, `frontend/CLAUDE.md` (thin; deep content in `docs/`).
+Package-local notes: `backend/CLAUDE.md`, `frontend/CLAUDE.md`, `admin/CLAUDE.md` (thin; deep content in `docs/`).
 
 ## Progressive disclosure (read in order)
 
@@ -67,6 +68,7 @@ Package-local notes: `backend/CLAUDE.md`, `frontend/CLAUDE.md` (thin; deep conte
 ./run-dev.sh                          # API :8000 + web :3000
 cd backend && source .venv/bin/activate && pytest
 cd frontend && npm run lint && npm run build
+cd admin && npm run lint && npm test   # admin console (typecheck/lint/test/build)
 cd flutter && flutter test
 python scripts/check_architecture.py
 python scripts/check_docs_structure.py

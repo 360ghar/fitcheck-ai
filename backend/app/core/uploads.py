@@ -21,8 +21,8 @@ from app.core.exceptions import FileTooLargeError
 # Chunk size for capped reads (reject before buffering past the cap).
 _READ_CHUNK_BYTES = 1024 * 1024
 
-# Max files accepted by one multipart endpoint. Mirrors
-# batch_processing._MAX_BATCH_IMAGES, the in-repo precedent.
+# Max files accepted by one multipart endpoint. The batch route imports this
+# constant (previously its own private copy) so the cap lives in one place.
 MAX_UPLOAD_FILES = 50
 
 

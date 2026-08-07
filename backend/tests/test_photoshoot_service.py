@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 from app.services.photoshoot_service import PhotoshootService, USE_CASE_TEMPLATES, PhotoshootUseCase
 from app.services.photoshoot_job_service import PhotoshootJobService, PhotoshootJob
 from app.models.photoshoot import PhotoshootJobStatus
-from app.core.exceptions import AIServiceError
+from app.core.exceptions import AIServiceError, ServiceError
 from app.models.subscription import PlanType
 from app.utils.json_utils import extract_json_block
 
@@ -942,9 +942,384 @@ class TestDemoPhotoshootJob:
         async with PhotoshootJobService._lock:
             PhotoshootJobService._jobs.pop(job.job_id, None)
 
+    @pytest.mark.asyncio
+    async def test_exception_after_partial_release_releases_only_remainder(self):
+        """An exception AFTER the mid-pipeline partial release must not refund
+        the full reservation again. The old generic except released the full
+        reservation on top of the partial one (release clamps at 0, so a 0/2
+        run over-credited the user 2x); the fix nets the remainder: 1 (unused)
+        + 1 (remainder) = 2 = exactly one reservation."""
+        from app.services.photoshoot_service import PhotoshootStreamingService
+
+        job = await PhotoshootJobService.create_job(
+            user_id="user-123",
+            photos=["data:image/jpeg;base64,SGVsbG8="],
+            use_case="linkedin",
+            num_images=2,
+            batch_size=2,
+        )
+
+        async def _generate_one(job, prompts):
+            await PhotoshootJobService.add_generated_image(
+                job.job_id,
+                "img_1",
+                0,
+                image_base64="b64",
+                image_url="https://cdn.example/x.png",
+            )
+
+        with (
+            patch.object(
+                PhotoshootService,
+                "generate_prompts",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch.object(
+                PhotoshootService,
+                "reserve_daily_usage",
+                new_callable=AsyncMock,
+                return_value=(True, Mock()),
+            ),
+            patch.object(
+                PhotoshootService,
+                "release_daily_usage",
+                new_callable=AsyncMock,
+            ) as release,
+            patch.object(
+                PhotoshootService,
+                "get_usage",
+                new_callable=AsyncMock,
+                return_value=Mock(),
+            ),
+            patch.object(
+                PhotoshootStreamingService,
+                "_generate_images_streaming",
+                new_callable=AsyncMock,
+                side_effect=_generate_one,
+            ),
+            # The terminal block after the partial release fails, so the
+            # generic except arm runs with a release already made.
+            patch.object(
+                PhotoshootJobService,
+                "set_usage",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("usage store down"),
+            ),
+        ):
+            service = PhotoshootStreamingService(user_id="user-123", db=Mock())
+            await service.run_pipeline(job)
+
+        calls = release.await_args_list
+        assert [c.args[1] for c in calls] == [1, 1], (
+            "expected partial (1 unused) + remainder (1), not a second full release"
+        )
+        assert sum(c.args[1] for c in calls) == job.num_images
+        assert job.status == PhotoshootJobStatus.FAILED
+
+        async with PhotoshootJobService._lock:
+            PhotoshootJobService._jobs.pop(job.job_id, None)
+
+    @pytest.mark.asyncio
+    async def test_zero_image_run_terminal_raise_does_not_release_twice(self):
+        """A 0-image run releases the FULL reservation mid-pipeline
+        (unused == num_images); if the terminal job_failed block then raises,
+        the generic except must NOT release again (released == num_images, so
+        the remainder is 0) — the old code refunded the full reservation a
+        second time and over-credited the user."""
+        from app.services.photoshoot_service import PhotoshootStreamingService
+
+        job = await PhotoshootJobService.create_job(
+            user_id="user-123",
+            photos=["data:image/jpeg;base64,SGVsbG8="],
+            use_case="linkedin",
+            num_images=2,
+            batch_size=2,
+        )
+
+        async def _fail_all_slots(job, prompts):
+            await PhotoshootJobService.mark_image_failed(job.job_id, 1, "provider error")
+            await PhotoshootJobService.mark_image_failed(job.job_id, 0, "provider error")
+
+        async def _fail_on_job_failed(job_id, event_type, *args, **kwargs):
+            if event_type == "job_failed":
+                raise RuntimeError("sse down")
+
+        with (
+            patch.object(
+                PhotoshootService,
+                "generate_prompts",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch.object(
+                PhotoshootService,
+                "reserve_daily_usage",
+                new_callable=AsyncMock,
+                return_value=(True, Mock()),
+            ),
+            patch.object(
+                PhotoshootService,
+                "release_daily_usage",
+                new_callable=AsyncMock,
+            ) as release,
+            patch.object(
+                PhotoshootService,
+                "get_usage",
+                new_callable=AsyncMock,
+                return_value=Mock(),
+            ),
+            patch.object(
+                PhotoshootStreamingService,
+                "_generate_images_streaming",
+                new_callable=AsyncMock,
+                side_effect=_fail_all_slots,
+            ),
+            patch.object(
+                PhotoshootJobService,
+                "broadcast_event",
+                new_callable=AsyncMock,
+                side_effect=_fail_on_job_failed,
+            ),
+        ):
+            service = PhotoshootStreamingService(user_id="user-123", db=Mock())
+            # The except arm's own job_failed broadcast raises too, so the
+            # failure escapes the pipeline.
+            with pytest.raises(RuntimeError, match="sse down"):
+                await service.run_pipeline(job)
+
+        # Exactly ONE release (the full reservation, mid-pipeline): the
+        # generic except found nothing left to refund.
+        release.assert_awaited_once()
+        release.assert_awaited_with("user-123", 2, service.db)
+
+        async with PhotoshootJobService._lock:
+            PhotoshootJobService._jobs.pop(job.job_id, None)
+
+    @pytest.mark.asyncio
+    async def test_cancellation_after_partial_release_releases_only_remainder(self):
+        """A cancellation landing AFTER the mid-pipeline partial release must
+        hand back only the remainder (job.num_images - released). CancelledError
+        derives from BaseException, so it reaches the dedicated arm, which
+        previously released the FULL reservation on top of the partial one."""
+        import asyncio
+
+        from app.services.photoshoot_service import PhotoshootStreamingService
+
+        job = await PhotoshootJobService.create_job(
+            user_id="user-123",
+            photos=["data:image/jpeg;base64,SGVsbG8="],
+            use_case="linkedin",
+            num_images=2,
+            batch_size=2,
+        )
+
+        async def _generate_one(job, prompts):
+            await PhotoshootJobService.add_generated_image(
+                job.job_id,
+                "img_1",
+                0,
+                image_base64="b64",
+                image_url="https://cdn.example/x.png",
+            )
+
+        with (
+            patch.object(
+                PhotoshootService,
+                "generate_prompts",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch.object(
+                PhotoshootService,
+                "reserve_daily_usage",
+                new_callable=AsyncMock,
+                return_value=(True, Mock()),
+            ),
+            patch.object(
+                PhotoshootService,
+                "release_daily_usage",
+                new_callable=AsyncMock,
+            ) as release,
+            # The post-release usage re-read is where the cancellation lands.
+            patch.object(
+                PhotoshootService,
+                "get_usage",
+                new_callable=AsyncMock,
+                side_effect=asyncio.CancelledError,
+            ),
+            patch.object(
+                PhotoshootStreamingService,
+                "_generate_images_streaming",
+                new_callable=AsyncMock,
+                side_effect=_generate_one,
+            ),
+        ):
+            service = PhotoshootStreamingService(user_id="user-123", db=Mock())
+            with pytest.raises(asyncio.CancelledError):
+                await service.run_pipeline(job)
+            # The shielded release runs as its own task; give the loop a tick.
+            await asyncio.sleep(0)
+
+        calls = release.await_args_list
+        assert [c.args[1] for c in calls] == [1, 1], (
+            "expected partial (1 unused) + remainder (1), not a second full release"
+        )
+        assert sum(c.args[1] for c in calls) == job.num_images
+
+        async with PhotoshootJobService._lock:
+            PhotoshootJobService._jobs.pop(job.job_id, None)
+
 
 class TestPhotoshootConcurrencyConfig:
     def test_photoshooot_concurrency_default_raised_to_4(self):
         from app.core.config import settings
 
         assert settings.PHOTOSHOOT_CONCURRENCY_LIMIT == 4
+
+
+class TestPhotoshootCancellationReleasesQuota:
+    """A cancelled run must hand the reserved daily quota back.
+
+    The sync route wraps `generate_photoshoot` in `asyncio.wait_for(...,
+    timeout=270)` (photoshoot.py) so the upstream proxy's ~300 s deadline
+    returns a clean 503 instead of an opaque 400. `wait_for` CANCELS the
+    coroutine, and `asyncio.CancelledError` derives from BaseException — it
+    matched neither `except (ValidationError, ...)` nor `except Exception`, so
+    `release_daily_usage` never ran and a free user's whole 10/day allowance was
+    burned for zero images (retry: "0 images remaining today").
+    """
+
+    @pytest.mark.asyncio
+    async def test_wait_for_timeout_releases_the_full_reservation(self, mock_db):
+        import asyncio
+
+        num_images = 10
+        usage = Mock(remaining=num_images, resets_at=None)
+
+        async def _never_finishes(*args, **kwargs):
+            await asyncio.sleep(30)
+
+        with (
+            patch.object(
+                PhotoshootService,
+                "reserve_daily_usage",
+                new_callable=AsyncMock,
+                return_value=(True, usage),
+            ) as reserve,
+            patch.object(
+                PhotoshootService,
+                "release_daily_usage",
+                new_callable=AsyncMock,
+            ) as release,
+            patch.object(
+                PhotoshootService,
+                "generate_prompts",
+                new=_never_finishes,
+            ),
+        ):
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    PhotoshootService.generate_photoshoot(
+                        user_id="user-123",
+                        photos=["data:image/png;base64,aGk="],
+                        use_case=PhotoshootUseCase.LINKEDIN,
+                        num_images=num_images,
+                        db=mock_db,
+                    ),
+                    timeout=0.05,
+                )
+            # The shielded release runs as its own task; give the loop a tick
+            # to let it finish after the cancellation propagated.
+            await asyncio.sleep(0)
+
+        reserve.assert_awaited_once()
+        release.assert_awaited_once_with("user-123", num_images, mock_db)
+
+    @pytest.mark.asyncio
+    async def test_cancellation_before_reservation_releases_nothing(self, mock_db):
+        """No reservation was made, so there is nothing to hand back."""
+        import asyncio
+
+        async def _never_finishes(*args, **kwargs):
+            await asyncio.sleep(30)
+
+        with (
+            patch.object(
+                PhotoshootService,
+                "reserve_daily_usage",
+                new=_never_finishes,
+            ),
+            patch.object(
+                PhotoshootService,
+                "release_daily_usage",
+                new_callable=AsyncMock,
+            ) as release,
+        ):
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(
+                    PhotoshootService.generate_photoshoot(
+                        user_id="user-123",
+                        photos=["data:image/png;base64,aGk="],
+                        use_case=PhotoshootUseCase.LINKEDIN,
+                        num_images=4,
+                        db=mock_db,
+                    ),
+                    timeout=0.05,
+                )
+            await asyncio.sleep(0)
+
+        release.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_sync_exception_after_partial_release_releases_only_remainder(self, mock_db):
+        """generate_photoshoot's generic except must refund only what the
+        mid-pipeline partial release did not cover. An exception in the
+        response construction after releasing 1 of 2 images used to trigger a
+        second FULL release (over-credit); the fix nets to exactly one
+        reservation."""
+        usage = Mock(remaining=2, resets_at=None)
+
+        with (
+            patch.object(
+                PhotoshootService,
+                "reserve_daily_usage",
+                new_callable=AsyncMock,
+                return_value=(True, usage),
+            ),
+            patch.object(
+                PhotoshootService,
+                "release_daily_usage",
+                new_callable=AsyncMock,
+            ) as release,
+            patch.object(
+                PhotoshootService,
+                "generate_prompts",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch.object(
+                PhotoshootService,
+                "generate_images",
+                new_callable=AsyncMock,
+                return_value=([Mock()], []),
+            ),
+            patch(
+                "app.services.photoshoot_service.PhotoshootResultResponse",
+                side_effect=RuntimeError("serialization boom"),
+            ),
+        ):
+            with pytest.raises(ServiceError):
+                await PhotoshootService.generate_photoshoot(
+                    user_id="user-123",
+                    photos=["data:image/png;base64,aGk="],
+                    use_case=PhotoshootUseCase.LINKEDIN,
+                    num_images=2,
+                    db=mock_db,
+                )
+
+        calls = release.await_args_list
+        assert [c.args[1] for c in calls] == [1, 1], (
+            "expected partial (1 unused) + remainder (1), not a second full release"
+        )
+        assert sum(c.args[1] for c in calls) == 2

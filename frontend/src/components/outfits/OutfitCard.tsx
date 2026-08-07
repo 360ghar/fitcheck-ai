@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { useElapsedSeconds } from '@/hooks/useElapsedSeconds'
 import type { Outfit } from '@/types'
+import { useImageWithFallback } from '@/hooks/useImageWithFallback'
 
 // ============================================================================
 // TYPES
@@ -65,30 +66,21 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
     const hasAiImage = outfit.images?.some((img) => img.generation_type === 'ai')
     const isGenerating = generationStatus === 'pending' || generationStatus === 'processing'
     const generationFailed = generationStatus === 'failed'
-    const [imageError, setImageError] = React.useState(false)
-    const imageErrorRef = React.useRef(false)
-    const handleImageError = React.useCallback(() => {
-      setImageError(true)
-      // Ask the parent for fresh URLs once (an expired presigned URL usually);
-      // avoid a loop on repeated errors.
-      if (!imageErrorRef.current) {
-        imageErrorRef.current = true
-        onImageError?.()
-      }
-    }, [onImageError])
+    // A derived `_thumb` URL can 404 while the full-size object is fine, so a
+    // thumbnail failure retries the full size before the tile reads as broken.
+    // onExhausted re-mints only once BOTH sources failed — an expired-URL
+    // problem; a merely-missing thumb is already fixed by the fallback.
+    const {
+      src: imageSrc,
+      onError: handleImageError,
+    } = useImageWithFallback(primaryImage?.thumbnail_url, primaryImage?.image_url, {
+      onExhausted: onImageError,
+      resetKey: outfit.id,
+    })
     // Only surface elapsed time once the wait is long enough to matter — a
     // tiny grid tile doesn't need a "1s" flicker for near-instant generations.
     const elapsedSeconds = useElapsedSeconds(isGenerating)
     const showElapsed = isGenerating && elapsedSeconds >= 3
-
-    React.useEffect(() => {
-      setImageError(false)
-    }, [primaryImage?.thumbnail_url, primaryImage?.image_url, outfit.id])
-
-    const imageSrc =
-      !imageError && primaryImage
-        ? primaryImage.thumbnail_url || primaryImage.image_url
-        : null
 
     // True only when a real photograph is actually painted in the tile. Drives
     // both the legibility scrim and the ink of the bottom overlay: white text
@@ -131,7 +123,9 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
                 src={imageSrc}
                 alt={outfit.name}
                 className="w-full h-full object-cover"
-                onError={handleImageError}
+                onError={(event) =>
+                  handleImageError(event.currentTarget.currentSrc || event.currentTarget.src)
+                }
                 loading="lazy"
               />
             ) : (
@@ -247,7 +241,9 @@ export const OutfitCard = React.forwardRef<HTMLDivElement, OutfitCardProps>(
             loading="lazy"
             width={primaryImage?.width}
             height={primaryImage?.height}
-            onError={handleImageError}
+            onError={(event) =>
+              handleImageError(event.currentTarget.currentSrc || event.currentTarget.src)
+            }
           />
         ) : (
           // Flat `bg-secondary`, not a red-to-neutral wash. This is the empty

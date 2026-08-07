@@ -69,6 +69,8 @@ export function OutfitPreviewStage({
       <div className={FRAME}>
         {showRender ? (
           <img
+            loading="lazy"
+            decoding="async"
             src={previewImageUrl as string}
             alt={
               outfitName
@@ -78,7 +80,6 @@ export function OutfitPreviewStage({
             // object-contain: a portrait render letterboxes onto the surface
             // instead of having its head or its shoes cropped off.
             className="absolute inset-0 h-full w-full object-contain"
-            decoding="async"
           />
         ) : (
           <>

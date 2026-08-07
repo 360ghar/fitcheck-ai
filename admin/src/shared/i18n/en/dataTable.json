@@ -1,0 +1,39 @@
+{
+  "aria": {
+    "label": "Data table"
+  },
+  "announce": {
+    "showing": "Showing {{from}} to {{to}} of {{total}} rows.",
+    "sortedBy": "Sorted by {{column}}, {{dir}}."
+  },
+  "sortDir": {
+    "ascending": "ascending",
+    "descending": "descending"
+  },
+  "columns": {
+    "label": "Columns"
+  },
+  "density": {
+    "label": "Density",
+    "comfortable": "Comfortable",
+    "compact": "Compact"
+  },
+  "selected_one": "{{count}} selected",
+  "selected_other": "{{count}} selected",
+  "clearSelection": "Clear selection",
+  "selectAll": "Select all rows on this page",
+  "selectRow": "Select row",
+  "empty": {
+    "title": "No results",
+    "message": "No rows match the current filters. Try adjusting the search or filters.",
+    "clearFilters": "Clear filters"
+  },
+  "showing": "{{from}}–{{to}} of {{total}}",
+  "pageSize": "Rows per page",
+  "pagination": {
+    "label": "Pagination",
+    "previous": "Previous page",
+    "next": "Next page",
+    "page": "Page {{page}}"
+  }
+}

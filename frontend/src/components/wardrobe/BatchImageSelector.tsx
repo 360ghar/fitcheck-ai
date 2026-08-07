@@ -58,7 +58,7 @@ export function BatchImageSelector({
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: {
-      'image/*': ['.png', '.jpg', '.jpeg', '.webp'],
+      'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.heic', '.heif', '.bmp', '.tif', '.tiff'],
     },
     multiple: true,
     maxSize: 10 * 1024 * 1024, // 10MB per file
@@ -109,7 +109,7 @@ export function BatchImageSelector({
             or click to browse
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            Supports PNG, JPG, WEBP up to 10MB each. We find items first, then polish studio photos in the background.
+            Supports PNG, JPG, WEBP, HEIC, BMP, TIFF up to 10MB each. We find items first, then polish studio photos in the background.
           </p>
           {hasImages && (
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
@@ -145,7 +145,7 @@ export function BatchImageSelector({
                 key={image.imageId}
                 className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 group"
               >
-                <img
+                <img loading="lazy" decoding="async"
                   src={image.previewUrl}
                   alt={image.file.name}
                   className="w-full h-full object-cover"

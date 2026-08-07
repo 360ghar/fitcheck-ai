@@ -39,18 +39,14 @@ def verify_admin(user: Dict[str, Any]) -> None:
     """
     Verify that the user has admin privileges.
 
-    Admin check is based on email domain or specific admin flag.
-    Adjust logic based on your admin requirements.
+    Thin wrapper over the shared RBAC gate (app.core.permissions.get_user_role):
+    an explicit admin ``role`` wins; otherwise the legacy check applies — the
+    ``is_admin`` flag OR an ``@fitcheckaiapp.com`` email grants admin, exactly
+    matching the pre-RBAC behavior of this function.
     """
-    # Check for admin flag in user metadata
-    is_admin = user.get("is_admin", False)
+    from app.core.permissions import ADMIN_ROLES, get_user_role
 
-    # Or check email domain (example: only @fitcheckaiapp.com emails are admins)
-    email = user.get("email", "")
-    if email and email.endswith("@fitcheckaiapp.com"):
-        is_admin = True
-
-    if not is_admin:
+    if get_user_role(user) not in ADMIN_ROLES:
         logger.warning(f"Non-admin user {user.get('id')} attempted admin operation")
         raise PermissionDeniedError("Admin access required for this operation")
 

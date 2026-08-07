@@ -131,7 +131,7 @@ export function PhotoshootResultsStep() {
               onClick={() => setPreviewIndex(index)}
               aria-label={`Preview generated image ${slotNumber}`}
             >
-              <img
+              <img loading="lazy" decoding="async"
                 src={getImageSrc(index) || PLACEHOLDER_IMAGE}
                 alt={`Generated ${slotNumber}`}
                 width={768}
@@ -202,7 +202,7 @@ export function PhotoshootResultsStep() {
           <DialogTitle className="sr-only">Image Preview</DialogTitle>
           {previewIndex !== null && generatedImages[previewIndex] && (
             <div className="relative">
-              <img
+              <img loading="lazy" decoding="async"
                 src={getImageSrc(previewIndex) || PLACEHOLDER_IMAGE}
                 alt={`Preview ${generatedImages[previewIndex].index + 1}`}
                 width={1536}

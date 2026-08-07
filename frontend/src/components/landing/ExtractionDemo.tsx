@@ -63,7 +63,7 @@ export function ExtractionDemo() {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp'] },
+    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.heic', '.heif', '.bmp', '.tif', '.tiff'] },
     multiple: false,
     maxSize: 10 * 1024 * 1024,
   })
@@ -107,7 +107,7 @@ export function ExtractionDemo() {
                 : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
             }`}
           >
-            <input {...getInputProps()} />
+            <input {...getInputProps({ 'aria-label': 'Upload a clothing photo' })} />
             <Upload className="w-10 h-10 text-gray-400 mb-4" />
             <p className="text-gray-700 dark:text-gray-300 font-medium mb-1">
               {isDragActive ? 'Drop your photo here' : 'Drop a clothing photo'}

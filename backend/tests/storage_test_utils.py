@@ -14,14 +14,21 @@ from typing import Dict, List, Optional
 class FakeS3Backend:
     """In-memory stand-in for ``S3StorageBackend`` that records every call."""
 
-    def __init__(self, download_bytes: Optional[bytes] = None):
+    def __init__(
+        self,
+        download_bytes: Optional[bytes] = None,
+        objects: Optional[List[dict]] = None,
+    ):
         self.download_bytes = download_bytes
+        # Objects served by scan_keys: [{"key", "size", "last_modified"}, ...]
+        self.objects = list(objects or [])
         self.download_keys: List[str] = []
         self.upload_calls: List[Dict[str, object]] = []
         self.copy_calls: List[tuple] = []
         self.delete_calls: List[str] = []
         self.presign_calls: List[str] = []
         self.list_calls: List[str] = []
+        self.scan_calls: List[tuple] = []
         self.closed = False
 
     async def upload(self, key: str, data: bytes, content_type: str, cache_control: str) -> None:
@@ -47,6 +54,7 @@ class FakeS3Backend:
         self.delete_calls.append(key)
 
     async def delete_many(self, keys: List[str]) -> int:
+        self.delete_calls.extend(keys)
         return len(keys)
 
     async def presign_get(self, key: str, expires: int = 900) -> str:
@@ -56,6 +64,10 @@ class FakeS3Backend:
     async def list_keys(self, prefix: str = "") -> List[str]:
         self.list_calls.append(prefix)
         return []
+
+    async def scan_keys(self, prefix: str = "", max_pages: int = 50) -> List[dict]:
+        self.scan_calls.append((prefix, max_pages))
+        return [o for o in self.objects if o.get("key", "").startswith(prefix)]
 
     async def close(self) -> None:
         self.closed = True

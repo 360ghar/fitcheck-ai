@@ -1,8 +1,8 @@
 # Architecture
 
-Last updated: 2026-08-04
+Last updated: 2026-08-07
 
-FitCheck AI is a monorepo: React web + Flutter mobile clients call a FastAPI backend. Supabase is the system of record for the DB (Postgres) + Auth; file storage moves to a Railway Bucket (private S3-compatible). AI runs behind backend provider abstractions. Optional vector retrieval uses Pinecone.
+FitCheck AI is a monorepo: React web + Flutter mobile clients call a FastAPI backend. An internal admin console (`admin/`, React 19 SPA) calls the same backend's `/api/v1/admin/*` surface with server-enforced RBAC. Supabase is the system of record for the DB (Postgres) + Auth; file storage is a private S3-compatible bucket (Railway Bucket → Cloudflare R2 since the 2026-08-05 egress RCA; R2 egress is $0). Images are served to clients either as short-lived presigned URLs (default) or as stable, edge-cached URLs through a Cloudflare Worker (`infra/images-worker/`, `IMAGE_SERVING_MODE=worker`) with `_thumb` siblings for list/grid tiles. AI runs behind backend provider abstractions. Optional vector retrieval uses Pinecone.
 
 This file is the top-level map of domains and **allowed dependency edges**. Deeper runtime detail lives in `docs/BACKEND.md`, `docs/FRONTEND.md`, `docs/FLUTTER.md`, and `docs/references/`.
 
@@ -11,9 +11,12 @@ This file is the top-level map of domains and **allowed dependency edges**. Deep
 ```text
 [React web] ──┐
               ├──► FastAPI /api/v1 ──► services ──► Supabase (DB + Auth)
-[Flutter]  ───┘                       ├──► Railway Bucket (S3) — storage
+[Flutter]  ───┘                       ├──► R2 (S3) — storage  ──► [Cloudflare Worker] ──► clients
                                       ├──► AI providers
                                       └──► Pinecone (optional)
+
+[Admin console (React 19 SPA)] ──► FastAPI /api/v1/admin/* (RBAC deps) ──► services ──► Supabase / Stripe
+                                     └──► audit_events (append-only, service-role only)
 
               └──► health / OpenAPI
 ```
@@ -24,6 +27,7 @@ This file is the top-level map of domains and **allowed dependency edges**. Deep
 |------|------|
 | `backend/` | API, business logic, AI orchestration, tests |
 | `frontend/` | Web client (Vite + React + TypeScript) |
+| `admin/` | Internal admin console (React 19 SPA; backend-enforced RBAC) |
 | `flutter/` | Mobile client (GetX) |
 | `remotion/` | Marketing video compositions |
 | `docs/` | System of record for product/design/plans/quality |
@@ -95,6 +99,30 @@ app/ owns routes, bindings, theme
 
 Details: `docs/FLUTTER.md`.
 
+## Admin app layers (enforced by ESLint zones, not the Python checker)
+
+```text
+pages (route components, no logic)
+  → features/<feature>/{components,hooks,api}   (feature logic lives here)
+    → shared/{ui,lib,hooks,api,stores}          (cross-cutting)
+      → openapi-fetch client                    (only import point of the network)
+```
+
+| Edge | Allowed | Enforced by |
+|------|---------|-------------|
+| `admin/` SPA → FastAPI `/api/v1/admin/*` | Yes (typed openapi-fetch; `contracts/openapi.json` codegen + drift check) | `npm run check:schema` |
+| Admin routers → services (`admin_service`, `audit_service`, stripe, storage) → Supabase / Stripe | Yes (same backend layering as the public API; `scripts/check_architecture.py` covers `backend/app/**`) | `scripts/check_architecture.py` |
+| `admin/src/features/*` cross-feature imports | **No** — a feature may import itself, `shared/`, `config/`, `app/`, `test/` only | ESLint `import-x/no-restricted-paths` (`admin/eslint.config.js`) |
+| `admin/src/shared/*` → `features` or `app` | **No** | ESLint `import-x/no-restricted-paths` |
+| Admin app importing backend code / hitting the DB directly | **No** — the app is a pure HTTP client of `/api/v1/admin/*` | Repo convention + codegen-only types |
+| Backend `services`/`models`/`core` importing `app.api` | **No** (pre-existing rule; admin routers are `app.api.v1.admin`, so services must not import them) | `scripts/check_architecture.py` |
+
+Notes:
+
+- The Python checker does not scan `admin/`; admin layering is enforced by the app's ESLint flat config zones.
+- RBAC lives backend-side (`backend/app/core/permissions.py`, deps `require_admin` / `require_permission` in `app/api/v1/deps.py`). The app's `shared/lib/permissions.ts` registry only shapes UI; `/api/v1/admin/me` is authoritative.
+- Every admin mutation writes an append-only `audit_events` row (service-role only; migration 038).
+
 ## Cross-cutting concerns
 
 | Concern | Where |
@@ -103,7 +131,7 @@ Details: `docs/FLUTTER.md`.
 | AuthN | Supabase JWT; `core/security.py`, `api/v1/deps.py` |
 | Logging | `core/logging_config.py`, correlation middleware |
 | Errors | `core/exceptions.py` + handlers in `main.py` |
-| Storage | `services/storage_service.py` + `services/object_storage.py` → Railway Bucket (S3-compatible) |
+| Storage | `services/storage_service.py` + `services/object_storage.py` → R2 (S3-compatible; Railway Bucket supported); serving via `api/v1/images.py` (`serve_url`) — presigned or Worker mode; `infra/images-worker/` |
 | Jobs / SSE | batch, photoshoot, social import job services |
 | Security notes | `docs/SECURITY.md` |
 | Reliability notes | `docs/RELIABILITY.md` |
@@ -125,4 +153,5 @@ python scripts/check_architecture.py
 python scripts/check_docs_structure.py
 cd backend && pytest
 cd frontend && npm run lint && npm run build
+cd admin && npm run lint && npm run typecheck && npm test && npm run check:schema
 ```

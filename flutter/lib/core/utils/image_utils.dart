@@ -169,7 +169,17 @@ class ImageUtils {
 
     // Check extension
     final extension = file.path.toLowerCase().split('.').last;
-    if (!['jpg', 'jpeg', 'png', 'webp', 'heic'].contains(extension)) {
+    if (![
+      'jpg',
+      'jpeg',
+      'png',
+      'webp',
+      'heic',
+      'heif',
+      'bmp',
+      'tif',
+      'tiff',
+    ].contains(extension)) {
       return 'Unsupported image format';
     }
 

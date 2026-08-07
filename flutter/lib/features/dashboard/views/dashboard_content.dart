@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../auth/controllers/auth_controller.dart';
@@ -157,12 +158,12 @@ class _DashboardContentState extends State<DashboardContent> {
                 backgroundColor: tokens.brandColor.withValues(alpha: 0.15),
                 child: avatarUrl != null && avatarUrl.isNotEmpty
                     ? ClipOval(
-                        child: Image.network(
+                        child: AppNetworkImage(
                           avatarUrl,
                           width: 44,
                           height: 44,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Text(
+                          errorWidget: (_, _, _) => Text(
                             initial,
                             style: TextStyle(
                               color: tokens.brandColor,

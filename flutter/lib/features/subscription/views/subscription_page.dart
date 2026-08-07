@@ -6,6 +6,7 @@ import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../controllers/subscription_controller.dart';
 import 'widgets/plan_card.dart';
+import 'widgets/subscription_disclosure.dart';
 import 'widgets/usage_progress.dart';
 import 'widgets/referral_share_card.dart';
 
@@ -70,6 +71,18 @@ class SubscriptionPage extends GetView<SubscriptionController> {
               if (controller.canUpgrade && controller.showPaywall) ...[
                 _buildUpgradeSection(context, theme),
                 const SizedBox(height: 24),
+              ],
+
+              // Restore Purchases: required on both stores (Apple Guideline
+              // 3.1.1 / Play policy), rendered for every mobile user —
+              // including Pro subscribers who see no upgrade section.
+              // NOT gated on showPaywall: restore is required whenever the
+              // IAP plugin ships in the binary, so a PAYWALL_ENABLED=false
+              // build would otherwise leave a paying user who reinstalls
+              // with no way to recover their subscription.
+              if (!kIsWeb) ...[
+                _buildRestorePurchasesRow(),
+                const SizedBox(height: 8),
               ],
 
               // Referral section
@@ -344,7 +357,7 @@ class SubscriptionPage extends GetView<SubscriptionController> {
             label: 'Plus',
             fallbackMonthly: 10.0,
             fallbackYearly: 100.0,
-            fallbackExtractions: 100,
+            fallbackExtractions: 200,
             fallbackGenerations: 350,
             isRecommended: true,
           ),
@@ -356,27 +369,57 @@ class SubscriptionPage extends GetView<SubscriptionController> {
           label: 'Pro',
           fallbackMonthly: 20.0,
           fallbackYearly: 200.0,
-          fallbackExtractions: 200,
+          fallbackExtractions: 400,
           fallbackGenerations: 1000,
           isRecommended: onPlus,
         ),
-        // Restore Purchases is required on both stores (Apple Guideline
-        // 3.1.1 / Play policy) so users can recover purchases after
-        // reinstalls or store-account changes.
+        // Guideline 3.1.2: the purchase screen itself must disclose the
+        // auto-renewing terms and link to the EULA and privacy policy.
+        // Store rails only — web checkout goes through Stripe, where none of
+        // this copy (Apple ID, store cancellation path) applies.
         if (!kIsWeb) ...[
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: controller.isCheckingOut.value
-                  ? null
-                  : controller.restorePurchases,
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Restore Purchases'),
-            ),
+          const SizedBox(height: 20),
+          SubscriptionDisclosure(
+            priceSummary: _priceSummary(includePlus: !onPlus),
+            isApple: controller.iapService.isApple,
+            planNames: onPlus ? 'Pro is an auto-renewing subscription'
+                : 'Plus and Pro are auto-renewing subscriptions',
           ),
         ],
       ],
+    );
+  }
+
+  /// Price sentence for the disclosure, preferring the localized store prices
+  /// already showing on the cards so the two can never disagree.
+  ///
+  /// A Plus subscriber is only offered Pro, so quoting Plus prices next to a
+  /// single Pro card would disclose terms for something they cannot buy here.
+  String _priceSummary({required bool includePlus}) {
+    String price(String planType, String fallback) =>
+        controller.storePriceFor(planType) ?? fallback;
+    final pro = 'Pro is ${price('pro_monthly', '\$20')}/month or '
+        '${price('pro_yearly', '\$200')}/year.';
+    if (!includePlus) return pro;
+    return 'Plus is ${price('plus_monthly', '\$10')}/month or '
+        '${price('plus_yearly', '\$100')}/year; $pro';
+  }
+
+  /// Restore Purchases button (Apple Guideline 3.1.1 / Play policy).
+  ///
+  /// Rendered for every mobile user — including Pro subscribers and
+  /// cancelled paid users who see no upgrade section — so a reinstall or
+  /// store-account change always has a recovery path.
+  Widget _buildRestorePurchasesRow() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: controller.isCheckingOut.value
+            ? null
+            : controller.restorePurchases,
+        icon: const Icon(Icons.refresh, size: 18),
+        label: const Text('Restore Purchases'),
+      ),
     );
   }
 

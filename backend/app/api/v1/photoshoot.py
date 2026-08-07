@@ -22,7 +22,7 @@ from sse_starlette.sse import EventSourceResponse
 from supabase import Client
 
 from app.api.v1.deps import get_current_user, get_db
-from app.core.exceptions import AIServiceError, FitCheckException, RateLimitError, ValidationError
+from app.core.exceptions import AIServiceError, FitCheckException, RateLimitError, ServiceError, ValidationError
 from app.core.ip_rate_limit import get_client_ip, ip_rate_limited_operation
 from app.core.logging_config import get_context_logger
 from app.models.photoshoot import (
@@ -225,15 +225,28 @@ async def generate_photoshoot(
         raise ValidationError("Custom prompt is required when use case is 'custom'")
 
     if sync:
-        # Synchronous mode - wait for completion (React frontend compatibility)
-        result = await PhotoshootService.generate_photoshoot(
-            user_id=user_id,
-            photos=body.photos,
-            use_case=body.use_case,
-            num_images=body.num_images,
-            db=db,
-            custom_prompt=body.custom_prompt,
-        )
+        # Synchronous mode - wait for completion (React frontend compatibility).
+        # Bound the wait below the upstream (Railway) proxy's ~300s request
+        # deadline so a runaway batch returns a clean 503 instead of the
+        # proxy's opaque 400. (RCA 2026-08-05: POST /photoshoot/generate 400 @ ~300s.)
+        try:
+            result = await asyncio.wait_for(
+                PhotoshootService.generate_photoshoot(
+                    user_id=user_id,
+                    photos=body.photos,
+                    use_case=body.use_case,
+                    num_images=body.num_images,
+                    db=db,
+                    custom_prompt=body.custom_prompt,
+                ),
+                timeout=270,
+            )
+        except asyncio.TimeoutError:
+            raise ServiceError(
+                "Photoshoot generation is taking longer than expected. "
+                "Please try again or use background mode.",
+                service_name="photoshoot",
+            )
         status_code = (
             status.HTTP_207_MULTI_STATUS
             if result.partial_success

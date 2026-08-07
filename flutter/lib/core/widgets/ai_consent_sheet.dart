@@ -75,7 +75,8 @@ class _AiConsentSheet extends StatelessWidget {
               Text(
                 'To create your try-on and photoshoot images, FitCheck AI sends '
                 'the photos you provide (including images of your face and body) '
-                'to a trusted third-party AI provider (OpenAI) for processing. '
+                'to a trusted third-party AI provider (such as OpenAI or '
+                'Google Gemini) for processing. '
                 'They generate your images and do not use them to train their '
                 'models under our terms. Photos are transmitted securely and '
                 'never shared for advertising.',

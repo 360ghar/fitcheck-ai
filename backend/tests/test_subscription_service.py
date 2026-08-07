@@ -44,6 +44,17 @@ def _mock_maybe_single(db, row_or_none):
     chain.execute.return_value = result if row_or_none is not None else None
 
 
+def _mock_write_result(db, row):
+    """Feed the sync write tails the row PostgREST would return.
+
+    sync_stripe/sync_iap build their response from the upsert/update result
+    instead of re-reading the row, so tests exercising the write path must
+    supply it (one line, both tails, whichever the flow uses).
+    """
+    db.table.return_value.upsert.return_value.execute.return_value = Mock(data=[row])
+    db.table.return_value.update.return_value.eq.return_value.execute.return_value = Mock(data=[row])
+
+
 @pytest.mark.asyncio
 async def test_get_subscription_returns_existing_row():
     db = Mock()
@@ -57,6 +68,26 @@ async def test_get_subscription_returns_existing_row():
 
     assert result.plan_type == PlanType.PRO_MONTHLY
     assert result.is_pro is True
+
+
+@pytest.mark.asyncio
+async def test_get_subscription_accepts_refunded_status_and_treats_as_free():
+    """mark_iap_refunded writes status='refunded'. SubscriptionStatus had no
+    REFUNDED member, so get_subscription raised ValueError and /subscription/me
+    (plus webhook syncs) 500'd. The status must parse and the user must NOT be
+    treated as entitled."""
+    db = Mock()
+    _mock_maybe_single(db, _subscription_row(
+        plan_type="plus_monthly",
+        status="refunded",
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+    ))
+
+    result = await SubscriptionService.get_subscription(USER_ID, db)
+
+    assert result.status.value == "refunded"
+    assert result.plan_type == PlanType.FREE
+    assert result.is_pro is False
 
 
 @pytest.mark.asyncio
@@ -314,12 +345,12 @@ async def test_check_limit_retries_once_on_dead_http2_connection():
          patch.object(SubscriptionService, "get_plan_limits", return_value={"monthly_extractions": 10}), \
          patch.object(SubscriptionService, "get_or_create_usage_record", return_value={"monthly_extractions": 0}), \
          patch("app.db.connection.SupabaseDB") as mock_supabase_db:
-        mock_supabase_db.get_service_client.return_value = Mock()
+        mock_supabase_db.rebuild_service_client.return_value = Mock()
         result = await SubscriptionService.check_limit(USER_ID, "extraction", db=Mock())
 
     assert result.allowed is True
     assert call_count["n"] == 2
-    mock_supabase_db.reset.assert_called_once()
+    mock_supabase_db.rebuild_service_client.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -352,11 +383,11 @@ async def test_increment_usage_retries_once_on_dead_http2_connection():
              SubscriptionService, "get_subscription",
              return_value=Mock(plan_type=PlanType.FREE),
          ),          patch.object(SubscriptionService, "get_plan_limits", return_value={"monthly_extractions": 10}),          patch("app.db.connection.SupabaseDB") as mock_supabase_db:
-        mock_supabase_db.get_service_client.return_value = fake_db
+        mock_supabase_db.rebuild_service_client.return_value = fake_db
         await SubscriptionService.increment_usage(USER_ID, "extraction", db=fake_db)
 
     assert call_count["n"] == 2
-    mock_supabase_db.reset.assert_called_once()
+    mock_supabase_db.rebuild_service_client.assert_called_once()
 
 
 # =============================================================================
@@ -376,6 +407,7 @@ async def test_sync_iap_subscription_persists_apple_fields():
     )
     chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
     chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
+    _mock_write_result(db, updated)
 
     result = await SubscriptionService.sync_iap_subscription(
         USER_ID,
@@ -408,6 +440,7 @@ async def test_sync_iap_subscription_google_clears_apple_identity():
     )
     chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
     chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
+    _mock_write_result(db, updated)
 
     await SubscriptionService.sync_iap_subscription(
         USER_ID,
@@ -434,6 +467,7 @@ async def test_sync_iap_subscription_free_status_downgrades():
     updated = _subscription_row(plan_type="free", status="active", billing_provider="apple")
     chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
     chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
+    _mock_write_result(db, updated)
 
     result = await SubscriptionService.sync_iap_subscription(
         USER_ID,
@@ -445,9 +479,154 @@ async def test_sync_iap_subscription_free_status_downgrades():
 
     assert result.plan_type == PlanType.FREE
     update_call = db.table.return_value.update.call_args
-    assert update_call.args[0]["plan_type"] == "free"
-    assert update_call.args[0]["apple_original_transaction_id"] is None
+    payload = update_call.args[0]
+    assert payload["plan_type"] == "free"
+    # The owning store's transaction identity is preserved so later webhook
+    # notifications can still resolve the user (regression: it was wiped).
+    assert "apple_original_transaction_id" not in payload
+    # A replaced rail's identity is stale and still cleared.
+    assert payload["google_purchase_token"] is None
+    assert payload["google_order_id"] is None
     assert db.table.return_value.upsert.called is False
+
+
+@pytest.mark.asyncio
+async def test_sync_iap_subscription_free_downgrade_preserves_google_identity():
+    db = Mock()
+    existing = _subscription_row(plan_type="pro_yearly", billing_provider="google")
+    updated = _subscription_row(plan_type="free", status="active", billing_provider="google")
+    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
+    _mock_write_result(db, updated)
+
+    result = await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="google",
+        plan_type=PlanType.PRO_MONTHLY,  # ignored on the downgrade path
+        status="free",
+    )
+
+    assert result.plan_type == PlanType.FREE
+    update_call = db.table.return_value.update.call_args
+    payload = update_call.args[0]
+    assert payload["plan_type"] == "free"
+    # The owning store's identity is preserved; the replaced Apple rail is
+    # still cleared.
+    assert "google_purchase_token" not in payload
+    assert "google_order_id" not in payload
+    assert payload["apple_original_transaction_id"] is None
+    assert db.table.return_value.upsert.called is False
+
+
+@pytest.mark.asyncio
+async def test_sync_iap_subscription_free_skips_stale_apple_refund_for_superseded_transaction():
+    """A REFUND/REVOKE for a SUPERSEDED Apple transaction — the row now carries
+    a NEWER original_transaction_id (the user resubscribed) — must NOT
+    downgrade the current active subscription. The webhook resolves the user
+    via the appAccountToken fallback, which previously killed the new plan."""
+    db = Mock()
+    existing = _subscription_row(
+        plan_type="pro_monthly",
+        billing_provider="apple",
+        apple_original_transaction_id="orig-new",
+        current_period_start=(datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=28)).isoformat(),
+    )
+    # Identity select, then get_subscription's select — both see the current row.
+    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    chain.execute.side_effect = [Mock(data=existing), Mock(data=existing)]
+    result = await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="apple",
+        plan_type=PlanType.PRO_MONTHLY,  # ignored on the downgrade path
+        status="free",
+        apple_original_transaction_id="orig-old",
+    )
+    assert result.plan_type == PlanType.PRO_MONTHLY
+    assert db.table.return_value.update.called is False
+    assert db.table.return_value.upsert.called is False
+
+
+@pytest.mark.asyncio
+async def test_sync_iap_subscription_free_skips_stale_google_refund_for_superseded_transaction():
+    """Same stale-transaction guard on the Play side, keyed on
+    google_purchase_token."""
+    db = Mock()
+    existing = _subscription_row(
+        plan_type="plus_monthly",
+        billing_provider="google",
+        google_purchase_token="tok-new",
+        current_period_start=(datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=28)).isoformat(),
+    )
+    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    chain.execute.side_effect = [Mock(data=existing), Mock(data=existing)]
+    result = await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="google",
+        plan_type=PlanType.PRO_MONTHLY,  # ignored on the downgrade path
+        status="free",
+        google_purchase_token="tok-old",
+    )
+    assert result.plan_type == PlanType.PLUS_MONTHLY
+    assert db.table.return_value.update.called is False
+    assert db.table.return_value.upsert.called is False
+
+
+@pytest.mark.asyncio
+async def test_sync_iap_subscription_free_downgrades_when_identifiers_match():
+    """A refund for the CURRENT transaction (row identifier == incoming) must
+    still downgrade."""
+    db = Mock()
+    existing = _subscription_row(
+        plan_type="plus_monthly",
+        billing_provider="apple",
+        apple_original_transaction_id="orig-1",
+    )
+    updated = _subscription_row(plan_type="free", status="active", billing_provider="apple")
+    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
+    _mock_write_result(db, updated)
+    result = await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="apple",
+        plan_type=PlanType.PRO_MONTHLY,  # ignored on the downgrade path
+        status="free",
+        apple_original_transaction_id="orig-1",
+    )
+    assert result.plan_type == PlanType.FREE
+    update_call = db.table.return_value.update.call_args
+    assert update_call.args[0]["plan_type"] == "free"
+
+
+@pytest.mark.asyncio
+async def test_sync_iap_subscription_free_downgrades_when_incoming_identifier_unknown():
+    """Legacy behavior: a caller with no identifier (None) cannot tell stale
+    from current, so the downgrade still runs even when the row carries one."""
+    db = Mock()
+    updated = _subscription_row(
+        plan_type="free",
+        status="active",
+        billing_provider="apple",
+        apple_original_transaction_id="orig-1",
+    )
+    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    # No identity select happens: only the write tail runs.
+    chain.execute.side_effect = [Mock(data=updated)]
+    _mock_write_result(db, updated)
+    result = await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="apple",
+        plan_type=PlanType.PRO_MONTHLY,  # ignored on the downgrade path
+        status="free",
+    )
+    assert result.plan_type == PlanType.FREE
+    assert db.table.return_value.update.called is True
 
 
 @pytest.mark.asyncio
@@ -475,6 +654,225 @@ async def test_sync_iap_subscription_skips_stale_snapshot():
 
     assert result.plan_type == PlanType.PLUS_MONTHLY
     assert db.table.return_value.upsert.called is False
+
+
+@pytest.mark.asyncio
+async def test_sync_iap_subscription_applies_upgrade_that_shortens_the_period():
+    """Plus yearly -> Pro monthly is a real upgrade even though it SHORTENS the
+    period. Apple ends the old subscription immediately and starts a shorter
+    one; a period-end comparison read that as stale and silently dropped it —
+    the exact flow App Review exercises."""
+    db = Mock()
+    now = datetime.now(timezone.utc)
+    existing = _subscription_row(
+        plan_type="plus_yearly",
+        billing_provider="apple",
+        billing_product_id="com.fitcheck.plus.yearly",
+        current_period_start=(now - timedelta(days=10)).isoformat(),
+        current_period_end=(now + timedelta(days=355)).isoformat(),
+    )
+    updated = _subscription_row(plan_type="pro_monthly", billing_provider="apple")
+    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
+    _mock_write_result(db, updated)
+
+    await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="apple",
+        plan_type=PlanType.PRO_MONTHLY,
+        status="active",
+        current_period_start=now.isoformat(),
+        current_period_end=(now + timedelta(days=30)).isoformat(),
+        product_id="com.fitcheck.pro.monthly",
+        apple_original_transaction_id="orig-2",
+    )
+
+    payload = db.table.return_value.upsert.call_args.args[0]
+    assert payload["plan_type"] == "pro_monthly"
+    assert payload["billing_product_id"] == "com.fitcheck.pro.monthly"
+
+
+@pytest.mark.asyncio
+async def test_sync_iap_subscription_skips_out_of_order_old_product_notification():
+    """The mirror of the upgrade case: after an upgrade Apple shortens the OLD
+    transaction's expiresDate, and a late notification for it still carries
+    signedTransactionInfo. Its later period end must not overwrite the new
+    plan — only the older purchase date identifies it as stale."""
+    db = Mock()
+    now = datetime.now(timezone.utc)
+    existing = _subscription_row(
+        plan_type="pro_monthly",
+        billing_provider="apple",
+        billing_product_id="com.fitcheck.pro.monthly",
+        current_period_start=now.isoformat(),
+        current_period_end=(now + timedelta(days=30)).isoformat(),
+    )
+    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    chain.execute.side_effect = [Mock(data=existing), Mock(data=existing)]
+
+    result = await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="apple",
+        plan_type=PlanType.PLUS_YEARLY,
+        status="active",
+        current_period_start=(now - timedelta(days=10)).isoformat(),
+        current_period_end=(now + timedelta(days=355)).isoformat(),
+        product_id="com.fitcheck.plus.yearly",
+        apple_original_transaction_id="orig-1",
+    )
+
+    assert result.plan_type == PlanType.PRO_MONTHLY
+    assert db.table.return_value.upsert.called is False
+
+
+@pytest.mark.asyncio
+async def test_sync_iap_subscription_restore_preserves_an_existing_cancellation():
+    """Restore Purchases re-registers the SAME transaction with no renewal
+    info, so it cannot know autoRenewStatus. Passing None must leave the
+    stored cancel_at_period_end alone — writing False would silently
+    un-cancel a subscription the user really cancelled."""
+    db = Mock()
+    now = datetime.now(timezone.utc)
+    start = (now - timedelta(days=2)).isoformat()
+    end = (now + timedelta(days=28)).isoformat()
+    existing = _subscription_row(
+        plan_type="pro_monthly",
+        billing_provider="apple",
+        billing_product_id="com.fitcheck.pro.monthly",
+        cancel_at_period_end=True,
+        current_period_start=start,
+        current_period_end=end,
+    )
+    updated = _subscription_row(plan_type="pro_monthly", billing_provider="apple")
+    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
+    _mock_write_result(db, updated)
+
+    await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="apple",
+        plan_type=PlanType.PRO_MONTHLY,
+        status="active",
+        current_period_start=start,
+        current_period_end=end,
+        cancel_at_period_end=None,  # unknown: the register path has no renewal info
+        product_id="com.fitcheck.pro.monthly",
+        apple_original_transaction_id="orig-1",
+    )
+
+    payload = db.table.return_value.upsert.call_args.args[0]
+    # The column is omitted entirely, so the upsert cannot overwrite it.
+    assert "cancel_at_period_end" not in payload
+
+
+@pytest.mark.asyncio
+async def test_sync_iap_subscription_skips_stale_google_snapshot_with_equal_start():
+    """Google's startTimeMillis is the ORIGINAL subscription start and does not
+    move across renewals, so purchase recency cannot discriminate there. With
+    equal starts the period-end rule must still reject a snapshot that would
+    roll current_period_end backwards."""
+    db = Mock()
+    now = datetime.now(timezone.utc)
+    start = (now - timedelta(days=60)).isoformat()
+    existing = _subscription_row(
+        plan_type="plus_monthly",
+        billing_provider="google",
+        billing_product_id="com.fitcheck.plus.monthly",
+        current_period_start=start,
+        current_period_end=(now + timedelta(days=30)).isoformat(),
+    )
+    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    chain.execute.side_effect = [Mock(data=existing), Mock(data=existing)]
+
+    result = await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="google",
+        plan_type=PlanType.PLUS_MONTHLY,
+        status="active",
+        current_period_start=start,
+        current_period_end=(now + timedelta(days=2)).isoformat(),
+        product_id="com.fitcheck.plus.monthly",
+        google_purchase_token="tok-1",
+    )
+
+    assert result.plan_type == PlanType.PLUS_MONTHLY
+    assert db.table.return_value.upsert.called is False
+
+
+@pytest.mark.asyncio
+async def test_sync_iap_subscription_applies_google_renewal_with_equal_start():
+    """The same equal-start case, but the snapshot moves the period FORWARD:
+    an ordinary Play renewal, which must be written."""
+    db = Mock()
+    now = datetime.now(timezone.utc)
+    start = (now - timedelta(days=60)).isoformat()
+    existing = _subscription_row(
+        plan_type="plus_monthly",
+        billing_provider="google",
+        billing_product_id="com.fitcheck.plus.monthly",
+        current_period_start=start,
+        current_period_end=(now + timedelta(days=1)).isoformat(),
+    )
+    updated = _subscription_row(plan_type="plus_monthly", billing_provider="google")
+    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
+    _mock_write_result(db, updated)
+
+    await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="google",
+        plan_type=PlanType.PLUS_MONTHLY,
+        status="active",
+        current_period_start=start,
+        current_period_end=(now + timedelta(days=31)).isoformat(),
+        product_id="com.fitcheck.plus.monthly",
+        google_purchase_token="tok-1",
+    )
+
+    assert db.table.return_value.upsert.called is True
+
+
+@pytest.mark.asyncio
+async def test_sync_iap_subscription_applies_cancel_flag_for_the_same_transaction():
+    """DID_CHANGE_RENEWAL_STATUS re-delivers the same transaction with the same
+    purchaseDate. Equal starts must still write, or turning auto-renew off
+    would never reach the row."""
+    db = Mock()
+    now = datetime.now(timezone.utc)
+    start = (now - timedelta(days=2)).isoformat()
+    end = (now + timedelta(days=28)).isoformat()
+    existing = _subscription_row(
+        plan_type="pro_monthly",
+        billing_provider="apple",
+        billing_product_id="com.fitcheck.pro.monthly",
+        current_period_start=start,
+        current_period_end=end,
+    )
+    updated = _subscription_row(plan_type="pro_monthly", billing_provider="apple")
+    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
+    _mock_write_result(db, updated)
+
+    await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="apple",
+        plan_type=PlanType.PRO_MONTHLY,
+        status="active",
+        current_period_start=start,
+        current_period_end=end,
+        cancel_at_period_end=True,
+        product_id="com.fitcheck.pro.monthly",
+        apple_original_transaction_id="orig-1",
+    )
+
+    payload = db.table.return_value.upsert.call_args.args[0]
+    assert payload["cancel_at_period_end"] is True
 
 
 @pytest.mark.asyncio
@@ -506,3 +904,109 @@ async def test_cancel_subscription_refuses_store_billed_rows():
         await SubscriptionService.cancel_subscription(USER_ID, db)
 
     assert db.table.return_value.update.called is False
+
+
+# =============================================================================
+# Store identifier ownership (one transaction -> one account)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_new_store_purchase_releases_identifier_from_previous_owner():
+    """A downgraded row keeps its store identity on purpose, so the same store
+    account resubscribing under a DIFFERENT FitCheck account would leave two
+    rows carrying one identifier — and the webhook's identifier lookup then has
+    to guess which. The claiming row strips it from every other row so the
+    lookup stays single-valued (renewals advance, refunds revoke)."""
+    db = Mock()
+    existing = _subscription_row(plan_type="free")
+    updated = _subscription_row(
+        plan_type="plus_monthly", status="active", billing_provider="apple"
+    )
+    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
+    _mock_write_result(db, updated)
+    release_chain = db.table.return_value.update.return_value.eq.return_value.neq.return_value
+    release_chain.execute.return_value = Mock(data=[{"user_id": "old-owner"}])
+
+    await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="apple",
+        plan_type=PlanType.PLUS_MONTHLY,
+        status="active",
+        product_id="com.fitcheck.plus.monthly",
+        apple_original_transaction_id="orig-shared",
+    )
+
+    # Cleared on the OTHER rows...
+    cleared = db.table.return_value.update.call_args.args[0]
+    assert cleared["apple_original_transaction_id"] is None
+    assert db.table.return_value.update.return_value.eq.call_args.args == (
+        "apple_original_transaction_id",
+        "orig-shared",
+    )
+    assert db.table.return_value.update.return_value.eq.return_value.neq.call_args.args == (
+        "user_id",
+        USER_ID,
+    )
+    # ...and still written on this one.
+    assert (
+        db.table.return_value.upsert.call_args.args[0]["apple_original_transaction_id"]
+        == "orig-shared"
+    )
+
+
+@pytest.mark.asyncio
+async def test_release_failure_does_not_block_the_entitlement_write():
+    """The user is waiting on the entitlement; a failed cleanup is logged only."""
+    db = Mock()
+    existing = _subscription_row(plan_type="free")
+    updated = _subscription_row(
+        plan_type="pro_monthly",
+        status="active",
+        billing_provider="google",
+        # A paid plan with no period end reads as expired, so give it a live one.
+        current_period_end=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+    )
+    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
+    _mock_write_result(db, updated)
+    release_chain = db.table.return_value.update.return_value.eq.return_value.neq.return_value
+    release_chain.execute.side_effect = Exception("permission denied")
+
+    result = await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="google",
+        plan_type=PlanType.PRO_MONTHLY,
+        status="active",
+        product_id="com.fitcheck.pro.monthly",
+        google_purchase_token="token-shared",
+    )
+
+    assert result.plan_type == PlanType.PRO_MONTHLY
+    db.table.return_value.upsert.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_no_identifier_means_no_release_query():
+    """Nothing to claim -> no cleanup write at all."""
+    db = Mock()
+    existing = _subscription_row(plan_type="free")
+    updated = _subscription_row(plan_type="plus_monthly", status="active")
+    chain = db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value
+    chain.execute.side_effect = [Mock(data=existing), Mock(data=updated)]
+    _mock_write_result(db, updated)
+
+    await SubscriptionService.sync_iap_subscription(
+        USER_ID,
+        db,
+        provider="apple",
+        plan_type=PlanType.PLUS_MONTHLY,
+        status="active",
+        product_id="com.fitcheck.plus.monthly",
+        apple_original_transaction_id=None,
+    )
+
+    db.table.return_value.update.assert_not_called()

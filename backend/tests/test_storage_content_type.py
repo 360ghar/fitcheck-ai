@@ -1,11 +1,16 @@
 """Regression: every storage upload must carry a REAL content type.
 
-storage3's `DEFAULT_FILE_OPTIONS` stamps `content-type: text/plain;charset=UTF-8`
-on any `upload()` call that passes no `file_options` (storage3/constants.py,
-merged in `_sync/file_api.py::_upload_or_update`). Every item, outfit and avatar
-object in the bucket was written that way, so all five upload helpers now pass
-explicit options - and the type is sniffed from the BYTES, because the batch web
-client names its upload `${tempId}.png` whatever the generator returned.
+ORIGIN (Supabase Storage era): storage3's `DEFAULT_FILE_OPTIONS` stamped
+`content-type: text/plain;charset=UTF-8` on any `upload()` that passed no
+`file_options`, so every item, outfit and avatar object in the bucket was written
+with a lying content type. storage3 is no longer in the call graph — uploads go
+through `S3StorageBackend.upload` with an explicit `content_type` — but the
+requirement it created outlived it and is what these tests hold:
+
+  * every upload helper passes a content type, and
+  * the type is sniffed from the BYTES, never inferred from the filename, because
+    the batch web client names its upload `${tempId}.png` whatever the generator
+    actually returned (frequently WebP since `background_removal.py` landed).
 """
 
 import io
@@ -14,7 +19,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PIL import Image
 
-from app.services.storage_service import DEFAULT_CACHE_CONTROL, StorageService
+from app.services.storage_service import (
+    DEFAULT_CACHE_CONTROL,
+    STORAGE_MAX_EDGE,
+    StorageService,
+)
 from tests.storage_test_utils import FakeS3Backend
 
 JPEG_MAGIC = b"\xff\xd8\xff\xe0" + b"0" * 64
@@ -24,6 +33,25 @@ PNG_MAGIC = b"\x89PNG\r\n\x1a\n" + b"0" * 64
 def _webp_bytes() -> bytes:
     buf = io.BytesIO()
     Image.new("RGBA", (8, 8), (255, 0, 0, 128)).save(buf, format="WEBP")
+    return buf.getvalue()
+
+
+def _heic_bytes() -> bytes:
+    # pillow-heif is registered at import of app.utils.image_processing.
+    buf = io.BytesIO()
+    Image.new("RGBA", (16, 16), (10, 120, 200, 180)).save(buf, format="HEIF")
+    return buf.getvalue()
+
+
+def _bmp_bytes() -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (16, 16), (10, 120, 200)).save(buf, format="BMP")
+    return buf.getvalue()
+
+
+def _tiff_bytes() -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (16, 16), (10, 120, 200)).save(buf, format="TIFF")
     return buf.getvalue()
 
 
@@ -58,26 +86,13 @@ def test_sniff_never_raises_on_hostile_input():
 # =============================================================================
 
 
-def test_upload_options_carry_content_type_and_cache_control():
-    options = StorageService._upload_options(PNG_MAGIC, "item.png")
-    assert options == {
-        "content-type": "image/png",
-        "cache-control": DEFAULT_CACHE_CONTROL,
-        # upsert makes the reconnect retry exact-once: a retry after a
-        # committed-but-lost response overwrites the same path instead of
-        # 409ing "Duplicate" (paths are unique uuid4 keys, so upsert never
-        # clobbers a foreign object).
-        "upsert": "true",
-    }
-
-
-def test_upload_options_builds_a_fresh_dict_each_call():
-    """storage3 MUTATES the file_options dict it is handed (it pops
-    cache-control and upsert), so a shared dict would be emptied after one use."""
-    first = StorageService._upload_options(PNG_MAGIC, "a.png")
-    first.pop("cache-control")
-    second = StorageService._upload_options(PNG_MAGIC, "a.png")
-    assert "cache-control" in second
+# The two tests that used to live here covered `StorageService._upload_options`
+# and asserted that "storage3 MUTATES the file_options dict it is handed" — a
+# property of a library that is no longer in the call graph at all. The S3 path
+# passes scalar content_type / cache_control to `S3StorageBackend.upload`, so the
+# helper had no production caller and the tests only guarded dead code. Both, and
+# the helper, are gone; what actually matters (the sniffed type reaching every
+# upload) is covered by the per-site tests below.
 
 
 # =============================================================================
@@ -102,11 +117,18 @@ async def test_upload_helpers_pass_sniffed_content_type(helper, kwargs):
     with patch("app.services.storage_service.get_storage_backend", return_value=backend):
         await getattr(StorageService, helper)(db=MagicMock(), user_id="u1", file_data=webp, **kwargs)
 
-    call = backend.upload_calls[-1]
+    # First call = the original object; second = the `_thumb` sibling.
+    original, thumb = backend.upload_calls[0], backend.upload_calls[-1]
     # Sniffed from the bytes, NOT from the .png filename the caller supplied.
-    assert call["content_type"] == "image/webp"
-    assert call["cache_control"] == DEFAULT_CACHE_CONTROL
-    assert call["key"].endswith(".webp")
+    assert original["content_type"] == "image/webp"
+    assert original["cache_control"] == DEFAULT_CACHE_CONTROL
+    assert original["key"].endswith(".webp")
+    # The thumb sibling derives from the original key; its type is the
+    # sniffed original when the flattened-JPEG re-encode is bigger (a small
+    # WebP cutout is routinely smaller than its white-flattened JPEG), else
+    # image/jpeg for the downscaled variant.
+    assert thumb["key"] == StorageService.thumb_key_for(original["key"])
+    assert thumb["content_type"] in {"image/webp", "image/jpeg"}
 
 
 @pytest.mark.asyncio
@@ -165,3 +187,146 @@ async def test_temp_generated_upload_sniffs_format_and_extension():
 
     assert captured["content_type"] == "image/webp"
     assert captured["file_path"].endswith(".webp")
+
+
+# =============================================================================
+# non-web-native formats are transcoded to WebP on the way in
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "data,filename",
+    [
+        (_heic_bytes, "photo.heic"),
+        (_bmp_bytes, "scan.bmp"),
+        (_tiff_bytes, "scan.tiff"),
+    ],
+)
+async def test_non_web_native_uploads_are_stored_as_webp(data, filename):
+    """HEIC/BMP/TIFF are accepted at the boundary but never persisted as-is:
+    the canonical object is a browser-safe .webp (browsers cannot render
+    HEIC/TIFF). Guards the _normalize_upload_bytes chokepoint."""
+    backend = FakeS3Backend()
+    raw = data()  # parametrize over the factory, not the bytes, for clarity
+
+    with patch("app.services.storage_service.get_storage_backend", return_value=backend):
+        await StorageService.upload_item_image(
+            db=MagicMock(), user_id="u1", filename=filename, file_data=raw
+        )
+
+    original = backend.upload_calls[0]
+    assert original["key"].endswith(".webp"), original["key"]
+    assert original["content_type"] == "image/webp"
+    # The original (non-web-native) bytes are never the persisted object.
+    assert original["data"] != raw
+
+
+@pytest.mark.asyncio
+async def test_web_native_upload_is_reencoded_to_smaller_webp():
+    """JPEG (a web-native format) is re-encoded to the storage compression
+    profile (WebP q82 @ 2048px) when that shrinks it: a full-res phone photo
+    is the storage cost driver (measured: items at median 0.75MB, max 10.4MB),
+    and nothing downstream consumes more than 2048px."""
+    backend = FakeS3Backend()
+    buf = io.BytesIO()
+    # Smooth photo-like gradient: compresses dramatically better as WebP.
+    grad = Image.linear_gradient("L").resize((1200, 1600))
+    Image.merge("RGB", [grad, grad, grad]).save(buf, format="JPEG", quality=95)
+    jpg = buf.getvalue()
+
+    with patch("app.services.storage_service.get_storage_backend", return_value=backend):
+        await StorageService.upload_item_image(
+            db=MagicMock(), user_id="u1", filename="photo.jpg", file_data=jpg
+        )
+
+    original = backend.upload_calls[0]
+    assert original["key"].endswith(".webp")
+    assert original["content_type"] == "image/webp"
+    assert len(original["data"]) < len(jpg)
+    with Image.open(io.BytesIO(original["data"])) as img:
+        assert max(img.size) <= STORAGE_MAX_EDGE
+
+
+@pytest.mark.asyncio
+async def test_upload_is_downscaled_to_storage_max_edge():
+    """An oversized upload never exceeds the storage max edge (2048px)."""
+    backend = FakeS3Backend()
+    buf = io.BytesIO()
+    grad = Image.linear_gradient("L").resize((3200, 2400))
+    Image.merge("RGB", [grad, grad, grad]).save(buf, format="JPEG", quality=95)
+    jpg = buf.getvalue()
+
+    with patch("app.services.storage_service.get_storage_backend", return_value=backend):
+        await StorageService.upload_item_image(
+            db=MagicMock(), user_id="u1", filename="huge.jpg", file_data=jpg
+        )
+
+    original = backend.upload_calls[0]
+    with Image.open(io.BytesIO(original["data"])) as img:
+        assert img.size == (2048, 1536)  # aspect preserved, longest edge capped
+
+
+@pytest.mark.asyncio
+async def test_keep_smaller_passes_optimized_webp_through():
+    """An already-optimized image (WebP within the max edge) is stored
+    byte-identical: the normalization must never inflate bytes, and an
+    already-compressed input is exactly the 'would grow' case."""
+    backend = FakeS3Backend()
+    buf = io.BytesIO()
+    Image.new("RGBA", (64, 64), (1, 2, 3, 128)).save(buf, format="WEBP", quality=75)
+    webp = buf.getvalue()
+
+    with patch("app.services.storage_service.get_storage_backend", return_value=backend):
+        await StorageService.upload_item_image(
+            db=MagicMock(), user_id="u1", filename="cutout.webp", file_data=webp
+        )
+
+    original = backend.upload_calls[0]
+    assert original["key"].endswith(".webp")
+    assert original["content_type"] == "image/webp"
+    assert original["data"] == webp  # byte-identical, no re-encode
+
+
+@pytest.mark.asyncio
+async def test_png_alpha_survives_storage_normalization():
+    """Background-removed cutouts are transparent PNGs; the stored WebP must
+    keep the alpha channel (a flattened thumbnail/object renders every
+    garment on a white block)."""
+    backend = FakeS3Backend()
+    buf = io.BytesIO()
+    Image.new("RGBA", (900, 900), (255, 0, 0, 128)).save(buf, format="PNG")
+    png = buf.getvalue()
+
+    with patch("app.services.storage_service.get_storage_backend", return_value=backend):
+        await StorageService.upload_item_image(
+            db=MagicMock(), user_id="u1", filename="cutout.png", file_data=png
+        )
+
+    original = backend.upload_calls[0]
+    assert original["content_type"] == "image/webp"
+    with Image.open(io.BytesIO(original["data"])) as img:
+        assert img.mode == "RGBA"
+
+
+@pytest.mark.asyncio
+async def test_animated_gif_passes_through_unchanged():
+    """Animated GIFs are never re-encoded (Pillow would flatten them to a
+    single frame)."""
+    backend = FakeS3Backend()
+    frames = [Image.new("P", (32, 32), color) for color in (1, 2)]
+    buf = io.BytesIO()
+    frames[0].save(
+        buf, format="GIF", save_all=True, append_images=frames[1:], duration=100, loop=0
+    )
+    gif = buf.getvalue()
+
+    with patch("app.services.storage_service.get_storage_backend", return_value=backend):
+        await StorageService.upload_item_image(
+            db=MagicMock(), user_id="u1", filename="anim.gif", file_data=gif
+        )
+
+    original = backend.upload_calls[0]
+    assert original["key"].endswith(".gif")
+    assert original["content_type"] == "image/gif"
+    assert original["data"] == gif  # byte-identical

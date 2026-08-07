@@ -1,0 +1,42 @@
+{
+  "title": "Audit log",
+  "description": "Every admin action, actor, and entity — filterable and exportable.",
+  "searchPlaceholder": "Filter current page by actor, entity, or action…",
+  "searchHint": "Free-text search applies to the current page; use the filters for server-side queries.",
+  "filters": {
+    "actor": "Actor",
+    "actorAll": "All actors",
+    "action": "Action",
+    "actionAll": "All actions",
+    "entityType": "Entity type",
+    "entityTypeAll": "All entity types",
+    "from": "From",
+    "to": "To"
+  },
+  "columns": {
+    "createdAt": "Time",
+    "actor": "Actor",
+    "action": "Action",
+    "entityType": "Entity type",
+    "entityId": "Entity ID",
+    "ip": "IP address"
+  },
+  "actions": {
+    "view": "View payload"
+  },
+  "payload": {
+    "title": "Audit event payload",
+    "payload": "Payload",
+    "userAgent": "User agent",
+    "empty": "No payload"
+  },
+  "export": {
+    "label": "Export CSV",
+    "filename": "audit-events.csv",
+    "toast": "Exported {{count}} audit events"
+  },
+  "empty": {
+    "title": "No audit events",
+    "message": "No audit events match the current filters."
+  }
+}

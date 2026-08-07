@@ -90,7 +90,6 @@ export const ENDPOINTS = {
   BLOG: {
     POSTS: '/api/v1/blog/posts',
     CATEGORIES: '/api/v1/blog/categories',
-    ADMIN_POSTS: '/api/v1/blog/admin/posts',
   },
   FEEDBACK: {
     BASE: '/api/v1/feedback',
@@ -119,4 +118,25 @@ export const LONG_RUNNING_PREFIXES = [
   ENDPOINTS.AI.TRY_ON,
   ENDPOINTS.AI.BATCH_EXTRACT_MULTIPART,
   ENDPOINTS.PHOTOSHOOT.GENERATE,
+  // Image uploads run Pillow validation + S3 PUTs through a small shared worker
+  // pool, so under concurrency a single upload can take well past the 30s
+  // default. Without the extended timeout the client aborts at 30s while the
+  // server keeps processing, surfacing as a late multipart 400.
+  // (RCA 2026-08-05: POST /items/upload, /users/me/avatar 400s.)
+  //
+  // NOTE: matching is `url.includes(prefix)`, so only add paths specific enough
+  // that no fast CRUD route shares the prefix. The outfit image upload
+  // (`/outfits/{id}/images`) is templated and would require `ENDPOINTS.OUTFITS.BASE`,
+  // which would also slow-timeout every outfit list/get/update - it sets its own
+  // timeout at the call site in `api/outfits.ts` instead.
+  ENDPOINTS.ITEMS.UPLOAD,
+  ENDPOINTS.USERS.AVATAR,
 ] as const;
+
+/**
+ * Timeout for image-upload requests whose path is too templated to match a
+ * static prefix (see the note above). Re-exported from `api/client.ts` rather
+ * than restated: two independent 600_000 literals that the interceptor and the
+ * per-call override had to keep equal is exactly how they drift apart.
+ */
+export { LONG_RUNNING_TIMEOUT_MS as UPLOAD_TIMEOUT_MS } from "@/api/client";

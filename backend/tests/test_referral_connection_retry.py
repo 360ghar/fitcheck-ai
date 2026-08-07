@@ -17,17 +17,12 @@ from app.services.referral_service import ReferralService
 
 
 def _patch_supabase_db(monkeypatch, fresh_db):
-    """Make execute_with_reconnect hand out `fresh_db` after a reset."""
+    """Make execute_with_reconnect hand out `fresh_db` after a rebuild."""
     from app.db.connection import SupabaseDB
 
-    events = []
-    monkeypatch.setattr(SupabaseDB, "reset", staticmethod(lambda: events.append("reset")))
     monkeypatch.setattr(
-        SupabaseDB,
-        "get_service_client",
-        staticmethod(lambda: (events.append("fresh"), fresh_db)[1]),
+        SupabaseDB, "rebuild_service_client", staticmethod(lambda _stale=None: fresh_db)
     )
-    return events
 
 
 def _db_with_code_row(row):

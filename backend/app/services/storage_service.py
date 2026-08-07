@@ -1,21 +1,22 @@
 """
 Storage service for managing file uploads to the S3-compatible object store
-(Railway Bucket). Handles item images, outfit images, user avatars, source
-photos, feedback attachments, and temporary generated images.
+(Cloudflare R2 / Railway Bucket — the endpoint decides). Handles item images,
+outfit images, user avatars, source photos, feedback attachments, and temporary
+generated images.
 
 The service keeps the same public method signatures and return shapes as the
 Supabase Storage implementation so callers change as little as possible; the
-internals now talk to ``S3StorageBackend`` (see ``app/services/object_storage.py``).
-Image URLs returned by uploads are SHORT-LIVED presigned GET URLs materialized
-at read time; the DB stores the ``storage_path`` (bucket key), never a URL.
+internals talk to ``S3StorageBackend`` (see ``app/services/object_storage.py``).
+Image URLs returned by uploads are SHORT-LIVED presigned GET URLs; every read
+path re-materializes them (``images.serve_url``), and the DB stores the
+``storage_path`` (bucket key) as the durable reference, never a URL.
 """
 
 import asyncio
 import base64
 import os
 import uuid
-from typing import Optional, List
-from datetime import datetime
+from typing import Iterable, Optional, List
 from urllib.parse import urlparse
 
 from app.core.config import settings
@@ -25,6 +26,7 @@ from app.core.exceptions import (
     FileTooLargeError,
     UnsupportedMediaTypeError,
 )
+from app.utils.datetime_util import utcnow_iso
 from app.utils.db import execute_with_reconnect
 from app.utils.image_processing import (
     DEFAULT_MAX_EDGE,
@@ -32,10 +34,14 @@ from app.utils.image_processing import (
     EXTENSION_BY_MIME,
     SUPPORTED_UPLOAD_MIME_TYPES,
     downscale_image_bytes_to_base64,
+    downscale_image_bytes_to_webp,
     sniff_image_mime,
+    sniff_image_mime_from_magic,
+    transcode_to_webp,
     validate_image_bytes,
 )
 from app.core.image_executor import run_image_op
+from app.core.storage_keys import USER_ID_SEGMENT_RE, normalize_preview_key
 from app.services.object_storage import (
     get_storage_backend,
     close_storage_backend,
@@ -53,12 +59,97 @@ BUCKET_AVATARS = "avatars"
 BUCKET_FEEDBACK = "feedback"
 
 # Allowed file extensions
-ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif'}
+ALLOWED_IMAGE_EXTENSIONS = {
+    '.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif',
+    # Accepted but transcoded to WebP on the way in (browsers cannot render
+    # HEIC/TIFF); see _TRANSCODE_TO_WEBP_MIMES and _normalize_upload_bytes.
+    '.heic', '.heif', '.bmp', '.tif', '.tiff',
+}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+# MIME types that are accepted at upload but NEVER stored as-is: they decode in
+# PIL but browsers cannot render HEIC/TIFF, so the canonical object is always
+# re-encoded to a browser-safe WebP before the key/content-type are minted.
+_TRANSCODE_TO_WEBP_MIMES = frozenset({
+    "image/heif", "image/heic", "image/bmp", "image/tiff",
+})
+
+# Storage compression profile. Every stored image is downscaled to at most
+# STORAGE_MAX_EDGE on its longest edge and re-encoded as WebP at
+# STORAGE_QUALITY — unless that would make it BIGGER (keep-smaller; a small
+# PNG/WebP passes through unchanged) or it is an animated GIF (Pillow would
+# flatten it to a single frame). Sources are stored at full upload resolution
+# today (items up to ~10MB), but nothing downstream consumes more than 2048px:
+# AI references are capped at DEFAULT_MAX_EDGE=1568 before leaving the app and
+# no phone/desktop screen renders beyond ~2048px. Measured bucket: 1.09GB with
+# items at median 0.75MB / max 10.4MB; WebP q82 @ 2048px shrinks photos ~3-4x
+# with no visible loss at display sizes. Alpha survives (WebP), so
+# background-removed cutouts stay transparent.
+STORAGE_MAX_EDGE = 2048
+STORAGE_QUALITY = 82
 
 # Browser/CDN cache lifetime stamped on every upload, in seconds. Encoded on
 # the S3 object as `cache-control: max-age=<v>`.
 DEFAULT_CACHE_CONTROL = "3600"
+
+# Thumbnail variant sizing. List/grid surfaces render tiles at ~44-160px, so a
+# 512px-longest-edge tile is ~10-20x smaller than the full-size original
+# (avg object ~0.94 MB). This is the egress-per-fetch multiplier for every
+# grid/list load (see docs/exec-plans/active/2026-08-05-railway-egress-rca.md).
+THUMB_MAX_EDGE = 512
+THUMB_QUALITY = 75
+
+# Thumbnails are ALWAYS WebP, whatever the original's format.
+#
+# Two reasons, both load-bearing:
+#  1. Alpha survives. Item images are routinely background-removed cutouts
+#     (transparent WebP/PNG); a JPEG thumb flattens them onto white, so grid
+#     tiles would show a white block behind every garment while the full-size
+#     image the card opens is transparent.
+#  2. The key is honest and predictable. The read path derives a thumb's key
+#     from its parent's key with no per-object lookup, so the format must be
+#     inferable from the key alone. One fixed format keeps the key extension,
+#     the stored bytes and the Content-Type in agreement — previously the key
+#     inherited the parent's extension (`abc_thumb.webp`) while the body was
+#     JPEG.
+THUMB_EXTENSION = ".webp"
+THUMB_CONTENT_TYPE = "image/webp"
+
+# Categories that get a thumbnail sibling object. Canonical durable images
+# only: `tmp/` generated previews are short-lived review flows and stay
+# full-size (they are deleted or promoted within their TTL), and `_thumb`
+# keys themselves must never re-derive.
+THUMB_CATEGORIES = frozenset({"items", "outfits", "avatars", "sources", "feedback"})
+
+
+def _with_thumb_siblings(storage_paths: Iterable[str]) -> List[str]:
+    """Return ``storage_paths`` in order, each followed by its ``_thumb`` sibling.
+
+    Every path that leaves this service for a delete or a cleanup sweep must carry
+    its derived thumbnail, or the `_thumb` object orphans in the bucket (thumbs are
+    never DB-referenced, so nothing else will ever find it again). Shared by the
+    batch-delete and account-deletion paths so the two cannot drift.
+
+    Falsy paths are dropped and the result is deduped. Membership is tested against
+    a set, not the output list: a heavy account carries thousands of paths and
+    ``in list`` made this quadratic.
+    """
+    expanded: List[str] = []
+    seen: set[str] = set()
+    for path in storage_paths:
+        if not path or path in seen:
+            continue
+        # Legacy per-user preview keys ({user_id}/tmp|generated/...) are
+        # normalized to the shared top-level layout so deletes resolve the
+        # object where it now lives (see app/core/storage_keys.py).
+        path = normalize_preview_key(path)
+        seen.add(path)
+        expanded.append(path)
+        thumb_key = StorageService.thumb_key_for(path)
+        if thumb_key and thumb_key not in seen:
+            seen.add(thumb_key)
+            expanded.append(thumb_key)
+    return expanded
 
 
 async def close_download_client() -> None:
@@ -87,6 +178,99 @@ class StorageService:
         return f"{user_id}/{category}/{uuid.uuid4().hex}{ext}"
 
     @staticmethod
+    def thumb_key_for(storage_path: str) -> Optional[str]:
+        """Derive the thumbnail object key for a canonical ``storage_path``.
+
+        Thumbnails are sibling objects named ``{stem}_thumb.webp`` (e.g.
+        ``u/items/abc.jpg`` -> ``u/items/abc_thumb.webp``), so the read path can
+        materialize a thumb URL from the durable ``storage_path`` with no schema
+        change and no per-object lookup. The extension is ALWAYS ``.webp``
+        because that is what is actually stored there — see THUMB_EXTENSION.
+
+        Returns None for non-canonical keys (``tmp/`` previews, keys without an
+        extension, ``_thumb`` keys themselves) — those images are served
+        full-size.
+        """
+        if not storage_path:
+            return None
+        parts = storage_path.split("/")
+        if len(parts) < 2 or parts[1] not in THUMB_CATEGORIES:
+            return None
+        name = parts[-1]
+        if not name or "_thumb" in name:
+            return None
+        stem, dot, _ext = name.rpartition(".")
+        if not dot:
+            return None
+        parts[-1] = f"{stem}_thumb{THUMB_EXTENSION}"
+        return "/".join(parts)
+
+    @staticmethod
+    async def _upload_thumbnail(
+        backend,
+        storage_path: str,
+        file_data: bytes,
+    ) -> bool:
+        """Create the ``_thumb`` sibling object for an uploaded image.
+
+        Best-effort by contract: a thumbnail is a serving optimization, so a
+        failure here must never fail the upload itself (the client already has
+        its presigned URL). The variant object is ALWAYS written when the key
+        is canonical so that, once ops has flipped ``THUMBNAILS_BACKFILLED``,
+        the read path can emit ``thumbnail_url`` without per-object existence
+        checks. CPU-bound Pillow work runs on the bounded image executor.
+        Returns True when the thumb object was written.
+
+        Always WebP, always ``image/webp`` (see THUMB_EXTENSION): transparency
+        survives, and the key/bytes/Content-Type cannot disagree.
+
+        A None return from the encoder means no thumbnail could be produced
+        (undecodable bytes, or an encode failure), so NO object is written and
+        the read path falls back to the full-size image. It deliberately does
+        not fall back to storing ``file_data``: that would put the full-size
+        object under the thumb key and serve full-size bytes to every grid tile
+        — the exact cost this variant exists to avoid — and would put non-WebP
+        bytes under a ``.webp`` key.
+
+        Read-path fallback: while ``THUMBNAILS_BACKFILLED`` is off the read
+        path mirrors ``image_url`` for every object, so this best-effort write
+        failing has no visible effect. The residual gap is a post-backfill
+        upload whose thumb encode fails here: the read path then emits a thumb
+        URL for a missing object and the tile 404s — the frontend's
+        ``thumbnail_url || image_url`` hook covers that case, so the gap is
+        bounded and accepted (re-encoding on read is not worth the latency).
+        """
+        thumb_key = StorageService.thumb_key_for(storage_path)
+        if not thumb_key:
+            return False
+        try:
+            thumb = await run_image_op(
+                downscale_image_bytes_to_webp, file_data, THUMB_MAX_EDGE, THUMB_QUALITY
+            )
+            if thumb is None:
+                logger.warning(
+                    "Could not encode thumbnail; serving full-size for this object",
+                    storage_path=storage_path,
+                    thumb_key=thumb_key,
+                )
+                return False
+            await backend.upload(
+                key=thumb_key,
+                data=thumb,
+                content_type=THUMB_CONTENT_TYPE,
+                cache_control=DEFAULT_CACHE_CONTROL,
+            )
+            return True
+        except Exception as e:
+            logger.warning(
+                "Failed to upload thumbnail",
+                storage_path=storage_path,
+                thumb_key=thumb_key,
+                error=str(e),
+            )
+            return False
+
+    @staticmethod
     def _sniff_content_type(file_data: bytes, filename: str = "") -> str:
         """Resolve the real content type of image bytes. Never raises.
 
@@ -96,23 +280,6 @@ class StorageService:
         WebP. The extension is only consulted when the bytes are unreadable.
         """
         return sniff_image_mime(file_data, filename)
-
-    @staticmethod
-    def _upload_options(file_data: bytes, filename: str = "") -> dict:
-        """Upload metadata for a stored object (test-compat helper).
-
-        Kept for unit-test compatibility (the returned dict carries a
-        ``content-type`` key). The S3 upload path calls
-        ``S3StorageBackend.upload`` directly with scalar ``content_type`` /
-        ``cache_control``; ``upsert`` is retained for signature compatibility
-        (an S3 PUT is naturally idempotent, so a reconnect retry overwrites the
-        same path instead of erroring on a now-existing key).
-        """
-        return {
-            "content-type": StorageService._sniff_content_type(file_data, filename),
-            "cache-control": DEFAULT_CACHE_CONTROL,
-            "upsert": "true",
-        }
 
     @staticmethod
     def _validate_image(file_data: bytes, filename: str) -> None:
@@ -168,6 +335,58 @@ class StorageService:
             ) from error
 
     @staticmethod
+    def _normalize_upload_bytes(file_data: bytes) -> bytes:
+        """Normalize accepted upload bytes to the storage compression profile.
+
+        Runs after ``_validate_image`` and before ``_sniff_content_type``, so the
+        sniff then resolves the (possibly new WebP) bytes to ``image/webp`` and
+        the key/content-type are minted as ``.webp`` / ``image/webp``.
+
+        Two steps, every stored image goes through both:
+          1. HEIC/HEIF, BMP and TIFF are accepted at the boundary but browsers
+             cannot render them, so they are transcoded to browser-safe WebP.
+          2. Storage compression: downscale to ``STORAGE_MAX_EDGE`` (2048px)
+             and re-encode as WebP at ``STORAGE_QUALITY`` (82). Web-native
+             formats (JPEG/PNG/WebP/AVIF) are NOT passed through anymore — a
+             10MB phone photo is stored as a ~200-400KB WebP with no visible
+             loss at display sizes. Keep-smaller: when the WebP output is not
+             smaller than the input, the original bytes are kept (a small PNG
+             logo or an already-compressed WebP is not inflated). Animated
+             GIFs pass through untouched (Pillow would flatten them to a
+             single frame). Alpha survives (WebP), so background-removed
+             cutouts stay transparent.
+
+        Sync by design; callers run it on the bounded image executor
+        (``run_image_op``) alongside ``_validate_image``. Best-effort: on any
+        failure the input is returned unchanged rather than dropping the
+        upload (the prior ``validate_image_bytes`` already ran
+        ``Image.verify()`` on these bytes, so a real photo that verifies also
+        re-encodes — failures need verify() to pass yet a full decode+reencode
+        to fail).
+        """
+        mime = sniff_image_mime_from_magic(file_data[:32])
+        if mime in _TRANSCODE_TO_WEBP_MIMES:
+            webp = transcode_to_webp(file_data)
+            if webp is not None:
+                file_data = webp
+            else:
+                logger.warning(
+                    "Accepted non-web-native image failed to transcode to WebP; "
+                    "storing original bytes (may not render in all browsers)",
+                    mime=mime,
+                )
+                return file_data
+        if mime != "image/gif":
+            webp = downscale_image_bytes_to_webp(
+                file_data,
+                max_edge=STORAGE_MAX_EDGE,
+                quality=STORAGE_QUALITY,
+            )
+            if webp is not None and len(webp) < len(file_data):
+                file_data = webp
+        return file_data
+
+    @staticmethod
     def key_from_path(value: Optional[str]) -> Optional[str]:
         """Extract the bucket object key from a storage key or a served URL.
 
@@ -179,6 +398,18 @@ class StorageService:
         Used by the download helpers so they only ever fetch known bucket keys
         via the S3 backend (SSRF-safe): a caller-provided string is reduced to
         a key and then read from the bucket, never from the arbitrary URL.
+
+        BUCKET NAMES ARE NOT ASSUMED TO BE CURRENT. Matching only the configured
+        bucket name was a latent data-loss bug that a provider cutover activates:
+        DB columns persist presigned URLs containing whatever bucket was live at
+        upload time, so after repointing ``OBJECT_STORAGE_BUCKET`` at R2 an old
+        Railway URL resolved to ``railway-bucket/{user}/avatars/x.png``. The real
+        object then looks unreferenced, and ``storage_inventory.py --delete``
+        would delete users' avatars as orphans. Every key we mint either begins
+        with a user UUID (canonical ``{user}/{category}/...``) or with a
+        top-level ``tmp|generated`` folder whose SECOND segment is the user
+        UUID (preview keys), so a leading segment that is neither is a
+        path-style bucket name and is dropped whatever it is called.
         """
         if not value:
             return None
@@ -195,6 +426,27 @@ class StorageService:
                 return "/".join(parts[1:])
             if len(parts) >= 2 and parts[0] == settings.OBJECT_STORAGE_BUCKET:
                 return "/".join(parts[1:])
+            # Top-level preview folders (``tmp/`` and ``generated/`` — see
+            # upload_temp_generated_image / save_generated_image) embed the
+            # owning user in the SECOND segment, so a URL from a bucket that is
+            # no longer the configured one has a non-UUID first segment (the
+            # bucket name) followed by ``tmp|generated``, not a UUID. Same
+            # only-drop-when-it-looks-like-ours rule: parts[2] must be
+            # UUID-shaped.
+            if (
+                len(parts) >= 4
+                and parts[1] in ("tmp", "generated")
+                and USER_ID_SEGMENT_RE.fullmatch(parts[2])
+            ):
+                return "/".join(parts[1:])
+            # Path-style URL from a bucket that is no longer the configured one
+            # (a pre-cutover URL persisted in the DB). Canonical keys begin with
+            # a user UUID, so a non-UUID leading segment is the bucket name.
+            # Only drop it when what remains still looks like one of our keys, so
+            # an unrelated external URL is never silently reshaped into a key.
+            if len(parts) >= 3 and not USER_ID_SEGMENT_RE.fullmatch(parts[0]):
+                if USER_ID_SEGMENT_RE.fullmatch(parts[1]):
+                    return "/".join(parts[1:])
             return "/".join(parts)
         return candidate
 
@@ -241,6 +493,12 @@ class StorageService:
         # handling. Runs on the bounded image executor.
         await run_image_op(StorageService._validate_image, file_data, filename)
 
+        # Normalize to the storage compression profile (WebP q82 @ 2048px,
+        # keep-smaller) before the storage key/content-type are minted.
+        file_data = await run_image_op(
+            StorageService._normalize_upload_bytes, file_data
+        )
+
         content_type = StorageService._sniff_content_type(file_data, filename)
         ext = EXTENSION_BY_MIME.get(content_type, os.path.splitext(filename)[1].lower() or ".jpg")
         storage_path = StorageService._build_key(user_id, "items", ext)
@@ -253,6 +511,8 @@ class StorageService:
                 content_type=content_type,
                 cache_control=DEFAULT_CACHE_CONTROL,
             )
+            # Thumbnail sibling (best-effort; never fails the upload).
+            await StorageService._upload_thumbnail(backend, storage_path, file_data)
             image_url = await StorageService.get_public_url(storage_path)
             thumbnail_url = image_url
 
@@ -314,6 +574,12 @@ class StorageService:
         # handling. Runs on the bounded image executor.
         await run_image_op(StorageService._validate_image, file_data, filename)
 
+        # Normalize to the storage compression profile (WebP q82 @ 2048px,
+        # keep-smaller) before the storage key/content-type are minted.
+        file_data = await run_image_op(
+            StorageService._normalize_upload_bytes, file_data
+        )
+
         content_type = StorageService._sniff_content_type(file_data, filename)
         ext = EXTENSION_BY_MIME.get(content_type, os.path.splitext(filename)[1].lower() or ".jpg")
         storage_path = StorageService._build_key(user_id, "outfits", ext)
@@ -326,6 +592,8 @@ class StorageService:
                 content_type=content_type,
                 cache_control=DEFAULT_CACHE_CONTROL,
             )
+            # Thumbnail sibling (best-effort; never fails the upload).
+            await StorageService._upload_thumbnail(backend, storage_path, file_data)
             image_url = await StorageService.get_public_url(storage_path)
 
             logger.info(
@@ -345,7 +613,7 @@ class StorageService:
                 "width": None,
                 "height": None,
                 "metadata": {
-                    "uploaded_at": datetime.now().isoformat()
+                    "uploaded_at": utcnow_iso()
                 }
             }
 
@@ -388,6 +656,12 @@ class StorageService:
         # handling. Runs on the bounded image executor.
         await run_image_op(StorageService._validate_image, file_data, filename)
 
+        # Normalize to the storage compression profile (WebP q82 @ 2048px,
+        # keep-smaller) before the storage key/content-type are minted.
+        file_data = await run_image_op(
+            StorageService._normalize_upload_bytes, file_data
+        )
+
         content_type = StorageService._sniff_content_type(file_data, filename)
         ext = EXTENSION_BY_MIME.get(content_type, os.path.splitext(filename)[1].lower() or ".jpg")
         storage_path = StorageService._build_key(user_id, "avatars", ext)
@@ -400,6 +674,8 @@ class StorageService:
                 content_type=content_type,
                 cache_control=DEFAULT_CACHE_CONTROL,
             )
+            # Thumbnail sibling (best-effort; never fails the upload).
+            await StorageService._upload_thumbnail(backend, storage_path, file_data)
 
             logger.info(
                 "Uploaded avatar",
@@ -441,7 +717,25 @@ class StorageService:
         """
         try:
             backend = get_storage_backend()
+            # Legacy per-user preview keys are normalized to the shared
+            # top-level layout so the delete resolves the object where it now
+            # lives (see app/core/storage_keys.py).
+            storage_path = normalize_preview_key(storage_path)
+            # Deliberately NOT delete_many: that call is best-effort (it logs
+            # per-key errors instead of raising), so batching these two would
+            # downgrade a failed PRIMARY delete from an exception to a warning.
+            # Callers rely on this raising. The thumb stays best-effort.
             await backend.delete(storage_path)
+            thumb_key = StorageService.thumb_key_for(storage_path)
+            if thumb_key:
+                try:
+                    await backend.delete(thumb_key)
+                except Exception as e:
+                    logger.warning(
+                        "Failed to delete thumbnail",
+                        thumb_key=thumb_key,
+                        error=str(e),
+                    )
             logger.info(
                 "Deleted image",
                 storage_path=storage_path,
@@ -480,9 +774,11 @@ class StorageService:
         if not storage_paths:
             return 0
 
+        expanded = _with_thumb_siblings(storage_paths)
+
         try:
             backend = get_storage_backend()
-            return await backend.delete_many(storage_paths)
+            return await backend.delete_many(expanded)
 
         except Exception as e:
             logger.error(
@@ -511,6 +807,8 @@ class StorageService:
         (account deletion).
 
         Returns ``{"item_ids": [...], "outfit_ids": [...], "storage_paths": [...]}``.
+        ``storage_paths`` includes the derived ``_thumb`` siblings so account
+        deletion never orphans a thumbnail object.
         Callers own the deletion and its error policy (best-effort for batch
         deletes, fail-loudly for account deletion). DB query behavior is
         unchanged (used by account deletion).
@@ -583,16 +881,22 @@ class StorageService:
             # Chunk the IN clause so account deletion (a user's entire
             # wardrobe) never exceeds PostgREST URL length limits. Built
             # inside the wrapped callable so a reconnect retry rebuilds it
-            # against the fresh client (read-only, safe to retry).
+            # against the fresh client (read-only, safe to retry). The chunks
+            # are independent reads; run them concurrently instead of
+            # serializing every 500-row batch.
+            chunk_queries = []
             for start in range(0, len(owned_ids), 500):
                 chunk = owned_ids[start:start + 500]
-                child_rows = await execute_with_reconnect(
-                    lambda d, _t=child_table, _f=fk_column, _c=chunk: (
-                        d.table(_t).select("storage_path").in_(_f, _c).execute()
-                    ),
-                    db,
-                    extra={"operation": f"resolve_owned_storage_paths.{child_table}", "user_id": user_id},
+                chunk_queries.append(
+                    execute_with_reconnect(
+                        lambda d, _t=child_table, _f=fk_column, _c=chunk: (
+                            d.table(_t).select("storage_path").in_(_f, _c).execute()
+                        ),
+                        db,
+                        extra={"operation": f"resolve_owned_storage_paths.{child_table}", "user_id": user_id},
+                    )
                 )
+            for child_rows in await asyncio.gather(*chunk_queries):
                 storage_paths.extend(
                     str(row["storage_path"])
                     for row in (getattr(child_rows, "data", None) or [])
@@ -602,7 +906,9 @@ class StorageService:
         return {
             "item_ids": owned_item_ids,
             "outfit_ids": owned_outfit_ids,
-            "storage_paths": storage_paths,
+            # Include the derived thumbnail siblings so account deletion cleans
+            # them too.
+            "storage_paths": _with_thumb_siblings(storage_paths),
         }
 
     @staticmethod
@@ -695,6 +1001,12 @@ class StorageService:
         # handling. Runs on the bounded image executor.
         await run_image_op(StorageService._validate_image, file_data, filename)
 
+        # Normalize to the storage compression profile (WebP q82 @ 2048px,
+        # keep-smaller) before the storage key/content-type are minted.
+        file_data = await run_image_op(
+            StorageService._normalize_upload_bytes, file_data
+        )
+
         content_type = StorageService._sniff_content_type(file_data, filename)
         ext = EXTENSION_BY_MIME.get(content_type, os.path.splitext(filename)[1].lower() or ".jpg")
         storage_path = StorageService._build_key(user_id, "feedback", ext)
@@ -707,6 +1019,8 @@ class StorageService:
                 content_type=content_type,
                 cache_control=DEFAULT_CACHE_CONTROL,
             )
+            # Thumbnail sibling (best-effort; never fails the upload).
+            await StorageService._upload_thumbnail(backend, storage_path, file_data)
             image_url = await StorageService.get_public_url(storage_path)
 
             logger.info(
@@ -763,6 +1077,11 @@ class StorageService:
                 content_type=content_type,
                 cache_control=cache_control or DEFAULT_CACHE_CONTROL,
             )
+            # Create the thumbnail sibling for canonical image categories
+            # (items/outfits/avatars/sources/feedback). Skipped internally for
+            # tmp/generated/export paths (thumb_key_for returns None) and
+            # never fails the upload (best-effort by contract).
+            await StorageService._upload_thumbnail(backend, file_path, file_data)
             public_url = await StorageService.get_public_url(file_path)
             return {
                 "public_url": public_url,
@@ -788,21 +1107,29 @@ class StorageService:
     ) -> dict:
         """Upload temporary AI-generated image for review workflows.
 
-        Behavior is UNCHANGED from the Supabase path: temp images stay under
-        ``{user_id}/tmp/{source}/``. `extension` is only a hint: the real
-        format is sniffed from the bytes, because generated images are no
-        longer always PNG (matted product shots come back as WebP) and a
-        mislabelled object is served with the wrong content type for as long as
-        it lives.
+        Temp images live under the shared top-level ``tmp/`` folder
+        (``tmp/{user_id}/{source}/...``) so every temp preview in the bucket
+        shares ONE common prefix: the whole folder can be listed, migrated or
+        cleared in a single pass (``scripts/cleanup_temp_assets.py``, admin ops,
+        provider lifecycle rules) instead of one folder per user. `extension`
+        is only a hint: the real format is sniffed from the bytes, because
+        generated images are no longer always PNG (matted product shots come
+        back as WebP) and a mislabelled object is served with the wrong content
+        type for as long as it lives.
         """
         ext = extension if extension.startswith(".") else f".{extension}"
         # Pillow decode is CPU-bound (up to ~7MB per image); never block the
         # event loop during request handling. Runs on the bounded image
         # executor (see app/core/image_executor.py).
         await run_image_op(StorageService._validate_image, file_data, ext)
+        # Normalize to the storage compression profile (WebP q82 @ 2048px,
+        # keep-smaller) before the storage key/content-type are minted.
+        file_data = await run_image_op(
+            StorageService._normalize_upload_bytes, file_data
+        )
         content_type = StorageService._sniff_content_type(file_data, ext)
         ext = EXTENSION_BY_MIME.get(content_type, ext)
-        temp_name = f"{user_id}/tmp/{source}/{uuid.uuid4().hex}{ext}"
+        temp_name = f"tmp/{user_id}/{source}/{uuid.uuid4().hex}{ext}"
         upload = await StorageService.upload_file(
             db=db,
             file_data=file_data,
@@ -836,6 +1163,11 @@ class StorageService:
         # event loop during request handling. Runs on the bounded image
         # executor (see app/core/image_executor.py).
         await run_image_op(StorageService._validate_image, file_data, ext)
+        # Normalize to the storage compression profile (WebP q82 @ 2048px,
+        # keep-smaller) before the storage key/content-type are minted.
+        file_data = await run_image_op(
+            StorageService._normalize_upload_bytes, file_data
+        )
         # Sniffed from the bytes, with the caller's extension only as a fallback.
         content_type = StorageService._sniff_content_type(file_data, ext)
         ext = EXTENSION_BY_MIME.get(content_type, ext)
@@ -943,15 +1275,37 @@ class StorageService:
     ) -> dict:
         """Move a temporary generated image into the canonical item image path.
 
-        Uses an S3 server-side copy (``{user_id}/tmp/...`` -> ``{user_id}/items/...``).
+        Uses an S3 server-side copy (``tmp/{user_id}/...`` ->
+        ``{user_id}/items/...``), then creates the ``_thumb`` sibling for the
+        promoted object (tmp objects never carry one). Best-effort thumb: a
+        failure only costs the variant, never the promotion.
         """
         ext = os.path.splitext(filename_hint)[1].lower() or ".png"
         new_path = StorageService._build_key(user_id, "items", ext)
+        # Legacy per-user preview keys ({user_id}/tmp/{sub}/... held in DB rows
+        # from before the temp-key migration) are normalized to the shared
+        # top-level layout before the move, mirroring the delete paths (see
+        # app/core/storage_keys.py): after the migration script moved the
+        # bytes, the legacy key no longer exists and the copy would raise
+        # NoSuchKey. Idempotent for canonical keys, so a fresh
+        # tmp/{user_id}/{sub}/... path passes through unchanged.
+        source_path = normalize_preview_key(temp_storage_path)
         await StorageService.move_image(
             db=db,
-            old_path=temp_storage_path,
+            old_path=source_path,
             new_path=new_path,
         )
+        try:
+            backend = get_storage_backend()
+            content = await backend.download(new_path)
+            if content:
+                await StorageService._upload_thumbnail(backend, new_path, content)
+        except Exception as e:
+            logger.warning(
+                "Failed to thumbnail promoted item image",
+                storage_path=new_path,
+                error=str(e),
+            )
         image_url = await StorageService.get_public_url(new_path)
         return {
             "image_url": image_url,
@@ -979,3 +1333,69 @@ class StorageService:
                 error=str(e),
             )
             return 0
+
+    # =========================================================================
+    # Admin ops: temp-object inventory + cleanup (bounded scan)
+    #
+    # Temp previews live under the shared top-level ``tmp/`` folder
+    # (``tmp/{user_id}/{source}/...``, see upload_temp_generated_image) — they
+    # are never DB-referenced, so the only way to find them is a bucket scan.
+    # ``scan_keys`` bounds the scan by page count so an admin call cannot walk
+    # an unbounded bucket.
+    # =========================================================================
+
+    @staticmethod
+    async def list_temp_objects(max_pages: int = 50) -> dict:
+        """Bounded scan for temp preview objects (``tmp/...``).
+
+        Matches both the current layout (``tmp/{user_id}/{source}/...``) and
+        the pre-migration one (``{user_id}/tmp/{source}/...``) so the admin
+        inventory stays accurate while scripts/migrate_temp_keys_layout.py is
+        still converting old keys.
+
+        Returns::
+
+            {
+                "scanned_keys": int,   # keys examined across the scanned pages
+                "count": int,          # temp objects found in the scanned range
+                "total_bytes": int,
+                "oldest": {key,size,last_modified} | None,
+                "newest": {key,size,last_modified} | None,
+                "items": [ {key,size,last_modified}, ... ],  # ALL found (route
+                                                             # truncates payload)
+                "truncated": bool,     # True when the page cap cut the scan short
+            }
+        """
+        backend = get_storage_backend()
+        objects = await backend.scan_keys(prefix="", max_pages=max_pages)
+        temp = [
+            o
+            for o in objects
+            if (o.get("key") or "").startswith("tmp/") or "/tmp/" in (o.get("key") or "")
+        ]
+        count = len(temp)
+        total_bytes = sum(int(o.get("size") or 0) for o in temp)
+        dated = [o for o in temp if o.get("last_modified")]
+        oldest = min(dated, key=lambda o: o["last_modified"]) if dated else None
+        newest = max(dated, key=lambda o: o["last_modified"]) if dated else None
+        return {
+            "scanned_keys": len(objects),
+            "count": count,
+            "total_bytes": total_bytes,
+            "oldest": oldest,
+            "newest": newest,
+            "items": temp,
+            "truncated": len(objects) >= max_pages * 1000,
+        }
+
+    @staticmethod
+    async def delete_temp_objects(keys: List[str]) -> int:
+        """Delete temp objects by key; returns the number deleted (best-effort).
+
+        The caller applies the per-call safety cap (see
+        ``admin_service.TEMP_DELETE_MAX_OBJECTS``); this method just deletes.
+        """
+        if not keys:
+            return 0
+        backend = get_storage_backend()
+        return await backend.delete_many(keys)

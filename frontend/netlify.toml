@@ -29,13 +29,50 @@
   status = 200
   force = true
 
-# SPA routing - redirect all routes to index.html
+# SPA routing - serve the empty app shell for every non-prerendered path.
+#
+# Prerendered SEO routes (/, /faq, /features/*, /compare/*, /best/*, ...) exist
+# as their own static dist/<path>/index.html files, and Netlify serves an
+# existing file before this redirect applies. Everything else (/auth/*,
+# /dashboard, /wardrobe, ...) gets dist/app-shell.html — the EMPTY-shell
+# template (no #root markup, but with the theme script, JSON-LD blocks and CSP
+# hashes) written by scripts/prerender-html.mjs during the build. Serving
+# dist/index.html here instead would flash the prerendered homepage on every
+# app-route cold load or refresh until JS hydrates.
 [[redirects]]
   from = "/*"
-  to = "/index.html"
+  to = "/app-shell.html"
   status = 200
+  force = true
 
 # Headers for security and caching
+#
+# Content-Security-Policy is ACTIVE (hash-based, no script 'unsafe-inline').
+# The blocker used to be the pre-hydration theme script + five JSON-LD blocks
+# in index.html. The JSON-LD blocks are type="application/ld+json" data blocks,
+# which the HTML/CSP specs do not execute and do not govern via script-src — so
+# only the theme script is executable. The six inline blocks are byte-stable
+# across builds (prerender-meta.mjs only regex-replaces title/meta/canonical/og;
+# prerender-html.mjs only fills #root; Vite does not minify inline scripts), so
+# static sha256 hashes pin them instead of 'unsafe-inline'. If any of those six
+# blocks is edited, recompute the hashes (see scripts/csp-hashes.mjs) or the
+# theme script / JSON-LD will be blocked on the next deploy.
+#
+# connect-src MUST list the object-storage origins, not just the API. `<img>`
+# rendering is covered by the wide `img-src ... https:`, but four paths fetch()
+# an image URL to build a Blob, and fetch() is governed by connect-src:
+#   src/lib/utils.ts (download), src/components/social/ShareOutfitDialog.tsx,
+#   src/pages/photoshoot/components/PhotoshootResultsStep.tsx,
+#   src/pages/try-on/TryOnPage.tsx
+# All three storage origins are listed so the R2 cutover and the later Worker
+# flip are not each a separate CSP edit to remember:
+#   *.storageapi.dev             Railway bucket (current)
+#   *.r2.cloudflarestorage.com   Cloudflare R2 S3 endpoint
+#   images.fitcheckaiapp.com     images Worker (IMAGE_SERVING_MODE=worker)
+# Note that R2 also needs a bucket CORS policy for these fetches; CSP only
+# permits the request, CORS is what lets the response be read.
+# `data:` is required too: src/stores/outfitStore.ts `dataUrlToFile` fetches a
+# data: URL to turn a generated preview into a File.
 [[headers]]
   for = "/*"
   [headers.values]
@@ -43,6 +80,18 @@
     X-Content-Type-Options = "nosniff"
     X-XSS-Protection = "1; mode=block"
     Referrer-Policy = "strict-origin-when-cross-origin"
+    # HSTS: every known subdomain (www, api) already serves valid HTTPS and
+    # http already 301s to https, so includeSubDomains is safe. preload is
+    # intentionally NOT set — submission to hstspreload.org is a separate,
+    # near-permanent decision and is deferred.
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    # same-origin-allow-popups (NOT same-origin): the social-import OAuth flow
+    # opens a popup to api.fitcheckaiapp.com whose page calls
+    # window.opener.postMessage. same-origin would null out the cross-origin
+    # opener and silently break that flow. allow-popups preserves it and still
+    # passes the Lighthouse COOP audit.
+    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'sha256-YrcuI051rae+8RQ8P83GQuMHjfmZI01DwfyJWuhpusA=' 'sha256-BiCpad06HRc0RdcAy8kibM8cY1exZC7Lvb9ztsSjyXM=' 'sha256-QyZbh9zaNeZxMtXA2d0bzeX5li13JFDU6XBVgJwTVq0=' 'sha256-9pfdcEo/osseMFUmkO6jrbC9FK6BlHjCPaq25OOaG+c=' 'sha256-/azZru59F/VuruBU5oaYTmr7RAE+kw/kDoMva1zJ9rw=' 'sha256-UFGQU8Z9gcofCVkpX/VHZB/s3xUJz0ksqayQZ5ROhG8=' https://us-assets.i.posthog.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' data: https://api.fitcheckaiapp.com https://*.supabase.co wss://*.supabase.co https://*.storageapi.dev https://*.r2.cloudflarestorage.com https://images.fitcheckaiapp.com https://us.i.posthog.com https://us-assets.i.posthog.com https://*.ingest.sentry.io; worker-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
 
 # Authenticated app routes: robots.txt already disallows them; belt-and-braces noindex
 [[headers]]
@@ -102,6 +151,25 @@
 
 [[headers]]
   for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Self-hosted fonts. Content-stable by construction: a different font revision
+# is a different file. Safe to mark immutable.
+[[headers]]
+  for = "/fonts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Content-Type = "font/woff2"
+
+# Landing imagery. These were served max-age=0, must-revalidate (Netlify's
+# default for unhashed public/ files), so every repeat visit re-fetched the
+# hero. They are not content-hashed, so treating them as immutable carries one
+# obligation: RENAME the file when the art changes (wardrobe.webp ->
+# wardrobe-v2.webp) rather than overwriting it, or clients keep the old image
+# for a year.
+[[headers]]
+  for = "/landing/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 

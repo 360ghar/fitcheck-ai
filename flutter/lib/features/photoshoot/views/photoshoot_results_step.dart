@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../core/widgets/report_content_sheet.dart';
@@ -424,10 +425,10 @@ class PhotoshootResultsStep extends GetView<PhotoshootController> {
 
     final url = image.imageUrl;
     if (url != null && url.isNotEmpty) {
-      return Image.network(
+      return AppNetworkImage(
         url,
         fit: fit,
-        errorBuilder: (context, error, stackTrace) => _brokenImage(tokens),
+        errorWidget: (context, error, stackTrace) => _brokenImage(tokens),
       );
     }
 

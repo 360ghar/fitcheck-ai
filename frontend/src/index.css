@@ -1,3 +1,43 @@
+/* Self-hosted brand type.
+ *
+ * These were previously pulled in via `@fontsource-variable/inter` and
+ * `@fontsource-variable/manrope` in main.tsx, which register the families as
+ * "Inter Variable" and "Manrope Variable". tailwind.config.ts asks for "Inter"
+ * and "Manrope", so nothing ever matched: 12 woff2 files (284 KB) shipped, no
+ * font request was ever made, and every surface silently rendered in
+ * system-ui. Declaring the faces here under the names Tailwind already uses
+ * removes the whole class of mismatch — the family name now lives in exactly
+ * one place per font.
+ *
+ * Latin subsets only. The other 10 subsets (cyrillic, greek, vietnamese, and
+ * the -ext variants) were only ever dead weight for an English-only product;
+ * `inLanguage: "en"` in the site's JSON-LD. Weight ranges are the real axis
+ * bounds of each variable file (Manrope's is 200-800, not 100-900).
+ *
+ * Both files are SIL Open Font License; see public/fonts/*-LICENSE.txt.
+ */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('/fonts/inter-latin-var.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url('/fonts/manrope-latin-var.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -385,6 +425,20 @@
 
 .prose a {
   @apply text-primary hover:text-primary/80;
+}
+
+/*
+ * Inline text links that are marked `text-primary` differ from surrounding
+ * body copy by hue alone, which fails WCAG 1.4.1 (use of color) for users who
+ * can't distinguish the red. Buttons are never `text-primary` (they use
+ * `text-primary-foreground`), so this rule reaches only inline links and adds
+ * the underline that makes them identifiable without color. A static
+ * underline (not a hover-only one) is the AA-recommended fix.
+ */
+a.text-primary {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
 }
 
 .prose strong {

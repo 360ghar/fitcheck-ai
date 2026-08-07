@@ -36,6 +36,8 @@ export interface FeaturePageTemplateProps {
   keywords: string
   eyebrow: string
   heroImage: string
+  /** Responsive variants (srcset) for the hero image. Omit to serve `heroImage` only. */
+  heroImageSrcSet?: string
   heroImageAlt: string
   preparationTitle: string
   preparation: string[]
@@ -61,6 +63,7 @@ export function FeaturePageTemplate({
   keywords,
   eyebrow,
   heroImage,
+  heroImageSrcSet,
   heroImageAlt,
   preparationTitle,
   preparation,
@@ -142,6 +145,8 @@ export function FeaturePageTemplate({
               <figure className="overflow-hidden rounded-2xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
                 <img
                   src={heroImage}
+                  srcSet={heroImageSrcSet}
+                  sizes="(min-width: 1024px) 47vw, 92vw"
                   alt={heroImageAlt}
                   className="aspect-[4/3] h-full w-full object-cover"
                   loading="eager"

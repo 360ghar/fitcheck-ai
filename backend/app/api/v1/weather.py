@@ -18,7 +18,7 @@ from supabase import Client
 
 from app.core.exceptions import WeatherServiceError
 from app.core.logging_config import get_context_logger
-from app.core.security import get_current_user_id
+from app.api.v1.deps import get_active_user_id
 from app.db.connection import get_db
 from app.services.weather_service import get_weather_service
 
@@ -116,7 +116,7 @@ async def _resolve_location(
 @router.get("", response_model=Dict[str, Any])
 async def get_current_weather(
     location: Optional[str] = Query(None, description="City name or 'lat,lon'"),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Get current weather (Celsius)."""
@@ -172,7 +172,7 @@ async def get_current_weather(
 async def get_weather_forecast(
     location: Optional[str] = Query(None, description="City name or 'lat,lon'"),
     days: int = Query(7, ge=1, le=14),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Get a simple daily forecast (Celsius)."""

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "prebuild": "node scripts/generate-sitemap.mjs",
-    "build": "tsc && vite build && node scripts/prerender-meta.mjs",
+    "build": "tsc && vite build && node scripts/prerender-meta.mjs && node scripts/prerender-html.mjs",
     "postbuild": "node scripts/generate-llms.mjs && node scripts/ping-indexnow.mjs",
     "sitemap": "node scripts/generate-sitemap.mjs",
     "prerender-meta": "node scripts/prerender-meta.mjs",
@@ -16,8 +16,6 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@fontsource-variable/inter": "^5.2.8",
-    "@fontsource-variable/manrope": "^5.2.8",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-checkbox": "^1.3.3",

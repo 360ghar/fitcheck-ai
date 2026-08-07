@@ -1,29 +1,12 @@
 /**
- * React Query hooks for blog data fetching
+ * React Query hooks for blog data fetching (public read-side).
+ *
+ * Admin mutations moved to the admin app (`admin/src/features/content/`).
  */
 
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-  type UseQueryOptions,
-  type UseMutationOptions,
-} from '@tanstack/react-query'
-import {
-  getBlogPosts,
-  getBlogPostBySlug,
-  getBlogCategories,
-  createBlogPost,
-  updateBlogPost,
-  deleteBlogPost,
-  getAllBlogPosts,
-} from '@/api/blog'
-import type {
-  BlogPost,
-  BlogPostListResponse,
-  BlogPostCreateRequest,
-  BlogPostUpdateRequest,
-} from '@/types'
+import { useQuery, type UseQueryOptions } from '@tanstack/react-query'
+import { getBlogPosts, getBlogPostBySlug, getBlogCategories } from '@/api/blog'
+import type { BlogPost, BlogPostListResponse } from '@/types'
 
 // ============================================================================
 // QUERY KEYS
@@ -34,9 +17,6 @@ export const blogKeys = {
   lists: () => [...blogKeys.all, 'list'] as const,
   list: (filters: { page?: number; pageSize?: number; category?: string; search?: string }) =>
     [...blogKeys.lists(), filters] as const,
-  adminLists: () => [...blogKeys.all, 'admin', 'list'] as const,
-  adminList: (filters: { page?: number; pageSize?: number }) =>
-    [...blogKeys.adminLists(), filters] as const,
   details: () => [...blogKeys.all, 'detail'] as const,
   detail: (slug: string) => [...blogKeys.details(), slug] as const,
   categories: () => [...blogKeys.all, 'categories'] as const,
@@ -85,92 +65,6 @@ export function useBlogCategories(options?: Omit<UseQueryOptions<string[], Error
   return useQuery({
     queryKey: blogKeys.categories(),
     queryFn: getBlogCategories,
-    ...options,
-  })
-}
-
-// ============================================================================
-// ADMIN HOOKS
-// ============================================================================
-
-/**
- * Hook to fetch all blog posts including unpublished (admin only)
- */
-export function useAllBlogPosts(
-  page: number = 1,
-  pageSize: number = 20,
-  includeUnpublished: boolean = true,
-  options?: Omit<UseQueryOptions<BlogPostListResponse, Error>, 'queryKey' | 'queryFn'>
-) {
-  return useQuery({
-    queryKey: blogKeys.adminList({ page, pageSize }),
-    queryFn: () => getAllBlogPosts(page, pageSize, includeUnpublished),
-    ...options,
-  })
-}
-
-// ============================================================================
-// MUTATIONS
-// ============================================================================
-
-/**
- * Hook to create a new blog post
- */
-export function useCreateBlogPost(
-  options?: Omit<UseMutationOptions<BlogPost, Error, BlogPostCreateRequest>, 'mutationFn'>
-) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: createBlogPost,
-    onSuccess: () => {
-      // Invalidate all blog lists
-      queryClient.invalidateQueries({ queryKey: blogKeys.lists() })
-      queryClient.invalidateQueries({ queryKey: blogKeys.adminLists() })
-    },
-    ...options,
-  })
-}
-
-/**
- * Hook to update an existing blog post
- */
-export function useUpdateBlogPost(
-  options?: Omit<
-    UseMutationOptions<BlogPost, Error, { slug: string; data: BlogPostUpdateRequest }>,
-    'mutationFn'
-  >
-) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({ slug, data }) => updateBlogPost(slug, data),
-    onSuccess: (_, variables) => {
-      // Invalidate specific post and all lists
-      queryClient.invalidateQueries({ queryKey: blogKeys.detail(variables.slug) })
-      queryClient.invalidateQueries({ queryKey: blogKeys.lists() })
-      queryClient.invalidateQueries({ queryKey: blogKeys.adminLists() })
-    },
-    ...options,
-  })
-}
-
-/**
- * Hook to delete a blog post
- */
-export function useDeleteBlogPost(
-  options?: Omit<UseMutationOptions<{ slug: string; deleted: boolean }, Error, string>, 'mutationFn'>
-) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: deleteBlogPost,
-    onSuccess: (_, slug) => {
-      // Remove specific post from cache and invalidate lists
-      queryClient.removeQueries({ queryKey: blogKeys.detail(slug) })
-      queryClient.invalidateQueries({ queryKey: blogKeys.lists() })
-      queryClient.invalidateQueries({ queryKey: blogKeys.adminLists() })
-    },
     ...options,
   })
 }

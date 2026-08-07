@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
@@ -401,7 +402,8 @@ class AstrologyTab extends StatelessWidget {
                     const SizedBox(height: AppConstants.spacing8),
                     ...items.map((item) {
                       final name = item['name']?.toString() ?? 'Unknown';
-                      final imageUrl = _extractItemImage(item);
+                      final image = _extractItemImage(item);
+                      final imageUrl = image.url;
                       return Container(
                         margin: const EdgeInsets.only(
                           bottom: AppConstants.spacing8,
@@ -423,7 +425,15 @@ class AstrologyTab extends StatelessWidget {
                                 width: 48,
                                 height: 48,
                                 child: imageUrl != null
-                                    ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined))
+                                    ? AppNetworkImage(
+                                        imageUrl,
+                                        fit: BoxFit.cover,
+                                        // A derived `_thumb` URL may not exist;
+                                        // retry the full size before showing a
+                                        // broken-image icon.
+                                        fallbackUrl: image.fallback,
+                                        errorWidget: (_, _, _) => const Icon(Icons.broken_image_outlined),
+                                      )
                                     : Container(
                                         color: tokens.cardColor.withValues(
                                           alpha: 0.4,
@@ -571,23 +581,31 @@ class AstrologyTab extends StatelessWidget {
     return value.whereType<Map<String, dynamic>>().toList();
   }
 
-  String? _extractItemImage(Map<String, dynamic> item) {
+  /// The URL to show, plus the full size to retry if it fails.
+  ///
+  /// Thumbnail-first is right for a 48px tile, but `thumbnail_url` is derived
+  /// from the parent key with no existence check and can 404 while the full-size
+  /// object is healthy (see `AppNetworkImage.fallbackUrl`), so the full size
+  /// comes back as the fallback rather than being discarded.
+  ({String? url, String? fallback}) _extractItemImage(Map<String, dynamic> item) {
     for (final key in ['images', 'item_images']) {
       final images = item[key];
       if (images is List && images.isNotEmpty) {
         final first = images.first;
         if (first is Map) {
           final map = Map<String, dynamic>.from(first);
-          final url = map['thumbnail_url']?.toString() ??
-              map['image_url']?.toString() ??
-              map['url']?.toString();
-          if (url != null && url.isNotEmpty) return url;
+          final full = map['image_url']?.toString() ?? map['url']?.toString();
+          final thumb = map['thumbnail_url']?.toString();
+          final url = (thumb != null && thumb.isNotEmpty) ? thumb : full;
+          if (url != null && url.isNotEmpty) {
+            return (url: url, fallback: full);
+          }
         }
       }
     }
     final flat = item['image_url']?.toString();
-    if (flat != null && flat.isNotEmpty) return flat;
-    return null;
+    if (flat != null && flat.isNotEmpty) return (url: flat, fallback: null);
+    return (url: null, fallback: null);
   }
 
   Color _parseHexColor(String value) {

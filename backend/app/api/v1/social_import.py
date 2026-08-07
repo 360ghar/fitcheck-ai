@@ -19,7 +19,7 @@ from supabase import Client
 from app.core.config import settings
 from app.core.exceptions import SocialImportJobNotFoundError
 from app.core.logging_config import get_context_logger
-from app.core.security import get_current_user_id
+from app.api.v1.deps import get_active_user_id
 from app.db.connection import get_db
 from app.models.social_import import (
     SocialImportActionResponse,
@@ -220,7 +220,7 @@ def _oauth_response(
 )
 async def create_social_import_job(
     body: SocialImportStartRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     if not settings.ENABLE_SOCIAL_IMPORT:
@@ -270,7 +270,7 @@ async def create_social_import_job(
 @router.get("/social-import/jobs/{job_id}/status", response_model=Dict[str, Any])
 async def get_social_import_status(
     job_id: str,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     if not settings.ENABLE_SOCIAL_IMPORT:
@@ -286,7 +286,7 @@ async def get_social_import_status(
 async def social_import_events(
     job_id: str,
     last_event_id: Optional[int] = Query(default=None),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     if not settings.ENABLE_SOCIAL_IMPORT:
@@ -390,7 +390,7 @@ async def create_oauth_connect_url(
     job_id: str,
     request: Request,
     mobile_redirect_uri: Optional[str] = Query(default=None),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     if not settings.ENABLE_SOCIAL_IMPORT:
@@ -521,7 +521,7 @@ async def social_oauth_callback(
 async def submit_oauth_auth(
     job_id: str,
     body: SocialImportOAuthAuthRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     service = _service(user_id, db)
@@ -542,7 +542,7 @@ async def submit_oauth_auth(
 async def submit_scraper_login(
     job_id: str,
     body: SocialImportScraperAuthRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     service = _service(user_id, db)
@@ -566,7 +566,7 @@ async def patch_social_item(
     photo_id: str,
     item_id: str,
     body: SocialImportItemPatchRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     service = _service(user_id, db)
@@ -588,7 +588,7 @@ async def patch_social_item(
 async def approve_social_photo(
     job_id: str,
     photo_id: str,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     service = _service(user_id, db)
@@ -614,7 +614,7 @@ async def approve_social_photo(
 async def reject_social_photo(
     job_id: str,
     photo_id: str,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     service = _service(user_id, db)
@@ -632,7 +632,7 @@ async def reject_social_photo(
 @router.post("/social-import/jobs/{job_id}/cancel", response_model=Dict[str, Any])
 async def cancel_social_import_job(
     job_id: str,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     service = _service(user_id, db)

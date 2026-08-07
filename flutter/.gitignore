@@ -42,6 +42,10 @@ app.*.map.json
 # Environment variables
 .env
 
+# Shorebird local CLI state (shorebird.yaml itself IS committed - the app_id is
+# not a secret and must be bundled as an asset for the updater to find the app).
+.shorebird/
+
 # Android Studio will place build artifacts here
 /android/app/debug
 /android/app/profile

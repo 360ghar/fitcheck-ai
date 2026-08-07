@@ -79,11 +79,20 @@ export default function HowItWorks() {
 
         <AnimatedSection delay={160}>
           <div className="mt-10 md:mt-12 relative rounded-2xl overflow-hidden border border-stone-200 dark:border-stone-800 aspect-[16/10] sm:aspect-[21/9] max-h-[360px]">
+            {/* Landscape variants: the container is 16/10 → 21/9 and the old
+                portrait source (864x1152) was upscaled to ~1280px wide on
+                desktop. outfit-wide-1280 is a 16/10 crop of the same source at
+                the same object-position (20% from top), so the visual is
+                unchanged but sharp. */}
             <img
-              src="/landing/outfit.webp"
+              src="/landing/outfit-wide-1280.webp"
+              srcSet="/landing/outfit-wide-640.webp 640w, /landing/outfit-wide-1280.webp 1280w"
+              sizes="(min-width: 640px) 80vw, 100vw"
               alt="A complete everyday outfit ready to wear"
               className="w-full h-full object-cover object-[center_20%]"
               loading="lazy"
+              width={1280}
+              height={800}
             />
             <div className="absolute inset-0 bg-stone-950/20" />
             <div className="absolute bottom-4 left-4 md:bottom-6 md:left-6 flex flex-wrap items-center gap-3">

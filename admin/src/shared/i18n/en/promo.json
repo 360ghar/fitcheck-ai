@@ -1,0 +1,93 @@
+{
+  "title": "Promo codes",
+  "description": "Create and manage promo codes and redemption stats.",
+  "columns": {
+    "code": "Code",
+    "discount": "Discount",
+    "plan": "Plan target",
+    "active": "Status",
+    "redemptions": "Redemptions",
+    "createdAt": "Created",
+    "expires": "Expires",
+    "maxUses": "Max uses"
+  },
+  "filters": {
+    "active": "Status",
+    "activePlaceholder": "All statuses",
+    "plan": "Plan",
+    "planPlaceholder": "All plans"
+  },
+  "active": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "plans": {
+    "plus_monthly": "Plus monthly",
+    "plus_yearly": "Plus yearly",
+    "pro_monthly": "Pro monthly",
+    "pro_yearly": "Pro yearly"
+  },
+  "discount": {
+    "months": "{{months}} mo free",
+    "unlimited": "Unlimited"
+  },
+  "rowActions": {
+    "label": "Actions",
+    "deactivate": "Deactivate",
+    "activate": "Activate"
+  },
+  "create": {
+    "title": "New promo code",
+    "description": "Create a code that grants free months of a plan.",
+    "submit": "Create code",
+    "submitPending": "Creating…",
+    "cancel": "Cancel",
+    "success": "Promo code {{code}} created."
+  },
+  "toggle": {
+    "activateTitle": "Activate code",
+    "activateDescription": "Activate {{code}}? It will be redeemable again.",
+    "deactivateTitle": "Deactivate code",
+    "deactivateDescription": "Deactivate {{code}}? It can no longer be redeemed.",
+    "confirm": "Confirm",
+    "success": "Promo code {{code}} updated.",
+    "errorGeneric": "Could not update the promo code. Try again."
+  },
+  "form": {
+    "code": "Code",
+    "codePlaceholder": "e.g. LAUNCH30",
+    "codeHint": "3–50 characters: letters, digits, '-' or '_', starting alphanumeric.",
+    "planType": "Plan",
+    "months": "Months granted",
+    "monthsHint": "Number of free months (1+).",
+    "maxUses": "Max uses",
+    "maxUsesPlaceholder": "Unlimited",
+    "maxUsesHint": "Leave empty for unlimited redemptions.",
+    "expiresAt": "Expires",
+    "expiresAtHint": "Leave empty to never expire.",
+    "active": "Active immediately"
+  },
+  "errors": {
+    "codeRequired": "Enter a code.",
+    "codeFormat": "Use 3–50 characters: letters, digits, '-' or '_', starting alphanumeric.",
+    "codeDuplicate": "This code already exists. Try a different code.",
+    "planRequired": "Choose a plan.",
+    "monthsRequired": "Enter the number of months.",
+    "monthsMin": "Months must be at least 1.",
+    "maxUsesMin": "Max uses must be at least 1.",
+    "createFailed": "Could not create the promo code. Try again."
+  },
+  "empty": {
+    "title": "No promo codes",
+    "message": "No promo codes match the current filters."
+  },
+  "loadError": {
+    "title": "Could not load promo codes",
+    "message": "The promo code list is unavailable right now."
+  },
+  "export": {
+    "label": "Export CSV",
+    "filename": "promo-codes.csv",
+    "toast": "Exported {{count}} promo codes"
+  }
+}

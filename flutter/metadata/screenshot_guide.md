@@ -7,7 +7,7 @@
 | iPhone 6.9" (Pro Max) | 1320 × 2868 | Portrait | Primary set — required for all iPhone listings |
 | iPhone 6.5" | 1284 × 2778 | Portrait | Optional; 6.9" set auto-scales down |
 | iPhone 5.5" | 1242 × 2208 | Portrait | Legacy; optional but recommended for wider reach |
-| iPad 12.9" (M4) | 2064 × 2752 | Portrait | Required if iPad is supported |
+| iPad 13-inch (M4) | 2064 × 2752 | Portrait | Required if iPad is supported |
 
 - **Max 10 screenshots** per device family; aim for **8–10**.
 - **No alpha channel** — App Store rejects screenshots with transparency.

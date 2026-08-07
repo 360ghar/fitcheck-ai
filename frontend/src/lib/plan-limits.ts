@@ -7,19 +7,19 @@
 
 export const PLAN_LIMITS = {
   free: {
-    monthlyExtractions: 25,
+    monthlyExtractions: 50,
     monthlyGenerations: 50,
     monthlyEmbeddings: 200,
     dailyPhotoshootImages: 10,
   },
   plus: {
-    monthlyExtractions: 100,
+    monthlyExtractions: 200,
     monthlyGenerations: 350,
     monthlyEmbeddings: 2000,
     dailyPhotoshootImages: 30,
   },
   pro: {
-    monthlyExtractions: 200,
+    monthlyExtractions: 400,
     monthlyGenerations: 1000,
     monthlyEmbeddings: 5000,
     dailyPhotoshootImages: 50,

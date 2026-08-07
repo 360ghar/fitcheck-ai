@@ -1,0 +1,96 @@
+name: Admin Lint, Test & E2E
+
+# The admin panel (React 19 + Vite) previously had no CI — a type, lint,
+# bundle-budget, or e2e regression could merge to main undetected. This
+# mirrors the backend-ci / frontend-ci / flutter-ci pattern with an added
+# Playwright job for the 8 critical admin journeys (spec §10).
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'admin/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'admin/**'
+
+jobs:
+  quality:
+    name: Typecheck, Lint, Test, Build & Budget
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Check OpenAPI schema drift
+        run: npm run check:schema
+
+      - name: Check bundle size budget
+        run: npm run check:bundle
+
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    needs: quality
+    defaults:
+      run:
+        working-directory: admin
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run e2e journeys
+        run: npm run e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            admin/dist/e2e/playwright-report
+            admin/dist/e2e/test-results
+          retention-days: 7

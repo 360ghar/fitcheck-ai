@@ -152,7 +152,7 @@ graph TD
 
    | | Free | Plus ($10/mo, $100/yr) | Pro ($20/mo, $200/yr) |
    |---|---|---|---|
-   | Item extractions / mo | 25 | 100 | 200 |
+   | Item extractions / mo | 50 | 200 | 400 |
    | Outfit visualizations / mo | 50 | 350 | 1,000 |
    | Embeddings / mo | 200 | 2,000 | 5,000 |
    | Photoshoot images / day | 10 | 30 | 50 |

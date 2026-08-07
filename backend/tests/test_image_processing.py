@@ -12,9 +12,12 @@ from PIL import Image
 from app.utils.image_processing import (
     MAX_BBOX_AREA_RATIO,
     MIN_BBOX_CONFIDENCE,
+    SUPPORTED_UPLOAD_MIME_TYPES,
     crop_base64_image_to_box,
     downscale_base64_image,
     resolve_product_reference_image,
+    transcode_to_webp,
+    validate_image_bytes,
 )
 
 
@@ -264,3 +267,64 @@ def test_multi_item_photo_with_legitimately_large_item_still_crops():
 
     assert strategy == "crop"
     assert result is not None
+
+
+# =============================================================================
+# transcode_to_webp + HEIC/BMP/TIFF upload acceptance
+# =============================================================================
+
+
+def _encode(fmt, mode="RGB", size=(64, 64), color=(10, 120, 200)):
+    img = Image.new(mode, size, color)
+    buf = io.BytesIO()
+    img.save(buf, format=fmt)
+    return buf.getvalue()
+
+
+def _heic_bytes(size=(64, 64)):
+    # pillow-heif is registered at import of app.utils.image_processing, so PIL
+    # can write HEIF here and read it back in the code under test.
+    img = Image.new("RGBA", size, (10, 120, 200, 180))
+    buf = io.BytesIO()
+    img.save(buf, format="HEIF")
+    return buf.getvalue()
+
+
+def test_upload_allowlist_includes_new_formats():
+    for mime in ("image/heif", "image/heic", "image/bmp", "image/tiff"):
+        assert mime in SUPPORTED_UPLOAD_MIME_TYPES
+
+
+def test_validate_image_bytes_accepts_heic_bmp_tiff():
+    for data, expected in [
+        (_heic_bytes(), "image/heif"),
+        (_encode("BMP"), "image/bmp"),
+        (_encode("TIFF"), "image/tiff"),
+    ]:
+        assert validate_image_bytes(data, max_bytes=10 * 1024 * 1024) == expected
+
+
+def test_transcode_to_webp_round_trips_new_formats():
+    for data in (_heic_bytes(), _encode("BMP"), _encode("TIFF")):
+        out = transcode_to_webp(data)
+        assert out is not None
+        # WebP magic: b"RIFF" .... b"WEBP"
+        assert out[:4] == b"RIFF" and out[8:12] == b"WEBP"
+        with Image.open(io.BytesIO(out)) as img:
+            assert img.format == "WEBP"
+
+
+def test_transcode_to_webp_preserves_alpha():
+    out = transcode_to_webp(_heic_bytes())  # RGBA source
+    with Image.open(io.BytesIO(out)) as img:
+        assert img.mode in {"RGBA", "LA"} or "transparency" in img.info
+
+
+def test_transcode_to_webp_preserves_resolution():
+    out = transcode_to_webp(_encode("BMP", size=(120, 80)))
+    with Image.open(io.BytesIO(out)) as img:
+        assert img.size == (120, 80)
+
+
+def test_transcode_to_webp_returns_none_on_garbage():
+    assert transcode_to_webp(b"definitely not an image") is None

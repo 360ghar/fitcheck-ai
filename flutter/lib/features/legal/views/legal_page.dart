@@ -7,8 +7,10 @@ import '../../../core/widgets/app_ui.dart';
 class LegalPage extends StatelessWidget {
   const LegalPage({super.key});
 
-  static const String privacyPolicyUrl = 'https://fitcheckaiapp.com/privacy';
-  static const String termsOfServiceUrl = 'https://fitcheckaiapp.com/terms';
+  // Aliases of the single source of truth in AppConstants — three copies of
+  // these URLs used to drift independently.
+  static const String privacyPolicyUrl = AppConstants.privacyPolicyUrl;
+  static const String termsOfServiceUrl = AppConstants.termsOfServiceUrl;
 
   @override
   Widget build(BuildContext context) {

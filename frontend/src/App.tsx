@@ -13,32 +13,32 @@ import FeatureErrorBoundary from './components/errors/FeatureErrorBoundary'
 // dead-code eliminated along with the pages they mount).
 import { FEATURES } from './lib/feature-flags'
 
-// Layouts
-import AppLayout from './components/layout/AppLayout'
+// Layouts. AppLayout (the signed-in shell: sidebar, bottom nav, user menu) is
+// lazy — it only renders for authenticated users, so marketing visitors never
+// download it. It mounts inside the <Suspense> boundary in App().
+const AppLayout = lazy(() => import('./components/layout/AppLayout'))
 import AuthLayout from './components/layout/AuthLayout'
 import PublicLayout from './layouts/PublicLayout'
 
-// Eager: the cold-start paths. A first-time visitor lands on one of these, so
-// putting them behind a chunk fetch would only add a round-trip before the
-// first paint. Everything else is lazy -- see the block below.
-import LandingPage from './pages/public/LandingPage'
-import LoginPage from './pages/auth/LoginPage'
-import RegisterPage from './pages/auth/RegisterPage'
+// Auth pages and the app shell are lazy: a marketing visitor never reaches
+// them, and every route lives inside <Suspense>, so there is no flash cost for
+// making them chunks. They were eager because a first-time visitor can land
+// straight on an auth path — the Suspense fallback (a theme-aware spinner)
+// covers that cold start. Everything else below is lazy too.
+const LoginPage = lazy(() => import('./pages/auth/LoginPage'))
+const RegisterPage = lazy(() => import('./pages/auth/RegisterPage'))
+
+// Public marketing routes come from one shared manifest so the build-time
+// prerender (src/entry-prerender.tsx) renders exactly what the client router
+// mounts. `componentFor` hands back an already-resolved component for the route
+// main.tsx preloaded, and a lazy one for everything else.
+import { PUBLIC_ROUTES, componentFor } from './routes/publicRoutes'
 
 // Lazy: every route the user reaches by navigating. Previously all ~40 page
 // modules were static imports, so landing on "/" downloaded the blog admin
 // rich-text editor, the photoshoot wizard and the try-on page before the hero
 // rendered. React guarantees the Suspense fallback resolves, so no content is
 // gated on an animation that might not fire.
-const AboutPage = lazy(() => import('./pages/public/AboutPage'))
-const TermsPage = lazy(() => import('./pages/public/TermsPage'))
-const PrivacyPage = lazy(() => import('./pages/public/PrivacyPage'))
-const SupportPage = lazy(() => import('./pages/public/SupportPage'))
-const FAQPage = lazy(() => import('./pages/public/FAQPage'))
-
-const BlogIndexPage = lazy(() => import('./pages/blog/BlogIndexPage'))
-const BlogPostPage = lazy(() => import('./pages/blog/BlogPostPage'))
-
 const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage'))
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'))
 const AuthCallbackPage = lazy(() => import('./pages/auth/AuthCallbackPage'))
@@ -62,25 +62,6 @@ const GamificationPage = FEATURES.gamification
 const SharedOutfitPage = lazy(() => import('./pages/shared/SharedOutfitPage'))
 const TryOnPage = lazy(() => import('./pages/try-on/TryOnPage'))
 const PhotoshootPage = lazy(() => import('./pages/photoshoot/PhotoshootPage'))
-
-const BlogAdminLayout = lazy(() => import('./pages/admin/BlogAdminLayout'))
-const BlogDashboardPage = lazy(() => import('./pages/admin/BlogDashboardPage'))
-const BlogListPage = lazy(() => import('./pages/admin/BlogListPage'))
-const BlogEditorPage = lazy(() => import('./pages/admin/BlogEditorPage'))
-const BlogCategoriesPage = lazy(() => import('./pages/admin/BlogCategoriesPage'))
-
-const FeaturesIndexPage = lazy(() => import('./pages/features/FeaturesIndexPage'))
-const AIWardrobeExtractionPage = lazy(() => import('./pages/features/AIWardrobeExtractionPage'))
-const VirtualTryOnPage = lazy(() => import('./pages/features/VirtualTryOnPage'))
-const AIPhotoshootGeneratorPage = lazy(() => import('./pages/features/AIPhotoshootGeneratorPage'))
-const OutfitRecommendationsPage = lazy(() => import('./pages/features/OutfitRecommendationsPage'))
-const WardrobeAnalyticsPage = lazy(() => import('./pages/features/WardrobeAnalyticsPage'))
-
-// Intent SEO pages (compare, best-of, personas, guides)
-const IntentSeoPage = lazy(() => import('./pages/seo/IntentSeoPage'))
-const CostPerWearCalculatorPage = lazy(
-  () => import('./pages/tools/CostPerWearCalculatorPage')
-)
 
 // Loading spinner for hydration state (theme-aware)
 function LoadingSpinner() {
@@ -168,47 +149,14 @@ function App() {
           lazy chunk can never leave a page blank the way a JS-gated reveal can. */}
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
-          {/* Public marketing routes */}
+          {/* Public marketing routes, generated from the shared manifest in
+              routes/publicRoutes.ts so the build-time prerender and the client
+              router can never disagree about what "/" renders. */}
           <Route element={<PublicLayout />}>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route path="/terms" element={<TermsPage />} />
-            <Route path="/privacy" element={<PrivacyPage />} />
-            <Route path="/support" element={<SupportPage />} />
-            <Route path="/faq" element={<FAQPage />} />
-            <Route path="/blog" element={<BlogIndexPage />} />
-            <Route path="/blog/category/:category" element={<BlogIndexPage />} />
-            <Route path="/blog/:slug" element={<BlogPostPage />} />
-
-            {/* Feature landing pages */}
-            <Route path="/features" element={<FeaturesIndexPage />} />
-            <Route path="/features/ai-wardrobe-extraction" element={<AIWardrobeExtractionPage />} />
-            <Route path="/features/virtual-try-on" element={<VirtualTryOnPage />} />
-            <Route path="/features/ai-photoshoot-generator" element={<AIPhotoshootGeneratorPage />} />
-            <Route path="/features/outfit-recommendations" element={<OutfitRecommendationsPage />} />
-            <Route path="/features/wardrobe-analytics" element={<WardrobeAnalyticsPage />} />
-
-            {/* SEO intent pages: best-of, comparisons, personas, guides */}
-            <Route path="/best/virtual-closet-apps" element={<IntentSeoPage />} />
-            <Route path="/best/ai-outfit-planners" element={<IntentSeoPage />} />
-            <Route path="/compare/fitcheck-vs-acloset" element={<IntentSeoPage />} />
-            <Route path="/compare/fitcheck-vs-whering" element={<IntentSeoPage />} />
-            <Route path="/alternatives/acloset-alternatives" element={<IntentSeoPage />} />
-            <Route path="/for/busy-professionals" element={<IntentSeoPage />} />
-            <Route path="/for/content-creators" element={<IntentSeoPage />} />
-            <Route path="/for/festive-and-wedding-outfits" element={<IntentSeoPage />} />
-            <Route path="/guides/how-to-digitize-your-wardrobe" element={<IntentSeoPage />} />
-            <Route path="/guides/what-to-wear-today" element={<IntentSeoPage />} />
-            <Route path="/guides/cost-per-wear-calculator-explained" element={<IntentSeoPage />} />
-            <Route path="/guides/how-to-reduce-clothing-returns-with-virtual-try-on" element={<IntentSeoPage />} />
-            <Route path="/compare/fitcheck-vs-stylebook" element={<IntentSeoPage />} />
-            <Route path="/compare/fitcheck-vs-indyx" element={<IntentSeoPage />} />
-            <Route path="/compare/fitcheck-vs-cladwell" element={<IntentSeoPage />} />
-            <Route path="/compare/fitcheck-vs-open-wardrobe" element={<IntentSeoPage />} />
-            <Route path="/guides/what-is-a-capsule-wardrobe" element={<IntentSeoPage />} />
-            <Route path="/guides/what-is-wardrobe-utilization" element={<IntentSeoPage />} />
-            <Route path="/wear/:citySlug" element={<IntentSeoPage />} />
-            <Route path="/tools/cost-per-wear-calculator" element={<CostPerWearCalculatorPage />} />
+            {PUBLIC_ROUTES.map(({ path }) => {
+              const Page = componentFor(path)
+              return <Route key={path} path={path} element={<Page />} />
+            })}
           </Route>
 
           {/* Auth routes */}
@@ -293,21 +241,6 @@ function App() {
             )}
             <Route path="/profile" element={<FeatureErrorBoundary featureName="Profile & settings"><ProfilePage /></FeatureErrorBoundary>} />
             <Route path="/settings" element={<SettingsRedirect />} />
-          </Route>
-
-          {/* Admin routes - protected */}
-          <Route
-            element={
-              <ProtectedRoute>
-                <BlogAdminLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route path="/admin/blog" element={<BlogDashboardPage />} />
-            <Route path="/admin/blog/posts" element={<BlogListPage />} />
-            <Route path="/admin/blog/new" element={<BlogEditorPage />} />
-            <Route path="/admin/blog/edit/:slug" element={<BlogEditorPage />} />
-            <Route path="/admin/blog/categories" element={<BlogCategoriesPage />} />
           </Route>
 
           {/* Catch all - redirect to dashboard or landing */}

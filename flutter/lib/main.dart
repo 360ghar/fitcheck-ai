@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'core/config/env_config.dart';
 import 'core/services/analytics_service.dart';
+import 'core/services/code_push_service.dart';
 import 'core/services/supabase_service.dart';
 import 'core/services/persistence_service.dart';
 import 'core/services/theme_service.dart';
@@ -40,6 +41,13 @@ void main() async {
   // dark theme. (ThemeService.onInit kicks off the async load; ready resolves
   // when it lands.)
   await themeService.ready;
+
+  // Shorebird code push. Registered here rather than in InitialBinding because
+  // InitialBinding only runs inside GetMaterialApp's initState - far too late
+  // for the patch number to reach the Sentry options below. The read is local,
+  // timeout-bounded, and degrades to null, so it cannot stall startup.
+  final codePushService = Get.put(CodePushService());
+  await codePushService.loadCurrentPatch();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -103,6 +111,12 @@ void main() async {
         options.tracesSampleRate = 1.0;
         options.environment = kDebugMode ? 'development' : 'production';
         options.release = '${packageInfo.packageName}@${packageInfo.version}+${packageInfo.buildNumber}';
+        // A Shorebird patch ships new Dart code under an UNCHANGED version and
+        // build number, so `release` alone cannot tell a crash in patch 3 from
+        // one in the original store build. `dist` is Sentry's own
+        // "distribution within a release" field and is exactly this. Null on an
+        // unpatched build, which Sentry treats as "no distribution".
+        options.dist = codePushService.currentPatchNumber.value?.toString();
         options.debug = kDebugMode;
       },
       appRunner: () {

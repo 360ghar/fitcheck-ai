@@ -49,7 +49,7 @@ AI Closet, Try-On & Outfits
 ```
 New: AI Photoshoot Generator — turn selfies into studio-quality headshots for LinkedIn, dating apps & Instagram. Plus virtual try-on and smart daily outfit picks.
 ```
-(160 chars.)
+(162 chars.)
 
 ### Description — `≤ 4000 chars`
 
@@ -99,16 +99,16 @@ PERFECT FOR
 
 PRICING
 FitCheck AI is free to download and use. Optional Plus and Pro subscriptions
-(monthly and yearly) are sold through Apple In-App Purchase; payments are
-processed by Apple, and subscriptions can be managed in the App Store
-subscription settings. The web app sells the same plans via its own checkout.
+(monthly and yearly) are sold through Apple In-App Purchase. Subscriptions
+renew automatically and can be managed or cancelled anytime in your App Store
+subscription settings.
 
 HOW IT WORKS
 FitCheck AI connects to a secure cloud backend to run its AI features (item extraction, try-on, photoshoot, and recommendations). An account is required so your wardrobe and outfits sync across your devices. You can delete your account and all associated data at any time from Settings.
 
 Download FitCheck AI and transform how you get dressed.
 ```
-(~2,050 chars — well within the 4000 limit, leaving room to extend.)
+(2,785 chars — well within the 4000 limit, leaving room to extend.)
 
 ### Keywords — `≤ 100 chars`, comma-separated, **NO spaces**
 
@@ -117,9 +117,9 @@ Download FitCheck AI and transform how you get dressed.
 > "wardrobe", "stylist") or in the category name ("lifestyle") — Apple already indexes those.
 
 ```
-closet,outfit,fashion,try-on,clothing,style,planner,organizer,virtual,photoshoot,headshot,capsule,lookbook,attire
+closet,outfit,fashion,try-on,clothing,style,planner,organizer,virtual,photoshoot,headshot,capsule
 ```
-(98 chars including commas. No spaces. No duplication of name/category terms.)
+(97 chars including commas. No spaces. No duplication of name/category terms.)
 
 ### What's New (Release Notes for v1.0) — `≤ 4000 chars`
 
@@ -205,9 +205,13 @@ first-party product analytics and **does not use the IDFA / no AdSupport framewo
 | **User Content → Photos or Videos** | Yes | **Yes (Linked)** | No | App Functionality |
 | **User Content → Other User Content** (body measurements: height, weight, body shape, skin tone) | Yes | **Yes (Linked)** | No | App Functionality |
 | **Identifiers → User ID** (Supabase UUID) | Yes | **Yes (Linked)** | No | App Functionality |
+| **Identifiers → Device ID** (PostHog anonymous install ID) | Yes | **Yes (Linked)** | No | Analytics |
 | **Usage Data → Product Interaction** (PostHog) | Yes | **Yes (Linked)** | No | Analytics |
 | **Diagnostics → Crash Data** (PostHog) | Yes | **Yes (Linked)** | No | App Functionality |
-| **Diagnostics → Performance Data** (PostHog, if captured) | Yes | **Yes (Linked)** | No | Analytics |
+| **Diagnostics → Performance Data** (Sentry performance traces, `tracesSampleRate = 1.0`) | Yes | **Yes (Linked)** | No | Analytics |
+
+> **Lock-step rule:** this ASC answer sheet and `flutter/ios/Runner/PrivacyInfo.xcprivacy` are kept in lock-step —
+> every data type, linked flag, and purpose below must be mirrored exactly in the manifest, and vice versa.
 
 Notes on Apple's exact category names:
 - Photos go under **User Content → "Photos or Videos"** (not "Sensitive Info"; facial photos are not
@@ -228,7 +232,7 @@ No data type qualifies for the "Data Not Linked to You" section.
 For each "Linked, no tracking, App Functionality / Analytics" entry, ASC will additionally ask:
 - "Is this data used for tracking?" → **No** (for all).
 - "Is this data linked to the user's identity?" → **Yes** (for all).
-- Purpose checkboxes: tick **App Functionality** (and **Analytics** for the two PostHog usage types).
+- Purpose checkboxes: tick **App Functionality** (and **Analytics** for the Product Interaction, Performance Data, and Device ID entries).
   Do NOT tick "Third-Party Advertising", "Developer's Advertising or Marketing", or
   "Product Personalization" unless the recommendation engine is later marketed as such.
 
@@ -309,10 +313,34 @@ HOW TO TEST KEY FEATURES
 6. Recommendations: open the Recommendations tab for weather/occasion-based outfit suggestions.
 7. Calendar: plan an outfit on a date in the Calendar tab.
 
-PRICING
-Free to download. Plus and Pro subscriptions (monthly and yearly) are sold
-through Apple In-App Purchase; renewals are managed by Apple. "Restore
-Purchases" is available on the Subscription page.
+SUBSCRIPTIONS - HOW TO TEST THE UPGRADE FLOW
+Free to download. Plus and Pro (monthly and yearly) are sold only through
+Apple In-App Purchase; renewals are managed by Apple. All four auto-renewable
+subscriptions and their subscription group are included in this submission and
+work in the Sandbox environment.
+
+To reach and complete an upgrade:
+1. Sign in with the demo account above.
+2. Tap the "More" tab (rightmost in the bottom bar).
+3. Tap "Plan & Billing" in the Account card.
+   (Alternative path: More -> Settings -> Subscription -> Manage Subscription.)
+4. Under "Choose a plan", tap "Upgrade" on any plan card (Plus or Pro,
+   Monthly or Yearly) and confirm with your Sandbox Apple Account.
+5. The purchase is verified server-side via the App Store Server API, and the
+   new plan and its higher limits appear on the same screen immediately.
+
+The demo account starts on the Free plan, so both Free -> Plus and Plus -> Pro
+upgrades can be exercised. Plus and Pro are in one subscription group with Pro
+ranked above Plus, so upgrading from Plus to Pro takes effect immediately
+rather than at the next renewal.
+
+"Restore Purchases" is on the same Plan & Billing screen and is available to
+every user, including subscribers. Auto-renewal terms and links to our Terms
+of Use and Privacy Policy are shown directly beneath the plan cards.
+
+Note: sandbox subscription periods are heavily accelerated (1 month is about 5
+minutes), so a purchased plan may renew or expire during a long review
+session. Repeat step 4 to re-purchase if that happens.
 
 ACCOUNT DELETION (Guideline 5.1.1(v))
 Users can delete their account and all data in-app: Settings -> Delete Account. This issues

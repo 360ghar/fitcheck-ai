@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../wardrobe/models/item_model.dart';
@@ -270,10 +271,10 @@ class WeatherBasedTab extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(AppConstants.radius8),
               child: item.itemImages != null && item.itemImages!.isNotEmpty
-                  ? Image.network(
+                  ? AppNetworkImage(
                   item.itemImages!.first.url,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined),
+                  errorWidget: (_, _, _) => const Icon(Icons.broken_image_outlined),
                 )
                   : Container(
                       color: tokens.cardColor.withValues(alpha: 0.5),

@@ -88,21 +88,26 @@ def test_is_db_connection_error_matches_bare_numeric_error_code():
 
 
 def _patch_supabase_db(monkeypatch):
-    """Record reset calls and hand out a distinct fresh client each time."""
+    """Record rebuild calls and hand out a distinct fresh client each time.
+
+    The reconnect wrappers now rebuild via a single atomic
+    ``SupabaseDB.rebuild_service_client()`` (reset + recreate under one lock) so
+    a wave of concurrent failures shares one fresh client instead of each
+    tearing the singleton down independently.
+    """
     from app.db.connection import SupabaseDB
 
     events = []
 
-    def fake_reset():
-        events.append("reset")
-
-    def fake_get_service_client():
+    def fake_rebuild_service_client(_stale=None):
         fresh = object()
+        events.append("rebuild")
         events.append(fresh)
         return fresh
 
-    monkeypatch.setattr(SupabaseDB, "reset", staticmethod(fake_reset))
-    monkeypatch.setattr(SupabaseDB, "get_service_client", staticmethod(fake_get_service_client))
+    monkeypatch.setattr(
+        SupabaseDB, "rebuild_service_client", staticmethod(fake_rebuild_service_client)
+    )
     return events
 
 
@@ -121,8 +126,8 @@ async def test_execute_with_reconnect_retries_once_with_fresh_client(monkeypatch
 
     assert result == "ok"
     # builder ran exactly twice: once on the dead client, once on the fresh
-    # one, with a singleton reset in between.
-    assert events == [old_db, "reset", events[2], events[2]]
+    # rebuilt client, with a single atomic rebuild in between.
+    assert events == [old_db, "rebuild", events[2], events[2]]
 
 
 @pytest.mark.asyncio
@@ -155,7 +160,7 @@ async def test_execute_with_reconnect_rethrows_non_connection_errors(monkeypatch
 
     with pytest.raises(ValueError, match="boom"):
         await execute_with_reconnect(lambda d: (_ for _ in ()).throw(ValueError("boom")), object())
-    assert "reset" not in events
+    assert "rebuild" not in events
 
 
 @pytest.mark.asyncio
@@ -167,7 +172,7 @@ async def test_execute_with_reconnect_retry_also_fails_propagates(monkeypatch):
 
     with pytest.raises(httpx.RemoteProtocolError):
         await execute_with_reconnect(builder, object())
-    assert "reset" in events
+    assert "rebuild" in events
 
 
 @pytest.mark.asyncio
@@ -191,9 +196,99 @@ async def test_execute_with_reconnect_max_retries_heals_sustained_blip(monkeypat
     result = await execute_with_reconnect(builder, dead_client, max_retries=2, backoff_seconds=0)
 
     assert result == "ok"
-    # original + 2 rebuilt clients were tried, with a reset before each rebuild.
+    # original + 2 rebuilt clients were tried, with a rebuild before each retry.
     assert len(seen_clients) == 3
-    assert events.count("reset") == 2
+    assert events.count("rebuild") == 2
+
+
+# ---------------------------------------------------------------------------
+# Builder shape: the builder must CALL .execute(), not hand back the method
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_execute_with_reconnect_returns_response_not_bound_method(monkeypatch):
+    """A builder written as ``lambda d: ....execute`` (no parens) returns the
+    bound METHOD instead of running the query, so the caller's
+    ``result.data`` blows up on every request - not just during an outage.
+
+    Regression for 2026-08-05: `create_item` / `get_item` were wrapped with the
+    parenless form. `asyncio.to_thread` happily returns the callable, and
+    `execute_with_reconnect` cannot tell the difference, so nothing failed until
+    the caller touched `.data`. This asserts the wrapper hands back whatever the
+    builder produced, making the contract explicit for call sites."""
+    _patch_supabase_db(monkeypatch)
+
+    class _Resp:
+        data = [{"id": "abc"}]
+
+    class _Query:
+        def execute(self):
+            return _Resp()
+
+    # Correct shape: parens -> a real response object.
+    result = await execute_with_reconnect(lambda d: _Query().execute(), object())
+    assert not callable(result)
+    assert result.data == [{"id": "abc"}]
+
+    # Buggy shape: no parens -> the bound method leaks through to the caller.
+    leaked = await execute_with_reconnect(lambda d: _Query().execute, object())
+    assert callable(leaked), (
+        "a parenless .execute builder returns the method; call sites must use .execute()"
+    )
+
+
+def test_no_parenless_execute_builders_in_app_code():
+    """Structural guard: an ``execute_with_reconnect`` lambda builder must CALL
+    ``.execute()``, never hand back the bare bound method.
+
+    Note the two OPPOSITE conventions, which is exactly why this bug was easy to
+    introduce:
+
+    * ``asyncio.to_thread(chain.execute)``   -> pass the UNCALLED method (correct;
+      to_thread invokes it for you).
+    * ``execute_with_reconnect(lambda d: chain.execute())`` -> CALL it (correct;
+      the lambda is the thing to_thread invokes, so its body must run the query).
+
+    Getting the second one wrong returns the method to the caller, so
+    ``result.data`` fails on EVERY request, not only during a connection blip.
+    `tests/test_small_routes_async.py` cannot catch it - it treats everything
+    inside `execute_with_reconnect(...)` as offloaded and never checks whether
+    `.execute` is actually invoked. Regression for 2026-08-05."""
+    import ast
+    from pathlib import Path
+
+    app_dir = Path(__file__).resolve().parents[1] / "app"
+    offenders: list[str] = []
+
+    def _returns_bare_execute(node: ast.AST) -> bool:
+        """True if the expression is an `....execute` attribute access that is
+        not itself being called."""
+        return isinstance(node, ast.Attribute) and node.attr == "execute"
+
+    for path in app_dir.rglob("*.py"):
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if name not in {"execute_with_reconnect", "run_sync_with_reconnect"}:
+                continue
+            # First positional arg is the builder.
+            if not node.args:
+                continue
+            builder = node.args[0]
+            if isinstance(builder, ast.Lambda) and _returns_bare_execute(builder.body):
+                offenders.append(
+                    f"{path.relative_to(app_dir.parent)}:{builder.lineno}"
+                )
+
+    assert not offenders, (
+        "execute_with_reconnect builders must CALL .execute() - a bare "
+        "`.execute` returns the bound method and breaks the caller:\n  "
+        + "\n  ".join(offenders)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +308,7 @@ def test_run_sync_with_reconnect_retries_once(monkeypatch):
 
     assert run_sync_with_reconnect(fn, old_db) == "ok"
     assert events[0] is old_db
-    assert "reset" in events
+    assert "rebuild" in events
 
 
 def test_run_sync_with_reconnect_rethrows_non_connection_errors(monkeypatch):
@@ -221,7 +316,7 @@ def test_run_sync_with_reconnect_rethrows_non_connection_errors(monkeypatch):
 
     with pytest.raises(ValueError, match="boom"):
         run_sync_with_reconnect(lambda d: (_ for _ in ()).throw(ValueError("boom")), object())
-    assert "reset" not in events
+    assert "rebuild" not in events
 
 
 # ---------------------------------------------------------------------------
@@ -273,11 +368,71 @@ async def test_get_subscription_retries_on_dead_connection(monkeypatch):
     )
     fresh_chain.execute.return_value = result
 
-    monkeypatch.setattr(SupabaseDB, "reset", staticmethod(lambda: None))
-    monkeypatch.setattr(SupabaseDB, "get_service_client", staticmethod(lambda: fresh_db))
+    monkeypatch.setattr(SupabaseDB, "rebuild_service_client", staticmethod(lambda _stale=None: fresh_db))
 
     sub = await SubscriptionService.get_subscription(USER_ID, dead_db)
 
     assert sub.plan_type == PlanType.PLUS_MONTHLY
     # The dead client was hit exactly once, then rebuilt and retried on fresh.
     dead_chain.execute.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# SupabaseDB.rebuild_service_client — one rebuild per failure wave
+# ---------------------------------------------------------------------------
+
+
+def test_rebuild_service_client_shares_one_client_across_a_failure_wave(monkeypatch):
+    """A wave of concurrent failures must produce exactly ONE new client.
+
+    Every waiter passes the client it saw fail; the first through the lock
+    rebuilds, the rest observe the singleton is no longer their stale client and
+    reuse it. Without the ``stale`` double-check each of K failing requests built
+    its own client (and its own httpx HTTP/2 pool) and serialized a worker thread
+    on the lock, so recovery cost grew linearly with concurrency.
+    """
+    from app.db.connection import SupabaseDB
+
+    created = []
+
+    def fake_create_client(url, key):
+        client = object()
+        created.append(client)
+        return client
+
+    monkeypatch.setattr("app.db.connection.create_client", fake_create_client)
+    monkeypatch.setattr("app.db.connection.settings.SUPABASE_URL", "https://x.supabase.co")
+    monkeypatch.setattr("app.db.connection.settings.SUPABASE_SECRET_KEY", "secret")
+    monkeypatch.setattr(SupabaseDB, "_service_instance", None)
+    monkeypatch.setattr(SupabaseDB, "_instance", None)
+
+    dead = SupabaseDB.get_service_client()
+    assert len(created) == 1
+
+    # Ten concurrent requests all saw `dead` fail.
+    rebuilt = [SupabaseDB.rebuild_service_client(dead) for _ in range(10)]
+
+    assert len(created) == 2, "the wave should have produced exactly one new client"
+    assert all(c is created[1] for c in rebuilt), "every waiter must share the rebuild"
+    assert SupabaseDB._service_instance is created[1]
+
+
+def test_rebuild_service_client_without_stale_always_rebuilds(monkeypatch):
+    """Callers that cannot name the failing client keep the old unconditional
+    behaviour — the dedup is opt-in via ``stale``, never a silent no-op."""
+    from app.db.connection import SupabaseDB
+
+    created = []
+    monkeypatch.setattr(
+        "app.db.connection.create_client",
+        lambda url, key: created.append(object()) or created[-1],
+    )
+    monkeypatch.setattr("app.db.connection.settings.SUPABASE_URL", "https://x.supabase.co")
+    monkeypatch.setattr("app.db.connection.settings.SUPABASE_SECRET_KEY", "secret")
+    monkeypatch.setattr(SupabaseDB, "_service_instance", None)
+    monkeypatch.setattr(SupabaseDB, "_instance", None)
+
+    SupabaseDB.rebuild_service_client()
+    SupabaseDB.rebuild_service_client()
+
+    assert len(created) == 2

@@ -391,3 +391,22 @@ class GooglePlayService:
                 sub_notification.get("notificationType"), "UNKNOWN"
             ),
         }
+
+    @staticmethod
+    def notification_type_name(notification: Dict[str, Any]) -> str:
+        """RTDN notification type name for the webhook ledger (analytics).
+
+        Test notifications carry no subscription state, so they are labelled
+        'TEST'. Every other push maps its ``subscriptionNotification``
+        ``notificationType`` to a stable name ('SUBSCRIPTION_RENEWED',
+        'SUBSCRIPTION_CANCELED', …); unknown/absent types fall back to
+        'UNKNOWN'. The admin revenue endpoint counts Google churn from these
+        names (expiry/cancel/revoke), so the ledger must store the real type
+        — a blanket 'rtdn' label would make every churn count zero.
+        """
+        if "testNotification" in notification:
+            return "TEST"
+        sub_notification = notification.get("subscriptionNotification") or {}
+        return _GOOGLE_NOTIFICATION_TYPES.get(
+            sub_notification.get("notificationType"), "UNKNOWN"
+        )

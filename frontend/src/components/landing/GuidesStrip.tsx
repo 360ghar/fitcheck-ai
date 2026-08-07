@@ -50,9 +50,14 @@ export default function GuidesStrip() {
         </AnimatedSection>
 
         <ul className="divide-y divide-stone-200 dark:divide-stone-800 border-y border-stone-200 dark:border-stone-800">
+          {/* AnimatedSection renders a <div> — it must wrap the <li> from
+              inside, never sit between <ul> and <li>. A <div> directly inside
+              <ul> is invalid markup that breaks the accessibility tree
+              ("Lists do not contain only <li> elements") and the semantic
+              list for screen readers. */}
           {links.map((link, index) => (
-            <AnimatedSection key={link.href} delay={index * 40}>
-              <li>
+            <li key={link.href}>
+              <AnimatedSection delay={index * 40}>
                 <Link
                   to={link.href}
                   className="group flex min-h-11 items-center justify-between gap-4 py-4 text-stone-900 dark:text-stone-50 hover:text-primary transition-colors"
@@ -60,8 +65,8 @@ export default function GuidesStrip() {
                   <span className="text-[15px] md:text-base font-medium">{link.title}</span>
                   <ArrowUpRight className="h-4 w-4 shrink-0 text-stone-400 group-hover:text-primary" />
                 </Link>
-              </li>
-            </AnimatedSection>
+              </AnimatedSection>
+            </li>
           ))}
         </ul>
       </div>

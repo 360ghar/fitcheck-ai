@@ -7,7 +7,7 @@ from datetime import timedelta
 from app.utils.datetime_util import utcnow
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.core.logging_config import setup_session_logging
 from app.core.exceptions import FitCheckException
 from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, get_correlation_id
-from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog, promo, images
+from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog, promo, images, admin
 from app.db.connection import SupabaseDB
 from app.utils.db import missing_quota_rpcs, missing_referral_rpcs, probe_valid_batch_size_bound
 from postgrest.exceptions import APIError as PostgrestAPIError
@@ -597,6 +597,9 @@ if settings.ENABLE_SOCIAL_IMPORT:
 # Blog routes (public read, admin write)
 app.include_router(blog.router, prefix="/api/v1/blog", tags=["Blog"])
 
+# Admin panel (all endpoints behind require_admin / require_permission)
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
+
 # Presigned-URL read path (auth; caller-owned objects only)
 app.include_router(images.router, prefix="/api/v1/images", tags=["Images"])
 
@@ -614,6 +617,18 @@ async def root():
         "version": settings.VERSION,
         "docs": "/api/v1/docs"
     }
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt():
+    """Serve a permissive robots.txt at the API origin.
+
+    The frontend host serves its own SEO robots.txt; this only answers direct
+    hits to the backend origin (scanners, misrouted ingress) so they stop
+    producing 404 noise. API endpoints should not be crawled.
+    (RCA 2026-08-05: GET /robots.txt 404.)
+    """
+    return "User-agent: *\nDisallow: /\n"
 
 
 @app.get("/health")

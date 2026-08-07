@@ -92,21 +92,6 @@ class SettingsRepository {
     return <String, dynamic>{};
   }
 
-  /// Update password
-  Future<void> updatePassword(String currentPassword, String newPassword) async {
-    try {
-      await _apiClient.post(
-        '${ApiConstants.users}/change-password',
-        data: {
-          'current_password': currentPassword,
-          'new_password': newPassword,
-        },
-      );
-    } on DioException catch (e) {
-      throw handleDioException(e);
-    }
-  }
-
   /// Delete account
   Future<void> deleteAccount() async {
     try {
@@ -120,7 +105,16 @@ class SettingsRepository {
   Future<String> requestDataExport() async {
     try {
       final response = await _apiClient.post('${ApiConstants.users}/export');
-      return response.data['export_url'] as String;
+      // The endpoint returns exactly {"data": {"export_url": ...}} — the standard
+      // envelope (backend/app/api/v1/users.py). A bare top-level `export_url` is
+      // not a shape this API produces, so there is nothing to fall back to.
+      final payload = response.data;
+      final data = payload is Map<String, dynamic> ? payload['data'] : null;
+      final exportUrl = data is Map<String, dynamic> ? data['export_url'] : null;
+      if (exportUrl is! String || exportUrl.isEmpty) {
+        throw StateError('Export URL missing from response');
+      }
+      return exportUrl;
     } on DioException catch (e) {
       throw handleDioException(e);
     }

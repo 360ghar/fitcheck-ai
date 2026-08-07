@@ -266,11 +266,14 @@ class AppPages {
       binding: HomeBinding(),
       middlewares: [AuthMiddleware()],
     ),
+    // Deliberately unauthenticated and unbound: LegalPage is a plain
+    // StatelessWidget (no controller), and App Review needs the policy links
+    // and the abuse/support contact reachable without signing in
+    // (Guideline 1.2). HomeBinding would eagerly wire dashboard/settings
+    // controllers that immediately fire authenticated requests.
     GetPage(
       name: Routes.legal,
       page: () => const LegalPage(),
-      binding: HomeBinding(),
-      middlewares: [AuthMiddleware()],
     ),
     GetPage(
       name: Routes.feedback,

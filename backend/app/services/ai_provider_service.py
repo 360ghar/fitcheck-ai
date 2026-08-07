@@ -766,15 +766,22 @@ class AIProviderService:
                         api_key=attempt_key,
                     )
                 except AIServiceError as e:
-                    # Only fall through to the next model for errors documented
-                    # as transient (429/503/timeout/no-images) or as a prompt
-                    # content-policy refusal (fallback_eligible - a 400 where
-                    # nothing was generated, so the fallback attempt cannot
-                    # double-bill and can succeed where the primary refuses).
-                    # Anything else (bad key, parse failure after a possibly
-                    # successful generation) would either fail identically or
-                    # risk a second billable request, so it should propagate.
-                    if i == len(attempts) - 1 or not (e.retryable or e.fallback_eligible):
+                    # Transient errors (429/503/timeout) always earn the next
+                    # model. A content-policy refusal (`fallback_eligible`) only
+                    # earns it when the fallback is a DIFFERENT HOST: two models
+                    # on the same gateway share one upstream safety policy, so
+                    # re-POSTing the identical blocked prompt just 400s again and
+                    # costs the user ~double latency for the same error (that is
+                    # the production default: agnes-image-2.1-flash ->
+                    # agnes-image-2.0-flash, both on apihub.agnes-ai.com).
+                    # Pointing AI_IMAGE_FALLBACK_API_URL at another vendor
+                    # restores the cross-vendor retry the 08-03 pass intended.
+                    # (RCA 2026-08-05: "trying fallback model" -> 400 both models.)
+                    if i == len(attempts) - 1:
+                        raise
+                    next_url = attempts[i + 1][1]
+                    cross_host_fallback = next_url != attempt_url
+                    if not (e.retryable or (e.fallback_eligible and cross_host_fallback)):
                         raise
                     logger.warning(
                         "Image generation failed, trying fallback model",

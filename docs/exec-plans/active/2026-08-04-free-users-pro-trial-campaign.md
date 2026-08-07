@@ -41,6 +41,7 @@ Every user still on the free plan gets a 1-month Pro trial (`plan_type=pro_month
 | 2026-08-04 | Wrote script; ruff + py_compile clean; `DRY_RUN=1` reported exactly 112 eligible. |
 | 2026-08-04 | Live run: 112 granted, 112 emailed (100 Resend, 12 SMTP), 0 failures. |
 | 2026-08-04 | Post-run verification: all 112 rows match campaign state; 1 free row remains = `info@360ghar.com` (excluded). |
+| 2026-08-06 | Re-run (same script, same audit file): 1,505 users scanned, 74 free/active eligible (excl. `info@360ghar.com`); 74 granted + 74 emailed via Resend, 0 failures; trial_end 2026-09-06. Post-run: all 74 rows verified (`pro_monthly`/`trial`, `cancel_at_period_end=true`); remaining free/active rows = 1 (`info@360ghar.com`). |
 
 ## Decision log
 

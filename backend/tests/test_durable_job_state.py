@@ -142,6 +142,22 @@ def test_storage_reference_paths_are_reduced_to_known_bucket_keys(monkeypatch):
     # A bare key passes through unchanged.
     assert StorageService.key_from_path("user-a/items/item.webp") == "user-a/items/item.webp"
 
+    # Top-level preview URLs (configured bucket) reduce to the key, second
+    # segment = owning user. Real user ids are UUID-shaped.
+    uid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    assert StorageService.key_from_path(
+        f"https://endpoint.example/bucket/tmp/{uid}/social-import/abc123.webp"
+    ) == f"tmp/{uid}/social-import/abc123.webp"
+    assert StorageService.key_from_path(
+        f"https://endpoint.example/bucket/generated/{uid}/try-on/abc123.png"
+    ) == f"generated/{uid}/try-on/abc123.png"
+
+    # A preview URL from a bucket that is no longer configured: the non-UUID
+    # leading segment (bucket name) is dropped when parts[2] is UUID-shaped.
+    assert StorageService.key_from_path(
+        f"https://old-bucket.example/old-bucket/tmp/{uid}/photoshoot/abc123.jpg"
+    ) == f"tmp/{uid}/photoshoot/abc123.jpg"
+
     # Any host is fine — the function only extracts a key, never fetches the URL.
     assert StorageService.key_from_path(
         "https://attacker.example/storage/v1/object/public/items/item.webp"

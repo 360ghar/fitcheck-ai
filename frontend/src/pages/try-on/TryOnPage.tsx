@@ -172,7 +172,7 @@ export default function TryOnPage() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.gif'],
+      'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.heic', '.heif', '.bmp', '.tif', '.tiff'],
     },
     multiple: false,
     maxSize: 10 * 1024 * 1024, // 10MB
@@ -444,7 +444,7 @@ export default function TryOnPage() {
               />
               {userAvatar && (
                 <div className="flex items-center gap-3">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={userAvatar}
                     alt="You"
                     className="h-12 w-12 rounded-full object-cover border border-border"

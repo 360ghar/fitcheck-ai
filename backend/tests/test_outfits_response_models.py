@@ -177,8 +177,7 @@ async def test_list_outfits_retries_once_on_dead_connection(monkeypatch):
     page_result.data = [_outfit_row(item_ids=[])]
     fresh_chain.order.return_value.range.return_value.execute.return_value = page_result
 
-    monkeypatch.setattr(SupabaseDB, "reset", staticmethod(lambda: None))
-    monkeypatch.setattr(SupabaseDB, "get_service_client", staticmethod(lambda: fresh_db))
+    monkeypatch.setattr(SupabaseDB, "rebuild_service_client", staticmethod(lambda _stale=None: fresh_db))
 
     result = await list_outfits(
         page=1,

@@ -5,14 +5,14 @@ Provides endpoints for managing per-user AI provider configuration.
 """
 
 import asyncio
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, status
 from supabase import Client
 
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError, ValidationError
-from app.core.security import get_current_user_id
+from app.api.v1.deps import get_active_user_id
 from app.db.connection import get_db
 from app.models.ai import (
     AISettingsUpdate,
@@ -25,10 +25,45 @@ from app.models.ai import (
 )
 from app.services.ai_settings_service import AISettingsService
 from app.services.ai_provider_interface import AIProvider, valid_provider_values
+from app.services.ai_provider_service import get_system_provider_config
 
 logger = get_context_logger(__name__)
 
 router = APIRouter()
+
+
+def _provider_has_usable_config(
+    provider_value: str,
+    request: "AISettingsUpdate",
+    current_settings: Dict[str, Any],
+) -> bool:
+    """True if ``provider_value`` has a system key, a BYOK key in this request,
+    or an existing stored BYOK key. Used to stop a user persisting a
+    ``default_provider`` whose every AI call would 503 (e.g. 'openai' with no
+    system key and no key of their own). See RCA 2026-08-05.
+
+    Takes an already-fetched ``current_settings`` so the settings row is read once
+    per request: this guard and ``update_user_settings`` both need it, and each
+    fetching its own copy cost a redundant Supabase round-trip on every save.
+    """
+    try:
+        provider = AIProvider(provider_value)
+    except ValueError:
+        return True  # the earlier valid-providers check handles malformed input
+
+    if get_system_provider_config(provider):
+        return True
+
+    # BYOK key submitted in this same request?
+    submitted = request.provider_configs or {}
+    if provider_value in submitted:
+        cfg = submitted[provider_value]
+        if getattr(cfg, "api_key", None):
+            return True
+
+    # Existing stored BYOK key? Same predicate the runtime fallback uses, so the
+    # write-side gate and the read-side fallback cannot disagree.
+    return AISettingsService.has_stored_byok_key(current_settings, provider)
 
 
 # =============================================================================
@@ -42,7 +77,7 @@ router = APIRouter()
     status_code=status.HTTP_200_OK,
 )
 async def get_ai_settings(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -88,7 +123,7 @@ async def get_ai_settings(
 )
 async def update_ai_settings(
     request: AISettingsUpdate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -99,6 +134,8 @@ async def update_ai_settings(
     """
     try:
         updates: Dict[str, Any] = {}
+        # Fetched at most once and shared with update_user_settings below.
+        current_settings: Optional[Dict[str, Any]] = None
 
         if request.default_provider is not None:
             valid_providers = valid_provider_values()
@@ -106,6 +143,19 @@ async def update_ai_settings(
                 raise ValidationError(
                     "Invalid provider",
                     details={"valid_providers": valid_providers},
+                )
+            # Reject selecting a provider with no usable config, so the user
+            # cannot persist e.g. default_provider='openai' and have every AI
+            # call 503. The runtime get_ai_service_for_user still falls back to
+            # the system default as a safety net.
+            current_settings = await AISettingsService.get_user_settings(user_id, db)
+            if not _provider_has_usable_config(
+                request.default_provider, request, current_settings
+            ):
+                raise ValidationError(
+                    f"The '{request.default_provider}' provider is not configured. "
+                    "Add an API key for it first or choose a configured provider.",
+                    details={"provider": request.default_provider},
                 )
             updates["default_provider"] = request.default_provider
 
@@ -125,6 +175,7 @@ async def update_ai_settings(
             user_id=user_id,
             updates=updates,
             db=db,
+            current_settings=current_settings,
         )
 
         # Return updated settings
@@ -149,7 +200,7 @@ async def update_ai_settings(
 )
 async def test_provider_config(
     request: TestProviderRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
 ):
     """
     Test an AI provider configuration.
@@ -220,7 +271,7 @@ async def test_provider_config(
     status_code=status.HTTP_200_OK,
 )
 async def get_usage_stats(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -255,7 +306,7 @@ async def get_usage_stats(
 )
 async def check_rate_limit(
     operation_type: str,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -307,7 +358,7 @@ async def check_rate_limit(
 )
 async def reset_provider_config(
     provider: str,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """

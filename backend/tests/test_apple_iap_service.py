@@ -286,6 +286,59 @@ def test_transaction_to_entitlement_revoked_is_free():
     assert entitlement["revoked"] is True
 
 
+def test_transaction_to_entitlement_honors_auto_renew_off():
+    """autoRenewStatus 0 is the only signal that a subscriber cancelled; a
+    reviewer who cancels in Settings must see the access-until state."""
+    with patch.multiple(settings, **_apple_settings()):
+        entitlement = AppleIAPService.transaction_to_entitlement(
+            _tx_info(),
+            renewal_info={"originalTransactionId": "orig-1", "autoRenewStatus": 0},
+        )
+    assert entitlement["cancel_at_period_end"] is True
+    # Entitlement continues until the period ends.
+    assert entitlement["status"] == "active"
+
+
+def test_transaction_to_entitlement_auto_renew_on_keeps_cancel_false():
+    with patch.multiple(settings, **_apple_settings()):
+        entitlement = AppleIAPService.transaction_to_entitlement(
+            _tx_info(),
+            renewal_info={"originalTransactionId": "orig-1", "autoRenewStatus": 1},
+        )
+    assert entitlement["cancel_at_period_end"] is False
+
+
+def test_transaction_to_entitlement_leaves_cancel_unknown_without_renewal_info():
+    """No renewal info means UNKNOWN, not "auto-renew is on".
+
+    The register path (including Restore Purchases) never has renewal info. If
+    this returned False, restoring a cancelled subscription would clear the
+    cancellation the user really made.
+    """
+    with patch.multiple(settings, **_apple_settings()):
+        entitlement = AppleIAPService.transaction_to_entitlement(_tx_info())
+    assert entitlement["cancel_at_period_end"] is None
+
+
+def test_transaction_to_entitlement_ignores_renewal_info_for_another_subscription():
+    with patch.multiple(settings, **_apple_settings()):
+        entitlement = AppleIAPService.transaction_to_entitlement(
+            _tx_info(),
+            renewal_info={"originalTransactionId": "orig-other", "autoRenewStatus": 0},
+        )
+    assert entitlement["cancel_at_period_end"] is None
+
+
+def test_transaction_to_entitlement_survives_a_malformed_auto_renew_status():
+    """A webhook must never 500 over an unexpected claim shape — Apple would
+    then redeliver it forever."""
+    with patch.multiple(settings, **_apple_settings()):
+        entitlement = AppleIAPService.transaction_to_entitlement(
+            _tx_info(), renewal_info={"autoRenewStatus": "nope"}
+        )
+    assert entitlement["cancel_at_period_end"] is None
+
+
 def test_product_plan_map_skips_unset():
     with patch.multiple(
         settings,

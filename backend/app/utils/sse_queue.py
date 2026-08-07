@@ -33,7 +33,7 @@ unbounded), because the decision lived in three places.
 """
 
 import asyncio
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from app.core.config import settings
 
@@ -58,6 +58,28 @@ STREAM_OVERFLOW = "stream_overflow"
 EVENT_HISTORY_MAX = 200
 
 
+# Base64 payload fields that must never be retained in replay history, each
+# mapped to the sibling field whose presence proves a durable copy exists.
+# ``None`` means the producer guarantees a durable copy, so strip unconditionally.
+#
+# A registry rather than a chain of per-producer branches inside the walker: this
+# helper is shared by the batch and photoshoot stores precisely so they cannot
+# drift, and a third job type with a differently-named base64 field would
+# otherwise fall through untouched and silently re-introduce the multi-MB history
+# pinning this exists to prevent. Adding a producer is one entry here.
+_BASE64_FIELD_GUARDS: Dict[str, Optional[str]] = {
+    # Batch-store events always carry a durable URL, so the base64 copy is
+    # redundant for late-join replay.
+    "generated_image_base64": None,
+    # Photoshoot image events carry base64 AND a durable URL; the URL alone
+    # renders in clients, so replays drop the multi-hundred-KB payload (a single
+    # oversized event can also blow the client-side SSE buffer). URL-less images
+    # (upload failed) KEEP base64 — stripping it would leave a blank image with
+    # no way to render it.
+    "image_base64": "image_url",
+}
+
+
 def strip_history_base64(event: Dict[str, Any]) -> Dict[str, Any]:
     """History copy of an SSE event with generated base64 payloads removed.
 
@@ -79,18 +101,10 @@ def strip_history_base64(event: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(node, dict):
             stripped: Dict[str, Any] = {}
             for key, value in node.items():
-                if key == "generated_image_base64":
-                    # Batch-store events always carry a durable URL, so the
-                    # base64 copy is redundant for late-join replay.
-                    stripped[key] = None
-                elif key == "image_base64":
-                    # Photoshoot image events carry base64 AND a durable URL;
-                    # the URL alone renders in clients, so replays drop the
-                    # multi-hundred-KB payload (a single oversized event can
-                    # also blow the client-side SSE buffer). URL-less images
-                    # (upload failed) KEEP base64 — stripping it would leave
-                    # a blank image with no way to render it.
-                    stripped[key] = None if node.get("image_url") else _strip(value)
+                if key in _BASE64_FIELD_GUARDS:
+                    guard = _BASE64_FIELD_GUARDS[key]
+                    keep = guard is not None and not node.get(guard)
+                    stripped[key] = _strip(value) if keep else None
                 else:
                     stripped[key] = _strip(value)
             return stripped

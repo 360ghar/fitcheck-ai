@@ -37,6 +37,7 @@ import {
 } from '@/lib/activation'
 import type { BatchJobUiStatus } from '@/types'
 import { ErrorState } from '@/components/ui/error-state'
+import { thumbnailErrorFallback } from '@/hooks/useImageWithFallback'
 
 const aiTools = [
   {
@@ -492,8 +493,9 @@ export default function DashboardPage() {
                   )}
                 >
                   {item.images.length > 0 ? (
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={item.images[0].thumbnail_url || item.images[0].image_url}
+                      onError={thumbnailErrorFallback(item.images[0].image_url)}
                       alt={item.name}
                       className="h-12 w-12 md:h-14 md:w-14 rounded-lg object-cover"
                     />

@@ -1,7 +1,7 @@
 """Regression tests for Wave A auth, ownership, and storage hardening."""
 
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -31,8 +31,19 @@ class _Query:
         self.operation = "select"
         return self
 
+    def update(self, *_args, **_kwargs):
+        self.operation = "update"
+        return self
+
     def delete(self):
         self.operation = "delete"
+        return self
+
+    def single(self):
+        return self
+
+    def maybe_single(self):
+        self._maybe_single = True
         return self
 
     def eq(self, column, value):
@@ -51,6 +62,9 @@ class _Query:
             else:
                 rows = [row for row in rows if row.get(column) in value]
         self.db.queries.append((self.table_name, self.operation, list(self.filters)))
+        if getattr(self, "_maybe_single", False):
+            # PostgREST maybe_single: `data` is one dict, or None when absent.
+            return SimpleNamespace(data=rows[0] if rows else None)
         return SimpleNamespace(data=rows)
 
 
@@ -144,6 +158,160 @@ async def test_batch_delete_only_cleans_images_owned_by_requesting_user(
         await route_module.batch_delete_outfits(request=request, user_id=USER_ID, db=db)
 
     assert deleted_paths == [owned_path]
+
+
+# --------------------------------------------------------------------------- #
+# single-item / single-outfit deletes must clean storage (leak regression)
+# --------------------------------------------------------------------------- #
+# Measured in the bucket: 296 orphans / 192MB accumulated because the single
+# delete endpoints removed the DB row but never the source photo, item/outfit
+# images or their _thumb siblings. The batch deletes already cleaned storage;
+# these lock the single deletes to the same behavior.
+
+
+@pytest.mark.asyncio
+async def test_single_item_delete_cleans_source_and_item_images(monkeypatch):
+    db = _DB(
+        {
+            "items": [
+                {
+                    "id": OWNED_ITEM_ID,
+                    "user_id": USER_ID,
+                    "source_image_storage_path": "user-a/sources/shot.jpg",
+                },
+            ],
+            "item_images": [
+                {"id": "img-1", "item_id": OWNED_ITEM_ID, "storage_path": "user-a/items/one.jpg"},
+                {"id": "img-2", "item_id": OWNED_ITEM_ID, "storage_path": "user-a/items/two.png"},
+            ],
+        }
+    )
+    deleted_paths = []
+
+    async def fake_delete_multiple_images(*, db, storage_paths, bucket=None):
+        deleted_paths.extend(storage_paths)
+        return len(storage_paths)
+
+    monkeypatch.setattr(
+        items_module.StorageService,
+        "delete_multiple_images",
+        staticmethod(fake_delete_multiple_images),
+    )
+    vector_service = Mock()
+    vector_service.delete_item = AsyncMock(return_value=None)
+    monkeypatch.setattr(items_module, "get_vector_service", lambda: vector_service)
+
+    await items_module.delete_item(item_id=OWNED_ITEM_ID, user_id=USER_ID, db=db)
+
+    # Source photo + both item images, each with its derived _thumb sibling.
+    assert sorted(deleted_paths) == [
+        "user-a/items/one.jpg",
+        "user-a/items/one_thumb.webp",
+        "user-a/items/two.png",
+        "user-a/items/two_thumb.webp",
+        "user-a/sources/shot.jpg",
+        "user-a/sources/shot_thumb.webp",
+    ]
+    # The parent row is deleted.
+    assert ("items", "delete", [("eq", "id", OWNED_ITEM_ID), ("eq", "user_id", USER_ID)]) in db.queries
+
+
+@pytest.mark.asyncio
+async def test_single_outfit_delete_cleans_outfit_images(monkeypatch):
+    db = _DB(
+        {
+            "outfits": [{"id": OWNED_OUTFIT_ID, "user_id": USER_ID}],
+            "outfit_images": [
+                {"id": "oi-1", "outfit_id": OWNED_OUTFIT_ID, "storage_path": "user-a/outfits/one.jpg"},
+            ],
+        }
+    )
+    deleted_paths = []
+
+    async def fake_delete_multiple_images(*, db, storage_paths, bucket=None):
+        deleted_paths.extend(storage_paths)
+        return len(storage_paths)
+
+    monkeypatch.setattr(
+        outfits_module.StorageService,
+        "delete_multiple_images",
+        staticmethod(fake_delete_multiple_images),
+    )
+
+    await outfits_module.delete_outfit(outfit_id=OWNED_OUTFIT_ID, user_id=USER_ID, db=db)
+
+    assert sorted(deleted_paths) == [
+        "user-a/outfits/one.jpg",
+        "user-a/outfits/one_thumb.webp",
+    ]
+    assert ("outfits", "delete", [("eq", "id", OWNED_OUTFIT_ID), ("eq", "user_id", USER_ID)]) in db.queries
+
+
+@pytest.mark.asyncio
+async def test_upload_avatar_deletes_replaced_avatar_object(monkeypatch):
+    """Replacing an avatar must remove the previous object (leak regression).
+
+    Measured in the bucket: 47 orphan avatar objects / 53MB. The old avatar
+    URL is captured before the row update, and the old object is deleted only
+    when it is the caller's own bucket key (external OAuth pictures pass
+    through untouched, as in materialize_avatar_url).
+    """
+    db = _DB(
+        {
+            "users": [
+                {
+                    "id": USER_ID,
+                    "avatar_url": "user-a/avatars/old1234567890abcdef1234567890abcd.jpg",
+                },
+            ],
+        }
+    )
+    deleted = []
+
+    async def fake_upload_avatar(*, db, user_id, filename, file_data):
+        return "https://r2.example/bucket/user-a/avatars/new1234567890abcdef1234567890abcd.webp"
+
+    async def fake_delete_image(*, db, storage_path, bucket=None):
+        deleted.append(storage_path)
+
+    monkeypatch.setattr(users_module.StorageService, "upload_avatar", staticmethod(fake_upload_avatar))
+    monkeypatch.setattr(users_module.StorageService, "delete_image", staticmethod(fake_delete_image))
+    monkeypatch.setattr(users_module, "read_upload_capped", AsyncMock(return_value=b"fake-image-bytes"))
+
+    await users_module.upload_avatar(
+        file=Mock(content_type="image/jpeg"), user_id=USER_ID, db=db
+    )
+
+    assert deleted == ["user-a/avatars/old1234567890abcdef1234567890abcd.jpg"]
+
+
+@pytest.mark.asyncio
+async def test_upload_avatar_skips_external_oauth_picture(monkeypatch):
+    """An external OAuth avatar URL is never reduced to a key and deleted."""
+    db = _DB(
+        {
+            "users": [
+                {"id": USER_ID, "avatar_url": "https://lh3.googleusercontent.com/a/abc123"},
+            ],
+        }
+    )
+    deleted = []
+
+    async def fake_upload_avatar(*, db, user_id, filename, file_data):
+        return "https://r2.example/bucket/user-a/avatars/new1234567890abcdef1234567890abcd.webp"
+
+    async def fake_delete_image(*, db, storage_path, bucket=None):
+        deleted.append(storage_path)
+
+    monkeypatch.setattr(users_module.StorageService, "upload_avatar", staticmethod(fake_upload_avatar))
+    monkeypatch.setattr(users_module.StorageService, "delete_image", staticmethod(fake_delete_image))
+    monkeypatch.setattr(users_module, "read_upload_capped", AsyncMock(return_value=b"fake-image-bytes"))
+
+    await users_module.upload_avatar(
+        file=Mock(content_type="image/jpeg"), user_id=USER_ID, db=db
+    )
+
+    assert deleted == []
 
 
 class _Admin:
@@ -260,12 +428,23 @@ async def test_delete_current_user_heals_dead_pooled_connection(monkeypatch):
     dead_db = _make_db(dead_counter)
     fresh_db = _make_db(fresh_counter)
 
-    monkeypatch.setattr(SupabaseDB, "reset", staticmethod(lambda: None))
-    monkeypatch.setattr(SupabaseDB, "get_service_client", staticmethod(lambda: fresh_db))
+    monkeypatch.setattr(SupabaseDB, "rebuild_service_client", staticmethod(lambda _stale=None: fresh_db))
 
     fake_vectors = Mock()
     fake_vectors.delete_user_items = AsyncMock(return_value=0)
     monkeypatch.setattr(users_module, "get_vector_service", lambda: fake_vectors)
+
+    # Account deletion now always includes the deterministic export object key
+    # ({user_id}/export/data.json); stub the storage backend so the test stays
+    # focused on the dead-connection healing behaviour.
+    async def fake_delete_multiple_images(*, db, storage_paths, bucket=None):
+        return len(storage_paths)
+
+    monkeypatch.setattr(
+        StorageService,
+        "delete_multiple_images",
+        staticmethod(fake_delete_multiple_images),
+    )
 
     await users_module.delete_current_user(user_id=USER_ID, db=dead_db)
 
@@ -309,6 +488,10 @@ def test_owned_storage_path_accepts_canonical_keys_only():
     assert _owned_storage_path("user-a/items/0123456789abcdef0123456789abcdef.jpg", "user-a")
     assert _owned_storage_path("user-a/tmp/social-import/0123456789abcdef0123456789abcdef.png", "user-a")
     assert _owned_storage_path("user-a/sources/0123456789abcdef0123456789abcdef.webp", "user-a")
+    # Top-level preview folders (new layout): owner is the SECOND segment.
+    assert _owned_storage_path("tmp/user-a/photoshoot/0123456789abcdef0123456789abcdef.png", "user-a")
+    assert _owned_storage_path("generated/user-a/try-on/0123456789abcdef0123456789abcdef.png", "user-a")
+    assert not _owned_storage_path("tmp/user-b/photoshoot/0123456789abcdef0123456789abcdef.png", "user-a")
     # Foreign user
     assert not _owned_storage_path("user-b/items/0123456789abcdef0123456789abcdef.jpg", "user-a")
     # Legacy (pre-migration) layouts are not canonical keys

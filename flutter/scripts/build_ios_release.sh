@@ -4,6 +4,24 @@
 # ---------------------------------------------------------------------------
 # Build a production IPA for FitCheck AI and prepare it for App Store upload.
 #
+# ###########################################################################
+# # WARNING: BUILDS FROM THIS SCRIPT CANNOT RECEIVE OVER-THE-AIR PATCHES.   #
+# ###########################################################################
+#
+# This script uses `flutter build ipa`. Only binaries produced by
+# `shorebird release` contain the Shorebird engine, so anything shipped from
+# here is permanently unpatchable - `shorebird patch ios` will refuse it, and
+# no later action can retrofit code push onto that build.
+#
+# THE NORMAL iOS RELEASE PATH IS CI:
+#   .github/workflows/build-ios.yml  (workflow_dispatch, or push a v* tag)
+# and hotfixes go out via:
+#   .github/workflows/shorebird-patch-ios.yml
+#
+# Keep this script only as an emergency fallback for when CI is unavailable,
+# and accept that the resulting version can never be hotfixed over the air.
+# See the "Code push (Shorebird)" section of docs/FLUTTER.md.
+#
 # WHAT IT DOES
 #   1. Validates that required --dart-define flags are present (or reads from env).
 #   2. Runs flutter clean for a fresh build.
@@ -25,10 +43,10 @@
 #   SENTRY_DSN                $SENTRY_DSN (optional)
 #
 # APPLE DEVELOPER TEAM ID
-#   The ios/ExportOptions.plist file contains "YOUR_TEAM_ID". Replace it with
-#   your actual Apple Developer Team ID before running this script.
-#   Find it at: https://developer.apple.com/account  → Membership → Team ID
-#   (a 10-character alphanumeric string, e.g. "ABC12DEF34").
+#   ios/ExportOptions.plist contains the Team ID (HMWGCVU4SV). The preflight
+#   below fails the build if the file is reverted to a "YOUR_TEAM_ID"
+#   placeholder. Find the ID at: https://developer.apple.com/account →
+#   Membership → Team ID (a 10-character alphanumeric string).
 #
 # FLAGS EXPLAINED
 #   --obfuscate
@@ -83,6 +101,22 @@
 # ---------------------------------------------------------------------------
 
 set -euo pipefail
+
+# Loud runtime echo of the header warning - the header is easy to scroll past,
+# and shipping an unpatchable build is silent until the day you need a hotfix.
+cat >&2 <<'SHOREBIRD_WARNING'
+
+  ⚠️  This builds with `flutter build ipa`, so the resulting IPA has NO
+      Shorebird engine and can NEVER receive an over-the-air patch.
+
+      Normal path:  .github/workflows/build-ios.yml  (shorebird release ios)
+      Hotfixes:     .github/workflows/shorebird-patch-ios.yml
+
+      Continue only if CI is unavailable and you accept that this version
+      cannot be hotfixed. Ctrl-C now to stop.
+
+SHOREBIRD_WARNING
+sleep 5
 
 # ---------------------------------------------------------------------------
 # Configuration — replace placeholders or export env vars before running.

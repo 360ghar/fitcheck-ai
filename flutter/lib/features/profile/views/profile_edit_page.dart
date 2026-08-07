@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../auth/controllers/auth_controller.dart';
@@ -230,10 +231,10 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                                       ? Image.file(avatar, fit: BoxFit.cover)
                                       : _currentAvatarUrl != null &&
                                             _currentAvatarUrl!.isNotEmpty
-                                      ? Image.network(
+                                      ? AppNetworkImage(
                                           _currentAvatarUrl!,
                                           fit: BoxFit.cover,
-                                          errorBuilder:
+                                          errorWidget:
                                               (context, error, stackTrace) =>
                                                   _buildAvatarPlaceholder(
                                                     tokens,

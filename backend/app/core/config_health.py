@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import List
 from urllib.parse import urlparse
 
-from app.core.config import settings
+from app.core.config import Settings, settings
 
 
 # Hosts that are NOT OpenAI-compatible. The provider service POSTs to
@@ -37,11 +37,10 @@ class ConfigIssue:
 
 
 def _is_production_like() -> bool:
-    # Railway sets RAILWAY_ENVIRONMENT on every deploy; DEBUG=False is the
-    # other signal. Either means we should enforce prod-required keys.
-    import os
-
-    return bool(os.environ.get("RAILWAY_ENVIRONMENT")) or not settings.DEBUG
+    # Centralized in Settings.is_production: Railway sets
+    # RAILWAY_ENVIRONMENT on every deploy; DEBUG=False is the other signal.
+    # Either means we should enforce prod-required keys.
+    return settings.is_production
 
 
 def _is_non_openai_host(url: str) -> bool:
@@ -224,34 +223,54 @@ def validate_production_config() -> List[ConfigIssue]:
             ),
         ))
 
-    # 9. Apple product map. The /plans endpoint publishes these IDs to the
-    # mobile apps (store_products.apple); a missing ID makes that variant
-    # show "not available for purchase yet" in-app and makes transaction
-    # verification reject it. Warn (not error): the other variants and the
-    # web/Stripe rail keep working.
-    missing_apple_products = [
-        name
-        for name, value in (
-            ("APPLE_PLUS_MONTHLY_PRODUCT_ID", settings.APPLE_PLUS_MONTHLY_PRODUCT_ID),
-            ("APPLE_PLUS_YEARLY_PRODUCT_ID", settings.APPLE_PLUS_YEARLY_PRODUCT_ID),
-            ("APPLE_PRO_MONTHLY_PRODUCT_ID", settings.APPLE_PRO_MONTHLY_PRODUCT_ID),
-            ("APPLE_PRO_YEARLY_PRODUCT_ID", settings.APPLE_PRO_YEARLY_PRODUCT_ID),
-        )
-        if not (value or "").strip()
-    ]
-    if missing_apple_products:
-        issues.append(ConfigIssue(
-            severity="warning",
-            key="APPLE_PLUS_MONTHLY_PRODUCT_ID",
-            message=(
-                "Apple product map is incomplete "
-                f"({' and '.join(missing_apple_products)} missing). /plans "
-                "publishes null for those variants so the iOS app shows 'not "
-                "available for purchase yet'. Create the matching auto-renewable "
-                "subscriptions in App Store Connect > Monetization > Subscriptions "
-                "and set the APPLE_*_PRODUCT_ID vars to the exact same IDs."
+    # 9. Store product maps. The IDs now default to the real App Store Connect /
+    # Play identifiers (see Settings), so "missing" is no longer reachable —
+    # the remaining way to misconfigure this is an ID that does not belong to
+    # this app's bundle/package. StoreKit resolves an unknown ID to *nothing*
+    # (queryProductDetails returns it in notFoundIDs with no error), so a
+    # mismatch shows up in-app as a paywall with no prices and no explanation.
+    # Warn (not error): the web/Stripe rail keeps working either way.
+    for label, prefix, entries in (
+        (
+            "Apple",
+            settings.APPLE_BUNDLE_ID,
+            (
+                ("APPLE_PLUS_MONTHLY_PRODUCT_ID", settings.APPLE_PLUS_MONTHLY_PRODUCT_ID),
+                ("APPLE_PLUS_YEARLY_PRODUCT_ID", settings.APPLE_PLUS_YEARLY_PRODUCT_ID),
+                ("APPLE_PRO_MONTHLY_PRODUCT_ID", settings.APPLE_PRO_MONTHLY_PRODUCT_ID),
+                ("APPLE_PRO_YEARLY_PRODUCT_ID", settings.APPLE_PRO_YEARLY_PRODUCT_ID),
             ),
-        ))
+        ),
+        (
+            "Google",
+            settings.GOOGLE_PACKAGE_NAME,
+            (
+                ("GOOGLE_PLUS_MONTHLY_PRODUCT_ID", settings.GOOGLE_PLUS_MONTHLY_PRODUCT_ID),
+                ("GOOGLE_PLUS_YEARLY_PRODUCT_ID", settings.GOOGLE_PLUS_YEARLY_PRODUCT_ID),
+                ("GOOGLE_PRO_MONTHLY_PRODUCT_ID", settings.GOOGLE_PRO_MONTHLY_PRODUCT_ID),
+                ("GOOGLE_PRO_YEARLY_PRODUCT_ID", settings.GOOGLE_PRO_YEARLY_PRODUCT_ID),
+            ),
+        ),
+    ):
+        bad_products = [
+            name
+            for name, value in entries
+            if not (value or "").strip() or not value.strip().startswith(prefix)
+        ]
+        if bad_products:
+            issues.append(ConfigIssue(
+                severity="warning",
+                key=entries[0][0],
+                message=(
+                    f"{label} product map does not match the app identifier "
+                    f"'{prefix}' ({' and '.join(bad_products)}). The store "
+                    "resolves unknown product IDs to nothing, so the paywall "
+                    "renders with no prices and every purchase attempt fails. "
+                    "Set these to the exact IDs of the auto-renewable "
+                    "subscriptions created for this app, or unset them to use "
+                    "the defaults."
+                ),
+            ))
 
     # 10. Stripe web billing. Without STRIPE_SECRET_KEY and the four price IDs,
     # every web checkout fails closed with a 503 at request time
@@ -280,6 +299,69 @@ def validate_production_config() -> List[ConfigIssue]:
                 "fails closed with a 503 at request time. Create subscription "
                 "prices in Stripe and set STRIPE_SECRET_KEY plus the four "
                 "STRIPE_*_PRICE_ID vars."
+            ),
+        ))
+
+    # Object storage must be fully configured, or EVERY image read and write
+    # fails at request time. Checked as one issue: the four are useless apart.
+    # Read the field list off Settings rather than restating it: a fifth required
+    # storage field added there would otherwise be enforced here while this
+    # check still reported "configured".
+    missing_storage = [
+        name for name in Settings._STORAGE_REQUIRED_FIELDS
+        if not getattr(settings, name).strip()
+    ]
+    if missing_storage:
+        issues.append(ConfigIssue(
+            severity="error",
+            key="OBJECT_STORAGE_BUCKET",
+            message=(
+                "Object storage is not configured "
+                f"({' and '.join(missing_storage)} missing). Every upload and "
+                "every presigned image URL fails at request time. Set the "
+                "OBJECT_STORAGE_* vars (see backend/.env.example)."
+            ),
+        ))
+
+    # Worker-mode serving needs its base URL, or `serve_url` silently falls back
+    # to presigned URLs (working, but uncacheable) with no signal anywhere.
+    serving_mode = (getattr(settings, "IMAGE_SERVING_MODE", "") or "").strip()
+    cdn_base = (getattr(settings, "IMAGE_CDN_BASE_URL", "") or "").strip()
+    if serving_mode == "worker" and not cdn_base:
+        issues.append(ConfigIssue(
+            severity="error",
+            key="IMAGE_CDN_BASE_URL",
+            message=(
+                "IMAGE_SERVING_MODE=worker but IMAGE_CDN_BASE_URL is empty, so "
+                "image URLs silently fall back to presigned mode. Set it to the "
+                "Worker's custom domain (e.g. https://images.fitcheckaiapp.com) "
+                "or set IMAGE_SERVING_MODE=presigned."
+            ),
+        ))
+
+    # 13. Thumbnail serving must not be flipped on before the backfill has run.
+    # THUMBNAIL_SERVING alone makes every read emit a ``_thumb`` URL, but the
+    # sibling object only exists for uploads made after the feature landed and
+    # for objects scripts/generate_thumbnails.py has covered — everything else
+    # 404s on its tile (clients fall back to image_url only when the field is
+    # empty, not on HTTP 404). The read path itself gates on BOTH flags; this
+    # check catches the operator-side half of the pair (serving on, backfill
+    # unset) at boot instead of in the next grid load.
+    if (
+        bool(getattr(settings, "THUMBNAIL_SERVING", False))
+        and not bool(getattr(settings, "THUMBNAILS_BACKFILLED", False))
+    ):
+        issues.append(ConfigIssue(
+            severity="warning",
+            key="THUMBNAILS_BACKFILLED",
+            message=(
+                "THUMBNAIL_SERVING is on but THUMBNAILS_BACKFILLED is not set: "
+                "the read path will emit a thumbnail_url for every canonical "
+                "image, and objects without a _thumb sibling (everything that "
+                "predates the backfill, plus best-effort uploads whose encode "
+                "failed) will 404 on their tile. Run "
+                "scripts/generate_thumbnails.py over the bucket, then set "
+                "THUMBNAILS_BACKFILLED=true."
             ),
         ))
 

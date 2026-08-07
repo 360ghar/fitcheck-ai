@@ -1,0 +1,393 @@
+@import 'tailwindcss';
+
+/*
+ * FitCheck Admin design tokens — sourced from flutter/DESIGN.md (§01 colors,
+ * §02 typography, §04 spacing, §05 radii). The admin app uses the SAME tokens
+ * as web + mobile: one brand accent (Brand Red #E60023) and warm neutrals.
+ *
+ * Layering:
+ *   @theme (static)      — tokens that never flip with the theme: brand,
+ *                          fixed palette names from DESIGN.md.
+ *   :root / .dark vars   — semantic tokens that flip between light/dark.
+ *   @theme inline        — semantic token aliases mapped to those vars so
+ *                          utilities like bg-background resolve to the var.
+ *
+ * Tailwind 4 emits @theme tokens as CSS variables on :root, so .dark can
+ * override the static palette tokens (canvas, surface-card, …) too.
+ */
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/fonts/plus-jakarta-sans-latin-var.woff2') format('woff2-variations');
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+@theme {
+  /* Brand & accent (DESIGN.md §01) */
+  --color-primary: #e60023;
+  --color-primary-pressed: #cc001f;
+  --color-editorial-purple: #7e238b;
+
+  /* Surfaces (warm neutral) */
+  --color-canvas: #ffffff;
+  --color-soft-surface: #fbfbf9;
+  --color-surface-card: #f6f6f3;
+  --color-secondary-bg: #e5e5e0;
+  --color-surface-dark: #262622;
+  --color-hairline: #dadad3;
+
+  /* Text */
+  --color-ink: #000000;
+  --color-ink-soft: #211922;
+  --color-body: #33332e;
+  --color-mute: #62625b;
+  --color-ash: #91918c;
+
+  /* Semantic */
+  --color-error: #9e0a0a;
+  --color-success-deep: #103c25;
+  --color-success-pale: #c7f0da;
+  --color-focus-outer: #435ee5;
+
+  /* Status tones (extension of DESIGN.md for badge semantics) */
+  --color-warning-deep: #92400e;
+  --color-warning-pale: #fef3c7;
+  --color-info-deep: #1d4ed8;
+  --color-info-pale: #dbeafe;
+
+  /* Radii (DESIGN.md §05): sm 8 / md 16 / lg 32 / full 9999 */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 32px;
+  --radius-full: 9999px;
+
+  /* Typography (DESIGN.md §02) */
+  --font-sans:
+    'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    sans-serif;
+}
+
+/* Semantic tokens — light */
+:root {
+  --background: #ffffff;
+  --foreground: #000000;
+  --card: #ffffff;
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+  --muted: #f6f6f3;
+  --muted-foreground: #62625b;
+  --border: #dadad3;
+  --input: #dadad3;
+  --ring: #435ee5;
+  --primary-foreground: #ffffff;
+  --secondary: #e5e5e0;
+  --secondary-foreground: #000000;
+  --accent: #f6f6f3;
+  --accent-foreground: #000000;
+  --destructive: #9e0a0a;
+  --destructive-foreground: #ffffff;
+  --success: #103c25;
+  --success-foreground: #ffffff;
+}
+
+/* Semantic tokens — dark (warm near-black per DESIGN.md §01 dark mode) */
+.dark {
+  --background: #1a1a17;
+  --foreground: #fbfbf9;
+  --card: #232320;
+  --card-foreground: #fbfbf9;
+  --popover: #232320;
+  --popover-foreground: #fbfbf9;
+  --muted: #2c2c28;
+  --muted-foreground: #91918c;
+  --border: #3a3a35;
+  --input: #3a3a35;
+  --ring: #435ee5;
+  --primary-foreground: #ffffff;
+  --secondary: #3a3a35;
+  --secondary-foreground: #fbfbf9;
+  --accent: #2c2c28;
+  --accent-foreground: #fbfbf9;
+  /* Dark-mode contrast adaptation of DESIGN.md's error token */
+  --destructive: #ff8080;
+  --destructive-foreground: #1a1a17;
+  --success: #c7f0da;
+  --success-foreground: #103c25;
+}
+
+/* Palette overrides in dark mode (static @theme tokens become vars on :root) */
+.dark {
+  --color-canvas: #1a1a17;
+  --color-soft-surface: #1a1a17;
+  --color-surface-card: #2c2c28;
+  --color-secondary-bg: #3a3a35;
+  --color-hairline: #3a3a35;
+  --color-ink: #fbfbf9;
+  --color-ink-soft: #fbfbf9;
+  --color-body: #fbfbf9;
+  --color-mute: #91918c;
+  --color-error: #ff8080;
+  --color-warning-deep: #fbbf24;
+  --color-warning-pale: #42341a;
+  --color-info-deep: #93c5fd;
+  --color-info-pale: #1e2a4a;
+}
+
+/* Semantic aliases — utilities (bg-background, text-muted-foreground, …)
+   resolve through these vars so light/dark swaps automatically. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    font-feature-settings:
+      'cv11' on,
+      'ss01' on;
+  }
+
+  /* Visible focus everywhere, even on non-component focusable elements */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Motion (DESIGN.md §07): subtle state changes only, <=150ms          */
+/* ------------------------------------------------------------------ */
+
+@keyframes fc-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fc-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes fc-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fc-slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fc-slide-out-right {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes fc-slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fc-slide-out-left {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes fc-slide-in-bottom {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fc-slide-out-bottom {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes fc-slide-in-top {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fc-slide-out-top {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes fc-slide-in-up {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fc-slide-out-down {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(4px);
+    opacity: 0;
+  }
+}
+
+@utility animate-fc-fade-in {
+  animation: fc-fade-in 150ms ease-out both;
+}
+
+@utility animate-fc-fade-out {
+  animation: fc-fade-out 120ms ease-in both;
+}
+
+@utility animate-fc-zoom-in {
+  animation: fc-zoom-in 150ms ease-out both;
+}
+
+@utility animate-fc-slide-in-right {
+  animation: fc-slide-in-right 200ms ease-out both;
+}
+
+@utility animate-fc-slide-out-right {
+  animation: fc-slide-out-right 150ms ease-in both;
+}
+
+@utility animate-fc-slide-in-left {
+  animation: fc-slide-in-left 200ms ease-out both;
+}
+
+@utility animate-fc-slide-out-left {
+  animation: fc-slide-out-left 150ms ease-in both;
+}
+
+@utility animate-fc-slide-in-bottom {
+  animation: fc-slide-in-bottom 220ms ease-out both;
+}
+
+@utility animate-fc-slide-out-bottom {
+  animation: fc-slide-out-bottom 150ms ease-in both;
+}
+
+@utility animate-fc-slide-in-top {
+  animation: fc-slide-in-top 220ms ease-out both;
+}
+
+@utility animate-fc-slide-out-top {
+  animation: fc-slide-out-top 150ms ease-in both;
+}
+
+@utility animate-fc-slide-in-up {
+  animation: fc-slide-in-up 120ms ease-out both;
+}
+
+@utility animate-fc-slide-out-down {
+  animation: fc-slide-out-down 100ms ease-in both;
+}
+
+@keyframes fc-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+@utility animate-fc-progress {
+  animation: fc-progress 1.2s ease-in-out infinite;
+}
+
+/* ------------------------------------------------------------------ */
+/* Accessibility                                                       */
+/* ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

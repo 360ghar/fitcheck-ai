@@ -13,7 +13,7 @@ import { getApiError } from '../lib/errors';
 import { logger } from '../lib/logger';
 import { resetForcedLogoutFlag, setTokens } from '../lib/auth';
 import { clearRequestCache, request } from '../lib/requestCache';
-import { supabase } from '../lib/supabase';
+import { getSupabase } from '../lib/supabase';
 
 // ============================================================================
 // AUTH STATE INTERFACE
@@ -211,6 +211,7 @@ export const useAuthStore = create<AuthState>()(
       signInWithGoogle: async () => {
         set({ isLoading: true, error: null });
         try {
+          const supabase = await getSupabase();
           const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
@@ -231,6 +232,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         try {
           // Get session from Supabase (populated from URL hash after redirect)
+          const supabase = await getSupabase();
           const { data: { session }, error } = await supabase.auth.getSession();
 
           if (error) throw error;

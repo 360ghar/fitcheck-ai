@@ -1,0 +1,44 @@
+{
+  "dashboard": {
+    "title": "Dashboard"
+  },
+  "trends": {
+    "title": "Trends"
+  },
+  "users": {
+    "title": "Users"
+  },
+  "userDetail": {
+    "title": "User details"
+  },
+  "subscriptions": {
+    "title": "Subscriptions"
+  },
+  "iap": {
+    "title": "IAP transactions"
+  },
+  "quotas": {
+    "title": "AI quotas"
+  },
+  "promo": {
+    "title": "Promo codes"
+  },
+  "feedback": {
+    "title": "Feedback"
+  },
+  "audit": {
+    "title": "Audit log"
+  },
+  "storage": {
+    "title": "Storage"
+  },
+  "settings": {
+    "title": "Settings"
+  },
+  "posts": {
+    "title": "Posts"
+  },
+  "categories": {
+    "title": "Categories"
+  }
+}

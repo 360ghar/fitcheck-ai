@@ -1,0 +1,75 @@
+{
+  "title": "Dashboard",
+  "refresh": "Refresh",
+  "updatedJustNow": "Updated just now",
+  "updatedAgo": "Updated {{seconds}}s ago",
+  "metrics": {
+    "signups7d": "Signups (7 days)",
+    "signups30d": "Signups (30 days)",
+    "activeUsers7d": "Active users (7 days)",
+    "activeUsers30d": "Active users (30 days)",
+    "paidSubscriptions": "Paid subscriptions",
+    "aiJobs7d": "AI jobs (7 days)"
+  },
+  "aiJobsHint": "{{succeeded}} succeeded · {{failed}} failed",
+  "charts": {
+    "title": "Trends",
+    "signups": "Signups",
+    "activeUsers": "Active users",
+    "last7Days": "Last 7 days",
+    "last30Days": "Last 30 days",
+    "total": "Total",
+    "succeeded": "Succeeded",
+    "failed": "Failed"
+  },
+  "topUsers": {
+    "title": "Top users",
+    "topOutfits": "Most outfits",
+    "topItems": "Most items",
+    "topReferrers": "Most referrals",
+    "empty": "No data yet"
+  },
+  "referrals": {
+    "title": "Referral program",
+    "codesIssued": "Codes issued",
+    "redemptions": "Redemptions",
+    "creditsGranted": "Credits granted",
+    "creditsPending": "Credits pending"
+  },
+  "activity": {
+    "title": "Recent admin activity",
+    "empty": "No admin activity yet",
+    "viewAll": "View audit log",
+    "error": "Couldn't load recent activity."
+  },
+  "revenue": {
+    "title": "Revenue",
+    "estimateHint": "Estimate from plan prices",
+    "viewTrends": "View daily trends",
+    "mrr": "MRR",
+    "mrrStripe": "MRR · Stripe",
+    "mrrIap": "MRR · Stores",
+    "paidSubscriptions": "Paid subscriptions",
+    "trialSubscriptions": "Trials",
+    "churnEvents30d": "Churn events (30d)",
+    "churnHint": "{{refunds}} refunds (30d)"
+  },
+  "trends": {
+    "title": "Daily trends",
+    "description": "Daily signups, AI jobs, paid subscriptions and active users over the selected window.",
+    "last7Days": "Last 7 days",
+    "last15Days": "Last 15 days",
+    "last30Days": "Last 30 days",
+    "last90Days": "Last 90 days",
+    "charts": {
+      "signups": "Signups",
+      "jobs": "AI jobs",
+      "jobsHint": "Succeeded vs failed",
+      "paid": "Paid subscriptions",
+      "paidHint": "Stripe vs stores",
+      "active": "AI-active users",
+      "activeHint": "Users with ≥1 AI job that day"
+    }
+  },
+  "error": "Couldn't load dashboard data."
+}

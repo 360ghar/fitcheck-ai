@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../wardrobe/models/item_model.dart';
 import '../controllers/recommendations_controller.dart';
@@ -152,7 +153,7 @@ class SelectedItemsChips extends StatelessWidget {
                 avatar: CircleAvatar(
                   backgroundImage:
                       item.itemImages != null && item.itemImages!.isNotEmpty
-                      ? NetworkImage(item.itemImages!.first.url)
+                      ? appImageProvider(item.itemImages!.first.url)
                       : null,
                   child: item.itemImages == null || item.itemImages!.isEmpty
                       ? const Icon(Icons.image, size: 16)

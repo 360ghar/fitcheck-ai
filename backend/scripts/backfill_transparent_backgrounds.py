@@ -191,9 +191,9 @@ from app.utils.background_removal import (  # noqa: E402
     remove_white_background,
 )
 
-# Storage is now the Railway S3-compatible bucket (private). This script talks
-# to the same `S3StorageBackend` the app uses, rather than the Supabase Storage
-# API directly. The DB client (supabase-py) is still used for the row listing /
+# Storage is now the Cloudflare R2 bucket (private). This script talks to the
+# same `S3StorageBackend` the app uses, rather than the Supabase Storage API
+# directly. The DB client (supabase-py) is still used for the row listing /
 # metadata patch — the DB stays on Supabase; only file storage moved.
 from app.services.object_storage import get_storage_backend  # noqa: E402
 

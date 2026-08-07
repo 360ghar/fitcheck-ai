@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import '../constants/app_constants.dart';
+import 'app_network_image.dart';
 
 /// A full-screen image viewer with zoom and pan capabilities.
 ///
@@ -177,7 +177,7 @@ class _AppImageViewerState extends State<AppImageViewer> {
       child: GestureDetector(
         onTap: () {}, // Prevent tap from propagating to dismiss
         child: PhotoView(
-          imageProvider: CachedNetworkImageProvider(imageUrl),
+          imageProvider: appImageProvider(imageUrl),
           minScale: PhotoViewComputedScale.contained,
           maxScale: PhotoViewComputedScale.covered * 3,
           initialScale: PhotoViewComputedScale.contained,
@@ -209,7 +209,7 @@ class _AppImageViewerState extends State<AppImageViewer> {
         backgroundDecoration: const BoxDecoration(color: Colors.transparent),
         builder: (context, index) {
           return PhotoViewGalleryPageOptions(
-            imageProvider: CachedNetworkImageProvider(widget.imageUrls[index]),
+            imageProvider: appImageProvider(widget.imageUrls[index]),
             minScale: PhotoViewComputedScale.contained,
             maxScale: PhotoViewComputedScale.covered * 3,
             initialScale: PhotoViewComputedScale.contained,

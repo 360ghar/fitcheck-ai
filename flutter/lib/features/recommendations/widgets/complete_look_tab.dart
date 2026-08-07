@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
@@ -264,12 +265,12 @@ class CompleteLookTab extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(AppConstants.radius8),
             child: item.itemImages != null && item.itemImages!.isNotEmpty
-                ? Image.network(
+                ? AppNetworkImage(
                     item.itemImages!.first.url,
                     width: 120,
                     height: 120,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
+                    errorWidget: (_, _, _) => Container(
                       width: 120,
                       height: 120,
                       color: tokens.cardColor.withValues(alpha: 0.5),

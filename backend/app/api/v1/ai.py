@@ -8,17 +8,17 @@ All AI processing is done server-side using configurable providers.
 from typing import Any, Dict, List, Optional
 
 import asyncio
-import re
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from supabase import Client
 
+from app.api.v1.images import _is_owned_by_user, materialize_avatar_url
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import AIServiceError, FitCheckException, RateLimitError
 from app.services.rate_limit import rate_limited_operation
 from app.models.subscription import OperationType
-from app.core.security import get_current_user_id
+from app.api.v1.deps import get_active_user_id
 from app.db.connection import get_db
 from app.utils.retry import is_retryable_error, with_retry
 from app.models.ai import (
@@ -53,21 +53,12 @@ logger = get_context_logger(__name__)
 router = APIRouter()
 
 
-_STORAGE_PATH_RE = re.compile(
-    r"^[^/\\]+/(?:items|outfits|avatars|sources|feedback|tmp/[^/\\]+)/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif)$"
-)
-
-
-def _owned_storage_path(storage_path: str, user_id: str) -> bool:
-    """Accept only canonical, user-scoped storage keys."""
-    return bool(
-        isinstance(storage_path, str)
-        and isinstance(user_id, str)
-        and storage_path == storage_path.strip()
-        and not any(char in storage_path for char in "\\\r\n")
-        and _STORAGE_PATH_RE.fullmatch(storage_path)
-        and storage_path.split("/", 1)[0] == user_id
-    )
+# Storage-key ownership shares images.py's allowlist: the two modules
+# previously carried hand-synced copies of the same key grammar (and
+# infra/images-worker/worker.js enforces it a third time at the edge). One
+# copy — images._is_owned_by_user — is the source of truth; the alias keeps
+# this module's call sites (and its tests) reading the same name.
+_owned_storage_path = _is_owned_by_user
 
 
 async def _materialize_image_source(
@@ -81,14 +72,6 @@ async def _materialize_image_source(
     return await StorageService.get_public_url(storage_path)
 
 
-# Storage keys are scoped by user id (a UUID), so a key whose first segment is
-# not UUID-shaped cannot belong to our bucket — it is an external URL and must
-# never be refreshed against our presigner.
-_USER_ID_KEY_RE = re.compile(
-    r"^[0-9a-f]{32}$|^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-)
-
-
 async def _provider_ready_avatar_url(avatar_url: str) -> str:
     """Return a fresh, provider-readable URL for a stored profile avatar.
 
@@ -98,10 +81,14 @@ async def _provider_ready_avatar_url(avatar_url: str) -> str:
     bucket key and re-materialized so providers never receive a stale URL;
     external URLs are passed through only over https (the Gemini download
     boundary enforces its own SSRF guard for the actual fetch).
+
+    ``presigned=True`` is mandatory here: an AI provider fetches the URL from its
+    own infrastructure and cannot present the app's JWT, so a worker-mode URL
+    would 404 on it.
     """
-    key = StorageService.key_from_path(avatar_url)
-    if key and _USER_ID_KEY_RE.fullmatch(key.split("/", 1)[0]):
-        return await StorageService.get_public_url(key)
+    fresh = await materialize_avatar_url(avatar_url, presigned=True)
+    if fresh:
+        return fresh
     if avatar_url.startswith("https://"):
         return avatar_url
     raise HTTPException(
@@ -147,7 +134,7 @@ async def _fetch_user_avatar_base64(user_id: str, db: Client) -> Optional[str]:
 )
 async def extract_items(
     request: ExtractItemsRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -203,7 +190,7 @@ async def extract_items(
 )
 async def extract_single_item(
     request: ExtractSingleItemRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -262,7 +249,7 @@ async def extract_single_item(
 )
 async def generate_outfit(
     request: GenerateOutfitRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -435,7 +422,7 @@ async def generate_outfit(
 )
 async def generate_product_image(
     request: GenerateProductImageRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -527,7 +514,7 @@ async def generate_product_image(
 )
 async def generate_try_on(
     request: TryOnRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -658,7 +645,7 @@ async def generate_try_on(
     status_code=status.HTTP_200_OK,
 )
 async def get_available_models(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
 ):
     """
     Get available AI models by provider.
@@ -778,7 +765,7 @@ class TestEmbeddingResult(BaseModel):
 )
 async def generate_embedding(
     request: EmbeddingRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -815,7 +802,7 @@ async def generate_embedding(
 )
 async def generate_batch_embeddings(
     request: BatchEmbeddingRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -865,7 +852,7 @@ async def generate_batch_embeddings(
 )
 async def search_similar_items(
     request: SimilaritySearchRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -934,7 +921,7 @@ async def search_similar_items(
 )
 async def test_embedding_model(
     request: TestEmbeddingRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """

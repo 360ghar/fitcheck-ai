@@ -11,7 +11,7 @@ from supabase import Client
 
 from app.api.v1.deps import get_current_user, get_db
 from app.core.config import settings
-from app.core.exceptions import ServiceError, ValidationError
+from app.core.exceptions import BillingNotConfiguredError, ServiceError, ValidationError
 from app.core.logging_config import get_context_logger
 from app.models.subscription import (
     PlanType,
@@ -256,8 +256,10 @@ async def create_checkout_session(
     if not _stripe_billing_configured():
         # Missing env, not a support issue - fail closed with a message that
         # points at the working path (promo codes) instead of "contact
-        # support" (observed 2026-08-03: repeated 503s at 18:02/18:31).
-        raise ServiceError(
+        # support". Uses BillingNotConfiguredError (distinct code) so the client
+        # treats this as permanent and does not retry (observed 2026-08-03/05:
+        # repeated 503 bursts when the frontend retried this transient 503).
+        raise BillingNotConfiguredError(
             "Web billing is not available yet. Use a promo code to upgrade."
         )
 
@@ -430,8 +432,8 @@ async def create_portal_session(
     """
     if not _stripe_billing_configured():
         # Same fail-closed gate as /checkout: missing env, not a support
-        # issue (observed 2026-08-03: repeated portal 503s at 18:02/18:03).
-        raise ServiceError(
+        # issue. Distinct code so the client treats it as permanent.
+        raise BillingNotConfiguredError(
             "Web billing is not available yet. Use a promo code to upgrade."
         )
 
@@ -475,6 +477,17 @@ async def cancel_subscription(
     The user will retain access until the period ends.
     """
     subscription = await SubscriptionService.get_subscription(user["id"], db)
+
+    # Store-billed rows are managed in the store's subscription settings
+    # (App Store / Play Store), never by the Stripe cancellation path —
+    # mirror the /checkout guard so a stale client cannot cancel a
+    # store-billed row locally (App Store Guideline 3.1.1 / Play policy).
+    if subscription.billing_provider in ("apple", "google"):
+        raise ServiceError(
+            "This subscription is billed through the "
+            f"{'App Store' if subscription.billing_provider == 'apple' else 'Play Store'}; "
+            "manage it in your store account settings."
+        )
 
     if subscription.plan_type == PlanType.FREE:
         raise ValidationError("You don't have an active paid subscription")

@@ -168,6 +168,8 @@ async def test_sync_stripe_subscription_persists_price_status_period_and_cancel_
     }
     result = Mock(data=row)
     db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = result
+    # The sync tail builds its response from the upsert result, not a re-read.
+    db.table.return_value.upsert.return_value.execute.return_value = Mock(data=[row])
 
     with patch.multiple(settings, **_stripe_settings()):
         synced = await SubscriptionService.sync_stripe_subscription(

@@ -10,7 +10,7 @@
 | App Name (ASC) | FitCheck AI: Wardrobe Stylist |
 | Display name (device) | FitCheck AI |
 | Bundle ID | `com.fitcheckaiapp.fitcheckai` |
-| Version | 1.0.3+5 |
+| Version | 1.0.4+9 |
 | Primary Language | English (U.S.) |
 | Category | Lifestyle / Photo & Video |
 | Support Email | support@fitcheckaiapp.com |
@@ -94,12 +94,12 @@
 
 ### In-App Purchase (monetization)
 
-**Product IDs.** Single source of truth for the env vars: `backend/.env.example`.
-The suggested IDs follow `com.fitcheckaiapp.fitcheckai.<plan>.<period>` and must
-match **exactly** across all three surfaces: App Store Connect products, the
-`APPLE_*_PRODUCT_ID` env vars, and the local StoreKit config
-(`ios/StoreKit/FitCheck.storekit`). Display prices below mirror web
-`PLAN_PRICES`; actual store prices are set per territory in ASC.
+**Product IDs.** The backend defaults to these IDs
+(`backend/app/core/config.py`), so no env var is needed — but the App Store
+Connect products and the local StoreKit config
+(`ios/StoreKit/FitCheck.storekit`) must match them **exactly**. Display prices
+below mirror web `PLAN_PRICES`; actual store prices are set per territory in
+ASC.
 
 | Plan | Monthly product ID | Yearly product ID | Display price (monthly / yearly) |
 |---|---|---|---|
@@ -107,7 +107,9 @@ match **exactly** across all three surfaces: App Store Connect products, the
 | Pro | `com.fitcheckaiapp.fitcheckai.pro.monthly` | `com.fitcheckaiapp.fitcheckai.pro.yearly` | $20 / $200 |
 
 - [ ] **In-App Purchase capability** enabled for the app ID in ASC (entitlement already in `Runner.entitlements`)
-- [ ] **4 auto-renewable subscription products** created in ASC > Monetization > Subscriptions with the exact IDs above (all in one subscription group); prices set per territory; review the "Save X%" yearly badge against actual store prices
+- [ ] **4 auto-renewable subscription products** created in ASC > Monetization > Subscriptions with the exact IDs above (all in **one** subscription group); prices set per territory; review the "Save X%" yearly badge against actual store prices
+- [ ] **Subscription rank order: Pro above Plus** in that group. This is what makes "Upgrade" an immediate upgrade — with the wrong order StoreKit treats Plus → Pro as a deferred crossgrade that charges nothing and changes nothing until the next renewal, so the reviewer sees a button that does nothing. Separate groups are worse: two live subscriptions and a double charge.
+- [ ] **Sandbox** App Store Server Notifications URL set (a separate ASC field from Production). Without it no `DID_RENEW` arrives, and because sandbox compresses a month to ~5 minutes the reviewer's entitlement lapses mid-review. See `docs/store/ios-sandbox-testing-runbook.md`.
 - [ ] **App Store Server API key** created (ASC > Users and Access > Integrations > App Store Connect API, "In-App Purchase" permission) and its issuer ID / key ID / `.p8` contents set in backend env: `APPLE_ISSUER_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`
 - [ ] **Sandbox tester** created in ASC (Users and Access > Sandbox) for TestFlight sandbox purchases
 - [ ] TestFlight sandbox purchase verified end-to-end (buy → backend grants entitlement → renew/expire via App Store Server Notifications)
@@ -122,39 +124,42 @@ errors at request time and the startup config health check logs it):
 | `APPLE_ISSUER_ID` | Issuer ID shown next to the App Store Connect API key |
 | `APPLE_KEY_ID` | Key ID of the App Store Connect API key (e.g. `3K9F2B7X4A`) |
 | `APPLE_PRIVATE_KEY` | Full `.p8` file contents (multi-line PEM — wrap in double quotes in `.env` so newlines survive dotenv parsing; paste raw in Railway) |
-| `APPLE_ENV` | `production` (default; automatically falls back to the sandbox API for TestFlight purchases) |
-| `APPLE_PLUS_MONTHLY_PRODUCT_ID` / `APPLE_PLUS_YEARLY_PRODUCT_ID` / `APPLE_PRO_MONTHLY_PRODUCT_ID` / `APPLE_PRO_YEARLY_PRODUCT_ID` | Exact ASC product IDs from the table above |
+| `APPLE_ENV` | `production` (default; automatically falls back to the sandbox API for TestFlight / sandbox / App Review purchases — sandbox transactions are accepted by design and logged with `environment: "Sandbox"`) |
+| `APPLE_PLUS_MONTHLY_PRODUCT_ID` / `APPLE_PLUS_YEARLY_PRODUCT_ID` / `APPLE_PRO_MONTHLY_PRODUCT_ID` / `APPLE_PRO_YEARLY_PRODUCT_ID` | **Leave unset.** The backend defaults to the exact IDs in the table above. Only override if the ASC IDs differ; an override outside `APPLE_BUNDLE_ID` is flagged by the startup health check. |
 | `APPLE_BUNDLE_ID` | `com.fitcheckaiapp.fitcheckai` (already the default) |
 
 **App Store Server Notifications V2** is configured in ASC > Monetization >
 App Store Server Notifications (no backend env var):
 `https://api.fitcheckaiapp.com/api/v1/subscription/apple/notifications`
 
-**Local IAP testing (iOS simulator).** `ios/StoreKit/FitCheck.storekit` is
-wired into the shared Runner scheme (`Runner.xcscheme` → `LaunchAction` →
-`StoreKitConfigurationFileReference`). To use it: open `ios/Runner.xcworkspace`
-in Xcode → Product > Scheme > Edit Scheme > Run > Options > StoreKit
-Configuration → `FitCheck.storekit`, then launch from Xcode (a CLI
-`flutter run` may not apply the scheme's StoreKit config). Keep the file's 4
-product IDs in sync with the table above. Note: local StoreKit transactions
-are generated on-device only and are invisible to the App Store Server API,
-so the full buy → backend verification → entitlement loop still requires the
-TestFlight sandbox path.
+**Local IAP testing (iOS simulator).** The Simulator has no App Store, so
+`ios/StoreKit/FitCheck.storekit` is the only product source there. Open
+`ios/Runner.xcworkspace`, select the **`Runner (Local StoreKit)`** scheme and
+launch with ⌘R — `flutter run` does **not** apply a scheme's StoreKit
+configuration, and the default `Runner` scheme deliberately has none (local
+transactions are invisible to the App Store Server API, so attaching it there
+would silently break real sandbox testing). Keep the file's 4 product IDs,
+prices and `groupNumber` ranks (Pro = 1, Plus = 2) in sync with App Store
+Connect. The app queries exactly the IDs the backend serves
+(`GET /subscription/plans` → `store_products.apple`); it never substitutes a
+made-up identifier. Simulator purchases complete in StoreKit and then fail
+backend verification by design — the full entitlement loop needs a real device.
+Full procedure: `docs/store/ios-sandbox-testing-runbook.md`.
 
 ### Auth / backend ops
 
 - [ ] Supabase Apple provider enabled for production
 - [ ] Demo reviewer account seeded (`backend/scripts/seed_app_store_reviewer.py`)
 - [ ] Production API reachable: `https://api.fitcheckaiapp.com`
-- [ ] Production backend env has Apple IAP config: `APPLE_ISSUER_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`, and all four `APPLE_*_PRODUCT_ID`s (backend fails closed without them)
+- [ ] Production backend env has Apple IAP config: `APPLE_ISSUER_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (backend fails closed without these three; the product IDs default correctly and need no env vars)
 - [ ] GitHub secrets for signing + ASC API (see `build-ios.yml` header)
 
 ### Before Submit for Review
 
 - [ ] Deploy frontend so `/privacy`, `/terms`, `/support` show updated copy
-- [ ] `pubspec.yaml` build number (`version: x.y.z+N`) is **strictly greater** than the last upload on App Store Connect (ASC rejected build `7` → repo is at `+8` or higher)
+- [x] `pubspec.yaml` build number (`version: x.y.z+N`) is **strictly greater** than the last upload on App Store Connect (ASC rejected build `7`; repo bumped to `1.0.4+9` on 2026-08-06)
 - [ ] Fresh archive after any version bump (old Organizer archives keep old `CFBundleVersion`)
-- [ ] Signed IPA uploaded (CI workflow_dispatch or `build_ios_release.sh`)
+- [ ] Signed IPA uploaded — **use the `Build iOS IPA` CI workflow**. It builds with `shorebird release ios`, so the upload is patchable over the air. `build_ios_release.sh` uses plain `flutter build ipa` and its output can NEVER receive a patch; see `docs/FLUTTER.md`.
 - [ ] Archive includes UUID-matched framework dSYMs via `ios/generate_missing_dsyms.sh` (fixes Organizer Sentry.framework symbol upload)
 - [ ] Optional: Sentry auth secrets set so CI uploads real dSYMs for crash symbolication
 - [ ] Build selected for the version in ASC
@@ -180,10 +185,20 @@ HOW TO TEST
 4. Shared outfit: open a share link → Report or Hide.
 5. Settings → Delete Account is available (use a throwaway user, not this demo).
 
-PRICING
-Free to download. Subscriptions (Plus / Pro, monthly and yearly) are sold
-through Apple In-App Purchase. Purchases are verified server-side; sandbox
-testers can buy at zero cost. See "Restore Purchases" on the Subscription page.
+SUBSCRIPTIONS - HOW TO TEST THE UPGRADE FLOW
+Free to download. Plus / Pro (monthly and yearly) are sold only through Apple
+In-App Purchase and are included in this submission; they work in Sandbox.
+1. Sign in with the demo account.
+2. "More" tab -> "Plan & Billing" (or More -> Settings -> Subscription).
+3. Under "Choose a plan", tap "Upgrade" on any card and confirm with a
+   Sandbox Apple Account.
+4. Purchases are verified server-side; the new plan and limits appear
+   immediately on the same screen.
+Plus and Pro share one subscription group with Pro ranked higher, so
+Plus -> Pro upgrades apply immediately. "Restore Purchases" is on the same
+screen for all users. Auto-renewal terms plus Terms of Use / Privacy Policy
+links appear directly under the plan cards. Sandbox periods are accelerated
+(1 month is about 5 minutes), so a plan may renew or expire mid-review.
 
 CONTACT
 support@fitcheckaiapp.com

@@ -374,6 +374,28 @@ class AuthController extends GetxController {
     }
   }
 
+  /// Email on the current session, or null (OAuth-only accounts may have none).
+  String? get currentUserEmail => _supabase.currentUserEmail;
+
+  /// Current Supabase session user, or null when signed out.
+  ///
+  /// Exposes the raw goTrue [User] (with `appMetadata`, e.g. the auth
+  /// `provider`) that the app-level [user] model does not carry - callers like
+  /// SettingsController key account-eligibility guards on the provider.
+  User? get currentUser => _supabase.currentUser.value;
+
+  /// Verify the caller knows [password] right now; throws `AuthException` if not.
+  ///
+  /// Intentionally silent — no snackbar, no `error.value` — because the caller
+  /// decides what a failure means. `SettingsController.changePassword` uses it to
+  /// gate a password change on the current password and shows its own message.
+  Future<void> reauthenticate({
+    required String email,
+    required String password,
+  }) async {
+    await _authService.reauthenticate(email: email, password: password);
+  }
+
   /// Update password.
   Future<void> updatePassword(String newPassword) async {
     try {

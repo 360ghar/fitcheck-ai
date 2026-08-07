@@ -10,7 +10,7 @@ from datetime import date, datetime, time as dt_time
 import asyncio
 import functools
 import re
-from app.utils.datetime_util import utc_today
+from app.utils.datetime_util import parse_utc_datetime, utc_today
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 from uuid import UUID
 
@@ -25,7 +25,7 @@ from app.core.exceptions import (
     ValidationError,
 )
 from app.core.logging_config import get_context_logger
-from app.core.security import get_current_user_id
+from app.api.v1.deps import get_active_user_id
 from app.db.connection import get_db
 from app.models.subscription import OperationType
 from app.services.ai_service import AIService
@@ -160,14 +160,14 @@ def _coerce_date(value: Any) -> Optional[date]:
     raw = str(value).strip()
     if not raw:
         return None
-    normalized = raw.replace("Z", "+00:00")
-    # Try full ISO datetime/date first, then a strict YYYY-MM-DD fallback.
+    # Shared helper: normalizes the "Z" suffix and naive strings to an aware
+    # UTC datetime (see app/utils/datetime_util.py). Only the strict
+    # YYYY-MM-DD shape that fromisoformat rejects needs the fallback below.
+    parsed = parse_utc_datetime(raw)
+    if parsed is not None:
+        return parsed.date()
     try:
-        return datetime.fromisoformat(normalized).date()
-    except ValueError:
-        pass
-    try:
-        return date.fromisoformat(normalized[:10])
+        return date.fromisoformat(raw[:10])
     except ValueError:
         return None
 
@@ -486,7 +486,7 @@ async def match_items(
     category: Optional[str] = Query(None),
     limit: int = Query(10, ge=1, le=50),
     min_score: int = Query(0, ge=0, le=100),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Find items that match the given item(s)."""
@@ -577,7 +577,7 @@ async def complete_look(
     style: Optional[str] = Query(None),
     occasion: Optional[str] = Query(None),
     limit: int = Query(5, ge=1, le=20),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Generate complete outfit suggestions from a start item."""
@@ -642,7 +642,7 @@ async def complete_look(
 async def personalized(
     type: str = Query("outfits"),
     limit: int = Query(10, ge=1, le=50),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Return simple personalized recommendations (favorites + least worn)."""
@@ -716,7 +716,7 @@ def _parse_coordinates(location: str) -> Optional[Tuple[float, float]]:
 )
 async def weather_recommendations(
     location: Optional[str] = Query(None),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Return a weather-driven recommendation object for the frontend."""
@@ -816,7 +816,7 @@ async def astrology_recommendations(
     target_date: Optional[date] = Query(None),
     mode: str = Query("daily"),
     limit_per_category: int = Query(4, ge=1, le=8),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Return astrology-driven lucky colors with wardrobe-linked picks."""
@@ -958,7 +958,7 @@ async def similar_items(
     item_id: str = Query(...),
     category: Optional[str] = Query(None),
     limit: int = Query(10, ge=1, le=50),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     source = await asyncio.to_thread(db.table("items").select("*").eq("id", item_id).eq("user_id", user_id).single().execute)
@@ -1083,7 +1083,7 @@ async def similar_items(
 )
 async def style_analysis(
     item_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     item_id_str = str(item_id)
@@ -1150,7 +1150,7 @@ async def style_analysis(
     error_message="Failed to analyze wardrobe gaps"
 )
 async def wardrobe_gaps(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     items = (await asyncio.to_thread(db.table("items").select("id,category").eq("user_id", user_id).eq("is_deleted", False).execute)).data or []
@@ -1177,7 +1177,7 @@ async def shopping_recommendations(
     category: Optional[str] = Query(None),
     budget: Optional[float] = Query(None, ge=0),
     style: Optional[str] = Query(None),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Return actionable shopping recommendations based on wardrobe gaps."""
@@ -1204,7 +1204,7 @@ async def capsule_wardrobe(
     season: Optional[str] = Query(None),
     style: Optional[str] = Query(None),
     item_count: int = Query(20, ge=5, le=50),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Return a simple capsule wardrobe suggestion from existing favorites."""
@@ -1253,7 +1253,7 @@ async def capsule_wardrobe(
 async def rate_recommendation(
     recommendation_id: UUID,
     request: RateRecommendationRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Store user feedback to improve future recommendations."""

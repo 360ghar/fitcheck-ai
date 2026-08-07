@@ -4,13 +4,28 @@
  * and keeps session recording active across auth transitions.
  */
 
-import { useEffect } from 'react'
-import { usePostHog } from 'posthog-js/react'
+import { useEffect, useState } from 'react'
+import type { PostHog } from 'posthog-js'
 import { useAuthStore } from '@/stores/authStore'
-import { ensureSessionRecording } from '@/lib/analytics'
+import { ensureSessionRecording, getPostHog, initAnalytics } from '@/lib/analytics'
 
 export function PostHogIdentify() {
-  const posthog = usePostHog()
+  // Was `usePostHog()` from `posthog-js/react`. That context provider wrapped
+  // the whole app in main.tsx and forced the ~370 kB SDK into the entry chunk.
+  // PostHog now loads on idle, so this subscribes to that same deferred load
+  // instead. Null until it resolves; the effect below already guards on it.
+  const [posthog, setPosthog] = useState<PostHog | null>(() => getPostHog())
+
+  useEffect(() => {
+    let cancelled = false
+    void initAnalytics().then((client) => {
+      if (!cancelled) setPosthog(client)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const user = useAuthStore((state) => state.user)
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const hasHydrated = useAuthStore((state) => state.hasHydrated)

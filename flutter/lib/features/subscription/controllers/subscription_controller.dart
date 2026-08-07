@@ -7,6 +7,7 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/config/env_config.dart';
+import '../../../core/services/supabase_service.dart';
 import '../../../core/utils/error_handler.dart';
 import '../models/subscription_model.dart';
 import '../repositories/subscription_repository.dart';
@@ -21,12 +22,32 @@ import '../../../core/utils/frame_safe.dart';
 ///   mobile build.
 /// - Web: Stripe checkout remains the purchase rail.
 class SubscriptionController extends GetxController {
-  SubscriptionController({IapService? iapService, SubscriptionRepository? repository})
-      : iapService = iapService ?? IapService(),
-        _repository = repository ?? SubscriptionRepository();
+  SubscriptionController({
+    IapService? iapService,
+    SubscriptionRepository? repository,
+    String? Function()? currentUserId,
+  })  : iapService = iapService ?? IapService(),
+        _repository = repository ?? SubscriptionRepository(),
+        _currentUserId = currentUserId ?? _defaultCurrentUserId;
 
   final SubscriptionRepository _repository;
   final IapService iapService;
+
+  /// The signed-in user's ID, attached to store purchases as Apple's
+  /// appAccountToken. Injectable so tests need no Supabase session.
+  final String? Function() _currentUserId;
+
+  /// Resolves the user ID without assuming SupabaseService is registered —
+  /// widget tests build this controller with no app bindings at all, and a
+  /// missing session must degrade to "no token", never throw mid-purchase.
+  static String? _defaultCurrentUserId() {
+    try {
+      if (!Get.isRegistered<SupabaseService>()) return null;
+      return Get.find<SupabaseService>().currentUserId;
+    } catch (_) {
+      return null;
+    }
+  }
 
   // Observable state
   final Rx<SubscriptionModel?> subscription = Rx<SubscriptionModel?>(null);
@@ -35,8 +56,15 @@ class SubscriptionController extends GetxController {
   final Rx<ReferralStatsModel?> referralStats = Rx<ReferralStatsModel?>(null);
   final RxList<PlanDetailsModel> plans = <PlanDetailsModel>[].obs;
   final Rx<StoreProductsModel> storeProducts = Rx<StoreProductsModel>(StoreProductsModel());
-  /// Store product details (localized prices) keyed by product ID.
+  /// Store product details (localized prices) keyed by plan type
+  /// (e.g. `plus_monthly`). `refreshStoreProducts` populates this on page
+  /// load and `_startStorePurchase` reads it cache-first at checkout.
   final RxMap<String, ProductDetails> storeProductDetails = <String, ProductDetails>{}.obs;
+  /// Product IDs the store answered for but did not recognize. Non-empty means
+  /// a store-side setup problem (product missing in App Store Connect / Play,
+  /// agreements unsigned, wrong bundle namespace) — the paywall would
+  /// otherwise just render without prices and say nothing.
+  final RxList<String> missingStoreProductIds = <String>[].obs;
   final RxBool isLoading = false.obs;
   final RxBool isCheckingOut = false.obs;
   /// The plan variant currently launching a store checkout ('' when none).
@@ -221,12 +249,27 @@ class SubscriptionController extends GetxController {
         }
       }
       if (ids.isEmpty) return;
-      final details = await iapService.fetchProducts(ids);
+      final query = await iapService.fetchProducts(ids);
       storeProductDetails
         ..clear()
         ..addEntries(
-          details.map((d) => MapEntry(planTypeById[d.id] ?? d.id, d)),
+          query.products.map((d) => MapEntry(planTypeById[d.id] ?? d.id, d)),
         );
+      missingStoreProductIds.assignAll(query.notFoundIds);
+      if (query.notFoundIds.isNotEmpty) {
+        // The store answered successfully and did not recognize these IDs.
+        // Silently ignoring it renders a paywall with no prices and no
+        // explanation, which is the single most common sandbox / App Review
+        // setup failure (product not created, agreements unsigned, wrong
+        // bundle namespace). Report it; the user still sees /plans prices.
+        ErrorHandler.reportError(
+          StateError(
+            'Store did not recognize product IDs: '
+            '${query.notFoundIds.join(', ')}',
+          ),
+          'Store product IDs not found (${iapService.storeName})',
+        );
+      }
     } catch (e, stackTrace) {
       // Prices fall back to the /plans response; a failed store query must
       // not block the page.
@@ -274,6 +317,10 @@ class SubscriptionController extends GetxController {
     // Hard guard: never surface a purchase flow when the paywall is disabled
     // (e.g. App Review builds). Prevents a stray call during review.
     if (!showPaywall) return;
+    // Re-entry guard: a checkout is already in flight (per-card loading via
+    // checkingOutPlanType still shows which plan is spinning); ignore taps on
+    // other cards so two store flows can never launch concurrently.
+    if (isCheckingOut.value) return;
     isCheckingOut.value = true;
     checkingOutPlanType.value = planType;
     error.value = '';
@@ -288,8 +335,12 @@ class SubscriptionController extends GetxController {
       // Unexpected failure: report AND surface it. Checkout failures used to
       // only set [error], which this page renders nowhere when the
       // subscription loaded, so a failed purchase looked like a dead button.
+      // Pass the exception (not [error.value]) so Sentry captures the real
+      // object — e.g. `IapException.details` keeps the raw store
+      // (`storekit_no_response`) payload — while the user sees only
+      // [extractMessage]'s friendly text either way.
       ErrorHandler.showError(
-        error.value,
+        e,
         title: 'Purchase failed',
         stackTrace: stackTrace,
       );
@@ -314,13 +365,26 @@ class SubscriptionController extends GetxController {
       ErrorHandler.showValidation(error.value, title: 'Purchase unavailable');
       return;
     }
-    final products = await iapService.fetchProducts({productId});
-    if (products.isEmpty) {
-      error.value = 'This plan is not available in the store yet.';
-      ErrorHandler.showValidation(error.value, title: 'Purchase unavailable');
-      return;
+    // Prefer the page-load cache: `refreshStoreProducts` already resolved and
+    // cached ProductDetails for this plan type, so a transient storekit error
+    // at checkout can no longer hard-fail when valid details are on hand.
+    // Only query the store on a cache miss. StoreKit re-resolves the live
+    // localized price at the native purchase sheet, so the cached details are
+    // safe to buy with.
+    ProductDetails? product = storeProductDetails[planType];
+    if (product == null) {
+      final query = await iapService.fetchProducts({productId});
+      if (query.isEmpty) {
+        error.value = 'This plan is not available in the store yet.';
+        ErrorHandler.showValidation(error.value, title: 'Purchase unavailable');
+        return;
+      }
+      product = query.products.first;
     }
-    final started = await iapService.startPurchase(products.first);
+    final started = await iapService.startPurchase(
+      product,
+      appAccountToken: _currentUserId(),
+    );
     if (!started) {
       error.value = 'The purchase could not be started. Please try again.';
       ErrorHandler.showValidation(error.value, title: 'Purchase unavailable');
@@ -369,8 +433,19 @@ class SubscriptionController extends GetxController {
           title: 'Purchase pending',
         );
       case PurchaseStatus.error:
-        error.value = details.error?.message ?? 'The purchase failed.';
-        ErrorHandler.showError(error.value, title: 'Purchase failed');
+        // The plugin's error message is a raw platform string (e.g. an
+        // "IAPError(code: ..., message: ...)" dump) that must never reach
+        // the user. Surface a stable friendly message and keep the raw
+        // error flowing to Sentry via the IapException details.
+        error.value = 'The purchase failed. Please try again.';
+        ErrorHandler.showError(
+          IapException(
+            message: error.value,
+            errorCode: details.error?.code,
+            details: details.error?.toString(),
+          ),
+          title: 'Purchase failed',
+        );
       case PurchaseStatus.canceled:
         break; // User dismissed the sheet; nothing to do.
     }

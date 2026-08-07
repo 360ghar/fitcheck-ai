@@ -16,6 +16,7 @@ import * as React from 'react'
 import { Heart, Shirt, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Item } from '@/types'
+import { useImageWithFallback } from '@/hooks/useImageWithFallback'
 
 // ============================================================================
 // TYPES
@@ -98,27 +99,20 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
   ) => {
     const conditionConfig = getConditionConfig(item.condition)
     const primaryImage = item.images?.[0]
-    const [imageError, setImageError] = React.useState(false)
-    const imageErrorRef = React.useRef(false)
-    const handleImageError = React.useCallback(() => {
-      setImageError(true)
-      // Ask the parent for fresh URLs once (an image error usually means the
-      // presigned URL expired); avoid a loop on repeated errors.
-      if (!imageErrorRef.current) {
-        imageErrorRef.current = true
-        onImageError?.()
-      }
-    }, [onImageError])
-
-    // Reset error when image source changes
-    React.useEffect(() => {
-      setImageError(false)
-    }, [primaryImage?.thumbnail_url, primaryImage?.image_url, item.id])
-
-    const imageSrc =
-      !imageError && primaryImage
-        ? primaryImage.thumbnail_url || primaryImage.image_url
-        : null
+    // `thumbnail_url` is derived from the parent key with no existence check, so
+    // it can 404 while the full-size object is healthy (best-effort thumb
+    // encode, or an object predating the backfill). Retry the full size before
+    // treating the tile as broken.
+    // onExhausted asks the parent for fresh URLs once BOTH sources have failed —
+    // the signal that the presigned URLs expired. A thumb that merely does not
+    // exist is fixed by the fallback, so re-minting on that would be wasted.
+    const {
+      src: imageSrc,
+      onError: handleImageError,
+    } = useImageWithFallback(primaryImage?.thumbnail_url, primaryImage?.image_url, {
+      onExhausted: onImageError,
+      resetKey: item.id,
+    })
 
     if (variant === 'list') {
       return (
@@ -161,7 +155,9 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
                 alt={item.name}
                 className="w-full h-full object-contain"
                 loading="lazy"
-                onError={handleImageError}
+                onError={(event) =>
+                  handleImageError(event.currentTarget.currentSrc || event.currentTarget.src)
+                }
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
@@ -261,7 +257,9 @@ export const ItemCard = React.forwardRef<HTMLDivElement, ItemCardProps>(
             loading="lazy"
             width={primaryImage?.width}
             height={primaryImage?.height}
-            onError={handleImageError}
+            onError={(event) =>
+              handleImageError(event.currentTarget.currentSrc || event.currentTarget.src)
+            }
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">

@@ -5,14 +5,15 @@ Handles user registration, login, logout, token refresh, and password reset.
 
 import asyncio
 import random
-from datetime import datetime
 from typing import Optional, Dict, Any
 
+import httpx
 from fastapi import APIRouter, HTTPException, Depends, Request, status
+from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.db.connection import get_db, get_anon_db, SupabaseDB
-from app.core.security import verify_password_strength, TokenData, verify_token
+from app.core.security import security, verify_password_strength, TokenData, verify_token
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
 from app.core.exceptions import (
@@ -25,6 +26,7 @@ from app.core.exceptions import (
 )
 from app.core.ip_rate_limit import auth_rate_limited_operation
 from app.utils.db import execute_with_reconnect, run_sync_with_reconnect
+from app.utils.datetime_util import utcnow_iso
 from app.services.referral_service import ReferralService
 from app.models.subscription import RedeemReferralResponse
 from supabase import Client
@@ -157,6 +159,19 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
+class LogoutRequest(BaseModel):
+    """Optional logout body.
+
+    ``refresh_token`` is accepted for API compatibility: the actual
+    server-side revocation happens through Supabase /auth/v1/logout, which
+    the backend calls with the request's Bearer access token and which
+    revokes that session's refresh token. A stateless client has no stored
+    Supabase session to sign out from, so the token alone cannot revoke
+    anything.
+    """
+    refresh_token: Optional[str] = None
+
+
 class ResetPasswordRequest(BaseModel):
     """Password reset request."""
     email: EmailStr
@@ -277,8 +292,8 @@ async def register(
                     "full_name": register_request.full_name,
                     "email_verified": False,
                     "is_active": True,
-                    "created_at": datetime.now().isoformat(),
-                    "updated_at": datetime.now().isoformat(),
+                    "created_at": utcnow_iso(),
+                    "updated_at": utcnow_iso(),
                 }
                 profile_created = await execute_with_reconnect(
                     lambda d: _upsert_user_profile(d, profile_payload),
@@ -491,9 +506,9 @@ async def login(
                         "full_name": user.user_metadata.get("full_name") if user.user_metadata else "",
                         "email_verified": user.email_confirmed_at is not None,
                         "is_active": True,
-                        "created_at": datetime.now().isoformat(),
-                        "updated_at": datetime.now().isoformat(),
-                        "last_login_at": datetime.now().isoformat(),
+                        "created_at": utcnow_iso(),
+                        "updated_at": utcnow_iso(),
+                        "last_login_at": utcnow_iso(),
                     }
                     await _upsert_user_profile(db, profile_payload)
 
@@ -522,7 +537,7 @@ async def login(
                 else:
                     # Profile exists - just update last_login_at
                     await asyncio.to_thread(db.table("users").update({
-                        "last_login_at": datetime.now().isoformat()
+                        "last_login_at": utcnow_iso()
                     }).eq("id", user.id).execute)
             except Exception as e:
                 logger.warning("Failed to ensure user profile", user_id=user.id, error=str(e))
@@ -592,18 +607,47 @@ async def login(
             raise DatabaseError("An error occurred during login")
 
 
+async def _revoke_supabase_session(access_token: str) -> None:
+    """Revoke the Supabase Auth session server-side via ``/auth/v1/logout``.
+
+    Supabase's logout endpoint invalidates the session (and therefore its
+    refresh token) for the Bearer access token. This is the only way a
+    stateless backend — whose anon client holds no stored session — can
+    revoke the refresh token; ``anon_db.auth.sign_out()`` alone is a no-op
+    on such a client.
+    """
+    async with httpx.AsyncClient(timeout=10) as client:
+        await client.post(
+            f"{settings.SUPABASE_URL}auth/v1/logout",
+            headers={
+                "apikey": settings.SUPABASE_PUBLISHABLE_KEY,
+                "Authorization": f"Bearer {access_token}",
+            },
+        )
+
+
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(anon_db: Client = Depends(get_anon_db)):
+async def logout(
+    request: Optional[LogoutRequest] = None,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    anon_db: Client = Depends(get_anon_db),
+):
     """
     Logout user by invalidating the session.
 
-    Note: In a stateless JWT setup, the client should simply discard the token.
-    This endpoint primarily serves to revoke the refresh token on the server.
+    With a Bearer access token, POSTs to Supabase /auth/v1/logout so the
+    session's refresh token is revoked server-side. Without one, falls back
+    to the legacy best-effort sign_out() on the anon client. Always
+    best-effort: a failure is logged and 204 is still returned — the client
+    discards its tokens regardless.
     """
     try:
-        # Supabase Auth sign-out is session-based; in a backend JWT flow the
-        # client should discard tokens. We still call sign_out() as a best-effort.
-        anon_db.auth.sign_out()
+        access_token = credentials.credentials if credentials else None
+        if access_token:
+            await _revoke_supabase_session(access_token)
+        else:
+            # Legacy best-effort path for callers that send no token.
+            anon_db.auth.sign_out()
     except Exception as e:
         logger.warning("Logout error (best-effort)", error=str(e))
         # Best-effort: client should still discard tokens.
@@ -790,12 +834,16 @@ async def oauth_sync(
                 "avatar_url": avatar_url,
                 "email_verified": True,  # OAuth emails are verified by provider
                 "is_active": True,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-                "last_login_at": datetime.now().isoformat(),
+                "created_at": utcnow_iso(),
+                "updated_at": utcnow_iso(),
+                "last_login_at": utcnow_iso(),
             }
 
-            profile_created = await _upsert_user_profile(db, profile_payload)
+            profile_created = await execute_with_reconnect(
+                lambda d: _upsert_user_profile(d, profile_payload),
+                db,
+                extra={"operation": "oauth_sync.upsert_profile", "user_id": user_id},
+            )
             if not profile_created:
                 raise DatabaseError(
                     "User profile could not be created",
@@ -882,7 +930,7 @@ async def oauth_sync(
             # Profile exists - update last_login_at
             await execute_with_reconnect(
                 lambda d: d.table("users").update({
-                    "last_login_at": datetime.now().isoformat()
+                    "last_login_at": utcnow_iso()
                 }).eq("id", user_id).execute(),
                 db,
                 extra={"operation": "oauth_sync.touch_login", "user_id": user_id},

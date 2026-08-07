@@ -2,3 +2,5 @@ node_modules/
 dist/
 .env
 .env.local
+# Throwaway SSR bundle from scripts/prerender-html.mjs
+.prerender-ssr/

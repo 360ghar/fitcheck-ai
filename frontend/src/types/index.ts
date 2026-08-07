@@ -1067,7 +1067,7 @@ export interface SocialImportSSEEvent<T = unknown> {
 export type PlanType =
   "free" | "plus_monthly" | "plus_yearly" | "pro_monthly" | "pro_yearly";
 
-export type SubscriptionStatus = "active" | "cancelled" | "past_due" | "trial";
+export type SubscriptionStatus = "active" | "cancelled" | "past_due" | "trial" | "refunded";
 
 export interface Subscription {
   id: UUID;
@@ -1081,6 +1081,13 @@ export interface Subscription {
   referral_credit_months: number;
   created_at: string;
   updated_at: string;
+  /**
+   * Which rail is billing this subscription (backend
+   * `SubscriptionResponse.billing_provider`, default "stripe"). Store-billed
+   * plans cannot be managed or cancelled through the Stripe portal — only in the
+   * App Store / Play subscription settings — so the UI has to branch on it.
+   */
+  billing_provider?: "stripe" | "apple" | "google";
 }
 
 export interface UsageLimits {
@@ -1223,38 +1230,6 @@ export interface BlogPostSummary {
   author: string;
   author_title?: string;
   is_published: boolean;
-  featured_image_url?: string;
-}
-
-export interface BlogPostCreateRequest {
-  slug: string;
-  title: string;
-  excerpt: string;
-  content: string;
-  category: string;
-  date: string; // ISO date string
-  read_time: string;
-  emoji: string;
-  keywords: string[];
-  author: string;
-  author_title?: string;
-  is_published?: boolean;
-  featured_image_url?: string;
-}
-
-export interface BlogPostUpdateRequest {
-  slug?: string;
-  title?: string;
-  excerpt?: string;
-  content?: string;
-  category?: string;
-  date?: string;
-  read_time?: string;
-  emoji?: string;
-  keywords?: string[];
-  author?: string;
-  author_title?: string;
-  is_published?: boolean;
   featured_image_url?: string;
 }
 

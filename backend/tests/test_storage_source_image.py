@@ -19,6 +19,15 @@ def _image_bytes(format_name: str) -> bytes:
     return buffer.getvalue()
 
 
+def _webp_bytes() -> bytes:
+    buffer = io.BytesIO()
+    # Already WebP within the storage max edge: the compression chokepoint
+    # returns it unchanged (keep-smaller), so the extension/content-type are
+    # deterministic in tests.
+    Image.new("RGBA", (64, 64), (1, 2, 3, 128)).save(buffer, format="WEBP", quality=75)
+    return buffer.getvalue()
+
+
 @pytest.mark.asyncio
 async def test_upload_source_image_uses_user_namespace_and_returns_url():
     """upload_source_image should drop the file under {user_id}/sources/ and
@@ -34,7 +43,7 @@ async def test_upload_source_image_uses_user_namespace_and_returns_url():
         }
 
     fake_db = MagicMock()
-    payload = _image_bytes("JPEG")
+    payload = _webp_bytes()
 
     with patch.object(StorageService, "upload_file", fake_upload_file):
         result = await StorageService.upload_source_image(
@@ -45,29 +54,38 @@ async def test_upload_source_image_uses_user_namespace_and_returns_url():
         )
 
     assert result["image_url"].startswith("https://storage.test/user-42/sources/")
-    assert result["image_url"].endswith(".jpg")
+    assert result["image_url"].endswith(".webp")
     assert result["storage_path"].startswith("user-42/sources/")
-    assert captured["content_type"] == "image/jpeg"
+    # Sniffed from the bytes, not from the .jpg hint the caller supplied.
+    assert captured["content_type"] == "image/webp"
     assert captured["file_data"] == payload
 
 
 @pytest.mark.asyncio
-async def test_upload_source_image_defaults_png_content_type_for_non_jpeg():
+async def test_upload_source_image_compresses_png_to_webp():
+    """A PNG source is stored as the WebP q82 compression profile (smaller
+    than the source), with the key/content-type minted from the stored bytes."""
     captured: dict = {}
 
     async def fake_upload_file(*, db, file_data, file_path, content_type, **_):
-        captured.update(content_type=content_type)
+        captured.update(content_type=content_type, file_path=file_path, file_data=file_data)
         return {"public_url": f"https://x/{file_path}", "storage_path": file_path}
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (200, 200), (240, 240, 240)).save(buffer, format="PNG")
+    png = buffer.getvalue()
 
     with patch.object(StorageService, "upload_file", fake_upload_file):
         await StorageService.upload_source_image(
             db=MagicMock(),
             user_id="u",
-            file_data=_image_bytes("PNG"),
+            file_data=png,
             extension=".png",
         )
 
-    assert captured["content_type"] == "image/png"
+    assert captured["content_type"] == "image/webp"
+    assert captured["file_path"].endswith(".webp")
+    assert captured["file_data"] != png  # re-encoded, not stored as-is
 
 
 @pytest.mark.asyncio

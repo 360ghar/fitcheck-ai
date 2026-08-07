@@ -25,15 +25,19 @@ from app.core.exceptions import (
     UnsupportedMediaTypeError,
 )
 from app.core.logging_config import get_context_logger
-from app.core.security import get_current_user_id
-from app.core.uploads import read_upload_capped
+from app.api.v1.deps import get_active_user_id
+from app.core.uploads import MAX_UPLOAD_FILES, read_upload_capped
 from app.db.connection import get_db
 from app.models.subscription import OperationType
 from app.services.ai_settings_service import AISettingsService
 from app.services.batch_job_service import BatchJobService, BatchJobStatus
 from app.services.batch_extraction_service import BatchExtractionService
 from app.utils.sse_queue import SSE_QUEUE_MAXSIZE, STREAM_OVERFLOW, note_consumed
-from app.utils.image_processing import make_base64_image_validator, validate_image_bytes
+from app.utils.image_processing import (
+    SUPPORTED_UPLOAD_MIME_TYPES,
+    make_base64_image_validator,
+    validate_image_bytes,
+)
 from app.utils.db import persistence_db as _persistence_db
 from app.utils.tasks import spawn_background_task
 
@@ -53,7 +57,6 @@ _MAX_BATCH_IMAGE_B64 = 10 * 1024 * 1024
 # encoded — under the 10MB budget the JSON path enforces per image. Worst-case
 # batch: 50 x 7MB raw ≈ 467MB base64, comparable to the JSON path's 500MB.
 _MAX_BATCH_IMAGE_BYTES = 7 * 1024 * 1024
-_MAX_BATCH_IMAGES = 50
 # Chunk size for capped multipart reads (reject before buffering past the cap).
 _READ_CHUNK_BYTES = 1024 * 1024
 
@@ -119,7 +122,7 @@ class BatchExtractionRequest(BaseModel):
     images: List[BatchImageInput] = Field(
         ...,
         min_length=1,
-        max_length=_MAX_BATCH_IMAGES,
+        max_length=MAX_UPLOAD_FILES,
         description="List of images to process (max 50)",
     )
     auto_generate: bool = Field(
@@ -312,10 +315,10 @@ async def _start_batch_job(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least one image is required",
         )
-    if total_images > _MAX_BATCH_IMAGES:
+    if total_images > MAX_UPLOAD_FILES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Maximum {_MAX_BATCH_IMAGES} images per batch",
+            detail=f"Maximum {MAX_UPLOAD_FILES} images per batch",
         )
 
     if reservations is None:
@@ -382,7 +385,7 @@ async def _start_batch_job(
 )
 async def start_batch_extraction(
     request: BatchExtractionRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -430,7 +433,7 @@ async def start_batch_extraction_multipart(
         ge=1,
         le=min(settings.AI_GENERATION_CONCURRENCY, 50),
     ),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -445,10 +448,10 @@ async def start_batch_extraction_multipart(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="At least one file is required",
             )
-        if len(files) > _MAX_BATCH_IMAGES:
+        if len(files) > MAX_UPLOAD_FILES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Maximum {_MAX_BATCH_IMAGES} images per batch",
+                detail=f"Maximum {MAX_UPLOAD_FILES} images per batch",
             )
 
         ids: List[str] = []
@@ -508,7 +511,7 @@ async def start_batch_extraction_multipart(
                     validate_image_bytes(content, max_bytes=_MAX_BATCH_IMAGE_BYTES)
                 except ValueError as error:
                     raise UnsupportedMediaTypeError(
-                        allowed_types=["image/jpeg", "image/png", "image/webp", "image/gif"],
+                        allowed_types=sorted(SUPPORTED_UPLOAD_MIME_TYPES),
                         message=f"Invalid image at index {index}: {error}",
                     ) from error
 
@@ -560,7 +563,7 @@ async def start_batch_extraction_multipart(
 @router.get("/batch-extract/{job_id}/events")
 async def batch_job_events(
     job_id: str,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
     last_event_id: Optional[str] = Header(default=None, alias="Last-Event-ID"),
 ):
@@ -715,7 +718,7 @@ async def batch_job_events(
 )
 async def cancel_batch_job(
     job_id: str,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -741,7 +744,7 @@ async def cancel_batch_job(
 )
 async def get_batch_job_status(
     job_id: str,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """
@@ -768,7 +771,7 @@ async def get_batch_job_status(
 )
 async def start_single_extraction(
     request: SingleExtractionRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """

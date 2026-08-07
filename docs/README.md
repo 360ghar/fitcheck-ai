@@ -82,6 +82,7 @@ docs/
 | Backend logic | `cd backend && source .venv/bin/activate && pytest` + `ruff check .` |
 | Architecture / docs layout | From **repo root**: `python scripts/check_architecture.py` + `python scripts/check_docs_structure.py` |
 | Web UI code | `cd frontend && npm run lint && npm test -- --run`; build is separate because its prebuild writes tracked `public/sitemap.xml` |
+| Admin UI code | `cd admin && npm run lint && npm run typecheck && npm test && npm run check:schema` |
 | Mobile | `cd flutter && flutter analyze --no-fatal-infos --no-fatal-warnings && flutter test` |
 | UI bug fix | Browser: reproduce → screenshot/DOM → fix → re-verify in browser |
 

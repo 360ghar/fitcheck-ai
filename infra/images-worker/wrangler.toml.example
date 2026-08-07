@@ -1,0 +1,46 @@
+# Example wrangler configuration for the FitCheck image-serving Worker.
+#
+# Copy to wrangler.toml and fill in the account/zone values, then:
+#   npx wrangler deploy
+#
+# Prerequisites (Cloudflare dashboard):
+#   1. An R2 bucket (e.g. `fitcheck-images`) with an S3 API access key —
+#      the backend's OBJECT_STORAGE_* env vars must point at the same bucket
+#      (the corpus was migrated there from the Railway bucket in 2026-08-05).
+#   2. A zone (or worker.dev subdomain) for IMAGE_CDN_BASE_URL; a custom
+#      domain route on a zone gives edge caching and a clean URL.
+#   3. The R2 binding below (IMAGES_BUCKET).
+#   4. SUPABASE_URL + SUPABASE_JWT_SECRET as Worker secrets (secrets are not
+#      committed):
+#        npx wrangler secret put SUPABASE_URL
+#        npx wrangler secret put SUPABASE_JWT_SECRET
+#      SUPABASE_JWT_SECRET must match the backend's SUPABASE_JWT_SECRET (legacy
+#      HS256 tokens). For Supabase projects with "JWT Signing Keys" (ES256/
+#      RS256 tokens) the Worker fetches the project JWKS automatically, so the
+#      secret is only the HS256 fallback.
+#
+# After deploy: set backend IMAGE_SERVING_MODE=worker +
+# IMAGE_CDN_BASE_URL=https://images.fitcheckaiapp.com, then run the
+# verification steps in README.md.
+
+name = "fitcheck-images"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Route for a custom domain (zone must be added to the account first).
+# [routes]
+# pattern = "images.fitcheckaiapp.com/*"
+# zone_name = "fitcheckaiapp.com"
+
+[vars]
+# Origins allowed to read an image response cross-origin. Required for the web
+# app's download / share buttons (they fetch() the image URL to build a Blob)
+# and for the canvas crop, which needs Access-Control-Allow-Origin. Anything not
+# listed here gets no CORS header and cannot read the body from JS; plain <img>
+# rendering does not need CORS and works regardless.
+# Comma-separated, exact origin match (scheme + host + port), no wildcards.
+ALLOWED_ORIGINS = "https://www.fitcheckaiapp.com,https://fitcheckaiapp.com"
+
+[[r2_buckets]]
+binding = "IMAGES_BUCKET"
+bucket_name = "fitcheck-images"

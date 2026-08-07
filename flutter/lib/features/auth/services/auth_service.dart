@@ -92,6 +92,23 @@ class AuthService extends GetxService {
     await _supabase.updatePassword(newPassword);
   }
 
+  /// Verify the caller currently knows [password], throwing if they do not.
+  ///
+  /// Supabase has no "check this password" call and `updateUser` needs only a
+  /// valid session, so a sign-in IS the re-auth: it throws `AuthException` for a
+  /// wrong password. Used to gate a password change on the current password (see
+  /// `SettingsController.changePassword`) — without it, anyone with an unlocked
+  /// device or a stolen session could take the account over.
+  ///
+  /// Deliberately does NOT sync auth state from the response: this is a
+  /// verification, not a login, and the existing session stays in place.
+  Future<void> reauthenticate({
+    required String email,
+    required String password,
+  }) async {
+    await _supabase.signInWithEmail(email: email, password: password);
+  }
+
   /// Resend the verification email.
   Future<void> resendVerificationEmail(String email) async {
     await _supabase.resendVerificationEmail(email);

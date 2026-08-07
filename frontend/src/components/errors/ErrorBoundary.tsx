@@ -1,6 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
 import { AlertTriangle, ChevronDown, ChevronUp, Home, RefreshCw } from 'lucide-react'
-import * as Sentry from '@sentry/react'
+import { captureException } from '../../lib/error-reporting'
 import { logger } from '../../lib/logger'
 
 interface Props {
@@ -36,8 +36,8 @@ class ErrorBoundary extends Component<Props, State> {
     logger.error('ErrorBoundary caught an error:', error)
     logger.error('Error info:', errorInfo)
 
-    // Report to Sentry (no-op if SDK is not initialized)
-    Sentry.captureException(error, { extra: { componentStack: errorInfo.componentStack } })
+    // Report to Sentry (lazy-loaded; no-op when no DSN is configured)
+    captureException(error, { extra: { componentStack: errorInfo.componentStack } })
 
     this.setState({ errorInfo })
   }

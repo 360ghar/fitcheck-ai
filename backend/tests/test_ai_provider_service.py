@@ -1401,9 +1401,11 @@ async def test_content_policy_400_marks_fallback_eligible_but_not_retryable():
 async def test_chat_falls_through_to_fallback_model_on_content_policy_400():
     """Regression for the 2026-08-03 /ai/try-on outage: agnes-image-2.1-flash
     refused the prompt with a 400, and because 400 is not transient the
-    fallback model was never tried - every try-on 503'd after ~25s. The
-    refusal is model-specific, so the fallback attempt is both safe and
-    potentially successful."""
+    fallback model was never tried - every try-on 503'd after ~25s.
+
+    A content-policy refusal still earns the fallback attempt when the fallback
+    is a DIFFERENT HOST (this fixture), since another vendor may accept what the
+    primary refused and nothing was generated/billed."""
     service = AIProviderService(_make_config_with_image_fallback())
     fake_client = _ContentRefusalClient()
 
@@ -1417,3 +1419,35 @@ async def test_chat_falls_through_to_fallback_model_on_content_policy_400():
     assert fake_client.urls[0].startswith("https://image.example.com")
     assert fake_client.urls[1].startswith("https://image-fallback.example.com")
     assert result.images == ["ZmFrZQ=="]
+
+
+@pytest.mark.asyncio
+async def test_chat_does_not_retry_content_policy_400_on_same_host_fallback():
+    """The PRODUCTION shape: primary and fallback image models live on the same
+    gateway (agnes-image-2.1-flash -> agnes-image-2.0-flash, both
+    apihub.agnes-ai.com), so they share one upstream safety policy. Re-POSTing
+    the identical blocked prompt 400s again and costs the user ~double latency
+    for the same error, which is exactly what the 2026-08-05 logs showed:
+
+        Image generation request failed (status=400, model=agnes-image-2.1-flash)
+        Image generation failed, trying fallback model
+        Image generation request failed (status=400, model=agnes-image-2.0-flash)
+
+    Same-host content-policy refusals must therefore raise after ONE attempt.
+    Transient 429/503 errors still swap models regardless of host."""
+    config = _make_config_with_image_fallback()
+    # Same host for primary and fallback - the production topology.
+    config.image_fallback_api_url = config.image_api_url
+    service = AIProviderService(config)
+    fake_client = _ContentRefusalClient()
+
+    with patch.object(AIProviderService, "_get_client", AsyncMock(return_value=fake_client)):
+        with pytest.raises(AIServiceError):
+            await service.chat(
+                messages=[ChatMessage(role="user", content="a cat")],
+                response_modalities=["TEXT", "IMAGE"],
+            )
+
+    # Only the primary was attempted; no wasted second call to the same gateway.
+    assert len(fake_client.urls) == 1
+    assert fake_client.urls[0].startswith("https://image.example.com")

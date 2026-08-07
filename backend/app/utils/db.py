@@ -183,8 +183,10 @@ async def execute_with_reconnect(
                     **(extra or {}),
                 },
             )
-            SupabaseDB.reset()
-            attempt_db = SupabaseDB.get_service_client()
+            # Rebuild under the singleton lock off-thread so concurrent failing
+            # requests share ONE fresh client. Passing the client we just saw fail
+            # is what enables that sharing (see SupabaseDB.rebuild_service_client).
+            attempt_db = await asyncio.to_thread(SupabaseDB.rebuild_service_client, attempt_db)
             await asyncio.sleep(backoff_seconds)
 
 
@@ -223,8 +225,10 @@ def run_sync_with_reconnect(
                     **(extra or {}),
                 },
             )
-            SupabaseDB.reset()
-            attempt_db = SupabaseDB.get_service_client()
+            # Rebuild under the singleton lock so concurrent failing requests
+            # share ONE fresh client. Passing the client we just saw fail is what
+            # enables that sharing (see SupabaseDB.rebuild_service_client).
+            attempt_db = SupabaseDB.rebuild_service_client(attempt_db)
             time.sleep(backoff_seconds)
 
 

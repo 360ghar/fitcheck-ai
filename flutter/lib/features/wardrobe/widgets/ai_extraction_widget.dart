@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/constants/use_cases.dart';
@@ -1519,10 +1520,10 @@ class _GeneratedItemCard extends StatelessWidget {
       }
     }
 
-    return Image.network(
+    return AppNetworkImage(
       url,
       fit: BoxFit.contain,
-      errorBuilder: (context, error, stackTrace) => errorWidget(),
+      errorWidget: (context, error, stackTrace) => errorWidget(),
     );
   }
 }

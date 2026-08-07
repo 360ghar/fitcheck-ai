@@ -69,7 +69,7 @@ const DEFAULT_TIMEOUT_MS = 30_000; // 30 seconds
  * Longer timeout for AI/batch endpoints that legitimately run for a while
  * (image extraction, generation, virtual try-on, multipart batch upload).
  */
-const LONG_RUNNING_TIMEOUT_MS = 600_000; // 10 minutes
+export const LONG_RUNNING_TIMEOUT_MS = 600_000; // 10 minutes
 
 /**
  * URL prefixes that map to long-running AI/batch operations. Requests matching
@@ -380,6 +380,20 @@ apiClient.interceptors.response.use(
     if (!isTransientFailure(error)) {
       // Permanent client errors are toasted exactly once by the toast/401
       // interceptor registered below.
+      return Promise.reject(error);
+    }
+
+    // A "billing not configured" 503 is permanent for this deployment (Stripe
+    // env vars absent), not a transient outage — retrying it just triples the
+    // wasted requests. The backend marks it with error_code
+    // BILLING_NOT_CONFIGURED so we can distinguish it from a real 503.
+    // Treated as terminal here (same as the other early returns above) so the
+    // single-toast contract still holds; today's callers pass `skipToast` and
+    // surface it inline, so this is a no-op for them.
+    // (RCA 2026-08-05: repeated /subscription/checkout|portal 503 bursts.)
+    const billingErrData = error.response?.data as { code?: string } | undefined;
+    if (billingErrData?.code === 'BILLING_NOT_CONFIGURED') {
+      notifyTerminalTransientError(error, config);
       return Promise.reject(error);
     }
 

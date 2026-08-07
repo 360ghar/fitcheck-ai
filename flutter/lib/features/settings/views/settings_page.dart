@@ -4,6 +4,7 @@ import '../../../core/config/env_config.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../core/widgets/app_version_label.dart';
 import '../../../app/routes/app_routes.dart';
 import '../controllers/settings_controller.dart';
 import '../models/user_preferences_model.dart';
@@ -97,6 +98,8 @@ class _SettingsPageState extends State<SettingsPage> {
         _buildAiSection(),
         const SizedBox(height: AppConstants.spacing24),
         _buildSubscriptionSection(),
+        const SizedBox(height: AppConstants.spacing24),
+        _buildAboutSection(),
         const SizedBox(height: AppConstants.spacing24),
         _buildLegalSection(),
         const SizedBox(height: AppConstants.spacing24),
@@ -280,6 +283,22 @@ class _SettingsPageState extends State<SettingsPage> {
           subtitle: const Text('Get 1 month free for each referral'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Get.toNamed(Routes.referral),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAboutSection() {
+    return _buildSection(
+      title: 'About',
+      children: const [
+        ListTile(
+          leading: Icon(Icons.info_outline),
+          title: Text('App version'),
+          // Shares one formatting path with the Profile > About dialog, so the
+          // two can never disagree. Includes the Shorebird patch number when a
+          // patch is installed.
+          subtitle: AppVersionLabel(),
         ),
       ],
     );
@@ -610,7 +629,7 @@ class _SettingsPageState extends State<SettingsPage> {
         () => AlertDialog(
           title: const Text('Export Data'),
           content: const Text(
-            'We will prepare a download link with all your data. You will receive an email when it\'s ready.',
+            'We\'ll prepare a download of all your data and open it when ready.',
           ),
           actions: [
             TextButton(

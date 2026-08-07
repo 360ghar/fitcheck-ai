@@ -4,9 +4,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 
-// Mock Sentry so componentDidCatch reporting is a no-op.
-vi.mock('@sentry/react', () => ({
+// Mock the error-reporting wrapper so componentDidCatch reporting is a no-op.
+// The boundary no longer talks to @sentry/react directly — lib/error-reporting
+// owns that, and lazy-imports the SDK only when a DSN is configured.
+vi.mock('../../../lib/error-reporting', () => ({
   captureException: vi.fn(),
+  initErrorReporting: vi.fn(),
 }))
 
 import ErrorBoundary from '@/components/errors/ErrorBoundary'
@@ -88,8 +91,8 @@ describe('ErrorBoundary', () => {
     expect(screen.getByText('All good')).toBeInTheDocument()
   })
 
-  it('reports the error to Sentry', async () => {
-    const { captureException } = await import('@sentry/react')
+  it('reports the error through lib/error-reporting', async () => {
+    const { captureException } = await import('../../../lib/error-reporting')
     shouldThrow = true
 
     render(

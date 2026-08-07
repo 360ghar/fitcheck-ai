@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
+import 'app_network_image.dart';
 import 'app_ui.dart';
 
 /// A reusable image widget that displays images with consistent styling.
@@ -90,11 +91,18 @@ class AppImage extends StatelessWidget {
     } else {
       imageWidget = CachedNetworkImage(
         imageUrl: imageUrl!,
+        // Key on origin+path so a rotating presigned signature does not make
+        // every load a cache miss — see stableCacheKey in app_network_image.dart.
+        cacheKey: stableCacheKey(imageUrl!),
         fit: fit,
         width: width,
         height: height,
         memCacheWidth: memCacheWidth,
         memCacheHeight: memCacheHeight,
+        // Worker-mode CDN URLs require the bearer token; presigned URLs must
+        // NOT receive one (signature validation rejects it) — see
+        // authHeadersForUrl in app_network_image.dart.
+        httpHeaders: authHeadersForUrl(imageUrl!),
         placeholder: (context, url) =>
             placeholder ?? _buildPlaceholder(context, tokens),
         errorWidget: (context, url, error) =>

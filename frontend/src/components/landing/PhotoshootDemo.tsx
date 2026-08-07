@@ -128,7 +128,7 @@ export function PhotoshootDemo() {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp'] },
+    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.heic', '.heif', '.bmp', '.tif', '.tiff'] },
     maxFiles: 1,
     disabled: state === 'processing',
   });
@@ -312,7 +312,7 @@ export function PhotoshootDemo() {
                 : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
             }`}
           >
-            <input {...getInputProps()} />
+            <input {...getInputProps({ 'aria-label': 'Upload your photo' })} />
             <Camera className="w-10 h-10 text-gray-400 mb-4" />
             <p className="text-gray-700 dark:text-gray-300 font-medium mb-1">
               {isDragActive ? 'Drop your photo here' : 'Upload your photo'}

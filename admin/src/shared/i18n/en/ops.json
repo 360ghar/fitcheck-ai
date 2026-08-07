@@ -1,0 +1,43 @@
+{
+  "title": "Storage",
+  "description": "Storage usage by bucket and temporary-file cleanup.",
+  "summary": {
+    "objects": "Temp objects",
+    "totalBytes": "Total size",
+    "scannedKeys": "Keys scanned",
+    "oldest": "Oldest object",
+    "newest": "Newest object",
+    "bucket": "Bucket"
+  },
+  "columns": {
+    "key": "Object key",
+    "size": "Size",
+    "age": "Age"
+  },
+  "cleanup": {
+    "title": "Clean temp files",
+    "description": "Delete up to 5,000 of the oldest temp objects ({{count}} objects, {{bytes}}) from the private preview bucket. The backend caps each run at 5,000 objects; run again if more remain.",
+    "confirm": "Clean {{count}} files",
+    "success": "Deleted {{count}} objects and freed {{bytes}}.",
+    "successTruncated": "Deleted {{count}} objects and freed {{bytes}}. More temp objects remain — run cleanup again.",
+    "errorGeneric": "Storage cleanup failed. Try again.",
+    "none": "No temp objects to clean."
+  },
+  "truncated": {
+    "banner": "Inventory is truncated — the scan reached its page cap. Displayed counts cover the scanned range only."
+  },
+  "empty": {
+    "title": "No temp files",
+    "message": "The temp preview bucket is empty."
+  },
+  "loadError": {
+    "title": "Could not load storage",
+    "message": "The storage inventory is unavailable right now."
+  },
+  "health": {
+    "title": "Deployment health",
+    "schemaReady": "Schema ready",
+    "schemaMissing": "Schema incomplete",
+    "rss": "RSS memory"
+  }
+}

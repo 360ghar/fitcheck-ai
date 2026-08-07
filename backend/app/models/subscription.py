@@ -37,6 +37,10 @@ class SubscriptionStatus(str, Enum):
     CANCELLED = "cancelled"
     PAST_DUE = "past_due"
     TRIAL = "trial"
+    # Set by the admin "mark refunded" flow (status-only update for store-
+    # billed rows). Never entitled: effective_plan_type falls through its
+    # TRIAL/ACTIVE branches and returns FREE for any other status.
+    REFUNDED = "refunded"
 
 
 # =============================================================================
@@ -187,7 +191,12 @@ class ReferralStats(BaseModel):
 
 class ValidateReferralRequest(BaseModel):
     """Request to validate a referral code."""
-    code: str = Field(..., min_length=3, max_length=50)
+    # min_length=1 (not 3): the public /referral/validate endpoint is used by
+    # the register page which validates as the user types, and the service
+    # returns a friendly valid=False for short/unknown codes. A min_length of 3
+    # turned partial input into a 422 - the same bug already fixed for promo
+    # codes (see ValidatePromoRequest). (RCA 2026-08-05.)
+    code: str = Field(..., min_length=1, max_length=50)
 
 
 class ValidateReferralResponse(BaseModel):

@@ -56,13 +56,14 @@ const _$SubscriptionStatusEnumMap = {
   SubscriptionStatus.trial: 'trial',
   SubscriptionStatus.cancelled: 'cancelled',
   SubscriptionStatus.pastDue: 'past_due',
+  SubscriptionStatus.refunded: 'refunded',
 };
 
 _UsageLimitsModel _$UsageLimitsModelFromJson(Map<String, dynamic> json) =>
     _UsageLimitsModel(
       monthlyExtractions: (json['monthly_extractions'] as num?)?.toInt() ?? 0,
       monthlyExtractionsLimit:
-          (json['monthly_extractions_limit'] as num?)?.toInt() ?? 25,
+          (json['monthly_extractions_limit'] as num?)?.toInt() ?? 50,
       monthlyGenerations: (json['monthly_generations'] as num?)?.toInt() ?? 0,
       monthlyGenerationsLimit:
           (json['monthly_generations_limit'] as num?)?.toInt() ?? 50,
@@ -139,7 +140,7 @@ _PlanDetailsModel _$PlanDetailsModelFromJson(Map<String, dynamic> json) =>
       description: json['description'] as String?,
       priceMonthly: (json['price_monthly'] as num?)?.toDouble() ?? 0.0,
       priceYearly: (json['price_yearly'] as num?)?.toDouble() ?? 0.0,
-      monthlyExtractions: (json['monthly_extractions'] as num?)?.toInt() ?? 25,
+      monthlyExtractions: (json['monthly_extractions'] as num?)?.toInt() ?? 50,
       monthlyGenerations: (json['monthly_generations'] as num?)?.toInt() ?? 50,
       features:
           (json['features'] as List<dynamic>?)

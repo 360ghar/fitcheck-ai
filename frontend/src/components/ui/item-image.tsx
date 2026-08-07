@@ -4,10 +4,12 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import type { SyntheticEvent } from 'react'
 import { Shirt, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Skeleton } from './skeleton'
 import { ZoomableImage } from './zoomable-image'
+import { useImageWithFallback } from '@/hooks/useImageWithFallback'
 import type { Item } from '@/types'
 
 interface ItemImageProps {
@@ -41,10 +43,18 @@ const IMAGE_DIMENSIONS = {
 } as const
 
 /**
- * Get the best available image URL for an item.
+ * Get the preferred source and its full-size fallback for an item.
+ *
+ * Two values, not one: `thumbnail_url` is derived from the parent key with no
+ * existence check, so it can 404 while the full-size object is fine. See
+ * `useImageWithFallback`.
+ *
  * Accepts wardrobe-normalized `images[]`, raw Supabase `item_images[]`, or flat `image_url`.
  */
-function getImageUrl(item: Item, preferThumbnail: boolean = true): string | null {
+function getImageSources(
+  item: Item,
+  preferThumbnail: boolean = true,
+): { preferred: string | null; fallback: string | null } {
   const raw = item as Item & {
     item_images?: Array<{
       image_url?: string
@@ -64,23 +74,25 @@ function getImageUrl(item: Item, preferThumbnail: boolean = true): string | null
 
   if (images && images.length > 0) {
     const primaryImage = images.find((img) => img.is_primary) || images[0]
-    if (preferThumbnail && primaryImage.thumbnail_url) {
-      return primaryImage.thumbnail_url
+    const full = primaryImage.image_url || null
+    const thumb = primaryImage.thumbnail_url || null
+    if (preferThumbnail && thumb) {
+      return { preferred: thumb, fallback: full }
     }
-    if (primaryImage.image_url) {
-      return primaryImage.image_url
+    if (full) {
+      return { preferred: full, fallback: null }
     }
-    if (primaryImage.thumbnail_url) {
-      return primaryImage.thumbnail_url
+    if (thumb) {
+      return { preferred: thumb, fallback: null }
     }
   }
 
   // Flat convenience fields used by some recommendation payloads
   if (raw.image_url) {
-    return raw.image_url
+    return { preferred: raw.image_url, fallback: null }
   }
 
-  return null
+  return { preferred: null, fallback: null }
 }
 
 /**
@@ -107,15 +119,54 @@ function getCategoryIcon() {
  */
 export function ItemImage({ item, size = 'sm', className, enableZoom = false }: ItemImageProps) {
   const [isLoading, setIsLoading] = useState(true)
-  const [hasError, setHasError] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
 
   // For zoom, use full-size image instead of thumbnail
-  const imageUrl = getImageUrl(item, !enableZoom && size === 'sm')
+  const { preferred, fallback } = getImageSources(item, !enableZoom && size === 'sm')
+  // A derived `_thumb` URL can 404 while the full-size object is healthy, so a
+  // thumbnail failure retries the full size before the tile is called broken.
+  const {
+    src: imageUrl,
+    hasError,
+    onError: handleImageFailure,
+    usingFallback,
+  } = useImageWithFallback(preferred, fallback)
   const sizeClass = SIZE_CLASSES[size]
   const iconSize = ICON_SIZES[size]
   const dimensions = IMAGE_DIMENSIONS[size]
   const CategoryIcon = getCategoryIcon()
+
+  /**
+   * Single failure path shared by the <img> onError (both branches) and the
+   * settle-polling effect. Passes the failing URL so the hook can dedupe the
+   * double report described below.
+   *
+   * The double signal: the effect's `complete && naturalWidth === 0` poll and
+   * the element's `onError` both report the same thumb failure. If the effect
+   * lands first and swaps in the fallback, the browser's queued error event
+   * can dispatch AFTER the swap committed — it then reports the FALLBACK's
+   * URL while the fallback's fetch is still in flight. A genuine fallback
+   * failure can only fire once its fetch settles (`complete === true`), so an
+   * error for a different URL on an element that has not settled is the stale
+   * duplicate — ignoring it keeps the healthy fallback on screen. (The effect
+   * marks `data-failure-polled` on the element so this guard only engages for
+   * failures the effect actually routed, which is what lets the same code run
+   * in environments without real image loading.)
+   */
+  const handleImageErrorEvent = (event: SyntheticEvent<HTMLImageElement>) => {
+    setIsLoading(false)
+    const img = event.currentTarget
+    const failedUrl = img.currentSrc || img.src
+    if (
+      usingFallback &&
+      img.dataset.failurePolled &&
+      img.dataset.failurePolled !== failedUrl &&
+      !img.complete
+    ) {
+      return
+    }
+    handleImageFailure(failedUrl)
+  }
 
   // Settle the skeleton from the element's OWN state, not only from `onLoad`.
   // `onLoad` is not dependable here: a cached image can finish before React
@@ -127,7 +178,6 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
   // wrapper. The <img> is never hidden while this is pending — see below.
   useEffect(() => {
     setIsLoading(true)
-    setHasError(false)
   }, [imageUrl])
 
   useEffect(() => {
@@ -142,13 +192,18 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
     // Intrinsic width is the honest "has paintable pixels" signal.
     if (img.naturalWidth > 0) {
       setIsLoading(false)
-      setHasError(false)
       return
     }
     if (img.complete) {
-      // Finished with no intrinsic size: the fetch resolved to nothing.
+      // Finished with no intrinsic size: the fetch resolved to nothing. Route it
+      // through the same fallback as `onError` — a missing `_thumb` object
+      // reaches us this way too when the load event was already missed. Mark
+      // the element with the failed URL so a queued <img> error event for it
+      // cannot double-report after the swap (see handleImageErrorEvent).
       setIsLoading(false)
-      setHasError(true)
+      const failedUrl = img.currentSrc || img.src
+      img.dataset.failurePolled = failedUrl
+      handleImageFailure(failedUrl)
       return
     }
     // Still in flight. `decode()` is a promise, so unlike the `load` event it
@@ -171,7 +226,26 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
     return () => {
       cancelled = true
     }
-  }, [imageUrl, hasError])
+  }, [imageUrl, hasError, handleImageFailure])
+
+  // Image failed to load. Checked FIRST: the fallback hook clears `src` once
+  // every source has failed, so testing `!imageUrl` ahead of this would report
+  // a broken image as "no image available" — a different, wrong announcement.
+  if (hasError) {
+    return (
+      <div
+        className={cn(
+          sizeClass,
+          'rounded-lg bg-muted flex items-center justify-center',
+          className
+        )}
+        role="img"
+        aria-label={`Image for ${item.name} could not be loaded`}
+      >
+        <AlertTriangle className={cn(iconSize, 'text-muted-foreground')} />
+      </div>
+    )
+  }
 
   // No image available
   if (!imageUrl) {
@@ -186,23 +260,6 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
         aria-label={`No image available for ${item.name}`}
       >
         <CategoryIcon className={iconSize} />
-      </div>
-    )
-  }
-
-  // Image failed to load
-  if (hasError) {
-    return (
-      <div
-        className={cn(
-          sizeClass,
-          'rounded-lg bg-muted flex items-center justify-center',
-          className
-        )}
-        role="img"
-        aria-label={`Image for ${item.name} could not be loaded`}
-      >
-        <AlertTriangle className={cn(iconSize, 'text-muted-foreground')} />
       </div>
     )
   }
@@ -225,10 +282,7 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
           height={dimensions.height}
           className="h-full w-full object-contain"
           onLoad={() => setIsLoading(false)}
-          onError={() => {
-            setIsLoading(false)
-            setHasError(true)
-          }}
+          onError={handleImageErrorEvent}
         />
       </div>
     )
@@ -249,10 +303,7 @@ export function ItemImage({ item, size = 'sm', className, enableZoom = false }: 
         loading="lazy"
         decoding="async"
         onLoad={() => setIsLoading(false)}
-        onError={() => {
-          setIsLoading(false)
-          setHasError(true)
-        }}
+        onError={handleImageErrorEvent}
       />
     </div>
   )
@@ -267,19 +318,12 @@ export function ItemImageSimple({
   size = 'sm',
   className
 }: ItemImageProps) {
-  const [hasError, setHasError] = useState(false)
-
-  const imageUrl = getImageUrl(item, size === 'sm')
+  const { preferred, fallback } = getImageSources(item, size === 'sm')
+  const { src: imageUrl, hasError, onError } = useImageWithFallback(preferred, fallback)
   const sizeClass = SIZE_CLASSES[size]
   const iconSize = ICON_SIZES[size]
   const dimensions = IMAGE_DIMENSIONS[size]
   const CategoryIcon = getCategoryIcon()
-
-  // Clear a stale error when the item (and so the source) changes. No loading
-  // flag here, so this variant never had the invisible-image failure above.
-  useEffect(() => {
-    setHasError(false)
-  }, [imageUrl])
 
   if (!imageUrl || hasError) {
     return (
@@ -306,7 +350,11 @@ export function ItemImageSimple({
       className={cn(sizeClass, 'rounded-lg bg-card object-contain', className)}
       loading="lazy"
       decoding="async"
-      onError={() => setHasError(true)}
+      onError={(event) => {
+        // No polling effect here, so the URL is what the element was showing:
+        // the hook's dedupe still guards against any other double report.
+        onError(event.currentTarget.currentSrc || event.currentTarget.src)
+      }}
     />
   )
 }

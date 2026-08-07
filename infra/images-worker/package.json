@@ -1,0 +1,9 @@
+{
+  "name": "fitcheck-images-worker",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker serving private R2 image objects behind stable, cacheable URLs.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

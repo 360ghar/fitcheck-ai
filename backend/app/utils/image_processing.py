@@ -24,6 +24,16 @@ from typing import Any, Dict, Optional, Tuple
 
 from PIL import Image, ImageOps
 
+# Register the HEIC/HEIF decoder so PIL can open iPhone/modern-camera photos.
+# Required before any Image.open()/verify() on HEIF bytes; a missing wheel
+# must not crash import (the upload allowlist + verify still gate the bytes).
+try:
+    from pillow_heif import register_heif_opener
+
+    register_heif_opener()
+except ImportError:  # pragma: no cover - wheel absent only in a broken env
+    pass
+
 # Matches the mobile client's existing 1920/q85 upload; above vision tiling
 # thresholds. One knob if extraction accuracy ever regresses.
 DEFAULT_MAX_EDGE = 1568
@@ -68,6 +78,16 @@ SUPPORTED_UPLOAD_MIME_TYPES = frozenset({
     # to JPEG (downscale_image_bytes_to_base64), so AVIF never reaches
     # providers that cannot consume it.
     "image/avif",
+    # HEIC/HEIF (iPhone default), BMP, TIFF: accepted but NEVER stored as-is.
+    # StorageService._normalize_upload_bytes re-encodes these to WebP before
+    # the object key/content-type are minted, because browsers cannot render
+    # HEIC/TIFF. `image/heic` is included alongside `image/heif` for the rare
+    # caller that resolves a MIME from a multipart content-type rather than
+    # magic bytes (the magic-byte sniffer always yields `image/heif`).
+    "image/heif",
+    "image/heic",
+    "image/bmp",
+    "image/tiff",
 })
 
 # Magic-byte prefixes, so a MIME can be resolved from ~32 bytes with no
@@ -271,6 +291,80 @@ def to_data_url(image_base64: str) -> str:
 _DRAFTABLE_FORMATS = frozenset({"JPEG", "MPO"})
 
 
+def _decode_and_fit(
+    raw: bytes,
+    max_edge: int,
+    *,
+    flatten_alpha: bool,
+) -> Tuple[Image.Image, Optional[str], Tuple[int, int], bool]:
+    """Decode ``raw``, orient it, normalize its mode and fit it to ``max_edge``.
+
+    Returns ``(img, src_format, src_size, had_alpha)`` where ``src_size`` is the
+    ORIGINAL size as first reported by the decoder — captured before the draft
+    decode on purpose, so a caller comparing ``img.size == src_size`` is asking
+    "were these pixels left untouched by BOTH the draft and the thumbnail", which
+    is the only safe basis for returning the source bytes unchanged. ``had_alpha``
+    records whether the SOURCE carried transparency — callers branch on it for
+    passthrough decisions and, in the JPEG case, to know a flatten happened.
+
+    MEMORY (the reason this exists as a shared step): a 12-48 MP phone photo
+    decodes to 36-144 MB of RGB before it is shrunk, and a naive version adds a
+    second full-size copy for EXIF transpose and alpha handling. For JPEG
+    sources we request a reduced-size DCT decode (`Image.draft`) up front and
+    materialize it with `load()`, so the full-size pixel buffer never exists.
+    EXIF transpose and mode conversion then run on the already-reduced image.
+    Both downscale entry points must keep that property, which is exactly why
+    the preamble lives here once instead of being copied per output format.
+
+    ``flatten_alpha`` picks the one genuine behavioural difference between the
+    callers: JPEG output must composite transparency onto white (it has no alpha
+    channel), WebP thumbnails must preserve it (garment cutouts would otherwise
+    render on a white block). Raises on undecodable input; callers convert that
+    to their own failure value.
+    """
+    with Image.open(io.BytesIO(raw)) as src:
+        src_format = src.format
+        src_size = src.size
+        if src_format in _DRAFTABLE_FORMATS:
+            try:
+                # Reduced-size decode; .size then reflects the loaded (reduced)
+                # dimensions, so all downstream geometry (transpose, thumbnail)
+                # is consistent — while src_size above still holds the original,
+                # so the passthrough checks stay honest.
+                src.draft("RGB", (max_edge, max_edge))
+                src.load()
+            except Exception:
+                pass
+        # exif_transpose returns a new (detached) image, so the file handle can
+        # close when this block exits.
+        img = ImageOps.exif_transpose(src)  # honour phone orientation
+
+    # had_alpha (not a mode whitelist): a palette+alpha (PA) image or a P-mode
+    # image with a transparency key must also be handled, or transparent pixels
+    # render with their source palette/L values instead of white.
+    had_alpha = img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info
+    if flatten_alpha:
+        # Flatten transparency onto white so JPEG has no alpha channel.
+        if had_alpha:
+            background = Image.new("RGB", img.size, (255, 255, 255))
+            rgba = img.convert("RGBA")
+            background.paste(rgba, mask=rgba.getchannel("A"))
+            img = background
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+    else:
+        # Keep alpha; only normalize the modes WebP cannot encode directly.
+        if had_alpha:
+            if img.mode != "RGBA":
+                img = img.convert("RGBA")
+        elif img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+
+    # thumbnail() is a no-op when already smaller (never upscales).
+    img.thumbnail((max_edge, max_edge))
+    return img, src_format, src_size, had_alpha
+
+
 def _downscale_bytes(
     raw: bytes,
     max_edge: int,
@@ -279,58 +373,24 @@ def _downscale_bytes(
     """Return (jpeg_bytes, had_alpha) for raw image bytes, or (None, False)
     on passthrough/failure.
 
-    MEMORY (the reason this exists): a 12-48 MP phone photo decodes to
-    36-144 MB of RGB before it is shrunk, and the old code added a second
-    full-size copy for EXIF transpose and alpha flatten. For JPEG sources we
-    request a reduced-size DCT decode (`Image.draft`) up front and materialize
-    it with `load()`, so the full-size pixel buffer never exists. EXIF
-    transpose and alpha flatten then run on the already-reduced image.
-
     Passthrough (returns None) when the input is already a small JPEG — the
     caller keeps its original bytes and skips the re-encode entirely.
     """
     try:
-        with Image.open(io.BytesIO(raw)) as img:
-            src_format = img.format
-            src_size = img.size
-            if src_format in _DRAFTABLE_FORMATS:
-                try:
-                    # Reduced-size decode; .size then reflects the loaded
-                    # (reduced) dimensions, so all downstream geometry
-                    # (transpose, thumbnail, size comparison) is consistent.
-                    img.draft("RGB", (max_edge, max_edge))
-                    img.load()
-                except Exception:
-                    pass
-            img = ImageOps.exif_transpose(img)  # honour phone orientation
+        img, src_format, src_size, had_alpha = _decode_and_fit(
+            raw, max_edge, flatten_alpha=True
+        )
 
-            # Flatten transparency onto white so JPEG has no alpha channel.
-            had_alpha = img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info
-            # had_alpha (not a mode whitelist): a palette+alpha (PA) image or
-            # a P-mode image with a transparency key must also flatten, or
-            # transparent pixels render with their source palette/L values
-            # instead of white.
-            if had_alpha:
-                background = Image.new("RGB", img.size, (255, 255, 255))
-                rgba = img.convert("RGBA")
-                background.paste(rgba, mask=rgba.getchannel("A"))
-                img = background
-            elif img.mode != "RGB":
-                img = img.convert("RGB")
+        # Already within bounds and already a JPEG - nothing to gain, and
+        # skipping the re-encode keeps CPU off images that are fine as-is.
+        # Only when no alpha was flattened: a transparent source MUST be
+        # re-encoded (flattening is load-bearing, see downscale_base64_image).
+        if not had_alpha and img.size == src_size and src_format == "JPEG":
+            return None, False
 
-            # thumbnail() is a no-op when already smaller (never upscales).
-            img.thumbnail((max_edge, max_edge))
-
-            # Already within bounds and already a JPEG - nothing to gain, and
-            # skipping the re-encode keeps CPU off images that are fine as-is.
-            # Only when no alpha was flattened: a transparent source MUST be
-            # re-encoded (flattening is load-bearing, see downscale_base64_image).
-            if not had_alpha and img.size == src_size and src_format == "JPEG":
-                return None, False
-
-            buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=quality, optimize=True)
-            return buf.getvalue(), had_alpha
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        return buf.getvalue(), had_alpha
     except Exception:
         return None, False
 
@@ -419,6 +479,86 @@ def downscale_image_bytes_to_base64(
     # would hand the model back the transparent original and quietly undo
     # the flatten this function exists to guarantee.
     return result if len(result) < len(raw_b64) else raw_b64
+
+
+def downscale_image_bytes_to_webp(
+    raw: bytes,
+    max_edge: int = DEFAULT_MAX_EDGE,
+    quality: int = DEFAULT_QUALITY,
+) -> Optional[bytes]:
+    """Downscale raw image bytes to a WebP thumbnail, PRESERVING transparency.
+
+    For storage thumbnail variants (uploaded as objects, served straight to the
+    UI) — as opposed to ``downscale_image_bytes_to_base64``, whose alpha flatten
+    onto white is load-bearing because AI providers need opaque JPEG.
+
+    Alpha must survive here: item images are frequently background-removed
+    cutouts (``background_removal.py`` emits transparent WebP/PNG), and a
+    flattened thumbnail renders every garment tile on a white block — glaringly
+    wrong on a dark theme, and inconsistent with the full-size image the same
+    card opens.
+
+    WebP unconditionally, rather than "JPEG unless alpha": the read path derives
+    a thumbnail's key from its parent's key with no per-object lookup, so the
+    thumb's format has to be predictable from the key alone. One format keeps the
+    key, the stored bytes and the Content-Type in agreement. WebP also encodes
+    both alpha and photographic content well, so nothing is given up for it.
+
+    Returns WebP bytes, or None when they could not be produced at all (undecodable
+    input, or an encode failure). ``None`` means EXACTLY "no thumbnail" — a source
+    that is already a within-bound WebP returns its own bytes unchanged, because
+    it is already the best possible thumbnail. Keeping those two cases distinct
+    matters: when None also meant "use the original", an encode failure on a large
+    image silently stored the FULL-SIZE object as its own thumbnail, which is the
+    exact egress cost thumbnails exist to avoid.
+    """
+    try:
+        img, src_format, src_size, _ = _decode_and_fit(
+            raw, max_edge, flatten_alpha=False
+        )
+
+        # Already a WebP within bounds: the original IS the best thumbnail and
+        # re-encoding would be a pure quality loss. Return it as-is (not None,
+        # which is reserved for "no thumbnail could be made").
+        if src_format == "WEBP" and img.size == src_size:
+            return raw
+
+        buf = io.BytesIO()
+        img.save(buf, format="WEBP", quality=quality, method=4)
+        return buf.getvalue()
+    except Exception:
+        return None
+
+
+def transcode_to_webp(
+    raw: bytes,
+    *,
+    quality: int = 92,
+) -> Optional[bytes]:
+    """Full-resolution re-encode of a non-web-native image to WebP.
+
+    The mirror of ``downscale_image_bytes_to_webp`` for the UPLOAD path: HEIC/
+    HEIF (iPhone photos), BMP and TIFF decode in PIL but browsers cannot render
+    HEIC/TIFF, so ``StorageService._normalize_upload_bytes`` runs accepted
+    uploads of those formats through this before the storage key/content-type
+    are minted. The stored object is always a browser-safe ``.webp``.
+
+    Resolution is PRESERVED (no downscale): ``max_edge`` is set so large that
+    ``thumbnail()`` is a no-op, matching the store-originals-as-is behavior every
+    other format already gets. Alpha survives (``flatten_alpha=False``) so a
+    transparent source stays transparent. Returns None on any decode/encode
+    failure, in which case the caller keeps the original bytes (and the request
+    still surfaces a clear error via the prior ``validate_image_bytes`` decode).
+    """
+    try:
+        img, _src_format, _src_size, _ = _decode_and_fit(
+            raw, max_edge=10**9, flatten_alpha=False
+        )
+        buf = io.BytesIO()
+        img.save(buf, format="WEBP", quality=quality, method=4)
+        return buf.getvalue()
+    except Exception:
+        return None
 
 
 def downscale_base64_image(

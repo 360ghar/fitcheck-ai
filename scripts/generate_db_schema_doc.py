@@ -59,6 +59,16 @@ def main() -> None:
 
     for path in files:
         text = path.read_text(encoding="utf-8", errors="replace")
+        # Strip SQL line comments (`--` to end of line) before the regex
+        # passes: comment text can contain CREATE/ALTER TABLE-shaped words
+        # (e.g. migration 038's "Idempotent (CREATE TABLE IF NOT EXISTS + DROP
+        # POLICY IF EXISTS guards)" note), which the table-name regexes would
+        # otherwise match and emit as bogus rows (a phantom `IF` table). The
+        # migrations never put `--` inside a string literal (checked across
+        # backend/db/supabase/migrations/), so a plain per-line strip is safe;
+        # the newline is preserved so statements are never glued across lines.
+        # Only this scanning copy is stripped — the source files are untouched.
+        text = re.sub(r"--[^\n]*", "", text)
         for m in CREATE_TABLE_RE.finditer(text):
             t = clean_name(m.group(1))
             tables.setdefault(t, []).append(path.name)

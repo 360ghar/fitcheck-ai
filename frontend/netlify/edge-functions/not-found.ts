@@ -1,7 +1,7 @@
 /**
  * Crawler soft-404 guard.
  *
- * The SPA fallback (`/* → /index.html`, 200) makes every unknown URL look
+ * The SPA fallback (`/* → /app-shell.html`, 200) makes every unknown URL look
  * indexable. For search/AI crawlers, paths outside the known public surface
  * get a real 404 with `X-Robots-Tag: noindex` so Google, Bing and AI engines
  * don't index garbage URLs. Real users still get the SPA fallback.

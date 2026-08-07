@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../../core/widgets/app_version_label.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../auth/models/user_model.dart';
@@ -106,10 +108,10 @@ class ProfileContent extends StatelessWidget {
                   ),
                   child: user?.avatarUrl != null
                       ? ClipOval(
-                          child: Image.network(
+                          child: AppNetworkImage(
                             user!.avatarUrl!,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
+                            errorWidget: (context, error, stackTrace) {
                               return _buildAvatarInitials(context, user);
                             },
                           ),
@@ -510,8 +512,8 @@ class ProfileContent extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppConstants.spacing8),
-            Text(
-              'Version 1.0.0',
+            AppVersionLabel(
+              prefix: 'Version ',
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),

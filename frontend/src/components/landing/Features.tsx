@@ -94,9 +94,13 @@ export default function Features() {
                     <>
                       <img
                         src={feature.image}
+                        srcSet="/landing/flatlay-640.webp 640w, /landing/flatlay.webp 1024w"
+                        sizes="(min-width: 768px) 33vw, 92vw"
                         alt={feature.imageAlt}
                         className="absolute inset-0 h-full w-full object-cover"
                         loading="lazy"
+                        width={1024}
+                        height={1024}
                       />
                       <div className="absolute inset-0 bg-stone-950/60" />
                       <div className="relative mt-auto p-6 md:p-8 text-white">

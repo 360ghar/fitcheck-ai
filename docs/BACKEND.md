@@ -1,6 +1,6 @@
 # Backend
 
-Last updated: 2026-08-04
+Last updated: 2026-08-07
 
 Deep guide for the FastAPI app under `backend/`. Architecture layers: root `ARCHITECTURE.md`. Package-local agent entry: `backend/CLAUDE.md` (thin pointer here).
 
@@ -69,30 +69,27 @@ Key tables (non-exhaustive): `users`, `user_preferences`, `user_settings`, `user
 
 File storage is a **private S3-compatible bucket** — Railway Bucket (since the 2026-08-04 migration) or Cloudflare R2 (2026-08-05 egress RCA; R2 egress is $0). The S3 layer is provider-agnostic; moving providers is an env repoint + object copy, no storage code change. The DB (Postgres) + Auth stay on Supabase; only file storage changes.
 
-- **S3 backend** — `app/services/object_storage.py` implements `S3StorageBackend`, a thin `aioboto3` wrapper (upload / download / copy / delete / delete_many / presigned GET / list_keys / close). `get_storage_backend()` returns a process-wide lazy singleton; `close_storage_backend()` releases it at shutdown. The constructor accepts explicit endpoint/region/keys/bucket overrides — used by `migrate_storage_to_r2.py` to run a second (destination) client.
+- **S3 backend** — `app/services/object_storage.py` implements `S3StorageBackend`, a thin `aioboto3` wrapper (upload / download / copy / delete / delete_many / presigned GET / list_keys / close). `get_storage_backend()` returns a process-wide lazy singleton; `close_storage_backend()` releases it at shutdown. The constructor accepts explicit endpoint/region/keys/bucket overrides — used by `storage_inventory.py`'s `--endpoint/--bucket` flags to inspect a bucket other than the configured one (e.g. the old bucket after a provider cutover).
 - **Service layer** — `app/services/storage_service.py` keeps its existing public method signatures and return shapes so callers change as little as possible; internals now talk to `S3StorageBackend`. `_build_key(user_id, category, ext)` replaces the old filename generator.
-- **Key layout** — `{user_id}/{category}/{uuid4hex}.{ext}` (no timestamps). Categories: `items`, `outfits`, `avatars`, `sources`, `feedback`, and `tmp/{source}`. Extensions derive from sniffed bytes (`EXTENSION_BY_MIME`). `promote_temp_image_to_item` moves `tmp/...` → `items/...` via an S3 server-side copy.
+- **Key layout** — `{user_id}/{category}/{uuid4hex}.{ext}` (no timestamps). Categories: `items`, `outfits`, `avatars`, `sources`, `feedback`. Temporary previews and user-saved renders live in shared **top-level folders** — `tmp/{user_id}/{source}/...` (photoshoot / batch / social-import review previews) and `generated/{user_id}/{image_type}/...` (try-on / outfit / product renders saved with `save_to_storage=true`) — so every preview in the bucket shares ONE common prefix and the whole folder can be listed or cleared in a single pass (`scripts/cleanup_temp_assets.py`). Extensions derive from sniffed bytes (`EXTENSION_BY_MIME`). `promote_temp_image_to_item` moves `tmp/...` → `items/...` via an S3 server-side copy. The serving allowlist (`app/api/v1/images.py`, `infra/images-worker/worker.js`) accepts both the top-level form and the legacy per-user form (`{user_id}/tmp|generated/...`) until `scripts/migrate_temp_keys_layout.py` has converted every old key.
+- **Accepted upload formats** — `SUPPORTED_UPLOAD_MIME_TYPES` (`app/utils/image_processing.py`) and `ALLOWED_IMAGE_EXTENSIONS` (`app/services/storage_service.py`) gate every upload: JPEG, PNG, WebP, GIF, AVIF, plus HEIC/HEIF, BMP, TIFF. Every stored image is normalized by `StorageService._normalize_upload_bytes` (run on the bounded image executor after `_validate_image`) to the **storage compression profile**: HEIC/HEIF/BMP/TIFF are transcoded to WebP (browsers cannot render them), and everything is downscaled to `STORAGE_MAX_EDGE` (2048px) and re-encoded as WebP at `STORAGE_QUALITY` (82) whenever that is strictly smaller than the input (keep-smaller — an already-optimized WebP or small PNG passes through byte-identical). Animated GIFs pass through untouched. Alpha survives (WebP), so background-removed cutouts stay transparent. The key/content-type are minted from the sniffed final bytes, so converted objects carry `.webp` / `image/webp`. Nothing downstream consumes more than 2048px (AI references are capped at 1568px before leaving the app), so this is lossless at display sizes while cutting stored bytes ~3-4x.
 - **Thumbnails** — every canonical upload (items/outfits/avatars/sources/feedback) writes a deterministic `{storage_path}_thumb` sibling (smaller of downscaled JPEG / original bytes; `THUMB_MAX_EDGE` / `THUMB_QUALITY`). Promote, delete, delete-multiple and account deletion (`resolve_owned_storage_paths`) all handle thumbs; the inventory script treats `_thumb` keys as referenced. `generate_thumbnails.py` backfills the legacy corpus.
-- **Private buckets, presigned URLs** — the bucket is private. The DB stores `storage_path` (the bucket key), never a URL. `image_url` / `thumbnail_url` / `public_url` are **short-lived presigned GET URLs** materialized at read time (default ~15 min, `PRESIGN_TTL`). `build_object_url` exists only as a stable locator for inventory scripts; the app does not serve public URLs. `materialize_image_urls` / `serve_url` in `app/api/v1/images.py` honor `IMAGE_SERVING_MODE` + `THUMBNAIL_SERVING` (see below).
+- **Private buckets, presigned URLs** — the bucket is private. The DB stores `storage_path` (the bucket key), never a URL. `image_url` / `thumbnail_url` / `public_url` are **short-lived presigned GET URLs** materialized at read time (default 1h, `OBJECT_STORAGE_PRESIGN_TTL=3600`). `build_object_url` exists only as a stable locator for inventory scripts; the app does not serve public URLs. `materialize_image_urls` / `serve_url` in `app/api/v1/images.py` honor `IMAGE_SERVING_MODE` + `THUMBNAIL_SERVING` (see below).
 - **Worker serving mode (`IMAGE_SERVING_MODE=worker`)** — rotating presigned URLs defeat every cache, so the egress RCA adds an optional Cloudflare Worker (`infra/images-worker/`) fronting R2 with **stable path-only URLs**: token auth (HS256 `SUPABASE_JWT_SECRET` or JWKS ES256/RS256), per-user path ownership (404 on mismatch, indistinguishable from missing), path-keyed edge cache. See `docs/SECURITY.md` "Worker serving mode" for the threat model. AI provider-bound fetches always stay presigned (providers cannot send JWTs).
 - **SSRF-safe downloads** — `download_to_base64` / `download_and_downscale_to_base64` fetch via the S3 backend by bucket key (`key_from_path`), never from arbitrary URLs.
 - **Config** — see `backend/.env.example`:
-  - `STORAGE_BACKEND` (`railway` default, or `supabase` as a cutover fallback)
-  - `OBJECT_STORAGE_PROVIDER` (`railway` | `r2`, informational/validation)
-  - `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`, `OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`, `OBJECT_STORAGE_BUCKET`
-  - Railway provides these as `BUCKET` / `ENDPOINT` / `REGION` / `ACCESS_KEY_ID` / `SECRET_ACCESS_KEY` (plus `AWS_*` aliases); R2 as `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET`. `config.py` maps aliases onto the `OBJECT_STORAGE_*` names when the canonical field is unset (`R2_*` takes precedence over the Railway generic names).
+  - `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`, `OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`, `OBJECT_STORAGE_BUCKET` — the only storage variables the backend reads (no provider-specific aliases).
   - `IMAGE_SERVING_MODE` (`presigned` default | `worker`), `IMAGE_CDN_BASE_URL` (Worker custom domain), `THUMBNAIL_SERVING` (`false` default; emit `thumbnail_url` → `_thumb` keys).
-- **Migration tooling** (see `docs/exec-plans/active/2026-08-04-railway-bucket-migration-contract.md` and `docs/exec-plans/active/2026-08-05-railway-egress-rca.md` for the live execution logs):
-  - `backend/scripts/storage_inventory.py` — orphan / missing report against the active bucket (dry-run by default; `--delete` to remove orphans). Thumb-aware: `_thumb` siblings of referenced keys are never orphans.
-  - `backend/scripts/migrate_storage_to_railway.py` — two-phase copy of objects from Supabase Storage to the Railway bucket (dry-run default; `--apply` to copy). Copies to the SAME key so `storage_path` stays valid; optional `CLEAR_URL_COLUMNS=1` nulls stale public URL columns.
-  - `backend/scripts/migrate_storage_to_r2.py` — copy objects Railway → R2 (dry-run default; `--apply`), header-preserving (content-type/cache-control), idempotent, JSONL audit, concurrent.
+- **Migration tooling** (see `docs/exec-plans/active/2026-08-04-railway-bucket-migration-contract.md` and `docs/exec-plans/active/2026-08-05-railway-egress-rca.md` for the live execution logs; the one-time Supabase→Railway→R2 copy scripts have been removed — storage is on R2):
+  - `backend/scripts/storage_inventory.py` — orphan / missing report against the active bucket (dry-run by default; `--delete` to remove orphans). Thumb-aware: `_thumb` siblings of referenced keys are never orphans. **Part of the weekly storage routine**: run `--delete` (2h grace protects in-flight uploads) alongside `cleanup_temp_assets.py --delete` so DB-unreferenced objects (replaced avatars, deleted-item leftovers, failed uploads) are removed the same week they appear — measured at 192MB / 296 objects before the leak fixes.
+  - `backend/scripts/cleanup_temp_assets.py` — **manual weekly cleanup** of the `tmp/` folder (dry-run default; `--delete` to delete; optional `--source` / `--min-age-hours`; JSONL audit). Temp previews are never DB-referenced and become unreachable once their 1h presigned URL expires, so this script is the only thing that removes them.
+  - `backend/scripts/migrate_temp_keys_layout.py` — **optional** one-time rewrite of legacy per-user preview keys (`{user}/tmp/...`, `{user}/generated/...`) to the top-level folders (dry-run default; `--apply` to execute; server-side copy-then-delete; idempotent). Not required for correctness: legacy keys keep serving via the dual-layout allowlists and `cleanup_temp_assets.py` removes old-layout tmp objects regardless. Run it (outside active review flows) only if you want a single-layout bucket or R2 lifecycle rules on the `tmp/` prefix.
   - `backend/scripts/generate_thumbnails.py` — backfill `_thumb` siblings for existing canonical keys (dry-run default; `--apply`), resumable via age/audit.
-  - `backend/scripts/cleanup_supabase_orphans.py` — delete orphan / temp objects from Supabase Storage BEFORE/DURING a migration (dry-run default; `--delete` to remove). Use this to purge null rows' leftovers and transient `tmp/`/`generated/` objects.
-  - `backend/scripts/migrate_legacy_keys_to_new_layout.py` — rewrite pre-migration keys (`{user}/{YYYYMMDD}/{prefix}_{uuid8}.{ext}`, `{user}/sources/source_{32hex}.{ext}`) to the new layout in the bucket (server-side copy) AND in every DB storage column (`item_images`, `outfit_images`, `items.source_image_*`, `users.avatar_url`, `support_tickets.attachment_storage_paths`). Deterministic key mapping makes re-runs no-ops; dry-run default, `--apply` to migrate, `--cleanup` to delete old keys after a successful copy + DB rewrite. Required before strict ownership validators can serve legacy rows.
+  - `backend/scripts/recompress_assets.py` — one-time backfill of the pre-compression corpus: downloads each canonical/`generated` object, re-encodes to the WebP q82 @ 2048px profile (keep-smaller), overwrites the SAME key in place, and regenerates/backfills the `_thumb` sibling (dry-run default; `--apply`; JSONL audit; resume-safe). Keys are unchanged, so no DB row or client-held URL goes stale.
 
 ### AI provider image input
 
-- Request models accept an owned `storage_path` in place of inline base64 (`ExtractItemsRequest`, `ExtractSingleItemRequest`, `GenerateProductImageRequest`, `TryOnRequest`); the route validates ownership (`_owned_storage_path`, canonical layout only) and materializes a fresh presigned URL (`_materialize_image_source`).
+- Request models accept an owned `storage_path` in place of inline base64 (`ExtractItemsRequest`, `ExtractSingleItemRequest`, `GenerateProductImageRequest`, `TryOnRequest`); the route validates ownership (`_owned_storage_path` — canonical keys plus the `tmp/` / `generated/` preview folders) and materializes a fresh presigned URL (`_materialize_image_source`).
 - Stored avatar URLs (`users.avatar_url`) are re-materialized from their bucket key before being sent to providers (`_provider_ready_avatar_url`) — the DB holds expiring presigned URLs; external https OAuth avatars pass through, non-https/non-owned URLs are refused.
 - `GeminiProvider._decode_image_part` downloads http(s) image URLs server-side with a 10 MB byte cap and an SSRF guard that refuses loopback / link-local / RFC1918 / multicast / reserved / metadata hosts before any fetch.
 
@@ -115,6 +112,86 @@ File storage is a **private S3-compatible bucket** — Railway Bucket (since the
   semantics (activation/extension/stacking) live in
   `apply_referral_credit_atomic` (migration 033); repair past silent drops
   with `backend/scripts/repair_pending_referrals.py`.
+
+## Admin API & RBAC
+
+Internal admin console (`admin/` SPA → `admin.fitcheckaiapp.com`) — all
+endpoints under the **`/api/v1/admin/*`** prefix (mounted in `main.py` via
+`app.api.v1.admin.router`). Every endpoint sits behind `require_admin` or
+`require_permission("…")` from `app/api/v1/deps.py`; **the backend is the only
+trust boundary** — the UI's permission gating is cosmetic.
+
+- **Roles → permissions** live in `app/core/permissions.py` (pure functions,
+  no `app.api` imports so any layer can use them): roles
+  `super_admin`/`admin` (`*` = everything), `ops`, `support`, `content_editor`.
+  Legacy fallback (`get_user_role`): an explicit admin `role` wins; otherwise
+  `is_admin = True` OR an `@fitcheckaiapp.com` email resolves to `admin`,
+  preserving the pre-RBAC `blog.py` behavior. Migration `037_admin_roles.sql`
+  adds `users.role` + `users.is_admin` + `users.custom_daily_quota` +
+  `support_tickets.internal_notes`; `038_audit_events.sql` adds the
+  append-only `audit_events` table (service-role-only RLS).
+- **Permission vocabulary**: `dashboards.read`, `users.read`/`users.write`,
+  `subscriptions.read`/`subscriptions.refund`, `iap.read`, `quotas.read`,
+  `ops.read`, `storage.cleanup`, `audit.read`, `content.read`/`content.write`,
+  `promo.read`, `feedback.read`/`feedback.write`, `search`. Full matrix in
+  `docs/exec-plans/active/2026-08-07-admin-panel.md` and `admin/README.md`.
+- **Key endpoint groups** (all under `/api/v1/admin`): `GET /me` (session
+  bootstrap: profile + role + permissions), `users` (list/detail/PATCH
+  role-is_active/is_admin with self-demotion + last-admin guards/activity),
+  `subscriptions` (+ `POST …/refund`, Stripe-only; store-billed rows
+  rejected), `iap/transactions` (+ `mark-refunded`, status-only — store
+  webhooks stay authoritative), `quotas` (+ `PATCH /users/{id}/quota-override`),
+  `dashboards` (overview/top-users/referrals/revenue/trends), `promo-codes`
+  (CRUD, gated by `content.write`), `feedback` (status + internal notes),
+  `ops` (health, storage inventory + `DELETE …/temp` cleanup), `audit` (trail
+  explorer +
+  per-entity history), `search`, `settings` (read-only deployment info).
+  Blog admin writes stay in `blog.py` (`/api/v1/blog/admin/posts`, …) guarded
+  by its local `verify_admin` — now a thin wrapper over the shared role
+  resolution; the admin app's content feature is the UI for them.
+- **Dashboards aggregates are SQL RPCs, not PostgREST selects** — this
+  project's PostgREST has select-side aggregates disabled
+  (`db-aggregates-enabled = false`) and the legacy bare-`count` select
+  shorthand emits SQL without `GROUP BY` (Postgres 42803), so grouped counts
+  can never run through `select`. The top-users lists therefore call the
+  service-role functions from migration `040_admin_dashboard_top_users.sql`
+  (`admin_top_users_outfits` / `_items` / `_referrals`); `dashboards/overview`
+  and `dashboards/referrals` use plain `count=exact` HEAD counts, which work.
+- **Revenue + trends dashboards** (`dashboards/revenue`, `dashboards/trends`,
+  2026-08-07): `revenue` estimates MRR from the configured plan prices
+  (`PLAN_AMOUNTS` in `admin_service.py` — yearly plans amortized), splits it
+  by `billing_provider` (Stripe vs Apple/Google), and counts trial rows,
+  30-day churn lifecycle events (`stripe_webhook_events` deleted + Apple
+  `EXPIRED`/`REVOKE` + Google `SUBSCRIPTION_*` rows) and refunds marked in
+  the window (`audit_events` actions `subscription.refunded` /
+  `iap.refund_marked`). `trends?days=7|15|30|90` returns zero-filled daily
+  series
+  from the service-role RPCs in `041_admin_trends.sql`
+  (`admin_trend_signups` / `_jobs` / `_paid` / `_active` — same hardening as
+  migration 040). "AI-active users" is distinct users with ≥1 durable job
+  that day (`users.last_login_at` cannot produce a daily series) across all
+  four job tables, extraction included. Google churn counts only rows whose
+  ledger `event_type` carries a real RTDN name (`SUBSCRIPTION_EXPIRED` /
+  `CANCELED` / `REVOKED` — the webhook stores the mapped name, not a
+  blanket label; rows written before that fix carry `'rtdn'` and are
+  invisible to churn by design). The RPC functions declare `p_days` and
+  `admin_service.dashboard_trends` must pass `{"p_days": days}` (PostgREST
+  matches args by name; a `days` key raises PGRST202). The UNION-based
+  functions qualify outer columns with the subquery alias (`s.day`, …) —
+  bare `day` collides with the `RETURNS TABLE` out-param and raises 42702.
+  Both are
+  read-only and ride on `dashboards.read`; revenue is an estimate — store
+  rows never carry amounts.
+- **Audit trail**: every admin mutation calls `record_audit`
+  (`app/services/audit_service.py`) with actor, action, entity, payload, ip,
+  user-agent. `record_audit` **never raises** — a failed audit write is logged
+  and swallowed so it cannot fail the admin action it documents.
+- **CORS**: `https://admin.fitcheckaiapp.com` + `http://localhost:5173` are in
+  the `BACKEND_CORS_ORIGINS` defaults (`app/core/config.py`) and
+  `backend/.env.example`; no wildcard.
+
+Tests: `backend/tests/test_admin_{authz,ops,predicates,commerce,audit,users}.py`
+(85 tests — authz 403s, role predicates, CRUD, suspend, refund, audit rows).
 
 ## Errors
 
@@ -303,7 +380,10 @@ Rules:
 - `GET /api/v1/subscription/plans` returns `store_products` (per-variant product IDs per store) plus the display plans; product IDs are never hardcoded in the apps.
 - Rails are exclusive: store sync clears the other rails' identity columns, and Stripe checkout/cancel fail closed on store-billed rows (a store-billed account must not be steered to Stripe — App Store Guideline 3.1.1).
 - Webhook handlers return 500 on processing failure so the store retries; signature failures are acknowledged without processing.
-- Env: `APPLE_ISSUER_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` / `APPLE_*_PRODUCT_ID` / `APPLE_ENV`, `GOOGLE_SERVICE_ACCOUNT_JSON` / `GOOGLE_RTDN_AUDIENCE` / `GOOGLE_*_PRODUCT_ID` (see `backend/.env.example`). Requires migration `030_mobile_iap.sql` (columns + webhook ledgers).
+- `cancel_at_period_end` comes only from a notification's `signedRenewalInfo`; a payload without it means *unknown* (`None`) and leaves the stored flag alone, so Restore Purchases cannot un-cancel a subscription.
+- Store snapshots are ordered by purchase recency (`current_period_start`), not period end — an upgrade legitimately shortens the period (Plus yearly → Pro monthly). The period-end rule still applies when purchase dates are equal or unknown, which is the normal case on Google (`startTimeMillis` is constant across renewals).
+- Sandbox transactions are accepted on a production backend by design (App Review runs in Sandbox) and logged with their `environment`; they are never rejected.
+- Env: `APPLE_ISSUER_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` / `APPLE_ENV`, `GOOGLE_SERVICE_ACCOUNT_JSON` / `GOOGLE_RTDN_AUDIENCE` (see `backend/.env.example`). The eight `APPLE_*_PRODUCT_ID` / `GOOGLE_*_PRODUCT_ID` settings default to the real store identifiers and normally need no env var; an override outside the bundle/package namespace is flagged by the startup config health check. Requires migration `030_mobile_iap.sql` (columns + webhook ledgers). Sandbox procedure: `docs/store/ios-sandbox-testing-runbook.md`.
 
 ### Promo codes (free grants)
 
@@ -320,7 +400,7 @@ subscribers are never overwritten. Codes are created by operators with
 
 ## Route registration
 
-Modules wired from `main.py` include: auth, users, items, outfits, shared_outfits, recommendations, calendar, weather, gamification (flagged), ai, ai_settings, batch_processing, photoshoot, feedback, waitlist, demo, subscription, referral, promo, social_import (flagged), blog.
+Modules wired from `main.py` include: auth, users, items, outfits, shared_outfits, recommendations, calendar, weather, gamification (flagged), ai, ai_settings, batch_processing, photoshoot, feedback, waitlist, demo, subscription, referral, promo, social_import (flagged), blog, and the admin API (`app.api.v1.admin` under `/api/v1/admin`, see "Admin API & RBAC").
 
 ### Flagged routes — two different shapes
 
@@ -351,7 +431,7 @@ only becomes safe after the Flutter side is fixed — see TD-034 in
 
 Required: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_SECRET`  
 
-Storage: `STORAGE_BACKEND` (default `railway`), `OBJECT_STORAGE_PROVIDER` (`railway`/`r2`), `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`, `OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`, `OBJECT_STORAGE_BUCKET` (Railway `BUCKET`/`ENDPOINT`/`REGION`/`ACCESS_KEY_ID`/`SECRET_ACCESS_KEY` and R2 `R2_ACCOUNT_ID`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`/`R2_BUCKET` aliases map onto these); `IMAGE_SERVING_MODE` (`presigned` default | `worker`), `IMAGE_CDN_BASE_URL`, `THUMBNAIL_SERVING`
+Storage: `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`, `OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`, `OBJECT_STORAGE_BUCKET` (canonical only — no provider-specific aliases); `IMAGE_SERVING_MODE` (`presigned` default | `worker`), `IMAGE_CDN_BASE_URL`, `THUMBNAIL_SERVING`
 
 AI: `AI_DEFAULT_PROVIDER`, `AI_GEMINI_*` (embeddings), `AI_CHAT_*`/`AI_VISION_*`/`AI_IMAGE_*` (per-leg, see `.env.example`), `AI_OUTFIT_ITEM_REFERENCE_MAX_EDGE` (garment reference size, default 768), `AI_OUTFIT_ITEM_REFERENCE_MAX_IMAGES` (default 12), `AI_OUTFIT_ITEM_REFERENCE_DOWNLOAD_CONCURRENCY` (default 8), and `AI_MAX_OUTFIT_ITEMS` (default 100)
 

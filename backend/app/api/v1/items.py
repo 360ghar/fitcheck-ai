@@ -28,7 +28,7 @@ from app.core.exceptions import (
     UnsupportedMediaTypeError,
     RateLimitError,
 )
-from app.core.security import get_current_user_id
+from app.api.v1.deps import get_active_user_id
 from app.core.uploads import MAX_UPLOAD_FILES, read_upload_capped
 from app.db.connection import get_db
 from app.models.subscription import OperationType
@@ -122,7 +122,7 @@ def _normalize_item_images(item: Dict[str, Any]) -> Dict[str, Any]:
 @router.post("/upload", response_model=Dict[str, Any], status_code=status.HTTP_202_ACCEPTED)
 async def upload_item_images(
     files: List[UploadFile] = File(...),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Upload one or more images to Supabase Storage for later item creation."""
@@ -135,7 +135,7 @@ async def upload_item_images(
         # Validate all files first
         for file in files:
             if not file.content_type or not file.content_type.startswith("image/"):
-                raise UnsupportedMediaTypeError(allowed_types=["image/jpeg", "image/png", "image/webp"])
+                raise UnsupportedMediaTypeError(allowed_types=["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/heic", "image/bmp", "image/tiff"])
 
         # Define upload function for each file
         async def upload_single_file(file: UploadFile, index: int) -> Dict[str, Any]:
@@ -232,7 +232,7 @@ async def upload_item_images(
 @router.post("", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 async def create_item(
     item: ItemCreate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Create a new wardrobe item."""
@@ -272,7 +272,12 @@ async def create_item(
             "is_deleted": False,
         }
 
-        inserted = await asyncio.to_thread(db.table("items").insert(item_data).execute)
+        inserted = await execute_with_reconnect(
+            lambda d: d.table("items").insert(item_data).execute(),
+            db,
+            extra={"operation": "create_item.insert", "user_id": user_id},
+            max_retries=1,
+        )
         row = (inserted.data or [None])[0]
         if not row:
             raise DatabaseError("Failed to create item", operation="insert")
@@ -297,7 +302,12 @@ async def create_item(
                 image_rows.append(img_row)
 
             # Single batch insert for all images
-            await asyncio.to_thread(db.table("item_images").insert(image_rows).execute)
+            await execute_with_reconnect(
+                lambda d: d.table("item_images").insert(image_rows).execute(),
+                db,
+                extra={"operation": "create_item.insert_images", "user_id": user_id},
+                max_retries=1,
+            )
             images = image_rows
 
         # Generate embedding + upsert to Pinecone (best-effort)
@@ -351,6 +361,31 @@ async def create_item(
         raise DatabaseError("Failed to create item", operation="insert")
 
 
+def _empty_item_page(
+    page: int,
+    page_size: int,
+    ignored_filters: Dict[str, Any],
+) -> Dict[str, Any]:
+    """A zero-result page for a filter whose every value was unrecognised.
+
+    Same envelope as a real page so clients need no special case; the
+    ``ignored_filters`` key is what distinguishes "nothing matched" from
+    "the filter you sent was not understood".
+    """
+    return {
+        "data": {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "total_pages": 1,
+            "has_next": False,
+            "has_prev": page > 1,
+            "ignored_filters": ignored_filters,
+        },
+        "message": "OK",
+    }
+
+
 @router.get("", response_model=Dict[str, Any])
 async def list_items(
     page: int = Query(1, ge=1),
@@ -362,7 +397,7 @@ async def list_items(
     brand: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     is_favorite: Optional[bool] = Query(None),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Browse items with filtering and pagination."""
@@ -372,16 +407,36 @@ async def list_items(
             normalized_occasion = normalize_tag_list([occasion])
             occasion_filter = normalized_occasion[0] if normalized_occasion else None
 
+        # Unknown filter values are dropped rather than 422'd — a browse filter
+        # should not hard-fail the page for a stale or typo'd value. But when
+        # EVERY supplied value is unknown, dropping the filter entirely would
+        # run the query unfiltered and return the user's whole wardrobe under an
+        # active filter chip. That is worse than an error: the wrong data looks
+        # authoritative. Hold the filter's intent and return an empty page,
+        # reporting what was ignored so a client can tell "no matches" from
+        # "your filter was not understood".
+        ignored_filters: Dict[str, Any] = {}
+
         if category:
             categories = [c.strip().lower() for c in category.split(",") if c.strip()]
             invalid = [c for c in categories if c not in VALID_CATEGORIES]
             if invalid:
-                raise ValidationError("Invalid category", details={"invalid_categories": invalid})
+                logger.warning(
+                    "Ignoring unknown category filter values",
+                    extra={"invalid_categories": invalid, "user_id": user_id},
+                )
+                ignored_filters["category"] = invalid
+            valid_categories = [c for c in categories if c in VALID_CATEGORIES]
+            if categories and not valid_categories:
+                return _empty_item_page(page, page_size, ignored_filters)
+            category = ",".join(valid_categories) if valid_categories else None
         if condition and condition not in VALID_CONDITIONS:
-            raise ValidationError(
-                "Invalid condition",
-                details={"condition": condition, "valid_conditions": list(VALID_CONDITIONS)},
+            logger.warning(
+                "Ignoring unknown condition filter value",
+                extra={"condition": condition, "user_id": user_id},
             )
+            ignored_filters["condition"] = [condition]
+            return _empty_item_page(page, page_size, ignored_filters)
 
         def _apply_filters(q):
             """Apply every optional filter to a base query builder."""
@@ -404,22 +459,29 @@ async def list_items(
                 q = q.or_(f"name.ilike.{like},brand.ilike.{like}")
             return q
 
-        def _list_and_count(d):
-            """Run count + page queries against client `d` (rebuilt on retry)."""
-            count_res = _apply_filters(
-                d.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_deleted", False)
-            ).execute()
-            total = getattr(count_res, "count", len(count_res.data or []))
+        async def _list_and_count(d):
+            """Run count + page queries concurrently against client `d` (rebuilt on retry)."""
+            # The two reads are independent; running them in parallel halves
+            # the page-load latency (count is often the slower of the two on
+            # large wardrobes).
             start = (page - 1) * page_size
             end = start + page_size - 1
-            list_res = (
-                _apply_filters(
-                    d.table("items").select("*, item_images(*)").eq("user_id", user_id).eq("is_deleted", False)
-                )
-                .order("created_at", desc=True)
-                .range(start, end)
-                .execute()
+            count_res, list_res = await asyncio.gather(
+                asyncio.to_thread(
+                    _apply_filters(
+                        d.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_deleted", False)
+                    ).execute
+                ),
+                asyncio.to_thread(
+                    _apply_filters(
+                        d.table("items").select("*, item_images(*)").eq("user_id", user_id).eq("is_deleted", False)
+                    )
+                    .order("created_at", desc=True)
+                    .range(start, end)
+                    .execute
+                ),
             )
+            total = getattr(count_res, "count", len(count_res.data or []))
             return total, list_res
 
         # A dead pooled HTTP/2 connection (gateway restart/idle) previously
@@ -448,6 +510,10 @@ async def list_items(
                 "total_pages": total_pages,
                 "has_next": page < total_pages,
                 "has_prev": page > 1,
+                # Partially-invalid filter: the valid values were applied and
+                # these were dropped. Always present so clients can read it
+                # unconditionally.
+                "ignored_filters": ignored_filters,
             },
             "message": "OK",
         }
@@ -462,18 +528,23 @@ async def list_items(
 @router.get("/{item_id:uuid}", response_model=Dict[str, Any])
 async def get_item(
     item_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
         item_id_str = str(item_id)
-        result = await asyncio.to_thread(
-            db.table("items")
-            .select("*, item_images(*)")
-            .eq("id", item_id_str)
-            .eq("user_id", user_id)
-            .single()
-            .execute
+        result = await execute_with_reconnect(
+            lambda d: (
+                d.table("items")
+                .select("*, item_images(*)")
+                .eq("id", item_id_str)
+                .eq("user_id", user_id)
+                .single()
+                .execute()
+            ),
+            db,
+            extra={"operation": "get_item", "user_id": user_id, "item_id": item_id_str},
+            max_retries=2,
         )
         if not result.data:
             raise ItemNotFoundError(item_id=item_id_str)
@@ -492,7 +563,7 @@ async def get_item(
 async def update_item(
     item_id: UUID,
     update: ItemUpdate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -584,7 +655,7 @@ async def update_item(
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_item(
     item_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Delete an item (hard delete)."""
@@ -594,6 +665,23 @@ async def delete_item(
         if not existing.data:
             raise ItemNotFoundError(item_id=item_id_str)
 
+        # Collect the owned storage paths (the source photo + every item image,
+        # plus their _thumb siblings) BEFORE the row is gone: the source path
+        # lives on the items row itself. Deleting the row without this leaks
+        # the objects forever (measured: 296 orphans / 192MB in the bucket).
+        storage_paths: List[str] = []
+        try:
+            owned = await StorageService.resolve_owned_storage_paths(
+                db, user_id, item_ids=[item_id_str]
+            )
+            storage_paths = owned["storage_paths"]
+        except Exception as e:
+            logger.warning(
+                "Failed to resolve storage paths for item delete",
+                item_id=item_id_str,
+                error=str(e),
+            )
+
         # Best-effort delete embedding
         try:
             vector_service = get_vector_service()
@@ -602,6 +690,17 @@ async def delete_item(
             logger.warning("Failed to delete item embedding", item_id=item_id_str, error=str(e))
 
         await asyncio.to_thread(db.table("items").delete().eq("id", item_id_str).eq("user_id", user_id).execute)
+
+        if storage_paths:
+            try:
+                await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)
+            except Exception as e:
+                logger.warning(
+                    "Failed to delete item images from storage",
+                    item_id=item_id_str,
+                    object_count=len(storage_paths),
+                    error=str(e),
+                )
         return None
     except (ItemNotFoundError, ValidationError, DatabaseError):
         raise
@@ -618,7 +717,7 @@ async def delete_item(
 @router.post("/{item_id}/favorite", response_model=Dict[str, Any])
 async def toggle_favorite(
     item_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -642,7 +741,7 @@ async def toggle_favorite(
 @router.post("/{item_id}/wear", response_model=Dict[str, Any])
 async def mark_worn(
     item_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -678,7 +777,7 @@ async def upload_item_image(
     item_id: UUID,
     file: UploadFile = File(...),
     is_primary: bool = Form(False),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Upload an additional image for an existing item."""
@@ -737,7 +836,7 @@ async def upload_item_image(
 async def delete_item_image(
     item_id: UUID,
     image_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Delete an item image and best-effort remove it from storage."""
@@ -784,7 +883,7 @@ async def delete_item_image(
 @router.post("/batch-delete", response_model=Dict[str, Any])
 async def batch_delete_items(
     request: BatchDeleteItemsRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Batch delete items (and best-effort remove embeddings/images)."""
@@ -807,7 +906,9 @@ async def batch_delete_items(
                 try:
                     await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)
                 except Exception as e:
-                    logger.warning("Failed to delete images from storage", count=len(storage_paths), error=str(e))
+                    # object_count, not image_count: storage_paths includes the
+                    # derived _thumb siblings, so this is ~2x the image count.
+                    logger.warning("Failed to delete images from storage", object_count=len(storage_paths), error=str(e))
 
         async def _delete_embeddings() -> None:
             # The request may contain IDs from another user. The database
@@ -836,21 +937,50 @@ async def batch_delete_items(
 
 @router.get("/stats", response_model=Dict[str, Any])
 async def get_item_stats(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Compute wardrobe item statistics for dashboard/analytics."""
     try:
-        items = (
-            (await asyncio.to_thread(db.table("items")
-            .select("id,name,category,colors,condition,price,usage_times_worn")
-            .eq("user_id", user_id)
-            .limit(1000)  # Limit to prevent fetching thousands of items
-            .execute))
-            .data or []
+        # Count, the aggregation payload, and the most/least-worn extremes are
+        # independent reads; run them concurrently. The extremes are pushed
+        # into SQL (ORDER BY + LIMIT) instead of sorting up to 1000 rows in
+        # Python, and the aggregation query drops the columns only that Python
+        # sort used.
+        count_res, agg_res, most_res, least_res = await asyncio.gather(
+            asyncio.to_thread(
+                db.table("items").select("id", count="exact").eq("user_id", user_id).execute
+            ),
+            asyncio.to_thread(
+                db.table("items")
+                .select("category,colors,condition,price")
+                .eq("user_id", user_id)
+                .limit(1000)  # Limit to prevent fetching thousands of items
+                .execute
+            ),
+            asyncio.to_thread(
+                db.table("items")
+                .select("id,name,usage_times_worn")
+                .eq("user_id", user_id)
+                # nullslast: a NULL wear count must rank as "never worn"
+                # (Postgres puts NULLs first under DESC by default).
+                .order("usage_times_worn", desc=True, nullsfirst=False)
+                .limit(5)
+                .execute
+            ),
+            asyncio.to_thread(
+                db.table("items")
+                .select("id,name,usage_times_worn")
+                .eq("user_id", user_id)
+                .order("usage_times_worn", nullsfirst=False)
+                .limit(5)
+                .execute
+            ),
         )
 
-        total_items = len(items)
+        count = getattr(count_res, "count", None)
+        items = agg_res.data or []
+        total_items = count if count is not None else len(items)
         items_by_category: Dict[str, int] = {}
         items_by_condition: Dict[str, int] = {}
         items_by_color: Dict[str, int] = {}
@@ -873,8 +1003,8 @@ async def get_item_stats(
                 except Exception as e:
                     logger.debug("Could not parse item price", item_id=item.get("id"), price=item.get("price"), error=str(e))
 
-        most_worn = sorted(items, key=lambda i: int(i.get("usage_times_worn") or 0), reverse=True)[:5]
-        least_worn = sorted(items, key=lambda i: int(i.get("usage_times_worn") or 0))[:5]
+        most_worn = most_res.data or []
+        least_worn = least_res.data or []
 
         return {
             "data": {
@@ -904,7 +1034,7 @@ async def get_item_stats(
 @router.get("/by-category/{category}", response_model=Dict[str, Any])
 async def get_items_by_category(
     category: str,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     cat = category.lower().strip()
@@ -934,7 +1064,7 @@ async def get_items_by_category(
 async def search_items(
     q: str = Query(..., min_length=1),
     limit: int = Query(10, ge=1, le=50),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Search items by name/brand (best-effort; Supabase full-text can be added later)."""
@@ -967,7 +1097,7 @@ async def search_items(
 @router.post("/{item_id}/categorize", response_model=Dict[str, Any])
 async def categorize_item(
     item_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Run lightweight categorization and persist derived fields.
@@ -1042,7 +1172,7 @@ async def categorize_item(
 async def update_item_categories(
     item_id: UUID,
     request: UpdateItemCategoriesRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Update item category-related fields (user override)."""
@@ -1126,7 +1256,7 @@ async def check_duplicates(
     request: DuplicateCheckRequest,
     threshold: float = Query(0.75, ge=0.5, le=0.99, description="Similarity threshold (0.5-0.99)"),
     limit: int = Query(5, ge=1, le=20, description="Max duplicates to return"),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Check for potential duplicate items in the user's wardrobe.
@@ -1319,7 +1449,7 @@ async def find_similar_items(
     item_id: UUID,
     limit: int = Query(5, ge=1, le=20),
     min_score: float = Query(0.6, ge=0.0, le=1.0),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Find items similar to the specified item.

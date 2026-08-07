@@ -160,7 +160,12 @@ class TryOnController extends GetxController {
         if (pathLower.endsWith('.jpg') ||
             pathLower.endsWith('.jpeg') ||
             pathLower.endsWith('.png') ||
-            pathLower.endsWith('.webp')) {
+            pathLower.endsWith('.webp') ||
+            pathLower.endsWith('.heic') ||
+            pathLower.endsWith('.heif') ||
+            pathLower.endsWith('.bmp') ||
+            pathLower.endsWith('.tif') ||
+            pathLower.endsWith('.tiff')) {
           clothingImages.add(File(image.path));
         }
       }

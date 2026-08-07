@@ -12,8 +12,7 @@ events in Supabase tables so the user can plan outfits against events.
 
 import asyncio
 import uuid
-from datetime import datetime
-from app.utils.datetime_util import utcnow_iso
+from app.utils.datetime_util import parse_utc_datetime, utcnow_iso
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
@@ -27,7 +26,8 @@ from app.core.exceptions import (
     ValidationError,
 )
 from app.core.logging_config import get_context_logger
-from app.core.security import get_current_user_email, get_current_user_id
+from app.core.security import get_current_user_email
+from app.api.v1.deps import get_active_user_id
 from app.db.connection import get_db
 
 logger = get_context_logger(__name__)
@@ -97,10 +97,24 @@ class UpdateEventRequest(BaseModel):
 # ============================================================================
 
 
+@router.get("", response_model=Dict[str, Any])
+async def calendar_root():
+    """Root handler for the calendar router.
+
+    Some clients (and probes) GET the bare ``/api/v1/calendar`` path; without a
+    root handler it 404s and adds log noise. The real functionality lives under
+    ``/connect``, ``/connections`` and ``/events``. (RCA 2026-08-05: 404 noise.)
+    """
+    return {
+        "service": "calendar",
+        "endpoints": ["/connect", "/connections", "/events"],
+    }
+
+
 @router.post("/connect", response_model=Dict[str, Any])
 async def connect_calendar(
     request: CalendarConnectRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     user_email: Optional[str] = Depends(get_current_user_email),
     db: Client = Depends(get_db),
 ):
@@ -203,7 +217,7 @@ async def connect_calendar(
 
 @router.get("/connections", response_model=Dict[str, Any])
 async def list_calendar_connections(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """List connected calendar providers for the user."""
@@ -246,7 +260,7 @@ async def list_calendar_connections(
 @router.delete("/connections/{connection_id}", response_model=Dict[str, Any])
 async def disconnect_calendar(
     connection_id: str,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Disconnect a calendar provider (soft disable)."""
@@ -296,10 +310,10 @@ def _parse_date_only(value: str, field_name: str) -> str:
     milliseconds (Flutter's DateTime.toIso8601String()) - either way we only
     need the date component for the day-boundary filters below.
     """
-    try:
-        return datetime.fromisoformat(value).date().isoformat()
-    except ValueError:
+    parsed = parse_utc_datetime(value)
+    if parsed is None:
         raise ValidationError(f"Invalid {field_name}: {value}")
+    return parsed.date().isoformat()
 
 
 @router.get("/events", response_model=Dict[str, Any])
@@ -308,7 +322,7 @@ async def get_calendar_events(
     end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
     limit: int = Query(500, ge=1, le=1000, description="Max events to return"),
     offset: int = Query(0, ge=0),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Get calendar events in a date range.
@@ -385,7 +399,7 @@ async def get_calendar_events(
 @router.post("/events", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 async def create_calendar_event(
     request: CreateEventRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Create an in-app calendar event (local planning)."""
@@ -440,7 +454,7 @@ async def create_calendar_event(
 async def update_calendar_event(
     event_id: str,
     request: UpdateEventRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Update a calendar event."""
@@ -528,7 +542,7 @@ async def update_calendar_event(
 @router.delete("/events/{event_id}", response_model=Dict[str, Any])
 async def delete_calendar_event(
     event_id: str,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Delete a calendar event."""
@@ -574,7 +588,7 @@ async def delete_calendar_event(
 async def assign_outfit_to_event(
     event_id: str,
     request: AssignOutfitRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Assign an outfit to a calendar event."""
@@ -632,7 +646,7 @@ async def assign_outfit_to_event(
 @router.delete("/events/{event_id}/outfit", response_model=Dict[str, Any])
 async def remove_outfit_from_event(
     event_id: str,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Remove outfit assignment from an event."""

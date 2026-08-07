@@ -80,7 +80,7 @@ export default function CTASection() {
                       </a>
                     </Button>
                   </div>
-                  <p className="mt-3 text-sm text-stone-500">
+                  <p className="mt-3 text-sm text-stone-400">
                     Already have an account?{' '}
                     <Link to="/auth/login" className="text-stone-300 underline-offset-4 hover:underline">
                       Log in

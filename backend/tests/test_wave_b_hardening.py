@@ -320,6 +320,28 @@ async def test_cancel_does_not_change_local_billing_state_when_stripe_fails():
 
 
 @pytest.mark.asyncio
+async def test_cancel_rejects_store_billed_rows_at_the_api_guard():
+    """The /cancel endpoint must fail closed for store-billed rows before any
+    Stripe call or service-level cancel, mirroring the /checkout guard."""
+    db = Mock()
+    with patch.object(
+        SubscriptionService,
+        "get_subscription",
+        new=AsyncMock(return_value=Mock(
+            plan_type=PlanType.PLUS_MONTHLY,
+            billing_provider="apple",
+        )),
+    ), patch.object(
+        SubscriptionService, "cancel_subscription", new=AsyncMock()
+    ) as service_cancel:
+        with pytest.raises(ServiceError, match="App Store"):
+            await cancel_subscription(user={"id": "user-1"}, db=db)
+
+    service_cancel.assert_not_called()
+    db.table.return_value.update.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_stripe_webhook_duplicate_event_is_acknowledged_without_reprocessing():
     db = Mock()
     duplicate = Exception("duplicate key value violates unique constraint")

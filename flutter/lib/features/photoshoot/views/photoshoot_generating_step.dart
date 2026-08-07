@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/widgets/app_network_image.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 import '../../../core/constants/app_constants.dart';
@@ -262,12 +263,12 @@ class _GeneratedThumbnail extends StatelessWidget {
 
     Widget child;
     if (hasUrl) {
-      child = Image.network(
+      child = AppNetworkImage(
         imageUrl,
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
-        errorBuilder: (_, _, _) => _fallbackBox(context),
+        errorWidget: (_, _, _) => _fallbackBox(context),
       );
     } else if (hasBase64) {
       child = Image.memory(

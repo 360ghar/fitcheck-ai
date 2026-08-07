@@ -110,7 +110,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
                 {content.lede}
               </p>
               {content.lastUpdated && (
-                <p className="mt-3 text-sm text-stone-500 dark:text-stone-500">
+                <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
                   Last updated {formatLastUpdated(content.lastUpdated)}
                 </p>
               )}
@@ -158,7 +158,7 @@ export function SeoPageLayout({ content }: { content: SeoPageContent }) {
                   )}
                 </Button>
               </div>
-              <p className="mt-3 text-sm text-stone-500 dark:text-stone-500">
+              <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
                 Free plan available. No credit card required to start.
               </p>
             </AnimatedSection>

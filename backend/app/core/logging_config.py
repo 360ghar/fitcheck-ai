@@ -276,10 +276,10 @@ def setup_session_logging() -> str:
         Path to the log file for this session, or empty string when file
         logging is disabled.
     """
-    import os
-
     # Railway sets RAILWAY_ENVIRONMENT; also treat non-DEBUG as production.
-    is_production = bool(os.environ.get("RAILWAY_ENVIRONMENT")) or not settings.DEBUG
+    # Definition centralized in Settings.is_production so this stays in step
+    # with the boot config checks (config_health).
+    is_production = settings.is_production
 
     # Determine log level
     log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)

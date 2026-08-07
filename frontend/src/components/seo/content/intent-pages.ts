@@ -18,7 +18,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
     keywords:
       'best virtual closet apps, digital wardrobe app, AI closet organizer, virtual wardrobe',
     stats: [
-      { value: '25', label: 'AI item extractions/month on the free plan' },
+      { value: '50', label: 'AI item extractions/month on the free plan' },
       { value: '10', label: 'AI photoshoot images/day on the free plan' },
       { value: '1,000', label: 'Outfit visualizations/month on Pro' },
     ],
@@ -158,7 +158,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
     ],
     keywords: 'FitCheck vs Acloset, Acloset alternative, Acloset comparison, virtual closet comparison',
     stats: [
-      { value: '25', label: 'Free monthly AI extractions (FitCheck)' },
+      { value: '50', label: 'Free monthly AI extractions (FitCheck)' },
       { value: '50', label: 'Free monthly outfit visualizations (FitCheck)' },
       { value: '$10', label: 'FitCheck Plus per month (or $100/year)' },
     ],
@@ -439,7 +439,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
     ],
     keywords: 'digitize wardrobe, digital closet how to, catalog clothes app, photo wardrobe inventory',
     stats: [
-      { value: '25–200', label: 'AI item extractions/month across Free → Pro' },
+      { value: '50–400', label: 'AI item extractions/month across Free → Pro' },
       { value: '~20–30%', label: 'Footprint cut when a garment lasts 9 months longer (WRAP)' },
     ],
     sources: [
@@ -601,7 +601,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
     keywords: 'FitCheck vs Stylebook, Stylebook alternative, Stylebook comparison, digital closet app',
     stats: [
       { value: 'Photo → item', label: 'FitCheck catalogs with AI; Stylebook needs manual entry' },
-      { value: '25', label: 'Free monthly AI extractions on FitCheck' },
+      { value: '50', label: 'Free monthly AI extractions on FitCheck' },
       { value: '$3.99', label: 'Stylebook is a one-time purchase (typical)' },
     ],
     sections: [
@@ -709,7 +709,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
     stats: [
       { value: 'Utilization', label: 'Cladwell strength: outfit math from your items' },
       { value: 'Try-on', label: 'FitCheck strength: generative visualization' },
-      { value: '25', label: 'Free monthly AI extractions on FitCheck' },
+      { value: '50', label: 'Free monthly AI extractions on FitCheck' },
     ],
     sections: [
       {
@@ -734,7 +734,7 @@ export const INTENT_PAGES: Record<string, SeoPageContent> = {
       {
         question: 'Can I try FitCheck AI free?',
         answer:
-          'Yes — FitCheck AI has a free plan with 25 AI extractions/month, 50 outfit visualizations/month, and 10 photoshoot images/day.',
+          'Yes — FitCheck AI has a free plan with 50 AI extractions/month, 50 outfit visualizations/month, and 10 photoshoot images/day.',
       },
     ],
     relatedLinks: [

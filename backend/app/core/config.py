@@ -4,10 +4,9 @@ All settings can be overridden via environment variables.
 """
 
 import json
-import os
 import re
 from pathlib import Path
-from typing import List, Optional
+from typing import ClassVar, List, Optional
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
@@ -35,6 +34,7 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: List[str] = [
         "https://www.fitcheckaiapp.com",
         "https://fitcheckaiapp.com",
+        "https://admin.fitcheckaiapp.com",
         "http://localhost:5173",
         "http://localhost:3000",
         "http://localhost:8000",
@@ -81,15 +81,17 @@ class Settings(BaseSettings):
     SUPABASE_STORAGE_BUCKET: str = "fitcheck-images"
 
     # ==========================================================================
-    # Object storage (Railway S3-compatible Bucket)
+    # Object storage (S3-compatible: Cloudflare R2)
     # ==========================================================================
-    # Primary storage path for the app (DB + Auth stay on Supabase). Railway
-    # provides these as variable references: BUCKET, ENDPOINT, REGION,
-    # ACCESS_KEY_ID, SECRET_ACCESS_KEY (plus AWS_* aliases); the model_validator
-    # below maps them onto the OBJECT_STORAGE_* names when the canonical field
-    # is unset.
-    STORAGE_BACKEND: str = "railway"  # "railway" (S3) or "supabase" (cutover fallback)
-    OBJECT_STORAGE_ENDPOINT: str = "https://storage.railway.app"
+    # Primary file storage for the app (DB + Auth stay on Supabase). These are
+    # the ONLY storage variables the backend reads — provider-specific names
+    # (R2_*, Railway generics, AWS_*) are intentionally not aliased.
+    #
+    # ENDPOINT has NO built-in default on purpose: a default would let a
+    # credential-less deployment boot and fail only at the first S3 call.
+    # `config_health.validate_production_config` surfaces the missing config at
+    # boot.
+    OBJECT_STORAGE_ENDPOINT: str = ""
     OBJECT_STORAGE_REGION: str = "auto"
     OBJECT_STORAGE_ACCESS_KEY_ID: str = ""
     OBJECT_STORAGE_SECRET_ACCESS_KEY: str = ""
@@ -101,6 +103,41 @@ class Settings(BaseSettings):
     # 90 days; keep this moderate — it is the access window for anyone holding
     # the URL.
     OBJECT_STORAGE_PRESIGN_TTL: int = 3600
+
+    # ==========================================================================
+    # Image serving (egress control)
+    # ==========================================================================
+    # "presigned" (default): every read materializes a short-lived presigned
+    # GET URL whose query-string signature rotates on every refetch. The
+    # rotating signature defeats browser/CDN/disk caches (a cache miss on
+    # every list load re-streams full bytes from the bucket), and the URL can
+    # never be cached client-side.
+    # "worker": materialize stable, path-only URLs
+    # (``IMAGE_CDN_BASE_URL + /{storage_path}``) served by a Cloudflare Worker
+    # bound to the R2 bucket that validates the app JWT + per-user path
+    # ownership. The URL is stable, so the Cloudflare edge, browser HTTP cache
+    # and Flutter's disk cache all hit; R2 egress is free.
+    # Roll out in that order: R2 with presigned mode first (kills egress cost),
+    # then flip to worker mode once the Worker (infra/images-worker) is
+    # deployed and the custom domain is live.
+    IMAGE_SERVING_MODE: str = "presigned"  # "presigned" | "worker"
+    # Base URL of the Cloudflare Worker / custom domain that serves R2 objects
+    # (e.g. https://images.fitcheckaiapp.com). Used only when
+    # IMAGE_SERVING_MODE=worker.
+    IMAGE_CDN_BASE_URL: str = ""
+    # When True, read paths materialize ``thumbnail_url`` to a separate
+    # downscaled object (``{storage_path}_thumb``) instead of the full-size
+    # image. Uploads ALWAYS create the thumb variant once thumbnails exist;
+    # backfill pre-existing objects with ``scripts/generate_thumbnails.py``
+    # BEFORE flipping this on, or legacy objects 404 on their thumb URL.
+    THUMBNAIL_SERVING: bool = False
+    # True only after scripts/generate_thumbnails.py has covered the whole
+    # bucket. The read path emits a ``_thumb`` URL ONLY when this is set
+    # together with THUMBNAIL_SERVING: pre-backfill objects (and best-effort
+    # uploads whose thumb encode failed) have no ``_thumb`` sibling, and a
+    # presigned URL for a missing object 404s the tile. Until ops flips this,
+    # ``thumbnail_url`` mirrors the full-size ``image_url`` so reads never 404.
+    THUMBNAILS_BACKFILLED: bool = False
 
     # Pinecone
     PINECONE_API_KEY: Optional[str] = None
@@ -225,10 +262,18 @@ class Settings(BaseSettings):
     APPLE_KEY_ID: Optional[str] = None
     APPLE_PRIVATE_KEY: Optional[str] = None
     APPLE_ENV: str = "production"
-    APPLE_PLUS_MONTHLY_PRODUCT_ID: Optional[str] = None
-    APPLE_PLUS_YEARLY_PRODUCT_ID: Optional[str] = None
-    APPLE_PRO_MONTHLY_PRODUCT_ID: Optional[str] = None
-    APPLE_PRO_YEARLY_PRODUCT_ID: Optional[str] = None
+    # Product IDs default to the real App Store Connect identifiers rather than
+    # None. They are public, non-secret constants (also committed in
+    # flutter/ios/StoreKit/FitCheck.storekit), and an unset value is a hard
+    # failure at two points: /plans publishes null so the app shows "This plan
+    # is not available for purchase yet", and a COMPLETED purchase fails
+    # verification because validate_transaction_info -> plan_for_product raises
+    # ValidationError, which verify_transaction's env-fallback loop does not
+    # catch. Defaulting them makes a forgotten env var a non-event.
+    APPLE_PLUS_MONTHLY_PRODUCT_ID: str = "com.fitcheckaiapp.fitcheckai.plus.monthly"
+    APPLE_PLUS_YEARLY_PRODUCT_ID: str = "com.fitcheckaiapp.fitcheckai.plus.yearly"
+    APPLE_PRO_MONTHLY_PRODUCT_ID: str = "com.fitcheckaiapp.fitcheckai.pro.monthly"
+    APPLE_PRO_YEARLY_PRODUCT_ID: str = "com.fitcheckaiapp.fitcheckai.pro.yearly"
 
     # Google Play Developer API (service account). GOOGLE_SERVICE_ACCOUNT_JSON
     # is the full contents of the service-account JSON key file downloaded from
@@ -239,21 +284,26 @@ class Settings(BaseSettings):
     GOOGLE_PACKAGE_NAME: str = "com.fitcheckaiapp.fitcheckai"
     GOOGLE_SERVICE_ACCOUNT_JSON: Optional[str] = None
     GOOGLE_RTDN_AUDIENCE: Optional[str] = None
-    GOOGLE_PLUS_MONTHLY_PRODUCT_ID: Optional[str] = None
-    GOOGLE_PLUS_YEARLY_PRODUCT_ID: Optional[str] = None
-    GOOGLE_PRO_MONTHLY_PRODUCT_ID: Optional[str] = None
-    GOOGLE_PRO_YEARLY_PRODUCT_ID: Optional[str] = None
+    # Same reasoning as the Apple product IDs above: public constants, defaulted
+    # so a missing env var cannot silently disable purchases.
+    GOOGLE_PLUS_MONTHLY_PRODUCT_ID: str = "com.fitcheckaiapp.fitcheckai.plus.monthly"
+    GOOGLE_PLUS_YEARLY_PRODUCT_ID: str = "com.fitcheckaiapp.fitcheckai.plus.yearly"
+    GOOGLE_PRO_MONTHLY_PRODUCT_ID: str = "com.fitcheckaiapp.fitcheckai.pro.monthly"
+    GOOGLE_PRO_YEARLY_PRODUCT_ID: str = "com.fitcheckaiapp.fitcheckai.pro.yearly"
 
     # Plan Limits (monthly)
-    PLAN_FREE_MONTHLY_EXTRACTIONS: int = 25
+    # Item extraction limits doubled on 2026-08-05 (Free 25->50, Plus 100->200,
+    # Pro 200->400); generations/embeddings unchanged. Keep frontend
+    # src/lib/plan-limits.ts and flutter model defaults in sync.
+    PLAN_FREE_MONTHLY_EXTRACTIONS: int = 50
     PLAN_FREE_MONTHLY_GENERATIONS: int = 50
     PLAN_FREE_MONTHLY_EMBEDDINGS: int = 200
 
-    PLAN_PLUS_MONTHLY_EXTRACTIONS: int = 100
+    PLAN_PLUS_MONTHLY_EXTRACTIONS: int = 200
     PLAN_PLUS_MONTHLY_GENERATIONS: int = 350
     PLAN_PLUS_MONTHLY_EMBEDDINGS: int = 2000
 
-    PLAN_PRO_MONTHLY_EXTRACTIONS: int = 200
+    PLAN_PRO_MONTHLY_EXTRACTIONS: int = 400
     PLAN_PRO_MONTHLY_GENERATIONS: int = 1000
     PLAN_PRO_MONTHLY_EMBEDDINGS: int = 5000
 
@@ -404,42 +454,15 @@ class Settings(BaseSettings):
         enable_decoding = False
         extra = "ignore"
 
-    @model_validator(mode="after")
-    def _resolve_object_storage_from_railway_aliases(self):
-        """Map Railway Bucket's generic env names onto the OBJECT_STORAGE_* fields.
-
-        Railway exposes the bucket credentials as BUCKET / ENDPOINT / REGION /
-        ACCESS_KEY_ID / SECRET_ACCESS_KEY (plus AWS_* aliases). Only fill the
-        canonical OBJECT_STORAGE_* field when it is unset, so a hand-set value
-        always wins.
-        """
-        if not self.OBJECT_STORAGE_ENDPOINT:
-            self.OBJECT_STORAGE_ENDPOINT = (
-                os.getenv("ENDPOINT")
-                or os.getenv("AWS_ENDPOINT_URL")
-                or self.OBJECT_STORAGE_ENDPOINT
-            )
-        if not self.OBJECT_STORAGE_REGION:
-            self.OBJECT_STORAGE_REGION = (
-                os.getenv("REGION") or os.getenv("AWS_REGION") or self.OBJECT_STORAGE_REGION
-            )
-        if not self.OBJECT_STORAGE_ACCESS_KEY_ID:
-            self.OBJECT_STORAGE_ACCESS_KEY_ID = (
-                os.getenv("ACCESS_KEY_ID")
-                or os.getenv("AWS_ACCESS_KEY_ID")
-                or self.OBJECT_STORAGE_ACCESS_KEY_ID
-            )
-        if not self.OBJECT_STORAGE_SECRET_ACCESS_KEY:
-            self.OBJECT_STORAGE_SECRET_ACCESS_KEY = (
-                os.getenv("SECRET_ACCESS_KEY")
-                or os.getenv("AWS_SECRET_ACCESS_KEY")
-                or self.OBJECT_STORAGE_SECRET_ACCESS_KEY
-            )
-        if not self.OBJECT_STORAGE_BUCKET:
-            self.OBJECT_STORAGE_BUCKET = (
-                os.getenv("BUCKET") or os.getenv("AWS_BUCKET") or self.OBJECT_STORAGE_BUCKET
-            )
-        return self
+    # The four fields that must all be set for any S3 call to work. REGION is
+    # excluded: "auto" is correct for R2, so a missing region is not a broken
+    # config. Read by config_health.validate_production_config at boot.
+    _STORAGE_REQUIRED_FIELDS: ClassVar[tuple] = (
+        "OBJECT_STORAGE_ENDPOINT",
+        "OBJECT_STORAGE_ACCESS_KEY_ID",
+        "OBJECT_STORAGE_SECRET_ACCESS_KEY",
+        "OBJECT_STORAGE_BUCKET",
+    )
 
     @model_validator(mode="after")
     def _include_frontend_origin(self):
@@ -460,6 +483,19 @@ class Settings(BaseSettings):
 
         self.BACKEND_CORS_ORIGINS = deduped
         return self
+
+    @property
+    def is_production(self) -> bool:
+        """True when running in a deployed (non-local) environment.
+
+        Railway sets ``RAILWAY_ENVIRONMENT`` on every deploy; ``DEBUG=False``
+        is the other signal. Centralized so boot-time config checks
+        (``config_health``) and logging setup (``logging_config``) share one
+        definition instead of two hand-synced copies that could drift.
+        """
+        import os
+
+        return bool(os.environ.get("RAILWAY_ENVIRONMENT")) or not self.DEBUG
 
 
 settings = Settings()

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:photo_view/photo_view.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../core/widgets/report_content_sheet.dart';
@@ -250,10 +251,10 @@ class TryOnContent extends StatelessWidget {
                   child: hasAvatar
                       ? ClipOval(
                           child: isRemote
-                              ? Image.network(
+                              ? AppNetworkImage(
                                   avatarPath,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => Icon(
+                                  errorWidget: (_, _, _) => Icon(
                                     Icons.person,
                                     size: 40,
                                     color: tokens.brandColor,
@@ -801,10 +802,10 @@ class TryOnContent extends StatelessWidget {
                   context,
                   controller.generatedImageUrl.value,
                 ),
-                child: Image.network(
+                child: AppNetworkImage(
                   controller.generatedImageUrl.value,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => const Center(
+                  errorWidget: (_, _, _) => const Center(
                     child: Icon(Icons.broken_image_outlined, size: 48),
                   ),
                 ),
@@ -994,12 +995,12 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
                                     context,
                                     imageUrl,
                                   ),
-                                  child: Image.network(
+                                  child: AppNetworkImage(
                                     imageUrl,
                                     width: 70,
                                     height: 70,
                                     fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
+                                    errorWidget: (context, error, stackTrace) {
                                       return Container(
                                         color: tokens.cardColor,
                                         child: Icon(
@@ -1200,10 +1201,10 @@ class _WardrobeItemTile extends StatelessWidget {
                       top: Radius.circular(AppConstants.radius12),
                     ),
                     child: imageUrl != null
-                        ? Image.network(
+                        ? AppNetworkImage(
                             imageUrl,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
+                            errorWidget: (context, error, stackTrace) {
                               return Container(
                                 color: tokens.cardColor,
                                 child: Icon(
@@ -1336,7 +1337,7 @@ class _FullScreenNetworkImageViewer extends StatelessWidget {
               child: GestureDetector(
                 onTap: () {}, // Prevent tap from propagating to dismiss
                 child: PhotoView(
-                  imageProvider: NetworkImage(imageUrl),
+                  imageProvider: appImageProvider(imageUrl),
                   minScale: PhotoViewComputedScale.contained,
                   maxScale: PhotoViewComputedScale.covered * 3,
                   initialScale: PhotoViewComputedScale.contained,

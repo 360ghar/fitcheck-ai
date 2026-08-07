@@ -1,6 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
-import * as Sentry from '@sentry/react'
+import { captureException } from '../../lib/error-reporting'
 import { logger } from '../../lib/logger'
 
 interface Props {
@@ -35,7 +35,7 @@ class FeatureErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     logger.error(`[FeatureErrorBoundary:${this.props.featureName}]`, error, errorInfo)
-    Sentry.captureException(error, {
+    captureException(error, {
       extra: { feature: this.props.featureName, componentStack: errorInfo.componentStack },
     })
   }

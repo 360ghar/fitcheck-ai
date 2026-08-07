@@ -40,7 +40,7 @@ export function SidebarUser() {
   }
 
   const avatarElement = userAvatar ? (
-    <img
+    <img loading="lazy" decoding="async"
       src={userAvatar}
       alt=""
       className="h-8 w-8 rounded-full object-cover ring-2 ring-border"

@@ -157,7 +157,11 @@ export default function Pricing() {
               >
                 Monthly
               </span>
-              <Switch checked={isYearly} onCheckedChange={setIsYearly} />
+              <Switch
+                checked={isYearly}
+                onCheckedChange={setIsYearly}
+                aria-label="Billing period"
+              />
               <span
                 className={cn(
                   'font-medium transition-colors text-sm flex items-center gap-2',

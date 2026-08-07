@@ -257,6 +257,7 @@ class AISettingsService:
         user_id: str,
         updates: Dict[str, Any],
         db,
+        current_settings: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Update AI settings for a user.
@@ -265,13 +266,19 @@ class AISettingsService:
             user_id: The user's ID
             updates: Settings updates (may include provider configs)
             db: Supabase client
+            current_settings: Already-fetched settings row, if the caller has one.
+                The route's default-provider guard reads the same row, so passing
+                it here saves a redundant Supabase round-trip per save.
 
         Returns:
             Updated settings dict
         """
         try:
-            # Get current settings first
-            current = await AISettingsService.get_user_settings(user_id, db)
+            current = (
+                current_settings
+                if current_settings is not None
+                else await AISettingsService.get_user_settings(user_id, db)
+            )
 
             # Process provider configs - encrypt any API keys
             if "provider_configs" in updates:
@@ -359,6 +366,23 @@ class AISettingsService:
         return system_config
 
     @staticmethod
+    def has_stored_byok_key(user_settings: dict, provider: AIProvider) -> bool:
+        """True when the user stored their OWN key for ``provider``.
+
+        A stored key is the signal that the provider choice is deliberate, which
+        is what separates "stale default nobody set on purpose" (safe to fall
+        back) from "the provider this user picked for their data" (never
+        silently substitute). Reads an already-fetched settings dict so callers
+        pay no extra query.
+
+        Twin of the write-side guard ``_provider_has_usable_config`` in
+        ``app/api/v1/ai_settings.py``, which also considers a key submitted in
+        the same request.
+        """
+        stored = (user_settings.get("provider_configs") or {}).get(provider.value, {})
+        return bool(isinstance(stored, dict) and stored.get("api_key_encrypted"))
+
+    @staticmethod
     async def get_ai_service_for_user(
         user_id: str,
         db,
@@ -385,7 +409,43 @@ class AISettingsService:
             except ValueError:
                 provider = AIProvider.CUSTOM
 
-        config = await AISettingsService.get_effective_provider_config(user_id, provider, db)
+        try:
+            config = await AISettingsService.get_effective_provider_config(user_id, provider, db)
+        except AIServiceError:
+            # The user's selected provider has no resolvable config - most
+            # commonly a stale ``default_provider='openai'`` row left over from
+            # an old BYOK setup, with no system OpenAI key. Rather than hard-
+            # fail the AI call, fall back to the system default provider (the
+            # Agnes 'custom' gateway in production) so the user can still use
+            # the feature. See RCA 2026-08-05 (POST /ai/generate-outfit 503s).
+            #
+            # NOT when the user supplied their OWN key for this provider: the
+            # key existing means they deliberately chose where their prompts and
+            # body photos go, and it is merely unresolvable right now (key
+            # deleted, encryption key rotated). Silently re-routing that traffic
+            # to the system gateway would send their images to a provider they
+            # did not pick, with only a server-side log. Fail loudly instead so
+            # they are told their provider is broken.
+            if AISettingsService.has_stored_byok_key(user_settings, provider):
+                logger.warning(
+                    "User's own provider key is unusable; refusing to re-route "
+                    "to the system default",
+                    user_id=user_id,
+                    requested_provider=provider.value,
+                )
+                raise
+            fallback_provider = get_default_provider()
+            if fallback_provider == provider:
+                raise
+            logger.warning(
+                "AI provider not configured, falling back to system default",
+                user_id=user_id,
+                requested_provider=provider.value,
+                fallback_provider=fallback_provider.value,
+            )
+            provider = fallback_provider
+            config = await AISettingsService.get_effective_provider_config(user_id, provider, db)
+
         return get_provider_class(provider)(config)
 
     @staticmethod

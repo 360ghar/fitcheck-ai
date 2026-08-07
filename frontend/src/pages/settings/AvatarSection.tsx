@@ -53,7 +53,7 @@ export function AvatarSection() {
       <div className="flex flex-col items-center xs:flex-row xs:items-center w-full">
         <div className="relative">
           {userAvatar ? (
-            <img
+            <img loading="lazy" decoding="async"
               src={userAvatar}
               alt={`${userDisplayName} avatar`}
               className="h-16 w-16 md:h-24 md:w-24 rounded-full object-cover"

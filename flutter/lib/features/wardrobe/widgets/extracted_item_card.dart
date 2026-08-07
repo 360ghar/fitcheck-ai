@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import '../../../core/widgets/app_network_image.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
@@ -227,10 +228,10 @@ class ExtractedItemCard extends StatelessWidget {
           children: [
             // Generated image or source image with bounding box
             if (item.generatedImageUrl != null)
-              Image.network(
+              AppNetworkImage(
                 item.generatedImageUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
+                errorWidget: (context, error, stackTrace) =>
                     _buildSourceImage(tokens),
               )
             else

@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.core.config import settings
+from app.core.exceptions import AIServiceError
 from app.models.ai import HealthCheckResult
 from app.services.ai_provider_interface import AIProvider
 from app.services.ai_provider_service import AIProviderService
@@ -260,6 +261,50 @@ class TestGetAiServiceForUser:
             )
         assert isinstance(service, GeminiProvider)
         await service.close()
+
+    @pytest.mark.asyncio
+    async def test_stale_default_with_no_key_falls_back_to_system_default(self, monkeypatch):
+        """The RCA case: `default_provider='openai'` left over from an old BYOK
+        setup, no system OpenAI key, no key of the user's own. Nobody chose this
+        on purpose, so falling back beats 503'ing every AI call."""
+        monkeypatch.setattr(settings, "AI_OPENAI_API_KEY", "", raising=False)
+        with patch.object(AISettingsService, "get_user_settings", AsyncMock(return_value={
+            "default_provider": "openai", "provider_configs": {},
+        })):
+            service = await AISettingsService.get_ai_service_for_user("user-1", db=object())
+        assert isinstance(service, AIProviderService)  # system default gateway
+        await service.close()
+
+    @pytest.mark.asyncio
+    async def test_unusable_byok_key_raises_instead_of_re_routing(self, monkeypatch):
+        """A stored key means the user DELIBERATELY chose where their prompts and
+        body photos go. If it cannot be resolved (key deleted, encryption key
+        rotated), silently sending that traffic to the system gateway leaks it to
+        a provider they did not pick — fail loudly instead."""
+        monkeypatch.setattr(settings, "AI_OPENAI_API_KEY", "", raising=False)
+        # api_key_encrypted present, but undecryptable -> config resolution fails.
+        with patch.object(AISettingsService, "get_user_settings", AsyncMock(return_value={
+            "default_provider": "openai",
+            "provider_configs": {"openai": {"api_key_encrypted": "not-decryptable"}},
+        })):
+            with pytest.raises(AIServiceError):
+                await AISettingsService.get_ai_service_for_user("user-1", db=object())
+
+    def test_has_stored_byok_key_reads_the_settings_dict(self):
+        assert AISettingsService.has_stored_byok_key(
+            {"provider_configs": {"openai": {"api_key_encrypted": "x"}}}, AIProvider.OPENAI
+        )
+        # No key, wrong provider, missing/odd shapes -> not a deliberate choice.
+        assert not AISettingsService.has_stored_byok_key(
+            {"provider_configs": {"openai": {}}}, AIProvider.OPENAI
+        )
+        assert not AISettingsService.has_stored_byok_key(
+            {"provider_configs": {"gemini": {"api_key_encrypted": "x"}}}, AIProvider.OPENAI
+        )
+        assert not AISettingsService.has_stored_byok_key({}, AIProvider.OPENAI)
+        assert not AISettingsService.has_stored_byok_key(
+            {"provider_configs": {"openai": "junk"}}, AIProvider.OPENAI
+        )
 
 
 class TestTestProviderConfig:

@@ -23,10 +23,11 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends
 from supabase import Client
 
+from app.api.v1.images import materialize_avatar_url
 from app.core.config import settings
 from app.core.exceptions import DatabaseError
 from app.core.logging_config import get_context_logger
-from app.core.security import get_current_user_id
+from app.api.v1.deps import get_active_user_id
 from app.db.connection import get_db
 
 logger = get_context_logger(__name__)
@@ -133,7 +134,7 @@ def _disabled_leaderboard_payload() -> Dict[str, Any]:
 
 @router.get("/streak", response_model=Dict[str, Any])
 async def get_streak(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     # Flag off -> 200 with zeros, NOT 404. A 404 here rejects the Flutter
@@ -197,7 +198,7 @@ async def get_streak(
 
 @router.get("/achievements", response_model=Dict[str, Any])
 async def get_achievements(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     # Flag off -> 200 with an empty earned list, NOT 404. See main.py and the
@@ -246,7 +247,7 @@ async def get_achievements(
 
 @router.get("/leaderboard", response_model=Dict[str, Any])
 async def get_leaderboard(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     # Flag off -> 200 with no entries, NOT 404. See main.py and the Flutter
@@ -288,7 +289,17 @@ async def get_leaderboard(
                     "rank": idx + 1,
                     "user_id": uid,
                     "username": _display_name(profile),
-                    "avatar_url": profile.get("avatar_url"),
+                    # `users.avatar_url` stores the presigned URL captured at
+                    # upload time, so it is dead after OBJECT_STORAGE_PRESIGN_TTL
+                    # (1h) and must be re-materialized on every read — every
+                    # leaderboard face was a broken image before this.
+                    # presigned=True is required: these are OTHER users' keys and
+                    # the Worker's ownership rule (first path segment == token
+                    # sub) 404s a cross-user path in worker mode.
+                    "avatar_url": await materialize_avatar_url(
+                        profile.get("avatar_url"), presigned=True
+                    )
+                    or profile.get("avatar_url"),
                     "level": _compute_level(total_points),
                     "total_points": total_points,
                     "current_streak": current_streak,

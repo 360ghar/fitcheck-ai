@@ -28,9 +28,12 @@ class AnalyticsService {
       ..debug = kDebugMode
       // Session replay: also requires "Record user sessions" in PostHog project settings.
       ..sessionReplay = true;
-    // Keep UI readable in replays; mask only if product policy tightens later.
-    config.sessionReplayConfig.maskAllTexts = false;
-    config.sessionReplayConfig.maskAllImages = false;
+    // Mask all text and images in replays so screen recordings never capture
+    // wardrobe/try-on photos or user-typed text: the App Privacy manifest
+    // declares only product interaction/crash data, so unmasked replays would
+    // be undeclared collection (nutrition-label mismatch).
+    config.sessionReplayConfig.maskAllTexts = true;
+    config.sessionReplayConfig.maskAllImages = true;
     await Posthog().setup(config);
     _enabled = true;
 

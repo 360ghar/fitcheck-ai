@@ -10,12 +10,29 @@ React + TypeScript web app under `frontend/`. Package-local agent entry: `fronte
 cd frontend
 npm install
 npm run dev       # :3000
-npm run build     # tsc + vite build
+npm run build     # tsc + vite build + prerender-meta + prerender-html
 npm run lint
 npm run preview
 ```
 
 Vite proxies `/api` to the backend (`:8000`) in development.
+
+### Build pipeline
+
+`npm run build` runs four stages; each depends on the previous one:
+
+1. `tsc` — typecheck only.
+2. `vite build` — client bundle. Production sourcemaps are **off**
+   (`sourcemap: false`): they were previously published and fetchable, which
+   exposed the whole frontend source.
+3. `scripts/prerender-meta.mjs` — writes `dist/<route>/index.html` per public
+   route with unique title/description/canonical plus a `<noscript>` teaser.
+4. `scripts/prerender-html.mjs` — renders **real HTML into `<div id="root">`**
+   for those routes. See "Prerendered public routes" below.
+
+Stage 4 exits non-zero if a route renders empty or if no route renders at all —
+shipping an empty `#root` is the failure it exists to prevent, so it must never
+degrade silently.
 
 ## Architecture
 
@@ -110,6 +127,49 @@ stores must not import pages
 
 - `lib/image-compress.ts` before upload when appropriate
 
+### Prerendered public routes
+
+The marketing pages are prerendered at build time, so first paint no longer
+waits for the SPA to boot. Before this, `#root` shipped empty and production
+measured `FCP === LCP` to the millisecond — there was no earlier paint to have.
+
+- **`src/routes/publicRoutes.ts` is the single source of truth.** Adding a
+  public route means adding it here, not to `App.tsx`. `App.tsx` maps the
+  manifest to `<Route>`s; `src/entry-prerender.tsx` renders the same components
+  at build time. Two hand-maintained lists would drift.
+- Also add the path to `scripts/seo-content.mjs` `SEO_ROUTES` — that registry is
+  what the prerender (and the sitemap, and the meta step) iterates.
+- **Avoiding the Suspense flash:** `main.tsx` awaits `preloadRoute()` before the
+  first `createRoot().render()`. Without it React would clear the prerendered
+  markup and paint the Suspense spinner over content that was already visible,
+  which both looks broken and pushes LCP back out. `componentFor()` returns the
+  resolved component synchronously for the preloaded route.
+- The client uses `createRoot`, **not** `hydrateRoot`. React discards the
+  prerendered DOM and re-renders it; the early paint is the point, and this
+  sidesteps hydration-mismatch bugs entirely. Measured CLS for the swap is 0.
+- Data-driven routes are listed in `PRERENDER_SKIP` (currently `/blog`, which
+  fetches its posts and already has the `seo-html` edge function in front of it).
+  Baking a loading skeleton into HTML would be worse than an empty root.
+- The prerender needs `ssr.noExternal` in `vite.config.ts` (gated on
+  `isSsrBuild`, because Vitest reads the same config and an unconditional value
+  breaks test collection), and shims `localStorage` in the build script for
+  zustand's `persist`. It deliberately does **not** shim `window` —
+  `src/lib/theme.ts` guards on `typeof window === 'undefined'`, so leaving it
+  undefined keeps Node on the safe path.
+
+### Fonts
+
+Inter and Manrope are **self-hosted from `public/fonts/`** with two hand-written
+`@font-face` rules at the top of `src/index.css`, named to match
+`tailwind.config.ts` (`Inter`, `Manrope`).
+
+Do not reintroduce `@fontsource-variable/*`: those packages register the
+families as `"Inter Variable"` / `"Manrope Variable"`, which never matched the
+Tailwind stack. The result was 284 KB of fonts deployed that the browser never
+requested, and every surface silently rendering in system-ui. Latin subsets
+only, `font-display: swap`, both preloaded from `index.html` (Manrope carries
+`.landing-display`, the mobile LCP element).
+
 ### Replayable previews (PostHog session recordings)
 
 - `lib/replayable-preview.ts` — `fileToReplayablePreview(file)` builds a
@@ -124,11 +184,12 @@ stores must not import pages
 
 ### Image URLs are short-lived (presigned)
 
-Image URLs returned by the backend are **short-lived presigned GET URLs** (default
-~15 min) served from the private Railway Bucket. Treat them as ephemeral: do not
-cache them long-term, and re-fetch from the backend as needed (e.g. on re-render or
-when a URL has expired). The DB stores a bucket key, not a URL, so the backend
-materializes a fresh URL at read time.
+Image URLs are served from the private S3-compatible bucket (R2 since the 2026-08-05 egress RCA) in one of two modes, driven by backend config:
+
+- **Presigned mode (default):** URLs are **short-lived presigned GET URLs** (~1h, `OBJECT_STORAGE_PRESIGN_TTL=3600`) that **rotate on every read** (the signature is in the query string) — they defeat browser HTTP caching, so treat them as ephemeral: re-fetch from the backend as needed. This is why the egress RCA added worker mode.
+- **Worker mode (`IMAGE_SERVING_MODE=worker`):** URLs are **stable and path-only** (`https://<IMAGE_CDN_BASE_URL>/{storage_path}`) with `Cache-Control: public, max-age=86400, immutable`, so the browser HTTP cache and the Cloudflare edge cache both hit. Fetching an image with the app's bearer token in the `Authorization` header is safe here (presigned S3 URLs must NOT carry one — only one auth mechanism is allowed; `authHeadersForUrl` in `flutter/lib/core/widgets/app_network_image.dart` handles this).
+
+The DB stores a bucket key, not a URL, so the backend materializes a fresh URL at read time. Grid/list tiles should use `thumbnail_url` when the backend returns one (`THUMBNAIL_SERVING=true` serves `_thumb` siblings). `<img>` tiles use `loading="lazy" decoding="async"` (done across wardrobe/calendar/dashboard/photoshoot surfaces 2026-08-05).
 
 ### Error copy — never render raw backend bodies
 

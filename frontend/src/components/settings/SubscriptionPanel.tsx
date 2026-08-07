@@ -189,6 +189,16 @@ export function SubscriptionPanel() {
   // by the register/login page (survives the Google OAuth round-trip via
   // localStorage). Only free users can redeem, so a paid user never sees it.
   const isFreePlan = currentPlan === "free";
+
+  // Store-billed subscriptions (Apple IAP / Play Billing) can only be managed
+  // and cancelled in the store itself — the Stripe portal has no record of them
+  // and `POST /subscription/cancel` cannot revoke a store entitlement.
+  const isStoreBilled =
+    subscription?.billing_provider === "apple" ||
+    subscription?.billing_provider === "google";
+  const storeName =
+    subscription?.billing_provider === "apple" ? "the App Store" : "Google Play";
+
   useEffect(() => {
     if (!isFreePlan || promoValidation) return;
     const urlCode = searchParams.get("promo");
@@ -363,17 +373,39 @@ export function SubscriptionPanel() {
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row">
+              {/* Gated on `isPro` ALONE. Adding `billing_configured !== false`
+                  here dropped existing paid subscribers into the free-user
+                  "card payments are being set up" branch on any deployment
+                  without Stripe configured — including everyone billed through
+                  the App Store / Play, and promo-code upgrades — leaving them no
+                  in-app way to see or cancel a subscription they are paying for.
+                  `billing_configured` gates the UPGRADE CTA below, nothing else. */}
               {isPro ? (
                 <>
-                  <Button
-                    variant="outline"
-                    onClick={handleManageBilling}
-                    disabled={isLoading}
-                  >
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    Manage Billing
-                  </Button>
-                  {!subscription?.cancel_at_period_end && (
+                  {isStoreBilled ? (
+                    // The Stripe portal cannot manage a store subscription, and
+                    // cancellation legally has to happen in the store, so point
+                    // there instead of offering controls that cannot work.
+                    <div className="flex flex-col gap-1 rounded-lg border border-border bg-background/90 px-4 py-3">
+                      <p className="text-sm font-medium">
+                        Billed through {storeName}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Manage or cancel this subscription in your {storeName}{" "}
+                        subscription settings.
+                      </p>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={handleManageBilling}
+                      disabled={isLoading}
+                    >
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Manage Billing
+                    </Button>
+                  )}
+                  {!isStoreBilled && !subscription?.cancel_at_period_end && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button

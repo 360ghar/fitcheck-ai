@@ -291,8 +291,9 @@ class AuthFooterText extends StatelessWidget {
 
   final Color textColor;
 
-  static const String privacyPolicyUrl = 'https://fitcheckaiapp.com/privacy';
-  static const String termsOfServiceUrl = 'https://fitcheckaiapp.com/terms';
+  // Aliases of the single source of truth in AppConstants.
+  static const String privacyPolicyUrl = AppConstants.privacyPolicyUrl;
+  static const String termsOfServiceUrl = AppConstants.termsOfServiceUrl;
 
   Future<void> _openUrl(String url) async {
     final uri = Uri.parse(url);

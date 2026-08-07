@@ -1,0 +1,67 @@
+{
+  "title": "Feedback",
+  "description": "Support tickets and user feedback with a status workflow.",
+  "columns": {
+    "subject": "Subject",
+    "user": "User",
+    "category": "Category",
+    "status": "Status",
+    "createdAt": "Created",
+    "updatedAt": "Updated"
+  },
+  "filters": {
+    "status": "Status",
+    "statusPlaceholder": "All statuses",
+    "category": "Category",
+    "categoryPlaceholder": "All categories"
+  },
+  "status": {
+    "open": "Open",
+    "in_progress": "In progress",
+    "resolved": "Resolved",
+    "closed": "Closed",
+    "unknown": "Unknown"
+  },
+  "categories": {
+    "bug_report": "Bug report",
+    "feature_request": "Feature request",
+    "general_feedback": "General feedback",
+    "support_request": "Support request",
+    "unknown": "Unknown"
+  },
+  "detail": {
+    "title": "Ticket",
+    "subject": "Subject",
+    "description": "Message",
+    "from": "From",
+    "contactEmail": "Contact email",
+    "app": "App",
+    "appPlatform": "Platform",
+    "appVersion": "Version",
+    "attachments": "Attachments",
+    "noAttachments": "No attachments.",
+    "internalNotes": "Internal notes",
+    "internalNotesPlaceholder": "Add staff-only notes…",
+    "statusLabel": "Status",
+    "createdAt": "Created",
+    "updatedAt": "Updated",
+    "storagePaths": "Storage paths",
+    "save": "Save changes",
+    "savePending": "Saving…",
+    "saved": "Ticket updated.",
+    "errorGeneric": "Could not update the ticket. Try again."
+  },
+  "empty": {
+    "title": "No tickets",
+    "message": "No support tickets match the current filters."
+  },
+  "loadError": {
+    "title": "Could not load tickets",
+    "message": "The support ticket list is unavailable right now."
+  },
+  "export": {
+    "label": "Export CSV",
+    "filename": "support-tickets.csv",
+    "toast": "Exported {{count}} tickets"
+  }
+}

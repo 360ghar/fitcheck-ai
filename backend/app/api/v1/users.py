@@ -3,6 +3,8 @@ User API routes.
 
 Implements:
 - GET/PUT /api/v1/users/me
+- DELETE /api/v1/users/me (account deletion)
+- POST /api/v1/users/export (data export archive)
 - GET/PUT /api/v1/users/preferences
 - GET/PUT /api/v1/users/settings
 - GET/PUT /api/v1/users/body-profile
@@ -11,6 +13,7 @@ Implements:
 """
 
 import asyncio
+import json
 import uuid
 import re
 from app.utils.datetime_util import utcnow, utcnow_iso
@@ -29,7 +32,7 @@ from app.core.exceptions import (
     ValidationError,
 )
 from app.core.logging_config import get_context_logger
-from app.core.security import get_current_user_id
+from app.api.v1.deps import get_active_user_id
 from app.core.uploads import read_upload_capped
 from app.db.connection import get_db
 from app.utils import maybe_single_data
@@ -48,7 +51,7 @@ from app.models.user import (
 from app.services.storage_service import MAX_FILE_SIZE, StorageService
 from app.services.vector_service import get_vector_service
 from app.services.weather_service import get_weather_service
-from app.api.v1.images import materialize_image_urls
+from app.api.v1.images import materialize_avatar_url, materialize_image_urls
 
 logger = get_context_logger(__name__)
 
@@ -266,7 +269,7 @@ def _sync_birth_fields_to_auth(
 
 @router.get("/me", response_model=Dict[str, Any])
 async def get_current_user(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -289,16 +292,21 @@ async def get_current_user(
                 if not user_data.get(field):
                     user_data[field] = meta.get(field)
 
-        # Regenerate a fresh presigned avatar URL at read time. The DB stores a
-        # presigned URL (or a legacy Supabase public URL) that expires (~15 min
-        # for presigned); the bucket key is recovered via key_from_path so a
-        # long-lived client session never serves a broken/expired avatar image.
+        # Regenerate a fresh avatar URL at read time. The DB stores a bucket
+        # key, a presigned URL (expires after OBJECT_STORAGE_PRESIGN_TTL), a
+        # legacy Supabase public URL — or an EXTERNAL https URL (OAuth
+        # provider picture). Only our own objects are re-materialized; an
+        # external URL must pass through untouched, never be reduced to a
+        # bucket key and presigned/minted (key_from_path would mangle
+        # e.g. https://lh3.googleusercontent.com/a/... into a bogus key).
+        # The UUID first-segment guard lives in materialize_avatar_url (images.py)
+        # so this, ai.py and the leaderboard share one implementation.
         avatar_url = user_data.get("avatar_url")
         if avatar_url:
             try:
-                key = StorageService.key_from_path(avatar_url)
-                if key:
-                    user_data["avatar_url"] = await StorageService.get_public_url(key)
+                fresh = await materialize_avatar_url(avatar_url)
+                if fresh:
+                    user_data["avatar_url"] = fresh
             except Exception as e:
                 logger.warning("Failed to materialize avatar URL", user_id=user_id, error=str(e))
 
@@ -313,7 +321,7 @@ async def get_current_user(
 @router.put("/me", response_model=Dict[str, Any])
 async def update_current_user(
     update_data: UserUpdate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -324,6 +332,15 @@ async def update_current_user(
         birth_patch = _extract_birth_patch(update_dict)
         update_payload = dict(update_dict)
         skipped_fields: List[str] = []
+
+        # Admin-only fields are never client-settable: a user must not be
+        # able to (un)suspend themselves, change their own role, or set an
+        # admin flag / quota override through the self-service profile route
+        # (the admin panel owns those via /api/v1/admin/users). They are
+        # stripped from the payload — not errors — so a stale client sending
+        # them degrades gracefully.
+        for admin_only in ("is_active", "role", "is_admin", "custom_daily_quota"):
+            update_payload.pop(admin_only, None)
 
         while True:
             update_payload["updated_at"] = _now()
@@ -379,7 +396,7 @@ async def update_current_user(
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_current_user(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Delete the current user's account and data.
@@ -437,6 +454,12 @@ async def delete_current_user(
         if avatar_key:
             storage_paths.append(avatar_key)
 
+        # The data-export archive is a single deterministic key per user
+        # (POST /users/export overwrites it), so its object is known without a
+        # bucket listing; delete it with the rest of the owned storage. A
+        # missing object is a no-op delete on the S3 side.
+        storage_paths.append(f"{user_id}/export/data.json")
+
         async def _delete_storage() -> None:
             if storage_paths:
                 await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)
@@ -451,6 +474,27 @@ async def delete_current_user(
         # Storage and vector cleanup are independent of each other; the user
         # row delete stays last so an Auth outage cannot leave a live profile.
         await asyncio.gather(_delete_storage(), _delete_vectors())
+
+        # ANONYMIZE, do not delete. support_tickets.user_id is ON DELETE SET
+        # NULL because 009_support_tickets supports anonymous tickets, and the
+        # table also holds in-app CONTENT REPORTS about other users plus open
+        # support/billing threads. Hard-deleting the requester's rows destroys
+        # the only record of a third party's violation (the reported user is
+        # never actioned and the content stays up) and any unresolved dispute
+        # support still needs.
+        #
+        # Erasure applies to the requester's personal data, not to the ticket
+        # itself: clearing user_id and contact_email severs every link back to
+        # them while the body/category/status survive for moderation. Their
+        # attachment objects were already deleted above.
+        await execute_with_reconnect(
+            lambda d: d.table("support_tickets")
+            .update({"user_id": None, "contact_email": None})
+            .eq("user_id", user_id)
+            .execute(),
+            db,
+            extra={"operation": "delete_account.support_tickets", "user_id": user_id},
+        )
 
         # The user-row delete is idempotent (a replayed delete is a no-op), so
         # it is safe through the reconnect retry: a dead pooled connection
@@ -474,15 +518,122 @@ async def delete_current_user(
         _handle_db_error("delete account", user_id, e)
 
 
+# ============================================================================
+# DATA EXPORT
+# ============================================================================
+
+
+@router.post("/export", response_model=Dict[str, Any])
+async def export_user_data(
+    user_id: str = Depends(get_active_user_id),
+    db: Client = Depends(get_db),
+):
+    """Generate a JSON archive of the current user's data and return a
+    short-lived presigned download URL.
+
+    Metadata only: rows carry their storage keys (``storage_path``); image
+    bytes are never included. The archive is written to a single
+    deterministic key per user (``{user_id}/export/data.json``, overwritten on
+    each call - the same key account deletion cleans up), and served as a
+    short-lived presigned GET URL (the repo's ~15-minute pattern). Every call
+    returns a fresh URL, so repeat requests never hand out a stale link.
+    """
+    try:
+        user_result = await execute_with_reconnect(
+            lambda d: d.table("users").select("*").eq("id", user_id).execute(),
+            db,
+            extra={"operation": "export_user_data.user", "user_id": user_id},
+            max_retries=2,
+        )
+        if not user_result.data:
+            raise UserNotFoundError(user_id=user_id)
+
+        async def _rows(table: str) -> List[Dict[str, Any]]:
+            result = await execute_with_reconnect(
+                lambda d: d.table(table).select("*").eq("user_id", user_id).execute(),
+                db,
+                extra={"operation": f"export_user_data.{table}", "user_id": user_id},
+                max_retries=2,
+            )
+            return result.data or []
+
+        # Sections are independent; read them concurrently (same pattern as
+        # the dashboard aggregate and the deletion cascade).
+        preferences, settings, body_profiles, items, outfits, calendar_events, subscriptions = await asyncio.gather(
+            _rows("user_preferences"),
+            _rows("user_settings"),
+            _rows("body_profiles"),
+            _rows("items"),
+            _rows("outfits"),
+            _rows("calendar_events"),
+            _rows("subscriptions"),
+        )
+
+        payload = {
+            "generated_at": _now(),
+            "note": "Metadata export: image files are not included; rows carry their storage keys.",
+            "user": user_result.data[0],
+            "preferences": (preferences or [None])[0],
+            "settings": (settings or [None])[0],
+            "body_profiles": body_profiles,
+            "items": items,
+            "outfits": outfits,
+            "calendar_events": calendar_events,
+            # Billing summary only - provider-side identifiers are the user's
+            # own data but add nothing to a wardrobe export.
+            "subscriptions": [
+                {
+                    "id": row.get("id"),
+                    "plan_type": row.get("plan_type"),
+                    "status": row.get("status"),
+                    "current_period_start": row.get("current_period_start"),
+                    "current_period_end": row.get("current_period_end"),
+                    "cancel_at_period_end": row.get("cancel_at_period_end"),
+                }
+                for row in subscriptions
+            ],
+        }
+
+        export_bytes = json.dumps(payload, default=str, indent=2).encode("utf-8")
+        upload = await StorageService.upload_file(
+            db=db,
+            file_data=export_bytes,
+            file_path=f"{user_id}/export/data.json",
+            content_type="application/json",
+            # Short cache TTL: the archive is personal data, so a CDN edge
+            # must never keep serving a previous export for long (upload_file
+            # docstring: pass a short value when overwriting an existing key).
+            cache_control="60",
+        )
+        return {"data": {"export_url": upload["public_url"]}, "message": "OK"}
+
+    except (UserNotFoundError, ValidationError, DatabaseError, StorageServiceError):
+        raise
+    except Exception as e:
+        _handle_db_error("export user data", user_id, e)
+
+
 @router.post("/me/avatar", response_model=Dict[str, Any])
 async def upload_avatar(
     file: UploadFile = File(...),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
         if not file.content_type or not file.content_type.startswith("image/"):
             raise UnsupportedMediaTypeError(message="Avatar must be an image file")
+
+        # Capture the CURRENT avatar before it is overwritten: replacing it
+        # without removing the old object leaks the previous avatar forever
+        # (measured: 47 orphan avatar objects / 53MB in the bucket).
+        old_avatar_url = None
+        try:
+            row = await asyncio.to_thread(
+                db.table("users").select("avatar_url").eq("id", user_id).maybe_single().execute
+            )
+            old_avatar_url = (row.data or {}).get("avatar_url") if row.data else None
+        except Exception as e:
+            logger.warning("Failed to read current avatar before replace", user_id=user_id, error=str(e))
 
         file_bytes = await read_upload_capped(file, MAX_FILE_SIZE)
         avatar_url = await StorageService.upload_avatar(
@@ -490,6 +641,23 @@ async def upload_avatar(
         )
 
         await asyncio.to_thread(db.table("users").update({"avatar_url": avatar_url, "updated_at": _now()}).eq("id", user_id).execute)
+
+        # Best-effort removal of the replaced avatar object. Only our own
+        # bucket key is deleted: an external OAuth picture URL must pass
+        # through untouched (key_from_path would mangle it), and a key from
+        # another user is never touched. Never fails the request.
+        if old_avatar_url:
+            try:
+                old_key = StorageService.key_from_path(old_avatar_url)
+                if old_key and old_key.startswith(f"{user_id}/avatars/") and old_key != StorageService.key_from_path(avatar_url):
+                    await StorageService.delete_image(db=db, storage_path=old_key)
+            except Exception as e:
+                logger.warning(
+                    "Failed to delete replaced avatar",
+                    user_id=user_id,
+                    error=str(e),
+                )
+
         return {"data": {"avatar_url": avatar_url}, "message": "OK"}
 
     except (UserNotFoundError, ValidationError, DatabaseError, UnsupportedMediaTypeError, StorageServiceError):
@@ -518,7 +686,7 @@ _PREFERENCES_DEFAULTS = {
 
 @router.get("/preferences", response_model=Dict[str, Any])
 async def get_user_preferences(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -537,7 +705,7 @@ async def get_user_preferences(
 @router.put("/preferences", response_model=Dict[str, Any])
 async def update_user_preferences(
     update_data: UserPreferencesUpdate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -577,7 +745,7 @@ _SETTINGS_DEFAULTS = {
 
 @router.get("/settings", response_model=Dict[str, Any])
 async def get_user_settings(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -595,7 +763,7 @@ async def get_user_settings(
 @router.put("/settings", response_model=Dict[str, Any])
 async def update_user_settings(
     update_data: UserSettingsUpdate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -617,7 +785,7 @@ async def update_user_settings(
 
 @router.get("/body-profiles", response_model=Dict[str, Any])
 async def list_body_profiles(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """List all body profiles for the user."""
@@ -642,7 +810,7 @@ async def list_body_profiles(
 @router.post("/body-profiles", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 async def create_body_profile(
     request: BodyProfileCreate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Create a new body profile."""
@@ -681,7 +849,7 @@ async def create_body_profile(
 async def update_body_profile(
     profile_id: UUID,
     update_data: BodyProfileUpdate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Update an existing body profile."""
@@ -717,7 +885,7 @@ async def update_body_profile(
 @router.delete("/body-profiles/{profile_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_body_profile(
     profile_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Delete a body profile."""
@@ -758,7 +926,7 @@ async def delete_body_profile(
 
 @router.get("/body-profile", response_model=Dict[str, Any])
 async def get_body_profile(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -787,7 +955,7 @@ async def get_body_profile(
 @router.put("/body-profile", response_model=Dict[str, Any])
 async def upsert_body_profile(
     update_data: BodyProfileUpdate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -967,78 +1135,93 @@ async def _get_outfit_of_the_day(user_id: str, db: Client) -> Optional[Dict[str,
 
 @router.get("/dashboard", response_model=Dict[str, Any])
 async def get_dashboard(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Aggregate endpoint for the dashboard UI."""
     async def _dashboard_data(d: Any) -> Dict[str, Any]:
-        user_row = await asyncio.to_thread(d.table("users").select("*").eq("id", user_id).execute)
-        if not user_row.data:
-            raise UserNotFoundError(user_id=user_id)
-
         now_dt = utcnow()
         month_start = now_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
 
-        # Parallel queries for counts
-        items_count = await asyncio.to_thread(d.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_deleted", False).execute)
-        outfits_count = await asyncio.to_thread(d.table("outfits").select("id", count="exact").eq("user_id", user_id).execute)
-
-        items_added_month = await asyncio.to_thread(
-            d.table("items")
-            .select("id", count="exact")
-            .eq("user_id", user_id)
-            .eq("is_deleted", False)
-            .gte("created_at", month_start)
-            .execute
+        # All count/recent queries are independent reads; run them concurrently
+        # so the home-screen endpoint waits on the slowest query, not their sum
+        # (the export path above uses the same pattern on the same client).
+        (
+            user_row,
+            items_count,
+            outfits_count,
+            items_added_month,
+            outfits_created_month,
+            most_worn_item,
+            fav_items,
+            fav_outfits,
+            recent_items,
+            recent_outfits,
+        ) = await asyncio.gather(
+            asyncio.to_thread(d.table("users").select("*").eq("id", user_id).execute),
+            asyncio.to_thread(d.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_deleted", False).execute),
+            asyncio.to_thread(d.table("outfits").select("id", count="exact").eq("user_id", user_id).execute),
+            asyncio.to_thread(
+                d.table("items")
+                .select("id", count="exact")
+                .eq("user_id", user_id)
+                .eq("is_deleted", False)
+                .gte("created_at", month_start)
+                .execute
+            ),
+            asyncio.to_thread(
+                d.table("outfits")
+                .select("id", count="exact")
+                .eq("user_id", user_id)
+                .gte("created_at", month_start)
+                .execute
+            ),
+            asyncio.to_thread(
+                d.table("items")
+                .select("name,usage_times_worn")
+                .eq("user_id", user_id)
+                .eq("is_deleted", False)
+                # nullslast: NULL wear count must not outrank every real count
+                # (Postgres sorts NULLs first under DESC by default).
+                .order("usage_times_worn", desc=True, nullsfirst=False)
+                .limit(1)
+                .execute
+            ),
+            asyncio.to_thread(d.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).eq("is_deleted", False).execute),
+            asyncio.to_thread(d.table("outfits").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).execute),
+            # Recent activity (images are needed so the activity feed can render
+            # thumbnails; storage_path is materialized to a fresh presigned URL in
+            # _build_recent_activity).
+            asyncio.to_thread(
+                d.table("items")
+                .select("id,name,created_at,item_images(storage_path,image_url,thumbnail_url,is_primary)")
+                .eq("user_id", user_id)
+                .eq("is_deleted", False)
+                .order("created_at", desc=True)
+                .limit(5)
+                .execute
+            ),
+            asyncio.to_thread(
+                d.table("outfits")
+                .select("id,name,created_at,outfit_images(storage_path,image_url,thumbnail_url,is_primary)")
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
+                .limit(5)
+                .execute
+            ),
         )
-        outfits_created_month = await asyncio.to_thread(
-            d.table("outfits")
-            .select("id", count="exact")
-            .eq("user_id", user_id)
-            .gte("created_at", month_start)
-            .execute
+        if not user_row.data:
+            raise UserNotFoundError(user_id=user_id)
+
+        most_worn_item = most_worn_item.data or []
+
+        # Activity materialization, weather and outfit-of-the-day are
+        # independent of each other; run them concurrently.
+        recent_activity, weather_based, outfit_of_the_day = await asyncio.gather(
+            _build_recent_activity(recent_items.data or [], recent_outfits.data or []),
+            _get_weather_suggestion(user_id, d),
+            _get_outfit_of_the_day(user_id, d),
         )
-
-        most_worn_item = (await asyncio.to_thread(
-            d.table("items")
-            .select("name,usage_times_worn")
-            .eq("user_id", user_id)
-            .eq("is_deleted", False)
-            .order("usage_times_worn", desc=True)
-            .limit(1)
-            .execute
-        )).data or []
-
-        fav_items = await asyncio.to_thread(d.table("items").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).eq("is_deleted", False).execute)
-        fav_outfits = await asyncio.to_thread(d.table("outfits").select("id", count="exact").eq("user_id", user_id).eq("is_favorite", True).execute)
-
-        # Recent activity (images are needed so the activity feed can render
-        # thumbnails; storage_path is materialized to a fresh presigned URL in
-        # _build_recent_activity).
-        recent_items = (await asyncio.to_thread(
-            d.table("items")
-            .select("id,name,created_at,item_images(storage_path,image_url,thumbnail_url,is_primary)")
-            .eq("user_id", user_id)
-            .eq("is_deleted", False)
-            .order("created_at", desc=True)
-            .limit(5)
-            .execute
-        )).data or []
-
-        recent_outfits = (await asyncio.to_thread(
-            d.table("outfits")
-            .select("id,name,created_at,outfit_images(storage_path,image_url,thumbnail_url,is_primary)")
-            .eq("user_id", user_id)
-            .order("created_at", desc=True)
-            .limit(5)
-            .execute
-        )).data or []
-
-        recent_activity = await _build_recent_activity(recent_items, recent_outfits)
-
-        # Weather-based suggestion and outfit of the day
-        weather_based = await _get_weather_suggestion(user_id, d)
-        outfit_of_the_day = await _get_outfit_of_the_day(user_id, d)
 
         return {
             "user": user_row.data,

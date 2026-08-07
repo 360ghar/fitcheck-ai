@@ -3,6 +3,7 @@
  */
 
 import { apiClient, getApiError } from './client';
+import { UPLOAD_TIMEOUT_MS } from '@/lib/endpoints';
 import type { AxiosRequestConfig } from 'axios';
 import type {
   ApiEnvelope,
@@ -201,6 +202,11 @@ export async function uploadOutfitImage(
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        // Image validation + thumbnail + S3 PUT can exceed the 30s default under
+        // concurrency; the 30s abort left the server working and surfaced as a
+        // late multipart 400. Set here rather than via LONG_RUNNING_PREFIXES
+        // because this path is templated (see endpoints.ts).
+        timeout: UPLOAD_TIMEOUT_MS,
       }
     );
     return response.data.data;

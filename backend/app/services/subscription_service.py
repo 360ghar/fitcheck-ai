@@ -2,7 +2,7 @@
 Subscription service for managing user subscriptions and usage tracking.
 """
 from datetime import datetime, date, timedelta
-from typing import Optional, Union
+from typing import Any, Dict, Optional, Union
 from dateutil.relativedelta import relativedelta
 
 import asyncio
@@ -20,7 +20,7 @@ from app.models.subscription import (
     SubscriptionWithUsage,
     UsageCheckResult,
 )
-from app.utils.datetime_util import utcnow, utcnow_iso
+from app.utils.datetime_util import parse_utc_datetime, utcnow, utcnow_iso
 from app.utils.db import (
     QUOTA_UNAVAILABLE_CLIENT_MESSAGE,
     execute_with_reconnect,
@@ -39,11 +39,9 @@ class SubscriptionService:
 
     @staticmethod
     def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
-        if not value:
-            return None
-        if isinstance(value, datetime):
-            return value
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        # Delegates to the shared helper so every module parses ISO timestamps
+        # the same way (Z suffix, naive strings, aware non-UTC -> UTC).
+        return parse_utc_datetime(value)
 
     # ==========================================================================
     # Plan Limit Helpers
@@ -164,6 +162,43 @@ class SubscriptionService:
     # ==========================================================================
 
     @staticmethod
+    def _response_from_row(data: Dict[str, Any]) -> SubscriptionResponse:
+        """Build the API response from a ``subscriptions`` row.
+
+        Shared by the read path (``get_subscription``) and the write paths
+        (webhook syncs), which receive the upserted/updated row from
+        PostgREST and would otherwise re-fetch it for the same transformation.
+        ``effective_plan_type`` applies the entitlement rules (trial/period
+        expiry) exactly as the read path does.
+        """
+        stored_plan_type = PlanType(data.get("plan_type", "free"))
+        status = SubscriptionStatus(data.get("status", "active"))
+        current_period_end = SubscriptionService._parse_datetime(data.get("current_period_end"))
+        trial_end = SubscriptionService._parse_datetime(data.get("trial_end"))
+        plan_type = SubscriptionService.effective_plan_type(
+            stored_plan_type,
+            status,
+            current_period_end,
+            trial_end,
+        )
+
+        return SubscriptionResponse(
+            id=data["id"],
+            user_id=data["user_id"],
+            plan_type=plan_type,
+            status=status,
+            current_period_start=SubscriptionService._parse_datetime(data.get("current_period_start")) or utcnow(),
+            current_period_end=current_period_end,
+            cancel_at_period_end=data.get("cancel_at_period_end", False),
+            trial_end=trial_end,
+            referral_credit_months=data.get("referral_credit_months", 0),
+            billing_provider=data.get("billing_provider", "stripe"),
+            created_at=SubscriptionService._parse_datetime(data.get("created_at")),
+            updated_at=SubscriptionService._parse_datetime(data.get("updated_at")),
+            is_pro=SubscriptionService.is_pro_plan(plan_type),
+        )
+
+    @staticmethod
     async def get_subscription(user_id: str, db: Client) -> SubscriptionResponse:
         """Get user's current subscription."""
         try:
@@ -198,32 +233,7 @@ class SubscriptionService:
             if not data:
                 raise DatabaseError("Subscription record could not be loaded after creation")
 
-            stored_plan_type = PlanType(data.get("plan_type", "free"))
-            status = SubscriptionStatus(data.get("status", "active"))
-            current_period_end = SubscriptionService._parse_datetime(data.get("current_period_end"))
-            trial_end = SubscriptionService._parse_datetime(data.get("trial_end"))
-            plan_type = SubscriptionService.effective_plan_type(
-                stored_plan_type,
-                status,
-                current_period_end,
-                trial_end,
-            )
-
-            return SubscriptionResponse(
-                id=data["id"],
-                user_id=data["user_id"],
-                plan_type=plan_type,
-                status=status,
-                current_period_start=SubscriptionService._parse_datetime(data.get("current_period_start")) or utcnow(),
-                current_period_end=current_period_end,
-                cancel_at_period_end=data.get("cancel_at_period_end", False),
-                trial_end=trial_end,
-                referral_credit_months=data.get("referral_credit_months", 0),
-                billing_provider=data.get("billing_provider", "stripe"),
-                created_at=SubscriptionService._parse_datetime(data.get("created_at")),
-                updated_at=SubscriptionService._parse_datetime(data.get("updated_at")),
-                is_pro=SubscriptionService.is_pro_plan(plan_type),
-            )
+            return SubscriptionService._response_from_row(data)
         except Exception as e:
             logger.error(f"Error getting subscription for user {user_id}: {e}")
             raise DatabaseError(f"Failed to get subscription: {str(e)}")
@@ -392,7 +402,7 @@ class SubscriptionService:
             "cancel_at_period_end": bool(value(stripe_subscription, "cancel_at_period_end", False)),
             "updated_at": now.isoformat(),
         }
-        await asyncio.to_thread(
+        upsert_result = await asyncio.to_thread(
             db.table("subscriptions").upsert(payload, on_conflict="user_id").execute
         )
         logger.info(
@@ -402,6 +412,13 @@ class SubscriptionService:
             plan_type=plan_type.value,
             status=status.value,
         )
+        # The upsert response already carries the row; building the response
+        # from it avoids a re-read SELECT per webhook. Fall back to the read
+        # path if the client returned no row (defensive; PostgREST returns the
+        # affected rows for on_conflict upserts).
+        upserted_rows = getattr(upsert_result, "data", None) or []
+        if upserted_rows:
+            return cls._response_from_row(upserted_rows[0])
         return await cls.get_subscription(user_id, db)
 
     @classmethod
@@ -415,7 +432,7 @@ class SubscriptionService:
         status: str,
         current_period_start: Optional[str] = None,
         current_period_end: Optional[str] = None,
-        cancel_at_period_end: bool = False,
+        cancel_at_period_end: Optional[bool] = False,
         product_id: Optional[str] = None,
         apple_original_transaction_id: Optional[str] = None,
         google_purchase_token: Optional[str] = None,
@@ -445,26 +462,84 @@ class SubscriptionService:
         check_at = now or utcnow()
 
         # Store-verified "free" means the store refunded/expired the purchase.
-        # Downgrade to the free plan; there is no store identity to keep.
+        # Downgrade to the free plan but KEEP the owning store's transaction
+        # identity: later notifications (renewal after resubscribe, refund
+        # follow-ups) resolve the user via apple_original_transaction_id /
+        # google_purchase_token, and wiping it would orphan the row from the
+        # webhook ledger. Only a NEW store purchase (the upsert path below)
+        # clears and replaces identity.
         if status == "free":
-            await asyncio.to_thread(db.table("subscriptions").update({
+            # A REFUND/REVOKE/EXPIRED notification can arrive for a SUPERSEDED
+            # transaction: the row now carries a NEWER store identifier because
+            # the user resubscribed (same App Store / Play account after a
+            # refund). The webhook resolves the user via the appAccountToken
+            # fallback, so the downgrade below would kill the CURRENT active
+            # subscription. When the incoming identifier is known and differs
+            # from the one the row owns, this notification is stale — skip the
+            # downgrade entirely. A None on either side keeps the legacy
+            # behavior (downgrade): the caller had no identifier to compare.
+            if apple_original_transaction_id or google_purchase_token:
+                identity = maybe_single_data(
+                    await asyncio.to_thread(
+                        db.table("subscriptions")
+                        .select("apple_original_transaction_id,google_purchase_token")
+                        .eq("user_id", user_id)
+                        .maybe_single()
+                        .execute
+                    )
+                )
+                if identity:
+                    stale = False
+                    if provider == "apple" and apple_original_transaction_id:
+                        row_id = identity.get("apple_original_transaction_id")
+                        stale = row_id is not None and row_id != apple_original_transaction_id
+                    elif provider == "google" and google_purchase_token:
+                        row_id = identity.get("google_purchase_token")
+                        stale = row_id is not None and row_id != google_purchase_token
+                    if stale:
+                        logger.info(
+                            "Ignoring stale store refund/revocation for superseded transaction",
+                            user_id=user_id,
+                            provider=provider,
+                            incoming_identifier=(
+                                apple_original_transaction_id or google_purchase_token
+                            ),
+                        )
+                        return await cls.get_subscription(user_id, db)
+
+            downgrade_payload = {
                 "plan_type": "free",
                 "status": "active",
                 "billing_provider": provider,
                 "current_period_end": None,
                 "cancel_at_period_end": False,
-                "apple_original_transaction_id": None,
-                "google_purchase_token": None,
-                "google_order_id": None,
                 "billing_product_id": None,
                 "updated_at": check_at.isoformat(),
-            }).eq("user_id", user_id).execute)
+            }
+            if provider == "apple":
+                # A replaced rail's identity (if any) is stale; keep only the
+                # owning store's.
+                downgrade_payload["google_purchase_token"] = None
+                downgrade_payload["google_order_id"] = None
+            elif provider == "google":
+                downgrade_payload["apple_original_transaction_id"] = None
+            downgrade_result = await asyncio.to_thread(
+                db.table("subscriptions")
+                .update(downgrade_payload)
+                .eq("user_id", user_id)
+                .execute
+            )
             logger.info(
                 "Store purchase expired/refunded; downgraded to free",
                 user_id=user_id,
                 provider=provider,
                 plan_type=plan_type.value,
             )
+            # The update response carries the row (see the sync tail below);
+            # fall back to the read path only if it does not.
+            downgraded_rows = getattr(downgrade_result, "data", None) or []
+            if downgraded_rows:
+                return cls._response_from_row(downgraded_rows[0])
             return await cls.get_subscription(user_id, db)
 
         status_map = {
@@ -479,27 +554,89 @@ class SubscriptionService:
 
         existing_result = await asyncio.to_thread(
             db.table("subscriptions")
-            .select("current_period_end,billing_provider")
+            .select(
+                "current_period_start,current_period_end,"
+                "billing_provider,billing_product_id"
+            )
             .eq("user_id", user_id)
             .maybe_single()
             .execute
         )
         existing = maybe_single_data(existing_result)
         if existing:
-            existing_period_end = cls._parse_datetime(existing.get("current_period_end"))
-            incoming_period_end = cls._parse_datetime(current_period_end) if current_period_end else None
+            # Staleness is decided by PURCHASE RECENCY, not by period end.
+            #
+            # An upgrade can legitimately SHORTEN the period (Plus yearly ->
+            # Pro monthly): Apple ends the old subscription immediately and
+            # starts a new, shorter one. A period-end comparison reads that as
+            # stale and silently drops the upgrade — the exact flow App Review
+            # exercises. current_period_start carries the store's purchaseDate,
+            # which only ever moves forward, so it is the correct discriminator.
+            #
+            # It also fixes the mirror hazard the end rule could not: after an
+            # upgrade Apple shortens the OLD transaction's expiresDate, and an
+            # out-of-order notification for that old transaction still carries
+            # signedTransactionInfo. Its later expiresDate would otherwise
+            # overwrite the new plan.
+            same_provider = existing.get("billing_provider") == provider
+            existing_start = cls._parse_datetime(existing.get("current_period_start"))
+            incoming_start = (
+                cls._parse_datetime(current_period_start) if current_period_start else None
+            )
+            existing_end = cls._parse_datetime(existing.get("current_period_end"))
+            incoming_end = (
+                cls._parse_datetime(current_period_end) if current_period_end else None
+            )
+            stored_product = existing.get("billing_product_id")
+            # None means "unknown" (a pre-IAP row): fall back to the
+            # conservative period-end rule rather than assuming a plan change.
+            same_product = stored_product is None or stored_product == product_id
+
+            # A strictly NEWER purchase date is a different, later transaction:
+            # always apply it, whatever it does to the period end.
+            is_newer_purchase = (
+                existing_start is not None
+                and incoming_start is not None
+                and incoming_start > existing_start
+            )
+            # A strictly OLDER one is a late-arriving snapshot of a superseded
+            # transaction: never apply it.
+            is_older_purchase = (
+                existing_start is not None
+                and incoming_start is not None
+                and incoming_start < existing_start
+            )
+
+            if same_provider and is_older_purchase:
+                logger.info(
+                    "Skipping stale store snapshot with older purchase date",
+                    user_id=user_id,
+                    provider=provider,
+                    existing_period_start=existing_start.isoformat(),
+                    incoming_period_start=incoming_start.isoformat(),
+                )
+                return await cls.get_subscription(user_id, db)
+
+            # Equal or unknown purchase dates mean "same subscription, another
+            # snapshot of it", so the period-end rule still decides. This is
+            # the normal case on Google, where startTimeMillis is the ORIGINAL
+            # subscription start and stays constant across renewals — dropping
+            # the end rule there would let a stale renewal snapshot roll
+            # current_period_end backwards.
             if (
-                existing_period_end
-                and incoming_period_end
-                and existing_period_end > incoming_period_end
-                and existing.get("billing_provider") == provider
+                same_provider
+                and not is_newer_purchase
+                and same_product
+                and existing_end
+                and incoming_end
+                and existing_end > incoming_end
             ):
                 logger.info(
                     "Skipping stale store snapshot with older period end",
                     user_id=user_id,
                     provider=provider,
-                    existing_period_end=existing_period_end.isoformat(),
-                    incoming_period_end=incoming_period_end.isoformat(),
+                    existing_period_end=existing_end.isoformat(),
+                    incoming_period_end=incoming_end.isoformat(),
                 )
                 return await cls.get_subscription(user_id, db)
 
@@ -510,7 +647,6 @@ class SubscriptionService:
             "billing_provider": provider,
             "current_period_start": current_period_start or check_at.isoformat(),
             "current_period_end": current_period_end,
-            "cancel_at_period_end": cancel_at_period_end,
             "billing_product_id": product_id,
             # Only the owning store's identity is kept; the others are
             # cleared so a stale snapshot from a replaced rail cannot match.
@@ -525,7 +661,64 @@ class SubscriptionService:
             "stripe_subscription_id": None,
             "updated_at": check_at.isoformat(),
         }
-        await asyncio.to_thread(
+
+        # None means "this payload does not say" — leave the stored flag alone.
+        # Only the App Store Server Notification carries autoRenewStatus, so a
+        # Restore Purchases (which re-registers the same transaction with no
+        # renewal info) would otherwise clear a cancellation the user really
+        # made. Omitting the column from the upsert preserves it on an existing
+        # row and falls back to the schema default FALSE on a new one.
+        if cancel_at_period_end is not None:
+            payload["cancel_at_period_end"] = cancel_at_period_end
+
+        # One store transaction belongs to exactly one account at a time. A
+        # downgraded row keeps its store identity on purpose (see the "free"
+        # branch above), so the same store account resubscribing under a
+        # different FitCheck account would leave TWO rows carrying one
+        # identifier — and the webhook's identifier lookup (iap.py
+        # `_user_id_for_store_purchase`) would then have to guess. Strip the
+        # identifier from every OTHER user's row as this one claims it: the
+        # retention intent is preserved for the owning row, and the lookup stays
+        # single-valued.
+        claimed_identifier = (
+            apple_original_transaction_id
+            if provider == "apple"
+            else google_purchase_token
+        )
+        identity_column = (
+            "apple_original_transaction_id"
+            if provider == "apple"
+            else "google_purchase_token"
+        )
+        if claimed_identifier:
+            try:
+                released = await asyncio.to_thread(
+                    db.table("subscriptions")
+                    .update({identity_column: None, "updated_at": check_at.isoformat()})
+                    .eq(identity_column, claimed_identifier)
+                    .neq("user_id", user_id)
+                    .execute
+                )
+                stale_rows = getattr(released, "data", None) or []
+                if stale_rows:
+                    logger.warning(
+                        "Released store identifier from a previous owner",
+                        user_id=user_id,
+                        provider=provider,
+                        previous_user_ids=[r.get("user_id") for r in stale_rows],
+                    )
+            except Exception as error:  # noqa: BLE001
+                # Non-fatal: the entitlement write below is what the user is
+                # waiting on. A leftover duplicate is logged and the webhook
+                # resolver still picks the most recently updated row.
+                logger.warning(
+                    "Could not release store identifier from other rows",
+                    user_id=user_id,
+                    provider=provider,
+                    error=str(error)[:200],
+                )
+
+        upsert_result = await asyncio.to_thread(
             db.table("subscriptions").upsert(payload, on_conflict="user_id").execute
         )
         logger.info(
@@ -536,6 +729,11 @@ class SubscriptionService:
             status=stored_status.value,
             product_id=product_id,
         )
+        # Same as the Stripe tail: build the response from the upserted row
+        # instead of re-reading it (one fewer SELECT per webhook).
+        upserted_rows = getattr(upsert_result, "data", None) or []
+        if upserted_rows:
+            return cls._response_from_row(upserted_rows[0])
         return await cls.get_subscription(user_id, db)
 
     @staticmethod
@@ -717,15 +915,35 @@ class SubscriptionService:
             raise
 
     @staticmethod
-    async def get_usage(user_id: str, db: Client) -> UsageLimits:
-        """Get user's current monthly usage and limits."""
-        try:
-            # Get subscription to determine plan limits
-            subscription = await SubscriptionService.get_subscription(user_id, db)
-            limits = SubscriptionService.get_plan_limits(subscription.plan_type)
+    async def get_usage(
+        user_id: str,
+        db: Client,
+        subscription: Optional[SubscriptionResponse] = None,
+    ) -> UsageLimits:
+        """Get user's current monthly usage and limits.
 
-            # Get current usage
-            usage_record = await SubscriptionService.get_or_create_usage_record(user_id, db)
+        ``subscription`` may be passed in by callers that already fetched it
+        (``get_subscription_with_usage``), avoiding a second row fetch per
+        request on the endpoint the mobile app polls.
+        """
+        try:
+            # Subscription and usage record are independent reads; run them
+            # concurrently (unless the caller already has the subscription).
+            # return_exceptions keeps a failing leg from leaving the other
+            # task dangling; the subscription error is re-raised below.
+            if subscription is None:
+                results = await asyncio.gather(
+                    SubscriptionService.get_subscription(user_id, db),
+                    SubscriptionService.get_or_create_usage_record(user_id, db),
+                    return_exceptions=True,
+                )
+                if isinstance(results[0], BaseException):
+                    raise results[0]
+                subscription, usage_record = results
+            else:
+                usage_record = await SubscriptionService.get_or_create_usage_record(user_id, db)
+
+            limits = SubscriptionService.get_plan_limits(subscription.plan_type)
 
             used_extractions = usage_record.get("monthly_extractions", 0)
             used_generations = usage_record.get("monthly_generations", 0)
@@ -825,8 +1043,7 @@ class SubscriptionService:
             if _retry and is_db_connection_error(e):
                 logger.warning(f"Connection error for user {user_id}, retrying: {e}")
                 from app.db.connection import SupabaseDB
-                SupabaseDB.reset()
-                new_db = SupabaseDB.get_service_client()
+                new_db = SupabaseDB.rebuild_service_client(db)
                 return await SubscriptionService.check_limit(
                     user_id, operation_type, new_db, count, _retry=False
                 )
@@ -927,7 +1144,7 @@ class SubscriptionService:
     async def get_subscription_with_usage(user_id: str, db: Client) -> SubscriptionWithUsage:
         """Get subscription and usage in one call."""
         subscription = await SubscriptionService.get_subscription(user_id, db)
-        usage = await SubscriptionService.get_usage(user_id, db)
+        usage = await SubscriptionService.get_usage(user_id, db, subscription=subscription)
 
         return SubscriptionWithUsage(
             subscription=subscription,

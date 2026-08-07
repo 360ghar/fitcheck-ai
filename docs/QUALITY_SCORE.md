@@ -1,6 +1,6 @@
 # Quality score
 
-Last updated: 2026-07-31
+Last updated: 2026-08-07
 
 Grades are honest snapshots for agents: where to be careful, where tests are strong, where docs lag. Update when a domain materially improves or regresses.
 
@@ -21,6 +21,7 @@ Scale: **A** solid · **B** workable · **C** fragile · **D** high risk
 | Social import | B | 2026-07-25 | Pipeline + XSS-oriented tests, SSE error events | Feature-flagged; ops complexity |
 | Subscriptions / Stripe | B | 2026-07-31 | Webhook tests (incl. Plus activation), plan-limit/entitlement tests | Three tiers live; Stripe Plus price IDs must be set in env |
 | Web frontend | B- | 2026-07-31 | 25 Vitest files / 77 test cases, API retry, feature error boundaries, Sentry, global error handlers | No authenticated browser E2E; build writes tracked `public/sitemap.xml` |
+| Admin panel | B | 2026-08-07 | Server-enforced RBAC (85 backend admin tests: authz 403s, predicates, CRUD, suspend, refund, audit), 17 Vitest files / 122 app tests (MSW, typed against generated OpenAPI), OpenAPI codegen + CI drift check, audit trail on every mutation, URL-synced table state, i18n + axe in tests | No Playwright e2e yet; token-refresh end-to-end verification pending hardening report; hand-written `types.ts` partially superseded by `schema.d.ts`; role-level permissions only (no field-level) |
 | Flutter | B | 2026-07-31 | Full Flutter suite (106 tests), offline queue hardening, bounded polling, error zone, Sentry | No `integration_test/` suite; SDK cache must be writable for local verification |
 | Docs / harness | B- | 2026-07-31 | Story ledger, architecture/docs/theme checks, conditional repo-wide runner | Curated API/schema docs can drift; unavailable toolchains need explicit follow-up |
 | Infra / CI | B- | 2026-07-31 | Backend + frontend + Flutter CI, Sentry on web + mobile | Backend missing `sentry-sdk`; no hosted smoke/load gate; public storage URL debt remains |

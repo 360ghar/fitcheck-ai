@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
@@ -176,10 +177,10 @@ class TryOnPage extends StatelessWidget {
                   child: hasAvatar
                       ? ClipOval(
                           child: isRemote
-                              ? Image.network(
+                              ? AppNetworkImage(
                                   avatarPath,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) =>
+                                  errorWidget: (_, _, _) =>
                                       const Icon(Icons.person),
                                 )
                               : Image.file(File(avatarPath), fit: BoxFit.cover),
@@ -494,10 +495,10 @@ class TryOnPage extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(AppConstants.radius12),
-              child: Image.network(
+              child: AppNetworkImage(
                 controller.generatedImageUrl.value,
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const Center(
+                errorWidget: (_, _, _) => const Center(
                   child: Icon(Icons.broken_image_outlined, size: 48),
                 ),
               ),

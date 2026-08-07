@@ -33,6 +33,11 @@ enum SubscriptionStatus {
   cancelled,
   @JsonValue('past_due')
   pastDue,
+  /// Set by the admin "mark IAP transaction refunded" flow (status-only
+  /// update). Never entitled: the backend serves `plan_type: free` for
+  /// refunded rows, so client entitlement (derived from plan type) stays off.
+  @JsonValue('refunded')
+  refunded,
 }
 
 /// Subscription model
@@ -61,7 +66,7 @@ abstract class SubscriptionModel with _$SubscriptionModel {
 abstract class UsageLimitsModel with _$UsageLimitsModel {
   const factory UsageLimitsModel({
     @JsonKey(name: 'monthly_extractions') @Default(0) int monthlyExtractions,
-    @JsonKey(name: 'monthly_extractions_limit') @Default(25) int monthlyExtractionsLimit,
+    @JsonKey(name: 'monthly_extractions_limit') @Default(50) int monthlyExtractionsLimit,
     @JsonKey(name: 'monthly_generations') @Default(0) int monthlyGenerations,
     @JsonKey(name: 'monthly_generations_limit') @Default(50) int monthlyGenerationsLimit,
     @JsonKey(name: 'period_start') DateTime? periodStart,
@@ -121,7 +126,7 @@ abstract class PlanDetailsModel with _$PlanDetailsModel {
     String? description,
     @JsonKey(name: 'price_monthly') @Default(0.0) double priceMonthly,
     @JsonKey(name: 'price_yearly') @Default(0.0) double priceYearly,
-    @JsonKey(name: 'monthly_extractions') @Default(25) int monthlyExtractions,
+    @JsonKey(name: 'monthly_extractions') @Default(50) int monthlyExtractions,
     @JsonKey(name: 'monthly_generations') @Default(50) int monthlyGenerations,
     @Default([]) List<String> features,
   }) = _PlanDetailsModel;
@@ -150,19 +155,19 @@ extension StoreProductsModelX on StoreProductsModel {
   /// The store product ID for a plan type on the given store
   /// ("apple" | "google").
   ///
-  /// Falls back to the plan type itself when the backend published no store
-  /// product map for this store at all (every entry null/empty) — dev /
-  /// sandbox environments where store products are exercised via an Xcode
-  /// StoreKit configuration file or a store that mirrors the plan type.
-  /// Note the backend always sends the full map (with null values when the
-  /// store rail is unconfigured), so "no map" must mean "all values
-  /// null/empty", not "empty map".
+  /// Returns null when this store rail is unconfigured (the backend published
+  /// no product ID for this variant — every entry null/empty means the rail
+  /// is entirely unconfigured). Callers fail closed with "This plan is not
+  /// available for purchase yet."; the app never queries the store with a
+  /// made-up identifier. Never substitute the plan type itself: plan-type
+  /// strings match nothing in App Store Connect or the repo's StoreKit
+  /// configuration file, and StoreKit answers such lookups with
+  /// `storekit_no_response`.
   String? productIdFor(String store, String planType) {
     final map = store == 'google' ? google : apple;
     final id = map[planType];
     if (id != null && id.isNotEmpty) return id;
-    final hasAnyConfigured = map.values.any((v) => v != null && v.isNotEmpty);
-    return hasAnyConfigured ? null : planType;
+    return null;
   }
 }
 

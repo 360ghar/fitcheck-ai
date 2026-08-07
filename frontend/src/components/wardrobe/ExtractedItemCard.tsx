@@ -206,7 +206,7 @@ export function ExtractedItemCard({
             fixed `aspect-square` and `cover` cropped portrait silhouettes. */}
         <div className="relative aspect-square bg-card">
           {imageSrc ? (
-            <img
+            <img loading="lazy" decoding="async"
               src={imageSrc}
               alt={item.sub_category || item.category}
               className="w-full h-full object-contain p-2"

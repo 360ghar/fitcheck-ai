@@ -164,7 +164,7 @@ export function BatchExtractionProgress({
                 getBorderStyle(image.status)
               )}
             >
-              <img
+              <img loading="lazy" decoding="async"
                 src={image.previewUrl}
                 alt={image.file.name}
                 className="w-full h-full object-cover"

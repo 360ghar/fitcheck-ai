@@ -35,6 +35,7 @@ import {
 } from '@/lib/use-cases'
 import type { Category, Condition, Item } from '@/types'
 import type { ItemEditor } from './useItemEditor'
+import { thumbnailErrorFallback } from '@/hooks/useImageWithFallback'
 
 const CATEGORIES: { value: Category; label: string }[] = [
   { value: 'tops', label: 'Tops' },
@@ -434,6 +435,9 @@ export function ItemDetailBody({ item, editor, notice }: ItemDetailBodyProps) {
                       lightboxSrc={image.image_url}
                       alt={item.name}
                       className="aspect-square w-full object-contain"
+                      // The `_thumb` sibling is derived, not verified — fall
+                      // back to the full size rather than showing a break.
+                      onError={thumbnailErrorFallback(image.image_url)}
                     />
                   </div>
                 ))}

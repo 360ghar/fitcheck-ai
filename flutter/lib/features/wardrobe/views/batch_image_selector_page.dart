@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/widgets/app_network_image.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
@@ -1037,12 +1038,12 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
           // Photo preview
           ClipRRect(
             borderRadius: BorderRadius.circular(AppConstants.radius12),
-            child: Image.network(
+            child: AppNetworkImage(
               photo.sourceThumbUrl ?? photo.sourcePhotoUrl,
               width: double.infinity,
               height: 200,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Container(
+              errorWidget: (_, _, _) => Container(
                 width: double.infinity,
                 height: 200,
                 color: Colors.black12,
@@ -1182,12 +1183,12 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(AppConstants.radius8),
-            child: Image.network(
+            child: AppNetworkImage(
               photo.sourceThumbUrl ?? photo.sourcePhotoUrl,
               width: 60,
               height: 60,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Container(
+              errorWidget: (_, _, _) => Container(
                 width: 60,
                 height: 60,
                 color: Colors.black12,
@@ -1470,12 +1471,12 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
           if ((item.generatedImageUrl ?? '').isNotEmpty)
             ClipRRect(
               borderRadius: BorderRadius.circular(6),
-              child: Image.network(
+              child: AppNetworkImage(
                 item.generatedImageUrl!,
                 width: 72,
                 height: 72,
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Container(
+                errorWidget: (_, _, _) => Container(
                   width: 72,
                   height: 72,
                   color: Colors.black12,

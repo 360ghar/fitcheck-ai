@@ -1,0 +1,73 @@
+{
+  "title": "IAP transactions",
+  "description": "In-app purchase transactions from iOS and Android.",
+  "columns": {
+    "user": "User",
+    "platform": "Platform",
+    "status": "Status",
+    "plan": "Plan",
+    "amount": "Amount",
+    "transactionId": "Transaction ID",
+    "createdAt": "Created",
+    "subscriptionId": "Subscription ID"
+  },
+  "filters": {
+    "platform": "Platform",
+    "platformPlaceholder": "All platforms",
+    "status": "Status",
+    "statusPlaceholder": "All statuses"
+  },
+  "platforms": {
+    "apple": "Apple App Store",
+    "google": "Google Play",
+    "unknown": "Unknown"
+  },
+  "status": {
+    "active": "Active",
+    "trialing": "Trialing",
+    "past_due": "Past due",
+    "canceled": "Canceled",
+    "cancelled": "Cancelled",
+    "refunded": "Refunded",
+    "unknown": "Unknown"
+  },
+  "detail": {
+    "title": "Transaction detail",
+    "description": "Store transaction {{transactionId}}",
+    "close": "Close",
+    "markRefunded": "Mark refunded",
+    "receipt": "Receipt metadata",
+    "noReceipt": "No receipt metadata on this transaction.",
+    "subscriptionId": "Subscription ID",
+    "billingProductId": "Billing product",
+    "userId": "User ID",
+    "userEmail": "User email",
+    "platform": "Platform",
+    "plan": "Plan",
+    "amount": "Amount",
+    "status": "Status",
+    "createdAt": "Created",
+    "notFound": "Transaction not found",
+    "noProviderTransactionId": "This row has no provider transaction id (store-billed). Details and refund-marking are unavailable for store-billed transactions."
+  },
+  "markRefunded": {
+    "dialogTitle": "Mark transaction refunded",
+    "dialogDescription": "Mark {{transactionId}} as refunded. This only updates the stored status — the store-side refund must already exist (webhooks record it).",
+    "confirm": "Mark refunded",
+    "success": "Transaction {{transactionId}} marked refunded.",
+    "errorGeneric": "Could not mark the transaction refunded. Try again."
+  },
+  "empty": {
+    "title": "No transactions",
+    "message": "No store transactions match the current filters."
+  },
+  "loadError": {
+    "title": "Could not load transactions",
+    "message": "The transaction list is unavailable right now."
+  },
+  "export": {
+    "label": "Export CSV",
+    "filename": "iap-transactions.csv",
+    "toast": "Exported {{count}} transactions"
+  }
+}

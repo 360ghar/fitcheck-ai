@@ -1,9 +1,10 @@
-"""S3-compatible object storage backend (Railway Bucket).
+"""S3-compatible object storage backend (Cloudflare R2 / Railway Bucket).
 
 Primary storage path for the app. All file uploads / downloads / copies /
 deletes go through this backend; the DB (Postgres) + Auth stay on Supabase.
-The ``STORAGE_BACKEND == "supabase"`` fallback is a cutover flag only — the S3
-backend is the primary path and the only one implemented here.
+Provider-agnostic on purpose: the endpoint and credentials decide whether this
+talks to R2, a Railway bucket, MinIO or S3 proper, so a provider migration is an
+env change plus an object copy.
 
 Ownership: ``core-storage`` agent. Do not add callers' concerns (public URL
 materialization, temp-image policy) here — that stays in ``storage_service``.
@@ -15,18 +16,35 @@ import asyncio
 from typing import List, Optional
 
 import aioboto3
+from botocore.config import Config as BotoConfig
 
 from app.core.config import settings
 from app.core.logging_config import get_context_logger
 
 logger = get_context_logger(__name__)
 
-# Module-level storage-backend selection flag. The rest of the code can check
-# this to branch on the cutover state (e.g. a read path that must fall back to
-# Supabase public URLs while the migration is in flight). The S3 backend is
-# always the primary path.
-STORAGE_BACKEND = settings.STORAGE_BACKEND
-IS_SUPABASE_FALLBACK = STORAGE_BACKEND == "supabase"
+# Wire behavior pinned explicitly rather than left to botocore's defaults,
+# because those defaults have broken S3-compatible providers before and the
+# breakage surfaces as an opaque 400/501 on upload:
+#
+# * request/response checksums: botocore >= 1.36 defaults both to
+#   "when_supported", which attaches `x-amz-checksum-crc32` to PutObject and
+#   requires a checksum on DeleteObjects. Non-AWS endpoints have historically
+#   rejected those. "when_required" sends them only where the S3 API mandates
+#   them, which every S3-compatible provider handles.
+# * addressing_style="path": R2 and MinIO both accept path style, and it keeps
+#   the signed host stable (no per-bucket subdomain, so no wildcard-cert
+#   surprises). It also matches `StorageService.build_object_url`, which
+#   composes path-style URLs — client and helper agree on one shape.
+# * s3v4: R2 requires SigV4; being explicit means a stray AWS_DEFAULT_* env var
+#   cannot downgrade it.
+_BOTO_CONFIG = BotoConfig(
+    signature_version="s3v4",
+    s3={"addressing_style": "path"},
+    request_checksum_calculation="when_required",
+    response_checksum_validation="when_required",
+    retries={"max_attempts": 3, "mode": "standard"},
+)
 
 _backend: Optional["S3StorageBackend"] = None
 
@@ -49,7 +67,7 @@ async def close_storage_backend() -> None:
 
 
 class S3StorageBackend:
-    """Thin ``aioboto3`` wrapper around the private Railway S3-compatible bucket.
+    """Thin ``aioboto3`` wrapper around the private Cloudflare R2 bucket.
 
     The ``aioboto3`` session/client is created lazily on first use (it binds to
     the running event loop) and cached for the process lifetime. All I/O
@@ -59,12 +77,40 @@ class S3StorageBackend:
     directly.
     """
 
-    def __init__(self) -> None:
-        self.bucket = settings.OBJECT_STORAGE_BUCKET
-        self.endpoint_url = settings.OBJECT_STORAGE_ENDPOINT
-        self.region_name = settings.OBJECT_STORAGE_REGION
-        self.aws_access_key_id = settings.OBJECT_STORAGE_ACCESS_KEY_ID
-        self.aws_secret_access_key = settings.OBJECT_STORAGE_SECRET_ACCESS_KEY
+    def __init__(
+        self,
+        *,
+        endpoint_url: Optional[str] = None,
+        region_name: Optional[str] = None,
+        aws_access_key_id: Optional[str] = None,
+        aws_secret_access_key: Optional[str] = None,
+        bucket: Optional[str] = None,
+    ) -> None:
+        """Create a backend bound to a specific S3 endpoint.
+
+        All parameters default to ``settings``. The explicit overrides let an
+        operator point a second backend at another bucket (e.g.
+        ``storage_inventory.py --endpoint/--bucket`` inspecting the old bucket
+        after a provider cutover) while the process-wide singleton stays on the
+        configured one.
+        """
+        self.bucket = bucket if bucket is not None else settings.OBJECT_STORAGE_BUCKET
+        self.endpoint_url = (
+            endpoint_url if endpoint_url is not None else settings.OBJECT_STORAGE_ENDPOINT
+        )
+        self.region_name = (
+            region_name if region_name is not None else settings.OBJECT_STORAGE_REGION
+        )
+        self.aws_access_key_id = (
+            aws_access_key_id
+            if aws_access_key_id is not None
+            else settings.OBJECT_STORAGE_ACCESS_KEY_ID
+        )
+        self.aws_secret_access_key = (
+            aws_secret_access_key
+            if aws_secret_access_key is not None
+            else settings.OBJECT_STORAGE_SECRET_ACCESS_KEY
+        )
         self._session: Optional[aioboto3.Session] = None
         self._client = None
         self._lock = asyncio.Lock()
@@ -85,6 +131,7 @@ class S3StorageBackend:
                     region_name=self.region_name,
                     aws_access_key_id=self.aws_access_key_id,
                     aws_secret_access_key=self.aws_secret_access_key,
+                    config=_BOTO_CONFIG,
                 )
                 self._client = await ctx.__aenter__()
         return self._client
@@ -125,7 +172,14 @@ class S3StorageBackend:
     async def delete_many(self, keys: List[str]) -> int:
         """Delete many objects (batched at S3's 1000-object limit).
 
-        Returns the number of keys requested for deletion.
+        Returns the number of keys the provider did NOT report an error for.
+
+        ``Quiet: True`` suppresses the per-key success list but still returns
+        ``Errors``, so subtracting those gives a real count instead of echoing
+        the request size. Errors are logged rather than raised: every caller
+        treats batch deletion as best-effort, and a partial failure must not
+        abandon the remaining chunks. Note that S3 semantics make deleting an
+        absent key a success, so an already-gone thumbnail is not an error.
         """
         if not keys:
             return 0
@@ -133,11 +187,21 @@ class S3StorageBackend:
         deleted = 0
         for start in range(0, len(keys), 1000):
             chunk = keys[start : start + 1000]
-            await client.delete_objects(
+            response = await client.delete_objects(
                 Bucket=self.bucket,
                 Delete={"Objects": [{"Key": k} for k in chunk], "Quiet": True},
             )
-            deleted += len(chunk)
+            errors = response.get("Errors") or []
+            if errors:
+                logger.warning(
+                    "Some objects failed to delete",
+                    bucket=self.bucket,
+                    requested=len(chunk),
+                    failed=len(errors),
+                    first_error_key=errors[0].get("Key"),
+                    first_error_code=errors[0].get("Code"),
+                )
+            deleted += len(chunk) - len(errors)
         return deleted
 
     async def presign_get(self, key: str, expires: int = 900) -> str:
@@ -160,6 +224,40 @@ class S3StorageBackend:
             for obj in page.get("Contents", []):
                 keys.append(obj["Key"])
         return keys
+
+    async def scan_keys(
+        self, prefix: str = "", *, max_pages: int = 50
+    ) -> List[dict]:
+        """List object keys with size/last-modified metadata, bounded by pages.
+
+        Each page yields up to ~1000 keys (``PageSize``). Scanning stops after
+        ``max_pages`` pages so an admin inventory call can never walk the whole
+        bucket (a bucket can hold millions of objects; admin ops endpoints use
+        this to sample the ``tmp/`` previews under user folders).
+
+        Returns a list of ``{"key", "size", "last_modified"}`` dicts.
+        """
+        client = await self._get_client()
+        out: List[dict] = []
+        paginator = client.get_paginator("list_objects_v2")
+        pages = 0
+        async for page in paginator.paginate(
+            Bucket=self.bucket,
+            Prefix=prefix,
+            PaginationConfig={"PageSize": 1000},
+        ):
+            pages += 1
+            for obj in page.get("Contents", []):
+                out.append(
+                    {
+                        "key": obj["Key"],
+                        "size": obj.get("Size", 0),
+                        "last_modified": obj.get("LastModified"),
+                    }
+                )
+            if pages >= max_pages:
+                break
+        return out
 
     async def close(self) -> None:
         """Release the aioboto3 client at app shutdown (idempotent)."""

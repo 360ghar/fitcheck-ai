@@ -44,6 +44,24 @@ void main() {
     expect(sub.billingProvider, 'apple');
   });
 
+  test('refunded status parses without throwing (admin mark-refunded flow)', () {
+    // The admin "mark IAP transaction refunded" action performs a status-only
+    // update (subscriptions.status = "refunded") and /subscription/me serves
+    // it alongside plan_type "free". An unknown enum value used to throw
+    // ArgumentError from the generated enum decode, crashing the app on the
+    // subscription page.
+    final sub = SubscriptionModel.fromJson({
+      'user_id': 'user-1',
+      'plan_type': 'free',
+      'status': 'refunded',
+    });
+
+    expect(sub.status, SubscriptionStatus.refunded);
+
+    // Round-trip: serializing a refunded row must emit the same wire value.
+    expect(sub.toJson()['status'], 'refunded');
+  });
+
   test('store products parse and resolve per-variant product IDs', () {
     final products = StoreProductsModel.fromJson({
       'apple': {
@@ -62,18 +80,19 @@ void main() {
     expect(products.productIdFor('google', 'pro_yearly'), isNull);
   });
 
-  test('store products fall back to plan type only when backend sent no map', () {
+  test('store products fail closed when backend sent no map', () {
     const products = StoreProductsModel();
 
-    expect(products.productIdFor('apple', 'plus_monthly'), 'plus_monthly');
+    expect(products.productIdFor('apple', 'plus_monthly'), isNull);
   });
 
-  test('store products fall back to plan type when every entry is null', () {
+  test('store products fail closed when every entry is null', () {
     // The backend always sends the full map (with null values when the store
-    // rail is unconfigured), so "no map" must mean all-null, not empty-map.
-    // Regression: the old `map.isEmpty` check never fired, so dev/sandbox
-    // builds could never reach the plan-type fallback and the Upgrade button
-    // failed silently.
+    // rail is unconfigured), so an unconfigured rail must return null — never
+    // a made-up identifier. Regression: the old plan-type fallback sent
+    // "plus_monthly" to StoreKit, which matches nothing in App Store Connect
+    // or the repo's StoreKit configuration file and produced
+    // `storekit_no_response` on every upgrade tap.
     final products = StoreProductsModel.fromJson({
       'apple': {
         'plus_monthly': null,
@@ -83,8 +102,8 @@ void main() {
       },
     });
 
-    expect(products.productIdFor('apple', 'plus_monthly'), 'plus_monthly');
-    expect(products.productIdFor('apple', 'pro_yearly'), 'pro_yearly');
+    expect(products.productIdFor('apple', 'plus_monthly'), isNull);
+    expect(products.productIdFor('apple', 'pro_yearly'), isNull);
   });
 
   test('store products never fall back when only some variants are configured', () {

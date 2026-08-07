@@ -212,17 +212,12 @@ async def test_validate_promo_fails_closed_on_broken_config():
 
 
 def _patch_supabase_db(monkeypatch, fresh_db):
-    """Make execute_with_reconnect hand out `fresh_db` after a reset."""
+    """Make execute_with_reconnect hand out `fresh_db` after a rebuild."""
     from app.db.connection import SupabaseDB
 
-    events = []
-    monkeypatch.setattr(SupabaseDB, "reset", staticmethod(lambda: events.append("reset")))
     monkeypatch.setattr(
-        SupabaseDB,
-        "get_service_client",
-        staticmethod(lambda: (events.append("fresh"), fresh_db)[1]),
+        SupabaseDB, "rebuild_service_client", staticmethod(lambda _stale=None: fresh_db)
     )
-    return events
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,39 @@
+{
+  "generic": {
+    "title": "Something went wrong",
+    "message": "An unexpected error occurred. Try again, or contact support with the reference below."
+  },
+  "network": {
+    "title": "Network error",
+    "message": "Could not reach the server. Check your connection and try again."
+  },
+  "server": {
+    "title": "Server error",
+    "message": "The server could not complete the request. Try again in a moment."
+  },
+  "rateLimited": {
+    "title": "Too many requests",
+    "message": "You are making requests too quickly. Wait a moment and try again."
+  },
+  "forbidden": {
+    "title": "No access",
+    "message": "You don't have permission to view this page. If you believe this is a mistake, contact an administrator."
+  },
+  "unauthorized": {
+    "title": "Session expired",
+    "message": "Your session has expired. Sign in again to continue."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "message": "The page you're looking for doesn't exist or has moved."
+  },
+  "sessionExpired": "Your session has expired. Please sign in again.",
+  "retry": "Try again",
+  "correlationId": "Reference",
+  "boundary": {
+    "title": "Something went wrong",
+    "message": "An unexpected error occurred in this view. Reload the page, or contact support with the reference below.",
+    "reload": "Reload page"
+  },
+  "backToDashboard": "Back to dashboard"
+}

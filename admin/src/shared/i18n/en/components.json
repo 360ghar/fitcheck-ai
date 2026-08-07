@@ -1,0 +1,57 @@
+{
+  "dialog": {
+    "close": "Close"
+  },
+  "search": {
+    "placeholder": "Search…",
+    "ariaLabel": "Search",
+    "clear": "Clear search",
+    "typeHint": "Type at least 2 characters to search across users, posts, tickets, and promo codes.",
+    "empty": "No results found for “{{query}}”.",
+    "error": "Search is unavailable right now. Try again.",
+    "dialogLabel": "Global search",
+    "groups": {
+      "users": "Users",
+      "posts": "Posts",
+      "tickets": "Feedback tickets",
+      "promoCodes": "Promo codes"
+    },
+    "hintNavigate": "to navigate",
+    "hintSelect": "to select",
+    "hintClose": "to close"
+  },
+  "confirmDialog": {
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "genericError": "The action failed. Try again."
+  },
+  "toolbar": {
+    "searchAriaLabel": "Filter results",
+    "filters": "Filters",
+    "filtersWithCount": "Filters ({{count}} active)",
+    "reset": "Reset filters",
+    "clearAll": "Clear all",
+    "clearFilter": "Clear {{label}}",
+    "refreshing": "Refreshing"
+  },
+  "pageLoader": {
+    "label": "Loading page",
+    "loading": "Loading…"
+  },
+  "skeleton": {
+    "tableLabel": "Loading table",
+    "loading": "Loading…"
+  },
+  "status": {
+    "active": "Active",
+    "suspended": "Suspended",
+    "trialing": "Trialing",
+    "past_due": "Past due",
+    "cancelled": "Cancelled",
+    "expired": "Expired",
+    "pending": "Pending",
+    "ok": "OK",
+    "degraded": "Degraded",
+    "down": "Down"
+  }
+}

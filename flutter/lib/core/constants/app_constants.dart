@@ -22,6 +22,11 @@ class AppConstants {
     'png',
     'webp',
     'gif',
+    'heic',
+    'heif',
+    'bmp',
+    'tif',
+    'tiff',
   ];
 
   // Animations

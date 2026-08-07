@@ -9,6 +9,7 @@ import time
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, Mock, patch
 
+import httpx
 import jwt as pyjwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -16,7 +17,7 @@ from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from jose import jwt
 
-from app.api.v1.auth import LoginRequest, RegisterRequest, login
+from app.api.v1.auth import LoginRequest, RegisterRequest, login, logout
 from app.core.config import settings
 from app.core.security import reset_jwks_client, verify_password_strength, verify_token
 
@@ -539,3 +540,58 @@ async def test_unknown_kid_retries_jwks_exactly_once():
     stale_client.get_signing_key_from_jwt.assert_called_once()
     fresh_client.get_signing_key_from_jwt.assert_called_once()
     mock_reset.assert_called_once()
+
+
+# ==========================================================================
+# logout route
+# ==========================================================================
+
+
+@pytest.mark.asyncio
+async def test_logout_with_access_token_posts_to_supabase_logout(monkeypatch):
+    """With a Bearer access token the backend must POST to Supabase
+    /auth/v1/logout so the session's refresh token is revoked server-side
+    (regression: sign_out() on the session-less anon client revoked nothing)."""
+    calls: list[dict] = []
+
+    async def mock_post(self, url, headers=None, **kwargs):
+        calls.append({"url": str(url), "headers": headers or {}})
+        return httpx.Response(204)
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post, raising=True)
+    anon_db = Mock()
+
+    result = await logout(request=None, credentials=_credentials("access-tok"), anon_db=anon_db)
+
+    assert result is None
+    assert len(calls) == 1
+    assert calls[0]["url"].rstrip("/").endswith("/auth/v1/logout")
+    assert calls[0]["headers"]["Authorization"] == "Bearer access-tok"
+    assert calls[0]["headers"]["apikey"] == settings.SUPABASE_PUBLISHABLE_KEY
+    # The token path must not fall back to the (no-op) anon sign_out.
+    anon_db.auth.sign_out.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_logout_without_access_token_keeps_legacy_sign_out():
+    """No Bearer token: keep the existing best-effort sign_out() behavior."""
+    anon_db = Mock()
+
+    result = await logout(request=None, credentials=None, anon_db=anon_db)
+
+    assert result is None
+    anon_db.auth.sign_out.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_logout_is_best_effort_when_supabase_call_fails(monkeypatch):
+    """A failed Supabase logout must not fail the request: log and still 204."""
+
+    async def mock_post(self, url, headers=None, **kwargs):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post, raising=True)
+
+    result = await logout(request=None, credentials=_credentials("access-tok"), anon_db=Mock())
+
+    assert result is None

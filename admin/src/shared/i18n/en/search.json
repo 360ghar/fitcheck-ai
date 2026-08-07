@@ -1,0 +1,23 @@
+{
+  "placeholder": "Search users, posts, tickets, promo codes…",
+  "ariaLabel": "Global search",
+  "typeHint": "Type at least 2 characters to search across users, posts, tickets, and promo codes.",
+  "empty": "No results found for “{{query}}”.",
+  "error": "Search is unavailable right now. Try again.",
+  "dialogLabel": "Global search",
+  "groups": {
+    "users": "Users",
+    "posts": "Posts",
+    "tickets": "Feedback tickets",
+    "promoCodes": "Promo codes"
+  },
+  "hintNavigate": "to navigate",
+  "hintSelect": "to select",
+  "hintClose": "to close",
+  "fallbacks": {
+    "untitled": "Untitled",
+    "noEmail": "No email",
+    "noSubject": "No subject"
+  },
+  "inactive": "inactive"
+}

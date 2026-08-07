@@ -15,7 +15,6 @@ import {
   buildFaqSchema,
   buildHowToSchema,
   buildFeatureItemListSchema,
-  buildVideoObjectSchema,
 } from '@/components/seo/JsonLd'
 
 const HOW_TO_STEPS = [
@@ -73,15 +72,10 @@ export default function LandingPage() {
     steps: HOW_TO_STEPS,
   })
   const featureListSchema = buildFeatureItemListSchema(FEATURE_LIST)
-  const videoSchema = buildVideoObjectSchema({
-    name: 'FitCheck AI — AI virtual closet, outfit planner, and AI photoshoots',
-    description:
-      'See how FitCheck AI turns photos of your clothes into a digital wardrobe with outfit recommendations, virtual try-on, and AI photoshoots.',
-    contentUrl: `${SEO_CONFIG.siteUrl}/video/promo.mp4`,
-    thumbnailUrl: `${SEO_CONFIG.siteUrl}/og-default.jpg`,
-    uploadDate: '2026-08-01',
-    duration: 'PT28S',
-  })
+  // The VideoObject is declared once globally in index.html (it is the same
+  // promo video for the whole site), so the landing page does not re-declare
+  // it — that would duplicate the block both in the static HTML and again
+  // after client hydration.
 
   return (
     <>
@@ -90,7 +84,7 @@ export default function LandingPage() {
         description={PAGE_SEO.landing.description}
         canonicalUrl={`${SEO_CONFIG.siteUrl}/`}
         keywords="virtual closet app, AI wardrobe organizer, AI outfit planner, digital wardrobe, virtual try-on, AI fashion, AI photoshoot, cost per wear"
-        jsonLd={[faqSchema, howToSchema, featureListSchema, videoSchema]}
+        jsonLd={[faqSchema, howToSchema, featureListSchema]}
       />
       <Hero />
       <DemoSection />

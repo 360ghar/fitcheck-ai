@@ -1,0 +1,49 @@
+{
+  "title": "AI quotas",
+  "description": "Today's AI usage per user and per-user daily limit overrides.",
+  "searchPlaceholder": "Search by name or email…",
+  "filters": {
+    "plan": "Plan",
+    "planAll": "All plans"
+  },
+  "columns": {
+    "email": "User",
+    "userEmail": "Email",
+    "plan": "Plan",
+    "used": "Used today",
+    "limit": "Daily limit",
+    "remaining": "Remaining",
+    "override": "Override"
+  },
+  "limit": {
+    "planDefault": "Plan default",
+    "none": "—"
+  },
+  "override": {
+    "label": "Override",
+    "set": "Set override",
+    "clear": "Clear override",
+    "title": "Daily AI limit override",
+    "description": "Set a custom daily AI limit for {{name}}. Clearing the override restores the plan default.",
+    "fieldLabel": "Daily limit",
+    "placeholder": "e.g. 200",
+    "clearLabel": "Clear override (use plan default)",
+    "save": "Save override",
+    "required": "Enter a daily limit",
+    "min": "The limit must be at least 1",
+    "integer": "The limit must be a whole number",
+    "savedToast": "Override saved for {{name}}",
+    "clearedToast": "Override cleared for {{name}}",
+    "failedToast": "Couldn't save the override: {{message}}"
+  },
+  "empty": {
+    "title": "No quota usage",
+    "message": "No AI usage recorded for the current filters."
+  },
+  "error": "Couldn't load quota usage.",
+  "export": {
+    "label": "Export CSV",
+    "filename": "quota-usage.csv",
+    "toast": "Exported {{count}} quota rows"
+  }
+}

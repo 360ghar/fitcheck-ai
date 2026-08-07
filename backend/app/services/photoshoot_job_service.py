@@ -90,6 +90,41 @@ def _build_persisted_payload(
     }
 
 
+def _first_image_error(job: Optional["PhotoshootJob"]) -> Optional[str]:
+    """The first (lowest-index) NON-EMPTY retained per-image failure detail.
+
+    Lock-free on purpose so both readers can share one policy: ``get_first_error``
+    takes ``cls._lock`` itself, while ``get_status`` already holds it. Two inline
+    copies meant ``/status.first_error`` could disagree with the ``job_failed``
+    payload the moment the policy changed.
+    """
+    if not job or not job.image_failures:
+        return None
+    return next(
+        (job.image_failures[i] for i in sorted(job.image_failures) if job.image_failures[i]),
+        None,
+    )
+
+
+def _hydrate_image_failures(row: Dict[str, Any]) -> Dict[int, str]:
+    """Rebuild the per-index failure map from a persisted job row.
+
+    Falls back to the legacy ``failed_indices`` column (with empty error strings)
+    when ``image_failures`` is absent: rows written before migration 035 carry only
+    the index list, and a job that spans that deploy must not lose its failure
+    count. The row keeps both columns for wire compatibility; in memory only the
+    map exists (see ``PhotoshootJob.image_failures``).
+    """
+    failures = {
+        int(entry["index"]): str(entry["error"])
+        for entry in row.get("image_failures") or []
+        if isinstance(entry, dict) and "index" in entry
+    }
+    if not failures:
+        failures = {int(index): "" for index in row.get("failed_indices") or []}
+    return failures
+
+
 _store = JobPersistenceStore(
     table="photoshoot_jobs",
     terminal_statuses=_TERMINAL_STATUSES,
@@ -120,10 +155,13 @@ class PhotoshootJob:
     total_batches: int = 1
     current_batch: int = 0
     generated_images: List[Dict[str, Any]] = field(default_factory=list)
-    failed_indices: Set[int] = field(default_factory=set)
     # Per-index provider error detail, retained so the job_failed payload and
     # /status can tell the client (and the operator) exactly why each slot
-    # failed. Bounded: one entry per requested slot.
+    # failed. Bounded: one entry per requested slot. This is the SINGLE record of
+    # which slots failed — `failed_indices` below is derived from its keys, not
+    # stored alongside it, because `mark_image_failed` is the only writer of
+    # either and two independently-rehydrated copies could report a
+    # `failed_count` that disagrees with the per-index detail in the same payload.
     image_failures: Dict[int, str] = field(default_factory=dict)
 
     # Cancellation
@@ -157,8 +195,17 @@ class PhotoshootJob:
         return len(self.generated_images)
 
     @property
+    def failed_indices(self) -> Set[int]:
+        """Slots that failed — derived from ``image_failures``.
+
+        An error string may be empty (a provider that failed without a message),
+        but the KEY is always present, so the two are exactly equivalent.
+        """
+        return set(self.image_failures)
+
+    @property
     def failed_count(self) -> int:
-        return len(self.failed_indices)
+        return len(self.image_failures)
 
 
 class PhotoshootJobService:
@@ -201,12 +248,7 @@ class PhotoshootJobService:
                 total_batches=int(row.get("total_batches") or 1),
                 current_batch=int(row.get("current_batch") or 0),
                 generated_images=generated_images,
-                failed_indices={int(index) for index in row.get("failed_indices") or []},
-                image_failures={
-                    int(entry["index"]): str(entry["error"])
-                    for entry in row.get("image_failures") or []
-                    if isinstance(entry, dict) and "index" in entry
-                },
+                image_failures=_hydrate_image_failures(row),
                 error_message=row.get("error_message"),
                 usage=row.get("usage"),
                 persistence_db=db,
@@ -560,7 +602,6 @@ class PhotoshootJobService:
         async with cls._lock:
             job = cls._jobs.get(job_id)
             if job and job.status not in _TERMINAL_STATUSES:
-                job.failed_indices.add(index)
                 job.image_failures[index] = (error or "")[:500]
                 _store.mark_dirty(job)
 
@@ -568,14 +609,7 @@ class PhotoshootJobService:
     async def get_first_error(cls, job_id: str) -> Optional[str]:
         """Return the first (lowest-index) retained per-image failure detail."""
         async with cls._lock:
-            job = cls._jobs.get(job_id)
-            if not job or not job.image_failures:
-                return None
-            for index in sorted(job.image_failures):
-                detail = job.image_failures[index]
-                if detail:
-                    return detail
-            return None
+            return _first_image_error(cls._jobs.get(job_id))
 
     @classmethod
     async def set_usage(cls, job_id: str, usage: Dict[str, Any]) -> None:
@@ -725,11 +759,10 @@ class PhotoshootJobService:
                 "usage": job.usage,
                 "error": job.error_message,
                 # First per-image failure detail (provider status/message) so
-                # a polled client can tell the user WHY images failed.
-                "first_error": next(
-                    (job.image_failures[index] for index in sorted(job.image_failures) if job.image_failures[index]),
-                    None,
-                ),
+                # a polled client can tell the user WHY images failed. Same
+                # selection policy as get_first_error — called directly rather
+                # than through it because this reader already holds cls._lock.
+                "first_error": _first_image_error(job),
             }
 
     @classmethod

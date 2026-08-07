@@ -15,11 +15,12 @@
  *    still type-checks as `any`; what this block buys is a real
  *    `string | undefined` (not `any`) on the vars we do declare, and a
  *    documented home for new ones.
- * 2. Only the flags are declared on purpose. Narrowing the other vars (e.g.
- *    `VITE_PUBLIC_POSTHOG_KEY`) from `any` to `string | undefined` immediately
- *    breaks `main.tsx`'s `<PostHogProvider apiKey={...}>`, which requires a
- *    non-optional `string`. That looseness is real and pre-existing, but
- *    fixing it is not this change's job.
+ * 2. Only the flags are declared on purpose. The other vars stay `any` from the
+ *    `vite/client` index signature. (This used to be forced by
+ *    `<PostHogProvider apiKey={...}>` needing a non-optional `string`; that
+ *    provider is gone — `lib/analytics.ts` now reads
+ *    `VITE_PUBLIC_POSTHOG_KEY` and narrows it itself — so the remaining
+ *    looseness is just untouched pre-existing scope.)
  */
 interface ImportMetaEnv {
   readonly VITE_ENABLE_SOCIAL_IMPORT?: string

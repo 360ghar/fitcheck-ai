@@ -51,7 +51,7 @@ Enforced from `backend/app/core/config.py` (`PLAN_*`); see
 `SubscriptionService.get_plan_limits`.
 
 - Monthly outfit generations: Free 50, Plus 350, Pro 1,000.
-- Monthly item extractions: Free 25, Plus 100, Pro 200.
+- Monthly item extractions: Free 50, Plus 200, Pro 400.
 - Daily photoshoot images: Free 10, Plus 30, Pro 50 (enforced by
   `PhotoshootService._get_daily_limit` via `PLAN_*_DAILY_PHOTOSHOOT_IMAGES` in
   `backend/app/core/config.py`; `SubscriptionService.get_plan_limits` covers the

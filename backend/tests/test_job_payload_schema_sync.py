@@ -74,9 +74,10 @@ def test_photoshoot_persisted_payload_keys_have_columns_in_migrations():
         num_images=2,
         batch_size=2,
         session_id="sess-1",
-        failed_indices={0},
+        # failed_indices is derived from image_failures, not constructed.
         image_failures={0: "provider error"},
     )
+    assert job.failed_indices == {0}
     payload = _build_persisted_payload(job)
     columns = _photoshoot_jobs_columns()
 

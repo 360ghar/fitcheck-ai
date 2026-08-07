@@ -1,0 +1,265 @@
+name: Shorebird Patch (iOS)
+
+# ==============================================================================
+# Ship a Dart-only hotfix over the air to an existing iOS release, without an
+# App Store submission or review cycle.
+#
+# ------------------------------------------------------------------------------
+# WHEN THIS WORKS AND WHEN IT DOES NOT
+# ------------------------------------------------------------------------------
+# It patches releases created by .github/workflows/build-ios.yml, which builds
+# with `shorebird release ios`. It CANNOT patch anything built by plain
+# `flutter build ipa` (including flutter/scripts/build_ios_release.sh) - those
+# binaries have no Shorebird engine in them.
+#
+# PATCHABLE      Dart code, pure-Dart pub packages, generated .freezed/.g.dart.
+# NOT PATCHABLE  Native code, anything under ios/ or android/, adding or
+#                upgrading a plugin with native code, ANY asset file (images,
+#                fonts, .env), and Flutter version changes.
+#
+# Shorebird detects native and asset diffs and refuses. Never reach for
+# --allow-native-diffs / --allow-asset-diffs to force it through: the patch will
+# install and then crash on user devices, because the native half is missing
+# from the store binary. If a patch is refused, cut a store release instead.
+#
+# ------------------------------------------------------------------------------
+# WHY THIS DUPLICATES build-ios.yml's SETUP
+# ------------------------------------------------------------------------------
+# A patch is a diff against the release artifact. To produce a clean diff this
+# job must reproduce the release build byte-for-byte: the same `.env` asset
+# written from the same secrets, the same signing identity, the same
+# ExportOptions, the same Flutter version, and the same `--no-tree-shake-icons`.
+# Any divergence surfaces as a spurious asset/native diff and the patch is
+# rejected. Keep the two workflows in lock-step when editing either.
+#
+# ------------------------------------------------------------------------------
+# REQUIRED SECRETS - identical to build-ios.yml
+# ------------------------------------------------------------------------------
+#   SHOREBIRD_TOKEN, SUPABASE_URL, SUPABASE_ANON_KEY, API_BASE_URL,
+#   POSTHOG_API_KEY, POSTHOG_HOST, SENTRY_DSN,
+#   APPLE_CERT_P12_BASE64, APPLE_CERT_PASSWORD,
+#   APPLE_PROVISIONING_PROFILE_BASE64, KEYCHAIN_PASSWORD (optional)
+#
+# App Store Connect secrets are NOT needed: a patch goes to Shorebird, not to
+# Apple.
+#
+# ------------------------------------------------------------------------------
+# ROLLING BACK A BAD PATCH
+# ------------------------------------------------------------------------------
+#   shorebird patches list --release-version <v>
+#   shorebird patches promote --release-version <v> --patch-number <good-n>
+# Devices always jump to the newest active patch, so re-promoting an older good
+# patch is the rollback.
+# ==============================================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release to patch, e.g. 1.0.4+9. "latest" = most recently updated release.'
+        required: true
+        default: 'latest'
+        type: string
+      track:
+        description: 'Deployment track. Use staging/beta to reach testers first.'
+        required: true
+        default: 'stable'
+        type: choice
+        options:
+          - stable
+          - beta
+          - staging
+
+env:
+  # Must match build-ios.yml. A patch is always compiled with the Flutter
+  # version of its release, so this exists to keep the toolchain consistent
+  # rather than to select one.
+  FLUTTER_VERSION: '3.44.6'
+  BUNDLE_ID: com.fitcheckaiapp.fitcheckai
+  DEVELOPMENT_TEAM: HMWGCVU4SV
+  SIGNING_IDENTITY: 'Apple Distribution'
+  SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+
+jobs:
+  patch-ios:
+    name: Patch iOS release
+    # Xcode is required to build the IPA that the patch is diffed against, and
+    # it must be the same Xcode major version the release used.
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: flutter
+
+    steps:
+      # Run this workflow from the ref that contains the released commit PLUS
+      # the Dart fix. Patching from an unrelated branch produces a huge diff and
+      # will trip the native/asset checks.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Cheap guard: a patch cannot change the deployment target, so a mismatch
+      # here means the checked-out ref has drifted from what was released.
+      - name: Check iOS deployment target >= 15.0
+        run: python3 ../scripts/check_ios_deployment_target.py
+
+      # Must resolve to the same Xcode major version the release used - a
+      # different Xcode is a documented cause of spurious "native changes"
+      # warnings that block the patch.
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 'latest-stable'
+
+      - name: Set up Shorebird
+        uses: shorebirdtech/setup-shorebird@v1
+        with:
+          cache: true
+
+      # Fail fast rather than dying with an opaque auth error partway through a
+      # multi-minute Xcode build.
+      - name: Verify Shorebird authentication
+        run: |
+          set -euo pipefail
+          if [ -z "${SHOREBIRD_TOKEN:-}" ]; then
+            echo "::error::SHOREBIRD_TOKEN secret is not set. Create an API key at" \
+                 "console.shorebird.dev -> Account -> API Keys and add it as a repo secret." >&2
+            exit 1
+          fi
+          shorebird account whoami
+          shorebird releases list
+
+      # `.env` is a bundled Flutter asset, so it is part of the diff. This block
+      # must stay byte-identical to the one in build-ios.yml - a single changed
+      # character makes Shorebird reject the patch as an asset diff.
+      - name: Create .env file
+        run: |
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
+          echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> .env
+          echo "API_BASE_URL=${{ secrets.API_BASE_URL }}" >> .env
+          echo "POSTHOG_API_KEY=${{ secrets.POSTHOG_API_KEY }}" >> .env
+          echo "POSTHOG_HOST=${{ secrets.POSTHOG_HOST }}" >> .env
+          echo "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" >> .env
+
+      # Same keychain/profile import as build-ios.yml. Unlike that workflow this
+      # one hard-fails without signing secrets: an unsigned patch would be diffed
+      # against a differently-built binary and is never useful.
+      - name: Import code signing assets
+        id: signing
+        env:
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_CERT_P12_BASE64}" ] || [ -z "${APPLE_PROVISIONING_PROFILE_BASE64}" ]; then
+            echo "::error::Signing secrets are required to build an iOS patch." >&2
+            exit 1
+          fi
+
+          CERT_PATH="$RUNNER_TEMP/dist_cert.p12"
+          PROFILE_PATH="$RUNNER_TEMP/profile.mobileprovision"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KC_PW="${KEYCHAIN_PASSWORD:-$(openssl rand -base64 24)}"
+
+          echo -n "$APPLE_CERT_P12_BASE64" | base64 --decode > "$CERT_PATH"
+          echo -n "$APPLE_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+
+          security create-keychain -p "$KC_PW" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KC_PW" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$APPLE_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KC_PW" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES_DIR"
+          PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" \
+            | plutil -extract UUID raw -o - -)
+          cp "$PROFILE_PATH" "$PROFILES_DIR/$PROFILE_UUID.mobileprovision"
+
+          echo "profile_uuid=$PROFILE_UUID" >> "$GITHUB_OUTPUT"
+
+      # Mirrors build-ios.yml. manageAppVersionAndBuildNumber is deliberately
+      # absent - see the note in that workflow.
+      - name: Generate ExportOptions.plist
+        id: export_opts
+        run: |
+          set -euo pipefail
+          EXPORT_PLIST="$RUNNER_TEMP/ExportOptions.plist"
+          cat > "$EXPORT_PLIST" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>${DEVELOPMENT_TEAM}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>signingCertificate</key>
+            <string>${SIGNING_IDENTITY}</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${BUNDLE_ID}</key>
+              <string>${{ steps.signing.outputs.profile_uuid }}</string>
+            </dict>
+            <key>uploadSymbols</key>
+            <false/>
+            <key>uploadBitcode</key>
+            <false/>
+            <key>destination</key>
+            <string>export</string>
+          </dict>
+          </plist>
+          EOF
+          echo "export_plist=$EXPORT_PLIST" >> "$GITHUB_OUTPUT"
+
+      # No --flutter-version: a patch always compiles with the Flutter version
+      # of the release it targets, and passing one is rejected.
+      #
+      # No --allow-native-diffs / --allow-asset-diffs, by design. If this step
+      # fails complaining about diffs, the change is NOT patchable - cut a store
+      # release with build-ios.yml instead of forcing it.
+      - name: Shorebird patch
+        id: patch
+        run: |
+          set -euo pipefail
+          shorebird patch ios \
+            --release-version="${{ inputs.release_version }}" \
+            --track="${{ inputs.track }}" \
+            --export-options-plist="${{ steps.export_opts.outputs.export_plist }}" \
+            --dart-define=API_BASE_URL="${{ secrets.API_BASE_URL }}" \
+            --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
+            --dart-define=POSTHOG_API_KEY="${{ secrets.POSTHOG_API_KEY }}" \
+            --dart-define=POSTHOG_HOST="${{ secrets.POSTHOG_HOST }}" \
+            --dart-define=SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
+            -- --no-tree-shake-icons
+
+      - name: Patch summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo "## iOS Patch Summary"
+            echo ""
+            echo "| Property | Value |"
+            echo "|----------|-------|"
+            echo "| Release version | ${{ inputs.release_version }} |"
+            echo "| Track | ${{ inputs.track }} |"
+            echo "| Result | ${{ steps.patch.outcome }} |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Ref | ${{ github.ref_name }} |"
+            echo "| Triggered By | ${{ github.actor }} |"
+            echo ""
+            if [ "${{ steps.patch.outcome }}" = 'success' ]; then
+              echo "Devices apply this on the **next launch after** the background download"
+              echo "completes, so expect roughly two launches before it is visible."
+              echo "Confirm in-app under Settings -> About -> App version."
+            else
+              echo "If the failure mentions asset or native diffs, the change is not"
+              echo "patchable - ship it as a store release via **Build iOS IPA** instead."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

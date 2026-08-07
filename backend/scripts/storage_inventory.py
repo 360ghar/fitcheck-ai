@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Railway Bucket orphan inventory + storage usage report.
+Object-storage orphan inventory + storage usage report (R2 / Railway / any S3).
 
-Lists every object in the Railway S3-compatible bucket (via
+Lists every object in the configured S3-compatible bucket (via
 ``S3StorageBackend.list_keys``), collects the authoritative set of DB
 ``storage_path`` keys from Supabase (Postgres), and reports:
 
@@ -17,6 +17,30 @@ writes an audit log. Dry-run is the default and never writes anything.
     cd backend && source .venv/bin/activate
     python scripts/storage_inventory.py                 # dry-run report
     python scripts/storage_inventory.py --delete        # actually delete orphans
+
+=============================================================================
+WHICH BUCKET DOES THIS TOUCH?
+=============================================================================
+
+By default: the CONFIGURED bucket (``OBJECT_STORAGE_*``). The target is printed
+on every run — read it before passing ``--delete``.
+
+That default is a trap for post-cutover cleanup. After the R2 migration the env
+points at R2, so a bare ``--delete`` inspects R2, NOT the Railway bucket you
+meant to clean out. Target the old bucket explicitly:
+
+    python scripts/storage_inventory.py \\
+        --endpoint https://<old>.storageapi.dev --bucket <old-bucket> \\
+        --access-key-id <old-key> --secret-access-key <old-secret>
+
+All four are required together; the script refuses a partial override rather
+than silently mixing one provider's bucket name with another's endpoint.
+
+Note also what ``--delete`` does and does not do: it removes DB-orphaned objects,
+it does NOT empty a bucket. Objects still referenced by a live DB row survive on
+purpose — which is exactly right while the DB is shared, but it means "empty the
+old bucket" is a separate operation (do it from the provider's dashboard once
+the new bucket is verified live).
 
 =============================================================================
 SAFETY GUARANTEES
@@ -53,10 +77,13 @@ NOTES
 
 * CATEGORY. The bucket may still hold OLD-style keys
   (``{user_id}/{timestamp}/{prefix}_{uuid}{ext}``) next to the NEW layout
-  (``{user_id}/{category}/{uuid}.{ext}``). ``classify_category`` recognises the
-  known category keywords and otherwise infers the category from the filename
-  prefix (``item_``, ``outfit_``, ``avatar_``, ``source_``, ``generated_``,
-  ``feedback_``). Anything else is binned as ``legacy-other``.
+  (``{user_id}/{category}/{uuid}.{ext}``) and the top-level preview folders
+  (``tmp/{user}/{source}/...``, ``generated/{user}/{type}/...``).
+  ``classify_category`` recognises the known category keywords (checking the
+  FIRST segment for the top-level preview folders, then the second segment)
+  and otherwise infers the category from the filename prefix (``item_``,
+  ``outfit_``, ``avatar_``, ``source_``, ``generated_``, ``feedback_``).
+  Anything else is binned as ``legacy-other``.
 
 * ``support_tickets.attachment_storage_paths`` is a TEXT[] column that the
   serving-schema agent is adding. The script probes for it defensively: if the
@@ -106,8 +133,10 @@ from typing import Dict, Iterable, List, Optional, Tuple
 # Make the backend package importable when run from the backend dir.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app.core.config import settings  # noqa: E402
 from app.db.connection import SupabaseDB  # noqa: E402
 from app.services.object_storage import (  # noqa: E402
+    S3StorageBackend,
     close_storage_backend,
     get_storage_backend,
 )
@@ -153,6 +182,21 @@ def _fmt_bytes(value: int) -> str:
 # caught mid upload->DB-insert (transient orphan window).
 DEFAULT_MIN_AGE_HOURS = 2.0
 
+# Per-category overrides of the grace window, for orphan classes that are NOT
+# transient. `{user_id}/generated/{image_type}/...` holds try-on and outfit
+# renders the user explicitly asked to keep (`save_to_storage=true` ->
+# image_generation_agent.save_generated_image). No DB row references them, so the
+# orphan math flags every one — but deleting them after 2h destroys content the
+# user asked to save. 30 days is a retention decision, not a transient-window
+# decision; override with GENERATED_MIN_AGE_HOURS.
+#
+# The real fix is to make these DB-referenced (then they stop being orphans at
+# all) — tracked as debt. Until then this stops the cleanup script from being the
+# thing that deletes them.
+CATEGORY_MIN_AGE_HOURS = {
+    "generated": float(_env("GENERATED_MIN_AGE_HOURS", "720")),  # 30 days
+}
+
 
 # --------------------------------------------------------------------------- #
 # category classification
@@ -182,11 +226,17 @@ _FILENAME_PREFIX_TO_CATEGORY = (
 def classify_category(key: str) -> str:
     """Best-effort category for a bucket key.
 
-    New layout: ``{user_id}/{category}/{uuid}.{ext}`` -> second segment.
-    Old layout: ``{user_id}/{timestamp}/{prefix}_{uuid}{ext}`` -> infer from
+    Top-level preview folders (``tmp/{user}/{source}/...`` and
+    ``generated/{user}/{type}/...``) -> FIRST segment.
+    Canonical layout (``{user_id}/{category}/{uuid}.{ext}``) and the legacy
+    per-user preview layout (``{user_id}/tmp|generated/{sub}/...``) -> second
+    segment.
+    Oldest layout: ``{user_id}/{timestamp}/{prefix}_{uuid}{ext}`` -> infer from
     the filename prefix. Anything else is ``legacy-other``.
     """
     parts = key.split("/")
+    if parts and parts[0] in CATEGORY_KEYWORDS:
+        return parts[0]
     if len(parts) >= 2:
         second = parts[1]
         if second in CATEGORY_KEYWORDS:
@@ -196,6 +246,41 @@ def classify_category(key: str) -> str:
         if filename.startswith(prefix):
             return category
     return "legacy-other"
+
+
+def parent_stem_of_thumb(key: str) -> Optional[str]:
+    """The extension-less parent key a ``_thumb`` sibling derives from, or None.
+
+    Thumbnails live at ``{stem}_thumb.webp`` (e.g. ``u/items/abc_thumb.webp`` is
+    the variant of ``u/items/abc.<anything>``). The STEM, not the full key,
+    because thumbnails are always WebP regardless of the original's format
+    (``StorageService.THUMB_EXTENSION``) — so ``abc_thumb.webp`` could belong to
+    ``abc.jpg``, ``abc.png`` or ``abc.webp`` and the parent's extension is simply
+    not recoverable from the thumb key. Callers therefore match against the set
+    of DB key STEMS (see ``key_stem``).
+
+    ``None`` for anything that is not a thumbnail key, so callers can filter
+    safely.
+    """
+    head, sep, name = key.rpartition("/")
+    if not sep or "_thumb." not in name:
+        return None
+    stem = name.split("_thumb.", 1)[0]
+    if not stem:
+        return None
+    return f"{head}/{stem}"
+
+
+def key_stem(key: str) -> str:
+    """A key with its extension removed (``u/items/abc.jpg`` -> ``u/items/abc``).
+
+    Pairs with ``parent_stem_of_thumb`` so a thumbnail can be matched to its
+    parent without knowing the parent's format.
+    """
+    head, sep, name = key.rpartition("/")
+    stem, dot, _ext = name.rpartition(".")
+    base = stem if dot else name
+    return f"{head}/{base}" if sep else base
 
 
 # --------------------------------------------------------------------------- #
@@ -379,20 +464,23 @@ def split_by_age(
 ) -> Tuple[List[str], List[str]]:
     """Split ``keys`` into ``(deletable, protected)`` by age.
 
-    A key is ``deletable`` only when its mtime is at least ``min_age_hours``
-    older than ``now``. A key with no known mtime is ``protected`` (never
-    deleted this run) — the conservative choice for a one-time cleanup. Pure
-    function (testable without the bucket).
+    A key is ``deletable`` only when its mtime is at least its category's grace
+    window older than ``now``. The window is ``min_age_hours`` for most
+    categories and ``CATEGORY_MIN_AGE_HOURS[category]`` where a longer retention
+    applies (``generated/`` = user-saved renders). A key with no known mtime is
+    ``protected`` (never deleted this run) — the conservative choice for a
+    one-time cleanup. Pure function (testable without the bucket).
     """
     deletable: List[str] = []
     protected: List[str] = []
-    cutoff = _to_aware_utc(now) - timedelta(hours=min_age_hours)
+    now_utc = _to_aware_utc(now)
     for key in keys:
         mtime = mtimes.get(key)
         if mtime is None:
             protected.append(key)
             continue
-        if _to_aware_utc(mtime) <= cutoff:
+        window = CATEGORY_MIN_AGE_HOURS.get(classify_category(key), min_age_hours)
+        if _to_aware_utc(mtime) <= now_utc - timedelta(hours=window):
             deletable.append(key)
         else:
             protected.append(key)
@@ -431,8 +519,12 @@ async def _run(
     audit_path: Path,
     orphan_list: Optional[Path],
     min_age_hours: float,
+    backend: Optional[S3StorageBackend] = None,
 ) -> int:
-    backend = get_storage_backend()
+    # `backend` is supplied only when --endpoint/--bucket target a bucket other
+    # than the configured one (see main()); otherwise use the process singleton.
+    owns_backend = backend is not None
+    backend = backend or get_storage_backend()
     try:
         db = SupabaseDB.get_service_client()
 
@@ -447,6 +539,18 @@ async def _run(
         print(f"  {len(db_keys)} distinct DB storage_path key(s)")
 
         orphans = sorted(bucket_set - set(db_keys))
+        # A `_thumb` sibling is DERIVED from a DB-referenced key (read paths
+        # materialize its URL from the parent's storage_path); it is never an
+        # orphan and must never be deleted as one. Matched on the extension-less
+        # stem because thumbs are always .webp while the parent may be any format
+        # (see parent_stem_of_thumb). A set, not the db_keys list: this runs once
+        # per bucket object.
+        db_stems = {key_stem(key) for key in db_keys}
+        orphans = [
+            key
+            for key in orphans
+            if (parent := parent_stem_of_thumb(key)) is None or parent not in db_stems
+        ]
         missing = sorted(set(db_keys) - bucket_set)
 
         # Age-based protection: a temp/generated image (or an item/outfit
@@ -471,7 +575,7 @@ async def _run(
         # ------------------------------------------------------------------ #
         print()
         print("=" * 72)
-        print("RAILWAY BUCKET STORAGE INVENTORY")
+        print(f"STORAGE INVENTORY - {backend.endpoint_url}/{backend.bucket}")
         print("=" * 72)
         print(f"  bucket objects        : {len(bucket_set)}")
         print(f"  DB storage_path keys  : {len(db_keys)}")
@@ -581,12 +685,15 @@ async def _run(
 
         return 0
     finally:
-        await close_storage_backend()
+        if owns_backend:
+            await backend.close()
+        else:
+            await close_storage_backend()
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Railway Bucket orphan inventory + usage report"
+        description="S3 bucket orphan inventory + usage report (R2 / Railway)"
     )
     parser.add_argument(
         "--delete",
@@ -611,10 +718,78 @@ def main() -> int:
         "in-flight temp/generated previews whose presigned URL is still live "
         "(default 2 = just past the 1h presign TTL).",
     )
+    # --------------------------------------------------------------------- #
+    # Bucket targeting overrides (post-cutover cleanup of the OLD bucket)
+    # --------------------------------------------------------------------- #
+    # Without these, this script always inspects the CONFIGURED bucket. That
+    # made the documented post-R2-cutover step ("empty the old Railway bucket
+    # with storage_inventory.py --delete") point at R2 instead, because the env
+    # has already been repointed by then.
+    parser.add_argument(
+        "--endpoint",
+        default=_env("SOURCE_ENDPOINT", ""),
+        help="Inspect this S3 endpoint instead of the configured one. Use with "
+        "--bucket to target the OLD bucket after a provider cutover.",
+    )
+    parser.add_argument(
+        "--bucket",
+        default=_env("SOURCE_BUCKET", ""),
+        help="Inspect this bucket instead of the configured one.",
+    )
+    parser.add_argument(
+        "--access-key-id",
+        default=_env("SOURCE_ACCESS_KEY_ID", ""),
+        help="Credentials for --endpoint (defaults to the configured key).",
+    )
+    parser.add_argument(
+        "--secret-access-key",
+        default=_env("SOURCE_SECRET_ACCESS_KEY", ""),
+        help="Credentials for --endpoint (defaults to the configured secret).",
+    )
+    parser.add_argument(
+        "--region",
+        default=_env("SOURCE_REGION", ""),
+        help='Region for --endpoint (default "auto", correct for R2/Railway).',
+    )
     args = parser.parse_args()
 
+    # An override is only meaningful as a complete set: pointing at another
+    # endpoint while silently reusing the configured bucket name (or the wrong
+    # credentials) is how you end up deleting from the live bucket.
+    override: Optional[S3StorageBackend] = None
+    if args.endpoint or args.bucket:
+        if not (args.endpoint and args.bucket):
+            print(
+                "ERROR: --endpoint and --bucket must be given together. "
+                "Targeting one bucket's name at another endpoint is how the "
+                "wrong bucket gets emptied.",
+                file=sys.stderr,
+            )
+            return 1
+        if not (args.access_key_id and args.secret_access_key):
+            print(
+                "ERROR: --access-key-id and --secret-access-key are required "
+                "with --endpoint/--bucket. The configured credentials belong to "
+                "a different provider and must not be reused implicitly.",
+                file=sys.stderr,
+            )
+            return 1
+        override = S3StorageBackend(
+            endpoint_url=args.endpoint,
+            region_name=args.region or "auto",
+            aws_access_key_id=args.access_key_id,
+            aws_secret_access_key=args.secret_access_key,
+            bucket=args.bucket,
+        )
+
     mode = "LIVE (delete)" if args.delete else "DRY-RUN"
-    print(f"[{mode}] railway bucket storage inventory")
+    target = (
+        f"{args.endpoint}/{args.bucket} (OVERRIDE)"
+        if override is not None
+        else f"{settings.OBJECT_STORAGE_ENDPOINT}/{settings.OBJECT_STORAGE_BUCKET} (configured)"
+    )
+    print(f"[{mode}] object storage inventory")
+    print(f"  target       = {target}")
     print(f"  audit_file   = {args.audit_file}")
     print(f"  orphan_list  = {args.orphan_list or '(not writing)'}")
     print(f"  measure_bytes= {_env_bool('MEASURE_BYTES', False)}")
@@ -627,6 +802,7 @@ def main() -> int:
             audit_path=Path(args.audit_file),
             orphan_list=Path(args.orphan_list) if args.orphan_list else None,
             min_age_hours=args.min_age_hours,
+            backend=override,
         )
     )
 

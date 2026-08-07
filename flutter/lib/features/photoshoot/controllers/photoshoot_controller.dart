@@ -43,6 +43,14 @@ class PhotoshootController extends GetxController {
   // never start overlapping poll loops.
   bool _pollStarted = false;
 
+  // Guards the terminal `job_complete` transition. The terminal SSE event
+  // closes the stream, so `onDone` fires while `_handleJobComplete` is still
+  // awaiting its reconcile - the fallback poll then resolves 'complete' and
+  // would run the whole completion flow a SECOND time (duplicate success
+  // snackbar, duplicate 'photoshoot_session_completed' analytics, redundant
+  // status fetch). Set synchronously before any await in _handleJobComplete.
+  bool _completionHandled = false;
+
   // Current step in the flow
   final Rx<PhotoshootStep> currentStep = PhotoshootStep.upload.obs;
 
@@ -293,6 +301,8 @@ class PhotoshootController extends GetxController {
     _sseSubscription?.cancel();
     // A fresh run may poll again; clear the previous run's fallback guard.
     _pollStarted = false;
+    // A fresh run may complete again; clear the previous run's completion guard.
+    _completionHandled = false;
 
     isGenerating.value = true;
     error.value = '';
@@ -425,7 +435,12 @@ class PhotoshootController extends GetxController {
   /// Start the bounded poll fallback once per run. SSE errors surface through
   /// several channels (stream onError, a synthetic `error` event, silent
   /// onDone), so the `_pollStarted` guard keeps exactly one poll loop alive.
+  /// Also inert once completion has been handled: the terminal `job_complete`
+  /// event closes the stream and onDone fires while the completion flow is
+  /// still awaiting its reconcile, so a fallback poll must never start (or
+  /// re-enter completion) after the job has finished.
   void _startPollFallback(String id) {
+    if (_completionHandled) return;
     if (_pollStarted) return;
     _pollStarted = true;
     _pollJobStatus(id);
@@ -586,6 +601,14 @@ class PhotoshootController extends GetxController {
 
   /// Handle job completion
   Future<void> _handleJobComplete(Map<String, dynamic>? data) async {
+    // Idempotency gate - must run synchronously BEFORE any await. The
+    // terminal job_complete SSE event closes the stream and its onDone starts
+    // the poll fallback, whose 'complete' status re-enters this method; a
+    // second run would duplicate the success snackbar, the
+    // 'photoshoot_session_completed' analytics event, and the reconcile fetch.
+    if (_completionHandled) return;
+    _completionHandled = true;
+
     generationProgress.value = 100;
     generationStatus.value = 'Complete!';
     etaSeconds.value = 0;
@@ -918,6 +941,7 @@ class PhotoshootController extends GetxController {
   void reset({bool keepPhotos = false}) {
     _sseSubscription?.cancel();
     _pollStarted = false;
+    _completionHandled = false;
     if (!keepPhotos) {
       selectedPhotos.clear();
     }

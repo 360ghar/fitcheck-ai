@@ -17,14 +17,14 @@ export default function Hero() {
               FitCheck AI turns photos of your clothes into a digital wardrobe, then helps you pick weather-aware outfits, try looks on, and generate photoshoot-style images from what you already own. Start free on the web.
             </p>
 
-            <p className="mt-3 text-sm text-stone-500 dark:text-stone-500 max-w-md">
+            <p className="mt-3 text-sm text-stone-500 dark:text-stone-400 max-w-md">
               Web + Android live · iOS waitlist
             </p>
 
             {/* Real plan numbers — the GEO "statistics" lever (no fabricated claims) */}
             <div className="mt-8 grid grid-cols-3 gap-3 max-w-md">
               {[
-                { value: '25', label: 'AI extractions / month free' },
+                { value: '50', label: 'AI extractions / month free' },
                 { value: '10', label: 'Photoshoot images / day free' },
                 { value: '1,000', label: 'Visualizations / month on Pro' },
               ].map((stat) => (
@@ -73,19 +73,37 @@ export default function Hero() {
 
           <div className="lg:col-span-7 relative pb-6 sm:pb-8">
             <div className="relative aspect-[4/3] overflow-hidden rounded-lg border border-stone-200/80 bg-stone-200 dark:border-stone-800 dark:bg-stone-900">
+              {/* LCP element, fetchpriority="high". PageSpeed flags "LCP request
+                  discovery" here: on the scored Moto G Power the image's
+                  visible area (~3x the h1's) makes it the Largest Contentful
+                  Paint, and it loaded at 3.6s behind the deferred vendor JS.
+                  fetchpriority="high" moves it ahead of those scripts. On
+                  mobile the srcset serves the 20KB 640w tier; on desktop it is
+                  the 58vw 1152w tier. The prerender puts this tag in the
+                  initial HTML, so the preload scanner finds it at parse time.
+                  It also gets an explicit <link rel="preload"> in index.html.
+                  Not lazy: at >=lg it is the LCP, and lazy-loading an LCP
+                  image delays it. */}
               <img
                 src="/landing/wardrobe.webp"
+                srcSet="/landing/wardrobe-640.webp 640w, /landing/wardrobe.webp 1152w"
+                sizes="(min-width: 1024px) 58vw, 100vw"
                 alt="A neatly arranged wardrobe of everyday clothes"
                 className="absolute inset-0 w-full h-full object-cover"
                 width={1152}
                 height={864}
-                {...({ fetchpriority: 'high' } as Record<string, string>)}
+                decoding="async"
+                // Spread (not `fetchPriority="high"`) on purpose: React 18.3's
+                // SSR does not know the prop and renders it camelCase, which
+                // browsers ignore. The spread passes the lowercase attribute
+                // through verbatim so the hint actually applies.
+                {...{ fetchpriority: 'high' }}
               />
               <div className="absolute inset-0 bg-stone-950/35" />
 
               <div className="absolute bottom-4 left-4 right-4 sm:bottom-6 sm:left-6 sm:right-auto sm:w-[min(100%,320px)]">
                 <div className="rounded-xl border border-white/15 bg-stone-950/90 p-4 text-white">
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-stone-400 mb-2">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-stone-300 mb-2">
                     Today&apos;s outfit
                   </p>
                   <p className="font-medium text-[15px] leading-snug">
@@ -99,7 +117,7 @@ export default function Hero() {
                     <span className="inline-flex h-7 items-center rounded-full bg-primary px-3 text-xs font-medium text-primary-foreground">
                       Recommended
                     </span>
-                    <span className="text-xs text-stone-400">Weather-aware pick</span>
+                    <span className="text-xs text-stone-300">Weather-aware pick</span>
                   </div>
                 </div>
               </div>
@@ -109,6 +127,8 @@ export default function Hero() {
             <div className="hidden sm:block absolute bottom-0 right-0 lg:right-4 w-36 h-44 rounded-xl overflow-hidden border-4 border-stone-50 dark:border-stone-950 rotate-2 translate-y-2">
               <img
                 src="/landing/outfit.webp"
+                srcSet="/landing/outfit-640.webp 640w, /landing/outfit.webp 864w"
+                sizes="144px"
                 alt="Styled everyday outfit"
                 className="w-full h-full object-cover"
                 width={864}

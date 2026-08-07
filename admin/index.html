@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>FitCheck Admin</title>
+
+    <!-- Brand type. Self-hosted variable font (same strategy as the main
+         frontend: preload + @font-face with font-display: swap) so the CSP
+         never needs third-party font origins. -->
+    <link rel="preload" href="/fonts/plus-jakarta-sans-latin-var.woff2" as="font" type="font/woff2" crossorigin />
+
+    <!-- Theme initialization — prevents flash of wrong theme. Applied before
+         paint; next-themes (class strategy) manages it afterwards. The CSP
+         pins this inline script with a sha256 hash (see netlify.toml); if you
+         edit it, recompute the hash with scripts/csp-hash.mjs. -->
+    <script>
+      (function () {
+        var STORAGE_KEY = 'fitcheck-admin-theme';
+        var stored = null;
+        try {
+          stored = localStorage.getItem(STORAGE_KEY);
+        } catch (e) {
+          stored = null;
+        }
+        var theme = stored;
+        if (theme !== 'light' && theme !== 'dark' && theme !== 'system') {
+          theme = 'system';
+        }
+        var resolved =
+          theme === 'system'
+            ? window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
+            : theme;
+        document.documentElement.classList.add(resolved);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <p style="font-family: system-ui, sans-serif; padding: 2rem; text-align: center">
+        FitCheck Admin requires JavaScript to run.
+      </p>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

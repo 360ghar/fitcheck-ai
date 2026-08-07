@@ -15,18 +15,20 @@ Deliberately does NOT re-cover what tests/test_phase2e_hardening.py already
 owns: the capped avatar upload / oversized-file rejection.
 """
 import inspect
+import json
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from app.api.v1 import users as users_module
+from app.api.v1.deps import get_active_user_id
 from app.core.exceptions import (
     BodyProfileNotFoundError,
     UnsupportedMediaTypeError,
     UserNotFoundError,
 )
-from app.core.security import get_current_user_id
 from app.models.user import (
     BodyProfileCreate,
     BodyProfileUpdate,
@@ -208,6 +210,7 @@ _HANDLERS = [
     "get_current_user",
     "update_current_user",
     "delete_current_user",
+    "export_user_data",
     "upload_avatar",
     "get_user_preferences",
     "update_user_preferences",
@@ -229,10 +232,11 @@ def test_every_user_route_requires_authentication(handler_name):
 
     An unauthenticated request never reaches these bodies: verify_token raises
     before the handler runs, so a route that lost this Depends would silently
-    become public.
+    become public. Every user route depends on get_active_user_id (the token
+    gate + suspension check), never the bare token dependency.
     """
     param = inspect.signature(getattr(users_module, handler_name)).parameters["user_id"]
-    assert param.default.dependency is get_current_user_id
+    assert param.default.dependency is get_active_user_id
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +254,41 @@ async def test_get_current_user_returns_the_profile():
     assert result["data"]["id"] == USER_ID
     assert result["data"]["email"] == "wardrobe@example.com"
     assert result["data"]["full_name"] == "Ada Lovelace"
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_materializes_an_owned_avatar_key():
+    """An avatar stored as an owned bucket key must come back as a fresh
+    served URL (presigned or worker-mode), never as the raw key."""
+    row = _user_row()
+    row["avatar_url"] = f"{USER_ID}/avatars/deadbeefdeadbeefdeadbeefdeadbeef.png"
+    db = _FakeDB({"users": [row]})
+
+    async def _fake_materialize(avatar_url, *, presigned=False):
+        return f"https://served.example/{avatar_url}"
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(users_module, "materialize_avatar_url", _fake_materialize)
+    try:
+        result = await users_module.get_current_user(user_id=USER_ID, db=db)
+    finally:
+        monkeypatch.undo()
+    assert result["data"]["avatar_url"] == (
+        f"https://served.example/{USER_ID}/avatars/deadbeefdeadbeefdeadbeefdeadbeef.png"
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_passes_external_oauth_avatar_through():
+    """An external https avatar (OAuth provider picture) must pass through
+    untouched — key_from_path would otherwise mangle it into a bogus bucket
+    key and the read path would serve a 404 for it."""
+    external = "https://lh3.googleusercontent.com/a/ACw8oPics97qXtDAbcD=w96-h96"
+    row = _user_row()
+    row["avatar_url"] = external
+    db = _FakeDB({"users": [row]})
+    result = await users_module.get_current_user(user_id=USER_ID, db=db)
+    assert result["data"]["avatar_url"] == external
 
 
 @pytest.mark.asyncio
@@ -282,6 +321,30 @@ async def test_update_current_user_with_an_empty_patch_reads_instead_of_writing(
 
     assert result["data"]["full_name"] == "Ada Lovelace"
     assert db.ops("users") == ["select"], "an empty patch must not issue an UPDATE"
+
+
+@pytest.mark.asyncio
+async def test_update_current_user_cannot_set_admin_only_fields():
+    """PUT /users/me must never write is_active/role/is_admin/custom_daily_quota.
+
+    Those are admin-panel fields: writing is_active would let a user
+    (un)suspend themselves, and the others would let them escalate. is_active
+    is accepted by the schema but stripped before the write — the profile
+    stays active and only the editable fields change.
+    """
+    db = _FakeDB({"users": [_user_row()]})
+
+    result = await users_module.update_current_user(
+        UserUpdate(is_active=False, full_name="Ada"), user_id=USER_ID, db=db
+    )
+
+    update_payload = db.calls[0][2]
+    for admin_only in ("is_active", "role", "is_admin", "custom_daily_quota"):
+        assert admin_only not in update_payload, (
+            f"PUT /users/me must not write {admin_only}"
+        )
+    assert result["data"]["is_active"] is True, "suspension flag must be untouched"
+    assert result["data"]["full_name"] == "Ada"
 
 
 # ---------------------------------------------------------------------------
@@ -820,3 +883,198 @@ async def test_available_items_materializes_presigned_image_urls(monkeypatch):
     assert items["i1"]["image_url"] == "https://presigned.example/u1/items/i1.jpg"
     # Legacy row without storage_path keeps its stored thumbnail.
     assert items["i2"]["image_url"] == "https://cdn/2-t.jpg"
+
+
+# ---------------------------------------------------------------------------
+# Data export
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_export_user_data_returns_a_presigned_url_with_data_sections(monkeypatch):
+    """POST /users/export must return the standard envelope with a fresh
+    presigned URL and an archive that contains every data section."""
+    db = _FakeDB(
+        {
+            "users": [_user_row()],
+            "user_preferences": [
+                {
+                    "user_id": USER_ID,
+                    "favorite_colors": ["olive"],
+                    "preferred_styles": ["minimal"],
+                    "liked_brands": [],
+                    "disliked_patterns": [],
+                    "preferred_occasions": [],
+                    "color_temperature": "cool",
+                    "style_personality": None,
+                    "data_points_collected": 3,
+                    "last_updated": NOW,
+                }
+            ],
+            "user_settings": [_settings_row()],
+            "body_profiles": [_body_profile_row()],
+            "items": [
+                {"id": "i1", "name": "Linen shirt", "category": "tops", "colors": ["white"], "is_deleted": False, "created_at": NOW}
+            ],
+            "outfits": [{"id": "o1", "name": "Weekend", "created_at": NOW}],
+            "calendar_events": [
+                {"id": "c1", "user_id": USER_ID, "title": "Date night", "event_date": "2026-02-14", "created_at": NOW}
+            ],
+            "subscriptions": [
+                {
+                    "id": "s1",
+                    "user_id": USER_ID,
+                    "plan_type": "free",
+                    "status": "active",
+                    "current_period_start": NOW,
+                    "current_period_end": None,
+                    "cancel_at_period_end": False,
+                    "stripe_customer_id": "cus_123",
+                }
+            ],
+        }
+    )
+    seen = {}
+
+    async def fake_upload_file(*, db, file_data, file_path, content_type="application/octet-stream", bucket=None, upsert=True, cache_control=None):
+        seen.update(
+            file_path=file_path,
+            content_type=content_type,
+            cache_control=cache_control,
+            file_data=file_data,
+        )
+        return {
+            "public_url": f"https://presigned.example/{file_path}",
+            "storage_path": file_path,
+            "bucket": "b",
+        }
+
+    monkeypatch.setattr(StorageService, "upload_file", staticmethod(fake_upload_file))
+
+    result = await users_module.export_user_data(user_id=USER_ID, db=db)
+
+    assert result["message"] == "OK"
+    assert result["data"]["export_url"] == f"https://presigned.example/{USER_ID}/export/data.json"
+    assert seen["content_type"] == "application/json"
+    assert seen["cache_control"] == "60"
+
+    payload = json.loads(seen["file_data"])
+    assert payload["generated_at"]
+    assert payload["user"]["id"] == USER_ID
+    assert payload["preferences"]["favorite_colors"] == ["olive"]
+    assert payload["settings"]["language"] == "en"
+    assert payload["body_profiles"][0]["id"] == PROFILE_ID
+    assert payload["items"][0]["name"] == "Linen shirt"
+    assert payload["outfits"][0]["name"] == "Weekend"
+    assert payload["calendar_events"][0]["title"] == "Date night"
+    # Billing summary carries the billing columns, not provider identifiers.
+    assert payload["subscriptions"][0]["plan_type"] == "free"
+    assert "stripe_customer_id" not in payload["subscriptions"][0]
+    assert "image files are not included" in payload["note"]
+
+
+@pytest.mark.asyncio
+async def test_export_user_data_overwrites_the_same_key_and_returns_a_fresh_url_per_call(monkeypatch):
+    """A second call must succeed and write the same deterministic key (so
+    account deletion knows exactly one export object per user), while the
+    presigned URL is regenerated per call."""
+    seen = {"paths": [], "urls": []}
+
+    async def fake_upload_file(*, db, file_data, file_path, content_type="application/octet-stream", bucket=None, upsert=True, cache_control=None):
+        seen["paths"].append(file_path)
+        url = f"https://presigned.example/{file_path}?fresh={len(seen['paths'])}"
+        seen["urls"].append(url)
+        return {"public_url": url, "storage_path": file_path, "bucket": "b"}
+
+    monkeypatch.setattr(StorageService, "upload_file", staticmethod(fake_upload_file))
+    db = _FakeDB({"users": [_user_row()]})
+
+    first = await users_module.export_user_data(user_id=USER_ID, db=db)
+    second = await users_module.export_user_data(user_id=USER_ID, db=db)
+
+    assert seen["paths"] == [
+        f"{USER_ID}/export/data.json",
+        f"{USER_ID}/export/data.json",
+    ]
+    assert first["data"]["export_url"] != second["data"]["export_url"]
+
+
+@pytest.mark.asyncio
+async def test_export_user_data_raises_when_the_user_row_is_missing():
+    db = _FakeDB({"users": []})
+
+    with pytest.raises(UserNotFoundError):
+        await users_module.export_user_data(user_id=USER_ID, db=db)
+
+
+# ---------------------------------------------------------------------------
+# Account deletion: support tickets + export archive cleanup
+# ---------------------------------------------------------------------------
+
+
+class _FakeAdmin:
+    def __init__(self):
+        self.deleted = []
+
+    def delete_user(self, user_id):
+        self.deleted.append(user_id)
+
+
+@pytest.mark.asyncio
+async def test_delete_current_user_anonymizes_tickets_and_purges_export_archive(monkeypatch):
+    """The requester's personal data goes; the ticket RECORD stays.
+
+    support_tickets holds in-app content reports about OTHER users and open
+    support/billing threads, and its user_id is ON DELETE SET NULL precisely so
+    a row can outlive its author. Hard-deleting the requester's rows destroyed
+    the only record of a third party's violation (reported user never actioned,
+    content stays up). Erasure clears user_id + contact_email instead, so
+    nothing links back to the deleted account while moderation keeps the body.
+    """
+    db = _FakeDB(
+        {
+            "users": [_user_row()],
+            "support_tickets": [
+                {
+                    "id": "t1",
+                    "user_id": USER_ID,
+                    "contact_email": "reporter@example.com",
+                    "subject": "Content report: shared outfit abc",
+                },
+            ],
+        }
+    )
+    db.auth = SimpleNamespace(admin=_FakeAdmin())
+
+    fake_vectors = Mock()
+    fake_vectors.delete_user_items = AsyncMock(return_value=0)
+    monkeypatch.setattr(users_module, "get_vector_service", lambda: fake_vectors)
+
+    deleted_paths = []
+
+    async def fake_delete_multiple_images(*, db, storage_paths, bucket=None):
+        deleted_paths.extend(storage_paths)
+        return len(storage_paths)
+
+    monkeypatch.setattr(
+        StorageService,
+        "delete_multiple_images",
+        staticmethod(fake_delete_multiple_images),
+    )
+
+    await users_module.delete_current_user(user_id=USER_ID, db=db)
+
+    # The report survives, stripped of everything identifying its author.
+    ticket = db.tables["support_tickets"][0]
+    assert ticket["user_id"] is None
+    assert ticket["contact_email"] is None
+    assert ticket["subject"] == "Content report: shared outfit abc"
+
+    assert db.tables["users"] == []
+    anonymize = ("update", "support_tickets", {"user_id": None, "contact_email": None})
+    assert anonymize in db.calls, "tickets must be anonymized, not deleted"
+    assert ("delete", "support_tickets", None) not in db.calls
+    assert db.calls.index(anonymize) < db.calls.index(
+        ("delete", "users", None)
+    ), "tickets must be anonymized before the users row"
+    assert f"{USER_ID}/export/data.json" in deleted_paths

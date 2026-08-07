@@ -71,14 +71,14 @@ export function TryOnDemo() {
 
   const personDropzone = useDropzone({
     onDrop: onDropPerson,
-    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp'] },
+    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.heic', '.heif', '.bmp', '.tif', '.tiff'] },
     multiple: false,
     maxSize: 10 * 1024 * 1024,
   })
 
   const outfitDropzone = useDropzone({
     onDrop: onDropOutfit,
-    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp'] },
+    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.heic', '.heif', '.bmp', '.tif', '.tiff'] },
     multiple: false,
     maxSize: 10 * 1024 * 1024,
   })
@@ -121,7 +121,7 @@ export function TryOnDemo() {
                 : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
             }`}
           >
-            <input {...personDropzone.getInputProps()} />
+            <input {...personDropzone.getInputProps({ 'aria-label': 'Upload your photo' })} />
             <User className="w-10 h-10 text-gray-400 mb-4" />
             <p className="text-gray-700 dark:text-gray-300 font-medium mb-1">
               Step 1: Upload your photo
@@ -165,7 +165,7 @@ export function TryOnDemo() {
                   : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
               }`}
             >
-              <input {...outfitDropzone.getInputProps()} />
+              <input {...outfitDropzone.getInputProps({ 'aria-label': 'Upload an outfit to try on' })} />
               <Shirt className="w-10 h-10 text-gray-400 mb-4" />
               <p className="text-gray-700 dark:text-gray-300 font-medium mb-1">
                 Step 2: Upload outfit to try on

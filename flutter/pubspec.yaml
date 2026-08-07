@@ -1,7 +1,7 @@
 name: fitcheck_ai
 description: "AI Wardrobe Organizer & Outfit Planner - Virtual Closet with AI Try-On, Photoshoot Generator & Style Recommendations"
 publish_to: 'none'
-version: 1.0.3+8
+version: 1.0.4+9
 
 environment:
   sdk: ^3.9.2
@@ -45,6 +45,11 @@ dependencies:
   # Crash Reporting
   sentry_flutter: ^9.0.0
 
+  # Shorebird code push (OTA patches). Read-only runtime surface: patch number
+  # for Sentry/Settings plus an opt-in update check. The updater itself runs
+  # regardless of this package - see `auto_update` in shorebird.yaml.
+  shorebird_code_push: ^2.0.7
+
   # Utils
   path_provider: ^2.1.5
   share_plus: ^10.1.4
@@ -67,6 +72,9 @@ dev_dependencies:
   # URL launching (platform interface stub in widget tests)
   url_launcher_platform_interface: ^2.3.2
 
+  # In-app purchase (platform interface stub in IAP service tests)
+  in_app_purchase_platform_interface: ^1.4.1
+
   # Icon Generation
   flutter_launcher_icons: ^0.14.3
 
@@ -85,6 +93,7 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/animations/
+    - shorebird.yaml
 
 flutter_launcher_icons:
   android: true

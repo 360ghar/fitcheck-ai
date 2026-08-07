@@ -38,6 +38,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 import type { Outfit } from '@/types'
+import { thumbnailErrorFallback } from '@/hooks/useImageWithFallback'
 
 // ============================================================================
 // TYPES
@@ -195,7 +196,7 @@ function EventBadge({ event, onClick }: EventBadgeProps) {
         />
       )}
       {event.outfit_image_url && (
-        <img
+        <img loading="lazy" decoding="async"
           src={event.outfit_image_url}
           alt=""
           className="h-4 w-4 shrink-0 rounded-full object-cover"
@@ -261,11 +262,20 @@ function OutfitAssignDialog({ isOpen, onClose, event, outfits, onAssign }: Outfi
             >
               <div className="aspect-square rounded-lg overflow-hidden bg-muted mb-2">
                 {outfit.images?.length ? (
-                  <img
-                    src={(outfit.images.find((img) => img.is_primary) || outfit.images[0]).thumbnail_url || (outfit.images.find((img) => img.is_primary) || outfit.images[0]).image_url}
-                    alt={outfit.name}
-                    className="w-full h-full object-cover"
-                  />
+                  (() => {
+                    const primary =
+                      outfit.images.find((img) => img.is_primary) || outfit.images[0]
+                    return (
+                      <img loading="lazy" decoding="async"
+                        src={primary.thumbnail_url || primary.image_url}
+                        alt={outfit.name}
+                        className="w-full h-full object-cover"
+                        // A derived `_thumb` URL can 404 while the full-size
+                        // object is fine; fall back rather than show a break.
+                        onError={thumbnailErrorFallback(primary.image_url)}
+                      />
+                    )
+                  })()
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <CalendarIcon className="h-8 w-8 text-muted-foreground" />
@@ -796,7 +806,7 @@ export function CalendarView({
                             </p>
                           </div>
                           {event.outfit_image_url && (
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={event.outfit_image_url}
                               alt=""
                               className="w-10 h-10 rounded-lg object-cover shrink-0"

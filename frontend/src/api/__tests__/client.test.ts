@@ -117,6 +117,48 @@ describe('apiClient retry logic', () => {
     expect(err.response?.status).toBe(500)
     expect(mock.history.post.length).toBe(1)
   })
+
+  it('does not retry a BILLING_NOT_CONFIGURED 503 (permanent, not an outage)', async () => {
+    // Stripe env vars are unset for this deployment, so /checkout and /portal
+    // fail closed with a 503 that can never succeed on retry. 503 is otherwise
+    // transient, so the interceptor used to burn 3 requests per click — the
+    // burst seen in the 2026-08-05 logs. The distinct backend error_code is
+    // what makes this permanent case distinguishable.
+    mock
+      .onPost('/api/v1/subscription/checkout')
+      .reply(503, {
+        error: 'Web billing is not available yet. Use a promo code to upgrade.',
+        code: 'BILLING_NOT_CONFIGURED',
+      })
+
+    const promise = apiClient
+      .post('/api/v1/subscription/checkout', {})
+      .catch((e) => e)
+    await vi.advanceTimersByTimeAsync(5000)
+
+    const err = await promise
+    expect(err.response?.status).toBe(503)
+    // Exactly one attempt: no retry storm.
+    expect(mock.history.post.length).toBe(1)
+  })
+
+  it('still retries a generic 503 with no billing code (real transient outage)', async () => {
+    // Guards the fix above from over-reaching: an ordinary 503 must keep its
+    // retry behavior.
+    mock.onPost('/api/v1/subscription/checkout').reply(503, { error: 'upstream down' })
+
+    const promise = apiClient
+      .post('/api/v1/subscription/checkout', {})
+      .catch((e) => e)
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(4000)
+
+    const err = await promise
+    expect(err.response?.status).toBe(503)
+    // 1 initial + 2 retries, unchanged.
+    expect(mock.history.post.length).toBe(3)
+  })
 })
 
 describe('apiClient global error toasts — one toast per logical failure', () => {

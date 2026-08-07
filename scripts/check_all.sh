@@ -35,6 +35,9 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/check_docs_structure.py
 echo "== theme tokens =="
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/check_theme_tokens.py
 
+echo "== ios deployment target =="
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/check_ios_deployment_target.py
+
 if [[ -x "$ROOT/backend/.venv/bin/ruff" ]]; then
   echo "== backend ruff =="
   (cd backend && .venv/bin/ruff check .)
@@ -69,6 +72,16 @@ if [[ -x "$ROOT/frontend/node_modules/.bin/eslint" && -x "$ROOT/frontend/node_mo
   (cd frontend && npm test -- --run)
 else
   missing_check "frontend lint/vitest" "frontend local node_modules binaries not found"
+fi
+
+# The images Worker is the authorization boundary in front of the private R2
+# bucket, so its tests are not optional. They use the Node built-in test runner
+# (no node_modules, no install step) and stub the Cloudflare-only globals.
+if command -v node >/dev/null 2>&1; then
+  echo "== images worker tests =="
+  (cd infra/images-worker && node --test)
+else
+  missing_check "images worker tests" "node command not found"
 fi
 
 if [[ "$RUN_FRONTEND_BUILD" == "1" ]]; then

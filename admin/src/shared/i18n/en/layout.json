@@ -1,0 +1,64 @@
+{
+  "brand": "FitCheck Admin",
+  "nav": {
+    "label": "Main navigation",
+    "overview": "Overview",
+    "dashboard": "Dashboard",
+    "trends": "Daily trends",
+    "customers": "Customers",
+    "users": "Users",
+    "commerce": "Commerce",
+    "subscriptions": "Subscriptions",
+    "iap": "IAP transactions",
+    "promo": "Promo codes",
+    "ai": "AI",
+    "quotas": "AI quotas",
+    "content": "Content",
+    "posts": "Posts",
+    "categories": "Categories",
+    "system": "System",
+    "audit": "Audit log",
+    "feedback": "Feedback",
+    "storage": "Storage",
+    "settings": "Settings"
+  },
+  "topbar": {
+    "openMenu": "Open navigation",
+    "search": {
+      "placeholder": "Search users, posts, tickets…",
+      "ariaLabel": "Global search",
+      "hint": "Search"
+    },
+    "theme": {
+      "label": "Theme",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
+    "userMenu": {
+      "label": "Account menu",
+      "settings": "Settings",
+      "logout": "Sign out"
+    }
+  },
+  "roles": {
+    "super_admin": "Super admin",
+    "admin": "Admin",
+    "ops": "Ops",
+    "support": "Support",
+    "content_editor": "Content editor"
+  },
+  "deployment": {
+    "operational": "Operational",
+    "degraded": "Degraded",
+    "down": "Down",
+    "unknown": "Status unknown"
+  },
+  "sidebar": {
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar"
+  },
+  "footer": {
+    "version": "Version"
+  }
+}

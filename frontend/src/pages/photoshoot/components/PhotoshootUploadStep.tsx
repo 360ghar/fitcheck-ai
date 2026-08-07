@@ -79,7 +79,7 @@ export function PhotoshootUploadStep() {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp'] },
+    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.heic', '.heif', '.bmp', '.tif', '.tiff'] },
     maxFiles: MAX_PHOTOS - photos.length,
     disabled: photos.length >= MAX_PHOTOS,
   });
@@ -105,7 +105,7 @@ export function PhotoshootUploadStep() {
               key={previewUrls.get(photo) || photo.name + index}
               className="aspect-square rounded-lg border border-muted relative overflow-hidden"
             >
-              <img
+              <img loading="lazy" decoding="async"
                 src={previewUrls.get(photo) || ''}
                 alt={`Upload preview ${index + 1}`}
                 className="w-full h-full object-cover"

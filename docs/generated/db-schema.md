@@ -1,6 +1,6 @@
 # Database schema (generated)
 
-Generated: 2026-08-05
+Generated: 2026-08-07
 
 Source: `backend/db/supabase/migrations/`.
 Regenerate: `python scripts/generate_db_schema_doc.py`.
@@ -54,12 +54,19 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `033_fix_referral_credit_stacking.sql`
 - `034_add_support_tickets_storage_paths.sql`
 - `035_add_photoshoot_jobs_image_failures.sql`
+- `036_widen_image_url_columns.sql`
+- `037_admin_roles.sql`
+- `038_audit_events.sql`
+- `039_scope_service_policies.sql`
+- `040_admin_dashboard_top_users.sql`
+- `041_admin_trends.sql`
 
 ## Tables (CREATE TABLE)
 
 | Table | Introduced in |
 |-------|---------------|
 | `apple_iap_events` | `030_mobile_iap.sql` |
+| `audit_events` | `038_audit_events.sql` |
 | `blog_posts` | `017_blog_posts.sql` |
 | `body_profiles` | `001_full_schema.sql` |
 | `calendar_connections` | `001_full_schema.sql` |
@@ -113,6 +120,8 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `027_stripe_webhook_processing_state.sql` | `stripe_webhook_events` | `attempts` |
 | `030_mobile_iap.sql` | `subscriptions` | `billing_provider` |
 | `035_add_photoshoot_jobs_image_failures.sql` | `photoshoot_jobs` | `image_failures` |
+| `037_admin_roles.sql` | `users` | `is_admin` |
+| `037_admin_roles.sql` | `users` | `role` |
 
 These columns are added after their table's CREATE TABLE and are required (NOT NULL DEFAULT), so inserts rely on the default until a value is supplied.
 
@@ -205,6 +214,14 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `031_promo_codes.sql` → `promo_redemptions`
 - `034_add_support_tickets_storage_paths.sql` → `support_tickets`
 - `035_add_photoshoot_jobs_image_failures.sql` → `photoshoot_jobs`
+- `036_widen_image_url_columns.sql` → `users`
+- `036_widen_image_url_columns.sql` → `item_images`
+- `036_widen_image_url_columns.sql` → `outfit_images`
+- `037_admin_roles.sql` → `users`
+- `037_admin_roles.sql` → `users`
+- `037_admin_roles.sql` → `users`
+- `037_admin_roles.sql` → `support_tickets`
+- `038_audit_events.sql` → `audit_events`
 
 ## Related
 

@@ -46,6 +46,48 @@ from app.services.subscription_service import SubscriptionService
 logger = get_context_logger(__name__)
 
 
+async def _release_reservation_on_cancel(
+    user_id: str,
+    num_images: int,
+    db,
+    **log_context: Any,
+) -> None:
+    """Hand a reserved photoshoot quota back while a cancellation is in flight.
+
+    ``num_images`` is the amount STILL reserved — callers pass the remainder
+    after netting out any partial release already made mid-pipeline, so a
+    cancellation never double-refunds the reservation.
+
+    ``CancelledError`` derives from ``BaseException``, so it matches neither of the
+    ordinary ``except`` arms in the generation paths — without an explicit release
+    the reservation leaks and the user's entire daily quota is burned for zero
+    images, with the immediate retry rejected as "0 images remaining today".
+
+    Shielded because a cancellation is already in flight: the awaiting frame may
+    itself be cancelled, and the shielded task still runs to completion on the
+    loop. A failure to release is logged, never raised — the caller is on its way
+    to re-raising the cancellation and must not have that replaced.
+
+    Shared by the sync (``asyncio.wait_for`` deadline) and streaming (worker
+    shutdown / client disconnect) paths. Two copies of a quota-refund guard meant
+    one path could leak a whole daily quota while the other did not.
+    """
+    try:
+        await asyncio.shield(
+            PhotoshootService.release_daily_usage(user_id, num_images, db)
+        )
+    except asyncio.CancelledError:
+        pass
+    except Exception as release_error:  # noqa: BLE001
+        logger.warning(
+            "Failed to release photoshoot quota after cancellation",
+            user_id=user_id,
+            num_images=num_images,
+            error=str(release_error)[:200],
+            **log_context,
+        )
+
+
 # =============================================================================
 # Use Case Templates
 # =============================================================================
@@ -955,6 +997,11 @@ RULES:
         start_time = time.time()
         session_id = f"ps_{uuid.uuid4().hex[:12]}"
         reservation_made = False
+        # Tracks how much of the reservation has already been handed back
+        # (mid-pipeline partial release), so the error arms below refund only
+        # the remainder instead of releasing the full reservation a second
+        # time (release clamps at 0, so a double release over-credits the user).
+        released = 0
 
         try:
             # Validate custom prompt requirement
@@ -992,6 +1039,7 @@ RULES:
             unused = num_images - len(images)
             if unused > 0:
                 await PhotoshootService.release_daily_usage(user_id, unused, db)
+                released += unused
 
             # The reservation RPC already reflects today's usage; reuse the
             # usage object returned by reserve_daily_usage instead of paying a
@@ -1012,12 +1060,45 @@ RULES:
                 partial_success=len(failures) > 0,
             )
 
+        except asyncio.CancelledError:
+            # The sync route wraps this coroutine in `asyncio.wait_for(...,
+            # timeout=270)`, which CANCELS it at the deadline. CancelledError
+            # derives from BaseException, so it matches neither handler below —
+            # without this arm the reservation leaks: the user's entire daily
+            # quota is burned for zero images and the immediate retry is
+            # rejected with "0 images remaining today".
+            #
+            # Only the not-yet-released remainder is handed back: a partial
+            # release may already have happened mid-pipeline, and releasing
+            # the full reservation on top would over-credit the user.
+            #
+            # Shielded because a cancellation is already in flight: the outer
+            # await here may itself be cancelled, and the shielded task still
+            # runs to completion on the loop.
+            if reservation_made:
+                remaining = num_images - released
+                if remaining > 0:
+                    await _release_reservation_on_cancel(
+                        user_id, remaining, db, session_id=session_id
+                    )
+            logger.warning(
+                "Photoshoot generation cancelled",
+                user_id=user_id,
+                num_images=num_images,
+                session_id=session_id,
+                quota_released=reservation_made,
+                elapsed_seconds=round(time.time() - start_time, 2),
+            )
+            raise
         except (ValidationError, RateLimitError, ServiceError, DatabaseError):
             # A failure after the reservation (e.g. prompt generation) must
-            # hand the full quota back; RateLimitError from a failed admission
-            # never reserved anything.
+            # hand the remaining quota back; RateLimitError from a failed
+            # admission never reserved anything. Net of any partial release
+            # that already happened.
             if reservation_made:
-                await PhotoshootService.release_daily_usage(user_id, num_images, db)
+                remaining = num_images - released
+                if remaining > 0:
+                    await PhotoshootService.release_daily_usage(user_id, remaining, db)
             raise
         except Exception as e:
             logger.exception(
@@ -1029,10 +1110,14 @@ RULES:
                 elapsed_seconds=round(time.time() - start_time, 2),
                 error=str(e)[:300],
             )
-            # The reservation was made before generation; hand it back so a
-            # failed run never burns the user's daily photoshoot quota.
+            # The reservation was made before generation; hand back whatever
+            # the mid-pipeline partial release did not cover so a failed run
+            # never burns the user's daily photoshoot quota AND is never
+            # refunded twice.
             if reservation_made:
-                await PhotoshootService.release_daily_usage(user_id, num_images, db)
+                remaining = num_images - released
+                if remaining > 0:
+                    await PhotoshootService.release_daily_usage(user_id, remaining, db)
             raise ServiceError("Photoshoot generation failed", service_name="photoshoot")
 
 
@@ -1084,6 +1169,12 @@ class PhotoshootStreamingService:
         )
 
         reservation_made = False
+        # Tracks how much of the reservation has already been handed back
+        # (mid-pipeline partial release), so the cancellation/error arms below
+        # refund only the remainder instead of releasing the full reservation
+        # a second time (release clamps at 0, so a double release over-credits
+        # the user — the 2026-08-05 photoshoot 0-image RCA's 2x refund).
+        released = 0
         try:
             await PhotoshootJobService.update_status(job.job_id, PhotoshootJobStatus.PROCESSING)
 
@@ -1128,6 +1219,7 @@ class PhotoshootStreamingService:
             unused = job.num_images - job.generated_count
             if not self.is_demo and unused > 0:
                 await PhotoshootService.release_daily_usage(self.user_id, unused, self.db)
+                released += unused
 
             # Check cancellation
             if job.is_cancelled():
@@ -1204,6 +1296,22 @@ class PhotoshootStreamingService:
             await PhotoshootJobService.clear_event_history(job.job_id)
             await PhotoshootJobService.release_generated_payloads(job.job_id)
 
+        except asyncio.CancelledError:
+            # Same BaseException trap as the sync path: a cancelled background
+            # job (worker shutdown, client disconnect teardown) must not keep
+            # the reservation. Only the not-yet-released remainder is handed
+            # back — the mid-pipeline partial release may already have
+            # happened, and a second full release would over-credit the user.
+            # Shielded so the release survives the in-flight cancellation.
+            # Job bookkeeping is deliberately skipped — the loop may be
+            # tearing down, and the reservation is the part the user feels.
+            if reservation_made:
+                remaining = job.num_images - released
+                if remaining > 0:
+                    await _release_reservation_on_cancel(
+                        self.user_id, remaining, self.db, job_id=job.job_id
+                    )
+            raise
         except RateLimitError as e:
             from app.services.photoshoot_job_service import PhotoshootJobService
             await PhotoshootJobService.set_error(job.job_id, str(e))
@@ -1218,10 +1326,14 @@ class PhotoshootStreamingService:
         except Exception as e:
             from app.services.photoshoot_job_service import PhotoshootJobService
             logger.exception(f"Photoshoot pipeline failed: {e}")
-            # The whole run failed after reserving; hand the full reservation
-            # back so the user can retry.
+            # The whole run failed after reserving; hand back whatever the
+            # mid-pipeline partial release did not cover so the user can retry
+            # (net of any release already made — a second full release would
+            # over-credit the user).
             if reservation_made:
-                await PhotoshootService.release_daily_usage(self.user_id, job.num_images, self.db)
+                remaining = job.num_images - released
+                if remaining > 0:
+                    await PhotoshootService.release_daily_usage(self.user_id, remaining, self.db)
             await PhotoshootJobService.set_error(job.job_id, str(e))
             await PhotoshootJobService.broadcast_event(job.job_id, "job_failed", {
                 "job_id": job.job_id,

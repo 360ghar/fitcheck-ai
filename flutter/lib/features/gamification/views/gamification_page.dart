@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/widgets/app_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_ui.dart';
@@ -421,12 +422,12 @@ class GamificationPage extends StatelessWidget {
             radius: 16,
             child: entry.avatarUrl != null
                 ? ClipOval(
-                    child: Image.network(
+                    child: AppNetworkImage(
                       entry.avatarUrl!,
                       width: 32,
                       height: 32,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => Text(
+                      errorWidget: (_, _, _) => Text(
                         entry.username[0].toUpperCase(),
                         style: const TextStyle(
                           color: Colors.white,

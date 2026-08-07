@@ -7,6 +7,30 @@ name: Build iOS IPA
 # (the Android pipeline) and adds the iOS-specific code-signing + TestFlight
 # upload plumbing.
 #
+# ------------------------------------------------------------------------------
+# SHOREBIRD CODE PUSH - WHY THIS BUILDS WITH `shorebird release` NOT `flutter build`
+# ------------------------------------------------------------------------------
+# Only a binary produced by `shorebird release` contains the Shorebird engine.
+# An IPA built by plain `flutter build ipa` can NEVER receive an over-the-air
+# Dart patch, no matter what is done afterwards. Since this workflow is the
+# real App Store / TestFlight path, it is also the Shorebird release path -
+# otherwise we would ship builds that look fine and then silently cannot be
+# hotfixed.
+#
+# Consequences that must be preserved when editing this file:
+#   * Shorebird vendors its own Flutter fork, so subosito/flutter-action is
+#     deliberately NOT used here. Two Flutter installs on one runner is the
+#     documented cause of "Invalid Podfile file" / FLUTTER_ROOT mismatches.
+#   * `--flutter-version` is pinned to the same version the other workflows use.
+#     A release's Flutter version can never be changed by a patch.
+#   * `--no-tree-shake-icons` must match flutter/scripts/_shorebird_common.sh and
+#     the patch workflow, or patches are rejected as asset diffs.
+#   * ExportOptions must NOT set manageAppVersionAndBuildNumber. If Xcode
+#     auto-increments the build number on upload, the shipped binary stops
+#     matching the recorded release version and patches never resolve.
+#   * Patches are shipped by .github/workflows/shorebird-patch-ios.yml, which
+#     must reproduce this build exactly (same .env, same signing, same flags).
+#
 # WHY manual + tags only (not "push: main"):
 #   iOS builds run on macOS runners which are slow and billed at ~10x the
 #   Linux minute rate. We therefore gate them to explicit, intentional runs:
@@ -49,6 +73,12 @@ name: Build iOS IPA
 #   APP_STORE_CONNECT_API_KEY_BASE64 - Base64 of the AuthKey_XXXXXXXXXX.p8 file
 #                                      downloaded when the API key was created.
 #
+# Shorebird code push (NEW - required for the release to be patchable):
+#   SHOREBIRD_TOKEN                  - API key from console.shorebird.dev ->
+#                                      Account -> API Keys -> Create API Key.
+#                                      (`shorebird login:ci` is deprecated; its
+#                                      tokens stop working in September 2026.)
+#
 # ------------------------------------------------------------------------------
 # MANUAL PREREQUISITES (must be done ONCE before this workflow can fully succeed)
 # ------------------------------------------------------------------------------
@@ -89,8 +119,15 @@ on:
       - 'v*'
 
 env:
-  # Keep in lock-step with .github/workflows/build-apk.yml
-  FLUTTER_VERSION: '3.41.1'
+  # Keep in lock-step with .github/workflows/build-apk.yml,
+  # .github/workflows/flutter-ci.yml, .github/workflows/shorebird-patch-ios.yml
+  # and flutter/scripts/_shorebird_common.sh.
+  FLUTTER_VERSION: '3.44.6'
+  # Authenticates the Shorebird CLI. Absent on forks (and before the secret is
+  # provisioned). When absent, the auth check is skipped and the unsigned
+  # validation path degrades to a warning: every `shorebird` command needs a
+  # token, so no dry-run is attempted.
+  SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
   # Bundle identifier from flutter/ios/Runner.xcodeproj/project.pbxproj
   BUNDLE_ID: com.fitcheckaiapp.fitcheckai
   # Apple Developer Team ID used for manual signing in the export step.
@@ -102,8 +139,10 @@ env:
 jobs:
   build-ios:
     name: Build iOS IPA
-    # macOS runner is required for Xcode. macos-14 is a stable, current image.
-    runs-on: macos-14
+    # macOS runner is required for Xcode. Xcode 26 (required for App Store /
+    # TestFlight uploads per the note below) needs macOS 15+, so this must stay
+    # at macos-15 or newer.
+    runs-on: macos-15
     defaults:
       run:
         working-directory: flutter
@@ -112,22 +151,51 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # App Store Connect rejects IPAs whose MinimumOSVersion is below 15.0
+      # (enforced starting Spring 2027). Fail fast here so a non-compliant
+      # deployment target can never reach the build/upload steps.
+      # `python3`, not `python`: this job has no actions/setup-python step (the
+      # script is stdlib-only and needs none), and the runner images ship only
+      # `python3` on PATH. Bare `python` here exited 127 and, as the first real
+      # step in the job, blocked every iOS build.
+      - name: Check iOS deployment target >= 15.0
+        run: python3 ../scripts/check_ios_deployment_target.py
+
       # Select a recent Xcode. NOTE: As of 2026-04-28 the App Store / TestFlight
-      # require apps to be built with Xcode 26 (iOS 26 SDK). The macos-14 image
-      # ships multiple Xcodes; pin explicitly so builds remain reproducible.
-      # If '26.0' is not present on the runner image yet, change this to the
-      # newest available (e.g. '16.4') or bump the runner to macos-15.
+      # require apps to be built with Xcode 26 (iOS 26 SDK). Xcode 26 requires
+      # macOS 15+, hence the macos-15 runner above. 'latest-stable' resolves to
+      # the newest Xcode on the runner image (26.x); pin an explicit version
+      # (e.g. '26.0') here if builds must be reproducible across image updates.
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: 'latest-stable'
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      # Installs the Shorebird CLI, which vends its own patched Flutter fork.
+      # Deliberately replaces subosito/flutter-action: a second Flutter install
+      # on the same runner rewrites ios/Flutter/Generated.xcconfig with a
+      # conflicting FLUTTER_ROOT and breaks the CocoaPods step.
+      # `shorebird release` runs `flutter pub get` and `pod install` itself.
+      - name: Set up Shorebird
+        uses: shorebirdtech/setup-shorebird@v1
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: 'stable'
           cache: true
+
+      # Fail fast and legibly WHEN the token is provisioned: the CLI would
+      # otherwise die partway through a multi-minute Xcode build with an opaque
+      # auth error, and there is no bare-`flutter` fallback on this runner (the
+      # only Flutter here is Shorebird's vendored fork, reachable only through
+      # the authenticated CLI).
+      # Skipped when SHOREBIRD_TOKEN is unset (forks / pre-provisioning): the
+      # "Validate iOS build (no signing secrets)" step below handles that case
+      # by degrading to a warning instead of failing the run. Gated on the
+      # secret itself so a fork with an empty-string secret gets the same
+      # treatment as a fork with no secret at all.
+      - name: Verify Shorebird authentication
+        if: ${{ secrets.SHOREBIRD_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          shorebird account whoami
 
       # Recreate the .env asset EXACTLY as the Android APK workflow does. The app
       # bundles flutter/.env as a Flutter asset (see pubspec.yaml `assets: - .env`).
@@ -141,13 +209,11 @@ jobs:
           echo "POSTHOG_HOST=${{ secrets.POSTHOG_HOST }}" >> .env
           echo "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" >> .env
 
-      - name: Get dependencies
-        run: flutter pub get
-
-      # pod install must run after `flutter pub get` so Generated.xcconfig exists.
-      - name: Install CocoaPods dependencies
-        working-directory: flutter/ios
-        run: pod install --repo-update
+      # NOTE: there is intentionally no `flutter pub get` or `pod install` step.
+      # Both need a Flutter SDK on PATH, and the only Flutter here belongs to
+      # Shorebird. `shorebird release`/`shorebird patch` run pub get and drive
+      # CocoaPods as part of the iOS build, and ios/Podfile.lock is committed so
+      # pod versions stay pinned without `--repo-update`.
 
       # ----------------------------------------------------------------------
       # Code signing: import the distribution cert (.p12) and the provisioning
@@ -237,40 +303,72 @@ jobs:
           </dict>
           </plist>
           EOF
+          # DO NOT add <key>manageAppVersionAndBuildNumber</key><true/> here.
+          # Xcode would then bump the build number during export, so the shipped
+          # binary's version would no longer match the version Shorebird
+          # recorded for this release, and every patch would fail to resolve.
           echo "export_plist=$EXPORT_PLIST" >> "$GITHUB_OUTPUT"
           echo "Generated ExportOptions.plist at $EXPORT_PLIST"
           cat "$EXPORT_PLIST"
 
-      # SIGNED build path: uses the generated ExportOptions.plist (manual signing).
-      # dart-defines mirror the .env asset so release never falls back to localhost.
-      - name: Build signed IPA (App Store)
+      # SIGNED build path: creates a patchable Shorebird release and exports an
+      # App Store IPA using the generated ExportOptions.plist (manual signing).
+      # dart-defines mirror the .env asset so release never falls back to
+      # localhost; they are passed as first-class Shorebird options (Shorebird
+      # forwards them to the Flutter build and records them on the release, so
+      # patches inherit the same values).
+      #
+      # Flags after `--` go straight to `flutter build`. Keep --no-tree-shake-icons
+      # identical here and in shorebird-patch-ios.yml.
+      - name: Build signed IPA (App Store, Shorebird release)
+        id: shorebird_release
         if: ${{ steps.signing.outputs.signed == 'true' }}
         run: |
           set -euo pipefail
-          flutter build ipa --release \
+          shorebird release ios \
+            --flutter-version="${FLUTTER_VERSION}" \
+            --export-options-plist="${{ steps.export_opts.outputs.export_plist }}" \
             --dart-define=API_BASE_URL="${{ secrets.API_BASE_URL }}" \
             --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
             --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
             --dart-define=POSTHOG_API_KEY="${{ secrets.POSTHOG_API_KEY }}" \
             --dart-define=POSTHOG_HOST="${{ secrets.POSTHOG_HOST }}" \
             --dart-define=SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
-            --export-options-plist="${{ steps.export_opts.outputs.export_plist }}"
+            -- --no-tree-shake-icons
 
-      # UNSIGNED build path (no secrets): still produce an artifact for inspection.
-      # `flutter build ipa --no-codesign` archives without signing so PRs/forks
-      # without the Apple secrets still validate that the iOS build compiles.
-      - name: Build unsigned IPA (no signing secrets)
+      # UNSIGNED validation path (no Apple secrets, e.g. a fork). With a
+      # SHOREBIRD_TOKEN present, --dry-run compiles and validates but uploads
+      # nothing, so a run without signing credentials can never create a junk
+      # release on the Shorebird account.
+      # NOTE: the dry-run is NOT a no-API path — every `shorebird` command
+      # authenticates first (see flutter/scripts/_shorebird_common.sh
+      # `shorebird_preflight`, which dies unless `shorebird account whoami`
+      # succeeds), so this branch still requires the token. Without a token (a
+      # fork has no secrets at all, and this job's only Flutter SDK is
+      # Shorebird's vendored fork, reachable only through the authenticated
+      # CLI), the step degrades to a warning and skips build validation
+      # instead of failing the run.
+      - name: Validate iOS build (no signing secrets)
         if: ${{ steps.signing.outputs.signed != 'true' }}
         run: |
           set -euo pipefail
-          flutter build ipa --release --no-codesign \
-            --dart-define=API_BASE_URL="${{ secrets.API_BASE_URL }}" \
-            --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
-            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
-            --dart-define=POSTHOG_API_KEY="${{ secrets.POSTHOG_API_KEY }}" \
-            --dart-define=POSTHOG_HOST="${{ secrets.POSTHOG_HOST }}" \
-            --dart-define=SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
-            || flutter build ios --release --no-codesign
+          if [ -n "${SHOREBIRD_TOKEN:-}" ]; then
+            shorebird release ios --dry-run --no-codesign \
+              --flutter-version="${FLUTTER_VERSION}" \
+              --dart-define=API_BASE_URL="${{ secrets.API_BASE_URL }}" \
+              --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+              --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
+              --dart-define=POSTHOG_API_KEY="${{ secrets.POSTHOG_API_KEY }}" \
+              --dart-define=POSTHOG_HOST="${{ secrets.POSTHOG_HOST }}" \
+              --dart-define=SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
+              -- --no-tree-shake-icons
+          else
+            echo "::warning::SHOREBIRD_TOKEN is not set (expected on a fork or before" \
+                 "the secret is provisioned). Skipping Shorebird dry-run build" \
+                 "validation: the CLI cannot authenticate without a token and there" \
+                 "is no bare Flutter SDK on this runner."
+            echo "No release is created and no artifact is produced by this path."
+          fi
 
       - name: Locate build outputs
         id: outputs
@@ -328,8 +426,10 @@ jobs:
           fi
 
       # ----------------------------------------------------------------------
-      # Upload to TestFlight using the App Store Connect API key with notarytool's
-      # sibling tool `xcrun altool --upload-app`. Guarded so it only runs when a
+      # Upload to TestFlight using the App Store Connect API key with
+      # `xcrun altool --upload-app` (deprecated by Apple in favor of
+      # iTMSTransporter / Transporter; still shipped with Xcode 26 — migrate
+      # when altool is removed from Xcode). Guarded so it only runs when a
       # signed .ipa exists AND the ASC secrets are present AND (for manual runs)
       # the user opted in. Marked continue-on-error so a transient ASC failure
       # does not discard the already-built artifact.
@@ -375,11 +475,17 @@ jobs:
             echo "| Build Type | Release |"
             echo "| Flutter Version | ${FLUTTER_VERSION} |"
             echo "| Signed | ${{ steps.signing.outputs.signed == 'true' && 'yes' || 'no (no signing secrets)' }} |"
+            echo "| Shorebird release | ${{ steps.signing.outputs.signed == 'true' && 'created (patchable)' || 'not created (unsigned path)' }} |"
             echo "| IPA | ${{ steps.outputs.outputs.ipa_path != '' && steps.outputs.outputs.ipa_path || 'not produced' }} |"
             echo "| TestFlight upload | ${{ steps.testflight.outcome || 'skipped' }} |"
             echo "| Commit | \`${{ github.sha }}\` |"
             echo "| Ref | ${{ github.ref_name }} |"
             echo "| Triggered By | ${{ github.actor }} |"
+            if [ "${{ steps.signing.outputs.signed }}" = 'true' ]; then
+              echo ""
+              echo "Dart-only hotfixes for this build ship via the **Shorebird Patch (iOS)** workflow."
+              echo "Do not change the version or build number in App Store Connect - patches resolve against it."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Always upload whatever IPA was produced as a workflow artifact.

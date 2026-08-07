@@ -1,0 +1,70 @@
+{
+  "title": "Subscriptions",
+  "description": "Active and historical subscriptions, plans, and refunds.",
+  "columns": {
+    "user": "User",
+    "plan": "Plan",
+    "status": "Status",
+    "period": "Current period",
+    "cancelAtPeriodEnd": "Cancels at period end",
+    "createdAt": "Created",
+    "amount": "Amount"
+  },
+  "filters": {
+    "plan": "Plan",
+    "planPlaceholder": "All plans",
+    "status": "Status",
+    "statusPlaceholder": "All statuses"
+  },
+  "plans": {
+    "free": "Free",
+    "plus_monthly": "Plus monthly",
+    "plus_yearly": "Plus yearly",
+    "pro_monthly": "Pro monthly",
+    "pro_yearly": "Pro yearly",
+    "unknown": "Unknown"
+  },
+  "status": {
+    "active": "Active",
+    "trialing": "Trialing",
+    "past_due": "Past due",
+    "canceled": "Canceled",
+    "cancelled": "Cancelled",
+    "incomplete": "Incomplete",
+    "incomplete_expired": "Incomplete expired",
+    "unpaid": "Unpaid",
+    "refunded": "Refunded",
+    "unknown": "Unknown"
+  },
+  "cancelAtPeriodEnd": {
+    "yes": "Scheduled",
+    "no": "Renews"
+  },
+  "rowActions": {
+    "label": "Actions",
+    "refund": "Refund"
+  },
+  "refund": {
+    "dialogTitle": "Refund subscription",
+    "dialogDescription": "Refund {{amount}} for {{email}}. This is an irreversible full refund of the latest Stripe charge.",
+    "confirm": "Refund {{amount}}",
+    "success": "Refund {{refundId}} issued ({{amount}}, {{status}}).",
+    "errorBillingNotConfigured": "Stripe billing is not configured for this deployment. Refunds are unavailable.",
+    "errorNoStripeCustomer": "This subscription has no Stripe customer (store-billed rows cannot be refunded here).",
+    "errorNotFound": "No subscription was found for this user.",
+    "errorGeneric": "The refund failed. Check the Stripe dashboard and try again."
+  },
+  "empty": {
+    "title": "No subscriptions",
+    "message": "No subscriptions match the current filters."
+  },
+  "loadError": {
+    "title": "Could not load subscriptions",
+    "message": "The subscription list is unavailable right now."
+  },
+  "export": {
+    "label": "Export CSV",
+    "filename": "subscriptions.csv",
+    "toast": "Exported {{count}} subscriptions"
+  }
+}

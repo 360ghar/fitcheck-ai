@@ -1,0 +1,42 @@
+{
+  "title": "Settings",
+  "description": "Deployment info, feature toggles, and billing configuration.",
+  "sections": {
+    "app": "Application",
+    "appName": "Name",
+    "version": "Version",
+    "commit": "Commit",
+    "environment": "Environment",
+    "environmentDevelopment": "Development",
+    "environmentProduction": "Production",
+    "environmentUnknown": "Unknown",
+    "deployment": "Deployment",
+    "featureToggles": "Feature toggles",
+    "noToggles": "No feature toggles reported.",
+    "billing": "Billing providers",
+    "billingStripe": "Stripe",
+    "billingApple": "Apple",
+    "billingGoogle": "Google",
+    "configured": "Configured",
+    "notConfigured": "Not configured",
+    "storage": "Object storage",
+    "storageBucket": "Bucket",
+    "storageServingMode": "Serving mode",
+    "storagePresignTtl": "Presign TTL (s)",
+    "storageConfigured": "Configured",
+    "storageNotConfigured": "Not configured",
+    "limits": "Plan limits",
+    "free": "Free",
+    "plus_monthly": "Plus monthly",
+    "pro_monthly": "Pro monthly",
+    "extractions": "Extractions",
+    "generations": "Generations",
+    "embeddings": "Embeddings"
+  },
+  "enabled": "On",
+  "disabled": "Off",
+  "loadError": {
+    "title": "Could not load settings",
+    "message": "Deployment settings are unavailable right now."
+  }
+}

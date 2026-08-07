@@ -150,9 +150,15 @@ class FindMatchesController extends GetxController {
                 ? Map<String, dynamic>.from(images.first as Map)
                 : null);
         if (first != null) {
-          final url = first['thumbnail_url']?.toString() ??
-              first['image_url']?.toString() ??
-              first['url']?.toString();
+          // Full size FIRST, matching item_repository/outfit_repository. A
+          // derived `_thumb` URL is not guaranteed to exist (no existence check
+          // in `materialize_image_urls`, and `_upload_thumbnail` is
+          // best-effort), and this value is flattened into a map consumed by
+          // `AppImage`, which has no error-fallback to retry with — so a missing
+          // thumb here would be a permanently broken tile.
+          final url = first['image_url']?.toString() ??
+              first['url']?.toString() ??
+              first['thumbnail_url']?.toString();
           if (url != null && url.isNotEmpty) return url;
         }
       }

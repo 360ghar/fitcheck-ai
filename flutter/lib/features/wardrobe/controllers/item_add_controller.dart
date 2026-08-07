@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/config/env_config.dart';
 import '../../../core/exceptions/app_exceptions.dart';
+import '../../../core/services/ai_consent_service.dart';
 import '../services/wardrobe_sync_service.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
@@ -70,6 +71,13 @@ class ItemAddController extends GetxController {
   /// Uses new /api/v1/ai/single-extract endpoint with real-time streaming
   /// Supports intelligent caching - detects and displays cached results (Phase 3)
   Future<void> processImage(File image) async {
+    // Third-party AI data-sharing consent gate (Apple 5.1.2(i)) — must run
+    // before any image bytes are compressed/encoded or uploaded.
+    if (!await Get.find<AiConsentService>().ensureConsent(
+      featureLabel: 'AI Wardrobe Extraction',
+    )) {
+      return;
+    }
     selectedImage.value = image;
     isProcessing.value = true;
     error.value = '';

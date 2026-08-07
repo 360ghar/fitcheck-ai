@@ -505,7 +505,7 @@ return $default(_that.monthlyExtractions,_that.monthlyExtractionsLimit,_that.mon
 @JsonSerializable()
 
 class _UsageLimitsModel implements UsageLimitsModel {
-  const _UsageLimitsModel({@JsonKey(name: 'monthly_extractions') this.monthlyExtractions = 0, @JsonKey(name: 'monthly_extractions_limit') this.monthlyExtractionsLimit = 25, @JsonKey(name: 'monthly_generations') this.monthlyGenerations = 0, @JsonKey(name: 'monthly_generations_limit') this.monthlyGenerationsLimit = 50, @JsonKey(name: 'period_start') this.periodStart, @JsonKey(name: 'period_end') this.periodEnd});
+  const _UsageLimitsModel({@JsonKey(name: 'monthly_extractions') this.monthlyExtractions = 0, @JsonKey(name: 'monthly_extractions_limit') this.monthlyExtractionsLimit = 50, @JsonKey(name: 'monthly_generations') this.monthlyGenerations = 0, @JsonKey(name: 'monthly_generations_limit') this.monthlyGenerationsLimit = 50, @JsonKey(name: 'period_start') this.periodStart, @JsonKey(name: 'period_end') this.periodEnd});
   factory _UsageLimitsModel.fromJson(Map<String, dynamic> json) => _$UsageLimitsModelFromJson(json);
 
 @override@JsonKey(name: 'monthly_extractions') final  int monthlyExtractions;
@@ -1631,7 +1631,7 @@ return $default(_that.id,_that.name,_that.description,_that.priceMonthly,_that.p
 @JsonSerializable()
 
 class _PlanDetailsModel implements PlanDetailsModel {
-  const _PlanDetailsModel({required this.id, required this.name, this.description, @JsonKey(name: 'price_monthly') this.priceMonthly = 0.0, @JsonKey(name: 'price_yearly') this.priceYearly = 0.0, @JsonKey(name: 'monthly_extractions') this.monthlyExtractions = 25, @JsonKey(name: 'monthly_generations') this.monthlyGenerations = 50, final  List<String> features = const []}): _features = features;
+  const _PlanDetailsModel({required this.id, required this.name, this.description, @JsonKey(name: 'price_monthly') this.priceMonthly = 0.0, @JsonKey(name: 'price_yearly') this.priceYearly = 0.0, @JsonKey(name: 'monthly_extractions') this.monthlyExtractions = 50, @JsonKey(name: 'monthly_generations') this.monthlyGenerations = 50, final  List<String> features = const []}): _features = features;
   factory _PlanDetailsModel.fromJson(Map<String, dynamic> json) => _$PlanDetailsModelFromJson(json);
 
 @override final  String id;

@@ -1106,7 +1106,15 @@ async def save_generated_image(
     db=None,
 ) -> Dict[str, str]:
     """
-    Save a generated image to Supabase Storage.
+    Save a generated image to object storage.
+
+    User-requested saves (``save_to_storage=true``) live under the shared
+    top-level ``generated/`` folder — ``generated/{user_id}/{image_type}/...`` —
+    so user-saved renders share one common prefix with every user (the
+    ``tmp/`` preview folder follows the same top-level-folder convention).
+    No DB row references these objects; they are served via the
+    ``/images/presigned`` read path and retained by policy (30 days in
+    ``scripts/storage_inventory.py``) until that changes.
 
     Args:
         generated: The GeneratedImage result
@@ -1124,14 +1132,23 @@ async def save_generated_image(
         # Decode base64 image
         image_data = base64.b64decode(generated.image_base64)
 
+        # Normalize to the storage compression profile (WebP q82 @ 2048px,
+        # keep-smaller) so user-saved renders cost the same per byte as every
+        # other stored image. Pillow decode is CPU-bound; runs on the bounded
+        # image executor. Best-effort: unchanged bytes on failure.
+        image_data = await run_image_op(
+            StorageService._normalize_upload_bytes, image_data
+        )
+
         # Sniffed, not assumed: a matted image is WebP, an unmatted one is
         # whatever the provider returned. Hardcoding .png/image/png here served
-        # every generated object with the wrong content type.
+        # every generated object with the wrong content type. Runs AFTER the
+        # normalization above so the key/content-type describe the stored bytes.
         content_type = sniff_image_mime(image_data)
         extension = EXTENSION_BY_MIME.get(content_type, ".png")
 
         # Generate unique filename
-        filename = f"{user_id}/generated/{image_type}/{uuid.uuid4().hex}{extension}"
+        filename = f"generated/{user_id}/{image_type}/{uuid.uuid4().hex}{extension}"
 
         # Upload to storage
         storage = StorageService()

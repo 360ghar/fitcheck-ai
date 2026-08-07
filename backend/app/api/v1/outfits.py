@@ -9,8 +9,6 @@ stores generated images in Supabase Storage and records metadata for retrieval.
 
 import asyncio
 import uuid
-from datetime import datetime, timezone
-from app.utils.datetime_util import utcnow, utcnow_iso
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
@@ -30,7 +28,7 @@ from app.core.exceptions import (
     NotFoundError,
     SharedOutfitNotFoundError,
 )
-from app.core.security import get_current_user_id
+from app.api.v1.deps import get_active_user_id
 from app.core.uploads import read_upload_capped
 from app.core.config import settings
 from app.db.connection import get_db
@@ -46,6 +44,7 @@ from app.models.outfit import (
     OutfitCollectionUpdate,
 )
 from app.services.storage_service import MAX_FILE_SIZE, StorageService
+from app.utils.datetime_util import utcnow, utcnow_iso, parse_utc_datetime
 from app.utils.db import execute_with_reconnect, safe_search_term
 from app.api.v1.images import materialize_image_urls, materialize_parent_images
 
@@ -81,17 +80,6 @@ class AddCollectionOutfitRequest(BaseModel):
 def _now() -> str:
     return utcnow_iso()
 
-
-def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=timezone.utc)
-        return parsed
-    except ValueError:
-        return None
 
 def _normalize_item_images(item: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize Supabase nested relation naming to API contract."""
@@ -236,7 +224,7 @@ def _fetch_outfit(
 @router.post("", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 async def create_outfit(
     request: OutfitCreate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -309,7 +297,7 @@ async def list_outfits(
     drafts_only: Optional[bool] = Query(None),
     search: Optional[str] = Query(None),
     tags: Optional[str] = Query(None, description="Comma-separated tags"),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -368,10 +356,14 @@ async def list_outfits(
         end = start + page_size - 1
 
         async def _list_outfits_data(d: Any) -> Tuple[Any, int, Dict[str, Dict[str, Any]]]:
-            count_res = await asyncio.to_thread(_build_list_query(d, count_only=True).execute)
+            # Count + page are independent reads; run them concurrently so a
+            # list response waits on the slower of the two, not their sum.
+            count_res, res = await asyncio.gather(
+                asyncio.to_thread(_build_list_query(d, count_only=True).execute),
+                asyncio.to_thread(_build_list_query(d, page_range=True).execute),
+            )
             total = getattr(count_res, "count", len(count_res.data or []))
 
-            res = await asyncio.to_thread(_build_list_query(d, page_range=True).execute)
             outfits = [_normalize_outfit_images(o) for o in (res.data or [])]
 
             # Fetch all items for all outfits in a single batch query
@@ -403,8 +395,10 @@ async def list_outfits(
         # Private buckets: materialize fresh short-lived presigned URLs from
         # storage_path at read time (the DB stores keys, not URLs) for both the
         # outfit images and the nested item images.
-        await materialize_parent_images(outfits)
-        await materialize_parent_images(list(items_map.values()))
+        await asyncio.gather(
+            materialize_parent_images(outfits),
+            materialize_parent_images(list(items_map.values())),
+        )
 
         # Attach items to each outfit
         for outfit in outfits:
@@ -434,7 +428,7 @@ async def list_outfits(
 
 @router.get("/available-items", response_model=Dict[str, Any])
 async def available_items(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Return simplified items list suitable for outfit-building UIs."""
@@ -473,7 +467,7 @@ async def available_items(
 @router.get("/{outfit_id:uuid}", response_model=DataResponse[OutfitResponse])
 async def get_outfit(
     outfit_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -529,7 +523,7 @@ async def get_public_outfit(
         )
         share_row = (share.data or [None])[0]
         if share_row:
-            expires_at = _parse_iso_datetime(share_row.get("expires_at"))
+            expires_at = parse_utc_datetime(share_row.get("expires_at"))
             if expires_at and expires_at < utcnow():
                 raise SharedOutfitNotFoundError(share_id=outfit_id_str)
             views = int(share_row.get("view_count") or 0) + 1
@@ -576,7 +570,7 @@ async def get_public_outfit(
 async def update_outfit(
     outfit_id: UUID,
     update: OutfitUpdate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -622,7 +616,7 @@ async def update_outfit(
 async def share_outfit(
     outfit_id: UUID,
     request: ShareOutfitRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Enable public sharing for an outfit and return a share URL.
@@ -689,7 +683,7 @@ async def share_outfit(
 @router.delete("/{outfit_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_outfit(
     outfit_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -697,7 +691,35 @@ async def delete_outfit(
         existing = await asyncio.to_thread(db.table("outfits").select("id").eq("id", outfit_id_str).eq("user_id", user_id).single().execute)
         if not existing.data:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
+
+        # Collect owned outfit-image storage paths (with _thumb siblings)
+        # BEFORE the row is gone; deleting the row without this leaks the
+        # objects forever (measured: 296 orphans / 192MB in the bucket).
+        storage_paths: List[str] = []
+        try:
+            owned = await StorageService.resolve_owned_storage_paths(
+                db, user_id, outfit_ids=[outfit_id_str]
+            )
+            storage_paths = owned["storage_paths"]
+        except Exception as e:
+            logger.warning(
+                "Failed to resolve storage paths for outfit delete",
+                outfit_id=outfit_id_str,
+                error=str(e),
+            )
+
         await asyncio.to_thread(db.table("outfits").delete().eq("id", outfit_id_str).eq("user_id", user_id).execute)
+
+        if storage_paths:
+            try:
+                await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)
+            except Exception as e:
+                logger.warning(
+                    "Failed to delete outfit images from storage",
+                    outfit_id=outfit_id_str,
+                    object_count=len(storage_paths),
+                    error=str(e),
+                )
         return None
     except OutfitNotFoundError:
         raise
@@ -714,7 +736,7 @@ async def delete_outfit(
 @router.post("/collections", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 async def create_collection(
     request: OutfitCollectionCreate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -750,7 +772,7 @@ async def create_collection(
 
 @router.get("/collections", response_model=Dict[str, Any])
 async def list_collections(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -796,7 +818,7 @@ async def list_collections(
 async def update_collection(
     collection_id: UUID,
     update: OutfitCollectionUpdate,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -846,7 +868,7 @@ async def update_collection(
 async def replace_collection_outfits(
     collection_id: UUID,
     request: UpdateCollectionOutfitsRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -882,7 +904,7 @@ async def replace_collection_outfits(
 async def add_collection_outfit(
     collection_id: UUID,
     request: AddCollectionOutfitRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Add one owned outfit to a collection without replacing existing members."""
@@ -942,7 +964,7 @@ async def add_collection_outfit(
 async def remove_collection_outfit(
     collection_id: UUID,
     outfit_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Remove one outfit from an owned collection."""
@@ -969,7 +991,7 @@ async def remove_collection_outfit(
 @router.delete("/collections/{collection_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_collection(
     collection_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -993,7 +1015,7 @@ async def delete_collection(
 @router.post("/{outfit_id}/favorite", response_model=Dict[str, Any])
 async def toggle_favorite(
     outfit_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -1021,7 +1043,7 @@ async def toggle_favorite(
 @router.post("/{outfit_id}/wear", response_model=Dict[str, Any])
 async def mark_worn(
     outfit_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -1068,7 +1090,7 @@ async def mark_worn(
 @router.get("/{outfit_id}/wear-history", response_model=Dict[str, Any])
 async def get_wear_history(
     outfit_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Get wear history for an outfit."""
@@ -1119,7 +1141,7 @@ async def get_wear_history(
 @router.post("/{outfit_id}/duplicate", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 async def duplicate_outfit(
     outfit_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -1172,7 +1194,7 @@ async def duplicate_outfit(
 async def add_item_to_outfit(
     outfit_id: UUID,
     request: AddItemToOutfitRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -1224,7 +1246,7 @@ async def add_item_to_outfit(
 async def remove_item_from_outfit(
     outfit_id: UUID,
     item_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -1283,7 +1305,7 @@ async def remove_item_from_outfit(
 async def start_generation(
     outfit_id: UUID,
     request: GenerationRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Create a generation record and return a generation_id.
@@ -1333,7 +1355,7 @@ async def start_generation(
 @router.get("/generation/{generation_id}", response_model=Dict[str, Any])
 async def get_generation_status(
     generation_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -1384,7 +1406,7 @@ async def upload_outfit_image(
     body_profile_id: Optional[str] = Form(None),
     generation_id: Optional[str] = Form(None),
     is_primary: bool = Form(True),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Upload an outfit image and create an outfit_images record."""
@@ -1457,7 +1479,7 @@ async def upload_outfit_image(
 async def delete_outfit_image(
     outfit_id: UUID,
     image_id: UUID,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Delete an outfit image and best-effort remove it from storage."""
@@ -1498,7 +1520,7 @@ async def delete_outfit_image(
 
 @router.get("/stats", response_model=Dict[str, Any])
 async def get_outfit_stats(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Compute outfit statistics for analytics/dashboard."""
@@ -1545,7 +1567,7 @@ async def get_outfit_stats(
 @router.post("/batch-delete", response_model=Dict[str, Any])
 async def batch_delete_outfits(
     request: BatchDeleteOutfitsRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Batch delete outfits and best-effort remove their images from storage."""
@@ -1565,7 +1587,9 @@ async def batch_delete_outfits(
             try:
                 await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)
             except Exception as e:
-                logger.warning("Failed to delete outfit images from storage", count=len(storage_paths), error=str(e))
+                # object_count, not image_count: storage_paths includes the
+                # derived _thumb siblings, so this is ~2x the image count.
+                logger.warning("Failed to delete outfit images from storage", object_count=len(storage_paths), error=str(e))
 
         delete_res = await asyncio.to_thread(db.table("outfits").delete().eq("user_id", user_id).in_("id", outfit_ids).execute)
         deleted_count = len(delete_res.data or [])
@@ -1580,7 +1604,7 @@ async def batch_delete_outfits(
 @router.get("/recently-worn", response_model=Dict[str, Any])
 async def recently_worn(
     limit: int = Query(5, ge=1, le=20),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -1604,7 +1628,7 @@ async def recently_worn(
 
 @router.get("/favorites", response_model=Dict[str, Any])
 async def favorites(
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     try:
@@ -1630,7 +1654,7 @@ async def favorites(
 async def weather_suggestions(
     temperature: float = Query(..., description="Current temperature in Celsius"),
     weather_condition: Optional[str] = Query(None),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
     """Return simple outfit suggestions based on temperature and seasonal tags."""

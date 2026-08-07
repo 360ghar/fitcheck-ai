@@ -36,7 +36,7 @@ export interface PinCreatorProps {
 export function PinCreator({ name, avatarUrl }: PinCreatorProps) {
   return (
     <span className="flex min-w-0 items-center gap-2 bg-on-image/95 px-2 py-1.5 text-xs font-bold text-on-image-foreground">
-      {avatarUrl ? <img src={avatarUrl} alt="" width={32} height={32} className="h-8 w-8 rounded-full object-cover" /> : <span className="flex h-8 w-8 items-center justify-center rounded-full bg-on-image-foreground/10">{name.slice(0, 1)}</span>}
+      {avatarUrl ? <img loading="lazy" decoding="async" src={avatarUrl} alt="" width={32} height={32} className="h-8 w-8 rounded-full object-cover" /> : <span className="flex h-8 w-8 items-center justify-center rounded-full bg-on-image-foreground/10">{name.slice(0, 1)}</span>}
       <span className="truncate">{name}</span>
     </span>
   )

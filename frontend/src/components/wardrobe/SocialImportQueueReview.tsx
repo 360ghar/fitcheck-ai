@@ -42,7 +42,7 @@ export function SocialImportQueueReview({
             <Badge>Photo #{awaitingPhoto.ordinal}</Badge>
           </div>
 
-          <img
+          <img loading="lazy" decoding="async"
             src={awaitingPhoto.source_thumb_url || awaitingPhoto.source_photo_url}
             alt={`Social import #${awaitingPhoto.ordinal} awaiting confirmation`}
             className="h-auto w-full rounded-md object-contain bg-card"
@@ -85,7 +85,7 @@ export function SocialImportQueueReview({
                 </div>
 
                 {item.generated_image_url ? (
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={item.generated_image_url}
                     alt={item.name || item.category}
                     className="mt-2 h-auto w-full rounded-md bg-card object-contain"
@@ -128,7 +128,7 @@ export function SocialImportQueueReview({
 
           {bufferedPhoto ? (
             <div className="space-y-2">
-              <img
+              <img loading="lazy" decoding="async"
                 src={bufferedPhoto.source_thumb_url || bufferedPhoto.source_photo_url}
                 alt={`Social import #${bufferedPhoto.ordinal} queued`}
                 className="h-auto w-full rounded-md bg-card object-contain"
@@ -139,7 +139,7 @@ export function SocialImportQueueReview({
             </div>
           ) : processingPhoto ? (
             <div className="space-y-2">
-              <img
+              <img loading="lazy" decoding="async"
                 src={processingPhoto.source_thumb_url || processingPhoto.source_photo_url}
                 alt={`Social import #${processingPhoto.ordinal} processing`}
                 className="h-auto w-full rounded-md bg-card object-contain opacity-80"

@@ -55,7 +55,7 @@ export default function Footer() {
                 <Shirt className="w-4 h-4 text-white" />
               </div>
               <span className="text-lg font-semibold tracking-tight text-stone-50">
-                FitCheck<span className="font-normal text-muted-foreground"> AI</span>
+                FitCheck<span className="font-normal text-stone-400"> AI</span>
               </span>
             </Link>
             <p className="max-w-xs text-sm leading-relaxed">
@@ -82,7 +82,7 @@ export default function Footer() {
                 href="mailto:info@fitcheckaiapp.com"
                 className="flex items-center gap-2 hover:text-stone-100 transition-colors"
               >
-                <Mail className="w-4 h-4" />
+                <Mail className="w-4 h-4" aria-hidden="true" />
                 <span>info@fitcheckaiapp.com</span>
               </a>
               <a
@@ -91,7 +91,7 @@ export default function Footer() {
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 hover:text-stone-100 transition-colors"
               >
-                <Phone className="w-4 h-4" />
+                <Phone className="w-4 h-4" aria-hidden="true" />
                 <span>+91 9310833204</span>
               </a>
             </div>
@@ -130,7 +130,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-stone-900 pt-6 flex flex-col md:flex-row justify-between items-center gap-3">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-stone-400">
             &copy; {new Date().getFullYear()} FitCheck AI. All rights reserved.
           </p>
         </div>

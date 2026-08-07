@@ -149,7 +149,7 @@ class UnsupportedMediaTypeError(FitCheckException):
     ):
         super().__init__(
             message,
-            details={"allowed_types": allowed_types or ["image/jpeg", "image/png", "image/webp"]}
+            details={"allowed_types": allowed_types or ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/heic", "image/bmp", "image/tiff"]}
         )
 
 
@@ -295,10 +295,10 @@ class SocialImportJobNotFoundError(NotFoundError):
 
 class ServiceError(FitCheckException):
     """Raised when an external service fails."""
-    
+
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     error_code = "SERVICE_UNAVAILABLE"
-    
+
     def __init__(
         self,
         message: str = "Service temporarily unavailable",
@@ -309,6 +309,19 @@ class ServiceError(FitCheckException):
         if service_name:
             _details["service"] = service_name
         super().__init__(message, _details)
+
+
+class BillingNotConfiguredError(ServiceError):
+    """Web billing (Stripe) is not configured for this deployment.
+
+    Same HTTP 503 as a generic :class:`ServiceError` for backwards
+    compatibility, but carries a distinct ``BILLING_NOT_CONFIGURED`` code so the
+    client can tell a *permanent* "billing isn't enabled here" from a
+    *transient* 503 and skip its transport-retry loop. See RCA 2026-08-05
+    (repeated /subscription/checkout|portal 503 bursts).
+    """
+
+    error_code = "BILLING_NOT_CONFIGURED"
 
 
 class AIServiceError(ServiceError):

@@ -152,8 +152,12 @@ export function OutfitDetailBody({
           detail="Often under a minute. You can close this and reopen from the progress pill."
           isActive
           previewUrls={
+            // Full size on purpose. GeneratingSurface takes a flat string[], so
+            // there is no per-URL error fallback to express here, and a derived
+            // `_thumb` URL is not guaranteed to exist. At most 4 images in a
+            // transient progress card, so correctness beats the byte saving.
             compositionItems
-              .map((item) => item.images?.[0]?.thumbnail_url || item.images?.[0]?.image_url)
+              .map((item) => item.images?.[0]?.image_url || item.images?.[0]?.thumbnail_url)
               .filter(Boolean) as string[]
           }
           previewLabel="Pieces in this outfit"

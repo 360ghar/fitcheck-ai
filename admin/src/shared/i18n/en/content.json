@@ -1,0 +1,132 @@
+{
+  "title": "Posts",
+  "description": "The blog content hub — write, edit, and publish.",
+  "newPost": "New post",
+  "stats": {
+    "total": "Total posts",
+    "published": "Published",
+    "drafts": "Drafts"
+  },
+  "columns": {
+    "post": "Post",
+    "category": "Category",
+    "status": "Status",
+    "date": "Date",
+    "author": "Author",
+    "updated": "Updated"
+  },
+  "filters": {
+    "status": "Status",
+    "statusPlaceholder": "All statuses",
+    "category": "Category",
+    "categoryPlaceholder": "All categories"
+  },
+  "status": {
+    "published": "Published",
+    "draft": "Draft"
+  },
+  "rowActions": {
+    "label": "Actions",
+    "edit": "Edit",
+    "preview": "Preview",
+    "delete": "Delete"
+  },
+  "delete": {
+    "dialogTitle": "Delete post",
+    "dialogDescription": "Delete “{{title}}”? This action cannot be undone.",
+    "confirm": "Delete",
+    "success": "Post deleted.",
+    "errorGeneric": "Could not delete the post. Try again."
+  },
+  "editor": {
+    "newTitle": "New post",
+    "editTitle": "Edit post",
+    "newDescription": "Create a new blog post",
+    "editDescription": "Update your blog post",
+    "back": "Back to posts",
+    "cancel": "Cancel",
+    "close": "Close",
+    "preview": "Preview",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Post saved.",
+    "created": "Post created.",
+    "updated": "Post updated.",
+    "errorLoad": "Could not load this post.",
+    "errorSave": "Could not save the post. Try again.",
+    "leaveGuard": "You have unsaved changes. Leave without saving?",
+    "leaveGuardLeave": "Leave",
+    "leaveGuardStay": "Keep editing",
+    "sections": {
+      "content": "Content",
+      "contentDescription": "The main content of your blog post",
+      "settings": "Settings",
+      "settingsDescription": "Metadata and publishing options"
+    },
+    "fields": {
+      "title": "Title",
+      "titlePlaceholder": "Enter post title…",
+      "slug": "Slug",
+      "slugHint": "This will be the URL: /blog/{{slug}}",
+      "excerpt": "Excerpt",
+      "excerptPlaceholder": "Brief summary of the post…",
+      "excerptCount": "{{count}}/500 characters",
+      "content": "Content",
+      "category": "Category",
+      "categoryPlaceholder": "Select or type a category",
+      "emoji": "Emoji",
+      "author": "Author",
+      "authorPlaceholder": "Author name",
+      "authorTitle": "Author title",
+      "authorTitlePlaceholder": "e.g. Fashion Expert",
+      "date": "Publish date",
+      "keywords": "Keywords",
+      "keywordsPlaceholder": "Add a keyword and press Enter",
+      "keywordsAdd": "Add",
+      "keywordsRemove": "Remove keyword {{keyword}}",
+      "featuredImage": "Featured image URL",
+      "featuredImagePlaceholder": "https://…",
+      "isPublished": "Published",
+      "draft": "Draft"
+    },
+    "errors": {
+      "titleRequired": "Enter a title.",
+      "titleMax": "Title is too long (200 max).",
+      "slugRequired": "Enter a slug.",
+      "slugFormat": "Lowercase letters, numbers, and hyphens only.",
+      "slugMax": "Slug is too long (255 max).",
+      "slugDuplicate": "A post with this slug already exists.",
+      "excerptRequired": "Enter an excerpt.",
+      "excerptMax": "Excerpt is too long (500 max).",
+      "contentRequired": "Write some content.",
+      "categoryRequired": "Choose a category.",
+      "emojiRequired": "Enter an emoji.",
+      "emojiMax": "Use a single emoji.",
+      "authorRequired": "Enter the author name.",
+      "dateRequired": "Pick a publish date.",
+      "featuredImageUrl": "Enter a valid URL.",
+      "keywordsMin": "Add at least one keyword."
+    }
+  },
+  "empty": {
+    "title": "No posts",
+    "message": "No blog posts match the current filters."
+  },
+  "loadError": {
+    "title": "Could not load posts",
+    "message": "The blog post list is unavailable right now."
+  },
+  "categories": {
+    "title": "Categories",
+    "description": "Organize blog posts into categories.",
+    "intro": "Categories are derived from published posts. Assign or rename them from the post editor.",
+    "header": "All categories",
+    "columnCategory": "Category",
+    "postCount": "{{count}} posts",
+    "noPosts": "No posts in this category",
+    "emptyTitle": "No categories",
+    "emptyMessage": "Categories appear here once posts are published.",
+    "loadErrorTitle": "Could not load categories",
+    "loadErrorMessage": "The category list is unavailable right now."
+  }
+}
