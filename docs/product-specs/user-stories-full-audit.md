@@ -269,7 +269,7 @@ Highest-priority items still open (deferred to fix phase):
 | 6 | P2 | No AI-photo consent revocation (App Review 5.1.2(i)) | fix |
 | 7 | P2 | Mobile dashboard: snapshot "Loading" forever after failure; no offline guard; streak tile/route active when backend flag off; light-mode contrast on dark gradients | fix |
 | 8 | P2 | Batch save concurrency uncapped (N uploads at once) | fix |
-| 9 | P3 | `outfit_wear_history` table in no migration — feature silently dead | backend |
+| 9 | P3 | `outfit_wear_history` table in no migration — feature silently dead | fixed (migration 042) |
 | 10 | P3 | `parallel_with_retry` retries hard AI errors ×3 (quota burn) | backend |
 | 11 | P3 | Calendar `assign_outfit_to_event` doesn't validate outfit ownership | backend |
 | 12 | P3 | Feedback tickets unbounded limit/offset | backend |

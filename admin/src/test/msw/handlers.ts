@@ -58,6 +58,12 @@ export const handlers = [
 
   http.post('*/api/v1/auth/logout', () => new HttpResponse(null, { status: 204 })),
 
+  // Google OAuth profile sync — the admin app never consumes the body, so a
+  // minimal envelope is enough (the session identity comes from /admin/me).
+  http.post('*/api/v1/auth/oauth/sync', () =>
+    HttpResponse.json({ data: { is_new_user: false }, message: 'OK' }),
+  ),
+
   http.post('*/api/v1/auth/refresh', async ({ request }) => {
     const body = (await request.json()) as { refresh_token?: string }
     if (!body.refresh_token) {

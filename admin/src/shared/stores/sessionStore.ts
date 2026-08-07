@@ -10,6 +10,7 @@ import {
 import { clearTokens, getTokens, setTokens } from '@/shared/api/tokens'
 import type { AdminRole, AdminUser, LoginEnvelope, MeResponse } from '@/shared/api/types'
 import { IDLE_CHECK_INTERVAL_MS, IDLE_TIMEOUT_MS } from '@/shared/lib/constants'
+import { getSupabase } from '@/shared/lib/supabase'
 
 /**
  * Session store — auth lifecycle for the admin surface.
@@ -42,6 +43,10 @@ export interface SessionState {
 
   bootstrap: () => Promise<BootstrapResult>
   login: (email: string, password: string) => Promise<BootstrapResult>
+  /** Google OAuth: start the Supabase redirect flow (browser leaves the app) */
+  signInWithGoogle: () => Promise<void>
+  /** Google OAuth: called on /auth/callback after the Supabase redirect */
+  handleOAuthCallback: () => Promise<BootstrapResult>
   logout: (reason?: LogoutReason) => void
   touch: () => void
 }
@@ -191,6 +196,77 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
     } catch (error) {
       clearTokens()
       stopIdleWatcher()
+      const apiError = isApiError(error) ? error : null
+      set({
+        status: 'anon',
+        user: null,
+        role: null,
+        permissions: [],
+        permissionDenied: isApiError(error) && error.status === 403,
+        error: apiError,
+      })
+      throw error
+    }
+  },
+
+  signInWithGoogle: async () => {
+    // The browser navigates to Google on success; errors (missing provider
+    // config, network) throw so the login page can surface them.
+    const supabase = await getSupabase()
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+    if (error) throw error
+  },
+
+  handleOAuthCallback: async () => {
+    set({ status: 'loading', permissionDenied: false, error: null })
+    try {
+      const supabase = await getSupabase()
+      const { data, error } = await supabase.auth.getSession()
+      if (error) throw error
+      if (!data.session) {
+        // No session on return (user cancelled at Google's consent screen or
+        // the redirect was tampered with). Distinct code so the callback page
+        // can show a "cancelled" message instead of a generic failure.
+        throw new ApiError({
+          status: 0,
+          code: 'OAUTH_NO_SESSION',
+          message: 'No OAuth session returned',
+        })
+      }
+
+      // Sync the profile with the backend using the Supabase OAuth session
+      // token. skipAuth + skipUnauthorizedEvent: a 401 here means the OAuth
+      // session itself is invalid/expired, NOT that app tokens need a refresh
+      // — retrying would swap in localStorage tokens and sync the wrong user
+      // (same rationale as frontend/src/api/auth.ts syncOAuthProfile).
+      await apiPost<{ data: { is_new_user?: boolean } }>(
+        '/api/v1/auth/oauth/sync',
+        {},
+        {
+          skipAuth: true,
+          skipUnauthorizedEvent: true,
+          headers: { Authorization: `Bearer ${data.session.access_token}` },
+        },
+      )
+
+      setTokens({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      })
+
+      // bootstrap() is the trust boundary: GET /admin/me resolves role +
+      // permissions. A non-admin Google account gets 403 → tokens cleared,
+      // permissionDenied flagged, 'forbidden' returned — identical to the
+      // email/password path.
+      return await get().bootstrap()
+    } catch (error) {
+      stopIdleWatcher()
+      clearTokens()
       const apiError = isApiError(error) ? error : null
       set({
         status: 'anon',

@@ -5,7 +5,6 @@ import * as axeMatchers from 'vitest-axe/matchers'
 
 import '@/shared/i18n'
 import { clearTokens } from '@/shared/api/tokens'
-import { useSessionStore } from '@/shared/stores/sessionStore'
 import { server } from '@/test/msw/server'
 import { sharedTestQueryClient } from '@/test/utils'
 
@@ -69,12 +68,17 @@ beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' })
 })
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
   server.resetHandlers()
   sharedTestQueryClient.clear()
   localStorage.clear()
   clearTokens()
+  // Lazy import: sessionStore pulls in @/shared/lib/supabase, and test files
+  // that mock that module register their vi.mock during their own import
+  // phase. An eager import here would load the real module before those
+  // mocks register and permanently bind the store to it.
+  const { useSessionStore } = await import('@/shared/stores/sessionStore')
   useSessionStore.setState({
     status: 'loading',
     user: null,

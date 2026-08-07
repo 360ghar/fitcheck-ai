@@ -110,6 +110,15 @@ async def test_revenue_mrr_split_and_counts():
     assert result["refunds_30d"] == 2
     assert result["as_of"]  # ISO timestamp present
 
+    # Churn counts must select the real PK of each dedupe ledger — the tables
+    # have no `id` column (stripe_webhook_events.event_id,
+    # apple_iap_events.notification_id, google_rtdn_events.message_id), and a
+    # `.select("id", count="exact")` here 500s in prod with Postgres 42703.
+    churn_selects = {table: args for table, args in db.selects}
+    assert churn_selects["stripe_webhook_events"] == ("event_id",)
+    assert churn_selects["apple_iap_events"] == ("notification_id",)
+    assert churn_selects["google_rtdn_events"] == ("message_id",)
+
 
 @pytest.mark.asyncio
 async def test_revenue_empty_state_is_zero():

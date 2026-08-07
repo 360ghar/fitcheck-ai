@@ -37,6 +37,15 @@ All optional (see `.env.example`); env access is zod-validated in
 |-----|----------------------|---------|
 | `VITE_API_BASE_URL` | empty → same-origin (`/api` proxied/redirected) | API base. Empty is correct for both the dev proxy and the Netlify `/api/*` redirect |
 | `VITE_SENTRY_DSN` | empty disables Sentry | Error monitoring via `@sentry/react` |
+| `VITE_SUPABASE_URL` | empty hides the Google button | Supabase project URL for "Continue with Google" (same project as the main app) |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | empty hides the Google button | Supabase publishable (anon) key for Google OAuth |
+
+Google sign-in requires both Supabase vars AND the callback URL in the
+Supabase Auth allowlist: **Authentication → URL Configuration → Redirect
+URLs** must include `https://admin.fitcheckaiapp.com/auth/callback` (and
+`http://localhost:5173/auth/callback` for local dev). The backend endpoints
+(`/api/v1/auth/oauth/sync`, `/api/v1/admin/me`) are unchanged — RBAC stays
+server-enforced, so a non-admin Google account gets 403 and is bounced.
 
 ## Scripts
 

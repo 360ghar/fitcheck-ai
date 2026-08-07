@@ -60,6 +60,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `039_scope_service_policies.sql`
 - `040_admin_dashboard_top_users.sql`
 - `041_admin_trends.sql`
+- `042_outfit_wear_history.sql`
 
 ## Tables (CREATE TABLE)
 
@@ -82,6 +83,7 @@ This is an orientation index for agents, not a substitute for reading migrations
 | `outfit_collections` | `001_full_schema.sql` |
 | `outfit_generations` | `001_full_schema.sql` |
 | `outfit_images` | `001_full_schema.sql` |
+| `outfit_wear_history` | `042_outfit_wear_history.sql` |
 | `outfits` | `001_full_schema.sql` |
 | `photoshoot_jobs` | `023_durable_job_state.sql` |
 | `promo_codes` | `031_promo_codes.sql` |
@@ -222,6 +224,7 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `037_admin_roles.sql` → `users`
 - `037_admin_roles.sql` → `support_tickets`
 - `038_audit_events.sql` → `audit_events`
+- `042_outfit_wear_history.sql` → `outfit_wear_history`
 
 ## Related
 

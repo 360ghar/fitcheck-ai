@@ -30,6 +30,14 @@ Table/column map used throughout (verified 2026-08-06):
   cancelled)
 - ``referral_codes`` / ``referral_redemptions`` (007): referrer_user_id,
   referred_user_id, referrer_credit_applied, referred_credit_applied
+- Webhook dedupe ledgers — PK is the provider's event ID, there is NO ``id``
+  column, so count queries must select the PK: ``stripe_webhook_events``
+  (022/027): event_id, event_type, received_at, status, attempts,
+  processing_started_at, processed_at, last_error; ``apple_iap_events``
+  (030): notification_id, event_type, signed_type, received_at, status,
+  attempts, processing_started_at, processed_at, last_error;
+  ``google_rtdn_events`` (030): message_id, event_type, received_at, status,
+  attempts, processing_started_at, processed_at, last_error
 - ``promo_codes`` / ``promo_redemptions`` (031)
 - ``support_tickets`` (009/034/037): id, user_id, category, subject,
   description, status, contact_email, app_platform, app_version,
@@ -1173,19 +1181,19 @@ async def dashboard_revenue(db: Any) -> Dict[str, Any]:
     )
     churn_stripe = await _count(
         lambda d: d.table("stripe_webhook_events")
-        .select("id", count="exact")
+        .select("event_id", count="exact")
         .in_("event_type", STRIPE_CHURN_EVENT_TYPES)
         .gte("received_at", d30)
     )
     churn_apple = await _count(
         lambda d: d.table("apple_iap_events")
-        .select("id", count="exact")
+        .select("notification_id", count="exact")
         .in_("event_type", APPLE_CHURN_EVENT_TYPES)
         .gte("received_at", d30)
     )
     churn_google = await _count(
         lambda d: d.table("google_rtdn_events")
-        .select("id", count="exact")
+        .select("message_id", count="exact")
         .in_("event_type", GOOGLE_CHURN_EVENT_TYPES)
         .gte("received_at", d30)
     )

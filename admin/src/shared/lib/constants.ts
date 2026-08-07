@@ -33,6 +33,8 @@ export const STORAGE_KEYS = {
   tokens: 'fitcheck_admin_tokens',
   ui: 'fitcheck-admin-ui',
   theme: 'fitcheck-admin-theme',
+  /** returnTo stashed before the Google OAuth redirect, consumed by /auth/callback */
+  oauthReturnTo: 'fitcheck-admin-oauth-return-to',
 } as const
 
 /** Date-range presets for filters (days). */

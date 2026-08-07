@@ -21,6 +21,7 @@ export interface RouteMeta {
 
 export const routeManifest = {
   login: { titleKey: 'auth:login.title' },
+  oauthCallback: { titleKey: 'auth:callback.title' },
   dashboard: { titleKey: 'placeholder:dashboard.title', permission: 'dashboards.read' },
   trends: { titleKey: 'placeholder:trends.title', permission: 'dashboards.read' },
   users: { titleKey: 'placeholder:users.title', permission: 'users.read' },
@@ -49,6 +50,9 @@ function lazyPage(loader: () => Promise<{ default: ComponentType }>): LazyExotic
 
 const LoginPage = lazyPage(() =>
   import('@/features/auth/pages/LoginPage').then((m) => ({ default: m.LoginPage })),
+)
+const OAuthCallbackPage = lazyPage(() =>
+  import('@/features/auth/pages/OAuthCallbackPage').then((m) => ({ default: m.OAuthCallbackPage })),
 )
 const DashboardPage = lazyPage(() =>
   import('@/features/dashboard/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })),
@@ -137,6 +141,17 @@ export const appRouteObjects: RouteObject[] = [
       </PublicOnlyGuard>
     ),
     handle: { titleKey: routeManifest.login.titleKey },
+  },
+  {
+    // Deliberately unguarded: the page drives its own transitions (success →
+    // returnTo, 403 → /login with the not-admin banner, failure → error UI).
+    path: '/auth/callback',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <OAuthCallbackPage />
+      </Suspense>
+    ),
+    handle: { titleKey: routeManifest.oauthCallback.titleKey },
   },
   {
     element: (

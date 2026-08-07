@@ -33,6 +33,11 @@ REQUIRED_TABLES = (
     "outfit_images",
     "outfit_collections",
     "outfit_collection_items",
+    # Wear history (migration 042): POST /outfits/{id}/wear writes it and GET
+    # /outfits/{id}/wear-history reads it. Without the table both degrade
+    # silently (empty wear history), so readiness fails closed until 042 is
+    # applied (same rationale as the webhook ledgers below).
+    "outfit_wear_history",
     "body_profiles",
     # Planning + generation tracking (docs-aligned MVP)
     "outfit_generations",

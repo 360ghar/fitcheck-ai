@@ -5,8 +5,9 @@ A small in-memory fake of the supabase-py query builder: routes run through
 ``execute_with_reconnect`` (worker thread), so the fake only needs to be
 thread-safe for plain attribute access. It supports the filter operators the
 admin service uses (eq/neq/gte/lte/ilike/in/or_), ``maybe_single``/``single``
-semantics, ``limit``/``range``, and records ``insert``/``update`` payloads for
-assertions (db.inserts / db.updates).
+semantics, ``limit``/``range``, and records ``insert``/``update`` payloads
+plus every ``select`` column list for assertions
+(db.inserts / db.updates / db.selects).
 """
 
 from __future__ import annotations
@@ -64,6 +65,7 @@ class FakeBuilder:
 
     # --- query modifiers (no-ops for the fake, recorded for assertions) ------
     def select(self, *args, **kwargs):
+        self._db.selects.append((self._table, args))
         return self
 
     def eq(self, col: str, value: Any):
@@ -226,6 +228,7 @@ class FakeDB:
         self.inserts: List[tuple] = []
         self.updates: List[tuple] = []
         self.rpc_calls: List[tuple] = []
+        self.selects: List[tuple] = []
 
     def _rows_for(self, table: str) -> List[Dict[str, Any]]:
         return self.rows.get(table, [])

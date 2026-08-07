@@ -57,7 +57,7 @@ listed in the worklist below.
 | P2 | `AlertDialog` aliased to dismissible `Dialog` — destructive confirm can be X-dismissed | `frontend/src/components/ui/alert-dialog.tsx:16` |
 | P2 | Flutter `Season.value => name` serializes `allSeason`; backend filters expect `all-season` (mobile-written all-season outfits invisible to backend season filters; read path works around via `Season.fromString`) | `flutter/lib/domain/enums/season.dart:24` |
 | P2 | Mobile dashboard snapshot "Loading" forever after failed load; no offline guard; streak tile active while backend `ENABLE_GAMIFICATION=false`; light-mode contrast on hardcoded dark gradients | `flutter/lib/features/dashboard/**` |
-| P3 | `outfit_wear_history` table exists in no migration — `/outfits/{id}/wear-history` returns `[]` on the exception path (silently dead) | `backend/app/api/v1/outfits.py:1063-1109` (no migration under `backend/db/supabase/migrations/`) |
+| P3 | `outfit_wear_history` table existed in no migration — `/outfits/{id}/wear-history` returned `[]` on the exception path (silently dead). **FIXED:** `backend/db/supabase/migrations/042_outfit_wear_history.sql` (columns match the API insert payload; added to `REQUIRED_TABLES` so `/ready` fails closed until applied) | `backend/app/api/v1/outfits.py:1063-1109` (was: no migration under `backend/db/supabase/migrations/`) |
 | P3 | `get_db` returns `SupabaseDB.get_service_client()` — identical to `get_service_db` (silent elevated privileges) | `backend/app/db/connection.py:68-75` vs `:86-92` |
 | P3 | Dashboard `user` field is a list, not an object | `backend/app/api/v1/users.py:949` |
 | P3 | Blog `?page=abc` → "Page NaN" | `frontend/src/pages/blog/BlogIndexPage.tsx:12` |

@@ -2,13 +2,24 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { RouteObject } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { axe } from 'vitest-axe'
 
 import { LoginPage } from './LoginPage'
 
+import { STORAGE_KEYS } from '@/shared/lib/constants'
+import { getSupabase } from '@/shared/lib/supabase'
 import { server } from '@/test/msw/server'
 import { renderWithProviders } from '@/test/utils'
+
+// The session store starts Google OAuth via getSupabase(); tests replace the
+// client with a fake (the shared setup defers its store import so this mock
+// registers first).
+vi.mock('@/shared/lib/supabase', () => ({
+  getSupabase: vi.fn(),
+}))
+
+const mockedGetSupabase = vi.mocked(getSupabase)
 
 const loginRoutes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
@@ -219,6 +230,81 @@ describe('LoginPage', () => {
     const alerts = screen.getAllByRole('alert').map((el) => el.textContent)
     expect(alerts).toContain('Email is required')
     expect(alerts).toContain('Password is required')
+    expect(await axe(container)).toHaveNoViolations()
+  })
+})
+
+describe('LoginPage Google sign-in', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('hides the Google button when Supabase env is not configured', () => {
+    vi.stubEnv('VITE_SUPABASE_URL', '')
+    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', '')
+    renderLogin()
+    expect(
+      screen.queryByRole('button', { name: 'Continue with Google' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows the Google button when Supabase env is configured', () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://test.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'anon-key')
+    renderLogin()
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeInTheDocument()
+  })
+
+  it('starts the Google OAuth flow and stashes returnTo for the callback', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://test.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'anon-key')
+    const signInWithOAuth = vi.fn().mockResolvedValue({ data: {}, error: null })
+    mockedGetSupabase.mockResolvedValue({ auth: { signInWithOAuth } } as never)
+
+    renderLogin('/login?returnTo=/users')
+    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }))
+
+    expect(signInWithOAuth).toHaveBeenCalledWith({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    })
+    expect(localStorage.getItem(STORAGE_KEYS.oauthReturnTo)).toBe('/users')
+  })
+
+  it('does not stash an unsafe returnTo (open-redirect guard)', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://test.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'anon-key')
+    const signInWithOAuth = vi.fn().mockResolvedValue({ data: {}, error: null })
+    mockedGetSupabase.mockResolvedValue({ auth: { signInWithOAuth } } as never)
+
+    renderLogin('/login?returnTo=https://evil.example.com')
+    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }))
+
+    expect(localStorage.getItem(STORAGE_KEYS.oauthReturnTo)).toBeNull()
+  })
+
+  it('shows an error banner when Google sign-in cannot start', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://test.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'anon-key')
+    const signInWithOAuth = vi
+      .fn()
+      .mockResolvedValue({ data: {}, error: { message: 'provider misconfigured' } })
+    mockedGetSupabase.mockResolvedValue({ auth: { signInWithOAuth } } as never)
+
+    renderLogin()
+    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Google sign-in could not be started. Try again.',
+    )
+    // Still on the login page — no navigation on failure.
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeInTheDocument()
+  })
+
+  it('has no axe violations with the Google button present', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://test.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'anon-key')
+    const { container } = renderLogin()
     expect(await axe(container)).toHaveNoViolations()
   })
 })

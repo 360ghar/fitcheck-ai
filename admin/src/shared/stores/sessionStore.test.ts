@@ -1,13 +1,44 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useSessionStore } from './sessionStore'
 
 import { apiGet } from '@/shared/api/client'
 import { clearTokens, getTokens, setTokens } from '@/shared/api/tokens'
 import type { MeResponse } from '@/shared/api/types'
+import { getSupabase } from '@/shared/lib/supabase'
 import { server } from '@/test/msw/server'
+
+// The store reaches the SDK only through getSupabase(). Mocking the wrapper
+// (instead of the leaf package) also bypasses its clientPromise cache, so
+// every test gets the client it configured. The shared setup file defers its
+// store import so this mock registers before the store binds the module.
+vi.mock('@/shared/lib/supabase', () => ({
+  getSupabase: vi.fn(),
+}))
+
+const mockedGetSupabase = vi.mocked(getSupabase)
+
+const oauthSession = {
+  access_token: 'oauth-access-token',
+  refresh_token: 'oauth-refresh-token',
+}
+
+function fakeSupabaseClient(
+  overrides: {
+    signInWithOAuth?: ReturnType<typeof vi.fn>
+    getSession?: ReturnType<typeof vi.fn>
+  } = {},
+): SupabaseClient {
+  const auth = {
+    signInWithOAuth: vi.fn().mockResolvedValue({ data: {}, error: null }),
+    getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+    ...overrides,
+  }
+  return { auth } as unknown as SupabaseClient
+}
 
 beforeEach(() => {
   clearTokens()
@@ -316,7 +347,120 @@ describe('sessionStore silent token refresh', () => {
   })
 })
 
-describe('sessionStore.logout', () => {
+describe('sessionStore.signInWithGoogle', () => {
+  beforeEach(() => {
+    mockedGetSupabase.mockResolvedValue(fakeSupabaseClient())
+  })
+
+  it('starts the Google OAuth flow with the admin callback redirect', async () => {
+    const signInWithOAuth = vi.fn().mockResolvedValue({ data: {}, error: null })
+    mockedGetSupabase.mockResolvedValue(fakeSupabaseClient({ signInWithOAuth }))
+
+    await useSessionStore.getState().signInWithGoogle()
+
+    expect(signInWithOAuth).toHaveBeenCalledWith({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    })
+  })
+
+  it('throws when Supabase reports an OAuth error', async () => {
+    const signInWithOAuth = vi
+      .fn()
+      .mockResolvedValue({ data: {}, error: { message: 'OAuth provider misconfigured' } })
+    mockedGetSupabase.mockResolvedValue(fakeSupabaseClient({ signInWithOAuth }))
+
+    await expect(useSessionStore.getState().signInWithGoogle()).rejects.toMatchObject({
+      message: 'OAuth provider misconfigured',
+    })
+  })
+})
+
+describe('sessionStore.handleOAuthCallback', () => {
+  it('syncs with the OAuth bearer token, stores tokens, and bootstraps authed', async () => {
+    let syncAuth: string | null = null
+    server.use(
+      http.post('*/api/v1/auth/oauth/sync', ({ request }) => {
+        syncAuth = request.headers.get('authorization')
+        return HttpResponse.json({ data: { is_new_user: false }, message: 'OK' })
+      }),
+    )
+    mockedGetSupabase.mockResolvedValue(
+      fakeSupabaseClient({
+        getSession: vi.fn().mockResolvedValue({ data: { session: oauthSession }, error: null }),
+      }),
+    )
+
+    const result = await useSessionStore.getState().handleOAuthCallback()
+
+    expect(result).toBe('authed')
+    // The sync must carry the Supabase OAuth session token, not app tokens.
+    expect(syncAuth).toBe('Bearer oauth-access-token')
+    expect(getTokens()).toEqual({
+      access_token: 'oauth-access-token',
+      refresh_token: 'oauth-refresh-token',
+    })
+    expect(useSessionStore.getState().status).toBe('authed')
+    expect(useSessionStore.getState().role).toBe('super_admin')
+  })
+
+  it('returns forbidden and drops the session when /me 403s (non-admin account)', async () => {
+    server.use(
+      http.get('*/api/v1/admin/me', () =>
+        HttpResponse.json(
+          { error: 'Forbidden', code: 'PERMISSION_DENIED', details: {} },
+          { status: 403 },
+        ),
+      ),
+    )
+    mockedGetSupabase.mockResolvedValue(
+      fakeSupabaseClient({
+        getSession: vi.fn().mockResolvedValue({ data: { session: oauthSession }, error: null }),
+      }),
+    )
+
+    const result = await useSessionStore.getState().handleOAuthCallback()
+
+    expect(result).toBe('forbidden')
+    expect(useSessionStore.getState().permissionDenied).toBe(true)
+    expect(useSessionStore.getState().status).toBe('anon')
+    expect(getTokens()).toBeNull()
+  })
+
+  it('throws OAUTH_NO_SESSION when the redirect returned no session (cancelled)', async () => {
+    mockedGetSupabase.mockResolvedValue(fakeSupabaseClient())
+
+    await expect(useSessionStore.getState().handleOAuthCallback()).rejects.toMatchObject({
+      code: 'OAUTH_NO_SESSION',
+    })
+    expect(useSessionStore.getState().status).toBe('anon')
+    expect(useSessionStore.getState().permissionDenied).toBe(false)
+    expect(getTokens()).toBeNull()
+  })
+
+  it('clears state and tokens when the profile sync fails', async () => {
+    server.use(
+      http.post('*/api/v1/auth/oauth/sync', () =>
+        HttpResponse.json({ error: 'boom', code: 'INTERNAL_ERROR', details: {} }, { status: 500 }),
+      ),
+    )
+    mockedGetSupabase.mockResolvedValue(
+      fakeSupabaseClient({
+        getSession: vi.fn().mockResolvedValue({ data: { session: oauthSession }, error: null }),
+      }),
+    )
+
+    await expect(useSessionStore.getState().handleOAuthCallback()).rejects.toMatchObject({
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    })
+    expect(useSessionStore.getState().status).toBe('anon')
+    expect(useSessionStore.getState().permissionDenied).toBe(false)
+    expect(getTokens()).toBeNull()
+  })
+})
+
+describe('sessionStore logout', () => {
   it('clears state and tokens, records the reason', () => {
     setTokens({ access_token: 't', refresh_token: 'r' })
     useSessionStore.setState({

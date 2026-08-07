@@ -50,6 +50,7 @@ The docs intentionally avoid duplicating full table DDL in Markdown to prevent d
   - `generation_type` (`ai`/`manual`), `generation_metadata`, `is_primary`
   - `storage_path` for Storage objects
 - **`public.outfit_collections`** and **`public.outfit_collection_items`**: Group outfits into collections
+- **`public.outfit_wear_history`**: Per-outfit wear log (`worn_at`, `created_at`) written by `POST /outfits/{id}/wear` and read by `GET /outfits/{id}/wear-history` (migration 042)
 
 ### Body Profiles
 
