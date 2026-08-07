@@ -12,10 +12,19 @@
  *   - SupportPanel         (Help tab)
  */
 
-import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore, useCurrentUser } from '../../stores/authStore'
-import { User, Mail, Settings2, Palette, CreditCard, MessageSquarePlus } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  CreditCard,
+  Mail,
+  MessageSquarePlus,
+  Palette,
+  Settings2,
+  User,
+} from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
 import { ScrollableTabs, ScrollableTab } from '@/components/ui/scrollable-tabs'
@@ -25,6 +34,8 @@ import { AvatarSection } from './AvatarSection'
 import { PreferencesPanel } from './PreferencesPanel'
 import { AppSettingsPanel } from './AppSettingsPanel'
 import { SecurityPanel } from './SecurityPanel'
+import { useIsSplitViewport } from '@/hooks/useMediaQuery'
+import { cn } from '@/lib/utils'
 
 /** Grouped settings IA (legacy ?tab= values still resolve). */
 type TabType = 'account' | 'style' | 'app' | 'plan' | 'help'
@@ -61,12 +72,20 @@ function resolveTab(value: string | null): TabType {
   return LEGACY_TAB_MAP[value] ?? 'account'
 }
 
+/** Copy params minus the one-shot Stripe ack keys (SubscriptionPanel strips them via history.replaceState). */
+function nextSearchParams(params: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(params)
+  next.delete('success')
+  next.delete('cancelled')
+  return next
+}
+
 const PROFILE_TABS = [
-  { id: 'account' as TabType, name: 'Account', icon: User },
-  { id: 'style' as TabType, name: 'Style', icon: Palette },
-  { id: 'app' as TabType, name: 'App', icon: Settings2 },
-  { id: 'plan' as TabType, name: 'Plan', icon: CreditCard },
-  { id: 'help' as TabType, name: 'Help', icon: MessageSquarePlus },
+  { id: 'account' as TabType, name: 'Account', description: 'Profile info and security', icon: User },
+  { id: 'style' as TabType, name: 'Style', description: 'Colors, styles, occasions, brands', icon: Palette },
+  { id: 'app' as TabType, name: 'App', description: 'Notifications, theme, units, location', icon: Settings2 },
+  { id: 'plan' as TabType, name: 'Plan', description: 'Subscription, usage, referral code', icon: CreditCard },
+  { id: 'help' as TabType, name: 'Help', description: 'Feedback, tickets, legal', icon: MessageSquarePlus },
 ]
 
 export default function ProfilePage() {
@@ -74,23 +93,47 @@ export default function ProfilePage() {
   const logout = useAuthStore((state) => state.logout)
   const setUser = useAuthStore((state) => state.setUser)
   const [searchParams, setSearchParams] = useSearchParams()
+  // <md (phones): sections are full-screen subpages with a back bar (iOS
+  // Settings pattern). ≥md: the tab strip with inline panels.
+  const isMobile = !useIsSplitViewport()
+  const navigate = useNavigate()
 
   const [activeTab, setActiveTab] = useState<TabType>(() => resolveTab(searchParams.get('tab')))
   const [isEditing, setIsEditing] = useState(false)
+  // Mobile drill-down into the Account subpage. Pure state: the root view is
+  // already `tab=account`, so the drill has no URL form of its own.
+  const [showAccountSub, setShowAccountSub] = useState(false)
+  // True when the current subpage was opened by a row tap (a pushed history
+  // entry the back bar can pop); false for deep links, which reset state
+  // instead. Cleared whenever the URL lands back on the root view.
+  const subpagePushedRef = useRef(false)
+  const backButtonRef = useRef<HTMLButtonElement | null>(null)
+  // Row that opened the current (or last) subpage, for focus restoration.
+  const lastOpenedSectionRef = useRef<TabType>('account')
+  // True only for tap-driven opens; deep links must not steal focus.
+  const openedByTapRef = useRef(false)
   // Tracks tabs the user has actually opened so a hidden panel mounts once,
   // on first activation, and then stays mounted (unsaved edits survive tab
-  // switches without ever fetching for a tab the user never opened).
-  const [hasVisited, setHasVisited] = useState<{ style: boolean; app: boolean }>(() => {
+  // switches and root ⇄ subpage navigation without ever fetching for a tab
+  // the user never opened).
+  const [hasVisited, setHasVisited] = useState<{
+    style: boolean
+    app: boolean
+    plan: boolean
+    help: boolean
+  }>(() => {
     const initial = resolveTab(searchParams.get('tab'))
     return {
       style: initial === 'style',
       app: initial === 'app',
+      plan: initial === 'plan',
+      help: initial === 'help',
     }
   })
 
   // Record first-time activation for lazily-mounted panels.
   useEffect(() => {
-    if (activeTab === 'style' || activeTab === 'app') {
+    if (activeTab === 'style' || activeTab === 'app' || activeTab === 'plan' || activeTab === 'help') {
       setHasVisited((prev) => (prev[activeTab] ? prev : { ...prev, [activeTab]: true }))
     }
   }, [activeTab])
@@ -107,7 +150,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const currentTab = searchParams.get('tab')
     if (currentTab === activeTab) return
-    const next = new URLSearchParams(searchParams)
+    const next = nextSearchParams(searchParams)
     next.set('tab', activeTab)
     setSearchParams(next, { replace: true })
   // searchParams/setSearchParams change identity on every navigation; adding them
@@ -115,7 +158,120 @@ export default function ProfilePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]) // Only react to activeTab changes, not searchParams
 
+  // URL → state: browser back/forward and deep links must open (or close) the
+  // matching view. Runs on every navigation; setting the same tab is a no-op
+  // for React, so this cannot loop with the write-effect above.
+  useEffect(() => {
+    const tab = resolveTab(searchParams.get('tab'))
+    setActiveTab(tab)
+    if (tab === 'account') {
+      subpagePushedRef.current = false
+      // The bare root URL (no explicit tab param — e.g. the mobile bottom nav
+      // landing back on /profile) must close the account drill so the back
+      // bar, the rendered panel, and the URL all agree. An explicit
+      // `?tab=account` must NOT reset: deep links and the Stripe ack-param
+      // flow (SubscriptionPanel strips success/cancelled via raw
+      // replaceState while the user sits in the subpage) would otherwise
+      // close the panel under the user.
+      if (!searchParams.get('tab')) setShowAccountSub(false)
+    } else {
+      // The account drill is a pure-state view of `tab=account`; any URL that
+      // points at another section must close it so the back-bar title, the
+      // rendered panel, and the URL all agree (e.g. rotate to desktop, click a
+      // tab, rotate back to mobile).
+      setShowAccountSub(false)
+    }
+  }, [searchParams])
+
+  // Switching sections (tab ⇄ tab, root ⇄ subpage) while scrolled must land at
+  // the top of the new section — dropping mid-content is jarring on mobile,
+  // where panels are tall. Skipped on first render so mount doesn't fight the
+  // browser's own scroll restoration.
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    window.scrollTo(0, 0)
+  }, [activeTab, showAccountSub])
+
+  const handleBack = useCallback(() => {
+    if (showAccountSub) {
+      // The account subpage is pure state; nothing to pop or rewrite.
+      setShowAccountSub(false)
+      return
+    }
+    if (subpagePushedRef.current) {
+      // Row-tap subpage: pop the pushed entry; the URL→state effect lands on
+      // the root view.
+      subpagePushedRef.current = false
+      navigate(-1)
+      return
+    }
+    // Deep link (or already at root): no history entry to pop.
+    setActiveTab('account')
+  }, [showAccountSub, navigate])
+
+  // Mobile section rows. Account opens its subpage in pure state; every other
+  // section pushes a `?tab=` history entry so the browser back button closes
+  // the subpage instead of leaving settings.
+  const handleSectionClick = (tab: TabType) => {
+    lastOpenedSectionRef.current = tab
+    openedByTapRef.current = true
+    if (tab === 'account') {
+      setShowAccountSub(true)
+      return
+    }
+    subpagePushedRef.current = true
+    setActiveTab(tab)
+    const next = nextSearchParams(searchParams)
+    next.set('tab', tab)
+    setSearchParams(next, { replace: false })
+  }
+
   const tabs = PROFILE_TABS
+
+  // Mobile: a section is "open" whenever the user is not on the root view
+  // (root = `tab=account` with no account drill). Desktop: everything is
+  // inline, so there are no subpages.
+  const mobileSubpageOpen = isMobile && (activeTab !== 'account' || showAccountSub)
+  const subpageTab: TabType | null = mobileSubpageOpen ? (showAccountSub ? 'account' : activeTab) : null
+  const subpageTabDef = subpageTab ? tabs.find((t) => t.id === subpageTab) : null
+
+  // Focus management for the drill-down: tapping a row unmounts it, so focus
+  // must move to the back bar on open and back to the originating row on
+  // close (including browser-back). Deep links skip the open-focus; desktop
+  // has no rows, so the restore query safely no-ops there.
+  const wasSubpageOpenRef = useRef(false)
+  useEffect(() => {
+    const isOpen = Boolean(subpageTab)
+    if (isOpen && openedByTapRef.current) {
+      backButtonRef.current?.focus()
+    }
+    if (wasSubpageOpenRef.current && !isOpen) {
+      document
+        .querySelector<HTMLButtonElement>(`[data-section="${lastOpenedSectionRef.current}"]`)
+        ?.focus({ preventScroll: true })
+    }
+    wasSubpageOpenRef.current = isOpen
+    openedByTapRef.current = false
+  }, [subpageTab])
+
+  // Escape anywhere in a subpage closes it. Document-level (not the back
+  // bar's container) so the key still works once focus moves into subpage
+  // content; active only while a subpage is open, cleaned up on close.
+  useEffect(() => {
+    if (!subpageTab) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        handleBack()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [subpageTab, handleBack])
 
   const handleLogout = async () => {
     await logout()
@@ -169,20 +325,23 @@ export default function ProfilePage() {
 
   return (
     <div className="app-page max-w-7xl">
-      {/* Header */}
-      <div className="mb-4 md:mb-4">
+      {/* Header — hidden on mobile subpages, where the back bar carries the title */}
+      <div className={cn('mb-4 md:mb-4', mobileSubpageOpen && 'hidden')}>
         <h1 className="text-lg md:text-2xl font-bold text-foreground">Profile & Settings</h1>
         <p className="mt-1 md:mt-2 text-xs md:text-sm text-muted-foreground">Manage your account and preferences</p>
       </div>
 
       <div className="bg-card rounded-lg">
-        {/* Avatar section */}
-        <AvatarSection />
+        {/* Avatar section — the mobile root's hero; hidden on subpages */}
+        <div className={cn(mobileSubpageOpen && 'hidden')}>
+          <AvatarSection />
+        </div>
 
-        {/* Scrollable Tabs */}
+        {/* Desktop tab strip (≥md) */}
         <ScrollableTabs
           aria-label="Profile sections"
-          className="border-b border-border px-0 md:px-6 lg:px-8 w-full sticky top-[calc(var(--mobile-header-height)+var(--safe-area-top))] z-20 bg-card/95 backdrop-blur-sm md:static"
+          fadeClassName="bg-card/95"
+          className="hidden md:block w-full border-b border-border px-0 md:px-6 lg:px-8"
         >
           {tabs.map((tab) => (
             <ScrollableTab
@@ -198,10 +357,60 @@ export default function ProfilePage() {
           ))}
         </ScrollableTabs>
 
-        {/* Tab content */}
-        <div className="px-4 py-4 md:px-6 md:py-6 lg:px-8">
+        {/* Mobile subpage chrome: sticky back bar with the section title */}
+        {subpageTab && (
+          <div className="sticky top-[calc(var(--mobile-header-height)+var(--safe-area-top))] z-20 flex items-center gap-2 border-b border-border bg-card px-4 py-2">
+            <Button
+              ref={backButtonRef}
+              variant="ghost"
+              size="icon"
+              onClick={handleBack}
+              aria-label="Back to profile settings"
+              className="shrink-0"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="flex min-w-0 flex-1 items-center gap-2 truncate text-base font-semibold text-foreground">
+              {subpageTabDef?.icon && <subpageTabDef.icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+              <span className="truncate">{subpageTabDef?.name ?? 'Account'}</span>
+            </h1>
+          </div>
+        )}
+
+        {/* Mobile root chrome: section list (drill-down index) */}
+        {isMobile && !mobileSubpageOpen && (
+          <nav aria-label="Profile sections" className="md:hidden">
+            <ul className="m-0 list-none divide-y divide-border p-0">
+              {tabs.map((tab) => (
+                <li key={tab.id}>
+                  <button
+                    data-section={tab.id}
+                    type="button"
+                    onClick={() => handleSectionClick(tab.id)}
+                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 active:bg-muted/60"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
+                      <tab.icon className="h-5 w-5 text-foreground" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium text-foreground">{tab.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{tab.description}</span>
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
+
+        {/* Content container — one stable mount point shared by the desktop
+            inline panels and the mobile subpages, so a panel never unmounts
+            (unsaved edits survive root ⇄ subpage switches). Hidden on the
+            mobile root, where the section list is the content. */}
+        <div className={cn('px-4 py-4 md:px-6 md:py-6 lg:px-8', isMobile && !mobileSubpageOpen && 'hidden')}>
           {activeTab === 'account' && (
-            <div className="space-y-6">
+            <div className="space-y-4 md:space-y-6">
               <div>
                 <h3 className="text-base md:text-lg font-medium text-foreground mb-4">Profile Information</h3>
                 <div className="grid grid-cols-1 gap-y-4 md:gap-y-6 gap-x-4 md:grid-cols-6">
@@ -325,7 +534,7 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                <div className="mt-6 flex flex-col-reverse gap-3 md:flex-row md:justify-end">
+                <div className="mt-4 md:mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                   {isEditing ? (
                     <>
                       <Button
@@ -338,20 +547,20 @@ export default function ProfilePage() {
                           setBirthTime(normalizeBirthTimeForInput(user?.birth_time))
                           setBirthPlace(user?.birth_place || '')
                         }}
-                        className="w-full md:w-auto"
+                        className="w-full sm:w-auto"
                       >
                         Cancel
                       </Button>
                       <Button
                         onClick={handleSaveProfile}
                         disabled={isSavingProfile}
-                        className="w-full md:w-auto"
+                        className="w-full sm:w-auto"
                       >
                         {isSavingProfile ? 'Saving...' : 'Save Changes'}
                       </Button>
                     </>
                   ) : (
-                    <Button onClick={() => setIsEditing(true)} className="w-full md:w-auto">
+                    <Button onClick={() => setIsEditing(true)} className="w-full sm:w-auto">
                       Edit Profile
                     </Button>
                   )}
@@ -362,7 +571,7 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Panels mount lazily on first tab activation so hidden tabs never
+          {/* Panels mount lazily on first activation so hidden sections never
               issue network reads for a surface the user has not opened.
               Switching away hides (not unmounts) so unsaved edits survive. */}
           {activeTab === 'style' || hasVisited.style ? (
@@ -377,26 +586,41 @@ export default function ProfilePage() {
             </div>
           ) : null}
 
-          {activeTab === 'plan' && (
-            <SubscriptionPanel />
-          )}
+          {activeTab === 'plan' || hasVisited.plan ? (
+            <div className={activeTab === 'plan' ? '' : 'hidden'}>
+              <SubscriptionPanel isActive={activeTab === 'plan'} />
+            </div>
+          ) : null}
 
-          {activeTab === 'help' && (
-            <SupportPanel />
-          )}
+          {activeTab === 'help' || hasVisited.help ? (
+            <div className={activeTab === 'help' ? '' : 'hidden'}>
+              <SupportPanel />
+            </div>
+          ) : null}
         </div>
+
+        {/* Mobile sign out — the last row of the root card */}
+        {isMobile && !mobileSubpageOpen && (
+          <div className="border-t border-border px-4 py-4">
+            <Button variant="outline" onClick={handleLogout} className="w-full">
+              Sign Out
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Logout button */}
-      <div className="mt-6 mb-4 text-center">
-        <Button
-          variant="outline"
-          onClick={handleLogout}
-          className="w-full md:w-auto"
-        >
-          Sign Out
-        </Button>
-      </div>
+      {/* Desktop sign out */}
+      {!isMobile && (
+        <div className="mt-6 mb-4 text-center">
+          <Button
+            variant="outline"
+            onClick={handleLogout}
+            className="w-full sm:w-auto"
+          >
+            Sign Out
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

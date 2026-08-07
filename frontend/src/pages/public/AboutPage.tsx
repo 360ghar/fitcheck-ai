@@ -48,7 +48,7 @@ export default function AboutPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center max-w-3xl mx-auto">
-                <Badge className="mb-6 border-0 bg-secondary text-primary">
+                <Badge className="mb-6 border-0 bg-secondary text-secondary-foreground">
                   About us
                 </Badge>
                 <h1 className="landing-display text-4xl sm:text-5xl font-semibold text-stone-900 dark:text-stone-50 mb-6">
@@ -68,7 +68,7 @@ export default function AboutPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <AnimatedSection>
-                <Badge className="mb-4 border-0 bg-secondary text-primary">
+                <Badge className="mb-4 border-0 bg-secondary text-secondary-foreground">
                   Our story
                 </Badge>
                 <h2 className="landing-display text-3xl font-semibold text-stone-900 dark:text-stone-50 mb-6">

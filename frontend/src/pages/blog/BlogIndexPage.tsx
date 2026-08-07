@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
+import { BlogImage } from '@/components/blog/BlogImage'
 import SEO from '@/components/seo/SEO'
+import { cn } from '@/lib/utils'
 import { Calendar, Clock, ArrowRight } from 'lucide-react'
 import { useBlogCategories } from '@/hooks/useBlog'
 import { useInfiniteBlogPosts } from '@/hooks/useInfiniteBlogPosts'
@@ -82,7 +84,7 @@ export default function BlogIndexPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center max-w-3xl mx-auto">
-                <Badge className="mb-4 bg-secondary text-primary border-0">
+                <Badge className="mb-4 bg-secondary text-secondary-foreground border-0">
                   {category ? categoryFilter || category : 'Blog'}
                 </Badge>
                 <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-6">
@@ -116,36 +118,60 @@ export default function BlogIndexPage() {
                   )}
                 </form>
 
-                {/* Category Pills */}
-                {!isLoadingCategories && categories && categories.length > 0 && (
-                  <div className="flex flex-wrap justify-center gap-2">
-                    <Link
-                      to="/blog"
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${!category
-                        ? 'bg-stone-900 text-white border-stone-900 dark:bg-white dark:text-stone-900 dark:border-white'
-                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-primary dark:hover:text-primary border-gray-200 dark:border-gray-700'
-                        }`}
-                    >
-                      All
-                    </Link>
-                    {categories.map((cat) => {
-                      const catSlug = slugifyCategory(cat)
-                      const isActive = category === catSlug
-                      return (
+                {/* Category Pills — the container is always rendered, but its
+                    reserved min-height (which holds the posts grid steady while
+                    categories fetch, avoiding CLS) applies only while loading or
+                    when categories exist, so an error or empty list leaves no
+                    blank band. */}
+                <div
+                  className={cn(
+                    'flex flex-wrap justify-center gap-2',
+                    (isLoadingCategories || (categories?.length ?? 0) > 0) && 'min-h-[124px] md:min-h-[44px]'
+                  )}
+                >
+                  {isLoadingCategories ? (
+                    // Skeleton pills fill the reserved space (same 36px pill
+                    // height + wrap) instead of an empty band.
+                    Array.from({ length: 6 }).map((_, i) => (
+                      <span
+                        key={i}
+                        aria-hidden="true"
+                        className="h-9 w-20 rounded-full bg-stone-200 dark:bg-stone-800 animate-pulse"
+                      />
+                    ))
+                  ) : (
+                    categories &&
+                    categories.length > 0 && (
+                      <>
                         <Link
-                          key={cat}
-                          to={`/blog/category/${catSlug}`}
-                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${isActive
+                          to="/blog"
+                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${!category
                             ? 'bg-stone-900 text-white border-stone-900 dark:bg-white dark:text-stone-900 dark:border-white'
                             : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-primary dark:hover:text-primary border-gray-200 dark:border-gray-700'
                             }`}
                         >
-                          {cat}
+                          All
                         </Link>
-                      )
-                    })}
-                  </div>
-                )}
+                        {categories.map((cat) => {
+                          const catSlug = slugifyCategory(cat)
+                          const isActive = category === catSlug
+                          return (
+                            <Link
+                              key={cat}
+                              to={`/blog/category/${catSlug}`}
+                              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${isActive
+                                ? 'bg-stone-900 text-white border-stone-900 dark:bg-white dark:text-stone-900 dark:border-white'
+                                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-primary dark:hover:text-primary border-gray-200 dark:border-gray-700'
+                                }`}
+                            >
+                              {cat}
+                            </Link>
+                          )
+                        })}
+                      </>
+                    )
+                  )}
+                </div>
               </div>
             </AnimatedSection>
           </div>
@@ -212,23 +238,22 @@ export default function BlogIndexPage() {
                         <article className="flex h-full flex-col overflow-hidden rounded-lg border border-gray-100 bg-gray-50 transition-[border-color] duration-300 dark:border-gray-800 dark:bg-gray-900">
                           {/* Image Placeholder */}
                           <div className="aspect-[16/9] bg-stone-200 dark:bg-stone-800 flex items-center justify-center relative overflow-hidden">
-                            {post.featured_image_url ? (
-                              <img
-                                src={post.featured_image_url}
-                                alt={post.title}
-                                width={640}
-                                height={360}
-                                loading="lazy"
-                                className="absolute inset-0 w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
-                              />
-                            ) : (
-                              <>
-                                <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors" />
-                                <span className="text-6xl md:text-7xl relative z-10 transform group-hover:scale-110 transition-transform duration-300">
-                                  {post.emoji}
-                                </span>
-                              </>
-                            )}
+                            <BlogImage
+                              src={post.featured_image_url}
+                              alt={post.title}
+                              emoji={post.emoji}
+                              emojiClassName="text-6xl md:text-7xl transform group-hover:scale-110 transition-transform duration-300"
+                              imgClassName="transform group-hover:scale-105 transition-transform duration-500"
+                              sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
+                              widths={[320, 480, 640, 800]}
+                              width={640}
+                              height={360}
+                              // The first card's image is the LCP element on
+                              // mobile and desktop: eager + high priority so
+                              // the preload scanner starts it immediately in
+                              // the prerendered HTML, before any JS runs.
+                              priority={index === 0}
+                            />
                           </div>
 
                           <div className="p-6 flex-1 flex flex-col">

@@ -86,7 +86,7 @@ const offeredTiersFor = (
 // COMPONENT
 // ============================================================================
 
-export function SubscriptionPanel() {
+export function SubscriptionPanel({ isActive = true }: { isActive?: boolean }) {
   const [searchParams] = useSearchParams();
   const requestedPlan = searchParams.get("plan_type");
   const [copied, setCopied] = useState(false);
@@ -131,13 +131,16 @@ export function SubscriptionPanel() {
   const offeredTiers = offeredTiersFor(plans, currentPlan);
   const nearLimit = useIsNearLimit();
 
-  // Load data on mount
+  // Load data when the panel becomes visible. The panel stays mounted between
+  // visits (unsaved edits survive), but billing/usage numbers change as the
+  // user consumes quota, so refetch on every activation.
   useEffect(() => {
+    if (!isActive) return;
     fetchSubscription();
     fetchReferralCode();
     fetchReferralStats();
     fetchPlans();
-  }, [fetchSubscription, fetchReferralCode, fetchReferralStats, fetchPlans]);
+  }, [isActive, fetchSubscription, fetchReferralCode, fetchReferralStats, fetchPlans]);
 
   // Stripe Checkout returns here with ?success=true / ?cancelled=true (the
   // store's success/cancel URLs). Consume the params once on mount so the user
@@ -318,7 +321,7 @@ export function SubscriptionPanel() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Error Display */}
       {error && (
         <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-3">

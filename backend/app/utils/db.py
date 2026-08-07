@@ -4,12 +4,14 @@ Helpers for working with postgrest-py query results.
 
 import asyncio
 import inspect
+import json
 import logging
 import re
 import time
 from typing import Any, Callable, Dict, Optional, Tuple
 
 import httpx
+from postgrest.exceptions import APIError
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,24 @@ def safe_search_term(term: str) -> str:
     the route. Shared by the items/outfits/blog search routes.
     """
     return re.sub(r"[(),*.:]", "", term)
+
+
+def jsonb_contains(builder: Any, column: str, values: Any) -> Any:
+    """JSONB array containment (``@>``) for list values.
+
+    postgrest-py's ``contains(list)`` serializes lists as Postgres ARRAY
+    literals (``{a,b}``), which is correct for native array columns but
+    invalid for JSONB columns: PostgREST casts the literal to jsonb and
+    answers ``22P02 invalid input syntax for type jsonb`` (observed
+    2026-08-07 on /items?occasion=informal -> every request 500ed after
+    2 client rebuilds because that text matches the ``invalid input``
+    connection marker). JSONB columns store JSON arrays, so the value must be
+    a JSON array literal (``["a","b"]``). ``json.dumps`` produces exactly
+    that; the string form passes through ``filter`` untouched.
+    """
+    if isinstance(values, str):
+        values = [values]
+    return builder.contains(column, json.dumps(list(values)))
 
 
 def persistence_db(db: Any) -> Any:
@@ -88,9 +108,34 @@ _DB_CONNECTION_TEXT_MARKERS = (
 )
 
 
+# HTTP statuses postgrest-py records in `APIError.code` (via
+# generate_default_error_message) when a 5xx/429 body is NOT PostgREST JSON -
+# i.e. the Supabase/Cloudflare gateway itself answered in a bad state (502/
+# 503/504 gateway timeouts and the Cloudflare 520-524 origin range, or a
+# rate-limit 429). Those are the transient gateway blips the retry mechanism
+# exists for, so one rebuild+retry still applies. SQLSTATEs and PGRST codes
+# (22P02, PGRST202, 42703, ...) can never collide with these: they are
+# 5-character codes, not 3-digit HTTP statuses, and PostgREST always answers
+# with a JSON error body (SQLSTATE-coded) rather than a bare status.
+_API_ERROR_RETRYABLE_HTTP_STATUSES = {"429", "500", "502", "503", "504", "520", "521", "522", "524"}
+
+
 def is_db_connection_error(exc: Exception) -> bool:
     """True when `exc` means the pooled Supabase connection is dead and the
     operation is worth one retry through a fresh client."""
+    if isinstance(exc, APIError):
+        # A structured PostgREST response (4xx/5xx with a `code`). Most are
+        # deterministic query/authorization errors: rebuilding the client
+        # cannot fix them, and retrying churns the shared pool (amplifying
+        # the real HTTP/2 races). Transport errors never arrive wrapped in
+        # APIError - postgrest does not catch them (observed 2026-08-07: a
+        # deterministic 22P02 "invalid input syntax for type jsonb" from a
+        # jsonb `contains` filter was retried 3 times with 2 client rebuilds
+        # before 500ing). The one exception is a structured *gateway* error:
+        # when the 5xx/429 body is not PostgREST JSON, the `code` is the HTTP
+        # status, which is transient and worth one fresh-client retry.
+        code = str(getattr(exc, "code", "") or "")
+        return code in _API_ERROR_RETRYABLE_HTTP_STATUSES
     if isinstance(exc, _DB_TRANSIENT_ERRORS):
         return True
     text = str(exc).lower().strip()
@@ -332,12 +377,15 @@ def missing_rpc_log_hint(function_name: str) -> str:
 # `extraction_jobs` / `photoshoot_jobs` (migrations 016 / 023). When those
 # migrations (or their columns/constraints) are missing on the hosted DB,
 # postgrest-py raises a raw APIError (PGRST205 unknown table, 42703 unknown
-# column, 23514 CHECK violation). Services must wrap those raw errors into a
-# friendly retryable 503 and log this operator hint - never send the raw DB
-# text to a client. Same policy as the quota-RPC helpers above.
+# column, PGRST204 unknown column in the schema cache - the exact code
+# observed 2026-08-07 when photoshoot_jobs.image_failures, migration 035,
+# was missing - and 23514 CHECK violation). Services must wrap those raw
+# errors into a friendly retryable 503 and log this operator hint - never
+# send the raw DB text to a client. Same policy as the quota-RPC helpers
+# above.
 # ============================================================================
 
-_MISSING_SCHEMA_MARKERS = ("pgrst205", "42703")
+_MISSING_SCHEMA_MARKERS = ("pgrst205", "42703", "pgrst204")
 # CHECK-violation marker for the extraction_jobs.generation_batch_size bound
 # (016 allows <=10; 023/029 raise it to <=50/<=100 to match the API cap).
 _CHECK_VIOLATION_MARKERS = ("23514", "valid_batch_size")
@@ -353,9 +401,10 @@ def job_persistence_migration_hint(table: str, error: Exception) -> str:
     """Operator-facing log hint for durable-job persistence migration gaps.
 
     Covers the two ways a hosted-Supabase migration gap breaks job creation:
-    the table/columns do not exist (016/023 missing) or the
-    ``generation_batch_size`` CHECK is still the pre-023 bound (<=10) while
-    the API sends up to 50. Returns "" when the error is not a migration gap.
+    the table/columns do not exist (016/023/035 missing - PGRST205/42703/
+    PGRST204) or the ``generation_batch_size`` CHECK is still the pre-023
+    bound (<=10) while the API sends up to 50. Returns "" when the error is
+    not a migration gap.
 
     LOGS ONLY — never put this string in a client-facing error message.
     """
@@ -364,8 +413,9 @@ def job_persistence_migration_hint(table: str, error: Exception) -> str:
         return (
             f"AI job persistence is unavailable: '{table}' or its columns are "
             "missing from the hosted schema (migrations "
-            "016_extraction_jobs.sql / 023_durable_job_state.sql not applied). "
-            "Apply them to restore batch/photoshoot job creation."
+            "016_extraction_jobs.sql / 023_durable_job_state.sql / "
+            "035_add_photoshoot_jobs_image_failures.sql not applied). Apply "
+            "them to restore batch/photoshoot job creation."
         )
     if all(marker in text for marker in _CHECK_VIOLATION_MARKERS):
         return (

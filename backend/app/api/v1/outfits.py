@@ -43,9 +43,10 @@ from app.models.outfit import (
     OutfitCollectionCreate,
     OutfitCollectionUpdate,
 )
+from app.services.outfit_service import delete_outfit as delete_outfit_service
 from app.services.storage_service import MAX_FILE_SIZE, StorageService
 from app.utils.datetime_util import utcnow, utcnow_iso, parse_utc_datetime
-from app.utils.db import execute_with_reconnect, safe_search_term
+from app.utils.db import execute_with_reconnect, jsonb_contains, safe_search_term
 from app.api.v1.images import materialize_image_urls, materialize_parent_images
 
 logger = get_context_logger(__name__)
@@ -329,7 +330,12 @@ async def list_outfits(
             if drafts_value is not None:
                 q = q.eq("is_draft", drafts_value)
             if tag_list:
-                q = q.contains("tags", tag_list)
+                # JSONB array contains: jsonb_contains emits a JSON array
+                # literal - plain contains(list) sends a Postgres array
+                # literal ({a,b}) and PostgREST answers 22P02 for the jsonb
+                # `tags` column (2026-08-07 /items occasion-filter incident,
+                # same latent pattern).
+                q = jsonb_contains(q, "tags", tag_list)
             if search:
                 like = f"%{safe_search_term(search)}%"
                 q = q.or_(f"name.ilike.{like},description.ilike.{like}")
@@ -686,40 +692,9 @@ async def delete_outfit(
     user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
+    """Delete an outfit and best-effort remove its images from storage."""
     try:
-        outfit_id_str = str(outfit_id)
-        existing = await asyncio.to_thread(db.table("outfits").select("id").eq("id", outfit_id_str).eq("user_id", user_id).single().execute)
-        if not existing.data:
-            raise OutfitNotFoundError(outfit_id=outfit_id_str)
-
-        # Collect owned outfit-image storage paths (with _thumb siblings)
-        # BEFORE the row is gone; deleting the row without this leaks the
-        # objects forever (measured: 296 orphans / 192MB in the bucket).
-        storage_paths: List[str] = []
-        try:
-            owned = await StorageService.resolve_owned_storage_paths(
-                db, user_id, outfit_ids=[outfit_id_str]
-            )
-            storage_paths = owned["storage_paths"]
-        except Exception as e:
-            logger.warning(
-                "Failed to resolve storage paths for outfit delete",
-                outfit_id=outfit_id_str,
-                error=str(e),
-            )
-
-        await asyncio.to_thread(db.table("outfits").delete().eq("id", outfit_id_str).eq("user_id", user_id).execute)
-
-        if storage_paths:
-            try:
-                await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)
-            except Exception as e:
-                logger.warning(
-                    "Failed to delete outfit images from storage",
-                    outfit_id=outfit_id_str,
-                    object_count=len(storage_paths),
-                    error=str(e),
-                )
+        await delete_outfit_service(db, user_id=user_id, outfit_id=str(outfit_id))
         return None
     except OutfitNotFoundError:
         raise
@@ -1487,17 +1462,28 @@ async def delete_outfit_image(
         outfit_id_str = str(outfit_id)
         image_id_str = str(image_id)
 
-        outfit = await asyncio.to_thread(db.table("outfits").select("id").eq("id", outfit_id_str).eq("user_id", user_id).single().execute)
+        outfit = await execute_with_reconnect(
+            lambda d: d.table("outfits")
+            .select("id")
+            .eq("id", outfit_id_str)
+            .eq("user_id", user_id)
+            .single()
+            .execute(),
+            db,
+            extra={"operation": "delete_outfit_image.load_outfit", "outfit_id": outfit_id_str},
+        )
         if not outfit.data:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
 
-        img = await asyncio.to_thread(
-            db.table("outfit_images")
+        img = await execute_with_reconnect(
+            lambda d: d.table("outfit_images")
             .select("id, storage_path")
             .eq("id", image_id_str)
             .eq("outfit_id", outfit_id_str)
             .single()
-            .execute
+            .execute(),
+            db,
+            extra={"operation": "delete_outfit_image.load_image", "outfit_id": outfit_id_str, "image_id": image_id_str},
         )
         if not img.data:
             raise ImageNotFoundError(image_id=image_id_str)
@@ -1509,7 +1495,17 @@ async def delete_outfit_image(
             except Exception as e:
                 logger.warning("Failed to delete outfit image from storage", storage_path=storage_path, error=str(e))
 
-        await asyncio.to_thread(db.table("outfit_images").delete().eq("id", image_id_str).eq("outfit_id", outfit_id_str).execute)
+        # Idempotent delete (see delete_outfit): heal a dead pooled
+        # Supabase connection with one rebuild + retry instead of a 500.
+        await execute_with_reconnect(
+            lambda d: d.table("outfit_images")
+            .delete()
+            .eq("id", image_id_str)
+            .eq("outfit_id", outfit_id_str)
+            .execute(),
+            db,
+            extra={"operation": "delete_outfit_image.delete", "outfit_id": outfit_id_str, "image_id": image_id_str},
+        )
         return {"data": {"deleted": True}, "message": "OK"}
     except (OutfitNotFoundError, ImageNotFoundError):
         raise

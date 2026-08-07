@@ -32,12 +32,12 @@ function ThemeSelector() {
   const { theme, setTheme } = useTheme()
 
   return (
-    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between py-3 border-b border-border">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-3 border-b border-border">
       <div>
         <p className="text-sm font-medium text-foreground">Theme</p>
         <p className="text-sm text-muted-foreground">Choose your preferred theme</p>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:gap-2">
         {THEMES.map((option) => {
           const Icon = themeIcons[option.value]
           return (
@@ -45,16 +45,17 @@ function ThemeSelector() {
               key={option.value}
               type="button"
               onClick={() => setTheme(option.value)}
+              aria-label={option.label}
               aria-pressed={theme === option.value}
               className={cn(
-                'flex-1 sm:flex-none px-3 py-2 text-sm rounded-md transition-colors flex items-center gap-1.5 touch-target',
+                'px-3 py-2 text-sm rounded-md transition-colors flex items-center justify-center gap-1.5 touch-target sm:flex-none',
                 theme === option.value
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-muted-foreground hover:bg-muted/80'
               )}
             >
               <Icon className="h-4 w-4" />
-              <span className="hidden xs:inline">{option.label}</span>
+              <span className="hidden xs:inline whitespace-nowrap">{option.label}</span>
             </button>
           )
         })}
@@ -156,7 +157,7 @@ export function AppSettingsPanel() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       <div className="space-y-6">
         <h3 className="text-base md:text-lg font-medium text-foreground">App Settings</h3>
 
@@ -168,7 +169,7 @@ export function AppSettingsPanel() {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between py-3 border-b border-border">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-3 border-b border-border">
               <div>
                 <p className="text-sm font-medium text-foreground">Notifications</p>
                 <p className="text-sm text-muted-foreground">Enable in-app notifications</p>
@@ -179,7 +180,7 @@ export function AppSettingsPanel() {
               />
             </div>
 
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between py-3 border-b border-border">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between py-3 border-b border-border">
               <div>
                 <p className="text-sm font-medium text-foreground">Email Marketing</p>
                 <p className="text-sm text-muted-foreground">Receive emails about new features</p>
@@ -192,7 +193,7 @@ export function AppSettingsPanel() {
 
             <ThemeSelector />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-3">
               <div>
                 <p className="text-sm font-medium text-foreground">Measurement Units</p>
                 <p className="text-sm text-muted-foreground">Choose between metric and imperial</p>
@@ -255,16 +256,16 @@ export function AppSettingsPanel() {
               />
             </div>
 
-            <div className="flex flex-col-reverse gap-3 md:flex-row md:items-center md:justify-end pt-2">
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end pt-2">
               {settingsDirty && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 md:mr-auto">
+                <p className="text-xs text-amber-600 dark:text-amber-400 sm:mr-auto">
                   Unsaved changes — click Save Settings to apply.
                 </p>
               )}
               <Button
                 onClick={handleSaveSettings}
                 disabled={isSavingSettings || !settingsDirty}
-                className="w-full md:w-auto"
+                className="w-full sm:w-auto"
               >
                 {isSavingSettings ? 'Saving…' : 'Save Settings'}
               </Button>
@@ -273,7 +274,7 @@ export function AppSettingsPanel() {
         )}
       </div>
 
-      <div className="border-t border-border pt-8 space-y-4">
+      <div className="border-t border-border pt-6 md:pt-8 space-y-4">
         <div className="flex items-center gap-2">
           <Cpu className="h-5 w-5 text-muted-foreground" />
           <h3 className="text-base md:text-lg font-medium text-foreground">AI Settings</h3>

@@ -147,9 +147,30 @@ measured `FCP === LCP` to the millisecond — there was no earlier paint to have
 - The client uses `createRoot`, **not** `hydrateRoot`. React discards the
   prerendered DOM and re-renders it; the early paint is the point, and this
   sidesteps hydration-mismatch bugs entirely. Measured CLS for the swap is 0.
-- Data-driven routes are listed in `PRERENDER_SKIP` (currently `/blog`, which
-  fetches its posts and already has the `seo-html` edge function in front of it).
-  Baking a loading skeleton into HTML would be worse than an empty root.
+- Data-driven routes were listed in `PRERENDER_SKIP` because baking a loading
+  skeleton into HTML is worse than an empty root. The blog **index** now breaks
+  that rule on purpose: `src/entry-prerender.tsx` prefetches the first page of
+  posts + categories at build time, renders the real grid, and embeds the
+  serialized React Query state in a `<script id="__FITCHECK_QUERY_STATE__">`
+  tag. `main.tsx` hydrates that state before mount (queries are stamped stale,
+  so they refetch in the background right away — baked content is a paint
+  shortcut, not a freshness ceiling). If the API is unreachable at build time,
+  `render()` returns `skip: true` and the route ships the empty shell as
+  before. The prefetch query keys must match the page hooks **exactly**
+  (including `search: ''` — react-query hashes keys by their stringified
+  value, so `undefined` misses the cache).
+- The stylesheet is **inlined into every prerendered page** (all routes +
+  `app-shell.html`) by `scripts/prerender-html.mjs` — `style-src
+  'unsafe-inline'` is already in the CSP, and the CSS is small enough that
+  re-shipping it with each page costs less than the render-blocking request
+  it removes.
+- `scripts/prerender-html.mjs` injects **per-route modulepreloads** from the
+  Vite build manifest (`build.manifest: true`) — currently only the blog
+  chunk graph on `/blog`; the entry's own static preloads are deduped.
+- Blog imagery is optimized at render time: `lib/images.ts` rewrites stored
+  Unsplash URLs (`?w=800&q=80` JPEG) to `auto=format&w=…&q=70` AVIF/WebP and
+  `components/blog/BlogImage.tsx` applies a responsive `srcset` + emoji
+  fallback on load error. Non-Unsplash URLs pass through untouched.
 - The prerender needs `ssr.noExternal` in `vite.config.ts` (gated on
   `isSsrBuild`, because Vitest reads the same config and an unconditional value
   breaks test collection), and shims `localStorage` in the build script for

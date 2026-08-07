@@ -41,6 +41,10 @@ export default defineConfig(({ isSsrBuild }) => ({
   build: {
     target: 'esnext',
     minify: 'esbuild',
+    // Emitted so scripts/prerender-html.mjs can resolve hashed chunk names and
+    // inject per-route <link rel="modulepreload"> (e.g. the blog chunk graph
+    // on /blog) instead of guessing filenames.
+    manifest: true,
     // Public sourcemaps served the whole frontend source to anyone who asked:
     // dist/assets/index-*.js.map was HTTP 200 in production, 9.4 MB across 92
     // files. 'hidden' would not fix it — the maps still land in dist/ and get

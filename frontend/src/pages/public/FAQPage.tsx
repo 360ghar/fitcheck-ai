@@ -192,7 +192,7 @@ export default function FAQPage() {
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="text-center mb-16">
-                <Badge className="mb-4 border-0 bg-secondary text-primary">
+                <Badge className="mb-4 border-0 bg-secondary text-secondary-foreground">
                   FAQ
                 </Badge>
                 <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">

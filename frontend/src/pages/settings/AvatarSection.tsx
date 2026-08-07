@@ -56,11 +56,11 @@ export function AvatarSection() {
             <img loading="lazy" decoding="async"
               src={userAvatar}
               alt={`${userDisplayName} avatar`}
-              className="h-16 w-16 md:h-24 md:w-24 rounded-full object-cover"
+              className="h-20 w-20 md:h-24 md:w-24 rounded-full object-cover"
             />
           ) : (
-            <div className="h-16 w-16 md:h-24 md:w-24 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="text-xl md:text-3xl font-bold text-primary">
+            <div className="h-20 w-20 md:h-24 md:w-24 rounded-full bg-primary/10 flex items-center justify-center">
+              <span className="text-2xl md:text-3xl font-bold text-primary">
                 {userDisplayName.charAt(0).toUpperCase()}
               </span>
             </div>

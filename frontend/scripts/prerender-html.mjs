@@ -15,7 +15,7 @@
  * Route registry is `scripts/seo-content.mjs` SEO_ROUTES — the same list that
  * drives the sitemap and the meta prerender.
  */
-import { readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, rmSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execFileSync } from 'node:child_process'
@@ -26,6 +26,137 @@ const root = join(__dirname, '..')
 const dist = join(root, 'dist')
 
 const ROOT_DIV = '<div id="root"></div>'
+
+// ============================================================================
+// CSS INLINING
+// ============================================================================
+//
+// The single stylesheet link Vite emits is render-blocking (~400 ms on slow
+// 4G, measured 2026-08-07) on every route. The stylesheet is small
+// (~17.7 KiB gzipped) and the HTML is served with `must-revalidate`, so
+// inlining it into every page costs nothing on repeat visits and removes the
+// request from the critical path entirely. CSP already allows
+// `style-src 'unsafe-inline'` (netlify.toml), so no policy change is needed.
+
+const CSS_LINK_RE = /<link rel="stylesheet"[^>]*href="\/assets\/index-[^"]+\.css"[^>]*>/i
+
+function findStylesheet() {
+  const assetsDir = join(dist, 'assets')
+  if (!existsSync(assetsDir)) return null
+  for (const name of readdirSync(assetsDir)) {
+    if (/^index-[A-Za-z0-9_-]+\.css$/.test(name)) return join(assetsDir, name)
+  }
+  return null
+}
+
+function collectHtmlFiles(dir, out = []) {
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name)
+    if (name === 'assets' || name === '.vite') continue
+    if (statSync(full).isDirectory()) collectHtmlFiles(full, out)
+    else if (name.endsWith('.html')) out.push(full)
+  }
+  return out
+}
+
+/** Replace the stylesheet <link> with an inline <style> in every dist HTML file. */
+function inlineStylesheets() {
+  const cssPath = findStylesheet()
+  if (!cssPath) {
+    console.warn('[prerender-html] no index-*.css found in dist/assets — skipping CSS inlining')
+    return
+  }
+  const css = readFileSync(cssPath, 'utf8')
+  let replaced = 0
+  for (const htmlPath of collectHtmlFiles(dist)) {
+    const html = readFileSync(htmlPath, 'utf8')
+    if (!CSS_LINK_RE.test(html)) continue
+    const out = html.replace(CSS_LINK_RE, () => `<style>${css}</style>`)
+    writeFileSync(htmlPath, out, 'utf8')
+    replaced += 1
+  }
+  console.log(
+    `[prerender-html] inlined ${cssPath.replace(dist, 'dist')} (${css.length} bytes) into ${replaced} HTML file(s)`
+  )
+}
+
+// ============================================================================
+// PER-ROUTE MODULEPRELOAD
+// ============================================================================
+//
+// Vite preloads the entry's static imports in the HTML, but route chunks
+// (loaded via dynamic import) are only discovered after the entry executes.
+// With build.manifest enabled, the manifest maps each source module to its
+// emitted chunk + transitive imports, so the prerender can start those
+// downloads in parallel with first paint. Currently only /blog — the only
+// data-driven route whose chunk graph is worth preloading.
+
+const BLOG_MANIFEST_SOURCE = 'src/pages/blog/BlogIndexPage.tsx'
+
+function readManifest() {
+  const manifestPath = join(dist, '.vite', 'manifest.json')
+  if (!existsSync(manifestPath)) return null
+  try {
+    return JSON.parse(readFileSync(manifestPath, 'utf8'))
+  } catch (error) {
+    console.warn('[prerender-html] could not parse build manifest:', error.message)
+    return null
+  }
+}
+
+/**
+ * Modulepreload links for a route's component chunk graph, minus anything the
+ * entry already preloads (the HTML shell already lists those).
+ *
+ * Vite's manifest is inconsistent about chunk naming: `file` values are
+ * 'assets/<name>.js', while `imports` reference shared chunks as
+ * '_<name>.js' — a leading underscore with NO directory prefix, even though
+ * the emitted file is '<name>.js' inside assets/. Every name is therefore
+ * normalized to 'assets/<name>.js' so hrefs, the dedupe set and the byFile
+ * lookups share one form (without it, emitted hrefs lost the assets/ prefix
+ * and 404'd). Non-JS imports ("index.html") and missing files are skipped.
+ */
+function routePreloads(manifest, sourcePath) {
+  if (!manifest) return ''
+  const entry = manifest['index.html']
+  const page = manifest[sourcePath]
+  if (!entry || !page) return ''
+
+  const normalize = (name) => {
+    const bare = name.startsWith('_') ? name.slice(1) : name
+    return bare.startsWith('assets/') ? bare : `assets/${bare}`
+  }
+
+  const entryImports = new Set((entry.imports || []).map(normalize))
+  const byFile = new Map()
+  for (const value of Object.values(manifest)) {
+    if (value && typeof value.file === 'string') byFile.set(value.file, value)
+  }
+
+  const seen = new Set()
+  const emitted = []
+  const push = (name) => {
+    const assetPath = normalize(name)
+    if (!assetPath.endsWith('.js')) return
+    if (!existsSync(join(dist, assetPath))) {
+      console.warn(`[prerender-html] modulepreload target not found in dist: ${assetPath}`)
+      return
+    }
+    if (seen.has(assetPath)) return
+    seen.add(assetPath)
+    emitted.push(`<link rel="modulepreload" crossorigin href="/${assetPath}">`)
+  }
+
+  const visit = (name) => {
+    const assetPath = normalize(name)
+    if (entryImports.has(assetPath)) return
+    push(assetPath)
+    const meta = byFile.get(assetPath)
+    for (const dep of meta?.imports || []) visit(dep)
+  }
+  visit(page.file)
+  return emitted.join('')
+}
 
 /**
  * Sibling of dist/index.html that Netlify's SPA fallback serves for every
@@ -104,6 +235,11 @@ function htmlPathFor(routePath) {
 async function main() {
   installBrowserShims()
 
+  // Inline the stylesheet into every HTML file FIRST so the app-shell
+  // snapshot below (taken from dist/index.html) and all route shells carry
+  // the inline CSS too.
+  inlineStylesheets()
+
   // Snapshot the empty-shell template BEFORE the homepage fill below. Netlify's
   // SPA fallback (`/* -> /app-shell.html`, see netlify.toml) serves this file
   // for every non-prerendered path, so a cold load or refresh of /auth/*,
@@ -145,6 +281,9 @@ async function main() {
 
   const { render, PRERENDER_SKIP } = renderModule
 
+  // Read once, before the route loop — per-route modulepreloads use it.
+  const manifest = readManifest()
+
   // Required, not optional. A local fallback copy would silently diverge from
   // routes/publicRoutes.ts the moment someone edits one and not the other, and
   // the failure mode is quiet: a data-driven route gets a loading skeleton baked
@@ -177,12 +316,25 @@ async function main() {
 
     let markup
     let headScripts = ''
+    let skipRoute = false
     try {
       const result = await render(routePath)
-      markup = result.markup
-      headScripts = result.headScripts || ''
+      if (result.skip) {
+        // The route's build-time data was unavailable (e.g. blog API down).
+        // Ship the empty shell exactly as before prerendering existed — the
+        // client renders the page itself.
+        skipRoute = true
+      } else {
+        markup = result.markup
+        headScripts = result.headScripts || ''
+      }
     } catch (error) {
       failures.push(`${routePath}: ${error.message}`)
+      continue
+    }
+
+    if (skipRoute) {
+      skipped.push(`${routePath} (build-time data unavailable)`)
       continue
     }
 
@@ -226,6 +378,13 @@ async function main() {
       headInject.push(
         '<link rel="preload" as="image" href="/landing/wardrobe-640.webp" imagesrcset="/landing/wardrobe-640.webp 640w, /landing/wardrobe.webp 1152w" imagesizes="(min-width: 1024px) 58vw, 100vw" fetchpriority="high" />'
       )
+    }
+    // The blog index's JS chunk graph is only discovered after the entry
+    // executes; preload it here so hydration starts in parallel with the
+    // baked-content paint.
+    if (routePath === '/blog') {
+      const preloads = routePreloads(manifest, BLOG_MANIFEST_SOURCE)
+      if (preloads) headInject.push(preloads)
     }
     if (headInject.length) {
       out = out.replace('</head>', `${headInject.join('')}\n    </head>`)

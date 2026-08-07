@@ -11,6 +11,10 @@ interface ScrollableTabsProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode
   /** Show gradient fade indicators on edges */
   showFade?: boolean
+  /** Tailwind class for the edge fade overlays. Defaults to the page
+   *  background; pass the strip's own surface (e.g. `bg-card/95`) when the
+   *  tabs sit on a card so the fades don't show a tonal seam. */
+  fadeClassName?: string
   /** Accessible name for the tablist */
   'aria-label'?: string
 }
@@ -19,6 +23,7 @@ export function ScrollableTabs({
   children,
   className,
   showFade = true,
+  fadeClassName = 'bg-background/90',
   'aria-label': ariaLabel = 'Tabs',
   ...props
 }: ScrollableTabsProps) {
@@ -64,7 +69,7 @@ export function ScrollableTabs({
       {/* Left fade indicator */}
       {showFade && canScrollLeft && (
         <div
-          className="pointer-events-none absolute bottom-0 left-0 top-0 w-8 bg-background/90"
+          className={cn('pointer-events-none absolute bottom-0 left-0 top-0 w-8', fadeClassName)}
           aria-hidden="true"
         />
       )}
@@ -72,7 +77,7 @@ export function ScrollableTabs({
       {/* Right fade indicator */}
       {showFade && canScrollRight && (
         <div
-          className="pointer-events-none absolute bottom-0 right-0 top-0 w-8 bg-background/90"
+          className={cn('pointer-events-none absolute bottom-0 right-0 top-0 w-8', fadeClassName)}
           aria-hidden="true"
         />
       )}

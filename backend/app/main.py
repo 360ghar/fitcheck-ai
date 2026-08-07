@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.core.logging_config import setup_session_logging
 from app.core.exceptions import FitCheckException
 from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, get_correlation_id
-from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog, promo, images, admin
+from app.api.v1 import auth, items, outfits, recommendations, users, calendar, weather, gamification, shared_outfits, ai, ai_settings, waitlist, demo, batch_processing, subscription, iap, referral, feedback, photoshoot, social_import, blog, promo, images, admin, health
 from app.db.connection import SupabaseDB
 from app.utils.db import missing_quota_rpcs, missing_referral_rpcs, probe_valid_batch_size_bound
 from postgrest.exceptions import APIError as PostgrestAPIError
@@ -97,6 +97,10 @@ REQUIRED_COLUMNS = (
     ("outfits", "is_public"),
     ("outfit_images", "storage_path"),
     ("outfit_collections", "is_favorite"),
+    # Photoshoot job failure detail (migration 035): without the column every
+    # POST /photoshoot/generate fails with PGRST204 at request time
+    # (observed 2026-08-07), so readiness fails closed until 035 is applied.
+    ("photoshoot_jobs", "image_failures"),
 )
 
 REQUIRED_COLUMN_ALTERNATIVES = {
@@ -106,9 +110,13 @@ REQUIRED_COLUMN_ALTERNATIVES = {
 
 
 # PostgREST/Postgres codes that genuinely mean "this table or column is not
-# in the schema". Anything else (permissions, connectivity, timeouts) is an
-# infrastructure failure wearing a schema failure's clothes.
-_SCHEMA_ABSENT_CODES = {"PGRST205", "42703"}
+# in the schema". PGRST204 is the schema-cache lookup failure PostgREST
+# returns for a missing column on writes (observed 2026-08-07:
+# photoshoot_jobs.image_failures) - a persistent PGRST204 means the column
+# is absent, not merely that the cache is stale. Anything else
+# (permissions, connectivity, timeouts) is an infrastructure failure
+# wearing a schema failure's clothes.
+_SCHEMA_ABSENT_CODES = {"PGRST205", "PGRST204", "42703"}
 
 
 def _column_exists(db, table: str, column: str) -> bool:
@@ -608,9 +616,13 @@ app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 # Presigned-URL read path (auth; caller-owned objects only)
 app.include_router(images.router, prefix="/api/v1/images", tags=["Images"])
 
+# Health endpoints: canonical /health + /api/v1/health compatibility alias.
+# The routes carry full paths, so no prefix is applied here.
+app.include_router(health.router, tags=["Health"])
+
 
 # ============================================================================
-# HEALTH CHECK & ROOT ENDPOINTS
+# ROOT & READINESS ENDPOINTS
 # ============================================================================
 
 
@@ -634,26 +646,6 @@ async def robots_txt():
     (RCA 2026-08-05: GET /robots.txt 404.)
     """
     return "User-agent: *\nDisallow: /\n"
-
-
-@app.get("/health")
-async def health_check():
-    """Liveness probe for the hosting platform (Railway).
-
-    Must stay cheap and free of DB/network I/O. Platform probes poll this
-    path; any blocking work here can delay restarts or mark the deploy
-    unhealthy while the process is still fine. Schema/DB readiness lives
-    on GET /ready instead.
-    """
-    from app.utils.process_metrics import get_rss_mb
-
-    return {
-        "status": "healthy",
-        "service": settings.PROJECT_NAME,
-        "version": settings.VERSION,
-        "commit": settings.RAILWAY_GIT_COMMIT_SHA,
-        "rss_mb": get_rss_mb(),
-    }
 
 
 @app.get("/ready")
