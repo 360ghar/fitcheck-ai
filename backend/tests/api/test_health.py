@@ -23,12 +23,18 @@ def test_health_liveness_shape(client):
 
 def test_health_api_v1_alias_serves_same_payload(client):
     """Probes pointed at the legacy /api/v1/health alias get the canonical
-    liveness payload (RCA 2026-08-07)."""
+    liveness payload (RCA 2026-08-07). rss_mb is a live memory reading that
+    can shift between the two calls, so it is checked separately."""
     canonical = client.get("/health").json()
     alias = client.get("/api/v1/health")
 
     assert alias.status_code == 200
-    assert alias.json() == canonical
+    alias_body = alias.json()
+    for key, value in canonical.items():
+        if key == "rss_mb":
+            assert isinstance(alias_body[key], (int, float))
+        else:
+            assert alias_body[key] == value
 
 
 def test_root_returns_project_metadata(client):

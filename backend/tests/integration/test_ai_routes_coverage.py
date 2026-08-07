@@ -835,6 +835,7 @@ async def test_generate_try_on_saves_to_storage(monkeypatch):
     db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url="http://stored/a.jpg")]})
     request = _try_on_request(save_to_storage=True)
     _fake_agent(monkeypatch, "generate_try_on", result=_outfit_result())
+    _patch_get_public_url(monkeypatch)
     monkeypatch.setattr(
         ai_module, "materialize_avatar_url", AsyncMock(return_value="https://fresh.example/a.jpg")
     )
