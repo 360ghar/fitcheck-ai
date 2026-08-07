@@ -50,7 +50,16 @@ Forbidden: services/models/core importing `app.api`. See `scripts/check_architec
   pool can throw `RuntimeError: deque mutated during iteration` under
   concurrent shared-client use; `app/utils/db.py` `is_db_connection_error` +
   `execute_with_reconnect`/`run_sync_with_reconnect` detect both classes and
-  rebuild the client and retry once on the hot paths. Covered so far:
+  rebuild the client and retry once on the hot paths. Structured PostgREST
+  responses (`APIError`) are retried only when the `code` is a bare gateway
+  HTTP status (429/500/502/503/520/521/522/524 — a non-PostgREST-JSON 5xx/429
+  body, i.e. the gateway itself in a bad state); deterministic SQLSTATE/PGRST
+  codes (`22P02`, `PGRST202`, …) never trigger a rebuild (2026-08-07: a
+  deterministic `22P02` from a jsonb `contains` filter was misclassified via
+  the `invalid input` text marker and retried 3x before 500ing); JSONB `@>`
+  filters must use `jsonb_contains()` (JSON array literal) — `contains(list)`
+  emits a Postgres array literal (`{a,b}`) that JSONB columns reject. Covered
+  so far:
   `/items`, `/auth/oauth/sync`, `/outfits` (list + create), `get_subscription`
   (also the shared choke point behind `/subscription`, `/referral/*`,
   `/users/dashboard`), usage check/increment + `reserve/release_ai_usage`,

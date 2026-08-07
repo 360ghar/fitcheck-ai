@@ -43,9 +43,10 @@ from app.models.outfit import (
     OutfitCollectionCreate,
     OutfitCollectionUpdate,
 )
+from app.services.outfit_service import delete_outfit as delete_outfit_service
 from app.services.storage_service import MAX_FILE_SIZE, StorageService
 from app.utils.datetime_util import utcnow, utcnow_iso, parse_utc_datetime
-from app.utils.db import execute_with_reconnect, safe_search_term
+from app.utils.db import execute_with_reconnect, jsonb_contains, safe_search_term
 from app.api.v1.images import materialize_image_urls, materialize_parent_images
 
 logger = get_context_logger(__name__)
@@ -329,7 +330,12 @@ async def list_outfits(
             if drafts_value is not None:
                 q = q.eq("is_draft", drafts_value)
             if tag_list:
-                q = q.contains("tags", tag_list)
+                # JSONB array contains: jsonb_contains emits a JSON array
+                # literal - plain contains(list) sends a Postgres array
+                # literal ({a,b}) and PostgREST answers 22P02 for the jsonb
+                # `tags` column (2026-08-07 /items occasion-filter incident,
+                # same latent pattern).
+                q = jsonb_contains(q, "tags", tag_list)
             if search:
                 like = f"%{safe_search_term(search)}%"
                 q = q.or_(f"name.ilike.{like},description.ilike.{like}")
@@ -686,62 +692,9 @@ async def delete_outfit(
     user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
+    """Delete an outfit and best-effort remove its images from storage."""
     try:
-        outfit_id_str = str(outfit_id)
-        existing = await execute_with_reconnect(
-            lambda d: d.table("outfits")
-            .select("id")
-            .eq("id", outfit_id_str)
-            .eq("user_id", user_id)
-            .single()
-            .execute(),
-            db,
-            extra={"operation": "delete_outfit.load", "outfit_id": outfit_id_str},
-        )
-        if not existing.data:
-            raise OutfitNotFoundError(outfit_id=outfit_id_str)
-
-        # Collect owned outfit-image storage paths (with _thumb siblings)
-        # BEFORE the row is gone; deleting the row without this leaks the
-        # objects forever (measured: 296 orphans / 192MB in the bucket).
-        storage_paths: List[str] = []
-        try:
-            owned = await StorageService.resolve_owned_storage_paths(
-                db, user_id, outfit_ids=[outfit_id_str]
-            )
-            storage_paths = owned["storage_paths"]
-        except Exception as e:
-            logger.warning(
-                "Failed to resolve storage paths for outfit delete",
-                outfit_id=outfit_id_str,
-                error=str(e),
-            )
-
-        # Idempotent delete: a retry after a lost response is a no-op, so a
-        # dead pooled Supabase connection is healed by one rebuild + retry
-        # instead of surfacing a 500 (observed 2026-08-07: DELETE /outfits
-        # failed with DATABASE_ERROR in a gateway-blip window; the library
-        # only retries GET/HEAD, never DELETE).
-        await execute_with_reconnect(
-            lambda d: d.table("outfits")
-            .delete()
-            .eq("id", outfit_id_str)
-            .eq("user_id", user_id)
-            .execute(),
-            db,
-            extra={"operation": "delete_outfit.delete", "outfit_id": outfit_id_str},
-        )
-
-        if storage_paths:
-            try:
-                await StorageService.delete_multiple_images(db=db, storage_paths=storage_paths)
-            except Exception as e:
-                logger.warning(
-                    "Failed to delete outfit images from storage",
-                    outfit_id=outfit_id_str,
-                    object_count=len(storage_paths),
-                    error=str(e),
-                )
+        await delete_outfit_service(db, user_id=user_id, outfit_id=str(outfit_id))
         return None
     except OutfitNotFoundError:
         raise

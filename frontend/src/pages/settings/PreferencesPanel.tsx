@@ -102,7 +102,7 @@ export function PreferencesPanel() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div>
         <h3 className="text-base md:text-lg font-medium text-foreground">Style Preferences</h3>
         <p className="text-sm text-muted-foreground">
@@ -155,7 +155,7 @@ export function PreferencesPanel() {
             placeholder="Add a pattern"
           />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="color-temp" className="block text-sm font-medium text-foreground">Color temperature</label>
               <select
@@ -182,11 +182,11 @@ export function PreferencesPanel() {
             </div>
           </div>
 
-          <div className="flex flex-col-reverse gap-3 md:flex-row md:justify-end">
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <Button
               onClick={handleSavePreferences}
               disabled={isSavingPreferences}
-              className="w-full md:w-auto"
+              className="w-full sm:w-auto"
             >
               {isSavingPreferences ? 'Saving…' : 'Save Preferences'}
             </Button>

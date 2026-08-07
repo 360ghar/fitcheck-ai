@@ -46,6 +46,93 @@ def test_is_db_connection_error_rejects_unrelated_errors():
     assert not is_db_connection_error(RuntimeError("PGRST202 could not find the function"))
 
 
+def test_is_db_connection_error_rejects_postgrest_api_errors():
+    """A structured PostgREST response carrying a SQLSTATE/PGRST `code`
+    (22P02, PGRST202, 42703, ...) is NEVER a dead pooled connection:
+    rebuilding the client cannot fix a query/authorization error, and
+    retrying churns the shared pool (amplifying the real HTTP/2 races).
+    Regression for 2026-08-07: a deterministic jsonb `contains` filter sent
+    a Postgres array literal (`cs.{informal}`) for a JSONB column, PostgREST
+    answered 22P02 "invalid input syntax for type jsonb", and the `invalid
+    input` text marker (added for h2 ProtocolError state strings)
+    misclassified it as a connection error - so /items burned 2 client
+    rebuilds and 3 attempts on every poll before 500ing. A structured
+    GATEWAY error (HTTP-status `code` from a non-JSON 5xx/429 body) is the
+    one retryable case - see
+    test_is_db_connection_error_retries_gateway_status_errors."""
+    from postgrest.exceptions import APIError
+
+    incident_error = APIError(
+        {
+            "code": "22P02",
+            "message": "invalid input syntax for type jsonb",
+            "hint": None,
+            "details": 'Token "informal" is invalid.',
+        }
+    )
+    assert not is_db_connection_error(incident_error)
+    # Proof of the 2026-08-07 misclassification: the APIError's `.message`
+    # holds the PostgREST error text ("invalid input syntax for type jsonb"),
+    # which the `invalid input` marker (added for h2 ProtocolError state
+    # strings) matches - the OLD classifier returned True for this
+    # deterministic query error, burning 2 client rebuilds per poll. Pin the
+    # marker against `.message` rather than str(), whose rendering depends on
+    # postgrest-py's internal args mechanism.
+    assert "invalid input" in (incident_error.message or "").lower()
+    # Other structured DB errors, same policy.
+    assert not is_db_connection_error(
+        APIError(
+            {
+                "code": "PGRST202",
+                "message": "Could not find the function public.reserve_ai_usage(p_user_id, p_operation, p_count, p_limit) in the schema cache",
+                "hint": None,
+                "details": None,
+            }
+        )
+    )
+    assert not is_db_connection_error(
+        APIError({"code": 400, "message": "JSON could not be generated", "hint": None, "details": "x"})
+    )
+    # A deterministic PostgREST 500 still carries a SQLSTATE code, not a bare
+    # status; only a NON-JSON gateway 5xx body lands on the HTTP status.
+    assert not is_db_connection_error(
+        APIError({"code": "PGRST104", "message": "Database connection error. Retry your request.", "hint": None, "details": None})
+    )
+    # The h2 ProtocolError state-machine text the marker was originally added
+    # for is a plain RuntimeError (no .code) and must keep matching.
+    assert is_db_connection_error(
+        RuntimeError("Invalid input StreamInputs.SEND_HEADERS in state 5")
+    )
+
+
+def test_is_db_connection_error_retries_gateway_status_errors():
+    """A structured error whose `code` is a bare HTTP status means the
+    response body was NOT PostgREST JSON - the Supabase/Cloudflare gateway
+    itself answered in a bad state (502/503/504/520/... or a rate-limit 429).
+    That is the transient gateway-blip class the rebuild+retry mechanism
+    exists for, so these stay retryable even though they arrive wrapped in
+    APIError."""
+    from postgrest.exceptions import APIError
+
+    def status_error(code):
+        return APIError(
+            {
+                "code": code,
+                "message": "JSON could not be generated",
+                "hint": "Refer to full message for details",
+                "details": "<html>Bad Gateway</html>",
+            }
+        )
+
+    for code in (429, 500, 502, 503, 504, 520, 521, 522, 524):
+        assert is_db_connection_error(status_error(code)), f"code {code} should retry"
+
+    # Non-gateway statuses and missing codes stay deterministic.
+    assert not is_db_connection_error(status_error(404))
+    assert not is_db_connection_error(status_error(401))
+    assert not is_db_connection_error(status_error(None))
+
+
 def test_is_db_connection_error_matches_deque_mutation():
     """httpcore's HTTP/2 pool raises `RuntimeError: deque mutated during
     iteration` when the same shared Supabase client is used concurrently (one

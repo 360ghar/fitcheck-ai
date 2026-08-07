@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { HelmetProvider } from 'react-helmet-async'
 import { initAnalytics } from './lib/analytics'
 import { captureException, initErrorReporting } from './lib/error-reporting'
+import { hydratePrerenderedState } from './lib/prerenderState'
 import { preloadRoute } from './routes/publicRoutes'
 import App from './App'
 import { Toaster } from './components/ui/toaster'
@@ -58,6 +59,18 @@ const queryClient = new QueryClient({
     },
   },
 })
+
+// The /blog prerender bakes the first page of posts into the HTML
+// (entry-prerender.tsx). Hydrate that state so the first client render shows
+// the baked grid instead of a loading skeleton. The baked queries are stamped
+// stale (dataUpdatedAt = 0) by the prerender, so they refetch in the
+// background right after mount — baked content is a paint shortcut, not a
+// freshness ceiling. Absent or corrupt state (any other route) is a no-op:
+// hydratePrerenderedState returns false and never throws.
+hydratePrerenderedState(
+  queryClient,
+  document.getElementById('__FITCHECK_QUERY_STATE__')?.textContent ?? null
+)
 
 // PostHog's init options (autocapture, session recording, masking) moved into
 // lib/analytics.ts alongside the lazy import. There is no <PostHogProvider>

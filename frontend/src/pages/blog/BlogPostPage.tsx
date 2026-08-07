@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
+import { BlogImage } from '@/components/blog/BlogImage'
 import SEO from '@/components/seo/SEO'
 import { BreadcrumbJsonLd, buildArticleSchema } from '@/components/seo/JsonLd'
 import { Calendar, Clock, ArrowLeft, User, ArrowRight, Loader2 } from 'lucide-react'
@@ -113,7 +114,7 @@ export default function BlogPostPage() {
               </Link>
 
               {/* Category */}
-              <Badge className="mb-4 bg-secondary text-primary border-0">
+              <Badge className="mb-4 bg-secondary text-secondary-foreground border-0">
                 {post.category}
               </Badge>
 
@@ -151,17 +152,18 @@ export default function BlogPostPage() {
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <AnimatedSection>
               <div className="aspect-[21/9] bg-stone-200 dark:bg-stone-800 rounded-2xl flex items-center justify-center overflow-hidden relative">
-                {post.featured_image_url ? (
-                  <img
-                    src={post.featured_image_url}
-                    alt={post.title}
-                    width={1280}
-                    height={548}
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-8xl md:text-9xl">{post.emoji}</span>
-                )}
+                <BlogImage
+                  src={post.featured_image_url}
+                  alt={post.title}
+                  emoji={post.emoji}
+                  emojiClassName="text-8xl md:text-9xl"
+                  sizes="(min-width: 1024px) 1024px, 100vw"
+                  widths={[640, 960, 1280, 1600]}
+                  quality={75}
+                  priority
+                  width={1280}
+                  height={548}
+                />
               </div>
             </AnimatedSection>
           </div>
@@ -294,18 +296,16 @@ export default function BlogPostPage() {
                     >
                       <article className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden transition-shadow">
                         <div className="aspect-video bg-stone-200 dark:bg-stone-800 flex items-center justify-center overflow-hidden relative">
-                          {relatedPost.featured_image_url ? (
-                            <img
-                              src={relatedPost.featured_image_url}
-                              alt={relatedPost.title}
-                              width={640}
-                              height={360}
-                              loading="lazy"
-                              className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                            />
-                          ) : (
-                            <span className="text-4xl">{relatedPost.emoji}</span>
-                          )}
+                          <BlogImage
+                            src={relatedPost.featured_image_url}
+                            alt={relatedPost.title}
+                            emoji={relatedPost.emoji}
+                            emojiClassName="text-4xl"
+                            sizes="(min-width: 768px) 33vw, 100vw"
+                            widths={[320, 480, 640, 800]}
+                            width={640}
+                            height={360}
+                          />
                         </div>
                         <div className="p-4">
                           <span className="text-xs font-medium text-primary dark:text-primary">
