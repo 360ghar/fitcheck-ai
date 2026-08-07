@@ -688,7 +688,16 @@ async def delete_outfit(
 ):
     try:
         outfit_id_str = str(outfit_id)
-        existing = await asyncio.to_thread(db.table("outfits").select("id").eq("id", outfit_id_str).eq("user_id", user_id).single().execute)
+        existing = await execute_with_reconnect(
+            lambda d: d.table("outfits")
+            .select("id")
+            .eq("id", outfit_id_str)
+            .eq("user_id", user_id)
+            .single()
+            .execute(),
+            db,
+            extra={"operation": "delete_outfit.load", "outfit_id": outfit_id_str},
+        )
         if not existing.data:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
 
@@ -708,7 +717,20 @@ async def delete_outfit(
                 error=str(e),
             )
 
-        await asyncio.to_thread(db.table("outfits").delete().eq("id", outfit_id_str).eq("user_id", user_id).execute)
+        # Idempotent delete: a retry after a lost response is a no-op, so a
+        # dead pooled Supabase connection is healed by one rebuild + retry
+        # instead of surfacing a 500 (observed 2026-08-07: DELETE /outfits
+        # failed with DATABASE_ERROR in a gateway-blip window; the library
+        # only retries GET/HEAD, never DELETE).
+        await execute_with_reconnect(
+            lambda d: d.table("outfits")
+            .delete()
+            .eq("id", outfit_id_str)
+            .eq("user_id", user_id)
+            .execute(),
+            db,
+            extra={"operation": "delete_outfit.delete", "outfit_id": outfit_id_str},
+        )
 
         if storage_paths:
             try:
@@ -1487,17 +1509,28 @@ async def delete_outfit_image(
         outfit_id_str = str(outfit_id)
         image_id_str = str(image_id)
 
-        outfit = await asyncio.to_thread(db.table("outfits").select("id").eq("id", outfit_id_str).eq("user_id", user_id).single().execute)
+        outfit = await execute_with_reconnect(
+            lambda d: d.table("outfits")
+            .select("id")
+            .eq("id", outfit_id_str)
+            .eq("user_id", user_id)
+            .single()
+            .execute(),
+            db,
+            extra={"operation": "delete_outfit_image.load_outfit", "outfit_id": outfit_id_str},
+        )
         if not outfit.data:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
 
-        img = await asyncio.to_thread(
-            db.table("outfit_images")
+        img = await execute_with_reconnect(
+            lambda d: d.table("outfit_images")
             .select("id, storage_path")
             .eq("id", image_id_str)
             .eq("outfit_id", outfit_id_str)
             .single()
-            .execute
+            .execute(),
+            db,
+            extra={"operation": "delete_outfit_image.load_image", "outfit_id": outfit_id_str, "image_id": image_id_str},
         )
         if not img.data:
             raise ImageNotFoundError(image_id=image_id_str)
@@ -1509,7 +1542,17 @@ async def delete_outfit_image(
             except Exception as e:
                 logger.warning("Failed to delete outfit image from storage", storage_path=storage_path, error=str(e))
 
-        await asyncio.to_thread(db.table("outfit_images").delete().eq("id", image_id_str).eq("outfit_id", outfit_id_str).execute)
+        # Idempotent delete (see delete_outfit): heal a dead pooled
+        # Supabase connection with one rebuild + retry instead of a 500.
+        await execute_with_reconnect(
+            lambda d: d.table("outfit_images")
+            .delete()
+            .eq("id", image_id_str)
+            .eq("outfit_id", outfit_id_str)
+            .execute(),
+            db,
+            extra={"operation": "delete_outfit_image.delete", "outfit_id": outfit_id_str, "image_id": image_id_str},
+        )
         return {"data": {"deleted": True}, "message": "OK"}
     except (OutfitNotFoundError, ImageNotFoundError):
         raise

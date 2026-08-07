@@ -80,3 +80,15 @@ ruff check app/services/admin_service.py app/utils/db.py app/main.py tests/
   mapping to stop traceback spam) added to the tracker.
 - TD-043 (async Supabase client) remains the full fix for pooled-connection
   outages; the 15:32–15:34 burst is infra, not code.
+
+## Follow-up (self-review 2026-08-07)
+
+- The 09:50 `DELETE /api/v1/outfits` 500 was re-examined: all outfit FKs
+  cascade and `.single()` on zero rows returns falsy data (no latent 404/500
+  bug), so the failure was a gateway blip — but the handler was one of the
+  remaining **unwrapped** call sites (TD-043 class). `delete_outfit` and
+  `delete_outfit_image` now run their ownership selects and row deletes
+  through `execute_with_reconnect` (reads + idempotent deletes are retry-safe;
+  postgrest-py's own retry only covers GET/HEAD on 503/520, never DELETE).
+  Lambdas call `.execute()` per the repo convention enforced by
+  `test_no_parenless_execute_builders_in_app_code`.
