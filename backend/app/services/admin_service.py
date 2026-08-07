@@ -887,18 +887,23 @@ _QUOTA_SORT_COLUMNS = {
 def _quota_usage_builder(
     d: Any, *, q: Optional[str], plan: Optional[str], sort_col: str, sort_dir: str
 ) -> Any:
+    # subscriptions is embedded THROUGH users (users.id <- subscriptions.user_id,
+    # migration 007): user_ai_settings has no FK to subscriptions, so a
+    # top-level `subscriptions(...)` embed raises PGRST200 "Could not find a
+    # relationship" on any DB with the repo schema (observed 2026-08-07 on
+    # GET /api/v1/admin/quotas). subscriptions.user_id is UNIQUE, so the
+    # nested embed resolves to a single object (not an array) in PostgREST.
     query = d.table("user_ai_settings").select(
         "user_id,daily_extraction_count,daily_generation_count,daily_embedding_count,"
         "last_reset_date,total_extractions,total_generations",
-        "users(email,full_name,custom_daily_quota)",
-        "subscriptions(plan_type,status)",
+        "users(email,full_name,custom_daily_quota,subscriptions(plan_type,status))",
         count="exact",
     )
     if q:
         term = f"%{safe_search_term(q)}%"
         query = query.or_(_or_ilike(("users.email", "users.full_name"), term))
     if plan:
-        query = query.eq("subscriptions.plan_type", plan)
+        query = query.eq("users.subscriptions.plan_type", plan)
     return query.order(sort_col, desc=(sort_dir == "desc"))
 
 
@@ -935,7 +940,14 @@ async def list_quota_usage(
     for row in page_result.data or []:
         row = dict(row)
         user = row.pop("users", None) or {}
-        sub = row.pop("subscriptions", None) or {}
+        # With the nested embed the subscription row lives inside `users`.
+        # subscriptions.user_id is UNIQUE (007) so PostgREST returns a single
+        # object; tolerate an array defensively (older PostgREST behavior).
+        subscriptions = user.get("subscriptions") if isinstance(user, dict) else None
+        if isinstance(subscriptions, list):
+            sub = subscriptions[0] if subscriptions else {}
+        else:
+            sub = subscriptions or {}
         items.append(
             {
                 **row,

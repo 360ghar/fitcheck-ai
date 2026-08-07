@@ -332,12 +332,15 @@ def missing_rpc_log_hint(function_name: str) -> str:
 # `extraction_jobs` / `photoshoot_jobs` (migrations 016 / 023). When those
 # migrations (or their columns/constraints) are missing on the hosted DB,
 # postgrest-py raises a raw APIError (PGRST205 unknown table, 42703 unknown
-# column, 23514 CHECK violation). Services must wrap those raw errors into a
-# friendly retryable 503 and log this operator hint - never send the raw DB
-# text to a client. Same policy as the quota-RPC helpers above.
+# column, PGRST204 unknown column in the schema cache - the exact code
+# observed 2026-08-07 when photoshoot_jobs.image_failures, migration 035,
+# was missing - and 23514 CHECK violation). Services must wrap those raw
+# errors into a friendly retryable 503 and log this operator hint - never
+# send the raw DB text to a client. Same policy as the quota-RPC helpers
+# above.
 # ============================================================================
 
-_MISSING_SCHEMA_MARKERS = ("pgrst205", "42703")
+_MISSING_SCHEMA_MARKERS = ("pgrst205", "42703", "pgrst204")
 # CHECK-violation marker for the extraction_jobs.generation_batch_size bound
 # (016 allows <=10; 023/029 raise it to <=50/<=100 to match the API cap).
 _CHECK_VIOLATION_MARKERS = ("23514", "valid_batch_size")
@@ -353,9 +356,10 @@ def job_persistence_migration_hint(table: str, error: Exception) -> str:
     """Operator-facing log hint for durable-job persistence migration gaps.
 
     Covers the two ways a hosted-Supabase migration gap breaks job creation:
-    the table/columns do not exist (016/023 missing) or the
-    ``generation_batch_size`` CHECK is still the pre-023 bound (<=10) while
-    the API sends up to 50. Returns "" when the error is not a migration gap.
+    the table/columns do not exist (016/023/035 missing - PGRST205/42703/
+    PGRST204) or the ``generation_batch_size`` CHECK is still the pre-023
+    bound (<=10) while the API sends up to 50. Returns "" when the error is
+    not a migration gap.
 
     LOGS ONLY — never put this string in a client-facing error message.
     """
@@ -364,8 +368,9 @@ def job_persistence_migration_hint(table: str, error: Exception) -> str:
         return (
             f"AI job persistence is unavailable: '{table}' or its columns are "
             "missing from the hosted schema (migrations "
-            "016_extraction_jobs.sql / 023_durable_job_state.sql not applied). "
-            "Apply them to restore batch/photoshoot job creation."
+            "016_extraction_jobs.sql / 023_durable_job_state.sql / "
+            "035_add_photoshoot_jobs_image_failures.sql not applied). Apply "
+            "them to restore batch/photoshoot job creation."
         )
     if all(marker in text for marker in _CHECK_VIOLATION_MARKERS):
         return (

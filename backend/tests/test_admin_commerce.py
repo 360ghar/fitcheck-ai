@@ -438,8 +438,15 @@ def test_quotas_list_returns_usage_rows(client):
                     "daily_generation_count": 2,
                     "daily_embedding_count": 1,
                     "last_reset_date": "2026-08-06",
-                    "users": {"email": "t@example.com", "full_name": "T", "custom_daily_quota": None},
-                    "subscriptions": {"plan_type": "free", "status": "active"},
+                    # subscriptions is embedded THROUGH users (no direct FK
+                    # between user_ai_settings and subscriptions; see
+                    # _quota_usage_builder / test_admin_quotas.py).
+                    "users": {
+                        "email": "t@example.com",
+                        "full_name": "T",
+                        "custom_daily_quota": None,
+                        "subscriptions": {"plan_type": "free", "status": "active"},
+                    },
                 }
             ]
         }

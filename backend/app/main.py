@@ -97,6 +97,10 @@ REQUIRED_COLUMNS = (
     ("outfits", "is_public"),
     ("outfit_images", "storage_path"),
     ("outfit_collections", "is_favorite"),
+    # Photoshoot job failure detail (migration 035): without the column every
+    # POST /photoshoot/generate fails with PGRST204 at request time
+    # (observed 2026-08-07), so readiness fails closed until 035 is applied.
+    ("photoshoot_jobs", "image_failures"),
 )
 
 REQUIRED_COLUMN_ALTERNATIVES = {
@@ -106,9 +110,13 @@ REQUIRED_COLUMN_ALTERNATIVES = {
 
 
 # PostgREST/Postgres codes that genuinely mean "this table or column is not
-# in the schema". Anything else (permissions, connectivity, timeouts) is an
-# infrastructure failure wearing a schema failure's clothes.
-_SCHEMA_ABSENT_CODES = {"PGRST205", "42703"}
+# in the schema". PGRST204 is the schema-cache lookup failure PostgREST
+# returns for a missing column on writes (observed 2026-08-07:
+# photoshoot_jobs.image_failures) - a persistent PGRST204 means the column
+# is absent, not merely that the cache is stale. Anything else
+# (permissions, connectivity, timeouts) is an infrastructure failure
+# wearing a schema failure's clothes.
+_SCHEMA_ABSENT_CODES = {"PGRST205", "PGRST204", "42703"}
 
 
 def _column_exists(db, table: str, column: str) -> bool:
@@ -654,6 +662,18 @@ async def health_check():
         "commit": settings.RAILWAY_GIT_COMMIT_SHA,
         "rss_mb": get_rss_mb(),
     }
+
+
+@app.get("/api/v1/health")
+async def health_check_api_v1():
+    """Compatibility alias for probes configured against /api/v1/health.
+
+    The canonical liveness endpoint is /health. Probes pointed at
+    /api/v1/health produced 404 noise (observed 2026-08-07); serve the same
+    cheap payload instead. Operators should still fix the probe path - this
+    only makes a misconfiguration harmless.
+    """
+    return await health_check()
 
 
 @app.get("/ready")
