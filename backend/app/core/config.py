@@ -31,6 +31,17 @@ class Settings(BaseSettings):
     RAILWAY_GIT_COMMIT_SHA: str = "unknown"
 
     # CORS
+    # First-party origins that are ALWAYS allowed. BACKEND_CORS_ORIGINS is the
+    # deploy-time source of truth, but a stale env override must not silently
+    # break a first-party surface — on 2026-08-07 the Railway override predated
+    # the admin panel and rejected admin.fitcheckaiapp.com preflights (400, no
+    # allow-origin header), breaking every admin API call. The model validator
+    # merges these in after the env value; they cannot be removed via env.
+    ALWAYS_ALLOWED_CORS_ORIGINS: ClassVar[tuple[str, ...]] = (
+        "https://www.fitcheckaiapp.com",
+        "https://fitcheckaiapp.com",
+        "https://admin.fitcheckaiapp.com",
+    )
     BACKEND_CORS_ORIGINS: List[str] = [
         "https://www.fitcheckaiapp.com",
         "https://fitcheckaiapp.com",
@@ -465,13 +476,17 @@ class Settings(BaseSettings):
     )
 
     @model_validator(mode="after")
-    def _include_frontend_origin(self):
+    def _ensure_cors_origins(self):
+        """Merge FRONTEND_URL and the always-allowed first-party origins into
+        the CORS allowlist so a stale BACKEND_CORS_ORIGINS override cannot
+        drop them (2026-08-07 admin CORS outage)."""
         frontend_url = (self.FRONTEND_URL or "").strip().rstrip("/")
         origins = [
             origin.strip().rstrip("/") for origin in (self.BACKEND_CORS_ORIGINS or [])
         ]
         if frontend_url:
             origins.append(frontend_url)
+        origins.extend(self.ALWAYS_ALLOWED_CORS_ORIGINS)
 
         deduped = []
         seen = set()

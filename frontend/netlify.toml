@@ -39,11 +39,17 @@
 # hashes) written by scripts/prerender-html.mjs during the build. Serving
 # dist/index.html here instead would flash the prerendered homepage on every
 # app-route cold load or refresh until JS hydrates.
+#
+# DO NOT add `force = true` here. Netlify's force flag applies the redirect
+# even when a real file exists at the requested path, so a forced catch-all
+# serves app-shell.html for /assets/*.js, /robots.txt and every prerendered
+# page (text/html where JS/CSS belongs) — the 2026-08-07 total-site outage.
+# Without force, real files shadow the redirect and the fallback only serves
+# the shell for genuinely missing paths.
 [[redirects]]
   from = "/*"
   to = "/app-shell.html"
   status = 200
-  force = true
 
 # Headers for security and caching
 #
