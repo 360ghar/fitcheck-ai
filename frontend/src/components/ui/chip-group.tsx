@@ -89,7 +89,7 @@ export function ChipGroup({
               key={s}
               type="button"
               onClick={() => add(s)}
-              className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
+              className="inline-flex min-h-11 items-center rounded-full border border-border px-3 text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
             >
               + {s}
             </button>

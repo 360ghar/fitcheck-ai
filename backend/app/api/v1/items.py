@@ -43,7 +43,7 @@ from app.services.ai_service import AIService
 from app.services.ai_settings_service import AISettingsService
 from app.services.storage_service import MAX_FILE_SIZE, StorageService
 from app.services.vector_service import get_vector_service
-from app.utils.db import execute_with_reconnect, safe_search_term
+from app.utils.db import execute_with_reconnect, jsonb_contains, safe_search_term
 from app.utils.parallel import parallel_with_retry
 from app.api.v1.images import materialize_parent_images
 
@@ -450,10 +450,14 @@ async def list_items(
             if brand:
                 q = q.ilike("brand", f"%{brand}%")
             if color:
-                # JSONB array contains
-                q = q.contains("colors", [color])
+                # JSONB array contains: jsonb_contains emits a JSON array
+                # literal (["red"]) - plain contains(list) would send a
+                # Postgres array literal ({red}) and PostgREST answers 22P02
+                # "invalid input syntax for type jsonb" (2026-08-07 /items
+                # 500 burst).
+                q = jsonb_contains(q, "colors", [color])
             if occasion_filter:
-                q = q.contains("occasion_tags", [occasion_filter])
+                q = jsonb_contains(q, "occasion_tags", [occasion_filter])
             if search:
                 like = f"%{safe_search_term(search)}%"
                 q = q.or_(f"name.ilike.{like},brand.ilike.{like}")

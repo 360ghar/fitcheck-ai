@@ -29,6 +29,18 @@
   status = 200
   force = true
 
+# /blog is prerendered to dist/blog/index.html, so Netlify's pretty-URL
+# handling 301s /blog -> /blog/ — a redirect hop that cost +595 ms of mobile
+# LCP in the 2026-08-07 PSI run. Rewrite in place instead: the page keeps the
+# /blog URL (its canonical, matching sitemap.xml) and skips the round trip.
+# force = true is required: without it Netlify serves the existing
+# dist/blog/index.html (and its auto 301) before this rule applies.
+[[redirects]]
+  from = "/blog"
+  to = "/blog/"
+  status = 200
+  force = true
+
 # SPA routing - serve the empty app shell for every non-prerendered path.
 #
 # Prerendered SEO routes (/, /faq, /features/*, /compare/*, /best/*, ...) exist

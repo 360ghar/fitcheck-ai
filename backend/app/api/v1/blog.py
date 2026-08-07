@@ -8,7 +8,7 @@ and admin-only write access.
 import asyncio
 from typing import Any, Dict, Literal
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from supabase import Client
 
 from app.api.v1.deps import get_current_user, get_db
@@ -55,11 +55,19 @@ def verify_admin(user: Dict[str, Any]) -> None:
 # PUBLIC ENDPOINTS
 # =============================================================================
 
+# Public blog content is static between deploys; let browsers (and any CDN in
+# front of the API) serve it without a round trip for a few minutes. The
+# client refetches on mount anyway (baked prerender data is stamped stale), so
+# max-age only helps cold loads — the 2026-08-07 PSI measured this endpoint at
+# 3.4 s on the mobile critical path.
+BLOG_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=600"
+
 
 @router.get("/posts", response_model=Dict[str, Any])
 async def list_posts(
     params: BlogPostListParams = Depends(),
     db: Client = Depends(get_db),
+    response: Response = None,
 ):
     """
     List all published blog posts with pagination.
@@ -84,16 +92,16 @@ async def list_posts(
         # Order by date descending (newest first)
         query = query.order("date", desc=True)
 
-        # Get total count first
-        count_result = await asyncio.to_thread(query.execute)
-        total = count_result.count if hasattr(count_result, "count") else 0
-
-        # Apply pagination
+        # Apply pagination and execute ONCE: PostgREST returns the exact count
+        # of the full filtered set alongside the page, so the previous
+        # count-then-page pattern (two Supabase round trips) is halved. This
+        # endpoint sat on the blog's mobile critical path (3.4 s in the
+        # 2026-08-07 PSI run), so the round trip matters.
         offset = (params.page - 1) * params.page_size
-        query = query.range(offset, offset + params.page_size - 1)
-
-        # Execute query
-        result = await asyncio.to_thread(query.execute)
+        result = await asyncio.to_thread(
+            query.range(offset, offset + params.page_size - 1).execute
+        )
+        total = result.count if hasattr(result, "count") else 0
 
         # Convert to response models
         posts = [BlogPostSummary(**post) for post in (result.data or [])]
@@ -111,6 +119,10 @@ async def list_posts(
             has_prev=params.page > 1,
         )
 
+        # Success path only: error responses must never inherit a cacheable
+        # header (a cached 404 would linger for max-age after a post is
+        # published).
+        response.headers["Cache-Control"] = BLOG_CACHE_CONTROL
         return {
             "data": response_data.model_dump(mode="json"),
             "message": "OK",
@@ -125,6 +137,7 @@ async def list_posts(
 async def get_post(
     slug: str,
     db: Client = Depends(get_db),
+    response: Response = None,
 ):
     """
     Get a single blog post by slug.
@@ -151,6 +164,9 @@ async def get_post(
 
         post = BlogPost(**result.data)
 
+        # Success path only — a NotFound 404 must not carry the cache header
+        # (see list_posts).
+        response.headers["Cache-Control"] = BLOG_CACHE_CONTROL
         return {
             "data": post.model_dump(mode="json"),
             "message": "OK",
@@ -164,7 +180,10 @@ async def get_post(
 
 
 @router.get("/categories", response_model=Dict[str, Any])
-async def get_categories(db: Client = Depends(get_db)):
+async def get_categories(
+    db: Client = Depends(get_db),
+    response: Response = None,
+):
     """
     Get all unique categories from published blog posts.
 
@@ -181,6 +200,8 @@ async def get_categories(db: Client = Depends(get_db)):
 
         categories = sorted(list(set(row["category"] for row in (result.data or []))))
 
+        # Success path only (see list_posts).
+        response.headers["Cache-Control"] = BLOG_CACHE_CONTROL
         return {
             "data": {"categories": categories},
             "message": "OK",

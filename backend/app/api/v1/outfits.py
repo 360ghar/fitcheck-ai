@@ -45,7 +45,7 @@ from app.models.outfit import (
 )
 from app.services.storage_service import MAX_FILE_SIZE, StorageService
 from app.utils.datetime_util import utcnow, utcnow_iso, parse_utc_datetime
-from app.utils.db import execute_with_reconnect, safe_search_term
+from app.utils.db import execute_with_reconnect, jsonb_contains, safe_search_term
 from app.api.v1.images import materialize_image_urls, materialize_parent_images
 
 logger = get_context_logger(__name__)
@@ -329,7 +329,12 @@ async def list_outfits(
             if drafts_value is not None:
                 q = q.eq("is_draft", drafts_value)
             if tag_list:
-                q = q.contains("tags", tag_list)
+                # JSONB array contains: jsonb_contains emits a JSON array
+                # literal - plain contains(list) sends a Postgres array
+                # literal ({a,b}) and PostgREST answers 22P02 for the jsonb
+                # `tags` column (2026-08-07 /items occasion-filter incident,
+                # same latent pattern).
+                q = jsonb_contains(q, "tags", tag_list)
             if search:
                 like = f"%{safe_search_term(search)}%"
                 q = q.or_(f"name.ilike.{like},description.ilike.{like}")

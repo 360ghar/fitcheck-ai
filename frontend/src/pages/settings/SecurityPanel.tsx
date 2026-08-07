@@ -51,7 +51,7 @@ export function SecurityPanel() {
   }
 
   return (
-    <div className="border-t border-border pt-6 space-y-4">
+    <div className="border-t border-border pt-4 md:pt-6 space-y-4">
       <div className="flex items-center gap-2">
         <Shield className="h-5 w-5 text-muted-foreground" />
         <h3 className="text-base md:text-lg font-medium text-foreground">Security</h3>
@@ -64,7 +64,7 @@ export function SecurityPanel() {
         <Button
           variant="outline"
           onClick={handleSendPasswordReset}
-          className="mt-3 w-full md:w-auto"
+          className="mt-3 w-full sm:w-auto"
         >
           Send Password Reset Email
         </Button>
@@ -77,7 +77,7 @@ export function SecurityPanel() {
         <Button
           variant="destructive"
           onClick={() => setIsDeleteAccountOpen(true)}
-          className="mt-3 w-full md:w-auto"
+          className="mt-3 w-full sm:w-auto"
         >
           Delete Account
         </Button>

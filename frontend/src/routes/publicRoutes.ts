@@ -44,9 +44,10 @@ export const PUBLIC_ROUTES: PublicRouteDef[] = [
   { path: '/support', importer: () => import('@/pages/public/SupportPage') as PageModule },
   { path: '/faq', importer: () => import('@/pages/public/FAQPage') as PageModule },
 
-  // Blog is data-driven (fetches posts on mount) and already has the
-  // `seo-html` Netlify edge function in front of it, so the prerender skips
-  // these — see PRERENDER_SKIP below.
+  // The blog index is data-driven but IS prerendered with baked first-page
+  // content (entry-prerender prefetches posts + categories at build time).
+  // Category and post pages stay dynamic: they are not in SEO_ROUTES, and the
+  // `seo-html` Netlify edge function handles crawlers on /blog/*.
   { path: '/blog', importer: () => import('@/pages/blog/BlogIndexPage') as PageModule },
   {
     path: '/blog/category/:category',
@@ -111,11 +112,15 @@ export const PUBLIC_ROUTES: PublicRouteDef[] = [
 ]
 
 /**
- * Routes the prerender must not emit markup for, because their content comes
- * from a network fetch — baking a loading skeleton into the HTML would be worse
- * than an empty root.
+ * Routes the prerender must not emit markup for.
+ *
+ * The blog INDEX is deliberately NOT in this set: entry-prerender fetches the
+ * first page + categories at build time and bakes real posts into the HTML,
+ * skipping to the empty shell only when the API is unreachable. Blog POST and
+ * category pages are dynamic — they are not in SEO_ROUTES, so the prerender
+ * never sees them; the `seo-html` edge function handles crawlers there.
  */
-export const PRERENDER_SKIP = new Set(['/blog'])
+export const PRERENDER_SKIP = new Set<string>([])
 
 /**
  * One `lazy()` wrapper per route, created once at module scope. Creating these
