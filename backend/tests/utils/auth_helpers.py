@@ -10,7 +10,7 @@ with tokens from :func:`make_hs256_token` (signed with the configured
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi.security import HTTPAuthorizationCredentials
 from jose import jwt
