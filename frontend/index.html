@@ -16,7 +16,9 @@
          on idle but fetched within the first seconds). Preconnect folds the
          TLS handshake into the HTML parse instead of the resource fetch.
          Copied into every prerendered route shell by prerender-meta.mjs. -->
-    <link rel="preconnect" href="https://images.unsplash.com" crossorigin />
+    <!-- Blog <img> loads are no-cors: a CORS-mode preconnect socket is never
+         reused, so the Unsplash preconnect must NOT carry `crossorigin`. -->
+    <link rel="preconnect" href="https://images.unsplash.com" />
     <link rel="preconnect" href="https://api.fitcheckaiapp.com" crossorigin />
     <link rel="preconnect" href="https://us.i.posthog.com" crossorigin />
     <link rel="preconnect" href="https://us-assets.i.posthog.com" crossorigin />

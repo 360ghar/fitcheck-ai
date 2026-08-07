@@ -41,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `?action=create` still works and redirects to the new page.
 - Recommendations → "Save as outfit" now carries the suggested pieces through to
   the create page. It previously opened an empty draft and lost the selection.
+- **Profile & Settings page is now mobile-responsive.** On phones (<768px) the
+  page becomes an iOS-Settings-style drill-down: an avatar hero plus a vertical
+  section list, with each section opening as a full-screen subpage with a back
+  bar, focus management, and Escape-to-close. Desktop (≥768px) keeps the tab
+  strip with inline panels, and `?tab=` deep links still resolve.
 
 ### Performance
 
@@ -82,6 +87,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Blog category/“Blog” badges now meet 4.5:1 contrast in both themes
   (was ~3.9:1 light / ~4.0:1 dark).
+- **Items occasion/color filters no longer 500.** The JSONB `contains`
+  filter sent list values as Postgres array syntax (`cs.{informal}`), which
+  PostgREST rejected with `22P02 invalid input syntax for type jsonb`; values
+  are now JSON-encoded (`cs.["informal"]`), so `/items` occasion/color filters
+  and `/outfits` tag filters work again from web and mobile.
 
 ## [1.0.0] - 2026-01-19
 

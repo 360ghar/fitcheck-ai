@@ -45,6 +45,7 @@ function ThemeSelector() {
               key={option.value}
               type="button"
               onClick={() => setTheme(option.value)}
+              aria-label={option.label}
               aria-pressed={theme === option.value}
               className={cn(
                 'px-3 py-2 text-sm rounded-md transition-colors flex items-center justify-center gap-1.5 touch-target sm:flex-none',

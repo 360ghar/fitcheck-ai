@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { AnimatedSection } from '@/components/landing/AnimatedSection'
 import { BlogImage } from '@/components/blog/BlogImage'
 import SEO from '@/components/seo/SEO'
+import { cn } from '@/lib/utils'
 import { Calendar, Clock, ArrowRight } from 'lucide-react'
 import { useBlogCategories } from '@/hooks/useBlog'
 import { useInfiniteBlogPosts } from '@/hooks/useInfiniteBlogPosts'
@@ -117,10 +118,17 @@ export default function BlogIndexPage() {
                   )}
                 </form>
 
-                {/* Category Pills — the container is rendered unconditionally so
-                    its reserved min-height holds the posts grid steady while the
-                    categories fetch resolves after first paint (CLS). */}
-                <div className="flex flex-wrap justify-center gap-2 min-h-[124px] md:min-h-[44px]">
+                {/* Category Pills — the container is always rendered, but its
+                    reserved min-height (which holds the posts grid steady while
+                    categories fetch, avoiding CLS) applies only while loading or
+                    when categories exist, so an error or empty list leaves no
+                    blank band. */}
+                <div
+                  className={cn(
+                    'flex flex-wrap justify-center gap-2',
+                    (isLoadingCategories || (categories?.length ?? 0) > 0) && 'min-h-[124px] md:min-h-[44px]'
+                  )}
+                >
                   {isLoadingCategories ? (
                     // Skeleton pills fill the reserved space (same 36px pill
                     // height + wrap) instead of an empty band.

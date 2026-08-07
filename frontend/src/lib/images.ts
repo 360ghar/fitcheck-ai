@@ -35,8 +35,10 @@ export function isUnsplashImageUrl(url: string): boolean {
 export function unsplashSrc(url: string, width: number, quality = 70): string {
   if (!isUnsplashImageUrl(url)) return url
   const parsed = new URL(url)
-  // Drop the stored params (e.g. `w=800&q=80`) so they cannot fight ours.
-  parsed.search = ''
+  // Drop only the stored params we own (`w`, `q`) so they cannot fight ours;
+  // keep any others (e.g. `fit`, `crop`, `ixid`) the stored URL carries.
+  parsed.searchParams.delete('w')
+  parsed.searchParams.delete('q')
   parsed.searchParams.set('auto', 'format')
   parsed.searchParams.set('w', String(width))
   parsed.searchParams.set('q', String(quality))

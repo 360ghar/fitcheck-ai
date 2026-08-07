@@ -110,13 +110,14 @@ _DB_CONNECTION_TEXT_MARKERS = (
 
 # HTTP statuses postgrest-py records in `APIError.code` (via
 # generate_default_error_message) when a 5xx/429 body is NOT PostgREST JSON -
-# i.e. the Supabase/Cloudflare gateway itself answered in a bad state. Those
-# are the transient gateway blips the retry mechanism exists for, so one
-# rebuild+retry still applies. SQLSTATEs and PGRST codes (22P02, PGRST202,
-# 42703, ...) can never collide with these: they are 5-character codes, not
-# 3-digit HTTP statuses, and PostgREST always answers with a JSON error body
-# (SQLSTATE-coded) rather than a bare status.
-_API_ERROR_RETRYABLE_HTTP_STATUSES = {"429", "500", "502", "503", "520", "521", "522", "524"}
+# i.e. the Supabase/Cloudflare gateway itself answered in a bad state (502/
+# 503/504 gateway timeouts and the Cloudflare 520-524 origin range, or a
+# rate-limit 429). Those are the transient gateway blips the retry mechanism
+# exists for, so one rebuild+retry still applies. SQLSTATEs and PGRST codes
+# (22P02, PGRST202, 42703, ...) can never collide with these: they are
+# 5-character codes, not 3-digit HTTP statuses, and PostgREST always answers
+# with a JSON error body (SQLSTATE-coded) rather than a bare status.
+_API_ERROR_RETRYABLE_HTTP_STATUSES = {"429", "500", "502", "503", "504", "520", "521", "522", "524"}
 
 
 def is_db_connection_error(exc: Exception) -> bool:

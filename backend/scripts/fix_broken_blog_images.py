@@ -71,16 +71,30 @@ def main() -> int:
 
     print(f"DRY_RUN:           {dry_run}")
 
+    rows: list[dict] = []
     with httpx.Client(timeout=30) as client:
         # Every row, not just published ones: a draft with a broken image would
         # surface the 404 the moment it is published.
-        response = client.get(
-            f"{base_url}/rest/v1/blog_posts",
-            params={"select": "id,slug,featured_image_url"},
-            headers=_auth_headers(key),
-        )
-        response.raise_for_status()
-        rows = response.json()
+        # PostgREST caps a single response at 1000 rows by default, so page
+        # with limit/offset until a page returns fewer than `limit` rows.
+        limit = 1000
+        offset = 0
+        while True:
+            response = client.get(
+                f"{base_url}/rest/v1/blog_posts",
+                params={
+                    "select": "id,slug,featured_image_url",
+                    "limit": limit,
+                    "offset": offset,
+                },
+                headers=_auth_headers(key),
+            )
+            response.raise_for_status()
+            page_rows = response.json()
+            rows.extend(page_rows)
+            if len(page_rows) < limit:
+                break
+            offset += limit
 
     matches = []
     for row in rows:

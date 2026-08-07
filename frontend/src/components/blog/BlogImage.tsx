@@ -42,17 +42,17 @@ export function BlogImage({
   width,
   height,
 }: BlogImageProps) {
-  const [failed, setFailed] = useState(false)
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
 
-  if (!src || failed) {
+  if (!src || failedSrc === src) {
     return emoji ? (
-      <span className={cn('relative z-10', emojiClassName)} aria-hidden="true">
+      <span className={cn('relative z-10', emojiClassName)} role="img" aria-label={alt}>
         {emoji}
       </span>
     ) : null
   }
 
-  const srcUrl = unsplashSrc(src, widths[Math.floor(widths.length / 2)], quality)
+  const srcUrl = unsplashSrc(src, widths[Math.floor(widths.length / 2)] ?? width, quality)
   const srcSet = unsplashSrcSet(src, widths, quality)
 
   // `fetchpriority` is passed lowercase: React 18 does not know the camelCase
@@ -68,7 +68,7 @@ export function BlogImage({
       loading={priority ? 'eager' : 'lazy'}
       {...(priority ? { fetchpriority: 'high' } : {})}
       decoding="async"
-      onError={() => setFailed(true)}
+      onError={() => setFailedSrc(src)}
       className={cn('absolute inset-0 w-full h-full object-cover', imgClassName)}
     />
   )

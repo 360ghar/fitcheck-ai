@@ -148,9 +148,22 @@ def _users_list_builder(
     sort_col: str,
     sort_dir: str,
 ) -> Any:
+    # A bare embed is a LEFT join: with a plan filter the
+    # `subscriptions.plan_type` eq would only filter the EMBEDDED rows, not
+    # the parent, so every user still matches and `count` reports ALL users
+    # (with subscriptions=null for non-matching plans). `!inner` turns the
+    # subscriptions embed into an inner join so the plan filter restricts the
+    # parent user rows. (007/008 backfill + new-user trigger give nearly every
+    # user a subscription row, but rows without one must not appear under a
+    # plan filter either.)
+    subscriptions_embed = (
+        "subscriptions!inner(plan_type,status,current_period_start,current_period_end,billing_provider)"
+        if plan
+        else "subscriptions(plan_type,status,current_period_start,current_period_end,billing_provider)"
+    )
     query = d.table("users").select(
         "*",
-        "subscriptions(plan_type,status,current_period_start,current_period_end,billing_provider)",
+        subscriptions_embed,
         "outfits(count)",
         "items(count)",
         count="exact",
@@ -165,8 +178,8 @@ def _users_list_builder(
     if role:
         query = query.eq("role", role)
     if plan:
-        # Every user has a subscription row (007/008 backfill + new-user
-        # trigger), so the embedded-resource filter is complete for all plans.
+        # The subscriptions embed above is !inner when plan is set, so this
+        # eq filters the parent user rows, not just the embedded rows.
         query = query.eq("subscriptions.plan_type", plan)
     return query.order(sort_col, desc=(sort_dir == "desc"))
 
@@ -893,12 +906,23 @@ def _quota_usage_builder(
     # relationship" on any DB with the repo schema (observed 2026-08-07 on
     # GET /api/v1/admin/quotas). subscriptions.user_id is UNIQUE, so the
     # nested embed resolves to a single object (not an array) in PostgREST.
-    query = d.table("user_ai_settings").select(
+    #
+    # A bare embed is a LEFT join: with a plan filter the
+    # `users.subscriptions.plan_type` eq would only filter the EMBEDDED
+    # rows, not the parent, so every user_ai_settings row still matches and
+    # `count` reports all plans' users (with subscriptions=null for the
+    # non-matching rows). `!inner` on BOTH embed levels turns them into
+    # inner joins, so the plan filter restricts the parent rows themselves.
+    select = (
         "user_id,daily_extraction_count,daily_generation_count,daily_embedding_count,"
         "last_reset_date,total_extractions,total_generations",
-        "users(email,full_name,custom_daily_quota,subscriptions(plan_type,status))",
-        count="exact",
+        (
+            "users!inner(email,full_name,custom_daily_quota,subscriptions!inner(plan_type,status))"
+            if plan
+            else "users(email,full_name,custom_daily_quota,subscriptions(plan_type,status))"
+        ),
     )
+    query = d.table("user_ai_settings").select(*select, count="exact")
     if q:
         term = f"%{safe_search_term(q)}%"
         query = query.or_(_or_ilike(("users.email", "users.full_name"), term))

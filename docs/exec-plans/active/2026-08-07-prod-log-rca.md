@@ -59,7 +59,7 @@ ruff check app/services/admin_service.py app/utils/db.py app/main.py tests/
    at minimum `035_add_photoshoot_jobs_image_failures.sql`; confirm `036`–`042`.
    `042_outfit_wear_history.sql` is REQUIRED before deploying HEAD (readiness
    fails closed without it). If applying outside the dashboard, run
-   `NOTIFY pgrst, 'reload schema';` afterwards.
+   `NOTIFY pgrst, 'reload schema';` afterward.
 2. **Verify** in the SQL editor:
    `SELECT image_failures FROM photoshoot_jobs LIMIT 1;`
    `SELECT event_id FROM stripe_webhook_events LIMIT 1;`

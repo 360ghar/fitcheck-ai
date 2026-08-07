@@ -12,7 +12,7 @@
  *   - SupportPanel         (Help tab)
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore, useCurrentUser } from '../../stores/authStore'
 import {
@@ -70,6 +70,14 @@ function normalizeBirthTimeForApi(value: string): string | undefined {
 function resolveTab(value: string | null): TabType {
   if (!value) return 'account'
   return LEGACY_TAB_MAP[value] ?? 'account'
+}
+
+/** Copy params minus the one-shot Stripe ack keys (SubscriptionPanel strips them via history.replaceState). */
+function nextSearchParams(params: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(params)
+  next.delete('success')
+  next.delete('cancelled')
+  return next
 }
 
 const PROFILE_TABS = [
@@ -142,12 +150,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const currentTab = searchParams.get('tab')
     if (currentTab === activeTab) return
-    const next = new URLSearchParams(searchParams)
-    // Stripe ack params are one-shot: SubscriptionPanel consumes and strips
-    // them via raw history.replaceState (invisible to the router), so URLs
-    // rebuilt here from router params must not resurrect them.
-    next.delete('success')
-    next.delete('cancelled')
+    const next = nextSearchParams(searchParams)
     next.set('tab', activeTab)
     setSearchParams(next, { replace: true })
   // searchParams/setSearchParams change identity on every navigation; adding them
@@ -163,6 +166,14 @@ export default function ProfilePage() {
     setActiveTab(tab)
     if (tab === 'account') {
       subpagePushedRef.current = false
+      // The bare root URL (no explicit tab param — e.g. the mobile bottom nav
+      // landing back on /profile) must close the account drill so the back
+      // bar, the rendered panel, and the URL all agree. An explicit
+      // `?tab=account` must NOT reset: deep links and the Stripe ack-param
+      // flow (SubscriptionPanel strips success/cancelled via raw
+      // replaceState while the user sits in the subpage) would otherwise
+      // close the panel under the user.
+      if (!searchParams.get('tab')) setShowAccountSub(false)
     } else {
       // The account drill is a pure-state view of `tab=account`; any URL that
       // points at another section must close it so the back-bar title, the
@@ -185,7 +196,7 @@ export default function ProfilePage() {
     window.scrollTo(0, 0)
   }, [activeTab, showAccountSub])
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     if (showAccountSub) {
       // The account subpage is pure state; nothing to pop or rewrite.
       setShowAccountSub(false)
@@ -200,7 +211,7 @@ export default function ProfilePage() {
     }
     // Deep link (or already at root): no history entry to pop.
     setActiveTab('account')
-  }
+  }, [showAccountSub, navigate])
 
   // Mobile section rows. Account opens its subpage in pure state; every other
   // section pushes a `?tab=` history entry so the browser back button closes
@@ -214,12 +225,7 @@ export default function ProfilePage() {
     }
     subpagePushedRef.current = true
     setActiveTab(tab)
-    const next = new URLSearchParams(searchParams)
-    // Stripe ack params are one-shot: SubscriptionPanel consumes and strips
-    // them via raw history.replaceState (invisible to the router), so URLs
-    // rebuilt here from router params must not resurrect them.
-    next.delete('success')
-    next.delete('cancelled')
+    const next = nextSearchParams(searchParams)
     next.set('tab', tab)
     setSearchParams(next, { replace: false })
   }
@@ -251,6 +257,21 @@ export default function ProfilePage() {
     wasSubpageOpenRef.current = isOpen
     openedByTapRef.current = false
   }, [subpageTab])
+
+  // Escape anywhere in a subpage closes it. Document-level (not the back
+  // bar's container) so the key still works once focus moves into subpage
+  // content; active only while a subpage is open, cleaned up on close.
+  useEffect(() => {
+    if (!subpageTab) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        handleBack()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [subpageTab, handleBack])
 
   const handleLogout = async () => {
     await logout()
@@ -338,15 +359,7 @@ export default function ProfilePage() {
 
         {/* Mobile subpage chrome: sticky back bar with the section title */}
         {subpageTab && (
-          <div
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault()
-                handleBack()
-              }
-            }}
-            className="sticky top-[calc(var(--mobile-header-height)+var(--safe-area-top))] z-20 flex items-center gap-2 border-b border-border bg-card px-4 py-2"
-          >
+          <div className="sticky top-[calc(var(--mobile-header-height)+var(--safe-area-top))] z-20 flex items-center gap-2 border-b border-border bg-card px-4 py-2">
             <Button
               ref={backButtonRef}
               variant="ghost"

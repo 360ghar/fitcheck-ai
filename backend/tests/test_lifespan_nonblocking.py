@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 
 import app.main as main_module
+from app.api.v1.health import health_check
 
 
 @pytest.mark.asyncio
@@ -32,7 +33,7 @@ async def test_lifespan_yields_before_background_init_finishes():
             await asyncio.sleep(0)
             assert started.is_set()
             # If lifespan had awaited background work, we would hang above.
-            body = await main_module.health_check()
+            body = await health_check()
             assert body["status"] == "healthy"
             released.set()
 

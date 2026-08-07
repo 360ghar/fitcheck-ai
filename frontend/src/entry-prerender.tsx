@@ -35,8 +35,19 @@ export { PRERENDER_SKIP } from './routes/publicRoutes'
  * parses — the page's FCP/LCP problem (2026-08-07 PSI: LCP 5.2s lab). Instead
  * the prerender fetches the first page + categories at build time and bakes
  * the real grid into the HTML (see render() below).
+ *
+ * The API resolves exactly like the runtime client (lib/apiBaseUrl.ts):
+ * `VITE_API_BASE_URL` wins, then `VITE_API_URL`, then the production origin as
+ * fallback. Without the env override a staging/standalone build — whose client
+ * is pointed at another API — would bake production blog content into its
+ * HTML. A trailing slash is stripped so the `/api/v1/...` concatenation below
+ * never produces `//api/v1/...`.
  */
-const BLOG_API = 'https://api.fitcheckaiapp.com'
+const BLOG_API = (
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
+  'https://api.fitcheckaiapp.com'
+).replace(/\/+$/, '')
 const BLOG_PAGE_SIZE = 12
 const PRERENDER_FETCH_TIMEOUT_MS = 10_000
 

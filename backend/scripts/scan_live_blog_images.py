@@ -12,10 +12,25 @@ Usage: python scripts/scan_live_blog_images.py
 import concurrent.futures as cf
 import json
 import sys
+import urllib.parse
 import urllib.request
 
 API = "https://api.fitcheckaiapp.com/api/v1/blog/posts"
 PAGE_SIZE = 50
+
+# featured_image_url is admin-controlled free-form TEXT in the DB, so the
+# script must never open arbitrary URLs: only HTTPS to images.unsplash.com is
+# allowed, which prevents SSRF against internal endpoints (localhost, cloud
+# metadata services, etc.).
+ALLOWED_IMAGE_HOST = "images.unsplash.com"
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow redirects: verify the exact stored URL, not wherever it
+    points."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 def fetch_json(url: str) -> dict:
@@ -26,10 +41,19 @@ def fetch_json(url: str) -> dict:
 
 def head_ok(url: str) -> bool:
     try:
+        parsed = urllib.parse.urlsplit(url)
+        if parsed.scheme != "https" or parsed.hostname != ALLOWED_IMAGE_HOST:
+            return False
+        if parsed.port not in (None, 443):
+            return False
         req = urllib.request.Request(url, method="HEAD")
-        with urllib.request.urlopen(req, timeout=15) as res:
+        opener = urllib.request.build_opener(_NoRedirect())
+        with opener.open(req, timeout=15) as res:
             return res.status == 200
-    except Exception:
+    except (ValueError, OSError):
+        # ValueError: malformed URL/port; OSError covers URLError + HTTPError.
+        # Any other exception would be a bug worth surfacing, not a "broken
+        # image", so the catch is intentionally narrow.
         return False
 
 
@@ -44,7 +68,8 @@ def check_one(post: dict) -> tuple:
 
 def main() -> int:
     broken: list[tuple] = []
-    checked = 0
+    ok_count = 0
+    with_images = 0
     page = 1
     while True:
         body = fetch_json(f"{API}?page={page}&page_size={PAGE_SIZE}")
@@ -54,15 +79,18 @@ def main() -> int:
         with cf.ThreadPoolExecutor(max_workers=8) as pool:
             results = list(pool.map(check_one, posts))
         for slug, url, ok in results:
+            if not url:
+                continue
+            with_images += 1
             if ok:
-                checked += 1
+                ok_count += 1
             else:
                 broken.append((slug, url))
         if not (body or {}).get("data", {}).get("has_next"):
             break
         page += 1
 
-    print(f"checked {checked} featured images")
+    print(f"checked {ok_count} of {with_images} featured images")
     if broken:
         for slug, url in broken:
             print(f"BROKEN {slug}: {url}")

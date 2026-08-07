@@ -371,7 +371,7 @@ export function SupportPanel() {
               href="/privacy"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex w-full items-center gap-2 px-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="touch-target flex w-full items-center gap-2 px-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <ExternalLink className="h-4 w-4" />
               Privacy Policy
@@ -380,14 +380,14 @@ export function SupportPanel() {
               href="/terms"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex w-full items-center gap-2 px-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="touch-target flex w-full items-center gap-2 px-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <ExternalLink className="h-4 w-4" />
               Terms of Service
             </a>
             <a
               href="mailto:info@fitcheckaiapp.com?subject=Account%20Deletion%20Request&body=Please%20delete%20my%20account%20and%20all%20associated%20data."
-              className="flex w-full items-center gap-2 px-2 py-2 text-sm text-destructive/80 hover:text-destructive transition-colors"
+              className="touch-target flex w-full items-center gap-2 px-2 py-2 text-sm text-destructive/80 hover:text-destructive transition-colors"
             >
               <Trash2 className="h-4 w-4" />
               Request Account Deletion

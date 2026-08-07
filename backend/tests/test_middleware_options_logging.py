@@ -60,3 +60,6 @@ def test_skip_paths_still_skip():
     """Sanity: the middleware's skip set still contains the health paths."""
     assert "/health" in RequestLoggingMiddleware.SKIP_PATHS
     assert "/ready" in RequestLoggingMiddleware.SKIP_PATHS
+    # The /api/v1/health compatibility alias must skip logging too (probes
+    # configured against it must not spam request/response lines).
+    assert "/api/v1/health" in RequestLoggingMiddleware.SKIP_PATHS

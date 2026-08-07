@@ -71,11 +71,14 @@ def test_is_db_connection_error_rejects_postgrest_api_errors():
         }
     )
     assert not is_db_connection_error(incident_error)
-    # Proof of the 2026-08-07 misclassification: the APIError's str() embeds
-    # the message text, which the `invalid input` marker (added for h2
-    # ProtocolError state strings) matches - the OLD classifier returned True
-    # for this deterministic query error, burning 2 client rebuilds per poll.
-    assert "invalid input" in str(incident_error).lower()
+    # Proof of the 2026-08-07 misclassification: the APIError's `.message`
+    # holds the PostgREST error text ("invalid input syntax for type jsonb"),
+    # which the `invalid input` marker (added for h2 ProtocolError state
+    # strings) matches - the OLD classifier returned True for this
+    # deterministic query error, burning 2 client rebuilds per poll. Pin the
+    # marker against `.message` rather than str(), whose rendering depends on
+    # postgrest-py's internal args mechanism.
+    assert "invalid input" in (incident_error.message or "").lower()
     # Other structured DB errors, same policy.
     assert not is_db_connection_error(
         APIError(
@@ -105,7 +108,7 @@ def test_is_db_connection_error_rejects_postgrest_api_errors():
 def test_is_db_connection_error_retries_gateway_status_errors():
     """A structured error whose `code` is a bare HTTP status means the
     response body was NOT PostgREST JSON - the Supabase/Cloudflare gateway
-    itself answered in a bad state (502/503/520/... or a rate-limit 429).
+    itself answered in a bad state (502/503/504/520/... or a rate-limit 429).
     That is the transient gateway-blip class the rebuild+retry mechanism
     exists for, so these stay retryable even though they arrive wrapped in
     APIError."""
@@ -121,7 +124,7 @@ def test_is_db_connection_error_retries_gateway_status_errors():
             }
         )
 
-    for code in (429, 500, 502, 503, 520, 521, 522, 524):
+    for code in (429, 500, 502, 503, 504, 520, 521, 522, 524):
         assert is_db_connection_error(status_error(code)), f"code {code} should retry"
 
     # Non-gateway statuses and missing codes stay deterministic.

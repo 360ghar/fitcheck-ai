@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, useLocation } from 'react-router-dom'
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import ProfilePage from '../ProfilePage'
 
 const h = vi.hoisted(() => ({
@@ -140,6 +140,16 @@ function renderPageWithProbe(initialEntry = '/profile') {
   )
 }
 
+/** Router-driven navigation helper (mirrors the mobile bottom nav going to a URL). */
+function NavTo({ to }: { to: string }) {
+  const navigate = useNavigate()
+  return (
+    <button type="button" onClick={() => navigate(to)}>
+      go:{to}
+    </button>
+  )
+}
+
 /** Desktop viewport: `useMediaQuery` sees a real `matchMedia` matching ≥md. */
 function stubMatchMedia() {
   Object.defineProperty(window, 'matchMedia', {
@@ -230,6 +240,29 @@ describe('ProfilePage mobile drill-down (<md, no matchMedia)', () => {
 
     expect(screen.getByRole('navigation', { name: 'Profile sections' })).toBeInTheDocument()
     expect(screen.getByLabelText('Full Name').closest('div.px-4')).toHaveClass('hidden')
+  })
+
+  it('closes the account drill when navigating to the bare /profile URL (bottom nav)', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/profile?tab=account']}>
+        <NavTo to="/profile" />
+        <ProfilePage />
+      </MemoryRouter>
+    )
+
+    // Open the account drill from the root.
+    await user.click(screen.getByRole('button', { name: /^Account/ }))
+    expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Profile sections' })).toBeNull()
+
+    // Bottom-nav style navigation to the bare root URL (no tab param) must
+    // close the drill and show the section list.
+    await user.click(screen.getByRole('button', { name: 'go:/profile' }))
+    await waitFor(() =>
+      expect(screen.getByRole('navigation', { name: 'Profile sections' })).toBeInTheDocument()
+    )
+    expect(screen.queryByRole('button', { name: 'Back to profile settings' })).toBeNull()
   })
 
   it('renders a deep-linked subpage directly and resets to the root on back', async () => {
@@ -351,6 +384,24 @@ describe('ProfilePage mobile drill-down (<md, no matchMedia)', () => {
     renderPage()
 
     await user.click(screen.getByRole('button', { name: /^Style/ }))
+    await user.keyboard('{Escape}')
+
+    expect(screen.getByRole('navigation', { name: 'Profile sections' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Back to profile settings' })).toBeNull()
+  })
+
+  it('closes the account drill with Escape while focus is inside a subpage field', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    // Open the Account drill and land focus on a real input inside its content
+    // (the Full Name field is disabled until editing starts).
+    await user.click(screen.getByRole('button', { name: /^Account/ }))
+    await user.click(screen.getByRole('button', { name: 'Edit Profile' }))
+    const fullName = screen.getByLabelText('Full Name')
+    await user.click(fullName)
+    expect(fullName).toHaveFocus()
+
     await user.keyboard('{Escape}')
 
     expect(screen.getByRole('navigation', { name: 'Profile sections' })).toBeInTheDocument()

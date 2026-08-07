@@ -46,6 +46,29 @@ describe('BlogImage', () => {
     expect(screen.queryByAltText('A post')).toBeNull()
   })
 
+  it('retries a new src after a previous src failed', () => {
+    const { rerender } = render(
+      <BlogImage {...BASE_PROPS} src="https://images.unsplash.com/photo-broken" emoji="👟" />
+    )
+    fireEvent.error(screen.getByAltText('A post'))
+    expect(screen.getByText('👟')).toBeTruthy()
+    expect(screen.queryByAltText('A post')).toBeNull()
+
+    rerender(<BlogImage {...BASE_PROPS} src="https://images.unsplash.com/photo-fixed" emoji="👟" />)
+    expect(screen.getByAltText('A post')).toBeTruthy()
+    expect(screen.queryByText('👟')).toBeNull()
+
+    rerender(<BlogImage {...BASE_PROPS} src="https://images.unsplash.com/photo-broken" emoji="👟" />)
+    expect(screen.getByText('👟')).toBeTruthy()
+    expect(screen.queryByAltText('A post')).toBeNull()
+  })
+
+  it('falls back to the width prop when widths is empty', () => {
+    render(<BlogImage {...BASE_PROPS} src="https://images.unsplash.com/photo-abc" widths={[]} />)
+    const img = screen.getByAltText('A post') as HTMLImageElement
+    expect(img.src).toContain('w=640')
+  })
+
   it('shows the emoji fallback when src is missing', () => {
     render(<BlogImage {...BASE_PROPS} emoji="👔" />)
     expect(screen.getByText('👔')).toBeTruthy()

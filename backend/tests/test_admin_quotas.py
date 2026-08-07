@@ -77,6 +77,17 @@ async def test_quota_usage_plan_filter_uses_nested_path():
     result = await list_quota_usage(db, plan="pro_monthly")
     assert [item["user_id"] for item in result["items"]] == ["u-paid"]
     assert result["total"] == 1
+    # The plan filter must use `!inner` on BOTH embed levels: a bare embed
+    # is a LEFT join, so `users.subscriptions.plan_type` would only filter
+    # the EMBEDDED rows and `count` would report every plan's users (with
+    # subscriptions=null for the non-matching rows).
+    selects = _quota_selects(db)
+    assert selects, "expected a user_ai_settings select"
+    for args in selects:
+        assert (
+            "users!inner(email,full_name,custom_daily_quota,subscriptions!inner(plan_type,status))"
+            in args
+        )
 
 
 @pytest.mark.asyncio

@@ -61,7 +61,7 @@ spacing density.
 | 2026-08-07 | Mobile root keeps the account form inside the Account subpage (pure state, no URL) | Root default is already `tab=account`, so the drill has no URL form; hero on the root covers quick profile view |
 | 2026-08-07 | One stable content container shared by desktop inline panels and mobile subpages | CSS-hiding instead of remounting preserves unsaved panel edits across root ⇄ subpage switches |
 | 2026-08-07 | Row layouts/buttons swept `md:` → `sm:` (640px) | Matches LocationInput/SubscriptionPanel; landscape phones and small tablets get roomier layouts |
-| 2026-08-07 | Review pass fixes: solid `bg-card` sticky bar (repo precedent), `ul/li` section list, `isActive`-gated plan refetch, URL ack-param hygiene | Why | Focus, data freshness, and URL correctness found in post-implementation review. |
+| 2026-08-07 | Review pass fixes: solid `bg-card` sticky bar (repo precedent), `ul/li` section list, `isActive`-gated plan refetch, URL ack-param hygiene | Focus, data freshness, and URL correctness found in post-implementation review. |
 
 ## Verification
 

@@ -40,6 +40,15 @@ describe('unsplashSrc', () => {
     const twice = unsplashSrc(once, 480)
     expect(twice).toBe(once)
   })
+
+  it('keeps unrelated stored params while replacing w and q', () => {
+    const out = unsplashSrc('https://images.unsplash.com/photo-abc?w=800&q=80&ixid=abc&fit=crop', 640)
+    expect(out).toContain('ixid=abc')
+    expect(out).toContain('fit=crop')
+    expect(out).toContain('w=640')
+    expect(out).toContain('q=70')
+    expect(out).toContain('auto=format')
+  })
 })
 
 describe('unsplashSrcSet', () => {
