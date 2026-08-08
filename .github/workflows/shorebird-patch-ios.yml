@@ -56,7 +56,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: 'Release to patch, e.g. 1.0.4+9. "latest" = most recently updated release.'
+        description: 'Release to patch, e.g. 1.0.5+10. "latest" = most recently updated release.'
         required: true
         default: 'latest'
         type: string

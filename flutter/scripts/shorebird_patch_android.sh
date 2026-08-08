@@ -8,7 +8,7 @@
 #   ./scripts/shorebird_patch_android.sh [release-version] [track]
 #
 #   release-version  Defaults to `latest` (the most recently updated release).
-#                    Pass an explicit "1.0.4+9" when several releases are live.
+#                    Pass an explicit "1.0.5+10" when several releases are live.
 #   track            Defaults to `stable`. Use `staging` or `beta` to publish
 #                    to testers first; verify with:
 #                      shorebird preview --track=staging

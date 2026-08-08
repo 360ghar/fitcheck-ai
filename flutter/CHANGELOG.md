@@ -5,6 +5,25 @@ All notable changes to the FitCheck AI Flutter app will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5+10] - 2026-08-08
+
+First store release with the Shorebird engine: this and every future release
+can receive over-the-air Dart patches. 1.0.4+9 was bumped but never released;
+this version supersedes it.
+
+### Added
+
+- Production builds now carry the Shorebird engine, so Dart-only hotfixes ship
+  over the air without a store release. The running patch number appears under
+  Settings > About and is attached to Sentry crash reports (see the "Code push
+  (Shorebird)" section of `docs/FLUTTER.md`).
+
+### Changed
+
+- Release engineering only: Android and iOS release builds are now produced by
+  `shorebird release` so they are patchable; no user-facing Dart changes beyond
+  the 1.0.4+9 entry below.
+
 ## [1.0.4+9] - 2026-08-06
 
 Note: builds 6, 7 and 8 never got their own entries (build 7 was rejected by

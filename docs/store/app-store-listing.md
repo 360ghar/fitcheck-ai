@@ -17,7 +17,7 @@
 
 ASC splits metadata across two places:
 - **App Information** (app-level, shared across versions): Name, Subtitle, Category, Privacy Policy URL.
-- **Version Information** (per-version, e.g. 1.0.4): Promotional Text, Description, Keywords, Support URL, Marketing URL, What's New, Copyright.
+- **Version Information** (per-version, e.g. 1.0.5): Promotional Text, Description, Keywords, Support URL, Marketing URL, What's New, Copyright.
 
 ### App Name — `≤ 30 chars`
 
@@ -121,10 +121,10 @@ closet,outfit,fashion,try-on,clothing,style,planner,organizer,virtual,photoshoot
 ```
 (97 chars including commas. No spaces. No duplication of name/category terms.)
 
-### What's New (Release Notes for v1.0.4) — `≤ 4000 chars`
+### What's New (Release Notes for v1.0.5) — `≤ 4000 chars`
 
 ```text
-Welcome to FitCheck AI 1.0.4!
+Welcome to FitCheck AI 1.0.5!
 
 - Unlock Plus or Pro with in-app purchase — monthly or yearly, right in the app
 - Redeem promo codes for free months of Plus or Pro
@@ -429,14 +429,14 @@ submitted. Most are not code and cannot be done by an agent.
       agreement is not needed for free, but the free-apps agreement must be active and contact/tax
       identity confirmed).
 - [ ] App Information filled: Name, Subtitle, Categories (Lifestyle / Photo & Video), Privacy Policy URL.
-- [ ] Version 1.0.4 metadata filled (Promotional Text, Description, Keywords, What's New, URLs, Copyright).
+- [ ] Version 1.0.5 metadata filled (Promotional Text, Description, Keywords, What's New, URLs, Copyright).
 - [ ] **App Privacy** questionnaire submitted per §2 (nothing as tracking; no ATT prompt).
 - [ ] **Age Rating** questionnaire submitted per §3 (UGC = Yes, AI = Yes; expect ~13+).
 - [ ] **App Review Information** filled with the seeded demo account (§4/§5) and contact details.
 - [ ] **Marketing icon** = `flutter/assets/icons/app_icon.png` (1024×1024, RGB, no alpha) uploaded.
 - [ ] **Screenshots** uploaded for iPhone 6.9" (1320×2868) and iPad 13" (2064×2752) — see
       `docs/store/app-store-screenshots.md`.
-- [ ] A signed build uploaded via Xcode/Transporter and selected for the 1.0.4 version.
+- [ ] A signed build uploaded via Xcode/Transporter and selected for the 1.0.5 version.
 - [ ] **Export Compliance** answered (standard HTTPS only → typically "uses exempt encryption").
 
 ### Live web pages (must resolve before submission)

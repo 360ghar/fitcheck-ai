@@ -10,7 +10,7 @@
 | App Name (ASC) | FitCheck AI: Wardrobe Stylist |
 | Display name (device) | FitCheck AI |
 | Bundle ID | `com.fitcheckaiapp.fitcheckai` |
-| Version | 1.0.4+9 |
+| Version | 1.0.5+10 |
 | Primary Language | English (U.S.) |
 | Category | Lifestyle / Photo & Video |
 | Support Email | support@fitcheckaiapp.com |
@@ -157,7 +157,7 @@ Full procedure: `docs/store/ios-sandbox-testing-runbook.md`.
 ### Before Submit for Review
 
 - [ ] Deploy frontend so `/privacy`, `/terms`, `/support` show updated copy
-- [x] `pubspec.yaml` build number (`version: x.y.z+N`) is **strictly greater** than the last upload on App Store Connect (ASC rejected build `7`; repo bumped to `1.0.4+9` on 2026-08-06)
+- [x] `pubspec.yaml` build number (`version: x.y.z+N`) is **strictly greater** than the last upload on App Store Connect (ASC rejected build `7`; repo bumped to `1.0.5+10` on 2026-08-08)
 - [ ] Fresh archive after any version bump (old Organizer archives keep old `CFBundleVersion`)
 - [ ] Signed IPA uploaded — **use the `Build iOS IPA` CI workflow**. It builds with `shorebird release ios`, so the upload is patchable over the air. `build_ios_release.sh` uses plain `flutter build ipa` and its output can NEVER receive a patch; see `docs/FLUTTER.md`.
 - [ ] Archive includes UUID-matched framework dSYMs via `ios/generate_missing_dsyms.sh` (fixes Organizer Sentry.framework symbol upload)

@@ -1,7 +1,7 @@
 name: fitcheck_ai
 description: "AI Wardrobe Organizer & Outfit Planner - Virtual Closet with AI Try-On, Photoshoot Generator & Style Recommendations"
 publish_to: 'none'
-version: 1.0.4+9
+version: 1.0.5+10
 
 environment:
   sdk: ^3.9.2
