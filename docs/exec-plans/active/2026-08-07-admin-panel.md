@@ -28,7 +28,7 @@ content feature of the admin app).
 - [x] Backend: migrations 037 (roles/quota override) + 038 (audit_events) idempotent, applied to hosted Supabase.
 - [x] Backend: `GET /api/v1/admin/me` returns `{ user, role, permissions[] }`; every admin endpoint behind `require_admin` / `require_permission`.
 - [x] Backend: every admin mutation writes an `audit_events` row (actor, action, entity, payload, ip, user-agent).
-- [x] Backend: RBAC unit/route tests (`tests/api/test_admin_*.py` + `tests/integration/test_admin/*.py`, 113 tests) cover 403 authz, CRUD, audit, suspend, refund.
+- [x] Backend: RBAC unit/route tests (`tests/api/test_admin_*.py` + `tests/integration/test_admin/*.py`, 172 tests) cover 403 authz, CRUD, audit, suspend, refund.
 - [x] Admin app: skeleton (M2) — login + `/admin/me` bootstrap, guards, layout, theme, i18n, toasts, error boundaries.
 - [x] Admin app: data infra (M3) — openapi-typescript codegen from `contracts/openapi.json`, drift check, typed client, query-key factory, DataTable + URL-synced table state.
 - [x] Admin app: feature modules (M4) — users, dashboard, subscriptions + IAP, quotas, content (blog port), promo, feedback, ops/storage, audit explorer, search palette, settings.
@@ -144,7 +144,7 @@ Apply both to hosted Supabase before deploying the backend; `docs/generated/db-s
 
 ## Frontend structure summary
 
-```
+```text
 admin/
 ├── netlify.toml            # build (npm run build → dist), /api/* proxy → api.fitcheckaiapp.com, CSP headers
 ├── contracts/openapi.json  # backend-published OpenAPI snapshot (454 KB)
@@ -163,7 +163,7 @@ Patterns: query-key factory per feature (single invalidation source); URL search
 
 | Layer | Tool | Count / status |
 |-------|------|----------------|
-| Backend admin unit/route | pytest (`tests/api/test_admin_*.py` + `tests/integration/test_admin/*.py`) | 113 tests: authz 403s, role predicates, CRUD, suspend, refund, audit writes, dashboards, quotas, revenue trends |
+| Backend admin unit/route | pytest (`tests/api/test_admin_*.py` + `tests/integration/test_admin/*.py`) | 172 tests: authz 403s, role predicates, CRUD, suspend, refund, audit writes, dashboards, quotas, revenue trends |
 | Admin app unit/integration | Vitest + RTL + MSW | 28 files / 215 tests passing (measured 2026-08-08) |
 | A11y | vitest-axe | wired into unit tests (axe on shared components + pages) |
 | Contract drift | `npm run check:schema` (regenerate → diff vs checked-in `schema.d.ts`) | wired; `contracts/openapi.json` present |

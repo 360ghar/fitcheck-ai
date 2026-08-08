@@ -20,15 +20,16 @@ Every user still on the free plan gets a 1-month Pro trial (`plan_type=pro_month
 
 - [x] Script targets only `plan_type='free' AND status='active'` rows with no Stripe id.
 - [x] `info@360ghar.com` excluded (verified: it is the only free row left after the run).
-- [x] 112/112 grants landed; 112/112 emails sent (100 Resend + 12 SMTP); 0 failures.
-- [x] All 112 granted rows verified: `pro_monthly`/`trial`, `trial_end=2026-09-04`, `cancel_at_period_end=true`.
+- [x] 112/112 grants landed; 112/112 emails sent (100 Resend + 12 SMTP); 0 failures (2026-08-04).
+- [x] 74/74 grants landed on the 08-06 re-run (74 Resend); 0 failures; trial_end=2026-09-06.
+- [x] All 112 granted rows verified: `pro_monthly`/`trial`, `trial_end=2026-09-04`, `cancel_at_period_end=true`; same verification passed for the 74 re-run rows.
 - [x] Idempotent audit file + dry-run preview work (`DRY_RUN=1`).
 
 ## Context / links
 
 - Script: `backend/scripts/upgrade_free_users_to_pro.py` (self-contained, mirrors
   `grant_free_pro_month.py` / `girlfriend_day_campaign.py`).
-- Audit: `backend/logs/free_users_pro_trial.jsonl` (112 granted + 112 emailed records).
+- Audit: `backend/logs/free_users_pro_trial.jsonl` (186 granted + 186 emailed records: 112 from the 08-04 run, 74 from the 08-06 re-run).
 - Revert after the month: `backend/scripts/revert_expired_pro_trials.py` with
   `AUDIT_FILE=backend/logs/free_users_pro_trial.jsonl`.
 - Prior campaign: `backend/logs/pro_grant.jsonl` (Aug 3 campaign, kept separate).
@@ -58,14 +59,14 @@ Every user still on the free plan gets a 1-month Pro trial (`plan_type=pro_month
 cd backend
 DRY_RUN=1 .venv/bin/python scripts/upgrade_free_users_to_pro.py   # preview, no writes
 .venv/bin/python scripts/upgrade_free_users_to_pro.py             # live grant + email
-# post-run:
-#   subs distribution: pro_monthly/trial 896, free/active 1 (info@360ghar.com)
-#   audit: 112 granted, 100 emailed/resend, 12 emailed/smtp
+# post-run (both runs combined, 08-04 + 08-06 re-run):
+#   subs distribution: pro_monthly/trial ~970, free/active 1 (info@360ghar.com)
+#   audit: 186 granted, 174 emailed/resend, 12 emailed/smtp (trial_end 2026-09-06)
 ```
 
 ## Deferred debt
 
-- Revert window: after 2026-09-04, run `revert_expired_pro_trials.py` with
+- Revert window: after 2026-09-06, run `revert_expired_pro_trials.py` with
   `AUDIT_FILE=backend/logs/free_users_pro_trial.jsonl` (or schedule it).
 - Observed (pre-existing, not caused by this campaign): `info@360ghar.com`'s row
   was downgraded from pro trial to free at 2026-08-04T19:01:59Z via the

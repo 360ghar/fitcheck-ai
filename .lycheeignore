@@ -1,16 +1,19 @@
-# Known-flaky / non-checkable external links (globs).
+# Known-flaky / non-checkable external links (regexes, anchored).
+# Lychee treats every line as an unanchored regex, so each entry must be
+# escaped + anchored to match only the intended URLs (a bare prefix like
+# `https://example.com/*` would match every https:// URL as a regex).
 # Storefronts often bot-block CI runners; localhost URLs are dev-only.
-https://apps.apple.com/*
-https://play.google.com/*
-http://localhost*
-https://t.co/*
+^https://apps\.apple\.com/.*$
+^https://play\.google\.com/.*$
+^http://localhost.*$
+^https://t\.co/.*$
 # Placeholder / example URLs in docs.
-https://example.com/*
-https://presigned.example/*
-https://<*
-https://...*
+^https://example\.com/.*$
+^https://presigned\.example/.*$
+^https://<
+^https://\.\.\.
 # Auth-walled or retired third-party endpoints referenced in docs.
-https://dashboard.stripe.com/*
-https://generativelanguage.googleapis.com/*
-https://apihub.agnes-ai.com/*
-https://storage.railway.app*
+^https://dashboard\.stripe\.com/.*$
+^https://generativelanguage\.googleapis\.com/.*$
+^https://apihub\.agnes-ai\.com/.*$
+^https://storage\.railway\.app.*$

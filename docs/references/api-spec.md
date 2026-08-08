@@ -26,7 +26,7 @@ These curated caveats carry forward from manual review of the API and remain tru
 
 ## Base URL
 
-```
+```text
 Development: http://localhost:8000/api/v1
 Production:  https://api.fitcheckaiapp.com/api/v1
 ```
@@ -37,7 +37,7 @@ The web app calls the API same-origin through a proxy (`/api` → backend in dev
 
 All endpoints except the public set below require a JWT bearer token in the `Authorization` header:
 
-```
+```text
 Authorization: Bearer <jwt_token>
 ```
 
@@ -156,9 +156,10 @@ Common domain error codes (full set in `backend/app/core/exceptions.py`):
 | 415 | Unsupported Media Type — `UNSUPPORTED_MEDIA_TYPE`. |
 | 422 | Validation Error — `VALIDATION_ERROR` with `details.errors[]`. |
 | 429 | Too Many Requests — `RATE_LIMIT_EXCEEDED` (AI daily quota / IP rate limit). |
-| 500 | Internal Server Error — `INTERNAL_ERROR` / `DATABASE_ERROR` / `AI_SERVICE_ERROR`. |
+| 500 | Internal Server Error — `INTERNAL_ERROR` / `DATABASE_ERROR`. |
+| 501 | Not Implemented — e.g. the Stripe webhook endpoint when webhooks are not configured (`HTTPException(501)`). |
 | 502 | Bad Gateway — e.g. `SOCIAL_IMPORT_OAUTH_EXCHANGE_ERROR`. |
-| 503 | Service Unavailable — `SERVICE_UNAVAILABLE` / `SCHEMA_NOT_INITIALIZED` / `BILLING_NOT_CONFIGURED`. |
+| 503 | Service Unavailable — `AI_SERVICE_ERROR` / `SERVICE_UNAVAILABLE` / `SCHEMA_NOT_INITIALIZED` / `BILLING_NOT_CONFIGURED`. |
 
 Error responses always use the error envelope below (with `correlation_id`); the `code` field is the domain code, not the HTTP status.
 

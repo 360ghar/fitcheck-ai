@@ -45,7 +45,7 @@ This feature enables users to select clothing items from their wardrobe and gene
 - Clear selection button
 
 **API Endpoints:**
-```
+```text
 POST /api/v1/outfits/create
 - Create outfit from selected items
 - Request: JSON
@@ -115,7 +115,7 @@ POST /api/v1/outfits/create
 - Allow cancellation mid-generation
 
 **API Endpoints:**
-```
+```text
 POST /api/v1/outfits/{outfit_id}/generate
 - Create a generation record and generate image via backend AI
 - Request: JSON
@@ -128,7 +128,7 @@ POST /api/v1/outfits/{outfit_id}/generate
   - estimated_time: number (seconds)
 ```
 
-```
+```text
 POST /api/v1/outfits/{outfit_id}/images
 - Upload generated image and mark completion
 - Request: multipart/form-data
@@ -141,7 +141,7 @@ POST /api/v1/outfits/{outfit_id}/images
   - image: outfit_image_object
 ```
 
-```
+```text
 GET /api/v1/outfits/generation/{generation_id}
 - Check generation status
 - Response: 200 OK
@@ -203,7 +203,7 @@ Regenerate by calling `POST /api/v1/outfits/{outfit_id}/generate` again.
 - Free tier: limited generations per month
 
 **API Endpoints:**
-```
+```text
 POST /api/v1/outfits/{outfit_id}/generate/poses
 - Generate multiple poses
 - Request: JSON
@@ -266,7 +266,7 @@ POST /api/v1/outfits/{outfit_id}/generate/poses
 - User can delete profile anytime
 
 **API Endpoints:**
-```
+```text
 POST /api/v1/users/body-profiles
 - Create body profile
 - Request: JSON
@@ -280,14 +280,14 @@ POST /api/v1/users/body-profiles
   - body_profile: body_profile_object
 ```
 
-```
+```text
 GET /api/v1/users/body-profiles
 - List user's body profiles
 - Response: 200 OK
   - body_profiles: List<body_profile_objects>
 ```
 
-```
+```text
 PUT /api/v1/users/body-profiles/{id}
 - Update body profile
 - Request: JSON (same as create)
@@ -295,7 +295,7 @@ PUT /api/v1/users/body-profiles/{id}
   - body_profile: updated_body_profile_object
 ```
 
-```
+```text
 DELETE /api/v1/users/body-profiles/{id}
 - Delete body profile
 - Response: 204 No Content
@@ -345,7 +345,7 @@ DELETE /api/v1/users/body-profiles/{id}
 - No extra cost for switching scenarios
 
 **API Endpoints:**
-```
+```text
 POST /api/v1/outfits/{outfit_id}/regenerate/lighting
 - Regenerate with different lighting
 - Request: JSON
@@ -396,7 +396,7 @@ POST /api/v1/outfits/{outfit_id}/regenerate/lighting
 - Easy to view all variations
 
 **API Endpoints:**
-```
+```text
 POST /api/v1/outfits/{outfit_id}/add-layer
 - Add seasonal layer to outfit
 - Request: JSON
@@ -406,7 +406,7 @@ POST /api/v1/outfits/{outfit_id}/add-layer
   - variation: outfit_variation_object
 ```
 
-```
+```text
 DELETE /api/v1/outfits/{outfit_id}/variations/{variation_id}/layer/{item_id}
 - Remove layer from variation
 - Response: 200 OK
@@ -464,7 +464,7 @@ DELETE /api/v1/outfits/{outfit_id}/variations/{variation_id}/layer/{item_id}
 - Duplicate outfits
 
 **API Endpoints:**
-```
+```text
 POST /api/v1/outfits/{outfit_id}/save
 - Save outfit
 - Request: JSON
@@ -476,7 +476,7 @@ POST /api/v1/outfits/{outfit_id}/save
   - outfit: updated_outfit_object
 ```
 
-```
+```text
 POST /api/v1/outfits/collections
 - Create collection
 - Request: JSON
@@ -486,7 +486,7 @@ POST /api/v1/outfits/collections
   - collection: collection_object
 ```
 
-```
+```text
 PUT /api/v1/outfits/collections/{collection_id}/outfits
 - Add outfits to collection
 - Request: JSON
@@ -495,13 +495,13 @@ PUT /api/v1/outfits/collections/{collection_id}/outfits
   - collection: updated_collection_object
 ```
 
-```
+```text
 DELETE /api/v1/outfits/{outfit_id}
 - Delete outfit
 - Response: 204 No Content
 ```
 
-```
+```text
 POST /api/v1/outfits/{outfit_id}/duplicate
 - Duplicate outfit
 - Response: 201 Created

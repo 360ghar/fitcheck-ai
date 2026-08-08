@@ -47,9 +47,11 @@ The docs intentionally avoid duplicating full table DDL in Markdown to prevent d
   - `material`, `pattern`, `style`
   - `materials`, `seasonal_tags`, `occasion_tags` (JSONB arrays)
   - Usage analytics: `usage_times_worn`, `usage_last_worn`, `cost_per_wear`, `is_favorite`
-- **`public.item_images`**: `image_url`, `thumbnail_url`, and `storage_path`
-  (bucket key) for object-storage tracking (S3-compatible/R2; URLs served via
-  short-lived presigned GETs, never stored)
+- **`public.item_images`**: persisted columns are `storage_path` (the bucket
+  key) plus `is_primary`/ordering flags. `image_url` and `thumbnail_url` are
+  **response-only** fields: the API materializes them as short-lived presigned
+  URLs at read time. They are never stored in the database — new code must not
+  write URL strings into `item_images` (S3-compatible/R2 object storage)
 - **`public.item_colors`**: Optional detailed color analysis (manual or derived)
 
 ### Outfit Management

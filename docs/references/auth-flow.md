@@ -194,7 +194,7 @@ Implementation: `backend/app/core/security.py` (`verify_token`).
 Supabase projects that use **JWT Signing Keys** issue **ES256** (or RS256) access tokens.
 Verification must use the project's JWKS endpoint, not only the legacy HS256 shared secret.
 
-```
+```text
 GET {SUPABASE_URL}/auth/v1/.well-known/jwks.json
 ```
 
@@ -344,9 +344,12 @@ USING (auth.uid()::text = user_id::text);
 
 Shipped (migration `037_admin_roles.sql`). Roles live on
 `public.users.role`: `user` (default), `super_admin`, `admin`, `ops`,
-`support`, `content_editor` (plus a legacy fallback — `is_admin` flag or an
-`@fitcheckaiapp.com` email is treated as `admin`). Every `/api/v1/admin/*`
-route sits behind `require_admin` or `require_permission(...)`:
+`support`, `content_editor` (plus a legacy fallback — the `is_admin` flag is
+treated as `admin`). The former `@fitcheckaiapp.com` email-domain fallback
+was removed (2026-08-08): registration is not domain-verified, so a
+self-registered address must not grant admin. Admin access requires an
+explicit `role` or the `is_admin` flag. Every `/api/v1/admin/*` route sits
+behind `require_admin` or `require_permission(...)`:
 
 ```python
 from app.api.v1.deps import require_admin, require_permission

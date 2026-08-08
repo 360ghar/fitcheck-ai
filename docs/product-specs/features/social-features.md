@@ -59,7 +59,7 @@ Social & Community features allow users to share outfits, get feedback from frie
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/outfits/{outfit_id}/share
 - Enable sharing and return a share link
 - Request: JSON
@@ -76,12 +76,12 @@ POST /api/v1/outfits/{outfit_id}/share
       }
 ```
 
-```
+```text
 POST /api/v1/outfits/{outfit_id}/share/social (planned)
 - Optional server-side helpers for platform-specific share payloads
 ```
 
-```
+```text
 GET /api/v1/outfits/public/{outfit_id}
 - View shared outfit (no auth, only when outfit is public)
 - Response: 200 OK
@@ -90,7 +90,7 @@ GET /api/v1/outfits/public/{outfit_id}
     - items: List<item_summary>
 ```
 
-```
+```text
 POST /api/v1/shared-outfits/{share_id}/feedback
 - Leave feedback on a shared outfit
 ```
@@ -158,7 +158,7 @@ POST /api/v1/shared-outfits/{share_id}/feedback
 
 **API Endpoints:**
 
-```
+```text
 GET /api/v1/community/outfits
 - Browse community outfits
 - Query Parameters:
@@ -186,26 +186,26 @@ GET /api/v1/community/outfits
     }
 ```
 
-```
+```text
 GET /api/v1/community/outfits/{id}
 - View community outfit details
 - Response: 200 OK
   - outfit: community_outfit_detail
 ```
 
-```
+```text
 POST /api/v1/community/outfits/{id}/like
 - Like community outfit
 - Response: 201 Created
 ```
 
-```
+```text
 DELETE /api/v1/community/outfits/{id}/like
 - Unlike community outfit
 - Response: 204 No Content
 ```
 
-```
+```text
 POST /api/v1/community/outfits/{id}/report
 - Report outfit
 - Request: JSON
@@ -294,7 +294,7 @@ POST /api/v1/community/outfits/{id}/report
 
 **API Endpoints:**
 
-```
+```text
 GET /api/v1/stylists
 - Browse stylists
 - Query Parameters:
@@ -308,14 +308,14 @@ GET /api/v1/stylists
   - stylists: List<stylist_summary>
 ```
 
-```
+```text
 GET /api/v1/stylists/{id}
 - View stylist profile
 - Response: 200 OK
   - stylist: stylist_detail
 ```
 
-```
+```text
 POST /api/v1/stylist-sessions/book
 - Book stylist session
 - Request: JSON
@@ -340,21 +340,21 @@ POST /api/v1/stylist-sessions/book
     - status: "pending_stylist_approval"
 ```
 
-```
+```text
 GET /api/v1/users/stylist-sessions
 - View user's stylist sessions
 - Response: 200 OK
   - sessions: List<session_detail>
 ```
 
-```
+```text
 POST /api/v1/stylist-sessions/{id}/accept
 - Stylist accepts session
 - Response: 200 OK
   - session: updated_session
 ```
 
-```
+```text
 POST /api/v1/stylist-sessions/{id}/recommendations
 - Stylist sends recommendations
 - Request: JSON
@@ -366,7 +366,7 @@ POST /api/v1/stylist-sessions/{id}/recommendations
 - Response: 201 Created
 ```
 
-```
+```text
 POST /api/v1/stylist-sessions/{id}/complete
 - Complete session
 - Request: JSON
@@ -448,7 +448,7 @@ POST /api/v1/stylist-sessions/{id}/complete
 
 **API Endpoints:**
 
-```
+```text
 GET /api/v1/challenges
 - Browse available challenges
 - Response: 200 OK
@@ -465,7 +465,7 @@ GET /api/v1/challenges
     - is_active: boolean
 ```
 
-```
+```text
 POST /api/v1/challenges/{id}/join
 - Join challenge
 - Response: 201 Created
@@ -481,14 +481,14 @@ POST /api/v1/challenges/{id}/join
       }
 ```
 
-```
+```text
 GET /api/v1/users/challenges/{challenge_id}/progress
 - View challenge progress
 - Response: 200 OK
   - progress: challenge_progress
 ```
 
-```
+```text
 POST /api/v1/users/challenges/{challenge_id}/submissions
 - Submit daily outfit
 - Request: JSON
@@ -500,7 +500,7 @@ POST /api/v1/users/challenges/{challenge_id}/submissions
   - submission: submission_object
 ```
 
-```
+```text
 GET /api/v1/challenges/{id}/leaderboard
 - View challenge leaderboard
 - Query Parameters:
@@ -509,7 +509,7 @@ GET /api/v1/challenges/{id}/leaderboard
   - leaderboard: List<leaderboard_entry>
 ```
 
-```
+```text
 GET /api/v1/challenges/{id}/feed
 - View challenge feed
 - Response: 200 OK

@@ -61,7 +61,7 @@ ASC → Monetization → App Store Server Notifications exposes a **Production
 Server URL** and a **Sandbox Server URL** as separate fields. Both must point
 at:
 
-```
+```text
 https://api.fitcheckaiapp.com/api/v1/subscription/apple/notifications
 ```
 
@@ -116,8 +116,9 @@ renew → renew → … → expire) in about half an hour.
 
 **The Simulator has no App Store.** It cannot sign into a Sandbox Apple Account
 and cannot fetch real products, so the *only* source of products there is the
-local StoreKit configuration file. Without one, `queryProductDetails` errors and
-the app shows **"The store couldn't be reached for this plan right now."**
+local StoreKit configuration file. Without one, `queryProductDetails` resolves
+zero products and the app shows **"This plan is not available in the store yet.
+Please check back soon."**
 
 Two separate things have to be true, and missing either produces that error:
 
@@ -227,12 +228,13 @@ Before hitting Submit:
 
 | Symptom | Cause |
 |---|---|
-| **"The store couldn't be reached for this plan right now"** on the **Simulator** | No StoreKit configuration applied. Use the `Runner (Local StoreKit)` scheme **and launch from Xcode** — `flutter run` does not apply it (§3a) |
-| Same message on a **real device** | Not signed into a Sandbox Apple Account (Settings → Developer), or §1 prerequisites incomplete |
+| **"This plan is not available in the store yet"** on the **Simulator** | No StoreKit configuration applied. Use the `Runner (Local StoreKit)` scheme **and launch from Xcode** — `flutter run` does not apply it (§3a) |
+| Same message on a **real device** (TestFlight included) | The store resolved zero of the queried products: not signed into a Sandbox Apple Account (Settings → Developer), or §1 prerequisites incomplete (agreement / products / metadata). The paywall also shows an "Upgrades aren't available in the store yet" banner with a Retry button in this state |
+| "The store couldn't be reached for this plan right now" | A genuine store error (network, App Store server) — retry; if it persists, see §1. The app maps this message only to real store errors, never to the zero-products state above |
 | No prices on the paywall | §1 prerequisites; check logs for "Store product IDs not found" |
 | "This plan is not available for purchase yet" | `/plans` published a null product ID — the backend override is set to something outside the bundle namespace (the startup health check warns about this) |
 | Purchase succeeds, no entitlement | Backend missing `APPLE_ISSUER_ID`/`KEY_ID`/`PRIVATE_KEY`, or the build used the local StoreKit file (§3) |
-| "Transaction … was not found by the App Store at https://api.storekit…" (both URLs) | Local StoreKit transaction, or the API key lacks the In-App Purchase permission |
+| "Transaction … was not found by the App Store at `https://api.storekit…`" (both URLs) | Local StoreKit transaction, or the API key lacks the In-App Purchase permission |
 | Entitlement lapses ~5 min after purchase | Sandbox ASSN URL not set (§1) |
 | Upgrade button changes nothing | ASC rank order (§1 step 5) |
 | "This purchase is still being processed" | A prior purchase failed backend verification and was left unfinished; relaunching the app redelivers and completes it |

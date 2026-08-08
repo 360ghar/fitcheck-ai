@@ -66,7 +66,7 @@ Shopping Integration allows users to find items similar to what they own, try be
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/shopping/search/similar
 - Find items similar to image
 - Request: multipart/form-data
@@ -90,7 +90,7 @@ POST /api/v1/shopping/search/similar
       }
 ```
 
-```
+```text
 GET /api/v1/shopping/search
 - Text-based search
 - Query Parameters:
@@ -111,7 +111,7 @@ GET /api/v1/shopping/search
     }
 ```
 
-```
+```text
 POST /api/v1/shopping/wishlist
 - Add item to wishlist
 - Request: JSON
@@ -121,7 +121,7 @@ POST /api/v1/shopping/wishlist
   - wishlist_item: wishlist_item_object
 ```
 
-```
+```text
 GET /api/v1/shopping/wishlist
 - View wishlist
 - Response: 200 OK
@@ -179,7 +179,7 @@ GET /api/v1/shopping/wishlist
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/shopping/virtual-try
 - Generate outfit with shopping item
 - Request: JSON
@@ -190,7 +190,7 @@ POST /api/v1/shopping/virtual-try
   - generation_id: string
 ```
 
-```
+```text
 GET /api/v1/shopping/virtual-try/{generation_id}
 - Check virtual try-on status
 - Response: 200 OK
@@ -199,7 +199,7 @@ GET /api/v1/shopping/virtual-try/{generation_id}
   - items_used: List<item_summary>
 ```
 
-```
+```text
 POST /api/v1/shopping/virtual-try/suggestions
 - Get "try with" suggestions
 - Request: JSON
@@ -268,7 +268,7 @@ POST /api/v1/shopping/virtual-try/suggestions
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/shopping/wishlist/{item_id}/price-alert
 - Set price alert
 - Request: JSON
@@ -278,7 +278,7 @@ POST /api/v1/shopping/wishlist/{item_id}/price-alert
   - alert: price_alert_object
 ```
 
-```
+```text
 GET /api/v1/shopping/wishlist/{item_id}/price-history
 - Get price history
 - Response: 200 OK
@@ -296,7 +296,7 @@ GET /api/v1/shopping/wishlist/{item_id}/price-history
       }
 ```
 
-```
+```text
 GET /api/v1/shopping/price-comparison/{item_id}
 - Compare prices across retailers
 - Response: 200 OK
@@ -312,7 +312,7 @@ GET /api/v1/shopping/price-comparison/{item_id}
       }
 ```
 
-```
+```text
 POST /api/v1/shopping/wishlist/{item_id}/mark-purchased
 - Mark item as purchased
 - Request: JSON
@@ -390,7 +390,7 @@ POST /api/v1/shopping/wishlist/{item_id}/mark-purchased
 
 **API Endpoints:**
 
-```
+```text
 GET /api/v1/shopping/items/{item_id}/sustainability
 - Get sustainability score
 - Response: 200 OK
@@ -419,7 +419,7 @@ GET /api/v1/shopping/items/{item_id}/sustainability
       }
 ```
 
-```
+```text
 GET /api/v1/shopping/search?sustainability_score={min_score}
 - Filter by sustainability
 - Response: 200 OK
@@ -492,7 +492,7 @@ GET /api/v1/shopping/search?sustainability_score={min_score}
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/wardrobe/items/{item_id}/list-for-sale
 - List item for sale
 - Request: JSON
@@ -514,7 +514,7 @@ POST /api/v1/wardrobe/items/{item_id}/list-for-sale
     - created_at: timestamp
 ```
 
-```
+```text
 GET /api/v1/wardrobe/items/sales
 - View sales listings
 - Query Parameters:
@@ -523,7 +523,7 @@ GET /api/v1/wardrobe/items/sales
   - listings: List<sale_listing>
 ```
 
-```
+```text
 PUT /api/v1/wardrobe/items/sales/{listing_id}
 - Update listing
 - Request: JSON
@@ -533,13 +533,13 @@ PUT /api/v1/wardrobe/items/sales/{listing_id}
   - listing: updated_listing
 ```
 
-```
+```text
 DELETE /api/v1/wardrobe/items/sales/{listing_id}
 - Withdraw listing
 - Response: 204 No Content
 ```
 
-```
+```text
 POST /api/v1/wardrobe/items/sales/{listing_id}/mark-sold
 - Mark item as sold
 - Request: JSON
@@ -549,7 +549,7 @@ POST /api/v1/wardrobe/items/sales/{listing_id}/mark-sold
   - sale: sale_record_object
 ```
 
-```
+```text
 POST /api/v1/wardrobe/items/{item_id}/list-for-swap
 - List item for swap
 - Request: JSON
@@ -558,14 +558,14 @@ POST /api/v1/wardrobe/items/{item_id}/list-for-swap
   - swap_listing: swap_listing_object
 ```
 
-```
+```text
 GET /api/v1/wardrobe/items/swap-listings
 - Browse swap listings
 - Response: 200 OK
   - listings: List<swap_listing>
 ```
 
-```
+```text
 POST /api/v1/wardrobe/items/swap/{listing_id}/propose
 - Propose swap
 - Request: JSON

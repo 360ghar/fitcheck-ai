@@ -213,7 +213,7 @@ trust boundary** — the UI's permission gating is cosmetic.
 
 Tests: `backend/tests/api/test_admin_{authz,ops,commerce,audit,users}.py` +
 `backend/tests/integration/test_admin/test_admin_{predicates,quotas,dashboards,revenue_trends}.py`
-(113 tests across 9 files — authz 403s, role predicates, CRUD, suspend,
+(172 tests across 9 files — authz 403s, role predicates, CRUD, suspend,
 refund, audit rows, quota overrides, dashboard aggregates).
 
 ## Errors

@@ -7,7 +7,7 @@ Completed: 2026-07-27
 ## Goal
 
 Enable this specific mixed AI configuration:
-```
+```text
 AI Chat model:            Agnes 2.5 flash
 AI Vision Model:          gemini 3.6 flash   (direct to Google, not via Agnes)
 AI Vision Fallback Model: Agnes 2.5 flash

@@ -174,7 +174,7 @@ The AI Photoshoot Generator creates professional-style images of users based on 
 
 ### Generate Photoshoot (Authenticated)
 
-```
+```text
 POST /api/v1/photoshoot/generate
 ```
 
@@ -215,7 +215,7 @@ POST /api/v1/photoshoot/generate
 
 ### Demo Photoshoot (Anonymous)
 
-```
+```text
 POST /api/v1/photoshoot/demo
 ```
 
@@ -253,7 +253,7 @@ images with image_url/image_base64/label, error) minus `usage`.
 
 ### Get Usage Stats
 
-```
+```text
 GET /api/v1/photoshoot/usage
 ```
 
@@ -272,7 +272,7 @@ GET /api/v1/photoshoot/usage
 
 ### Get Use Cases
 
-```
+```text
 GET /api/v1/photoshoot/use-cases
 ```
 

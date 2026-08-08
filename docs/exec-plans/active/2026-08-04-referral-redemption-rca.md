@@ -110,8 +110,8 @@ cd flutter && flutter analyze lib test && flutter test
    WHERE proname IN ('redeem_referral_atomic', 'apply_referral_credit_atomic',
                      'redeem_promo_atomic');
    ```
-   - Empty → migrations 022/026 were never applied (the 07-31 gap).
-   - Also check the damage window:
+- Empty → migrations 022/026 were never applied (the 07-31 gap).
+- Also check the damage window:
      ```sql
      SELECT count(*) FROM public.users WHERE referred_by_code IS NOT NULL;
      SELECT count(*) FROM public.referral_redemptions

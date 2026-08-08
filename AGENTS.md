@@ -67,7 +67,7 @@ Package-local notes: `backend/CLAUDE.md`, `frontend/CLAUDE.md`, `admin/CLAUDE.md
 ./run-dev.sh                          # API :8000 + web :3000
 cd backend && source .venv/bin/activate && pytest
 cd frontend && npm run lint && npm test && npm run build
-cd admin && npm run lint && npm run typecheck && npm test && npm run check:schema   # admin console (lint/typecheck/test/check:schema/build)
+cd admin && npm run lint && npm run typecheck && npm test && npm run check:schema   # admin console (lint/typecheck/test/check:schema)
 cd flutter && flutter test
 python scripts/check_architecture.py
 python scripts/check_docs_structure.py

@@ -56,6 +56,7 @@ errors: list[str] = []
 
 
 def check_required() -> None:
+    """Fail when any of the required harness/knowledge-base files is missing."""
     for path in REQUIRED:
         if not path.is_file():
             errors.append(f"missing required file: {path.relative_to(ROOT)}")
@@ -109,8 +110,30 @@ def check_schema_doc_freshness() -> None:
         )
 
 
-LAST_UPDATED_RE = re.compile(r"Last updated:\s*(\d{4}-\d{2}-\d{2})")
+LAST_UPDATED_RE = re.compile(r"(?m)^Last updated:\s*(\d{4}-\d{2}-\d{2})(?:\s|$)")
 FRESHNESS_GRACE_DAYS = 3
+
+
+def _is_shallow_repo() -> bool:
+    """True when the checkout is a shallow clone (no per-file history).
+
+    With actions/checkout@v4 defaults (fetch-depth: 1), `git log -- <path>`
+    reports the single tip commit as the "last commit" of every file, which
+    would false-fail (or falsely pass) every freshness check. CI sets
+    fetch-depth: 0; a shallow local clone skips the per-file freshness check
+    instead of trusting the tip.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--is-shallow-repository"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0 and proc.stdout.strip() == "true"
 
 
 def _last_commit_date(path: Path) -> date | None:
@@ -141,11 +164,15 @@ def check_last_updated_freshness() -> None:
     """Fail when a doc's 'Last updated' header predates its last commit by >3 days.
 
     Files without a 'Last updated' header, untracked files, and repos where git
-    is unavailable are skipped. Uncommitted working-tree edits are intentionally
-    measured against the last COMMIT date (the intended behavior: a doc edited
-    today but committed months ago passes as long as its header is newer than
-    the commit date).
+    is unavailable are skipped. Shallow checkouts are skipped too (a per-file
+    `git log` there cannot identify the file's real last commit). Uncommitted
+    working-tree edits are intentionally measured against the last COMMIT date
+    (the intended behavior: a doc edited today but committed months ago passes
+    as long as its header is newer than the commit date). Headers dated in the
+    future are rejected outright.
     """
+    shallow = _is_shallow_repo()
+    today = date.today()
     for path in sorted(DOCS.rglob("*.md")):
         if not path.is_file():
             continue
@@ -156,6 +183,17 @@ def check_last_updated_freshness() -> None:
         try:
             header_date = datetime.strptime(match.group(1), "%Y-%m-%d").date()
         except ValueError:
+            continue
+        if header_date > today:
+            errors.append(
+                f"{path.relative_to(ROOT)}: 'Last updated' header ({header_date}) "
+                f"is in the future (today is {today}). "
+                f"REMEDIATE: set the header to today's date."
+            )
+            continue
+        if shallow:
+            # The per-file commit date is meaningless in a shallow clone; do
+            # not treat the tip commit as every file's last commit.
             continue
         commit_date = _last_commit_date(path)
         if commit_date is None:
@@ -170,6 +208,7 @@ def check_last_updated_freshness() -> None:
 
 
 def check_markdown_links() -> None:
+    """Fail when a relative markdown link (root agent files + docs/) is broken."""
     md_files = [ROOT / "AGENTS.md", ROOT / "CLAUDE.md", ROOT / "ARCHITECTURE.md"]
     md_files.extend(DOCS.rglob("*.md"))
     for path in md_files:
@@ -229,6 +268,7 @@ def _normalize_docs_ref(ref: str) -> str | None:
 
 
 def _scan_text_for_docs_paths(path: Path, text: str, use_backtick_only: bool) -> None:
+    """Collect `docs/...` path mentions in one file and flag nonexistent targets."""
     seen: set[str] = set()
     if use_backtick_only:
         candidates = DOCS_BACKTICK_RE.findall(text)
@@ -290,6 +330,7 @@ def check_docs_path_references() -> None:
 
 
 def main() -> int:
+    """Run every docs-structure check; exit 1 with a report when anything fails."""
     check_required()
     check_claude_imports_agents()
     check_schema_doc_freshness()

@@ -122,8 +122,22 @@ first pass. Most entries are already fixed by the 19:00 UTC deploy of HEAD
    + client closed; retryable failure → exactly ONE agent invocation; happy
    path → 200 envelope.
 
-### Ops checklist (unchanged from first pass; still pending)
+### Ops checklist (updated 2026-08-08; label = recorded live state)
 
-Apply migrations 035–042 on hosted Supabase (035 for `photoshoot_jobs.image_failures`
-is the blocker behind the 19:01:01 readiness warning); set Railway env
-`AI_ENCRYPTION_KEY` + the five Stripe vars; optional paid-tier Gemini key.
+Migration status on hosted Supabase, per the in-repo records
+(`2026-08-07-admin-panel.md`, `2026-08-07-admin-revenue-trends-export.md`,
+`2026-08-05-photoshoot-zero-images-rca.md`):
+
+| Migration | State | Note |
+|-----------|-------|------|
+| 035 `photoshoot_jobs.image_failures` | **pending** | Blocker behind the 19:01:01 readiness warning; apply before/with the backend deploy. |
+| 036 `widen_image_url_columns` | **pending** | R2 cutover dependency (TEXT columns for longer URLs); part of the egress RCA ops checklist. |
+| 037 `admin_roles` | **applied** | Recorded applied to hosted Supabase in `2026-08-07-admin-panel.md`. |
+| 038 `audit_events` | **applied** | Recorded applied to hosted Supabase in `2026-08-07-admin-panel.md`. |
+| 039 `scope_service_policies` | **pending** | No applied record; apply and verify `/ready` + admin endpoints. |
+| 040 `admin_dashboard_top_users` | **applied** | RPCs live-verified (42803/PGRST204 fixes); recorded in `2026-08-07-admin-panel.md`. |
+| 041 `admin_trends` | **re-apply** | Applied, but corrected function bodies (qualify `day` with alias `s`; `p_days` signature unchanged) must be re-applied via `CREATE OR REPLACE`, then sanity-check `SELECT public.admin_trend_jobs(30)`. |
+| 042 `outfit_wear_history` | **pending** | Ships with the `/outfits/{id}/wear` + `/wear-history` routes; apply before those routes go live. |
+
+Also: set Railway env `AI_ENCRYPTION_KEY` + the five Stripe vars; optional
+paid-tier Gemini key.

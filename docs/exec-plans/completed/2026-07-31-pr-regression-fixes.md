@@ -27,7 +27,7 @@ behavior while updating existing subscriptions in place.
 
 ## Context / links
 
-- PR: https://github.com/360ghar/fitcheck-ai/pull/9
+- PR: `https://github.com/360ghar/fitcheck-ai/pull/9`
 - Related code: `backend/app/services/subscription_service.py`, `backend/app/api/v1/subscription.py`, `backend/app/services/ai_provider_service.py`, `frontend/src/components/wardrobe/`, `flutter/lib/app/themes/`
 
 ## Progress log

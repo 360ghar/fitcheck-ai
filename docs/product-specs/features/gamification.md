@@ -87,7 +87,7 @@ Gamification features add engagement and motivation through streaks, achievement
 
 **API Endpoints:**
 
-```
+```text
 GET /api/v1/gamification/streak
 - View current streak
 - Response: 200 OK
@@ -103,14 +103,14 @@ GET /api/v1/gamification/streak
     }|null
 ```
 
-```
+```text
 POST /api/v1/gamification/streak/freeze (planned)
 - Use streak freeze
 - Response: 200 OK
   - streak: updated_streak_object
 ```
 
-```
+```text
 POST /api/v1/gamification/streak/vacation (planned)
 - Set vacation mode
 - Request: JSON
@@ -194,7 +194,7 @@ POST /api/v1/gamification/streak/vacation (planned)
 
 **API Endpoints:**
 
-```
+```text
 GET /api/v1/gamification/achievements
 - View all achievements
 - Response: 200 OK
@@ -206,7 +206,7 @@ GET /api/v1/gamification/achievements
     - xp_reward?: number
 ```
 
-```
+```text
 GET /api/v1/gamification/achievements/{id} (planned)
 - View achievement details
 - Response: 200 OK
@@ -217,7 +217,7 @@ GET /api/v1/gamification/achievements/{id} (planned)
     - reward_claimed: boolean
 ```
 
-```
+```text
 POST /api/v1/gamification/achievements/{id}/claim-reward (planned)
 - Claim achievement reward
 - Response: 200 OK
@@ -298,7 +298,7 @@ POST /api/v1/gamification/achievements/{id}/claim-reward (planned)
 
 **API Endpoints:**
 
-```
+```text
 GET /api/v1/gamification/stats (planned)
 - View overall statistics
 - Response: 200 OK
@@ -354,7 +354,7 @@ GET /api/v1/gamification/stats (planned)
     }
 ```
 
-```
+```text
 GET /api/v1/gamification/stats/trends (planned)
 - View trends over time
 - Query Parameters:
@@ -378,7 +378,7 @@ GET /api/v1/gamification/stats/trends (planned)
     }
 ```
 
-```
+```text
 GET /api/v1/gamification/stats/export (planned)
 - Export statistics
 - Query Parameters:
@@ -466,7 +466,7 @@ GET /api/v1/gamification/stats/export (planned)
 
 **API Endpoints:**
 
-```
+```text
 GET /api/v1/gamification/sustainability (planned)
 - View sustainability metrics
 - Response: 200 OK
@@ -501,7 +501,7 @@ GET /api/v1/gamification/sustainability (planned)
     }
 ```
 
-```
+```text
 POST /api/v1/gamification/sustainability/goals (planned)
 - Set sustainability goal
 - Request: JSON
@@ -512,7 +512,7 @@ POST /api/v1/gamification/sustainability/goals (planned)
   - goal: sustainability_goal_object
 ```
 
-```
+```text
 GET /api/v1/gamification/sustainability/goals (planned)
 - View sustainability goals
 - Response: 200 OK
@@ -526,7 +526,7 @@ GET /api/v1/gamification/sustainability/goals (planned)
     - status: "active"|"completed"|"failed"
 ```
 
-```
+```text
 POST /api/v1/gamification/sustainability/log-purchase (planned)
 - Log purchase (reduces sustainability score)
 - Request: JSON

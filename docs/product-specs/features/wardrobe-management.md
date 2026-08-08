@@ -43,7 +43,7 @@ Wardrobe Management is the foundational feature of FitCheck AI, allowing users t
 - Alert user for invalid files
 
 **API Endpoints:**
-```
+```text
 POST /api/v1/items/upload
 - Upload one or more images to storage (no item record created yet)
 - Request: multipart/form-data
@@ -118,7 +118,7 @@ POST /api/v1/items
 - Suggest manual review for scores <70%
 
 **API Endpoints:**
-```
+```text
 POST /api/v1/ai/batch-extract-multipart   # web preferred (binary files)
 POST /api/v1/ai/batch-extract             # JSON base64 (Flutter / legacy)
 GET  /api/v1/ai/batch-extract/{job_id}/events
@@ -236,7 +236,7 @@ POST /api/v1/items
 - Allow user to confirm or dismiss
 
 **API Endpoints:**
-```
+```text
 POST /api/v1/items
 - Create new item manually
 - Request: JSON
@@ -302,7 +302,7 @@ POST /api/v1/items
 - Improve accuracy over time
 
 **API Endpoints:**
-```
+```text
 POST /api/v1/items/{id}/categorize
 - Run AI categorization on item
 - Response: 200 OK
@@ -315,7 +315,7 @@ POST /api/v1/items/{id}/categorize
   - confidence: number
 ```
 
-```
+```text
 PUT /api/v1/items/{id}/categories
 - Update item categories (user override)
 - Request: JSON
@@ -389,7 +389,7 @@ PUT /api/v1/items/{id}/categories
 - Create, rename, delete saved filters
 
 **API Endpoints:**
-```
+```text
 GET /api/v1/items
 - Browse items with filters
 - Query Parameters:
@@ -415,7 +415,7 @@ GET /api/v1/items
   - total_pages: number
 ```
 
-```
+```text
 POST /api/v1/filters
 - Save filter combination
 - Request: JSON
@@ -425,7 +425,7 @@ POST /api/v1/filters
   - filter_id: string
 ```
 
-```
+```text
 GET /api/v1/filters
 - List saved filters
 - Response: 200 OK
@@ -484,7 +484,7 @@ GET /api/v1/filters
 - Option to confirm or cancel
 
 **API Endpoints:**
-```
+```text
 GET /api/v1/items/{id}
 - Get item details
 - Response: 200 OK
@@ -512,7 +512,7 @@ GET /api/v1/items/{id}
     - updated_at: ISO8601 date
 ```
 
-```
+```text
 PUT /api/v1/items/{id}
 - Update item details
 - Request: JSON
@@ -532,13 +532,13 @@ PUT /api/v1/items/{id}
   - item: updated_item_object
 ```
 
-```
+```text
 DELETE /api/v1/items/{id}
 - Delete item
 - Response: 204 No Content
 ```
 
-```
+```text
 POST /api/v1/items/{id}/images
 - Add image to item
 - Request: multipart/form-data
@@ -547,7 +547,7 @@ POST /api/v1/items/{id}/images
   - item: updated_item_object
 ```
 
-```
+```text
 DELETE /api/v1/items/{id}/images/{image_id}
 - Remove image from item
 - Response: 200 OK
@@ -606,7 +606,7 @@ DELETE /api/v1/items/{id}/images/{image_id}
 - Help identify items needing frequent repair
 
 **API Endpoints:**
-```
+```text
 PUT /api/v1/items/{id}/condition
 - Update item condition
 - Request: JSON
@@ -616,7 +616,7 @@ PUT /api/v1/items/{id}/condition
   - item: updated_item_object
 ```
 
-```
+```text
 POST /api/v1/items/condition/bulk
 - Bulk update item conditions
 - Request: JSON
@@ -627,7 +627,7 @@ POST /api/v1/items/condition/bulk
   - updated_count: number
 ```
 
-```
+```text
 GET /api/v1/items?condition=clean
 - Filter items by condition
 - Response: 200 OK
@@ -683,7 +683,7 @@ GET /api/v1/items?condition=clean
 - Mark item as "not a duplicate" (false positive)
 
 **API Endpoints:**
-```
+```text
 GET /api/v1/items/duplicates
 - Find duplicate items
 - Query Parameters:
@@ -700,7 +700,7 @@ GET /api/v1/items/duplicates
       }
 ```
 
-```
+```text
 POST /api/v1/items/{id}/duplicate-action
 - Resolve duplicate status
 - Request: JSON

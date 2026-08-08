@@ -55,7 +55,7 @@ merging, with the patch number visible in-app and attributed on Sentry crashes.
   `flutter/scripts/shorebird_patch_android.sh`,
   `.github/workflows/build-ios.yml`,
   `.github/workflows/shorebird-patch-ios.yml`
-- External: https://docs.shorebird.dev — Shorebird CLI 1.6.115, app_id
+- External: `https://docs.shorebird.dev` — Shorebird CLI 1.6.115, app_id
   `525158a1-b148-4745-83ce-8e189e3334d3`, free tier (5,000 patch installs/month)
 
 ## Progress log

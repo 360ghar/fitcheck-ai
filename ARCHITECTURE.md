@@ -8,24 +8,20 @@ This file is the top-level map of domains and **allowed dependency edges**. Deep
 
 ## System diagram
 
-```text
-[React web] ──┐
-              ├──► FastAPI /api/v1 ──► services ──► Supabase (DB + Auth)
-[Flutter]  ───┘                       ├──► R2 (S3) — storage  ──► [Cloudflare Worker] ──► clients
-                                      ├──► AI providers
-                                      └──► Pinecone (optional)
-
-[Admin console (React 19 SPA)] ──► FastAPI /api/v1/admin/* (RBAC deps) ──► services ──► Supabase / Stripe
-                                     └──► audit_events (append-only, service-role only)
-
-              └──► health / OpenAPI
-```
+Single authoritative view (rendered on GitHub). Clients — web, mobile, and
+the admin console — all consume image URLs served from R2 via the Cloudflare
+Worker; the admin console calls the RBAC-guarded `/api/v1/admin/*` surface
+and appends audit events (service-role only, append-only table).
 
 ```mermaid
 flowchart TD
-    Web[Web + Admin SPAs] --> API[FastAPI /api/v1]
+    Web[Web SPA] --> API[FastAPI /api/v1]
     Mobile[Flutter mobile] --> API
-    API --> SVC[Domain services]
+    Admin[Admin console SPA] --> ADMIN_API[FastAPI /api/v1/admin/* RBAC]
+    ADMIN_API --> SVC[Domain services]
+    ADMIN_API --> AUDIT[(audit_events append-only)]
+    API --> SVC
+    API --> HC[health + OpenAPI]
     SVC --> DB[(Supabase PG)]
     SVC --> R2[(R2 object store)]
     SVC --> AI[AI providers]
@@ -33,6 +29,8 @@ flowchart TD
     SVC --> STR[Stripe]
     R2 --> IMG[Cloudflare Worker]
     IMG --> Web
+    IMG --> Mobile
+    IMG --> Admin
 ```
 
 Layer flow: clients → API → services → data/AI/storage; images served from R2 via the Cloudflare Worker.

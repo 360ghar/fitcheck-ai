@@ -60,7 +60,7 @@ Advanced Features provide additional functionality for wardrobe maintenance, car
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/laundry/schedule
 - Set laundry schedule
 - Request: JSON
@@ -70,14 +70,14 @@ POST /api/v1/laundry/schedule
   - schedule: laundry_schedule_object
 ```
 
-```
+```text
 GET /api/v1/laundry/schedule
 - View laundry schedule
 - Response: 200 OK
   - schedule: laundry_schedule_object
 ```
 
-```
+```text
 POST /api/v1/laundry/queue
 - Add items to laundry queue
 - Request: JSON
@@ -86,7 +86,7 @@ POST /api/v1/laundry/queue
   - queue: laundry_queue_object
 ```
 
-```
+```text
 GET /api/v1/laundry/queue
 - View laundry queue
 - Response: 200 OK
@@ -97,7 +97,7 @@ GET /api/v1/laundry/queue
       }
 ```
 
-```
+```text
 POST /api/v1/laundry/queue/process
 - Mark laundry as done
 - Request: JSON
@@ -157,7 +157,7 @@ POST /api/v1/laundry/queue/process
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/tailors
 - Add tailor
 - Request: JSON
@@ -170,14 +170,14 @@ POST /api/v1/tailors
   - tailor: tailor_object
 ```
 
-```
+```text
 GET /api/v1/tailors
 - List saved tailors
 - Response: 200 OK
   - tailors: List<tailor_object>
 ```
 
-```
+```text
 POST /api/v1/wardrobe/items/{item_id}/alterations
 - Add alteration record
 - Request: multipart/form-data
@@ -193,14 +193,14 @@ POST /api/v1/wardrobe/items/{item_id}/alterations
   - alteration: alteration_record_object
 ```
 
-```
+```text
 GET /api/v1/wardrobe/items/{item_id}/alterations
 - View alteration history
 - Response: 200 OK
   - alterations: List<alteration_record_object>
 ```
 
-```
+```text
 PUT /api/v1/wardrobe/items/{item_id}/alterations/{alteration_id}
 - Update alteration record
 - Response: 200 OK
@@ -263,7 +263,7 @@ PUT /api/v1/wardrobe/items/{item_id}/alterations/{alteration_id}
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/wardrobe/items/{item_id}/care-instructions
 - Add care instructions
 - Request: multipart/form-data
@@ -279,21 +279,21 @@ POST /api/v1/wardrobe/items/{item_id}/care-instructions
   - instructions: care_instructions_object
 ```
 
-```
+```text
 GET /api/v1/wardrobe/items/{item_id}/care-instructions
 - View care instructions
 - Response: 200 OK
   - instructions: care_instructions_object
 ```
 
-```
+```text
 PUT /api/v1/wardrobe/items/{item_id}/care-instructions
 - Update care instructions
 - Response: 200 OK
   - instructions: updated_instructions
 ```
 
-```
+```text
 POST /api/v1/wardrobe/items/{item_id}/care-scan
 - Auto-detect care instructions from photo
 - Request: multipart/form-data
@@ -307,7 +307,7 @@ POST /api/v1/wardrobe/items/{item_id}/care-scan
       }
 ```
 
-```
+```text
 GET /api/v1/wardrobe/items?care_requirement=dry_clean
 - Filter by care requirement
 - Response: 200 OK
@@ -379,7 +379,7 @@ GET /api/v1/wardrobe/items?care_requirement=dry_clean
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/photos/enhance
 - Enhance photo
 - Request: multipart/form-data
@@ -395,7 +395,7 @@ POST /api/v1/photos/enhance
       }
 ```
 
-```
+```text
 POST /api/v1/photos/background-remove
 - Remove background
 - Request: multipart/form-data
@@ -409,7 +409,7 @@ POST /api/v1/photos/background-remove
       }
 ```
 
-```
+```text
 POST /api/v1/photos/batch-enhance
 - Enhance multiple photos
 - Request: multipart/form-data
@@ -480,7 +480,7 @@ POST /api/v1/photos/batch-enhance
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/households
 - Create household
 - Request: JSON
@@ -489,7 +489,7 @@ POST /api/v1/households
   - household: household_object
 ```
 
-```
+```text
 POST /api/v1/households/{id}/invite
 - Invite member
 - Request: JSON
@@ -499,7 +499,7 @@ POST /api/v1/households/{id}/invite
   - invitation: invitation_object
 ```
 
-```
+```text
 POST /api/v1/households/{id}/join
 - Accept invitation
 - Request: JSON
@@ -508,7 +508,7 @@ POST /api/v1/households/{id}/join
   - household: household_object
 ```
 
-```
+```text
 POST /api/v1/wardrobe/items/{item_id}/share
 - Share item with household
 - Request: JSON
@@ -518,14 +518,14 @@ POST /api/v1/wardrobe/items/{item_id}/share
   - sharing: item_sharing_object
 ```
 
-```
+```text
 GET /api/v1/households/{id}/shared-items
 - View shared items
 - Response: 200 OK
   - shared_items: List<shared_item_object>
 ```
 
-```
+```text
 POST /api/v1/wardrobe/items/{item_id}/borrow
 - Request to borrow item
 - Request: JSON
@@ -535,14 +535,14 @@ POST /api/v1/wardrobe/items/{item_id}/borrow
   - request: borrow_request_object
 ```
 
-```
+```text
 POST /api/v1/borrow-requests/{id}/approve
 - Approve borrow request
 - Response: 200 OK
   - request: approved_request
 ```
 
-```
+```text
 PUT /api/v1/wardrobe/items/{item_id}/return
 - Mark item as returned
 - Response: 200 OK
@@ -614,7 +614,7 @@ PUT /api/v1/wardrobe/items/{item_id}/return
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/lookbooks
 - Create lookbook
 - Request: JSON
@@ -626,14 +626,14 @@ POST /api/v1/lookbooks
   - lookbook: lookbook_object
 ```
 
-```
+```text
 GET /api/v1/lookbooks
 - List lookbooks
 - Response: 200 OK
   - lookbooks: List<lookbook_object>
 ```
 
-```
+```text
 PUT /api/v1/lookbooks/{id}
 - Update lookbook
 - Request: JSON
@@ -645,7 +645,7 @@ PUT /api/v1/lookbooks/{id}
   - lookbook: updated_lookbook
 ```
 
-```
+```text
 POST /api/v1/lookbooks/{id}/export
 - Export lookbook
 - Request: JSON
@@ -664,7 +664,7 @@ POST /api/v1/lookbooks/{id}/export
       }
 ```
 
-```
+```text
 GET /api/v1/lookbooks/{id}/export/{export_id}
 - Check export status
 - Response: 200 OK

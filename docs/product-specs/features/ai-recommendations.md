@@ -47,7 +47,7 @@ AI-Powered Recommendations use machine learning to provide personalized style ad
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/recommendations/match
 - Get matching items for selected items
 - Request: JSON
@@ -64,7 +64,7 @@ POST /api/v1/recommendations/match
   - complete_looks: List<outfit_suggestion>
 ```
 
-```
+```text
 POST /api/v1/recommendations/complete-look
 - Get complete outfit suggestions
 - Request: JSON
@@ -135,7 +135,7 @@ POST /api/v1/recommendations/complete-look
 
 **API Endpoints:**
 
-```
+```text
 GET /api/v1/recommendations/wardrobe-gaps
 - Analyze wardrobe for gaps
 - Response: 200 OK
@@ -157,7 +157,7 @@ GET /api/v1/recommendations/wardrobe-gaps
       }
 ```
 
-```
+```text
 GET /api/v1/recommendations/gap-fillers/{category_id}
 - Get items to fill specific gap
 - Response: 200 OK
@@ -226,7 +226,7 @@ GET /api/v1/recommendations/gap-fillers/{category_id}
 
 **API Endpoints:**
 
-```
+```text
 GET /api/v1/recommendations/trends
 - Get current fashion trends
 - Query Parameters:
@@ -246,7 +246,7 @@ GET /api/v1/recommendations/trends
       }
 ```
 
-```
+```text
 GET /api/v1/recommendations/wardrobe-trend-alignment
 - Compare wardrobe to trends
 - Response: 200 OK
@@ -266,7 +266,7 @@ GET /api/v1/recommendations/wardrobe-trend-alignment
       }
 ```
 
-```
+```text
 GET /api/v1/recommendations/trend-suggestions
 - Get on-trend items to add
 - Response: 200 OK
@@ -327,7 +327,7 @@ GET /api/v1/recommendations/trend-suggestions
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/recommendations/colors
 - Get color-matching suggestions
 - Request: JSON
@@ -352,7 +352,7 @@ POST /api/v1/recommendations/colors
       }
 ```
 
-```
+```text
 GET /api/v1/recommendations/colors/palette/{outfit_id}
 - Get color palette for outfit
 - Response: 200 OK
@@ -430,7 +430,7 @@ Track user interactions:
 
 **API Endpoints:**
 
-```
+```text
 GET /api/v1/recommendations/personalized
 - Get personalized recommendations
 - Query Parameters:
@@ -450,7 +450,7 @@ GET /api/v1/recommendations/personalized
       }
 ```
 
-```
+```text
 POST /api/v1/recommendations/feedback
 - Submit feedback on recommendation
 - Request: JSON
@@ -461,7 +461,7 @@ POST /api/v1/recommendations/feedback
   - acknowledged: boolean
 ```
 
-```
+```text
 GET /api/v1/users/preferences
 - View user preference profile
 - Response: 200 OK
@@ -475,7 +475,7 @@ GET /api/v1/users/preferences
       }
 ```
 
-```
+```text
 PUT /api/v1/users/preferences
 - Update user preference profile
 - Request: JSON

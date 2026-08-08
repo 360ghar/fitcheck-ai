@@ -70,7 +70,7 @@ that lacked it (users, subscriptions, IAP, quotas, promo, feedback). Campaigns
 | 2026-08-07 | Migration 041 + revenue/trends endpoints + models; backend tests green. |
 | 2026-08-07 | Revenue strip on dashboard; trends page + charts; nav + i18n. |
 | 2026-08-07 | useCsvExport wired into 6 list pages; export tests incl. new promo/feedback handlers + page tests. |
-| 2026-08-07 | Full verification (pytest 1306/4, vitest 194, lint, typecheck, build, check:schema, db-schema regen). |
+| 2026-08-07 | Full verification (pytest 1306/4, vitest 28 files / 215 tests, lint, typecheck, build, check:schema, db-schema regen). |
 
 ## Decision log
 
@@ -99,6 +99,7 @@ python scripts/generate_db_schema_doc.py && python scripts/check_docs_structure.
 ## Deferred debt
 
 - Playwright e2e for the admin console (incl. revenue strip + trends page)
-  remains pending from the admin-panel plan.
+  is wired into CI (`.github/workflows/admin-ci.yml`, 6 files / 8 journeys);
+  token-refresh end-to-end verification remains pending.
 - Revenue estimate could be made exact later by capturing provider prices
   (e.g. subscription `amount` fields) — tracked as an estimate for now.

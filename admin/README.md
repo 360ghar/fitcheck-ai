@@ -10,9 +10,10 @@ Supabase-backed auth as the other clients. All authorization is
 > library, server-driven data tables, OpenAPI codegen contract, and all
 > feature modules (users, dashboard + revenue/trends, subscriptions + IAP,
 > quotas, content, promo, feedback, ops/storage, audit, search, settings)
-> are in place, with 28 Vitest files / 215 tests. Playwright e2e specs have
-> landed (6 files / 8 critical journeys, `npm run e2e`) but are not yet
-> wired into CI; token-refresh end-to-end verification is still pending
+> are in place, with 28 Vitest files / 215 tests. Playwright e2e specs
+> (6 files / 8 critical journeys) are wired into CI via
+> `.github/workflows/admin-ci.yml` (runs on PRs touching `admin/**` and on
+> pushes to main); token-refresh end-to-end verification is still pending
 > (see "Known advisories / limitations").
 
 ## Quickstart
@@ -211,7 +212,7 @@ src/
 | Unit / integration | Vitest + RTL + MSW | 28 files / 215 tests passing; tests never hit the real network |
 | A11y | vitest-axe | wired into unit tests (axe on shared components + pages) |
 | Contract | `npm run check:schema` | wired (CI drift check) |
-| E2E | Playwright (Chromium) | specs landed — 6 files / 8 critical journeys (`npm run e2e`); not wired into CI; verification pending |
+| E2E | Playwright (Chromium) | 6 files / 8 critical journeys (`npm run e2e`); wired into CI (`.github/workflows/admin-ci.yml`); token-refresh journey still pending (see advisories) |
 
 `src/test/utils.tsx` renders with all providers (Query, Theme, Router,
 Toaster); MSW handlers live in `src/test/msw/handlers/` and fixtures mirror

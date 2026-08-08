@@ -17,11 +17,11 @@
 
 ASC splits metadata across two places:
 - **App Information** (app-level, shared across versions): Name, Subtitle, Category, Privacy Policy URL.
-- **Version Information** (per-version, e.g. 1.0): Promotional Text, Description, Keywords, Support URL, Marketing URL, What's New, Copyright.
+- **Version Information** (per-version, e.g. 1.0.4): Promotional Text, Description, Keywords, Support URL, Marketing URL, What's New, Copyright.
 
 ### App Name — `≤ 30 chars`
 
-```
+```text
 FitCheck AI: Wardrobe Stylist
 ```
 (29 chars. Aligns with the Play title "FitCheck AI: Wardrobe & Outfits" but trades "& Outfits" for
@@ -37,7 +37,7 @@ FitCheck AI: Wardrobe Stylist
 
 ### Subtitle — `≤ 30 chars`
 
-```
+```text
 AI Closet, Try-On & Outfits
 ```
 (27 chars. Apple indexes the subtitle for search, so it carries keywords, not just a tagline.)
@@ -46,7 +46,7 @@ AI Closet, Try-On & Outfits
 
 > Editable any time without a new app review — use it for launch/seasonal messaging.
 
-```
+```text
 New: AI Photoshoot Generator — turn selfies into studio-quality headshots for LinkedIn, dating apps & Instagram. Plus virtual try-on and smart daily outfit picks.
 ```
 (162 chars.)
@@ -56,7 +56,7 @@ New: AI Photoshoot Generator — turn selfies into studio-quality headshots for 
 > Adapted from `docs/store/play-store-aso.md` "Full Description". Apple does NOT index the description for
 > search (unlike Google Play), so it is written for human conversion, not keyword stuffing.
 
-```
+```text
 FitCheck AI is your AI-powered virtual closet and personal stylist. Digitize your wardrobe, plan outfits, visualize new looks, and generate professional photos — all powered by cutting-edge artificial intelligence.
 
 AI WARDROBE EXTRACTION
@@ -116,14 +116,14 @@ Download FitCheck AI and transform how you get dressed.
 > so omit them after commas. Do NOT repeat words already in the App Name ("fitcheck", "ai",
 > "wardrobe", "stylist") or in the category name ("lifestyle") — Apple already indexes those.
 
-```
+```text
 closet,outfit,fashion,try-on,clothing,style,planner,organizer,virtual,photoshoot,headshot,capsule
 ```
 (97 chars including commas. No spaces. No duplication of name/category terms.)
 
 ### What's New (Release Notes for v1.0.4) — `≤ 4000 chars`
 
-```
+```text
 Welcome to FitCheck AI 1.0.4!
 
 - Unlock Plus or Pro with in-app purchase — monthly or yearly, right in the app
@@ -152,7 +152,7 @@ Thanks for using FitCheck AI — tell us what you'd like to see next!
 
 ### Copyright
 
-```
+```text
 © 2026 FitCheck AI
 ```
 (Replace "FitCheck AI" with the legal entity name on the Apple Developer account if it differs,
@@ -286,7 +286,7 @@ region. Confirm the computed rating in ASC after submitting answers.
 > ASC fields to fill in this section: a demo **Sign-In account** (username/password), a contact
 > first/last name, phone, and email, plus the free-form **Notes** below.
 
-```
+```text
 APP OVERVIEW
 FitCheck AI is an AI-powered wardrobe and personal-styling app. Core AI features (clothing
 extraction from photos, virtual try-on, AI photoshoot, and outfit recommendations) require
@@ -429,14 +429,14 @@ submitted. Most are not code and cannot be done by an agent.
       agreement is not needed for free, but the free-apps agreement must be active and contact/tax
       identity confirmed).
 - [ ] App Information filled: Name, Subtitle, Categories (Lifestyle / Photo & Video), Privacy Policy URL.
-- [ ] Version 1.0 metadata filled (Promotional Text, Description, Keywords, What's New, URLs, Copyright).
+- [ ] Version 1.0.4 metadata filled (Promotional Text, Description, Keywords, What's New, URLs, Copyright).
 - [ ] **App Privacy** questionnaire submitted per §2 (nothing as tracking; no ATT prompt).
 - [ ] **Age Rating** questionnaire submitted per §3 (UGC = Yes, AI = Yes; expect ~13+).
 - [ ] **App Review Information** filled with the seeded demo account (§4/§5) and contact details.
 - [ ] **Marketing icon** = `flutter/assets/icons/app_icon.png` (1024×1024, RGB, no alpha) uploaded.
 - [ ] **Screenshots** uploaded for iPhone 6.9" (1320×2868) and iPad 13" (2064×2752) — see
       `docs/store/app-store-screenshots.md`.
-- [ ] A signed build uploaded via Xcode/Transporter and selected for the 1.0 version.
+- [ ] A signed build uploaded via Xcode/Transporter and selected for the 1.0.4 version.
 - [ ] **Export Compliance** answered (standard HTTPS only → typically "uses exempt encryption").
 
 ### Live web pages (must resolve before submission)

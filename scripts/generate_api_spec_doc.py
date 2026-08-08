@@ -116,9 +116,10 @@ STATUS_NOTES = {
     415: "Unsupported Media Type — `UNSUPPORTED_MEDIA_TYPE`.",
     422: "Validation Error — `VALIDATION_ERROR` with `details.errors[]`.",
     429: "Too Many Requests — `RATE_LIMIT_EXCEEDED` (AI daily quota / IP rate limit).",
-    500: "Internal Server Error — `INTERNAL_ERROR` / `DATABASE_ERROR` / `AI_SERVICE_ERROR`.",
+    500: "Internal Server Error — `INTERNAL_ERROR` / `DATABASE_ERROR`.",
+    501: "Not Implemented — e.g. the Stripe webhook endpoint when webhooks are not configured (`HTTPException(501)`).",
     502: "Bad Gateway — e.g. `SOCIAL_IMPORT_OAUTH_EXCHANGE_ERROR`.",
-    503: "Service Unavailable — `SERVICE_UNAVAILABLE` / `SCHEMA_NOT_INITIALIZED` / `BILLING_NOT_CONFIGURED`.",
+    503: "Service Unavailable — `AI_SERVICE_ERROR` / `SERVICE_UNAVAILABLE` / `SCHEMA_NOT_INITIALIZED` / `BILLING_NOT_CONFIGURED`.",
 }
 
 # Common FitCheckException codes for the Response Format section (the full
@@ -151,6 +152,7 @@ MAX_TABLE_PROPERTIES = 12  # inline a response model table when at most this man
 
 
 def load_openapi() -> dict:
+    """Load the live OpenAPI document from the FastAPI app via TestClient."""
     client = TestClient(app)
     response = client.get("/api/v1/openapi.json")
     if response.status_code != 200:
@@ -181,6 +183,7 @@ def deref(schema: dict, components: dict) -> dict:
 
 
 def ref_name(schema: dict) -> str | None:
+    """Return the referenced schema name for a $ref, or None."""
     if isinstance(schema, dict) and "$ref" in schema:
         return schema["$ref"].rsplit("/", 1)[-1]
     return None
@@ -274,6 +277,7 @@ def schema_table(schema, components: dict) -> list[str]:
 
 
 def schema_description(schema, components: dict) -> str:
+    """Return a flattened schema description (empty when none is declared)."""
     resolved = deref(schema, components)
     if isinstance(resolved, dict):
         return clean_desc(resolved.get("description", ""), limit=400)
@@ -281,6 +285,7 @@ def schema_description(schema, components: dict) -> str:
 
 
 def group_for(path: str) -> str:
+    """Map an API path to its section heading (first matching prefix rule)."""
     for prefix, heading in GROUPS:
         if path.startswith(prefix):
             return heading
@@ -288,6 +293,7 @@ def group_for(path: str) -> str:
 
 
 def auth_line(op: dict) -> str:
+    """One-line auth requirement note for an OpenAPI operation."""
     security = op.get("security")
     if not security:  # None or []
         return "**Auth:** none (public endpoint)"
@@ -304,6 +310,7 @@ def is_generic_payload(schema: dict) -> bool:
 
 
 def render_endpoint(method: str, path: str, op: dict, components: dict) -> list[str]:
+    """Render the full markdown section (params, body, responses) for one operation."""
     lines: list[str] = []
     heading = f"### {method.upper()} {path}"
     lines.append(heading)
@@ -422,13 +429,14 @@ def render_success(method: str, path: str, code: str, resp: dict, components: di
 
 
 def render_public_endpoints(spec: dict) -> list[str]:
+    """Render the Authentication section and the public (no-auth) endpoint list."""
     lines = ["## Authentication", ""]
     lines.append(
         "All endpoints except the public set below require a JWT bearer token in the "
         "`Authorization` header:"
     )
     lines.append("")
-    lines.append("```")
+    lines.append("```text")
     lines.append("Authorization: Bearer <jwt_token>")
     lines.append("```")
     lines.append("")
@@ -452,6 +460,7 @@ def render_public_endpoints(spec: dict) -> list[str]:
 
 
 def render_status_codes(spec: dict) -> list[str]:
+    """Render the Status Codes table (declared responses + handler-emitted codes)."""
     codes: set[int] = set()
     for path in spec["paths"]:
         for op in spec["paths"][path].values():
@@ -479,6 +488,7 @@ def render_status_codes(spec: dict) -> list[str]:
 
 
 def render_models(spec: dict) -> list[str]:
+    """Render the Models section (every OpenAPI component schema, sorted by name)."""
     schemas = spec.get("components", {}).get("schemas", {})
     lines = ["## Models", ""]
     lines.append(
@@ -503,6 +513,7 @@ def render_models(spec: dict) -> list[str]:
 
 
 def render_doc(spec: dict) -> list[str]:
+    """Assemble the full generated markdown document from the OpenAPI spec."""
     components = spec.get("components", {}).get("schemas", {})
     paths = spec["paths"]
 
@@ -591,7 +602,7 @@ def render_doc(spec: dict) -> list[str]:
     lines.append("")
     lines.append("## Base URL")
     lines.append("")
-    lines.append("```")
+    lines.append("```text")
     lines.append("Development: http://localhost:8000/api/v1")
     lines.append("Production:  https://api.fitcheckaiapp.com/api/v1")
     lines.append("```")
@@ -626,6 +637,7 @@ def render_doc(spec: dict) -> list[str]:
 
 
 def render_response_format(spec: dict) -> list[str]:
+    """Render the Response Format section (envelope shapes + handler mapping)."""
     lines = ["## Response Format", ""]
     lines.append("### Success Response")
     lines.append("")
@@ -686,6 +698,7 @@ def render_response_format(spec: dict) -> list[str]:
 
 
 def main() -> int:
+    """Generate the API reference markdown; default output is docs/references/api-spec.md."""
     out_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_OUTPUT
     spec = load_openapi()
     lines = render_doc(spec)

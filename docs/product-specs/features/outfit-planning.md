@@ -59,7 +59,7 @@ Outfit Planning & Organization features help users plan their wardrobe usage in 
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/calendar/connect
 - Connect calendar provider
 - Request: JSON
@@ -74,20 +74,20 @@ POST /api/v1/calendar/connect
     }
 ```
 
-```
+```text
 GET /api/v1/calendar/connections
 - List connected calendars
 - Response: 200 OK
   - calendars: List<calendar_connection>
 ```
 
-```
+```text
 DELETE /api/v1/calendar/connections/{id}
 - Disconnect calendar
 - Response: 204 No Content
 ```
 
-```
+```text
 GET /api/v1/calendar/events
 - Fetch calendar events
 - Query Parameters:
@@ -106,7 +106,7 @@ GET /api/v1/calendar/events
     - outfit_id?: string
 ```
 
-```
+```text
 POST /api/v1/calendar/events/{event_id}/outfit
 - Assign outfit to event
 - Request: JSON
@@ -115,7 +115,7 @@ POST /api/v1/calendar/events/{event_id}/outfit
   - event: updated_event_object
 ```
 
-```
+```text
 DELETE /api/v1/calendar/events/{event_id}/outfit
 - Remove outfit assignment
 - Response: 200 OK
@@ -189,7 +189,7 @@ DELETE /api/v1/calendar/events/{event_id}/outfit
 
 **API Endpoints:**
 
-```
+```text
 GET /api/v1/weather
 - Get current weather
 - Query Parameters:
@@ -205,7 +205,7 @@ GET /api/v1/weather
     }
 ```
 
-```
+```text
 GET /api/v1/weather/forecast
 - Get weather forecast
 - Query Parameters:
@@ -219,7 +219,7 @@ GET /api/v1/weather/forecast
     - precipitation_chance: number (0-100)
 ```
 
-```
+```text
 GET /api/v1/outfits/suggestions/weather
 - Get weather-based outfit suggestions
 - Query Parameters:
@@ -301,7 +301,7 @@ GET /api/v1/outfits/suggestions/weather
 
 **API Endpoints:**
 
-```
+```text
 GET /api/v1/occasions
 - List available occasions
 - Response: 200 OK
@@ -313,7 +313,7 @@ GET /api/v1/occasions
     - is_custom: boolean
 ```
 
-```
+```text
 POST /api/v1/occasions
 - Create custom occasion
 - Request: JSON
@@ -324,7 +324,7 @@ POST /api/v1/occasions
   - occasion: occasion_object
 ```
 
-```
+```text
 GET /api/v1/outfits/suggestions/occasion/{occasion_id}
 - Get occasion-based suggestions
 - Response: 200 OK
@@ -393,7 +393,7 @@ GET /api/v1/outfits/suggestions/occasion/{occasion_id}
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/trips
 - Create trip
 - Request: JSON
@@ -416,7 +416,7 @@ POST /api/v1/trips
       }
 ```
 
-```
+```text
 POST /api/v1/trips/{trip_id}/generate-capsule
 - Generate capsule wardrobe for trip
 - Response: 200 OK
@@ -427,7 +427,7 @@ POST /api/v1/trips/{trip_id}/generate-capsule
       }
 ```
 
-```
+```text
 GET /api/v1/trips/{trip_id}/packing-list
 - Get packing checklist
 - Response: 200 OK
@@ -443,7 +443,7 @@ GET /api/v1/trips/{trip_id}/packing-list
       }
 ```
 
-```
+```text
 PUT /api/v1/trips/{trip_id}/packing-list/{item_id}
 - Update packing status
 - Request: JSON
@@ -502,7 +502,7 @@ PUT /api/v1/trips/{trip_id}/packing-list/{item_id}
 
 **API Endpoints:**
 
-```
+```text
 POST /api/v1/outfits/{outfit_id}/log-wearing
 - Log when outfit is worn
 - Request: JSON
@@ -519,7 +519,7 @@ POST /api/v1/outfits/{outfit_id}/log-wearing
       }
 ```
 
-```
+```text
 GET /api/v1/outfits/{outfit_id}/repetition-status
 - Check if outfit can be worn with group
 - Query Parameters:
@@ -533,7 +533,7 @@ GET /api/v1/outfits/{outfit_id}/repetition-status
       }
 ```
 
-```
+```text
 GET /api/v1/groups
 - List user's "worn with" groups
 - Response: 200 OK
@@ -543,7 +543,7 @@ GET /api/v1/groups
     - members: List<string>
   ```
 
-```
+```text
 POST /api/v1/groups
 - Create "worn with" group
 - Request: JSON
