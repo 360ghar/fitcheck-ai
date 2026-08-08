@@ -349,6 +349,17 @@ class SubscriptionPage extends GetView<SubscriptionController> {
           ),
         ),
         const SizedBox(height: 16),
+        // The store rail is not serving products yet (App Store Connect /
+        // Play setup incomplete — the definitive zero-products state): say so
+        // above the cards instead of letting every Upgrade tap fail with a
+        // snackbar. Retry self-heals without an app restart once the store is
+        // ready.
+        if (!kIsWeb &&
+            controller.storeStatus.value != StoreStatus.ready &&
+            controller.storeStatus.value != StoreStatus.unknown) ...[
+          _buildStoreUnavailableBanner(context, theme),
+          const SizedBox(height: 16),
+        ],
         // Plus is the recommended entry point, so it renders first.
         if (!onPlus) ...[
           _buildTierRow(
@@ -387,6 +398,40 @@ class SubscriptionPage extends GetView<SubscriptionController> {
           ),
         ],
       ],
+    );
+  }
+
+  /// Banner shown above the plan cards when the store rail cannot serve the
+  /// plans ([StoreStatus.unavailable] / [StoreStatus.notConfigured]).
+  ///
+  /// Without it, a store that cannot resolve the products (App Store Connect
+  /// / Play setup incomplete) renders a paywall whose every Upgrade tap fails
+  /// with a snackbar — the "dead CTA" this page was built to eliminate.
+  Widget _buildStoreUnavailableBanner(BuildContext context, ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.amber.withAlpha(26),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.storefront, color: Colors.amber, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Upgrades aren\'t available in the store yet. Check back soon.',
+              style: TextStyle(color: Colors.amber.shade800, fontSize: 13),
+            ),
+          ),
+          TextButton(
+            onPressed: controller.isCheckingOut.value
+                ? null
+                : controller.retryStoreProducts,
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
     );
   }
 

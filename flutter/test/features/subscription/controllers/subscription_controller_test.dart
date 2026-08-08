@@ -413,10 +413,11 @@ void main() {
       await pumpApp(tester);
       // The plugin's storekit_no_response: StoreKit resolved zero products
       // for the requested ID. Regression: the message used to interpolate
-      // the raw APError(...) dump into the "Purchase failed" snackbar.
+      // the raw APError(...) dump into the "Purchase failed" snackbar, and
+      // the wording used to promise "try again in a moment" for a state that
+      // only clears on the App Store Connect side.
       iapService.fetchError = IapException(
-        message: 'The store couldn\'t be reached for this plan right now. '
-            'Please try again in a moment.',
+        message: kPlanNotAvailableInStoreMessage,
         errorCode: 'storekit_no_response',
         details: 'IAPError(code: storekit_no_response, source: app_store, '
             'message: StoreKit: Failed to get response from platform., '
@@ -433,7 +434,7 @@ void main() {
       // No raw platform dump may reach the user.
       expect(controller.error.value, isNot(contains('APError')));
       expect(controller.error.value, isNot(contains('StoreKit')));
-      expect(controller.error.value, contains('try again'));
+      expect(controller.error.value, contains('not available in the store yet'));
       expect(Get.isSnackbarOpen, isTrue);
       await settle(tester);
       controller.onClose();
@@ -716,6 +717,68 @@ void main() {
       await settle(tester);
     });
 
+    testWidgets('paywall shows a store-unavailable banner whose Retry self-heals', (
+      tester,
+    ) async {
+      // The store answers with zero products (e.g. App Store Connect not
+      // serving them yet): the paywall must say so above the cards instead of
+      // presenting dead Upgrade buttons, and Retry must recover once the
+      // store starts serving products — without an app restart.
+      iapService.productsToReturn = const [];
+      repository.plansResponse = PlansResponse(
+        storeProducts: _storeProducts(),
+      );
+      final controller = SubscriptionController(
+        iapService: iapService,
+        repository: repository,
+      );
+      Get.put(controller);
+      await tester.pumpWidget(const GetMaterialApp(home: SubscriptionPage()));
+      await tester.pumpAndSettle();
+
+      expect(controller.storeStatus.value, StoreStatus.unavailable);
+      final banner = find.textContaining('aren\'t available in the store yet');
+      await tester.scrollUntilVisible(
+        banner,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(banner, findsOneWidget);
+
+      // Retry: the store now resolves the product; the banner disappears and
+      // prices (and the Upgrade flow) come back. Target the banner's
+      // TextButton explicitly — the load-error card also uses a "Retry"
+      // label (on an OutlinedButton, which would not match).
+      iapService.productsToReturn = [_product('plus_monthly')];
+      await tester.tap(find.widgetWithText(TextButton, 'Retry'));
+      await tester.pumpAndSettle();
+
+      expect(controller.storeStatus.value, StoreStatus.ready);
+      expect(find.textContaining('aren\'t available in the store yet'), findsNothing);
+      await settle(tester);
+    });
+
+    testWidgets('no store banner when the store is ready', (tester) async {
+      iapService.productsToReturn = [_product('plus_monthly')];
+      repository.plansResponse = PlansResponse(
+        storeProducts: _storeProducts(),
+      );
+      final controller = SubscriptionController(
+        iapService: iapService,
+        repository: repository,
+      );
+      Get.put(controller);
+      await tester.pumpWidget(const GetMaterialApp(home: SubscriptionPage()));
+      await tester.pumpAndSettle();
+
+      expect(controller.storeStatus.value, StoreStatus.ready);
+      expect(
+        find.textContaining('aren\'t available in the store yet'),
+        findsNothing,
+      );
+      await settle(tester);
+    });
+
     testWidgets('Restore Purchases renders for a Pro subscriber with no upgrade section', (
       tester,
     ) async {
@@ -901,6 +964,142 @@ void main() {
       await controller.refreshStoreProducts();
 
       expect(controller.missingStoreProductIds, isEmpty);
+      await settle(tester);
+      controller.onClose();
+    });
+
+    testWidgets('store status is notConfigured when the backend publishes no IDs', (
+      tester,
+    ) async {
+      // The default PlansResponse has an all-null store map (fail-closed):
+      // nothing is queried and the rail is marked not configured.
+      await pumpApp(tester);
+      final controller = buildController();
+
+      await controller.refreshStoreProducts();
+
+      expect(controller.storeStatus.value, StoreStatus.notConfigured);
+      expect(iapService.fetchProductsCalls, 0);
+      await settle(tester);
+      controller.onClose();
+    });
+
+    testWidgets('store status is ready when products resolve', (tester) async {
+      await pumpApp(tester);
+      iapService.productsToReturn = [_product('plus_monthly')];
+      final controller = buildController();
+      controller.storeProducts.value = _storeProducts();
+
+      await controller.refreshStoreProducts();
+
+      expect(controller.storeStatus.value, StoreStatus.ready);
+      await settle(tester);
+      controller.onClose();
+    });
+
+    testWidgets('store status is unavailable when the store answers with zero products', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      iapService.productsToReturn = const [];
+      final controller = buildController();
+      controller.storeProducts.value = _storeProducts();
+
+      await controller.refreshStoreProducts();
+
+      expect(controller.storeStatus.value, StoreStatus.unavailable);
+      expect(controller.missingStoreProductIds, ['plus_monthly']);
+      await settle(tester);
+      controller.onClose();
+    });
+
+    testWidgets('store status is unavailable when the store query fails', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      iapService.fetchError = IapException(
+        message: kPlanNotAvailableInStoreMessage,
+        errorCode: 'storekit_no_response',
+      );
+      final controller = buildController();
+      controller.storeProducts.value = _storeProducts();
+
+      await controller.refreshStoreProducts();
+
+      expect(controller.storeStatus.value, StoreStatus.unavailable);
+      await settle(tester);
+      controller.onClose();
+    });
+
+    testWidgets('a transient store error keeps the status unknown', (
+      tester,
+    ) async {
+      // Only the definitive zero-products failure (storekit_no_response)
+      // marks the rail unavailable. A transient network / store-server error
+      // must NOT raise the "not available in the store yet" banner: the
+      // checkout path re-queries with its own retries and gets the accurate
+      // "couldn't be reached" message.
+      await pumpApp(tester);
+      iapService.fetchError = IapException(
+        message: 'The store couldn\'t be reached for this plan right now. '
+            'Please try again in a moment.',
+        errorCode: 'storekit2_products_error',
+      );
+      final controller = buildController();
+      controller.storeProducts.value = _storeProducts();
+
+      await controller.refreshStoreProducts();
+
+      expect(controller.storeStatus.value, StoreStatus.unknown);
+      await settle(tester);
+      controller.onClose();
+    });
+
+    testWidgets('a transient retry does not clear an already-unavailable store', (
+      tester,
+    ) async {
+      // Page load: definitive zero-products failure -> unavailable. A later
+      // Retry hitting a transient store error must not clear the banner —
+      // the underlying state (products not served) has not changed.
+      await pumpApp(tester);
+      iapService.productsToReturn = const [];
+      final controller = buildController();
+      controller.storeProducts.value = _storeProducts();
+      await controller.refreshStoreProducts();
+      expect(controller.storeStatus.value, StoreStatus.unavailable);
+
+      iapService.fetchError = IapException(
+        message: 'The store couldn\'t be reached for this plan right now. '
+            'Please try again in a moment.',
+        errorCode: 'storekit2_products_error',
+      );
+      await controller.refreshStoreProducts();
+
+      expect(controller.storeStatus.value, StoreStatus.unavailable);
+      await settle(tester);
+      controller.onClose();
+    });
+
+    testWidgets('checkout fails fast when the store already failed this session', (
+      tester,
+    ) async {
+      // The page-load store query failed; re-querying at the tap can only
+      // repeat the same failure after its retry delay. The tap must report
+      // the accurate message immediately without touching the store again.
+      await pumpApp(tester);
+      iapService.productsToReturn = const [];
+      final controller = buildController();
+      controller.storeProducts.value = _storeProducts();
+      await controller.refreshStoreProducts();
+      expect(controller.storeStatus.value, StoreStatus.unavailable);
+      final callsBefore = iapService.fetchProductsCalls;
+
+      await controller.startCheckout('plus_monthly');
+
+      expect(iapService.fetchProductsCalls, callsBefore);
+      expect(iapService.startPurchaseCalls, 0);
+      expect(controller.error.value, contains('not available in the store yet'));
+      expect(Get.isSnackbarOpen, isTrue);
       await settle(tester);
       controller.onClose();
     });

@@ -6,6 +6,18 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../../core/exceptions/app_exceptions.dart';
 
+/// User-visible message when the store rail is not serving the plan's
+/// products: the store answered and resolved zero of the queried IDs (e.g.
+/// the products are not created yet in App Store Connect / Play Console, are
+/// still under review, or the Paid Applications agreement is unsigned).
+///
+/// Shared by [IapService.fetchProducts] (StoreKit surfaces this exact state
+/// as `storekit_no_response`) and the controller's fail-fast checkout so the
+/// user always sees one consistent sentence. Deliberately not "try again in a
+/// moment": this state persists until the store side is fixed.
+const String kPlanNotAvailableInStoreMessage =
+    'This plan is not available in the store yet. Please check back soon.';
+
 /// Result of a store product lookup.
 ///
 /// [notFoundIds] exists because the store reports an unknown product as a
@@ -58,9 +70,13 @@ class IapService {
   /// throwing [IapException]. A genuinely-missing product resolves to an
   /// *empty* list with `response.error == null` (never an error), so retrying
   /// on the error path can never mask a real "not found" — only transient
-  /// failures are retried. The most common one is the plugin's
-  /// `storekit_no_response` ("StoreKit: Failed to get response from platform"),
-  /// which surfaces on cold start / sandbox sync before the store is warm.
+  /// failures are retried. The plugin's StoreKit 2 wrapper throws
+  /// `storekit_no_response` when `Product.products(for:)` returns a
+  /// *successful empty result* — the store was reached and resolved zero of
+  /// the queried IDs (App Store Connect / Play setup incomplete). That state
+  /// is not transient, so it maps to [kPlanNotAvailableInStoreMessage]
+  /// instead of the retry message; genuine store errors (thrown
+  /// `Product.products(for:)`, cloud-service/network codes) keep "try again".
   ///
   /// When the store still cannot resolve the products after the retries, a
   /// friendly [IapException] is thrown. The raw platform error plus the
@@ -80,9 +96,8 @@ class IapService {
     if (productIds.isEmpty || !await _purchase.isAvailable()) {
       return const IapProductQuery(products: [], notFoundIds: {});
     }
-    // StoreKit 2's Product.products(for:) can surface `storekit_no_response`
-    // on cold start / sandbox sync / the first call of a session before the
-    // store is warm. A single transient failure must not be terminal.
+    // A single transient failure (e.g. cold start before the store is warm)
+    // must not be terminal; the loop below re-queries up to maxRetries.
     for (var attempt = 0;; attempt++) {
       final response = await _purchase.queryProductDetails(productIds);
       if (response.error == null) {
@@ -93,10 +108,23 @@ class IapService {
         );
       }
       if (attempt >= maxRetries) {
+        final code = response.error!.code;
         throw IapException(
-          message: 'The store couldn\'t be reached for this plan right now. '
-              'Please try again in a moment.',
-          errorCode: response.error!.code,
+          // With StoreKit 2 (this app's path — the plugin defaults to it and
+          // the app never opts into StoreKit 1), `storekit_no_response` is
+          // NOT a network failure: the native side returned a *successful
+          // empty result* and the wrapper converts it to this code. The store
+          // was reached and said "zero of these products exist here" (App
+          // Store Connect setup incomplete). Retrying cannot fix that, so
+          // tell the truth instead of "try again in a moment". Genuine store
+          // errors (e.g. `storekit2_products_error` from a thrown
+          // `Product.products(for:)`, cloud-service/network codes) keep the
+          // retry-friendly message.
+          message: code == 'storekit_no_response'
+              ? kPlanNotAvailableInStoreMessage
+              : 'The store couldn\'t be reached for this plan right now. '
+                  'Please try again in a moment.',
+          errorCode: code,
           details: 'ids=${productIds.join(',')} | ${response.error.toString()}',
         );
       }

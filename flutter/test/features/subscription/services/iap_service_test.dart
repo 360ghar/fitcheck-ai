@@ -83,6 +83,12 @@ void main() {
         throwsA(
           isA<IapException>()
               .having((e) => e.errorCode, 'errorCode', 'storekit_no_response')
+              // StoreKit 2 surfaces a *successful empty result* as this code:
+              // the store WAS reached and resolved zero of the queried IDs
+              // (App Store Connect setup incomplete). The message must say
+              // "not available yet", never "try again in a moment" — that
+              // state persists until the store side is fixed.
+              .having((e) => e.message, 'message', contains('not available in the store yet'))
               // The user-visible message must never leak the raw platform
               // error dump.
               .having((e) => e.message, 'message', isNot(contains('APError')))
@@ -96,6 +102,34 @@ void main() {
       );
       // maxRetries: 1 -> one failure then the final failure (2 calls total).
       expect(platform.queryCalls, 2);
+    });
+
+    test('a genuine store error keeps the retry-friendly message', () async {
+      // Only `storekit_no_response` means "the store answered: zero products".
+      // Real store failures (a thrown Product.products(for:) surfaces as
+      // storekit2_products_error, cloud-service / network codes, ...) must
+      // keep the "couldn't be reached — try again" advice.
+      platform.response = ProductDetailsResponse(
+        productDetails: const [],
+        notFoundIDs: const [],
+        error: IAPError(
+          source: 'app_store',
+          code: 'storekit2_products_error',
+          message: 'The operation couldn\'t be completed.',
+        ),
+      );
+
+      final iap = IapService();
+      await expectLater(
+        iap.fetchProducts({'plus_monthly'}, maxRetries: 1),
+        throwsA(
+          isA<IapException>()
+              .having((e) => e.errorCode, 'errorCode', 'storekit2_products_error')
+              .having((e) => e.message, 'message', contains('couldn\'t be reached'))
+              .having((e) => e.message, 'message', contains('try again'))
+              .having((e) => e.message, 'message', isNot(contains('not available in the store yet'))),
+        ),
+      );
     });
 
     test('ErrorHandler.extractMessage surfaces only the friendly message', () async {
@@ -114,7 +148,7 @@ void main() {
         expect(visible, e.message);
         expect(visible, isNot(contains('APError')));
         expect(visible, isNot(contains('StoreKit')));
-        expect(visible, contains('try again'));
+        expect(visible, contains('not available in the store yet'));
       }
     });
 

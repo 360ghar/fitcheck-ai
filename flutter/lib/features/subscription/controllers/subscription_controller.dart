@@ -14,6 +14,22 @@ import '../repositories/subscription_repository.dart';
 import '../services/iap_service.dart';
 import '../../../core/utils/frame_safe.dart';
 
+/// Whether the store rail is serving products right now.
+///
+/// Drives the paywall banner and fail-fast checkout so a store that cannot
+/// resolve the plan products (App Store Connect / Play setup incomplete, or a
+/// transient failure) is never presented as ready with dead Upgrade buttons.
+enum StoreStatus {
+  /// No store query has completed yet (page still loading).
+  unknown,
+  /// The store resolved the plan's products (localized prices available).
+  ready,
+  /// The backend published no store product IDs for this rail.
+  notConfigured,
+  /// The store query failed, or the store answered with zero products.
+  unavailable,
+}
+
 /// Controller for subscription and referral state.
 ///
 /// Purchase routing (App Store Guideline 3.1.1 compliance):
@@ -56,6 +72,11 @@ class SubscriptionController extends GetxController {
   final Rx<ReferralStatsModel?> referralStats = Rx<ReferralStatsModel?>(null);
   final RxList<PlanDetailsModel> plans = <PlanDetailsModel>[].obs;
   final Rx<StoreProductsModel> storeProducts = Rx<StoreProductsModel>(StoreProductsModel());
+  /// Whether the store rail is currently serving products (see [StoreStatus]).
+  /// Set by [refreshStoreProducts]; the paywall banner and fail-fast checkout
+  /// read it so a store that cannot serve the plans is never presented as
+  /// ready.
+  final Rx<StoreStatus> storeStatus = Rx<StoreStatus>(StoreStatus.unknown);
   /// Store product details (localized prices) keyed by plan type
   /// (e.g. `plus_monthly`). `refreshStoreProducts` populates this on page
   /// load and `_startStorePurchase` reads it cache-first at checkout.
@@ -227,6 +248,14 @@ class SubscriptionController extends GetxController {
   }
 
   /// Query the store for product details (localized prices) of all variants.
+  ///
+  /// Also derives [storeStatus]: the single source of truth for whether the
+  /// store rail is ready. Only the definitive zero-products failure
+  /// (`storekit_no_response`, or a success with zero products) is
+  /// [StoreStatus.unavailable] — that state persists until the store side is
+  /// fixed, so the paywall says so instead of letting every Upgrade tap fail.
+  /// Other failures (transient network / store server errors) leave the
+  /// status [StoreStatus.unknown] so the checkout path can retry on its own.
   Future<void> refreshStoreProducts() async {
     if (!iapService.isStoreBillingAvailable) return;
     try {
@@ -248,7 +277,12 @@ class SubscriptionController extends GetxController {
           planTypeById[id] = planType;
         }
       }
-      if (ids.isEmpty) return;
+      if (ids.isEmpty) {
+        // The backend published no store product IDs: the rail is not wired
+        // up (fail-closed by design — see config_health.py's contract).
+        storeStatus.value = StoreStatus.notConfigured;
+        return;
+      }
       final query = await iapService.fetchProducts(ids);
       storeProductDetails
         ..clear()
@@ -256,6 +290,13 @@ class SubscriptionController extends GetxController {
           query.products.map((d) => MapEntry(planTypeById[d.id] ?? d.id, d)),
         );
       missingStoreProductIds.assignAll(query.notFoundIds);
+      // Zero products resolved: the store answered and does not serve this
+      // rail yet (products not created / still under review / agreements
+      // unsigned). That is persistent until the store side is fixed — never
+      // advertise upgrades as ready in this state.
+      storeStatus.value = query.products.isEmpty
+          ? StoreStatus.unavailable
+          : StoreStatus.ready;
       if (query.notFoundIds.isNotEmpty) {
         // The store answered successfully and did not recognize these IDs.
         // Silently ignoring it renders a paywall with no prices and no
@@ -272,8 +313,40 @@ class SubscriptionController extends GetxController {
       }
     } catch (e, stackTrace) {
       // Prices fall back to the /plans response; a failed store query must
-      // not block the page.
+      // not block the page. Only the definitive zero-products failure
+      // (`storekit_no_response` — the store answered and resolved none of
+      // the IDs) marks the rail unavailable, because that state persists
+      // until the store side is fixed: the banner shows and checkout fails
+      // fast with the accurate message. Any other failure (transient
+      // network / App Store server error) leaves the status unknown so a
+      // later Upgrade tap re-queries with its own retries and gets the
+      // accurate "couldn't be reached" message instead of a misleading
+      // "not available yet" banner. An already-unavailable rail stays
+      // unavailable across a transient retry — the underlying state
+      // (products not served) has not changed.
+      final wasDefinitivelyUnavailable =
+          storeStatus.value == StoreStatus.unavailable;
+      storeStatus.value =
+          (e is IapException && e.errorCode == 'storekit_no_response') ||
+                  wasDefinitivelyUnavailable
+              ? StoreStatus.unavailable
+              : StoreStatus.unknown;
       ErrorHandler.reportError(e, 'Store product query failed', stackTrace: stackTrace);
+    }
+  }
+
+  /// Re-query the store from the paywall banner.
+  ///
+  /// Self-heals without an app restart once the store starts serving the
+  /// products (e.g. the App Store Connect setup completes while the app stays
+  /// open): prices appear and Upgrade taps work again.
+  Future<void> retryStoreProducts() async {
+    await refreshStoreProducts();
+    if (storeStatus.value == StoreStatus.ready) {
+      ErrorHandler.showSuccess(
+        'Store prices are now available. You can upgrade.',
+        title: 'Store ready',
+      );
     }
   }
 
@@ -362,6 +435,15 @@ class SubscriptionController extends GetxController {
     );
     if (productId == null) {
       error.value = 'This plan is not available for purchase yet.';
+      ErrorHandler.showValidation(error.value, title: 'Purchase unavailable');
+      return;
+    }
+    if (storeStatus.value == StoreStatus.unavailable) {
+      // The page-load store query already failed (or the store answered with
+      // zero products) this session; re-querying here can only repeat the
+      // same failure after its retry delay. Fail fast with the accurate
+      // message — the paywall banner's Retry is the recovery path.
+      error.value = kPlanNotAvailableInStoreMessage;
       ErrorHandler.showValidation(error.value, title: 'Purchase unavailable');
       return;
     }
