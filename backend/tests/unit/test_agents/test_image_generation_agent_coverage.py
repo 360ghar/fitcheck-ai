@@ -51,6 +51,25 @@ def _item(name, category="tops", reference=None):
     return item
 
 
+def _matted_result() -> MatteResult:
+    """A successful matte outcome for the run_image_op stub.
+
+    _matte reads result.status/transparent_fraction/center_opacity/
+    content_type after run_image_op returns, so the stub must hand back a
+    real MatteResult (status=STATUS_MATTED keeps the flat-lay/variations
+    branch on the "cutout applied" path).
+    """
+    return MatteResult(
+        image_bytes=b"ZmFrZQ==",
+        content_type="image/png",
+        status=STATUS_MATTED,
+        transparent_fraction=0.0,
+        center_opacity=1.0,
+        width=4,
+        height=4,
+    )
+
+
 def _chat_prompt(agent) -> str:
     messages = agent.ai_service.chat.call_args.kwargs["messages"]
     assert len(messages) == 1
@@ -358,9 +377,15 @@ async def test_product_image_view_angles(view_angle, expected):
 @pytest.mark.asyncio
 async def test_generate_flat_lay_delegates_to_outfit():
     agent = _make_agent()
-    result = await agent.generate_flat_lay(
-        items=[_item("tee", "tops")], style="boho", background="white", lighting="warm"
-    )
+    # The flat-lay branch runs _matte -> run_image_op (the real executor);
+    # stub it so this stays a pure unit test.
+    with patch(
+        "app.agents.image_generation_agent.run_image_op",
+        new=AsyncMock(return_value=("ZmFrZQ==", _matted_result())),
+    ):
+        result = await agent.generate_flat_lay(
+            items=[_item("tee", "tops")], style="boho", background="white", lighting="warm"
+        )
     prompt = agent.ai_service.generate_image.call_args.args[0]
     assert "flat lay (top-down)" in prompt
     assert "boho" in prompt
@@ -382,7 +407,13 @@ async def test_generate_variations_default_styles_runs_all():
         "app.agents.image_generation_agent.parallel_with_retry",
         new=AsyncMock(side_effect=_fake_parallel),
     ):
-        results = await agent.generate_variations(items=[_item("tee", "tops")])
+        # Guard the real matte executor too: variations fan out to
+        # generate_outfit, which can reach _matte -> run_image_op.
+        with patch(
+            "app.agents.image_generation_agent.run_image_op",
+            new=AsyncMock(return_value=("ZmFrZQ==", _matted_result())),
+        ):
+            results = await agent.generate_variations(items=[_item("tee", "tops")])
 
     assert len(results) == 3
     assert all(result.image_base64 == "ZmFrZQ==" for result in results)

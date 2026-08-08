@@ -42,9 +42,10 @@ class UserBase(BaseModel):
         if isinstance(v, str):
             normalized = v.strip()
             return normalized or None
-        # Unreachable: the str field type-check rejects non-str before this
-        # passthrough runs; kept as a defensive guard.
-        return v  # pragma: no cover - str type-check rejects non-str first
+        # mode='before' runs prior to Pydantic's type check: non-string input
+        # (e.g. 5) lands here and is passed through for the Optional[str]
+        # field check to reject.
+        return v
 
 
 class UserCreate(BaseModel):
@@ -90,9 +91,10 @@ class UserUpdate(BaseModel):
         if isinstance(v, str):
             normalized = v.strip()
             return normalized or None
-        # Unreachable: the str field type-check rejects non-str before this
-        # passthrough runs; kept as a defensive guard.
-        return v  # pragma: no cover - str type-check rejects non-str first
+        # mode='before' runs prior to Pydantic's type check: non-string input
+        # (e.g. 5) lands here and is passed through for the Optional[str]
+        # field check to reject.
+        return v
 
 
 class UserResponse(UserBase):

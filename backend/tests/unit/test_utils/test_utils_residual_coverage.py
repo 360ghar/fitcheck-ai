@@ -5,8 +5,6 @@ app/utils/process_metrics.py, app/utils/background_removal.py, and
 app/utils/image_processing.py (full-suite coverage report).
 """
 
-import io
-
 import pytest
 from PIL import Image
 
@@ -212,6 +210,8 @@ def test_decode_and_validate_accepts_base64_data_url():
 def test_sniff_image_mime_pillow_format_fallback():
     from app.utils.image_processing import sniff_image_mime
 
-    buf = io.BytesIO()
-    Image.new("RGB", (4, 4), (10, 20, 30)).save(buf, format="PNG")
-    assert sniff_image_mime(buf.getvalue()) == "image/png"
+    # A PPM has no magic-byte signature in sniff_image_mime_from_magic, so
+    # sniffing genuinely falls through to Pillow's decoded format (a PNG would
+    # be caught by its magic bytes before ever reaching the PIL branch).
+    ppm = b"P6\n4 4\n255\n" + bytes(4 * 4 * 3)
+    assert sniff_image_mime(ppm) == "image/ppm"

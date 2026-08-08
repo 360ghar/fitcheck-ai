@@ -59,14 +59,25 @@ def test_correlation_id_extracted_from_bearer_for_log_context(client, db, caplog
     assert records_with_user, "middleware log context must include the token's sub"
 
 
-def test_bearer_token_without_sub_is_ignored(client):
+def test_bearer_token_without_sub_is_ignored(client, caplog):
     """A token that decodes (unverified) but carries no sub must not set a
     user_id in the log context."""
     from jose import jwt
 
+    from app.core.middleware import CorrelationIdLogFilter
+
     token = jwt.encode({"no_sub": True}, "unused-key", algorithm="HS256")
-    response = client.get("/health", headers={"Authorization": f"Bearer {token}"})
-    assert response.status_code == 200
+    # /health is in the middleware SKIP_PATHS (no request-log record at all);
+    # use a non-skipped path so the negative assertion actually observes logs.
+    caplog.handler.addFilter(CorrelationIdLogFilter())
+    with caplog.at_level(logging.INFO, logger="app.core.middleware"):
+        response = client.get("/api/v1/definitely-not-a-route", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 404
+    records_with_user = [
+        r for r in caplog.records if getattr(r, "user_id", None) is not None
+    ]
+    assert not records_with_user, "no log record may carry a user_id without a token sub"
 
 
 # ---------------------------------------------------------------------------

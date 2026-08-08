@@ -2,9 +2,10 @@
 ;
 ; The suite's contract (see docs/BACKEND.md → "Testing"):
 ;   `pytest` from backend/ runs everything AND enforces the coverage gate.
-; Line and branch coverage must both stay >= 90% (coverage.py reports the
-; combined total; the per-line and per-branch numbers are shown in the
-; term-missing report so a regression in either is immediately visible).
+; The fail_under=90 gate below applies to the COMBINED total only. Branch
+; coverage is surfaced per-line in the term-missing report, but it is not
+; separately gated — a branch regression can pass CI while branches sit
+; below 90% (the combined total is the enforceable floor).
 ;
 ; The gate is intentionally in fail_under here, not in pytest.ini addopts:
 ; `pytest --cov-fail-under=0` still works for a quick local iteration.

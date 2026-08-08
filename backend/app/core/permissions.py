@@ -17,10 +17,12 @@ Roles (from the 2026-08-06 admin panel spec, §4):
                     search
 
 Legacy fallback (kept for compatibility with the pre-RBAC admin gate in
-``blog.py``): a user whose ``is_admin`` column is True OR whose email ends
-with ``@fitcheckaiapp.com`` is treated as role ``admin`` unless they already
-carry an explicit admin role. This preserves today's behavior verbatim while
-letting the new ``role`` column take precedence.
+``blog.py``): a user whose ``is_admin`` column is True is treated as role
+``admin`` unless they already carry an explicit admin role. The previous
+email-domain bootstrap (any ``@fitcheckaiapp.com`` email treated as admin)
+was removed on 2026-08-08: registration is not domain-verified, so a
+self-registered address must not grant admin. Admin access now requires an
+explicit ``role`` (or the ``is_admin`` flag).
 """
 
 from __future__ import annotations
@@ -31,11 +33,6 @@ ADMIN_ROLES = frozenset({"super_admin", "admin", "ops", "support", "content_edit
 
 # The plain end-user role; the only non-admin role the system stores.
 USER_ROLE = "user"
-
-# Legacy bootstrap domain: any email ending with this domain is treated as
-# admin when no explicit admin role is set (keeps blog.py's verify_admin
-# semantics and the pre-admin-panel bootstrap path).
-ADMIN_EMAIL_DOMAIN = "@fitcheckaiapp.com"
 
 # Grant-all marker.
 _ALL_PERMISSION = "*"
@@ -81,16 +78,14 @@ def get_user_role(user: Dict[str, Any]) -> str:
     """Resolve a user dict to its effective role.
 
     Explicit admin roles win. Otherwise the legacy fallback applies: a True
-    ``is_admin`` flag or an ``@fitcheckaiapp.com`` email is treated as
-    ``admin``. Everything else is the plain ``user`` role.
+    ``is_admin`` flag is treated as ``admin`` (the email-domain bootstrap
+    was removed 2026-08-08 — self-registered addresses must not grant
+    admin). Everything else is the plain ``user`` role.
     """
     role = user.get("role")
     if role in ADMIN_ROLES:
         return role
     if user.get("is_admin") is True:
-        return "admin"
-    email = str(user.get("email") or "")
-    if email.endswith(ADMIN_EMAIL_DOMAIN):
         return "admin"
     return USER_ROLE
 

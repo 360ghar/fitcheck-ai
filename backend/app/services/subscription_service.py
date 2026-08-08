@@ -521,7 +521,9 @@ class SubscriptionService:
                 # owning store's.
                 downgrade_payload["google_purchase_token"] = None
                 downgrade_payload["google_order_id"] = None
-            elif provider == "google":  # pragma: no cover - provider validated apple/google at entry, so the elif can never be false
+            elif provider == "google":
+                # A replaced rail's identity (if any) is stale; keep only the
+                # owning store's.
                 downgrade_payload["apple_original_transaction_id"] = None
             downgrade_result = await asyncio.to_thread(
                 db.table("subscriptions")

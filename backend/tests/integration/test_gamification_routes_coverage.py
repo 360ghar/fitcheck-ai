@@ -190,8 +190,10 @@ async def test_get_leaderboard_builds_entries_and_rank_summary(monkeypatch):
     db = FakeDB(
         rows={
             "user_streaks": [
-                _streak_row(user_id=USER_ID, current_streak=9),
+                # Seeded out of order on purpose: the route must sort by
+                # current_streak DESC itself, not inherit fixture order.
                 _streak_row(user_id=OTHER_USER, current_streak=4),
+                _streak_row(user_id=USER_ID, current_streak=9),
             ],
             "users": [
                 {"id": USER_ID, "full_name": "Ada", "avatar_url": "https://cdn/a.png"},
@@ -208,6 +210,7 @@ async def test_get_leaderboard_builds_entries_and_rank_summary(monkeypatch):
 
     result = await get_leaderboard(user_id=USER_ID, db=db)
 
+    assert ("user_streaks", "current_streak", True, False) in db.orders
     entries = {e["user_id"]: e for e in result["data"]["entries"]}
     assert entries[USER_ID]["rank"] == 1
     assert entries[USER_ID]["username"] == "Ada"

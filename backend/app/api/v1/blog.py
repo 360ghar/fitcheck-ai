@@ -40,9 +40,8 @@ def verify_admin(user: Dict[str, Any]) -> None:
     Verify that the user has admin privileges.
 
     Thin wrapper over the shared RBAC gate (app.core.permissions.get_user_role):
-    an explicit admin ``role`` wins; otherwise the legacy check applies — the
-    ``is_admin`` flag OR an ``@fitcheckaiapp.com`` email grants admin, exactly
-    matching the pre-RBAC behavior of this function.
+    an explicit admin ``role`` wins; otherwise the legacy ``is_admin`` flag
+    grants admin (the email-domain bootstrap was removed 2026-08-08).
     """
     from app.core.permissions import ADMIN_ROLES, get_user_role
 

@@ -453,6 +453,36 @@ async def test_events_generator_replays_terminal_jobs(monkeypatch, status, expec
 
 
 @pytest.mark.asyncio
+async def test_events_generator_terminal_job_without_status_data(monkeypatch):
+    """A terminal job whose status payload is gone (e.g. evicted from the
+    in-memory store) closes the stream after 'connected' without crashing."""
+    job = await _seed_job()
+    job.status = PhotoshootJobStatus.COMPLETE
+    monkeypatch.setattr(PhotoshootJobService, "get_job_status", AsyncMock(return_value=None))
+    monkeypatch.setattr(ps, "EventSourceResponse", _CapturingESR)
+
+    response = await ps.photoshoot_job_events(job_id=job.job_id, user={"id": USER_ID}, db=None)
+    events = await _drain(response.content)
+
+    assert _event_types(events) == ["connected"]
+
+
+@pytest.mark.asyncio
+async def test_events_generator_recovered_job_without_status_data(monkeypatch):
+    """A recovered job whose status payload is gone also closes the stream
+    after 'connected' instead of emitting a stale recovered event."""
+    job = await _seed_job()
+    job.recovered_from_persistence = True
+    monkeypatch.setattr(PhotoshootJobService, "get_job_status", AsyncMock(return_value=None))
+    monkeypatch.setattr(ps, "EventSourceResponse", _CapturingESR)
+
+    response = await ps.photoshoot_job_events(job_id=job.job_id, user={"id": USER_ID}, db=None)
+    events = await _drain(response.content)
+
+    assert _event_types(events) == ["connected"]
+
+
+@pytest.mark.asyncio
 async def test_events_generator_emits_recovered_event_for_hydrated_jobs(monkeypatch):
     job = await _seed_job()
     job.recovered_from_persistence = True

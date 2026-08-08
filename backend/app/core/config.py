@@ -50,7 +50,20 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:8000",
     ]
+    # Broad Netlify preview default (pre-existing, kept for compatibility);
+    # deployment templates should override with a scoped value or an empty
+    # string, which the validator below normalizes to None (an empty regex
+    # would match every origin in CORSMiddleware).
     BACKEND_CORS_ORIGIN_REGEX: Optional[str] = r"^https://.*\.netlify\.app$"
+
+    @field_validator("BACKEND_CORS_ORIGIN_REGEX", mode="before")
+    @classmethod
+    def _normalize_cors_origin_regex(cls, value):
+        # An empty-string env override must mean "no regex origins", not
+        # re.compile("") (which CORSMiddleware applies to every origin).
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod

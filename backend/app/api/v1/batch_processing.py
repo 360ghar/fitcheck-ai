@@ -340,7 +340,7 @@ async def _start_batch_job(
     except Exception:
         # Admission succeeded but job creation did not. Return the reserved
         # daily capacity before surfacing the failure to the caller.
-        if reservations:  # pragma: no cover - admission always reserves before this
+        if reservations:
             await asyncio.gather(*[
                 _release_usage_best_effort(
                     user_id=user_id,

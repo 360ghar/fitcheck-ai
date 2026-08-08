@@ -660,13 +660,15 @@ async def test_generation_consumer_discards_batch_when_cancelled_midstream():
 
     service = BatchExtractionService(user_id="u1", db=None)
     with (
-        patch.object(BatchExtractionService, "_generate_single_item", AsyncMock()),
+        patch.object(BatchExtractionService, "_generate_single_item", AsyncMock()) as generate,
         patch(
             "app.services.batch_extraction_service.get_image_generation_agent",
             AsyncMock(return_value=object()),
         ),
     ):
         await service._generation_consumer(job, _CancelOnFirstGet(job))
+    # The batch must be discarded without generating anything.
+    generate.assert_not_awaited()
 
 
 @pytest.mark.asyncio

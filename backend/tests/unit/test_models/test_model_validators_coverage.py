@@ -59,8 +59,8 @@ def test_user_birth_date_future_rejected():
 
 
 def test_user_birth_place_non_string_is_rejected_by_type_check():
-    # The before-validator's non-str passthrough (return v) is unreachable:
-    # pydantic's str type check rejects the value first.
+    # The before-validator's non-str passthrough (return v) runs here: the
+    # Optional[str] type check rejects the value only after the validator.
     with pytest.raises(ValidationError):
         UserBase(email="a@b.com", birth_place=12345)
 

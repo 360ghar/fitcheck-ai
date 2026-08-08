@@ -225,6 +225,15 @@ async def test_social_image_fetch_rejects_private_ip_before_network(monkeypatch)
         UnexpectedClient,
     )
 
+    # The conftest network guard refuses socket.getaddrinfo entirely; resolve
+    # the loopback host to itself so the SSRF classification (not the DNS
+    # block) is what rejects the fetch — the same pattern as the redirect test
+    # below.
+    def resolve(host, *args, **kwargs):
+        return [(None, None, None, None, ("127.0.0.1", 80))]
+
+    monkeypatch.setattr("app.services.social_scraper_service.socket.getaddrinfo", resolve)
+
     with pytest.raises(SocialImportError, match="private|blocked|unsafe"):
         await SocialScraperService.fetch_photo_as_base64("http://127.0.0.1/image.jpg")
 

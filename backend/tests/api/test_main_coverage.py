@@ -155,17 +155,15 @@ async def test_init_pinecone_skips_without_api_key(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_init_pinecone_creates_index():
+async def test_init_pinecone_creates_index(monkeypatch):
     svc = Mock()
     svc.create_index = Mock()
+    monkeypatch.setattr(main_module.settings, "PINECONE_API_KEY", "pk")
     with patch.dict(
         "sys.modules",
         {"app.services.vector_service": Mock(get_vector_service=lambda: svc)},
     ):
-        monkeypatch = pytest.MonkeyPatch()
-        monkeypatch.setattr(main_module.settings, "PINECONE_API_KEY", "pk")
         await main_module._init_pinecone_in_thread()
-        monkeypatch.undo()
     svc.create_index.assert_called_once()
 
 
@@ -256,7 +254,7 @@ def test_lifespan_shutdown_handles_background_task_error(monkeypatch):
         pass
 
 
-def test_ready_endpoint_debug_includes_missing_tables(monkeypatch):
+def test_ready_endpoint_debug_includes_missing_tables(_lifespan_mocks, monkeypatch):
     monkeypatch.setattr(main_module, "_get_cached_schema_status", lambda: (False, ["users", "items"]))
     monkeypatch.setattr(main_module.settings, "DEBUG", True)
 
@@ -269,7 +267,7 @@ def test_ready_endpoint_debug_includes_missing_tables(monkeypatch):
     assert body["missing_tables"] == ["users", "items"]
 
 
-def test_ready_endpoint_reports_ready(monkeypatch):
+def test_ready_endpoint_reports_ready(_lifespan_mocks, monkeypatch):
     monkeypatch.setattr(main_module, "_get_cached_schema_status", lambda: (True, []))
     monkeypatch.setattr(main_module.settings, "DEBUG", False)
 
@@ -280,7 +278,7 @@ def test_ready_endpoint_reports_ready(monkeypatch):
     assert "missing_tables" not in resp.json()
 
 
-def test_ready_endpoint_falls_back_when_check_raises(monkeypatch):
+def test_ready_endpoint_falls_back_when_check_raises(_lifespan_mocks, monkeypatch):
     def _boom():
         raise RuntimeError("check failed")
 

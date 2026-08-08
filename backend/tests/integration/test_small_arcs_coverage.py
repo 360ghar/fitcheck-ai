@@ -42,6 +42,7 @@ def test_is_admin_role_false_for_plain_user():
 
 
 def test_provider_has_usable_config_without_request_key(monkeypatch):
+    from app.api.v1 import ai_settings as ai_settings_module
     from app.services.ai_settings_service import AISettingsService
 
     request = AISettingsUpdate(
@@ -51,6 +52,11 @@ def test_provider_has_usable_config_without_request_key(monkeypatch):
         AISettingsService,
         "has_stored_byok_key",
         lambda current, provider: False,
+    )
+    # Deterministic: the False assertion must not depend on whether the test
+    # env happens to have a system openai key configured.
+    monkeypatch.setattr(
+        ai_settings_module, "get_system_provider_config", lambda provider: None
     )
     # No system key (openai requires BYOK), no request api_key, no stored key.
     assert _provider_has_usable_config("openai", request, {}) is False

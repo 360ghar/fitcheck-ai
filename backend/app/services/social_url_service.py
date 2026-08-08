@@ -108,6 +108,8 @@ class SocialURLService:
             raise SocialImportInvalidUrlError("Facebook profile URL is missing profile slug")
 
         slug = path_parts[0].strip()
+        if not slug:
+            raise SocialImportInvalidUrlError("Facebook profile URL is missing profile slug")
         slug_lower = slug.lower()
         if slug_lower in SocialURLService._FACEBOOK_RESERVED_PATHS:
             if slug_lower == "profile.php":

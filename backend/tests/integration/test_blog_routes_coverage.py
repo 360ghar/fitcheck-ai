@@ -128,8 +128,14 @@ def test_verify_admin_allows_legacy_is_admin_flag():
     verify_admin({"id": "admin-1", "is_admin": True})
 
 
-def test_verify_admin_allows_fitcheck_email():
-    verify_admin({"id": "admin-1", "email": "editor@fitcheckaiapp.com"})
+def test_verify_admin_denies_fitcheck_email_without_role():
+    """A @fitcheckaiapp.com email alone no longer grants admin access.
+
+    The email-domain fallback was removed 2026-08-08; verify_admin requires
+    an explicit admin role or the is_admin flag.
+    """
+    with pytest.raises(PermissionDeniedError):
+        verify_admin({"id": "admin-1", "email": "editor@fitcheckaiapp.com"})
 
 
 def test_verify_admin_denies_plain_user():

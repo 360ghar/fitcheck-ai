@@ -18,11 +18,37 @@ Conventions (see docs/BACKEND.md → "Testing"):
 from __future__ import annotations
 
 import socket
+import sys
 from unittest.mock import Mock
 
 import pytest
 
 from tests.utils.fake_db import FakeDB
+
+
+# ---------------------------------------------------------------------------
+# Shared pinecone stub
+# ---------------------------------------------------------------------------
+
+# The pinecone client package is not a dev dependency; the vector service
+# imports it lazily, and several test modules import that service directly.
+# One shared stub in the root conftest (pytest imports it before any test
+# module) keeps every copy honest — duplicated per-file stubs drifted.
+if "pinecone" not in sys.modules:
+    import types as _types
+
+    class _StubServerlessSpec:
+        """Minimal stand-in: the vector service instantiates
+        ServerlessSpec(cloud=..., region=...) when creating an index, and
+        tests assert on spec.cloud/spec.region."""
+
+        def __init__(self, *args, **kwargs):
+            self.__dict__.update(kwargs)
+
+    _pinecone_stub = _types.ModuleType("pinecone")
+    _pinecone_stub.Pinecone = object
+    _pinecone_stub.ServerlessSpec = _StubServerlessSpec
+    sys.modules["pinecone"] = _pinecone_stub
 
 
 # ---------------------------------------------------------------------------
@@ -39,9 +65,18 @@ def _refuse_connect(self, address):
     )
 
 
+def _refuse_getaddrinfo(*args, **kwargs):
+    raise OSError(
+        "DNS resolution blocked by tests/conftest.py: the backend test suite "
+        "must never touch real external services (socket.getaddrinfo was "
+        "called). Patch the client instead; opt a deliberate exception out "
+        "with @pytest.mark.network."
+    )
+
+
 @pytest.fixture(autouse=True)
 def _block_network(monkeypatch, request):
-    """Refuse all outbound TCP connects unless the test opts out.
+    """Refuse all outbound TCP connects and DNS resolution unless the test opts out.
 
     This is the enforcement arm of "never hit real external services in
     tests": a missing mock used to mean a real (slow, credential-leaking,
@@ -53,6 +88,10 @@ def _block_network(monkeypatch, request):
         return
     monkeypatch.setattr(socket.socket, "connect", _refuse_connect)
     monkeypatch.setattr(socket.socket, "connect_ex", lambda self, address: 1)
+    # DNS and UDP are separate sockets paths; patch them too so a missed mock
+    # cannot silently perform real lookups/datagrams.
+    monkeypatch.setattr(socket, "getaddrinfo", _refuse_getaddrinfo)
+    monkeypatch.setattr(socket.socket, "sendto", _refuse_connect)
     yield
 
 

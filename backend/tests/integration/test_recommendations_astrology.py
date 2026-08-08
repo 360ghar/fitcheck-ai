@@ -1,16 +1,8 @@
 from datetime import date
 from types import SimpleNamespace
 from typing import Any, Dict, List
-import sys
-import types
 
 import pytest
-
-if "pinecone" not in sys.modules:
-    pinecone_stub = types.ModuleType("pinecone")
-    pinecone_stub.Pinecone = object
-    pinecone_stub.ServerlessSpec = object
-    sys.modules["pinecone"] = pinecone_stub
 
 from app.api.v1.recommendations import (
     _coerce_date,

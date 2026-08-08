@@ -392,15 +392,9 @@ async def test_complete_look_raises_when_seed_item_missing():
 
 @pytest.mark.asyncio
 async def test_complete_look_returns_looks_with_occasion_and_style():
-    """NOTE: documents current behaviour, not intent.
-
-    The internal ``match_items(...)`` call passes no ``category``/``limit``/
-    ``min_score``, so the FastAPI ``Query()`` default objects are used. A
-    ``Query`` object is truthy, so ``if category:`` applies a bogus
-    ``eq("category", ...)`` filter and every candidate is dropped. The
-    endpoint therefore returns an empty ``complete_looks`` list even when the
-    wardrobe holds matching items.
-    """
+    """The internal match call passes explicit query params, so candidates
+    survive and the look is built (regression: Query() defaults used to
+    arrive as truthy ParamInfo objects and empty the candidate pool)."""
     db = _NotAwareDB(
         rows={
             "items": [
@@ -420,7 +414,11 @@ async def test_complete_look_returns_looks_with_occasion_and_style():
     )
 
     assert result["message"] == "OK"
-    assert result["data"]["complete_looks"] == []
+    looks = result["data"]["complete_looks"]
+    assert len(looks) == 1
+    assert {item["id"] for item in looks[0]["items"]} == {"src-1", "cand-1"}
+    assert looks[0]["occasion"] == "date night"
+    assert looks[0]["style"] == "minimal"
 
 
 # ---------------------------------------------------------------------------
@@ -1138,9 +1136,13 @@ async def test_style_analysis_returns_style_occasions_and_companions():
     assert data["style"] == "business"
     assert data["suggested_occasions"] == ["work", "formal", "workout"]
     assert data["color_palette"] == ["black"]
-    # The internal match call hits the Query-default bug (see complete-look
-    # test): no candidates survive, so companions come back empty.
-    assert data["suggested_companions"] == []
+    # The internal match call passes explicit query params (regression: the
+    # Query-default bug used to empty the candidate pool), so the companion
+    # from the same wardrobe survives.
+    companions = data["suggested_companions"]
+    assert len(companions) == 1
+    assert companions[0]["item_id"] == "cand-1"
+    assert companions[0]["category"] == "bottoms"
 
 
 @pytest.mark.asyncio

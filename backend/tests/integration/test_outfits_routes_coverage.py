@@ -122,21 +122,11 @@ class _OutfitsFakeDB(FakeDB):
         builder.maybe_single = _maybe_single
 
         # PostgREST's `return=representation` updates echo the merged rows
-        # back AND the change is committed; the shared fake only echoes the
-        # merged rows without persisting them, so a read-after-update handler
-        # would see stale rows. Persist the merge so those handlers behave
-        # like they do against the real client.
-        orig_execute = builder.execute
-
-        def _execute():
-            result = orig_execute()
-            if builder._mode == "update" and result.data:
-                for row, merged in zip(builder._matched_rows(), result.data):
-                    row.clear()
-                    row.update(merged)
-            return result
-
-        builder.execute = _execute
+        # back AND the change is committed; the shared fake persists the
+        # merged rows itself (update execute replaces matched rows), so a
+        # read-after-update handler sees the new state without extra work
+        # here. (A wrapper doing row.clear() + row.update() on top would be
+        # self-referential: the persisted row IS the merged dict.)
         return builder
 
 

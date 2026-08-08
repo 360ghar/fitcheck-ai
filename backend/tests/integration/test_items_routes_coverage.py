@@ -101,22 +101,31 @@ def _image_row(**overrides: Any) -> Dict[str, Any]:
 
 
 class _FakeUpload:
-    """Minimal UploadFile double (read chunks, seek to 0, content_type)."""
+    """Minimal UploadFile double (read chunks, seek to 0, content_type).
+
+    ``seek(0)`` rewinds the read position, mirroring real UploadFile/Spooled
+    semantics — a route that re-reads the file after validation must see the
+    bytes again, not an empty buffer.
+    """
 
     def __init__(self, data: bytes = b"png-bytes", filename: str = "a.png", content_type: str = "image/png"):
-        self._data = data
+        self._original = data
+        self._pos = 0
         self.filename = filename
         self.content_type = content_type
 
     async def read(self, size: int = -1) -> bytes:
         if size is None or size < 0:
-            out, self._data = self._data, b""
+            out = self._original[self._pos:]
+            self._pos = len(self._original)
             return out
-        out, self._data = self._data[:size], self._data[size:]
+        out = self._original[self._pos : self._pos + size]
+        self._pos += len(out)
         return out
 
     async def seek(self, offset: int) -> None:
-        assert offset == 0
+        assert offset == 0, "fake only supports seek(0)"
+        self._pos = 0
 
 
 def _patch_embedding(

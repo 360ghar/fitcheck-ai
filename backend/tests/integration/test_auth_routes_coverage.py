@@ -152,10 +152,19 @@ def test_check_schema_tables_reraises_unrelated_api_errors():
         auth_module._check_schema_tables(_RaisingDB())
 
 
-def test_require_schema_short_circuits_after_first_success():
+def test_require_schema_short_circuits_after_first_success(monkeypatch):
     """Once confirmed, the schema probes never re-run (cached flag)."""
-    auth_module._require_schema(FakeDB())
-    auth_module._require_schema(FakeDB())
+    monkeypatch.setattr(auth_module, "_schema_confirmed_ready", False)
+    probe = Mock(side_effect=[None])
+    monkeypatch.setattr(auth_module, "_check_schema_tables", probe)
+    try:
+        auth_module._require_schema(FakeDB())
+        assert auth_module._schema_confirmed_ready is True
+        assert probe.call_count == 1
+        auth_module._require_schema(FakeDB())
+        assert probe.call_count == 1  # short-circuited
+    finally:
+        monkeypatch.setattr(auth_module, "_schema_confirmed_ready", False)
 
 
 # ===========================================================================
@@ -643,11 +652,11 @@ async def test_login_other_auth_error(anon_db):
 
 
 @pytest.mark.asyncio
-async def test_login_auth_api_error_from_unguarded_profile_read(anon_db):
+async def test_login_auth_api_error_from_unguarded_profile_read(anon_db, monkeypatch):
     """An AuthApiError escaping the unguarded profile re-read (after the
     profile-ensure try/except) must be translated by the outer handler
     instead of leaking as an untranslated error."""
-    auth_module._schema_confirmed_ready = True
+    monkeypatch.setattr(auth_module, "_schema_confirmed_ready", True)
     anon_db.auth.sign_in_with_password.return_value = _auth_response()
 
     with patch(

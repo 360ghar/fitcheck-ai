@@ -1,18 +1,9 @@
-import sys
-import types
-
 import pytest
 
 from app.core.exceptions import SocialImportError, SocialImportJobNotFoundError
 from app.services.ai_settings_service import AISettingsService
 from app.services.social_import_event_service import SocialImportEventService
 from app.services.social_import_job_store import SocialImportJobStore
-
-if "pinecone" not in sys.modules:
-    pinecone_stub = types.ModuleType("pinecone")
-    pinecone_stub.Pinecone = object
-    pinecone_stub.ServerlessSpec = object
-    sys.modules["pinecone"] = pinecone_stub
 
 from app.services.social_import_pipeline_service import SocialImportPipelineService
 from app.services.social_auth_service import SocialAuthService

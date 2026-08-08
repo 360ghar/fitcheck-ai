@@ -517,6 +517,16 @@ async def match_items(
         .eq("is_deleted", False)
         .not_.in_("id", source_ids)
     )
+    # Guard: when this endpoint is invoked directly by other routes (not via
+    # FastAPI routing), the Query() defaults arrive as ParamInfo instances.
+    # ParamInfo is truthy, so `if category:` below would apply a bogus
+    # `.eq("category", <ParamInfo>)` filter and drop every candidate.
+    if not isinstance(category, str):
+        category = None
+    if not isinstance(min_score, int):
+        min_score = 0
+    if not isinstance(limit, int):
+        limit = 10
     if category:
         candidates_q = candidates_q.eq("category", category)
     # Exclude laundry/repair/donate by default (docs)
@@ -611,6 +621,11 @@ async def complete_look(
     # Reuse match logic
     match_res = await match_items(
         MatchRequest(item_ids=seed_ids, limit=50),
+        # Explicit query-parameter values: without them the FastAPI Query()
+        # defaults arrive as truthy ParamInfo objects and poison the filter.
+        category=None,
+        limit=50,
+        min_score=0,
         user_id=user_id,
         db=db,
     )
@@ -1109,7 +1124,16 @@ async def style_analysis(
         suggested_occasions.append("workout")
 
     # Suggested companions: top 3 match results
-    match = await match_items(MatchRequest(item_id=item_id_str, limit=10), user_id=user_id, db=db)
+    match = await match_items(
+        MatchRequest(item_id=item_id_str, limit=10),
+        # Explicit query-parameter values (see complete_look): FastAPI Query()
+        # defaults are truthy ParamInfo objects and would empty the pool.
+        category=None,
+        limit=10,
+        min_score=0,
+        user_id=user_id,
+        db=db,
+    )
     matches = (match.get("data") or {}).get("matches") or []
     suggested_companions = [
         {

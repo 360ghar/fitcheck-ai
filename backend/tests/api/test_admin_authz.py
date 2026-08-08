@@ -121,8 +121,12 @@ def test_super_admin_me_returns_star_permissions(client):
     assert "*" in response.json()["permissions"]
 
 
-def test_legacy_email_admin_gets_admin_role(client):
-    """@fitcheckaiapp.com email without is_admin/role still bootstraps admin."""
+def test_fitcheck_email_without_role_or_flag_is_plain_user(client):
+    """A @fitcheckaiapp.com email alone no longer bootstraps admin.
+
+    The email-domain fallback was removed 2026-08-08 (registration is not
+    domain-verified); admin requires an explicit role or the is_admin flag.
+    """
     legacy = {
         "id": "user-legacy",
         "email": "founder@fitcheckaiapp.com",
@@ -133,8 +137,7 @@ def test_legacy_email_admin_gets_admin_role(client):
     }
     with _with_user(client, legacy, FakeDB()):
         response = client.get("/api/v1/admin/me")
-    assert response.status_code == 200
-    assert response.json()["role"] == "admin"
+    assert response.status_code == 403
 
 
 @pytest.mark.parametrize("method,path", _admin_routes())
@@ -183,8 +186,9 @@ def test_get_user_role_priority_and_fallbacks():
     assert get_user_role({"role": "ops", "email": "ops@example.com", "is_admin": False}) == "ops"
     # is_admin flag fallback.
     assert get_user_role({"role": "user", "email": "x@example.com", "is_admin": True}) == "admin"
-    # Legacy email fallback.
-    assert get_user_role({"role": "user", "email": "founder@fitcheckaiapp.com", "is_admin": False}) == "admin"
+    # The email-domain bootstrap was removed (2026-08-08): a matching domain
+    # without an explicit role/flag must NOT grant admin.
+    assert get_user_role({"role": "user", "email": "founder@fitcheckaiapp.com", "is_admin": False}) == "user"
     # Plain user.
     assert get_user_role({"email": "plain@example.com"}) == "user"
 

@@ -242,10 +242,9 @@ async def test_find_similar_error_returns_empty(service):
 
 @pytest.mark.asyncio
 async def test_find_matching_items_appends_source_category_and_excludes_self(service):
-    """Note: `excluded = exclude_categories or []` aliases the caller's list,
-    so `excluded.append(source_category)` mutates the argument passed in.
-    That leaked "tops" into item-b's filter below; the assertions mirror the
-    actual (buggy) behavior rather than the intent. See final report."""
+    """Each item's $nin filter is built from a copy of the caller's
+    exclude_categories list, so source-category appends never leak into
+    other items' filters (or back into the caller's own list)."""
     service._index.fetch.return_value = SimpleNamespace(
         vectors={
             "item-a": SimpleNamespace(metadata={"category": "tops"}, values=[1.0]),
@@ -257,10 +256,11 @@ async def test_find_matching_items_appends_source_category_and_excludes_self(ser
         SimpleNamespace(matches=[_match("item-y", 0.7, {})]),
     ]
 
+    excludes = ["bottoms"]
     result = await service.find_matching_items(
         ["item-a", "item-b"],
         user_id="u1",
-        exclude_categories=["bottoms"],
+        exclude_categories=excludes,
     )
 
     # item-a: self-match excluded, source category appended to the $nin list.
@@ -274,12 +274,13 @@ async def test_find_matching_items_appends_source_category_and_excludes_self(ser
         "user_id": {"$eq": "u1"},
         "category": {"$nin": ["bottoms", "tops"]},
     }
-    # item-b filter: "tops" leaked in because the source-category append
-    # mutated the caller's exclude_categories list.
+    # item-b filter: the caller's list is not aliased, so "tops" must NOT leak in.
     assert service._index.query.call_args_list[1].kwargs["filter"] == {
         "user_id": {"$eq": "u1"},
-        "category": {"$nin": ["bottoms", "tops"]},
+        "category": {"$nin": ["bottoms"]},
     }
+    # The caller's list is never mutated.
+    assert excludes == ["bottoms"]
 
 
 @pytest.mark.asyncio

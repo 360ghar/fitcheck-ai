@@ -62,6 +62,16 @@ def _async_return(value):
     return _inner
 
 
+@pytest.fixture(autouse=True)
+def _restore_stripe_api_key():
+    """The routes assign the module-global ``stripe.api_key`` from the patched
+    STRIPE_SECRET_KEY; restore it after every test so the value never leaks
+    into later tests in the session."""
+    original = stripe.api_key
+    yield
+    stripe.api_key = original
+
+
 class _WebhookDB:
     """Mock db for the stripe webhook ledger with configurable chains.
 

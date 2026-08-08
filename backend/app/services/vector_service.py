@@ -273,7 +273,7 @@ class VectorService:
                 filter_dict = {"user_id": {"$eq": user_id}}
 
                 # Exclude the source item's category
-                excluded = exclude_categories or []
+                excluded = list(exclude_categories or [])
                 if source_category:
                     excluded.append(source_category)
 

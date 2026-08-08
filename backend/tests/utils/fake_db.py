@@ -104,6 +104,7 @@ class FakeBuilder:
         self._bare_none = False
         self._limit: Optional[int] = None
         self._range: Optional[tuple] = None
+        self._order: Optional[tuple] = None  # (column, desc, nullsfirst)
         self._not: FakeNotBuilder = FakeNotBuilder(self)
 
     # --- query modifiers (recorded; filters also applied on execute) ---------
@@ -158,7 +159,11 @@ class FakeBuilder:
     def not_(self) -> FakeNotBuilder:
         return self._not
 
-    def order(self, *args, **kwargs):
+    def order(self, column: str, desc: bool = False, nullsfirst: bool = False, **kwargs):
+        # Mirror postgrest-py's QueryRequestBuilder.order: nullsfirst=False is
+        # the default and means NULLS LAST (independent of direction).
+        self._order = (column, bool(desc), bool(nullsfirst))
+        self._db.orders.append((self._table, column, bool(desc), bool(nullsfirst)))
         return self
 
     def limit(self, n: int):
@@ -289,6 +294,12 @@ class FakeBuilder:
             db.updates.append((self._table, self._payload))
             matched = self._matched_rows()
             merged = [{**row, **self._payload} for row in matched]
+            # Persist the merged rows so read-after-update sees them (keeps
+            # the fake consistent with insert/delete, which also mutate).
+            rows = db._rows_for(self._table)
+            for idx, row in enumerate(rows):
+                if row in matched:
+                    rows[idx] = merged[matched.index(row)]
             return FakeResult(data=merged, count=len(merged))
 
         if self._mode == "delete":
@@ -300,6 +311,16 @@ class FakeBuilder:
 
         rows = self._matched_rows()
         count = len(rows)
+        if self._order is not None:
+            column, desc, nullsfirst = self._order
+            # Partition NULLs out of the value sort (None is not comparable
+            # with numbers/strings) and place them per Postgres semantics:
+            # NULLS LAST by default, matching postgrest-py's
+            # order(..., nullsfirst=False); NULLS FIRST when requested.
+            nulls = [r for r in rows if r.get(column) is None]
+            values = [r for r in rows if r.get(column) is not None]
+            values = sorted(values, key=lambda r: r.get(column), reverse=desc)
+            rows = values + nulls if not nullsfirst else nulls + values
         if self._range is not None:
             start, end = self._range
             rows = rows[start : end + 1]
@@ -347,6 +368,7 @@ class FakeDB:
         self.rpc_calls: List[tuple] = []
         self.selects: List[tuple] = []
         self.filters: List[tuple] = []
+        self.orders: List[tuple] = []  # (table, column, desc, nullsfirst)
 
     def _rows_for(self, table: str) -> List[Dict[str, Any]]:
         return self.rows.setdefault(table, [])
