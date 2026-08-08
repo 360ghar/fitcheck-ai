@@ -53,9 +53,13 @@ log "Build args: ${SHOREBIRD_BUILD_ARGS[*]}"
 # --artifact defaults to aab, which is what Play requires. Note that
 # --split-per-abi is NOT supported by Shorebird: split APKs each get a
 # different release version than pubspec declares, which patching cannot model.
+# NOTE: the ${RELEASE_FLAGS[@]+...} guard is required on macOS bash 3.2, where
+# expanding an EMPTY array under `set -u` (inherited from _shorebird_common.sh)
+# aborts the script with "unbound variable". RELEASE_FLAGS is empty on the
+# non-dry-run path, so this failed on the first real release.
 shorebird release android \
   --flutter-version="${SHOREBIRD_FLUTTER_VERSION}" \
-  "${RELEASE_FLAGS[@]}" \
+  "${RELEASE_FLAGS[@]+"${RELEASE_FLAGS[@]}"}" \
   -- "${SHOREBIRD_BUILD_ARGS[@]}"
 
 if [ "${DRY_RUN}" = true ]; then

@@ -159,7 +159,7 @@ Full procedure: `docs/store/ios-sandbox-testing-runbook.md`.
 - [ ] Deploy frontend so `/privacy`, `/terms`, `/support` show updated copy
 - [x] `pubspec.yaml` build number (`version: x.y.z+N`) is **strictly greater** than the last upload on App Store Connect (ASC rejected build `7`; repo bumped to `1.0.5+10` on 2026-08-08)
 - [ ] Fresh archive after any version bump (old Organizer archives keep old `CFBundleVersion`)
-- [ ] Signed IPA uploaded — **use the `Build iOS IPA` CI workflow**. It builds with `shorebird release ios`, so the upload is patchable over the air. `build_ios_release.sh` uses plain `flutter build ipa` and its output can NEVER receive a patch; see `docs/FLUTTER.md`.
+- [ ] Signed IPA uploaded — prefer the **`Build iOS IPA` CI workflow** (signs with the CI distribution cert and uploads to TestFlight automatically). It builds with `shorebird release ios`, so the upload is patchable over the air. The local `flutter/scripts/build_ios_release.sh` also builds with `shorebird release ios` (automatic signing; upload the `.ipa` via Xcode Organizer / Transporter). **Never upload an archive built from the Xcode GUI** — plain `flutter build` output can NEVER receive a patch; see `docs/FLUTTER.md`.
 - [ ] Archive includes UUID-matched framework dSYMs via `ios/generate_missing_dsyms.sh` (fixes Organizer Sentry.framework symbol upload)
 - [ ] Optional: Sentry auth secrets set so CI uploads real dSYMs for crash symbolication
 - [ ] Build selected for the version in ASC

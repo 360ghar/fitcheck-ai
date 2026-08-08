@@ -41,7 +41,7 @@ merging, with the patch number visible in-app and attributed on Sentry crashes.
 - [x] `docs/FLUTTER.md` documents the workflow and the lock-step invariants
 - [x] `pubspec.yaml` bumped to `1.0.4+9` for the first Shorebird release, above
       every build number evidenced anywhere in the repo
-- [ ] `SHOREBIRD_TOKEN` created and added as a GitHub repo secret (**human**)
+- [x] `SHOREBIRD_TOKEN` created and added as a GitHub repo secret (verified present 2026-08-08)
 - [ ] End-to-end Android release → patch → two launches verified on a device
 - [ ] End-to-end iOS release → patch verified on a **physical** arm64 device
 
@@ -62,7 +62,10 @@ merging, with the patch number visible in-app and attributed on Sentry crashes.
 
 | Date | Note |
 |------|------|
-| 2026-08-06 | Verified Flutter 3.44.6 is Shorebird-supported; CLI already installed and authenticated |
+| 2026-08-08 | First release decided as `1.0.5+10` (user decision; supersedes the `1.0.4+9` decision below), bumped, committed (`5fe9755`) and pushed |
+| 2026-08-08 | Fixed a latent bug the first real release hit: `shorebird_release_android.sh` expanded an empty `RELEASE_FLAGS` array under `set -u`, which aborts on macOS bash 3.2 (`unbound variable`). Guarded with `${RELEASE_FLAGS[@]+"${RELEASE_FLAGS[@]}"}` |
+| 2026-08-08 | Converted `flutter/scripts/build_ios_release.sh` from unpatchable `flutter build ipa` to `shorebird release ios` (same pinned Flutter/dart-defines/`--no-tree-shake-icons` as CI; automatic signing via `ios/ExportOptions.plist`), so a local iOS build is patchable. Patches for a local iOS release must be cut locally (command in the script header) |
+| 2026-08-08 | Android Shorebird release `1.0.5+10` cut from this Mac (see `shorebird releases list`); E2E device verification still pending |
 | 2026-08-06 | Ran `shorebird init`; it also added two entitlements to `flutter/macos/Runner/Release.entitlements` (unshipped scaffold target, kept to avoid churning against `shorebird doctor`) |
 | 2026-08-06 | Shorebird's Flutter ran the standard Gradle migrator, adding `android.builtInKotlin=false` / `android.newDsl=false` to `flutter/android/gradle.properties`; kept and committed so local and CI builds match |
 | 2026-08-06 | Implemented service + scripts + both workflows + docs |
@@ -80,7 +83,9 @@ merging, with the patch number visible in-app and attributed on Sentry crashes.
 | 2026-08-06 | Drop `subosito/flutter-action` and the standalone `pod install --repo-update` from `build-ios.yml` | Two Flutter installs on one runner is the documented cause of `Invalid Podfile` / FLUTTER_ROOT mismatch; Shorebird runs pub get and CocoaPods itself, and `Podfile.lock` is committed |
 | 2026-08-06 | Unsigned CI path uses `shorebird release ios --dry-run` | Validates the build on forks without creating junk releases |
 | 2026-08-06 | Preflight compares local.properties against pubspec rather than rejecting the keys outright | Flutter's Gradle tooling regenerates those keys from pubspec on every build, so their presence is normal — only a mismatch is dangerous |
-| 2026-08-06 | First Shorebird release is `1.0.4+9` | Build 9 is strictly above 8, the highest number evidenced anywhere (git tops out at `1.0.3+8`; ASC rejected build 7 and has nothing live; builds 6 and 7 never existed in git). `1.0.4` was already the intended next name — it had been hand-set in `local.properties`. Confirmed with the user that nothing above 8 was uploaded out-of-band |
+| 2026-08-08 | First release is `1.0.5+10`, not `1.0.4+9` (user decision 2026-08-08) | Name `1.0.5` per user request; build `10` stays strictly above 9. 1.0.4+9 was never released, so nothing is orphaned |
+| 2026-08-08 | `build_ios_release.sh` converted to `shorebird release ios` instead of remaining an unpatchable fallback | The user wants local iOS builds (via Xcode-side export) to be patchable. CI remains the primary iOS path; the local script is now a real alternative, but its release must be patched locally (same .env/defines) and its dry-run surfaced that automatic signing needs an Xcode account with the team |
+| 2026-08-06 | First Shorebird release is `1.0.4+9` | Build 9 is strictly above 8, the highest number evidenced anywhere (git tops out at `1.0.3+8`; ASC rejected build 7 and has nothing live; builds 6 and 7 never existed in git). `1.0.4` was already the intended next name — it had been hand-set in `local.properties`. Confirmed with the user that nothing above 8 was uploaded out-of-band. **Superseded by the 2026-08-08 decision above** |
 | 2026-08-06 | One `AppVersionLabel` widget instead of two `PackageInfo` call sites | The Profile dialog hardcoded `Version 1.0.0` for three releases. A single formatting path means Settings and Profile cannot disagree and neither can go stale, and both pick up the patch number for free |
 
 ## Verification

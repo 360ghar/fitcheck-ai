@@ -52,22 +52,23 @@ the `app_id` is not a secret and **must** stay in `pubspec.yaml` `assets:`, or t
 updater cannot find the app at runtime).
 
 **Only binaries built by `shorebird release` can ever be patched.** Anything from
-`flutter build` is permanently unpatchable, so every store upload must come from
-the paths below. `flutter/scripts/build_ios_release.sh` is *not* one of them and
-warns loudly at runtime.
+plain `flutter build` — including any archive made from the Xcode GUI — is
+permanently unpatchable, so every store upload must come from the paths below.
 
 | Platform | Release | Patch |
 |----------|---------|-------|
 | Android | `flutter/scripts/shorebird_release_android.sh` (local, then upload the `.aab` to Play) | `flutter/scripts/shorebird_patch_android.sh [release-version] [track]` (local) |
-| iOS | `.github/workflows/build-ios.yml` (`workflow_dispatch` or a `v*` tag) | `.github/workflows/shorebird-patch-ios.yml` (`workflow_dispatch`) |
+| iOS | `.github/workflows/build-ios.yml` (`workflow_dispatch` or a `v*` tag) or `flutter/scripts/build_ios_release.sh` (local, with automatic signing) | `.github/workflows/shorebird-patch-ios.yml` (`workflow_dispatch`) for CI releases; the exact `shorebird patch ios` command is in `build_ios_release.sh`'s header for local releases |
 
 ### Release and patch must run in the same place
 
 `flutter/.env` is a bundled Flutter asset, so it is part of every patch diff.
 Android releases are cut on the Mac from the local `.env`; iOS releases are cut in
-CI from GitHub secrets. **Patch from wherever you released** — a cross-environment
+CI from GitHub secrets (or on the Mac from the same local `.env` when using
+`build_ios_release.sh`). **Patch from wherever you released** — a cross-environment
 patch produces an asset diff and is rejected. This is why Android has scripts and
-iOS has workflows rather than one shared mechanism.
+iOS has workflows rather than one shared mechanism. If you release iOS locally,
+also patch locally (same machine, same `.env`, same dart-defines).
 
 ### What a patch can and cannot carry
 
