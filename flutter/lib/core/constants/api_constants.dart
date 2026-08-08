@@ -68,6 +68,10 @@ class ApiConstants {
   static const String referral = '$apiVersion/referral';
   static const String feedback = '$apiVersion/feedback';
   static const String photoshoot = '$apiVersion/photoshoot';
+
+  // Image serving: re-mint a fresh client-fetchable URL for a storage_path
+  // (the API serves short-lived presigned URLs; clients re-mint on expiry).
+  static const String imagesPresigned = '$apiVersion/images/presigned';
   static String photoshootEvents(String jobId) => '$photoshoot/$jobId/events';
   static String photoshootCancel(String jobId) => '$photoshoot/$jobId/cancel';
   static String photoshootStatus(String jobId) => '$photoshoot/$jobId/status';

@@ -17,7 +17,14 @@ import '../../../core/utils/error_handler.dart';
 /// Controller for item add page
 /// Handles image processing, AI extraction, product image generation, and item creation
 class ItemAddController extends GetxController {
-  final ItemRepository _itemRepository = ItemRepository();
+  final ItemRepository _itemRepository;
+
+  /// [itemRepository] is injectable so unit tests can drive the item-save
+  /// image-upload strategy without hitting the real API. Defaults to a live
+  /// repository.
+  ItemAddController({ItemRepository? itemRepository})
+    : _itemRepository = itemRepository ?? ItemRepository();
+
   WardrobeSyncService get _wardrobeSync =>
       Get.isRegistered<WardrobeSyncService>()
           ? Get.find<WardrobeSyncService>()
@@ -820,18 +827,66 @@ class ItemAddController extends GetxController {
           final ItemModel finalItem;
           if (itemWithImage.generatedImageUrl != null) {
             // Studio photo ready: create the item, then upload the generated
-            // image (convert the data URL back to base64 for upload).
+            // image. Strategy, in priority order — mirrors the batch
+            // saveSelectedItems chain:
+            //  1. Data-URI generated image (base64 embedded in
+            //     generatedImageUrl) — strip the prefix, upload the bytes.
+            //  2. Real storage URL — the post-job_complete state: the backend
+            //     ships generated_image_base64: null for URL-backed items, so
+            //     only the presigned URL remains. Download and re-upload.
+            //  3. Source photo — last resort, so an item is never saved
+            //     image-less when the generated image is unreachable.
+            final rawImageUrl = itemWithImage.generatedImageUrl!;
+            final isDataUri = rawImageUrl.startsWith('data:image');
+            var imageUploaded = false;
+
             final created = await _itemRepository.createItem(request);
-            final dataUrlRegex = RegExp(
-              r'^data:image/\w+;base64,',
-              caseSensitive: false,
-            );
-            final base64Data = itemWithImage.generatedImageUrl!.replaceFirst(
-              dataUrlRegex,
-              '',
-            );
-            await _itemRepository.uploadImageFromBase64(created.id, base64Data);
+            if (isDataUri) {
+              final base64Data = rawImageUrl.replaceFirst(
+                RegExp(r'^data:image/\w+;base64,', caseSensitive: false),
+                '',
+              );
+              if (base64Data.isNotEmpty) {
+                imageUploaded =
+                    (await _itemRepository.uploadImageFromBase64(
+                      created.id,
+                      base64Data,
+                    )) !=
+                    null;
+              }
+            }
+
+            if (!imageUploaded && !rawImageUrl.startsWith('data:')) {
+              imageUploaded =
+                  (await _itemRepository.uploadImageFromUrl(
+                    created.id,
+                    rawImageUrl,
+                  )) !=
+                  null;
+            }
+
+            if (!imageUploaded && selectedImage.value != null) {
+              final uploaded = await _itemRepository.uploadImages(
+                created.id,
+                [selectedImage.value!],
+              );
+              imageUploaded = uploaded.isNotEmpty;
+            }
+
             finalItem = await _itemRepository.getItem(created.id);
+            if (!imageUploaded &&
+                (finalItem.itemImages == null ||
+                    finalItem.itemImages!.isEmpty)) {
+              // The item row exists but no image made it to storage. Surface
+              // the failure so the user isn't silently left with a text-only
+              // item.
+              ErrorHandler.reportError(
+                StateError('Item image upload failed'),
+                'saveGeneratedItems: created item ${created.id} '
+                '("${itemWithImage.name ?? itemWithImage.subCategory ?? itemWithImage.category}") '
+                'has no images after all upload strategies',
+              );
+            }
           } else if (selectedImage.value != null) {
             // Studio photo not ready yet (decoupled save) - save with the
             // original uploaded photo instead of skipping the item.

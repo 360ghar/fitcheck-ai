@@ -5,6 +5,7 @@ import '../../../core/widgets/app_ui.dart';
 import '../../../app/routes/app_routes.dart';
 import '../controllers/dashboard_controller.dart';
 import '../models/dashboard_models.dart';
+import '../../wardrobe/repositories/item_repository.dart';
 
 /// Activity feed section showing recent user activity
 class ActivityFeed extends StatelessWidget {
@@ -54,6 +55,10 @@ class ActivityFeed extends StatelessWidget {
 class _ActivityRow extends StatelessWidget {
   final DashboardActivity activity;
 
+  // Presigned image URLs expire after 1h; on a failed load a fresh URL is
+  // re-minted from the durable storage key.
+  static final ItemRepository _itemRepository = ItemRepository();
+
   const _ActivityRow({required this.activity});
 
   @override
@@ -75,6 +80,8 @@ class _ActivityRow extends StatelessWidget {
                 height: 44,
                 enableZoom: false,
                 errorIcon: icon,
+                storagePath: activity.storagePath,
+                remintUrl: _itemRepository.remintImageUrl,
               ),
             )
           else

@@ -5,6 +5,7 @@ import '../../../core/widgets/app_ui.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
 import '../controllers/wardrobe_controller.dart';
+import '../repositories/item_repository.dart';
 import '../../../app/routes/app_routes.dart';
 
 /// Wardrobe content without Scaffold wrapper (for IndexedStack in MainShellPage)
@@ -18,6 +19,7 @@ class WardrobeContent extends StatefulWidget {
 
 class _WardrobeContentState extends State<WardrobeContent> {
   final WardrobeController controller = Get.find<WardrobeController>();
+  final ItemRepository _itemRepository = ItemRepository();
 
   @override
   Widget build(BuildContext context) {
@@ -440,6 +442,10 @@ class _WardrobeContentState extends State<WardrobeContent> {
                       memCacheWidth: 200,
                       memCacheHeight: 200,
                       errorIcon: _getCategoryIcon(item.category),
+                      // Presigned URLs expire after 1h; on a failed load
+                      // re-mint a fresh URL from the durable storage key.
+                      storagePath: item.itemImages?.first.storagePath,
+                      remintUrl: _itemRepository.remintImageUrl,
                     )
                   : _buildPlaceholder(item.category),
             ),
@@ -587,6 +593,10 @@ class _WardrobeContentState extends State<WardrobeContent> {
                           memCacheWidth: 400,
                           memCacheHeight: 600,
                           errorIcon: _getCategoryIcon(item.category),
+                          // Presigned URLs expire after 1h; on a failed load
+                          // re-mint a fresh URL from the durable storage key.
+                          storagePath: item.itemImages?.first.storagePath,
+                          remintUrl: _itemRepository.remintImageUrl,
                         )
                       : _buildPlaceholder(item.category),
                 ),

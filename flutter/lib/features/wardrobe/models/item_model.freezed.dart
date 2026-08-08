@@ -373,7 +373,11 @@ as DateTime?,
 /// @nodoc
 mixin _$ItemImage {
 
- String get id; String get url;@JsonKey(name: 'is_primary') bool get isPrimary; int? get width; int? get height; String? get blurhash;
+ String get id; String get url;/// Durable bucket key. The API serves short-lived presigned URLs
+/// materialized from this key at read time; keeping it lets clients
+/// re-mint a fresh URL when the cached one expires (see
+/// AppImage's remint fallback).
+@JsonKey(name: 'storage_path') String? get storagePath;@JsonKey(name: 'is_primary') bool get isPrimary; int? get width; int? get height; String? get blurhash;
 /// Create a copy of ItemImage
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -386,16 +390,16 @@ $ItemImageCopyWith<ItemImage> get copyWith => _$ItemImageCopyWithImpl<ItemImage>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ItemImage&&(identical(other.id, id) || other.id == id)&&(identical(other.url, url) || other.url == url)&&(identical(other.isPrimary, isPrimary) || other.isPrimary == isPrimary)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.blurhash, blurhash) || other.blurhash == blurhash));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ItemImage&&(identical(other.id, id) || other.id == id)&&(identical(other.url, url) || other.url == url)&&(identical(other.storagePath, storagePath) || other.storagePath == storagePath)&&(identical(other.isPrimary, isPrimary) || other.isPrimary == isPrimary)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.blurhash, blurhash) || other.blurhash == blurhash));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,url,isPrimary,width,height,blurhash);
+int get hashCode => Object.hash(runtimeType,id,url,storagePath,isPrimary,width,height,blurhash);
 
 @override
 String toString() {
-  return 'ItemImage(id: $id, url: $url, isPrimary: $isPrimary, width: $width, height: $height, blurhash: $blurhash)';
+  return 'ItemImage(id: $id, url: $url, storagePath: $storagePath, isPrimary: $isPrimary, width: $width, height: $height, blurhash: $blurhash)';
 }
 
 
@@ -406,7 +410,7 @@ abstract mixin class $ItemImageCopyWith<$Res>  {
   factory $ItemImageCopyWith(ItemImage value, $Res Function(ItemImage) _then) = _$ItemImageCopyWithImpl;
 @useResult
 $Res call({
- String id, String url,@JsonKey(name: 'is_primary') bool isPrimary, int? width, int? height, String? blurhash
+ String id, String url,@JsonKey(name: 'storage_path') String? storagePath,@JsonKey(name: 'is_primary') bool isPrimary, int? width, int? height, String? blurhash
 });
 
 
@@ -423,11 +427,12 @@ class _$ItemImageCopyWithImpl<$Res>
 
 /// Create a copy of ItemImage
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? url = null,Object? isPrimary = null,Object? width = freezed,Object? height = freezed,Object? blurhash = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? url = null,Object? storagePath = freezed,Object? isPrimary = null,Object? width = freezed,Object? height = freezed,Object? blurhash = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
-as String,isPrimary: null == isPrimary ? _self.isPrimary : isPrimary // ignore: cast_nullable_to_non_nullable
+as String,storagePath: freezed == storagePath ? _self.storagePath : storagePath // ignore: cast_nullable_to_non_nullable
+as String?,isPrimary: null == isPrimary ? _self.isPrimary : isPrimary // ignore: cast_nullable_to_non_nullable
 as bool,width: freezed == width ? _self.width : width // ignore: cast_nullable_to_non_nullable
 as int?,height: freezed == height ? _self.height : height // ignore: cast_nullable_to_non_nullable
 as int?,blurhash: freezed == blurhash ? _self.blurhash : blurhash // ignore: cast_nullable_to_non_nullable
@@ -516,10 +521,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String url, @JsonKey(name: 'is_primary')  bool isPrimary,  int? width,  int? height,  String? blurhash)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String url, @JsonKey(name: 'storage_path')  String? storagePath, @JsonKey(name: 'is_primary')  bool isPrimary,  int? width,  int? height,  String? blurhash)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ItemImage() when $default != null:
-return $default(_that.id,_that.url,_that.isPrimary,_that.width,_that.height,_that.blurhash);case _:
+return $default(_that.id,_that.url,_that.storagePath,_that.isPrimary,_that.width,_that.height,_that.blurhash);case _:
   return orElse();
 
 }
@@ -537,10 +542,10 @@ return $default(_that.id,_that.url,_that.isPrimary,_that.width,_that.height,_tha
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String url, @JsonKey(name: 'is_primary')  bool isPrimary,  int? width,  int? height,  String? blurhash)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String url, @JsonKey(name: 'storage_path')  String? storagePath, @JsonKey(name: 'is_primary')  bool isPrimary,  int? width,  int? height,  String? blurhash)  $default,) {final _that = this;
 switch (_that) {
 case _ItemImage():
-return $default(_that.id,_that.url,_that.isPrimary,_that.width,_that.height,_that.blurhash);case _:
+return $default(_that.id,_that.url,_that.storagePath,_that.isPrimary,_that.width,_that.height,_that.blurhash);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -557,10 +562,10 @@ return $default(_that.id,_that.url,_that.isPrimary,_that.width,_that.height,_tha
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String url, @JsonKey(name: 'is_primary')  bool isPrimary,  int? width,  int? height,  String? blurhash)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String url, @JsonKey(name: 'storage_path')  String? storagePath, @JsonKey(name: 'is_primary')  bool isPrimary,  int? width,  int? height,  String? blurhash)?  $default,) {final _that = this;
 switch (_that) {
 case _ItemImage() when $default != null:
-return $default(_that.id,_that.url,_that.isPrimary,_that.width,_that.height,_that.blurhash);case _:
+return $default(_that.id,_that.url,_that.storagePath,_that.isPrimary,_that.width,_that.height,_that.blurhash);case _:
   return null;
 
 }
@@ -572,11 +577,16 @@ return $default(_that.id,_that.url,_that.isPrimary,_that.width,_that.height,_tha
 @JsonSerializable()
 
 class _ItemImage implements ItemImage {
-  const _ItemImage({required this.id, required this.url, @JsonKey(name: 'is_primary') this.isPrimary = false, this.width, this.height, this.blurhash});
+  const _ItemImage({required this.id, required this.url, @JsonKey(name: 'storage_path') this.storagePath, @JsonKey(name: 'is_primary') this.isPrimary = false, this.width, this.height, this.blurhash});
   factory _ItemImage.fromJson(Map<String, dynamic> json) => _$ItemImageFromJson(json);
 
 @override final  String id;
 @override final  String url;
+/// Durable bucket key. The API serves short-lived presigned URLs
+/// materialized from this key at read time; keeping it lets clients
+/// re-mint a fresh URL when the cached one expires (see
+/// AppImage's remint fallback).
+@override@JsonKey(name: 'storage_path') final  String? storagePath;
 @override@JsonKey(name: 'is_primary') final  bool isPrimary;
 @override final  int? width;
 @override final  int? height;
@@ -595,16 +605,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ItemImage&&(identical(other.id, id) || other.id == id)&&(identical(other.url, url) || other.url == url)&&(identical(other.isPrimary, isPrimary) || other.isPrimary == isPrimary)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.blurhash, blurhash) || other.blurhash == blurhash));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ItemImage&&(identical(other.id, id) || other.id == id)&&(identical(other.url, url) || other.url == url)&&(identical(other.storagePath, storagePath) || other.storagePath == storagePath)&&(identical(other.isPrimary, isPrimary) || other.isPrimary == isPrimary)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.blurhash, blurhash) || other.blurhash == blurhash));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,url,isPrimary,width,height,blurhash);
+int get hashCode => Object.hash(runtimeType,id,url,storagePath,isPrimary,width,height,blurhash);
 
 @override
 String toString() {
-  return 'ItemImage(id: $id, url: $url, isPrimary: $isPrimary, width: $width, height: $height, blurhash: $blurhash)';
+  return 'ItemImage(id: $id, url: $url, storagePath: $storagePath, isPrimary: $isPrimary, width: $width, height: $height, blurhash: $blurhash)';
 }
 
 
@@ -615,7 +625,7 @@ abstract mixin class _$ItemImageCopyWith<$Res> implements $ItemImageCopyWith<$Re
   factory _$ItemImageCopyWith(_ItemImage value, $Res Function(_ItemImage) _then) = __$ItemImageCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String url,@JsonKey(name: 'is_primary') bool isPrimary, int? width, int? height, String? blurhash
+ String id, String url,@JsonKey(name: 'storage_path') String? storagePath,@JsonKey(name: 'is_primary') bool isPrimary, int? width, int? height, String? blurhash
 });
 
 
@@ -632,11 +642,12 @@ class __$ItemImageCopyWithImpl<$Res>
 
 /// Create a copy of ItemImage
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? url = null,Object? isPrimary = null,Object? width = freezed,Object? height = freezed,Object? blurhash = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? url = null,Object? storagePath = freezed,Object? isPrimary = null,Object? width = freezed,Object? height = freezed,Object? blurhash = freezed,}) {
   return _then(_ItemImage(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
-as String,isPrimary: null == isPrimary ? _self.isPrimary : isPrimary // ignore: cast_nullable_to_non_nullable
+as String,storagePath: freezed == storagePath ? _self.storagePath : storagePath // ignore: cast_nullable_to_non_nullable
+as String?,isPrimary: null == isPrimary ? _self.isPrimary : isPrimary // ignore: cast_nullable_to_non_nullable
 as bool,width: freezed == width ? _self.width : width // ignore: cast_nullable_to_non_nullable
 as int?,height: freezed == height ? _self.height : height // ignore: cast_nullable_to_non_nullable
 as int?,blurhash: freezed == blurhash ? _self.blurhash : blurhash // ignore: cast_nullable_to_non_nullable

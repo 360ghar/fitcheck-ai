@@ -46,6 +46,12 @@ abstract class ItemImage with _$ItemImage {
   const factory ItemImage({
     required String id,
     required String url,
+
+    /// Durable bucket key. The API serves short-lived presigned URLs
+    /// materialized from this key at read time; keeping it lets clients
+    /// re-mint a fresh URL when the cached one expires (see
+    /// AppImage's remint fallback).
+    @JsonKey(name: 'storage_path') String? storagePath,
     @JsonKey(name: 'is_primary') @Default(false) bool isPrimary,
     int? width,
     int? height,

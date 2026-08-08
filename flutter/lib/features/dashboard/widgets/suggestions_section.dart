@@ -5,6 +5,7 @@ import '../../../core/widgets/app_ui.dart';
 import '../../../app/routes/app_routes.dart';
 import '../controllers/dashboard_controller.dart';
 import '../models/dashboard_models.dart';
+import '../../wardrobe/repositories/item_repository.dart';
 
 /// Suggestions section showing weather and outfit of the day
 class SuggestionsSection extends StatelessWidget {
@@ -108,6 +109,10 @@ class _WeatherSuggestion extends StatelessWidget {
 class _OutfitSuggestion extends StatelessWidget {
   final DashboardOutfitOfTheDay outfit;
 
+  // Presigned image URLs expire after 1h; on a failed load a fresh URL is
+  // re-minted from the durable storage key.
+  static final ItemRepository _itemRepository = ItemRepository();
+
   const _OutfitSuggestion({required this.outfit});
 
   @override
@@ -136,6 +141,8 @@ class _OutfitSuggestion extends StatelessWidget {
                       fit: BoxFit.contain,
                       enableZoom: false,
                       errorIcon: Icons.image,
+                      storagePath: outfit.storagePath,
+                      remintUrl: _itemRepository.remintImageUrl,
                     ),
             ),
           ),

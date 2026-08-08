@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -133,6 +136,12 @@ CachedNetworkImageProvider appImageProvider(String url) {
 /// attaching the Supabase access token when the URL is an authenticated
 /// worker-mode CDN URL (see [authHeadersForUrl]).
 ///
+/// `data:image/...` URLs are rendered from their embedded base64 bytes
+/// (`Image.memory`) instead of being handed to `CachedNetworkImage`, which
+/// cannot decode them. The AI generation flows hand the live previews around
+/// as data URIs until the job completes and the durable URL arrives, so this
+/// keeps those thumbnails visible mid-generation.
+///
 /// This is the disk-cache half of the egress RCA fix
 /// (docs/exec-plans/active/2026-08-05-railway-egress-rca.md): stable URLs +
 /// disk cache means a wardrobe screen renders without re-downloading.
@@ -147,12 +156,26 @@ class AppNetworkImage extends StatefulWidget {
     this.cacheWidth,
     this.cacheHeight,
     this.fallbackUrl,
+    this.storagePath,
+    this.remintUrl,
   });
 
   final String url;
   final BoxFit? fit;
   final double? width;
   final double? height;
+
+  /// Durable bucket key for the object behind [url]. The API serves
+  /// short-lived presigned URLs materialized from this key at read time, so
+  /// a cached URL can expire while the object itself is perfectly healthy.
+  /// When set together with [remintUrl], a failed load retries once with a
+  /// freshly minted URL instead of rendering a permanent error tile.
+  final String? storagePath;
+
+  /// Re-mints a fresh client-fetchable URL for [storagePath] (e.g. via the
+  /// backend's `/api/v1/images/presigned` endpoint). Returns null when no
+  /// fresh URL could be obtained.
+  final Future<String?> Function(String storagePath)? remintUrl;
 
   /// Full-size URL to retry once if [url] fails.
   ///
@@ -184,6 +207,11 @@ class AppNetworkImage extends StatefulWidget {
 class _AppNetworkImageState extends State<AppNetworkImage> {
   bool _usingFallback = false;
 
+  /// Whether the re-mint fallback has already been attempted. A single retry
+  /// per URL is enough: if the fresh URL fails too, the object is genuinely
+  /// unreadable and an error tile is the honest result.
+  bool _reminted = false;
+
   // Derived from the active URL and cached, because `build` runs per frame for
   // every visible tile on a scrolling grid — which is precisely the surface this
   // widget was introduced for. Parsing the URL twice per frame per tile (once for
@@ -208,8 +236,11 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
   void didUpdateWidget(AppNetworkImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     // A stale failure must never suppress a freshly-minted URL.
-    if (oldWidget.url != widget.url || oldWidget.fallbackUrl != widget.fallbackUrl) {
+    if (oldWidget.url != widget.url ||
+        oldWidget.fallbackUrl != widget.fallbackUrl ||
+        oldWidget.storagePath != widget.storagePath) {
       _usingFallback = false;
+      _reminted = false;
       _resolveActiveUrl();
     }
   }
@@ -223,6 +254,9 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_activeUrl.startsWith('data:image')) {
+      return _buildDataUriImage(context);
+    }
     final fallback = _fallback;
 
     return CachedNetworkImage(
@@ -241,22 +275,124 @@ class _AppNetworkImageState extends State<AppNetworkImage> {
         // rebuild is scheduled rather than applied inline because errorWidget
         // runs during build.
         if (!_usingFallback && fallback != null) {
+          _scheduleFallbackSwap();
+          return SizedBox(width: widget.width, height: widget.height);
+        }
+        // Re-mint fallback: presigned URLs expire after 1h. Retry once with
+        // a fresh URL minted from the durable storage key before rendering
+        // a permanent error tile.
+        if (!_reminted &&
+            widget.storagePath != null &&
+            widget.remintUrl != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && !_usingFallback) {
-              setState(() {
-                _usingFallback = true;
-                _resolveActiveUrl();
-              });
-            }
+            _remintAndRetry();
           });
           return SizedBox(width: widget.width, height: widget.height);
         }
-        final builder = widget.errorWidget;
-        if (builder != null) {
-          return builder(context, failedUrl, error);
-        }
-        return const Icon(Icons.broken_image_outlined);
+        return _buildError(context, failedUrl, error);
       },
     );
+  }
+
+  /// Renders a `data:image/...` URL from its embedded base64 bytes.
+  ///
+  /// `CachedNetworkImage` cannot decode data URIs (the AI generation flows
+  /// preview their live output as data URIs until the durable URL arrives),
+  /// so route them through [Image.memory] — no network, no cache involved.
+  Widget _buildDataUriImage(BuildContext context) {
+    final fallback = _fallback;
+    final bytes = _tryDecodeDataUri(_activeUrl);
+    if (bytes == null) {
+      // Malformed payload — treat like any other decode failure.
+      if (!_usingFallback && fallback != null) {
+        _scheduleFallbackSwap();
+        return SizedBox(width: widget.width, height: widget.height);
+      }
+      return _buildError(context, _activeUrl, const FormatException('Invalid data URI'));
+    }
+    return Image.memory(
+      bytes,
+      fit: widget.fit,
+      width: widget.width,
+      height: widget.height,
+      cacheWidth: widget.cacheWidth,
+      cacheHeight: widget.cacheHeight,
+      errorBuilder: (context, error, stackTrace) {
+        if (!_usingFallback && fallback != null) {
+          _scheduleFallbackSwap();
+          return SizedBox(width: widget.width, height: widget.height);
+        }
+        return _buildError(context, _activeUrl, error);
+      },
+    );
+  }
+
+  /// Strips a `data:image/...;base64,` prefix and decodes the payload; null
+  /// when the URI is not a base64 data URI or the payload is not valid
+  /// base64.
+  Uint8List? _tryDecodeDataUri(String url) {
+    final data = url.replaceFirst(
+      RegExp(r'^data:image/\w+;base64,', caseSensitive: false),
+      '',
+    );
+    if (data.isEmpty || data == url) {
+      return null;
+    }
+    try {
+      return base64Decode(data);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  void _scheduleFallbackSwap() {
+    final fallback = _fallback;
+    if (!_usingFallback && fallback != null) {
+      // The rebuild is scheduled rather than applied inline because error
+      // widgets run during build.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_usingFallback) {
+          setState(() {
+            _usingFallback = true;
+            _resolveActiveUrl();
+          });
+        }
+      });
+    }
+  }
+
+  /// Re-mints a fresh URL for the durable [AppNetworkImage.storagePath] and
+  /// retries the image once. Mirrors AppImage's re-mint fallback.
+  Future<void> _remintAndRetry() async {
+    if (_reminted || widget.storagePath == null || widget.remintUrl == null) {
+      return;
+    }
+    _reminted = true;
+    try {
+      final freshUrl = await widget.remintUrl!(widget.storagePath!);
+      if (freshUrl == null || freshUrl.isEmpty || !mounted) return;
+      setState(() {
+        // A re-minted URL supersedes any prior fallback: it is the durable
+        // object's fresh short-lived URL, not a retry of the same bytes.
+        // The old fallback is dropped so it can never re-fire after the
+        // fresh URL fails — the re-mint is the last retry.
+        _usingFallback = false;
+        _fallback = null;
+        _activeUrl = freshUrl;
+        _cacheKey = stableCacheKey(freshUrl);
+        _authEligible = urlAcceptsAuthToken(freshUrl);
+      });
+    } catch (_) {
+      // The error tile already stands; a re-mint failure must not crash or
+      // loop. The failed load is surfaced through the error widget.
+    }
+  }
+
+  Widget _buildError(BuildContext context, String failedUrl, Object error) {
+    final builder = widget.errorWidget;
+    if (builder != null) {
+      return builder(context, failedUrl, error);
+    }
+    return const Icon(Icons.broken_image_outlined);
   }
 }

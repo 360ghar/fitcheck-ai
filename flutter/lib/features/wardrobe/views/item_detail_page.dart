@@ -7,6 +7,7 @@ import '../../../core/widgets/app_ui.dart';
 import '../../../domain/constants/use_cases.dart';
 import '../../../domain/enums/category.dart';
 import '../controllers/wardrobe_controller.dart';
+import '../repositories/item_repository.dart';
 import '../models/item_model.dart';
 
 /// Detail page for a single wardrobe item
@@ -20,6 +21,8 @@ class ItemDetailPage extends StatefulWidget {
 }
 
 class _ItemDetailPageState extends State<ItemDetailPage> {
+  final ItemRepository _itemRepository = ItemRepository();
+
   @override
   void initState() {
     super.initState();
@@ -28,7 +31,11 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
 
   /// If the item is not already on the loaded closet page (deep link, or an
   /// item on a later page), fetch it so we never strand the user on an
-  /// infinite shimmer.
+  /// infinite shimmer. When it IS cached, still refresh it from the server:
+  /// the API serves short-lived presigned image URLs (1h TTL) minted at the
+  /// last list fetch, so the cached model may hold an expired URL. Network
+  /// failures fall back to the cached model (refreshItemById swallows
+  /// errors).
   Future<void> _loadItem() async {
     final controller = Get.find<WardrobeController>();
     final item = controller.items.firstWhereOrNull(
@@ -36,6 +43,8 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
     );
     if (item == null) {
       await controller.fetchItemById(widget.itemId);
+    } else {
+      await controller.refreshItemById(widget.itemId);
     }
   }
 
@@ -368,6 +377,10 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                   enableZoom: true,
                   galleryUrls: imageUrls,
                   errorIcon: _getCategoryIcon(item.category),
+                  // Presigned URLs expire after 1h; on a failed load re-mint
+                  // a fresh URL from the durable storage key.
+                  storagePath: item.itemImages?.first.storagePath,
+                  remintUrl: _itemRepository.remintImageUrl,
                 )
               : Center(
                   child: Icon(

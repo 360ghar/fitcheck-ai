@@ -62,11 +62,17 @@ class DashboardActivity {
   final DateTime? timestamp;
   final String? imageUrl;
 
+  /// Durable bucket key behind [imageUrl] — lets the tile re-mint a fresh
+  /// short-lived URL when the one it holds expires (presigned URLs are
+  /// 1h TTL).
+  final String? storagePath;
+
   const DashboardActivity({
     required this.type,
     required this.description,
     required this.timestamp,
     this.imageUrl,
+    this.storagePath,
   });
 
   factory DashboardActivity.fromJson(Map<String, dynamic> json) {
@@ -76,6 +82,7 @@ class DashboardActivity {
       description: (json['description'] ?? '').toString(),
       timestamp: timestampRaw != null ? DateTime.tryParse(timestampRaw) : null,
       imageUrl: json['image_url']?.toString(),
+      storagePath: json['storage_path']?.toString(),
     );
   }
 }
@@ -107,10 +114,16 @@ class DashboardOutfitOfTheDay {
   final String? name;
   final String? imageUrl;
 
+  /// Durable bucket key behind [imageUrl] — lets the tile re-mint a fresh
+  /// short-lived URL when the one it holds expires (presigned URLs are
+  /// 1h TTL).
+  final String? storagePath;
+
   const DashboardOutfitOfTheDay({
     required this.id,
     required this.name,
     required this.imageUrl,
+    this.storagePath,
   });
 
   factory DashboardOutfitOfTheDay.fromJson(Map<String, dynamic> json) {
@@ -118,6 +131,7 @@ class DashboardOutfitOfTheDay {
       id: json['id']?.toString(),
       name: json['name']?.toString(),
       imageUrl: json['image_url']?.toString(),
+      storagePath: json['storage_path']?.toString(),
     );
   }
 }

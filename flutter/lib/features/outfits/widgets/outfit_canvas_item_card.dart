@@ -3,6 +3,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../controllers/outfit_builder_controller.dart';
+import '../../wardrobe/repositories/item_repository.dart';
 
 /// Card displaying an item on the outfit canvas
 /// Supports visibility toggle, remove, and layer management
@@ -14,6 +15,10 @@ class OutfitCanvasItemCard extends StatelessWidget {
   final VoidCallback onRemove;
   final VoidCallback onToggleVisibility;
   final Function(bool) onMoveLayer;
+
+  // Presigned item image URLs expire after 1h; on a failed load a fresh URL
+  // is re-minted from the durable storage key.
+  static final ItemRepository _itemRepository = ItemRepository();
 
   const OutfitCanvasItemCard({
     super.key,
@@ -65,6 +70,9 @@ class OutfitCanvasItemCard extends StatelessWidget {
                         enableZoom: false,
                         backgroundColor: isVisible ? null : Colors.black54,
                         errorIcon: _getCategoryIcon(outfitItem.item.category),
+                        storagePath: outfitItem.item.itemImages!.first
+                            .storagePath,
+                        remintUrl: _itemRepository.remintImageUrl,
                       )
                     : Container(
                         color: tokens.cardColor.withValues(alpha: 0.5),

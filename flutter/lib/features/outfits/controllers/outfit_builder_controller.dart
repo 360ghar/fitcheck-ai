@@ -14,8 +14,17 @@ import '../../../core/utils/error_handler.dart';
 /// Controller for outfit builder
 /// Manages outfit creation, item selection, and AI generation
 class OutfitBuilderController extends GetxController {
-  final OutfitRepository _outfitRepository = OutfitRepository();
-  final ItemRepository _itemRepository = ItemRepository();
+  final OutfitRepository _outfitRepository;
+  final ItemRepository _itemRepository;
+
+  /// Both repositories are injectable so unit tests can drive the save-time
+  /// image-upload strategy without hitting the real API. Default to live
+  /// repositories in production.
+  OutfitBuilderController({
+    OutfitRepository? outfitRepository,
+    ItemRepository? itemRepository,
+  }) : _outfitRepository = outfitRepository ?? OutfitRepository(),
+       _itemRepository = itemRepository ?? ItemRepository();
 
   // Worker for cleanup
   Worker? _wardrobeItemsWorker;
@@ -274,23 +283,57 @@ class OutfitBuilderController extends GetxController {
         Get.find<OutfitListController>().addOutfit(outfit);
       }
 
-      // Upload generated image if available (automatic save like web version)
-      // Only upload if it's a data URL (base64), not a remote URL
-      if (generatedImageUrl.value.startsWith('data:image/')) {
-        final base64Data = generatedImageUrl.value.split(',').last;
+      // Upload generated image if available (automatic save like web
+      // version). The AI service returns the visualization either as a
+      // base64 data URI (default) or, when save_to_storage is enabled, as a
+      // presigned URL — handle both:
+      //  1. Data-URI: strip the prefix and upload the embedded bytes.
+      //  2. Real URL: download the bytes and re-upload (mirrors the item
+      //     save chain).
+      // Upload failures must not fail the outfit save itself; the image is
+      // still recoverable from the detail page re-mint fallback.
+      var imageUploaded = false;
+      final generatedUrl = generatedImageUrl.value;
+      if (generatedUrl.startsWith('data:image/')) {
+        final base64Data = generatedUrl.split(',').last;
         try {
-          await _outfitRepository.uploadOutfitImageFromBase64(
-            outfit.id,
-            base64Data,
-            isPrimary: true,
-            pose: 'front',
-          );
+          imageUploaded =
+              await _outfitRepository.uploadOutfitImageFromBase64(
+                outfit.id,
+                base64Data,
+                isPrimary: true,
+                pose: 'front',
+              ) !=
+              null;
         } catch (e) {
           // Log error but don't fail the outfit save
           debugPrint('Error uploading generated image: $e');
         }
-      } else if (generatedImageUrl.value.isNotEmpty) {
-        debugPrint('Skipping generated image upload: not a base64 data URI.');
+      } else if (generatedUrl.isNotEmpty) {
+        // Post-generate-outfit state when the backend saved the visualization
+        // to storage: only the presigned URL remains, so download and
+        // re-upload the bytes.
+        try {
+          imageUploaded =
+              await _outfitRepository.uploadOutfitImageFromUrl(
+                outfit.id,
+                generatedUrl,
+                isPrimary: true,
+                pose: 'front',
+              ) !=
+              null;
+        } catch (e) {
+          // Log error but don't fail the outfit save
+          debugPrint('Error uploading generated image from URL: $e');
+        }
+      }
+
+      if (!imageUploaded && generatedUrl.isNotEmpty) {
+        ErrorHandler.reportError(
+          StateError('Outfit image upload failed'),
+          'saveOutfit: outfit ${outfit.id} ("${name.value.trim()}") was '
+          'created but its generated visualization never made it to storage',
+        );
       }
 
       Get.back(result: outfit);

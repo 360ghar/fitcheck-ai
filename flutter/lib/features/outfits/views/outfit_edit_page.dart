@@ -66,6 +66,16 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
     isLoadingOutfit.value = true;
     loadError.value = '';
     try {
+      // The API serves short-lived presigned image URLs (1h TTL) minted at
+      // the last fetch, so a cached outfit may hold an expired URL. Refresh
+      // it server-side when cached (failures fall back to the cached model);
+      // fetchOutfitById then returns the fresh model.
+      final cachedIndex = _outfitsController.outfits.indexWhere(
+        (o) => o.id == widget.outfitId,
+      );
+      if (cachedIndex != -1) {
+        await _outfitsController.refreshOutfitById(widget.outfitId);
+      }
       final outfit = await _outfitsController.fetchOutfitById(widget.outfitId);
       if (!mounted) return;
       if (outfit == null) {
@@ -460,6 +470,11 @@ class _OutfitEditPageState extends State<OutfitEditPage> {
                               backgroundColor: isDeleting
                                   ? Colors.black.withValues(alpha: 0.5)
                                   : null,
+                              // Presigned URLs expire after 1h; on a failed
+                              // load re-mint a fresh URL from the durable
+                              // storage key.
+                              storagePath: image.storagePath,
+                              remintUrl: _outfitRepository.remintImageUrl,
                             ),
                           ),
                         ),

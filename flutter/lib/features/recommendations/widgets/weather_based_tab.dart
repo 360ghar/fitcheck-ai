@@ -4,11 +4,16 @@ import '../../../core/widgets/app_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../wardrobe/models/item_model.dart';
+import '../../wardrobe/repositories/item_repository.dart';
 import '../controllers/recommendations_controller.dart';
 
 /// Weather-Based Tab - Get recommendations based on weather
 class WeatherBasedTab extends StatelessWidget {
   const WeatherBasedTab({super.key});
+
+  // Presigned item image URLs expire after 1h; on a failed load a fresh URL
+  // is re-minted from the durable storage key.
+  static final ItemRepository _itemRepository = ItemRepository();
 
   @override
   Widget build(BuildContext context) {
@@ -274,6 +279,8 @@ class WeatherBasedTab extends StatelessWidget {
                   ? AppNetworkImage(
                   item.itemImages!.first.url,
                   fit: BoxFit.cover,
+                  storagePath: item.itemImages!.first.storagePath,
+                  remintUrl: _itemRepository.remintImageUrl,
                   errorWidget: (_, _, _) => const Icon(Icons.broken_image_outlined),
                 )
                   : Container(

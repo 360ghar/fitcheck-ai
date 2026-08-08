@@ -5,6 +5,7 @@ import '../../../core/widgets/app_bottom_navigation_bar.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../wardrobe/models/item_model.dart';
+import '../../wardrobe/repositories/item_repository.dart';
 import '../controllers/recommendations_controller.dart';
 import '../widgets/find_matches_tab.dart';
 import '../widgets/complete_look_tab.dart';
@@ -123,6 +124,10 @@ class SelectedItemsChips extends StatelessWidget {
   final RxList<ItemModel> selectedItems;
   final Function(ItemModel) onRemove;
 
+  // Presigned item image URLs expire after 1h; on a failed load a fresh URL
+  // is re-minted from the durable storage key.
+  static final ItemRepository _itemRepository = ItemRepository();
+
   const SelectedItemsChips({
     super.key,
     required this.selectedItems,
@@ -150,14 +155,27 @@ class SelectedItemsChips extends StatelessWidget {
               padding: const EdgeInsets.only(right: AppConstants.spacing8),
               child: Chip(
                 label: Text(item.name),
-                avatar: CircleAvatar(
-                  backgroundImage:
-                      item.itemImages != null && item.itemImages!.isNotEmpty
-                      ? appImageProvider(item.itemImages!.first.url)
-                      : null,
-                  child: item.itemImages == null || item.itemImages!.isEmpty
-                      ? const Icon(Icons.image, size: 16)
-                      : null,
+                avatar: ClipOval(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child:
+                        item.itemImages != null && item.itemImages!.isNotEmpty
+                        ? AppNetworkImage(
+                            item.itemImages!.first.url,
+                            fit: BoxFit.cover,
+                            // Presigned URLs expire after 1h; on a failed
+                            // load re-mint a fresh URL from the durable
+                            // storage key.
+                            storagePath: item.itemImages!.first.storagePath,
+                            remintUrl:
+                                SelectedItemsChips._itemRepository
+                                    .remintImageUrl,
+                            errorWidget: (_, _, _) =>
+                                const Icon(Icons.image, size: 16),
+                          )
+                        : const Icon(Icons.image, size: 16),
+                  ),
                 ),
                 onDeleted: () => onRemove(item),
                 backgroundColor: tokens.brandColor.withValues(alpha: 0.1),
@@ -177,6 +195,10 @@ class RecommendationCard extends StatelessWidget {
   /// Optional favorite action; omit when favorites are not wired yet
   final VoidCallback? onFavorite;
 
+  // Presigned item image URLs expire after 1h; on a failed load a fresh URL
+  // is re-minted from the durable storage key.
+  static final ItemRepository _recommendationItemRepository = ItemRepository();
+
   const RecommendationCard({
     super.key,
     required this.item,
@@ -192,6 +214,12 @@ class RecommendationCard extends StatelessWidget {
     final category = item['category']?.toString();
     final imageUrl = item['image_url']?.toString();
     final score = item['score'] as num? ?? 0.0;
+    // The response nests the full image rows under `images` (with the
+    // durable storage key) alongside the flattened convenience `image_url`.
+    final images = item['images'];
+    final storagePath = images is List && images.isNotEmpty && images.first is Map
+        ? (images.first as Map)['storage_path']?.toString()
+        : null;
 
     return InkWell(
       onTap: onTap,
@@ -211,6 +239,10 @@ class RecommendationCard extends StatelessWidget {
                         fit: BoxFit.contain,
                         enableZoom: false,
                         errorIcon: _getCategoryIcon(category),
+                        // Presigned URLs expire after 1h; on a failed load
+                        // re-mint a fresh URL from the durable storage key.
+                        storagePath: storagePath,
+                        remintUrl: _recommendationItemRepository.remintImageUrl,
                       )
                     : Container(
                         color: tokens.cardColor.withValues(alpha: 0.5),

@@ -232,9 +232,19 @@ class ItemRepository {
         filename: 'generated_image.png',
         contentType: 'image/png',
       );
-    } on DioException {
+    } on DioException catch (e) {
+      ErrorHandler.reportError(
+        e,
+        'Item image upload failed: DioException while uploading base64 image '
+        'for item $itemId',
+      );
       return null;
-    } catch (_) {
+    } catch (e) {
+      ErrorHandler.reportError(
+        e,
+        'Item image upload failed: could not decode base64 image for item '
+        '$itemId',
+      );
       return null;
     }
   }
@@ -254,6 +264,11 @@ class ItemRepository {
       );
       final bytes = response.data;
       if (bytes is! List<int> || bytes.isEmpty) {
+        ErrorHandler.reportError(
+          StateError('Empty image body'),
+          'Item image upload failed: empty download from $imageUrl for item '
+          '$itemId',
+        );
         return null;
       }
       return await _uploadBytes(
@@ -262,9 +277,19 @@ class ItemRepository {
         filename: 'generated_image.png',
         contentType: 'image/png',
       );
-    } on DioException {
+    } on DioException catch (e) {
+      ErrorHandler.reportError(
+        e,
+        'Item image upload failed: could not download $imageUrl for item '
+        '$itemId',
+      );
       return null;
-    } catch (_) {
+    } catch (e) {
+      ErrorHandler.reportError(
+        e,
+        'Item image upload failed: could not download $imageUrl for item '
+        '$itemId',
+      );
       return null;
     }
   }
@@ -294,9 +319,47 @@ class ItemRepository {
       if (dataMap.isNotEmpty) {
         return ItemImage.fromJson(_normalizeItemImageJson(dataMap));
       }
+      ErrorHandler.reportError(
+        StateError('Empty upload response'),
+        'Item image upload failed: unexpected response body for item $itemId',
+      );
       return null;
-    } on DioException {
+    } on DioException catch (e) {
+      ErrorHandler.reportError(
+        e,
+        'Item image upload failed: HTTP error uploading image for item '
+        '$itemId',
+      );
       return null;
+    } catch (e) {
+      ErrorHandler.reportError(
+        e,
+        'Item image upload failed: unexpected error uploading image for item '
+        '$itemId',
+      );
+      return null;
+    }
+  }
+
+  /// Re-mint a fresh client-fetchable URL for a durable storage key.
+  ///
+  /// The API serves short-lived presigned URLs materialized from
+  /// `storage_path` at read time; a cached URL expires after
+  /// OBJECT_STORAGE_PRESIGN_TTL (1h). Surfaces that render item images can
+  /// call this when a load fails and retry with the fresh URL instead of
+  /// showing a permanently broken tile. Returns null on any failure.
+  Future<String?> remintImageUrl(String storagePath) async {
+    try {
+      final response = await _apiClient.get(
+        ApiConstants.imagesPresigned,
+        queryParameters: {'storage_path': storagePath},
+      );
+      final dataMap = _extractDataMap(response.data);
+      final url = dataMap['url']?.toString();
+      if (url == null || url.isEmpty) {
+        return null;
+      }
+      return url;
     } catch (_) {
       return null;
     }

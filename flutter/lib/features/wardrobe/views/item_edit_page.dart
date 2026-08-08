@@ -531,6 +531,11 @@ class _ItemEditPageState extends State<ItemEditPage> {
                               backgroundColor: isDeleting
                                   ? Colors.black.withValues(alpha: 0.5)
                                   : null,
+                              // Presigned URLs expire after 1h; on a failed
+                              // load re-mint a fresh URL from the durable
+                              // storage key.
+                              storagePath: image.storagePath,
+                              remintUrl: _itemRepository.remintImageUrl,
                             ),
                           ),
                         ),

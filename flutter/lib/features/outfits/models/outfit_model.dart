@@ -43,6 +43,12 @@ abstract class OutfitImage with _$OutfitImage {
   const factory OutfitImage({
     required String id,
     required String url,
+
+    /// Durable bucket key. The API serves short-lived presigned URLs
+    /// materialized from this key at read time; keeping it lets clients
+    /// re-mint a fresh URL when the cached one expires (see
+    /// AppImage's remint fallback).
+    @JsonKey(name: 'storage_path') String? storagePath,
     String? type,
     String? pose,
     String? lighting,

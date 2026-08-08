@@ -6,6 +6,7 @@ import '../../../domain/enums/style.dart';
 import '../../../domain/enums/season.dart';
 import '../controllers/outfit_list_controller.dart';
 import '../controllers/outfit_generation_controller.dart';
+import '../repositories/outfit_repository.dart';
 import '../../../app/routes/app_routes.dart';
 import 'outfit_detail_page.dart';
 
@@ -21,6 +22,7 @@ class OutfitsContent extends StatefulWidget {
 class _OutfitsContentState extends State<OutfitsContent> {
   final OutfitListController controller = Get.find<OutfitListController>();
   final OutfitGenerationController generationController = Get.find<OutfitGenerationController>();
+  final OutfitRepository _outfitRepository = OutfitRepository();
 
   @override
   Widget build(BuildContext context) {
@@ -218,6 +220,10 @@ class _OutfitsContentState extends State<OutfitsContent> {
                             : Colors.grey.withValues(alpha: 0.1),
                         enableZoom: false,
                         galleryUrls: imageUrls,
+                        // Presigned URLs expire after 1h; on a failed load
+                        // re-mint a fresh URL from the durable storage key.
+                        storagePath: outfit.outfitImages?.first.storagePath,
+                        remintUrl: _outfitRepository.remintImageUrl,
                       )
                     : _buildPlaceholder(),
               ),

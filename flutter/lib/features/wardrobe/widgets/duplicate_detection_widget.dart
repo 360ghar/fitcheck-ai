@@ -4,6 +4,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../models/item_model.dart';
+import '../repositories/item_repository.dart';
 
 /// Widget showing potential duplicate items
 class DuplicateDetectionWidget extends StatelessWidget {
@@ -190,6 +191,10 @@ class DuplicateDetectionWidget extends StatelessWidget {
 class _DuplicateItemCard extends StatelessWidget {
   final ItemModel item;
 
+  // Presigned item image URLs expire after 1h; on a failed load a fresh URL
+  // is re-minted from the durable storage key.
+  static final ItemRepository _itemRepository = ItemRepository();
+
   const _DuplicateItemCard({required this.item});
 
   @override
@@ -212,6 +217,8 @@ class _DuplicateItemCard extends StatelessWidget {
                       fit: BoxFit.contain,
                       enableZoom: false,
                       errorIcon: _getCategoryIcon(item.category),
+                      storagePath: item.itemImages!.first.storagePath,
+                      remintUrl: _itemRepository.remintImageUrl,
                     )
                   : Container(
                       color: tokens.cardColor.withValues(alpha: 0.5),

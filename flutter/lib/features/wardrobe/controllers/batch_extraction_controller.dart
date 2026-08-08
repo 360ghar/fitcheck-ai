@@ -34,7 +34,7 @@ enum BatchInputMode { upload, social }
 /// 4. Save selected items to wardrobe
 class BatchExtractionController extends GetxController {
   final BatchExtractionRepository _batchRepo;
-  final ItemRepository _itemRepo = ItemRepository();
+  final ItemRepository _itemRepo;
   final SocialImportRepository _socialRepo = SocialImportRepository();
   final ImagePicker _imagePicker = ImagePicker();
   final AppLinks _appLinks = AppLinks();
@@ -48,8 +48,15 @@ class BatchExtractionController extends GetxController {
 
   /// [batchRepository] is injectable so unit tests can drive the fallback
   /// polling loop without hitting the real API. Defaults to a live repository.
-  BatchExtractionController({BatchExtractionRepository? batchRepository})
-    : _batchRepo = batchRepository ?? BatchExtractionRepository();
+  ///
+  /// [itemRepository] is injectable so unit tests can drive the item-save
+  /// image-upload strategy without hitting the real API. Defaults to a live
+  /// repository.
+  BatchExtractionController({
+    BatchExtractionRepository? batchRepository,
+    ItemRepository? itemRepository,
+  }) : _batchRepo = batchRepository ?? BatchExtractionRepository(),
+       _itemRepo = itemRepository ?? ItemRepository();
 
   // Constants
   static const int maxImages = 50;
@@ -1416,37 +1423,75 @@ class BatchExtractionController extends GetxController {
 
         final created = await _itemRepo.createItem(request);
 
+        // Image upload strategy, in priority order. Each stage only runs when
+        // the previous one produced no image:
+        //  1. In-memory generated base64 (from SSE generation events).
+        //  2. Data-URI generated image (base64 embedded in generatedImageUrl)
+        //     — strip the prefix and upload the bytes.
+        //  3. Real storage URL — this is the normal post-job_complete state:
+        //     the backend ships generated_image_base64: null for URL-backed
+        //     items and frees the base64 at job end, so only the presigned
+        //     URL remains. Download the bytes and re-upload to the item.
+        //  4. Source photo the item was extracted from — last resort.
+        final rawImageUrl = item.generatedImageUrl;
+        final isDataUri =
+            rawImageUrl != null && rawImageUrl.startsWith('data:image');
+        var imageUploaded = false;
+
         final generatedBase64 =
             item.generatedImageBase64 ??
-            item.generatedImageUrl?.replaceFirst(
-              RegExp(r'^data:image/\w+;base64,', caseSensitive: false),
-              '',
-            );
+            (isDataUri
+                ? rawImageUrl.replaceFirst(
+                    RegExp(r'^data:image/\w+;base64,', caseSensitive: false),
+                    '',
+                  )
+                : null);
 
         if (generatedBase64 != null && generatedBase64.isNotEmpty) {
-          await _itemRepo.uploadImageFromBase64(created.id, generatedBase64);
-        } else if (item.generatedImageUrl != null &&
-            item.generatedImageUrl!.isNotEmpty &&
-            !item.generatedImageUrl!.startsWith('data:')) {
-          // Reload-after-completion edge: the backend frees item base64 at
-          // job end, so only a real storage URL remains. Download and
-          // upload the bytes the same way as in-flow saves.
-          await _itemRepo.uploadImageFromUrl(
-            created.id,
-            item.generatedImageUrl!,
-          );
-        } else {
+          imageUploaded =
+              (await _itemRepo.uploadImageFromBase64(
+                created.id,
+                generatedBase64,
+              )) !=
+              null;
+        }
+
+        if (!imageUploaded &&
+            rawImageUrl != null &&
+            rawImageUrl.isNotEmpty &&
+            !rawImageUrl.startsWith('data:')) {
+          imageUploaded =
+              (await _itemRepo.uploadImageFromUrl(
+                created.id,
+                rawImageUrl,
+              )) !=
+              null;
+        }
+
+        if (!imageUploaded) {
           final sourceImage = selectedImages.firstWhereOrNull(
             (img) => img.id == item.sourceImageId,
           );
           if (sourceImage != null) {
-            await _itemRepo.uploadImages(created.id, [
+            final uploaded = await _itemRepo.uploadImages(created.id, [
               File(sourceImage.filePath),
             ]);
+            imageUploaded = uploaded.isNotEmpty;
           }
         }
 
-        savedItems.add(await _itemRepo.getItem(created.id));
+        final savedItem = await _itemRepo.getItem(created.id);
+        if (!imageUploaded &&
+            (savedItem.itemImages == null || savedItem.itemImages!.isEmpty)) {
+          // The item row exists but no image made it to storage. Surface the
+          // failure so the user isn't silently left with a text-only item.
+          ErrorHandler.reportError(
+            StateError('Item image upload failed'),
+            'saveSelectedItems: created item ${created.id} '
+            '("${item.name}") has no images after all upload strategies',
+          );
+        }
+        savedItems.add(savedItem);
       } catch (e) {
         if (kDebugMode) {
           print('Failed to save item ${item.name}: $e');

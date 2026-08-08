@@ -4,11 +4,16 @@ import '../../../core/widgets/app_network_image.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/app_ui.dart';
+import '../../wardrobe/repositories/item_repository.dart';
 import '../controllers/recommendations_controller.dart';
 
 /// Astrology tab - lucky colors and outfit picks
 class AstrologyTab extends StatelessWidget {
   const AstrologyTab({super.key});
+
+  // Presigned item image URLs expire after 1h; on a failed load a fresh URL
+  // is re-minted from the durable storage key.
+  static final ItemRepository _itemRepository = ItemRepository();
 
   @override
   Widget build(BuildContext context) {
@@ -432,6 +437,9 @@ class AstrologyTab extends StatelessWidget {
                                         // retry the full size before showing a
                                         // broken-image icon.
                                         fallbackUrl: image.fallback,
+                                        storagePath: image.storagePath,
+                                        remintUrl:
+                                            _itemRepository.remintImageUrl,
                                         errorWidget: (_, _, _) => const Icon(Icons.broken_image_outlined),
                                       )
                                     : Container(
@@ -587,7 +595,9 @@ class AstrologyTab extends StatelessWidget {
   /// from the parent key with no existence check and can 404 while the full-size
   /// object is healthy (see `AppNetworkImage.fallbackUrl`), so the full size
   /// comes back as the fallback rather than being discarded.
-  ({String? url, String? fallback}) _extractItemImage(Map<String, dynamic> item) {
+  ({String? url, String? fallback, String? storagePath}) _extractItemImage(
+    Map<String, dynamic> item,
+  ) {
     for (final key in ['images', 'item_images']) {
       final images = item[key];
       if (images is List && images.isNotEmpty) {
@@ -596,16 +606,19 @@ class AstrologyTab extends StatelessWidget {
           final map = Map<String, dynamic>.from(first);
           final full = map['image_url']?.toString() ?? map['url']?.toString();
           final thumb = map['thumbnail_url']?.toString();
+          final storagePath = map['storage_path']?.toString();
           final url = (thumb != null && thumb.isNotEmpty) ? thumb : full;
           if (url != null && url.isNotEmpty) {
-            return (url: url, fallback: full);
+            return (url: url, fallback: full, storagePath: storagePath);
           }
         }
       }
     }
     final flat = item['image_url']?.toString();
-    if (flat != null && flat.isNotEmpty) return (url: flat, fallback: null);
-    return (url: null, fallback: null);
+    if (flat != null && flat.isNotEmpty) {
+      return (url: flat, fallback: null, storagePath: null);
+    }
+    return (url: null, fallback: null, storagePath: null);
   }
 
   Color _parseHexColor(String value) {

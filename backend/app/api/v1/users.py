@@ -1040,6 +1040,18 @@ def _primary_image_url(images: List[Dict]) -> Optional[str]:
     return (primary or {}).get("thumbnail_url") or (primary or {}).get("image_url")
 
 
+def _primary_storage_path(images: List[Dict]) -> Optional[str]:
+    """Pick the durable storage key of the primary (else first) image.
+
+    Siblings the URL picker above so clients can re-mint a fresh short-lived
+    URL when the one they hold expires while a screen stays open.
+    """
+    if not images:
+        return None
+    primary = next((i for i in images if i.get("is_primary")), images[0])
+    return (primary or {}).get("storage_path")
+
+
 async def _build_recent_activity(items: List[Dict], outfits: List[Dict]) -> List[Dict[str, Any]]:
     """Build combined recent activity list from items and outfits.
 
@@ -1058,6 +1070,7 @@ async def _build_recent_activity(items: List[Dict], outfits: List[Dict]) -> List
             "description": f"Added {it.get('name')}",
             "timestamp": it.get("created_at"),
             "image_url": _primary_image_url(images),
+            "storage_path": _primary_storage_path(images),
         })
 
     for o in outfits:
@@ -1068,6 +1081,7 @@ async def _build_recent_activity(items: List[Dict], outfits: List[Dict]) -> List
             "description": f"Created {o.get('name')}",
             "timestamp": o.get("created_at"),
             "image_url": _primary_image_url(images),
+            "storage_path": _primary_storage_path(images),
         })
 
     return sorted(activity, key=lambda a: a.get("timestamp") or "", reverse=True)[:10]
@@ -1128,6 +1142,9 @@ async def _get_outfit_of_the_day(user_id: str, db: Client) -> Optional[Dict[str,
             "id": o.get("id"),
             "name": o.get("name"),
             "image_url": (primary or {}).get("thumbnail_url") or (primary or {}).get("image_url"),
+            # Durable key so clients can re-mint a fresh URL if this one
+            # expires while the dashboard stays open.
+            "storage_path": (primary or {}).get("storage_path"),
         }
     except Exception:
         return None

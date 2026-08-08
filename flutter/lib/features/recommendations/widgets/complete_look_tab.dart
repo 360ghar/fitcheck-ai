@@ -6,12 +6,17 @@ import '../../../core/widgets/app_ui.dart';
 import '../../../domain/enums/category.dart';
 import '../../../domain/enums/style.dart';
 import '../../wardrobe/models/item_model.dart';
+import '../../wardrobe/repositories/item_repository.dart';
 import '../controllers/recommendations_controller.dart';
 import '../views/recommendations_page.dart';
 
 /// Complete Look Tab - Generate complete outfit suggestions
 class CompleteLookTab extends StatelessWidget {
   const CompleteLookTab({super.key});
+
+  // Presigned item image URLs expire after 1h; on a failed load a fresh URL
+  // is re-minted from the durable storage key.
+  static final ItemRepository _itemRepository = ItemRepository();
 
   @override
   Widget build(BuildContext context) {
@@ -270,6 +275,8 @@ class CompleteLookTab extends StatelessWidget {
                     width: 120,
                     height: 120,
                     fit: BoxFit.cover,
+                    storagePath: item.itemImages!.first.storagePath,
+                    remintUrl: _itemRepository.remintImageUrl,
                     errorWidget: (_, _, _) => Container(
                       width: 120,
                       height: 120,

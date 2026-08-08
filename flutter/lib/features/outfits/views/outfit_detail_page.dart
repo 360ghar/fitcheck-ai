@@ -30,6 +30,7 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
   int _currentImageIndex = 0;
   late final PageController _pageController;
   late final OutfitListController _controller;
+  final OutfitRepository _outfitRepository = OutfitRepository();
 
   @override
   void initState() {
@@ -46,9 +47,19 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
   }
 
   Future<void> _loadOutfit() async {
-    final outfit = _controller.outfits.firstWhereOrNull((o) => o.id == widget.outfitId);
+    final outfit =
+        _controller.outfits.firstWhereOrNull((o) => o.id == widget.outfitId);
     if (outfit == null) {
       await _controller.fetchOutfitById(widget.outfitId);
+    } else {
+      // Always refresh on open instead of serving the cached model blind:
+      // the API serves short-lived presigned image URLs (1h TTL) minted at
+      // the last list fetch, and the cached model may hold an expired one.
+      // Refreshing replaces the list entry with fresh URLs, so the detail
+      // page — and the card after back navigation — renders current images
+      // instead of a permanently broken tile. Network failures fall back to
+      // the cached model (refreshOutfitById swallows errors).
+      await _controller.refreshOutfitById(widget.outfitId);
     }
   }
 
@@ -368,6 +379,11 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                           enableZoom: true,
                           galleryUrls: imageUrls,
                           initialGalleryIndex: index,
+                          // Presigned URLs expire after 1h; on a failed load
+                          // re-mint a fresh URL from the durable storage key.
+                          storagePath:
+                              outfit.outfitImages?[index].storagePath,
+                          remintUrl: _outfitRepository.remintImageUrl,
                         );
                       },
                     ),
@@ -456,6 +472,11 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
                             imageUrl: imageUrl,
                             fit: BoxFit.cover,
                             enableZoom: false,
+                            // Presigned URLs expire after 1h; on a failed
+                            // load re-mint a fresh URL from the durable
+                            // storage key.
+                            storagePath: item.itemImages?.first.storagePath,
+                            remintUrl: _outfitRepository.remintImageUrl,
                           )
                         : Center(
                             child: Icon(

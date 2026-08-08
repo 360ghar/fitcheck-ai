@@ -91,6 +91,7 @@ const _$ConditionEnumMap = {
 _ItemImage _$ItemImageFromJson(Map<String, dynamic> json) => _ItemImage(
   id: json['id'] as String,
   url: json['url'] as String,
+  storagePath: json['storage_path'] as String?,
   isPrimary: json['is_primary'] as bool? ?? false,
   width: (json['width'] as num?)?.toInt(),
   height: (json['height'] as num?)?.toInt(),
@@ -101,6 +102,7 @@ Map<String, dynamic> _$ItemImageToJson(_ItemImage instance) =>
     <String, dynamic>{
       'id': instance.id,
       'url': instance.url,
+      'storage_path': instance.storagePath,
       'is_primary': instance.isPrimary,
       'width': instance.width,
       'height': instance.height,

@@ -359,7 +359,11 @@ as DateTime?,
 /// @nodoc
 mixin _$OutfitImage {
 
- String get id; String get url; String? get type; String? get pose; String? get lighting;@JsonKey(name: 'body_profile_id') String? get bodyProfileId;@JsonKey(name: 'is_generated') bool get isGenerated; int? get width; int? get height; String? get blurhash;
+ String get id; String get url;/// Durable bucket key. The API serves short-lived presigned URLs
+/// materialized from this key at read time; keeping it lets clients
+/// re-mint a fresh URL when the cached one expires (see
+/// AppImage's remint fallback).
+@JsonKey(name: 'storage_path') String? get storagePath; String? get type; String? get pose; String? get lighting;@JsonKey(name: 'body_profile_id') String? get bodyProfileId;@JsonKey(name: 'is_generated') bool get isGenerated; int? get width; int? get height; String? get blurhash;
 /// Create a copy of OutfitImage
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -372,16 +376,16 @@ $OutfitImageCopyWith<OutfitImage> get copyWith => _$OutfitImageCopyWithImpl<Outf
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is OutfitImage&&(identical(other.id, id) || other.id == id)&&(identical(other.url, url) || other.url == url)&&(identical(other.type, type) || other.type == type)&&(identical(other.pose, pose) || other.pose == pose)&&(identical(other.lighting, lighting) || other.lighting == lighting)&&(identical(other.bodyProfileId, bodyProfileId) || other.bodyProfileId == bodyProfileId)&&(identical(other.isGenerated, isGenerated) || other.isGenerated == isGenerated)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.blurhash, blurhash) || other.blurhash == blurhash));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is OutfitImage&&(identical(other.id, id) || other.id == id)&&(identical(other.url, url) || other.url == url)&&(identical(other.storagePath, storagePath) || other.storagePath == storagePath)&&(identical(other.type, type) || other.type == type)&&(identical(other.pose, pose) || other.pose == pose)&&(identical(other.lighting, lighting) || other.lighting == lighting)&&(identical(other.bodyProfileId, bodyProfileId) || other.bodyProfileId == bodyProfileId)&&(identical(other.isGenerated, isGenerated) || other.isGenerated == isGenerated)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.blurhash, blurhash) || other.blurhash == blurhash));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,url,type,pose,lighting,bodyProfileId,isGenerated,width,height,blurhash);
+int get hashCode => Object.hash(runtimeType,id,url,storagePath,type,pose,lighting,bodyProfileId,isGenerated,width,height,blurhash);
 
 @override
 String toString() {
-  return 'OutfitImage(id: $id, url: $url, type: $type, pose: $pose, lighting: $lighting, bodyProfileId: $bodyProfileId, isGenerated: $isGenerated, width: $width, height: $height, blurhash: $blurhash)';
+  return 'OutfitImage(id: $id, url: $url, storagePath: $storagePath, type: $type, pose: $pose, lighting: $lighting, bodyProfileId: $bodyProfileId, isGenerated: $isGenerated, width: $width, height: $height, blurhash: $blurhash)';
 }
 
 
@@ -392,7 +396,7 @@ abstract mixin class $OutfitImageCopyWith<$Res>  {
   factory $OutfitImageCopyWith(OutfitImage value, $Res Function(OutfitImage) _then) = _$OutfitImageCopyWithImpl;
 @useResult
 $Res call({
- String id, String url, String? type, String? pose, String? lighting,@JsonKey(name: 'body_profile_id') String? bodyProfileId,@JsonKey(name: 'is_generated') bool isGenerated, int? width, int? height, String? blurhash
+ String id, String url,@JsonKey(name: 'storage_path') String? storagePath, String? type, String? pose, String? lighting,@JsonKey(name: 'body_profile_id') String? bodyProfileId,@JsonKey(name: 'is_generated') bool isGenerated, int? width, int? height, String? blurhash
 });
 
 
@@ -409,11 +413,12 @@ class _$OutfitImageCopyWithImpl<$Res>
 
 /// Create a copy of OutfitImage
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? url = null,Object? type = freezed,Object? pose = freezed,Object? lighting = freezed,Object? bodyProfileId = freezed,Object? isGenerated = null,Object? width = freezed,Object? height = freezed,Object? blurhash = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? url = null,Object? storagePath = freezed,Object? type = freezed,Object? pose = freezed,Object? lighting = freezed,Object? bodyProfileId = freezed,Object? isGenerated = null,Object? width = freezed,Object? height = freezed,Object? blurhash = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
-as String,type: freezed == type ? _self.type : type // ignore: cast_nullable_to_non_nullable
+as String,storagePath: freezed == storagePath ? _self.storagePath : storagePath // ignore: cast_nullable_to_non_nullable
+as String?,type: freezed == type ? _self.type : type // ignore: cast_nullable_to_non_nullable
 as String?,pose: freezed == pose ? _self.pose : pose // ignore: cast_nullable_to_non_nullable
 as String?,lighting: freezed == lighting ? _self.lighting : lighting // ignore: cast_nullable_to_non_nullable
 as String?,bodyProfileId: freezed == bodyProfileId ? _self.bodyProfileId : bodyProfileId // ignore: cast_nullable_to_non_nullable
@@ -506,10 +511,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String url,  String? type,  String? pose,  String? lighting, @JsonKey(name: 'body_profile_id')  String? bodyProfileId, @JsonKey(name: 'is_generated')  bool isGenerated,  int? width,  int? height,  String? blurhash)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String url, @JsonKey(name: 'storage_path')  String? storagePath,  String? type,  String? pose,  String? lighting, @JsonKey(name: 'body_profile_id')  String? bodyProfileId, @JsonKey(name: 'is_generated')  bool isGenerated,  int? width,  int? height,  String? blurhash)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _OutfitImage() when $default != null:
-return $default(_that.id,_that.url,_that.type,_that.pose,_that.lighting,_that.bodyProfileId,_that.isGenerated,_that.width,_that.height,_that.blurhash);case _:
+return $default(_that.id,_that.url,_that.storagePath,_that.type,_that.pose,_that.lighting,_that.bodyProfileId,_that.isGenerated,_that.width,_that.height,_that.blurhash);case _:
   return orElse();
 
 }
@@ -527,10 +532,10 @@ return $default(_that.id,_that.url,_that.type,_that.pose,_that.lighting,_that.bo
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String url,  String? type,  String? pose,  String? lighting, @JsonKey(name: 'body_profile_id')  String? bodyProfileId, @JsonKey(name: 'is_generated')  bool isGenerated,  int? width,  int? height,  String? blurhash)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String url, @JsonKey(name: 'storage_path')  String? storagePath,  String? type,  String? pose,  String? lighting, @JsonKey(name: 'body_profile_id')  String? bodyProfileId, @JsonKey(name: 'is_generated')  bool isGenerated,  int? width,  int? height,  String? blurhash)  $default,) {final _that = this;
 switch (_that) {
 case _OutfitImage():
-return $default(_that.id,_that.url,_that.type,_that.pose,_that.lighting,_that.bodyProfileId,_that.isGenerated,_that.width,_that.height,_that.blurhash);case _:
+return $default(_that.id,_that.url,_that.storagePath,_that.type,_that.pose,_that.lighting,_that.bodyProfileId,_that.isGenerated,_that.width,_that.height,_that.blurhash);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -547,10 +552,10 @@ return $default(_that.id,_that.url,_that.type,_that.pose,_that.lighting,_that.bo
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String url,  String? type,  String? pose,  String? lighting, @JsonKey(name: 'body_profile_id')  String? bodyProfileId, @JsonKey(name: 'is_generated')  bool isGenerated,  int? width,  int? height,  String? blurhash)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String url, @JsonKey(name: 'storage_path')  String? storagePath,  String? type,  String? pose,  String? lighting, @JsonKey(name: 'body_profile_id')  String? bodyProfileId, @JsonKey(name: 'is_generated')  bool isGenerated,  int? width,  int? height,  String? blurhash)?  $default,) {final _that = this;
 switch (_that) {
 case _OutfitImage() when $default != null:
-return $default(_that.id,_that.url,_that.type,_that.pose,_that.lighting,_that.bodyProfileId,_that.isGenerated,_that.width,_that.height,_that.blurhash);case _:
+return $default(_that.id,_that.url,_that.storagePath,_that.type,_that.pose,_that.lighting,_that.bodyProfileId,_that.isGenerated,_that.width,_that.height,_that.blurhash);case _:
   return null;
 
 }
@@ -562,11 +567,16 @@ return $default(_that.id,_that.url,_that.type,_that.pose,_that.lighting,_that.bo
 @JsonSerializable()
 
 class _OutfitImage implements OutfitImage {
-  const _OutfitImage({required this.id, required this.url, this.type, this.pose, this.lighting, @JsonKey(name: 'body_profile_id') this.bodyProfileId, @JsonKey(name: 'is_generated') this.isGenerated = false, this.width, this.height, this.blurhash});
+  const _OutfitImage({required this.id, required this.url, @JsonKey(name: 'storage_path') this.storagePath, this.type, this.pose, this.lighting, @JsonKey(name: 'body_profile_id') this.bodyProfileId, @JsonKey(name: 'is_generated') this.isGenerated = false, this.width, this.height, this.blurhash});
   factory _OutfitImage.fromJson(Map<String, dynamic> json) => _$OutfitImageFromJson(json);
 
 @override final  String id;
 @override final  String url;
+/// Durable bucket key. The API serves short-lived presigned URLs
+/// materialized from this key at read time; keeping it lets clients
+/// re-mint a fresh URL when the cached one expires (see
+/// AppImage's remint fallback).
+@override@JsonKey(name: 'storage_path') final  String? storagePath;
 @override final  String? type;
 @override final  String? pose;
 @override final  String? lighting;
@@ -589,16 +599,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _OutfitImage&&(identical(other.id, id) || other.id == id)&&(identical(other.url, url) || other.url == url)&&(identical(other.type, type) || other.type == type)&&(identical(other.pose, pose) || other.pose == pose)&&(identical(other.lighting, lighting) || other.lighting == lighting)&&(identical(other.bodyProfileId, bodyProfileId) || other.bodyProfileId == bodyProfileId)&&(identical(other.isGenerated, isGenerated) || other.isGenerated == isGenerated)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.blurhash, blurhash) || other.blurhash == blurhash));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _OutfitImage&&(identical(other.id, id) || other.id == id)&&(identical(other.url, url) || other.url == url)&&(identical(other.storagePath, storagePath) || other.storagePath == storagePath)&&(identical(other.type, type) || other.type == type)&&(identical(other.pose, pose) || other.pose == pose)&&(identical(other.lighting, lighting) || other.lighting == lighting)&&(identical(other.bodyProfileId, bodyProfileId) || other.bodyProfileId == bodyProfileId)&&(identical(other.isGenerated, isGenerated) || other.isGenerated == isGenerated)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.blurhash, blurhash) || other.blurhash == blurhash));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,url,type,pose,lighting,bodyProfileId,isGenerated,width,height,blurhash);
+int get hashCode => Object.hash(runtimeType,id,url,storagePath,type,pose,lighting,bodyProfileId,isGenerated,width,height,blurhash);
 
 @override
 String toString() {
-  return 'OutfitImage(id: $id, url: $url, type: $type, pose: $pose, lighting: $lighting, bodyProfileId: $bodyProfileId, isGenerated: $isGenerated, width: $width, height: $height, blurhash: $blurhash)';
+  return 'OutfitImage(id: $id, url: $url, storagePath: $storagePath, type: $type, pose: $pose, lighting: $lighting, bodyProfileId: $bodyProfileId, isGenerated: $isGenerated, width: $width, height: $height, blurhash: $blurhash)';
 }
 
 
@@ -609,7 +619,7 @@ abstract mixin class _$OutfitImageCopyWith<$Res> implements $OutfitImageCopyWith
   factory _$OutfitImageCopyWith(_OutfitImage value, $Res Function(_OutfitImage) _then) = __$OutfitImageCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String url, String? type, String? pose, String? lighting,@JsonKey(name: 'body_profile_id') String? bodyProfileId,@JsonKey(name: 'is_generated') bool isGenerated, int? width, int? height, String? blurhash
+ String id, String url,@JsonKey(name: 'storage_path') String? storagePath, String? type, String? pose, String? lighting,@JsonKey(name: 'body_profile_id') String? bodyProfileId,@JsonKey(name: 'is_generated') bool isGenerated, int? width, int? height, String? blurhash
 });
 
 
@@ -626,11 +636,12 @@ class __$OutfitImageCopyWithImpl<$Res>
 
 /// Create a copy of OutfitImage
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? url = null,Object? type = freezed,Object? pose = freezed,Object? lighting = freezed,Object? bodyProfileId = freezed,Object? isGenerated = null,Object? width = freezed,Object? height = freezed,Object? blurhash = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? url = null,Object? storagePath = freezed,Object? type = freezed,Object? pose = freezed,Object? lighting = freezed,Object? bodyProfileId = freezed,Object? isGenerated = null,Object? width = freezed,Object? height = freezed,Object? blurhash = freezed,}) {
   return _then(_OutfitImage(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
-as String,type: freezed == type ? _self.type : type // ignore: cast_nullable_to_non_nullable
+as String,storagePath: freezed == storagePath ? _self.storagePath : storagePath // ignore: cast_nullable_to_non_nullable
+as String?,type: freezed == type ? _self.type : type // ignore: cast_nullable_to_non_nullable
 as String?,pose: freezed == pose ? _self.pose : pose // ignore: cast_nullable_to_non_nullable
 as String?,lighting: freezed == lighting ? _self.lighting : lighting // ignore: cast_nullable_to_non_nullable
 as String?,bodyProfileId: freezed == bodyProfileId ? _self.bodyProfileId : bodyProfileId // ignore: cast_nullable_to_non_nullable

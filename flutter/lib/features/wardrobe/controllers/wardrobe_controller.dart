@@ -253,6 +253,28 @@ class WardrobeController extends GetxController {
     }
   }
 
+  /// Refresh a single item from the server and replace the cached entry.
+  ///
+  /// The API serves short-lived presigned image URLs (1h TTL) materialized
+  /// at the last fetch, so a detail page opened later must re-fetch instead
+  /// of rendering the cached model blind. Errors are swallowed — the cached
+  /// model stays on screen — but surfaced through the standard error
+  /// snackbar.
+  Future<void> refreshItemById(String itemId) async {
+    try {
+      final item = await _itemRepository.getItem(itemId);
+      if (isClosed) return;
+      final index = items.indexWhere((existing) => existing.id == itemId);
+      if (index == -1) {
+        items.add(item);
+      } else {
+        items[index] = item;
+      }
+    } catch (e) {
+      ErrorHandler.showError(ErrorHandler.extractMessage(e));
+    }
+  }
+
   /// Map sort type to API sort_by parameter
   String _mapSortTypeToApi(String sortType) {
     switch (sortType) {

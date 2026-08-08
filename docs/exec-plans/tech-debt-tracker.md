@@ -1,6 +1,6 @@
 # Tech debt tracker
 
-Last updated: 2026-08-08 (TD-030–TD-089)
+Last updated: 2026-08-08 (TD-030–TD-093)
 
 | ID | Item | Severity | Domain | Notes |
 |----|------|----------|--------|-------|
@@ -101,6 +101,11 @@ Last updated: 2026-08-08 (TD-030–TD-089)
 | TD-087 | Blog post/category pages serve the empty app shell to users | medium | web | `/blog/:slug` and `/blog/category/*` cannot be prerendered at build time (slugs unknown); users get `app-shell.html` → first paint waits for JS, and crawlers receive head-tags-only from the `seo-html` edge function (no body content in the HTML). Option: prerender the top-N latest posts at build time (slugs resolvable from the public API, same bake pattern as the blog index) for real HTML + content in page source. Found 2026-08-07 (blog pagespeed RCA) |
 | TD-088 | PostHog config.js served with 5-minute Cache-TTL | low | web | PSI "efficient cache lifetimes" flags `us-assets.i.posthog.com/…/config.js` (5m TTL, ~1 KiB) on every pageview. Fix would proxy PostHog assets through our origin with longer cache headers (edge function) — negligible byte savings, deferred. Found 2026-08-07 (blog pagespeed RCA) |
 | TD-089 | Unidentified client sends out-of-range query params to `/items` → 422 | low | cross | `GET /api/v1/items` 422 at 91ms (observed 2026-08-07 17:52): FastAPI query-param validation after the ~90ms `get_active_user_id` lookup, so the client sent `page`/`page_size` outside 1–100 or a non-coercible `is_favorite`. Web sends ≤24 and Flutter sends `limit=20` + `page_size=20`, so neither shipped client matches — audit clients for out-of-range pagination before changing anything server-side (backend validation is correct). Found 2026-08-07 (late-window prod log RCA) |
+
+| TD-090 | Session-cached presigned avatar URL breaks after 1h | low | mobile | `AuthController.user.avatarUrl` is materialized at login and cached for the session, so avatar tiles (dashboard header, profile edit) render an expired presigned URL after `OBJECT_STORAGE_PRESIGN_TTL`. Cosmetic only — try-on generation uses the server-side avatar, not the cached URL. Fix: refresh the user from `/users/me` when the profile/dashboard opens (same pattern as the item/outfit refresh-on-open), or re-mint the avatar via `/images/presigned`. Found 2026-08-08 (sibling-bug sweep, deferred Tier 3) |
+| TD-091 | `createItemWithImage` leaves an orphan item when the image upload throws | low | mobile | `item_repository.dart::createItemWithImage` creates the item row first, then uploads; on upload failure the exception propagates and the row stays image-less (visible failure, not silent loss — the caller's catch means a retry creates a duplicate). Fix: delete the created row on upload failure, or upload-then-create. Found 2026-08-08 (sibling-bug sweep, deferred Tier 3) |
+| TD-092 | `batchCreateItems` is dead code with silent image-loss baked in | low | mobile | `item_repository.dart::batchCreateItems` has no callers anywhere in `flutter/lib`; its shape would silently drop images (no per-image failure handling). Delete it (with its tests, if any) when someone next touches the repository. Found 2026-08-08 (sibling-bug sweep, deferred Tier 3) |
+| TD-093 | Outfit edit page trips the ListTile-in-DecoratedBox debug assertion | low | mobile | `outfit_edit_page.dart` renders `ListTile`s inside `AppGlassCard` (a DecoratedBox with a background color), so debug builds report "ListTile background color or ink splashes may be invisible" on every render — harmless visually (release unaffected) but it blocks widget-testing the page (every pump reports the framework error). Fix: wrap those ListTiles in their own `Material`. Found 2026-08-08 (sibling-bug sweep — blocked the outfit-edit widget test; refresh-on-open is covered at the controller level) |
 
 ## Process
 

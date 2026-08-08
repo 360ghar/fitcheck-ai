@@ -86,6 +86,7 @@ const _$SeasonEnumMap = {
 _OutfitImage _$OutfitImageFromJson(Map<String, dynamic> json) => _OutfitImage(
   id: json['id'] as String,
   url: json['url'] as String,
+  storagePath: json['storage_path'] as String?,
   type: json['type'] as String?,
   pose: json['pose'] as String?,
   lighting: json['lighting'] as String?,
@@ -100,6 +101,7 @@ Map<String, dynamic> _$OutfitImageToJson(_OutfitImage instance) =>
     <String, dynamic>{
       'id': instance.id,
       'url': instance.url,
+      'storage_path': instance.storagePath,
       'type': instance.type,
       'pose': instance.pose,
       'lighting': instance.lighting,

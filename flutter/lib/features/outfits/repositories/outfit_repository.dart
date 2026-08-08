@@ -5,6 +5,7 @@ import '../models/outfit_model.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/exceptions/app_exceptions.dart';
+import '../../../core/utils/error_handler.dart';
 
 /// Outfit repository
 class OutfitRepository {
@@ -230,6 +231,70 @@ class OutfitRepository {
       return null;
     } on DioException catch (e) {
       throw handleDioException(e);
+    }
+  }
+
+  /// Upload an outfit image from an HTTP(S) URL (for AI-generated
+  /// visualizations saved by URL instead of base64). Downloads the bytes,
+  /// then reuses the same multipart upload as
+  /// [uploadOutfitImageFromBase64]. Best-effort: returns null on any
+  /// download/upload failure so callers can fall back or surface the loss.
+  Future<OutfitImage?> uploadOutfitImageFromUrl(
+    String outfitId,
+    String imageUrl, {
+    bool isPrimary = true,
+    String? pose,
+  }) async {
+    try {
+      final response = await _apiClient.get(
+        imageUrl,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      final bytes = response.data;
+      if (bytes is! List<int> || bytes.isEmpty) {
+        ErrorHandler.reportError(
+          StateError('Empty image body'),
+          'Outfit image upload failed: empty download from $imageUrl for '
+          'outfit $outfitId',
+        );
+        return null;
+      }
+
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(
+          bytes,
+          filename: 'generated_outfit_$outfitId.png',
+          contentType: DioMediaType.parse('image/png'),
+        ),
+        'is_primary': isPrimary,
+        if (pose != null) 'pose': pose,
+        'is_generated': true,
+      });
+
+      final uploadResponse = await _apiClient.post(
+        '${ApiConstants.outfits}/$outfitId/images',
+        data: formData,
+      );
+
+      final dataMap = _extractDataMap(uploadResponse.data);
+      if (dataMap.isNotEmpty) {
+        return OutfitImage.fromJson(_normalizeOutfitImageJson(dataMap));
+      }
+      return null;
+    } on DioException catch (e) {
+      ErrorHandler.reportError(
+        e,
+        'Outfit image upload failed: could not download $imageUrl for outfit '
+        '$outfitId',
+      );
+      return null;
+    } catch (e) {
+      ErrorHandler.reportError(
+        e,
+        'Outfit image upload failed: could not download $imageUrl for outfit '
+        '$outfitId',
+      );
+      return null;
     }
   }
 
@@ -463,6 +528,30 @@ class OutfitRepository {
       );
     } on DioException catch (e) {
       throw handleDioException(e);
+    }
+  }
+
+  /// Re-mint a fresh client-fetchable URL for a durable storage key.
+  ///
+  /// The API serves short-lived presigned URLs materialized from
+  /// `storage_path` at read time; a cached URL expires after
+  /// OBJECT_STORAGE_PRESIGN_TTL (1h). Surfaces that render outfit images can
+  /// call this when a load fails and retry with the fresh URL instead of
+  /// showing a permanently broken tile. Returns null on any failure.
+  Future<String?> remintImageUrl(String storagePath) async {
+    try {
+      final response = await _apiClient.get(
+        ApiConstants.imagesPresigned,
+        queryParameters: {'storage_path': storagePath},
+      );
+      final data = _extractDataMap(response.data);
+      final url = data['url']?.toString();
+      if (url == null || url.isEmpty) {
+        return null;
+      }
+      return url;
+    } catch (_) {
+      return null;
     }
   }
 

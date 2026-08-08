@@ -23,6 +23,9 @@ dependencies:
   # UI Components
   shimmer: ^3.0.0
   cached_network_image: ^3.3.1
+  # Cache manager type used by CachedNetworkImage (direct dep so AppImage can
+  # expose an injectable BaseCacheManager for tests)
+  flutter_cache_manager: ^3.4.1
   image_picker: ^1.0.7
   photo_view: ^0.15.0
   flutter_image_compress: ^2.1.0
@@ -74,6 +77,10 @@ dev_dependencies:
 
   # In-app purchase (platform interface stub in IAP service tests)
   in_app_purchase_platform_interface: ^1.4.1
+
+  # In-memory file system stub for flutter_cache_manager in widget tests
+  # (the default IOFileSystem needs path_provider, which has no test host)
+  file: ^7.0.0
 
   # Icon Generation
   flutter_launcher_icons: ^0.14.3

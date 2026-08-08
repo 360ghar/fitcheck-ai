@@ -16,11 +16,18 @@
 // That hands a working session credential to someone else's CDN. The guard is
 // now a host allowlist.
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:fitcheck_ai/core/widgets/app_network_image.dart';
 
 const _user = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const _name = '0123456789abcdef0123456789abcdef';
+
+/// A valid 1x1 transparent PNG.
+const _tinyPngBase64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8'
+    'z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 String _presigned(String signature) =>
     'https://acct.r2.cloudflarestorage.com/bucket/$_user/items/$_name.webp'
@@ -112,6 +119,78 @@ void main() {
       expect(authHeadersForUrl(''), isNull);
       expect(authHeadersForUrl('://'), isNull);
       expect(authHeadersForUrl('/relative/path.webp'), isNull);
+    });
+  });
+
+  group('AppNetworkImage data-URI rendering', () {
+    // The AI generation flows preview live output as data URIs until the
+    // durable URL arrives. CachedNetworkImage cannot decode those, so the
+    // widget must route them through Image.memory instead — these pin that
+    // routing and the decode-failure fallback.
+
+    testWidgets('renders a valid data URI from its embedded bytes', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: AppNetworkImage('data:image/png;base64,$_tinyPngBase64'),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(Image), findsOneWidget);
+      expect(
+        find.byType(CachedNetworkImage),
+        findsNothing,
+        reason:
+            'a data URI must never reach CachedNetworkImage, which cannot '
+            'decode it',
+      );
+    });
+
+    testWidgets('surfaces the error widget for a malformed data URI', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AppNetworkImage(
+              'data:image/png;base64,@@@not-base64@@@',
+              errorWidget: (context, url, error) => const Text('broken-tile'),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('broken-tile'), findsOneWidget);
+      expect(
+        find.byType(CachedNetworkImage),
+        findsNothing,
+        reason: 'a malformed data URI must fail fast without a network round '
+            'trip',
+      );
+    });
+
+    testWidgets('falls back to the broken-image icon without an errorWidget', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: AppNetworkImage('data:image/png;base64,@@@not-base64@@@'),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byIcon(Icons.broken_image_outlined), findsOneWidget);
+      expect(
+        find.byType(CachedNetworkImage),
+        findsNothing,
+      );
     });
   });
 }

@@ -979,6 +979,9 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
                   final imageUrl = item.itemImages?.isNotEmpty == true
                       ? item.itemImages!.first.url
                       : null;
+                  final storagePath = item.itemImages?.isNotEmpty == true
+                      ? item.itemImages!.first.storagePath
+                      : null;
 
                   return Container(
                     width: 70,
@@ -1000,6 +1003,12 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
                                     width: 70,
                                     height: 70,
                                     fit: BoxFit.cover,
+                                    // Presigned URLs expire after 1h; on a
+                                    // failed load re-mint a fresh URL from
+                                    // the durable storage key.
+                                    storagePath: storagePath,
+                                    remintUrl:
+                                        _itemRepository.remintImageUrl,
                                     errorWidget: (context, error, stackTrace) {
                                       return Container(
                                         color: tokens.cardColor,
@@ -1164,6 +1173,10 @@ class _WardrobeItemTile extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
 
+  // Presigned item image URLs expire after 1h; on a failed load a fresh URL
+  // is re-minted from the durable storage key.
+  static final ItemRepository _itemRepository = ItemRepository();
+
   const _WardrobeItemTile({
     required this.item,
     this.isSelected = false,
@@ -1204,6 +1217,13 @@ class _WardrobeItemTile extends StatelessWidget {
                         ? AppNetworkImage(
                             imageUrl,
                             fit: BoxFit.cover,
+                            // Presigned URLs expire after 1h; on a failed
+                            // load re-mint a fresh URL from the durable
+                            // storage key.
+                            storagePath: item.itemImages?.isNotEmpty == true
+                                ? item.itemImages!.first.storagePath
+                                : null,
+                            remintUrl: _itemRepository.remintImageUrl,
                             errorWidget: (context, error, stackTrace) {
                               return Container(
                                 color: tokens.cardColor,

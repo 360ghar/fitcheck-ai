@@ -6,6 +6,7 @@ import '../../../domain/enums/category.dart';
 import '../../../domain/enums/style.dart';
 import '../../../domain/enums/season.dart';
 import '../controllers/outfit_builder_controller.dart';
+import '../../wardrobe/repositories/item_repository.dart';
 
 /// Outfit builder page - Create and visualize outfits
 class OutfitBuilderPage extends StatefulWidget {
@@ -17,6 +18,7 @@ class OutfitBuilderPage extends StatefulWidget {
 
 class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
   late final OutfitBuilderController controller;
+  final ItemRepository _itemRepository = ItemRepository();
 
   @override
   void initState() {
@@ -378,6 +380,11 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
                       fit: BoxFit.cover,
                       enableZoom: false,
                       errorIcon: _getCategoryIcon(outfitItem.item.category),
+                      // Presigned URLs expire after 1h; on a failed load
+                      // re-mint a fresh URL from the durable storage key.
+                      storagePath: outfitItem.item.itemImages!.first
+                          .storagePath,
+                      remintUrl: _itemRepository.remintImageUrl,
                     )
                   : Icon(
                       _getCategoryIcon(outfitItem.item.category),
@@ -628,6 +635,11 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
                               fit: BoxFit.contain,
                               enableZoom: false,
                               errorIcon: _getCategoryIcon(item.category),
+                              // Presigned URLs expire after 1h; on a failed
+                              // load re-mint a fresh URL from the durable
+                              // storage key.
+                              storagePath: item.itemImages!.first.storagePath,
+                              remintUrl: _itemRepository.remintImageUrl,
                             )
                           : Container(
                               color: tokens.cardColor.withValues(alpha: 0.5),

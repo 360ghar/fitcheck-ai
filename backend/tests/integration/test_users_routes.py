@@ -723,6 +723,7 @@ async def test_get_dashboard_aggregates_counts_and_recent_activity():
         "timestamp": "2026-01-03T00:00:00",
         # No storage_path on the legacy row -> the stored thumbnail is kept.
         "image_url": "https://cdn/x-t.jpg",
+        "storage_path": None,
     }
     assert len(activity) == 3
     # Items without any images degrade to a null image_url, never an error.
@@ -734,6 +735,7 @@ async def test_get_dashboard_aggregates_counts_and_recent_activity():
         "id": "o1",
         "name": "Weekend",
         "image_url": "https://cdn/x-t.jpg",
+        "storage_path": None,
     }
 
 
@@ -792,8 +794,16 @@ async def test_get_dashboard_materializes_presigned_image_urls(monkeypatch):
     assert by_type["item_created"]["image_url"] == "https://presigned.example/u1/items/i1.jpg"
     assert by_type["outfit_created"]["image_url"] == "https://presigned.example/u1/outfits/o1.jpg"
 
+    # The durable storage keys ride along so clients can re-mint a fresh URL
+    # if the one they hold expires while a screen stays open.
+    assert by_type["item_created"]["storage_path"] == "u1/items/i1.jpg"
+    assert by_type["outfit_created"]["storage_path"] == "u1/outfits/o1.jpg"
+
     assert result["data"]["suggestions"]["outfit_of_the_day"]["image_url"] == (
         "https://presigned.example/u1/outfits/o1.jpg"
+    )
+    assert result["data"]["suggestions"]["outfit_of_the_day"]["storage_path"] == (
+        "u1/outfits/o1.jpg"
     )
 
 
