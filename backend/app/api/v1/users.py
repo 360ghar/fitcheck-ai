@@ -66,19 +66,21 @@ def _now() -> str:
 
 
 def _is_owned_avatar_key(key: str, user_id: str) -> bool:
-    """True when ``key`` is a ``{user_id}/avatars/...`` key owned by ``user_id``.
+    """True when ``key`` is this user's own avatar object (any layout).
 
     Avatar cleanup must only ever delete the caller's own avatar object — an
-    external OAuth picture or another user's key is never touched. Canonical
-    keys are checked structurally (``avatars`` category via ``parse_key``);
-    legacy avatar keys with non-canonical (non-hex) names still live under the
-    same ``{user_id}/avatars/`` prefix and are matched the same way the old
-    prefix check did, so nothing that used to be deleted stops being deleted.
+    external OAuth picture or another user's key is never touched. Current
+    keys are ``users/{user_id}/avatars/...``; legacy keys were
+    ``{user_id}/avatars/...`` (non-hex legacy names included), so both are
+    matched structurally/positionally.
     """
     ref = parse_key(key)
     if ref is not None and ref.layout == "canonical" and ref.user == user_id:
         return ref.category == "avatars"
-    parts = key.split("/", 2)
+    parts = key.split("/")
+    # users/{user_id}/avatars/... (current) or {user_id}/avatars/... (legacy).
+    if len(parts) >= 3 and parts[0] == "users" and parts[1] == user_id:
+        return parts[2] == "avatars"
     return len(parts) >= 2 and parts[0] == user_id and parts[1] == "avatars"
 
 
@@ -558,7 +560,7 @@ async def export_user_data(
 
     Metadata only: rows carry their storage keys (``storage_path``); image
     bytes are never included. The archive is written to a single
-    deterministic key per user (``{user_id}/export/data.json``, overwritten on
+    deterministic key per user (``users/{user_id}/export/data.json``, overwritten on
     each call - the same key account deletion cleans up), and served as a
     short-lived presigned GET URL (the repo's ~15-minute pattern). Every call
     returns a fresh URL, so repeat requests never hand out a stale link.

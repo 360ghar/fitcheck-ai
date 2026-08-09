@@ -1053,7 +1053,7 @@ async def test_delete_current_user_collects_ticket_attachments_and_avatar(monkey
 
     assert f"{USER_ID}/tickets/t1.jpg" in deleted
     assert avatar_key in deleted
-    assert f"{USER_ID}/export/data.json" in deleted
+    assert f"users/{USER_ID}/export/data.json" in deleted
     assert db.auth.admin.deleted == [USER_ID]
 
 

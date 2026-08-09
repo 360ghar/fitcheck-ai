@@ -270,6 +270,79 @@ describe('key authorization', () => {
     assert.equal(res.status, 404);
   });
 
+  it('serves every users/ canonical category with the owner at segment 1', async () => {
+    for (const category of ['items', 'outfits', 'avatars', 'sources', 'feedback']) {
+      const key = `users/${USER}/${category}/${NAME}.jpg`;
+      const env = makeEnv({ objects: { [key]: r2Object({ contentType: 'image/jpeg' }) } });
+      const res = await call(key, { token: await mintToken(), env });
+      assert.equal(res.status, 200, `${key} should be servable`);
+    }
+  });
+
+  it('serves users/ preview, thumb and (missing) export keys', async () => {
+    const keys = [
+      `users/${USER}/tmp/batch/${NAME}.webp`,
+      `users/${USER}/generated/try-on/${NAME}.png`,
+      `users/${USER}/items/${NAME}_thumb.webp`,
+    ];
+    for (const key of keys) {
+      const env = makeEnv({ objects: { [key]: r2Object() } });
+      const res = await call(key, { token: await mintToken(), env });
+      assert.equal(res.status, 200, `${key} should be servable`);
+    }
+  });
+
+  it('404s a users/ key owned by another user (owner is segment 1)', async () => {
+    const key = `users/${OTHER_USER}/items/${NAME}.webp`;
+    const env = makeEnv({ objects: { [key]: r2Object() } });
+    const res = await call(key, { token: await mintToken(), env });
+    assert.equal(res.status, 404);
+  });
+
+  it('404s the users/ data export under the user prefix', async () => {
+    const exportKey = `users/${USER}/export/data.json`;
+    const env = makeEnv({
+      objects: { [exportKey]: r2Object({ contentType: 'application/json' }) },
+    });
+    const res = await call(exportKey, { token: await mintToken(), env });
+    assert.equal(res.status, 404, 'the data export must never be servable here');
+  });
+
+  it('rejects a users/ key with a non-canonical category', async () => {
+    const key = `users/${USER}/unknowncat/${NAME}.webp`;
+    const env = makeEnv({ objects: { [key]: r2Object() } });
+    const res = await call(key, { token: await mintToken(), env });
+    assert.equal(res.status, 404);
+  });
+
+  it('serves public/ assets WITHOUT a token (no-auth)', async () => {
+    const keys = [
+      `public/banners/home/${NAME}.webp`,
+      `public/landing/hero/${NAME}.png`,
+      `public/blog/post-1/${NAME}.jpg`,
+      `public/static/logo/${NAME}.webp`,
+    ];
+    for (const key of keys) {
+      const env = makeEnv({ objects: { [key]: r2Object() } });
+      const res = await call(key, { env }); // no token
+      assert.equal(res.status, 200, `${key} must be servable without auth`);
+    }
+  });
+
+  it('serves public/ thumb siblings without a token', async () => {
+    const key = `public/banners/home/${NAME}_thumb.webp`;
+    const env = makeEnv({ objects: { [key]: r2Object() } });
+    const res = await call(key, { env });
+    assert.equal(res.status, 200);
+  });
+
+  it('rejects a public/ key with an unknown group', async () => {
+    const key = `public/misc/${NAME}.webp`;
+    const env = makeEnv({ objects: { [key]: r2Object() } });
+    const res = await call(key, { env });
+    assert.equal(res.status, 404);
+  });
+
   it('404s traversal, bad names and unknown categories', async () => {
     const bad = [
       `${USER}/../${OTHER_USER}/items/${NAME}.webp`,
@@ -737,12 +810,49 @@ describe('env validation', () => {
     }
   }
 
-  it('500s with a descriptive log when SUPABASE_JWT_SECRET is missing', async () => {
-    const { res, errors } = await captureErrors(() => missingSecretCall('SUPABASE_JWT_SECRET'));
-    assert.equal(res.status, 500);
+  it('serves requests in a JWKS-only deployment without SUPABASE_JWT_SECRET', async () => {
+    // The legacy secret is only needed for HS256 tokens (README); an
+    // ES256/RS256 deployment must keep serving with it unset.
+    const env = makeEnv();
+    delete env.SUPABASE_JWT_SECRET;
+    const mod = await freshWorker();
+    const { pair, jwk } = await rsaKeypair('kid-rs256');
+    const stub = installJwksStub([{ keys: [jwk] }]);
+    try {
+      const token = await mintRs256(pair.privateKey, 'kid-rs256');
+      const res = await mod.fetch(
+        new Request(`https://images.fitcheckaiapp.com/${KEY}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        env,
+        ctx,
+      );
+      assert.equal(res.status, 200, 'RS256 tokens verify via JWKS without the secret');
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it('rejects HS256 tokens indistinguishably when SUPABASE_JWT_SECRET is missing', async () => {
+    const env = makeEnv();
+    delete env.SUPABASE_JWT_SECRET;
+    const mod = await freshWorker();
+    const token = await mintToken();
+    const { res, errors } = await captureErrors(() =>
+      mod.fetch(
+        new Request(`https://images.fitcheckaiapp.com/${KEY}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        env,
+        ctx,
+      ),
+    );
+    assert.equal(res.status, 404, 'an unverifiable HS256 token must not reveal existence');
     assert.ok(
-      errors.some((e) => e.includes('SUPABASE_JWT_SECRET is required')),
-      `expected a descriptive error, got: ${errors.join(' | ')}`,
+      !errors.some((e) => e.includes('SUPABASE_JWT_SECRET is required')),
+      `must not 500 with a misconfiguration error: ${errors.join(' | ')}`,
     );
   });
 

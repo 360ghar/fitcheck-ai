@@ -43,7 +43,7 @@ async def test_upload_item_image_uses_s3_backend_and_returns_presigned_url():
 
     assert len(backend.upload_calls) == 2
     call = backend.upload_calls[0]
-    assert call["key"].startswith("user-1/items/")
+    assert call["key"].startswith("users/user-1/items/")
     assert call["key"].endswith(".webp")
     assert call["content_type"] == "image/webp"
     assert call["cache_control"] == DEFAULT_CACHE_CONTROL
@@ -57,9 +57,9 @@ async def test_upload_item_image_uses_s3_backend_and_returns_presigned_url():
 
 
 def test_build_key_uses_user_category_and_uuid_without_timestamps():
-    """The new key layout is {user_id}/{category}/{uuid4hex}.{ext} — no timestamps."""
+    """The key layout is users/{user_id}/{category}/{uuid4hex}.{ext} — no timestamps."""
     key = StorageService._build_key("user-1", "items", ".png")
-    assert re.fullmatch(r"user-1/items/[0-9a-f]{32}\.png", key)
+    assert re.fullmatch(r"users/user-1/items/[0-9a-f]{32}\.png", key)
 
     # The extension is normalized to a leading dot.
     assert StorageService._build_key("u", "outfits", "webp").endswith(".webp")
@@ -212,13 +212,13 @@ def test_key_from_path_configured_bucket_presigned_url_still_resolves(monkeypatc
 # promote_temp_image_to_item normalizes legacy preview keys
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
-async def test_promote_temp_image_to_item_normalizes_legacy_preview_key():
-    """A legacy per-user preview key ({user}/tmp/{sub}/...) held in a DB row is
-    normalized to the top-level layout before the server-side copy, mirroring
-    the delete paths (storage_keys.normalize_preview_key): after the temp-key
-    migration script moved the bytes, the legacy key no longer exists and
-    passing it straight to move_image would raise NoSuchKey. Canonical
-    tmp/{user}/{sub}/... keys pass through unchanged."""
+async def test_promote_temp_image_to_item_maps_legacy_preview_key():
+    """A legacy preview key ({user}/tmp/{sub}/...) held in a DB row is mapped
+    to its users/ home before the server-side copy, mirroring the delete paths
+    (storage_keys.migrate_key_to_users_layout): after the layout migration
+    moved the bytes, the legacy key no longer exists and passing it straight to
+    move_image would raise NoSuchKey. Current users/ keys pass through
+    unchanged."""
     backend = FakeS3Backend(download_bytes=_valid_png_bytes())
     with patch("app.services.storage_service.get_storage_backend", return_value=backend):
         result = await StorageService.promote_temp_image_to_item(
@@ -227,12 +227,12 @@ async def test_promote_temp_image_to_item_normalizes_legacy_preview_key():
             temp_storage_path="user-1/tmp/social-import/abc123.png",
         )
 
-    # The move ran from the NORMALIZED key, not the legacy one, and the
-    # legacy key was deleted (copy + delete semantics preserved).
+    # The move ran from the MAPPED key, not the legacy one, and the legacy key
+    # was deleted (copy + delete semantics preserved).
     assert backend.copy_calls == [
-        ("tmp/user-1/social-import/abc123.png", result["storage_path"])
+        ("users/user-1/tmp/social-import/abc123.png", result["storage_path"])
     ]
-    assert backend.delete_calls == ["tmp/user-1/social-import/abc123.png"]
+    assert backend.delete_calls == ["users/user-1/tmp/social-import/abc123.png"]
     assert "user-1/tmp/social-import/abc123.png" not in backend.copy_calls[0]
     # The promoted object still gets its best-effort thumb sibling.
     assert any("_thumb" in c["key"] for c in backend.upload_calls)

@@ -45,9 +45,9 @@ from app.core.storage_keys import (
     build_object_url,
     is_owned_storage_key,
     key_from_path,
+    migrate_key_to_users_layout,
     mint_key,
     mint_preview_key,
-    normalize_preview_key,
     thumb_key_for,
 )
 from app.services.object_storage import (
@@ -117,17 +117,17 @@ THUMB_CONTENT_TYPE = "image/webp"
 
 
 def _is_temp_preview_key(key: str) -> bool:
-    """True for a ``tmp`` preview key in either layout (never ``generated/``).
+    """True for a ``tmp`` preview key in any layout (never ``generated/``).
 
     Temp-object scans (admin inventory/cleanup) deliberately cover the ``tmp/``
     previews only: ``generated/`` renders can be kept (they are what the user
-    asked to keep). First segment matches the top-level layout
-    (``tmp/{user}/...``), second segment the legacy per-user layout
-    (``{user}/tmp/...``) — same rule as ``is_preview_key`` but pinned to the
-    ``tmp`` folder.
+    asked to keep). Matches the current ``users/{user}/tmp/...`` layout and the
+    legacy top-level ``tmp/{user}/...`` / per-user ``{user}/tmp/...`` shapes.
     """
     parts = key.split("/", 2)
-    return parts[0] == TEMP_FOLDER or (len(parts) > 1 and parts[1] == TEMP_FOLDER)
+    if parts[0] == TEMP_FOLDER or (len(parts) > 1 and parts[1] == TEMP_FOLDER):
+        return True
+    return len(parts) >= 3 and parts[0] == "users" and parts[2] == TEMP_FOLDER
 
 
 def _with_thumb_siblings(storage_paths: Iterable[str]) -> List[str]:
@@ -145,12 +145,16 @@ def _with_thumb_siblings(storage_paths: Iterable[str]) -> List[str]:
     expanded: List[str] = []
     seen: set[str] = set()
     for path in storage_paths:
-        if not path or path in seen:
+        if not path:
             continue
-        # Legacy per-user preview keys ({user_id}/tmp|generated/...) are
-        # normalized to the shared top-level layout so deletes resolve the
-        # object where it now lives (see app/core/storage_keys.py).
-        path = normalize_preview_key(path)
+        # Map every key to its current ``users/`` home so deletes resolve the
+        # object where it now lives (see app/core/storage_keys.py). Legacy
+        # shapes map to their ``users/{user}/...`` target; current keys pass
+        # through unchanged. The dedupe runs on the MAPPED key so two legacy
+        # aliases of the same object collapse to one delete.
+        path = migrate_key_to_users_layout(path) or path
+        if path in seen:
+            continue
         seen.add(path)
         expanded.append(path)
         thumb_key = StorageService.thumb_key_for(path)
@@ -665,10 +669,10 @@ class StorageService:
         """
         try:
             backend = get_storage_backend()
-            # Legacy per-user preview keys are normalized to the shared
-            # top-level layout so the delete resolves the object where it now
-            # lives (see app/core/storage_keys.py).
-            storage_path = normalize_preview_key(storage_path)
+            # Map legacy keys to their current ``users/`` home so the delete
+            # resolves the object where it now lives (see
+            # app/core/storage_keys.py); current keys pass through unchanged.
+            storage_path = migrate_key_to_users_layout(storage_path) or storage_path
             # Deliberately NOT delete_many: that call is best-effort (it logs
             # per-key errors instead of raising), so batching these two would
             # downgrade a failed PRIMARY delete from an exception to a warning.
@@ -1293,14 +1297,13 @@ class StorageService:
         existing download-then-encode fallback runs, so behavior is
         identical for callers that do not hold the bytes.
         """
-        # Legacy per-user preview keys ({user_id}/tmp/{sub}/... held in DB rows
-        # from before the temp-key migration) are normalized to the shared
-        # top-level layout before the move, mirroring the delete paths (see
-        # app/core/storage_keys.py): after the migration script moved the
-        # bytes, the legacy key no longer exists and the copy would raise
-        # NoSuchKey. Idempotent for canonical keys, so a fresh
-        # tmp/{user_id}/{sub}/... path passes through unchanged.
-        source_path = normalize_preview_key(temp_storage_path)
+        # Legacy preview keys (pre-restructure shapes held in DB rows) are
+        # mapped to their current ``users/`` home before the move, mirroring
+        # the delete paths (see app/core/storage_keys.py): after the layout
+        # migration moved the bytes, the legacy key no longer exists and the
+        # copy would raise NoSuchKey. Current ``users/`` keys pass through
+        # unchanged.
+        source_path = migrate_key_to_users_layout(temp_storage_path) or temp_storage_path
         # The extension comes from the SOURCE key, not the hint: temp objects
         # are sniffed at upload time (upload_temp_generated_image re-derives
         # the real format from the bytes), so ``tmp/.../abc.webp`` really is

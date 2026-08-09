@@ -65,11 +65,11 @@ from typing import Any, Dict, List, Optional, Tuple
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts._common import _env, _utc_now_iso  # noqa: E402
-from app.core.storage_keys import (
+from app.core.storage_keys import (  # noqa: E402
     CANONICAL_CATEGORIES,
-    USER_ID_SEGMENT_RE,
     key_from_path,
-)  # noqa: E402
+    parse_key,
+)
 from app.db.connection import SupabaseDB  # noqa: E402
 
 # Canonical categories that can back a DB-referenced image row come from the
@@ -90,21 +90,22 @@ def derive_storage_path(value: Optional[str]) -> Optional[str]:
 
     Conservative by design: ``key_from_path`` already refuses to reshape
     unrelated external URLs into keys, and this function additionally requires
-    the canonical ``{user-uuid}/{category}/...`` shape (first segment a UUID,
-    category one of ours). Anything else — an OAuth picture, a junk URL, a
-    preview key — returns None and the row is reported unrepairable.
+    the canonical ``{user}/{category}/...`` shape (current ``users/{user}/...``
+    or legacy ``{user}/...``, category one of ours). Anything else — an OAuth
+    picture, a junk URL, a preview key — returns None and the row is reported
+    unrepairable.
     """
     if not value:
         return None
     key = key_from_path(value)
     if not key:
         return None
-    parts = key.split("/")
-    if len(parts) < 2:
+    ref = parse_key(key)
+    if ref is None or ref.layout not in ("canonical", "legacy_canonical"):
         return None
-    if USER_ID_SEGMENT_RE.fullmatch(parts[0]) and parts[1] in CANONICAL_CATEGORIES:
-        return key
-    return None
+    if ref.category not in CANONICAL_CATEGORIES:
+        return None
+    return key
 
 
 # PostgREST caps a single SELECT at this many rows (hosted Supabase default),

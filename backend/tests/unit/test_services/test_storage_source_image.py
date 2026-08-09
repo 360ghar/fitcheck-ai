@@ -53,9 +53,9 @@ async def test_upload_source_image_uses_user_namespace_and_returns_url():
             extension=".jpg",
         )
 
-    assert result["image_url"].startswith("https://storage.test/user-42/sources/")
+    assert result["image_url"].startswith("https://storage.test/users/user-42/sources/")
     assert result["image_url"].endswith(".webp")
-    assert result["storage_path"].startswith("user-42/sources/")
+    assert result["storage_path"].startswith("users/user-42/sources/")
     # Sniffed from the bytes, not from the .jpg hint the caller supplied.
     assert captured["content_type"] == "image/webp"
     assert captured["file_data"] == payload

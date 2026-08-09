@@ -1,39 +1,37 @@
 """Shared vocabulary, minting, parsing and URL reduction for storage keys.
 
-This module is the SINGLE owner of the object-storage key grammar. Storage keys
-are minted as ``{user_id}/{category}/{uuid4hex}.{ext}``, so the first path
-segment is always the owning user's id. Several layers need to decide "is this
-first segment a user id?" — the routes (to know whether a stored
-``avatar_url`` is one of our own objects and may be re-minted) and the services
-(to recognise, and drop, a legacy path-style bucket segment without depending
-on the bucket's current NAME).
+This module is the SINGLE owner of the object-storage key grammar. Two
+namespace roots decide ownership, so the serving rules are pure:
 
-That predicate lives here rather than in either caller because ``app/core`` is
-the one layer both routes and services may import (ARCHITECTURE.md). It was
-previously two hand-synced copies, one per layer, and the two guarded different
-decisions against the same rule — if the key layout ever admits a non-UUID first
-segment, a single updated copy means either avatars stop refreshing or the
-storage-inventory sweep mis-classifies live objects as orphans and deletes them.
-One copy makes that class of divergence impossible.
+- ``users/{user_id}/...`` — PRIVATE user content. The owner is ALWAYS segment
+  1 (``user_id``); nothing else decides. Categories under a user:
+  ``items|outfits|avatars|sources|feedback`` (durable, DB-referenced),
+  ``tmp|generated`` (preview/staging, never DB-referenced) and ``export``.
+- ``public/{group}/...`` — PUBLIC assets owned by nobody (banners, landing
+  images, blog, static). Served without auth; ``group`` must be one of
+  ``PUBLIC_GROUPS``.
 
-Everything that builds, validates, parses, or URL-reduces a key converges
-here: the mint helpers (``mint_key`` / ``mint_preview_key`` / ``mint_export_key``),
-the predicates (``is_owned_storage_key`` / ``is_preview_key`` /
-``normalize_preview_key``), the structural parser (``parse_key``), the URL
-reducer (``key_from_path``) and the object-URL composer (``build_object_url``).
-``StorageService`` re-exports these so long-standing callers keep working, but
-no key-shape logic lives outside this module.
-
-``infra/images-worker/worker.js`` enforces an equivalent allowlist at the
-edge; the two must stay in step (worker.test.mjs pins it).
+The old layout (``{user_id}/{category}/...`` with ``tmp|generated`` as
+top-level or per-user folders) is still parsed and served during the
+transition window (legacy regexes below), and ``migrate_key_to_users_layout``
+maps every legacy shape to its ``users/`` home — used by the re-key migration
+script and, once the migration is verified, by the read path so legacy URLs
+self-heal. After the migration, the legacy regexes and the mapping flip are
+retired (delete the ``_LEGACY_*`` regexes and enable the mapping inside
+``key_from_path``).
 
 Layouts (all regexes are built from the constants below so they cannot drift):
 
-- canonical:      ``{user}/{items|outfits|avatars|sources|feedback}/{hex}.{ext}``
-- thumb:          ``{user}/{category}/{hex}_thumb.webp``  (always .webp)
-- preview:        ``{tmp|generated}/{user}/{sub}/{hex}.{ext}``  (top-level folders)
-- legacy preview: ``{user}/{tmp|generated}/{sub}/{hex}.{ext}``  (pre-migration)
-- export:         ``{user}/export/data.json``  (deterministic per-user archive)
+- canonical:       ``users/{user}/items|outfits|avatars|sources|feedback/{hex}.{ext}``
+- thumb:           ``users/{user}/{category}/{hex}_thumb.webp``  (always .webp)
+- preview:         ``users/{user}/tmp|generated/{sub}/{hex}.{ext}``
+- export:          ``users/{user}/export/data.json``
+- public:          ``public/banners|landing|blog|static/{slug}/{hex}.{ext}``
+- legacy (window): ``{user}/{category}/...``, ``{tmp|generated}/{user}/{sub}/...``,
+                   ``{user}/{tmp|generated}/{sub}/...``, ``{user}/export/data.json``
+
+``infra/images-worker/worker.js`` enforces an equivalent allowlist at the
+edge; the two must stay in step (worker.test.mjs pins it).
 """
 
 import re
@@ -43,20 +41,27 @@ from urllib.parse import urlparse
 
 from app.core.config import settings
 
+# Namespace roots. ``users/`` is private (owner = segment 1); ``public/`` is
+# owned by nobody and served without auth.
+USERS_FOLDER = "users"
+PUBLIC_FOLDER = "public"
+PUBLIC_GROUPS = frozenset({"banners", "landing", "blog", "static"})
+
 # Canonical categories that can back a DB-referenced image row (and their
 # ``_thumb.webp`` siblings). The same set backs storage_inventory / the worker
-# allowlist / the backfill scripts.
+# allowlist / the backfill scripts. ``tmp``/``generated`` are never here: they
+# are preview/staging namespaces that must never be DB-referenced.
 CANONICAL_CATEGORIES = frozenset({"items", "outfits", "avatars", "sources", "feedback"})
 
-# Preview folders. Top-level layout shares ONE common prefix per folder so the
-# whole folder can be listed / migrated / cleared in a single pass
-# (scripts/cleanup_temp_assets.py, admin ops, provider lifecycle rules).
+# Preview folders. Staging lives under the user (``users/{user}/tmp/...``,
+# ``users/{user}/generated/...``) so every preview of one user shares a
+# prefix, and the whole user's previews are clearable together.
 TEMP_FOLDER = "tmp"
 GENERATED_FOLDER = "generated"
 PREVIEW_FOLDERS = frozenset({TEMP_FOLDER, GENERATED_FOLDER})
 
 # The data-export archive is a single deterministic key per user
-# (``POST /users/export`` overwrites it): ``{user}/export/data.json``.
+# (``POST /users/export`` overwrites it): ``users/{user}/export/data.json``.
 EXPORT_CATEGORY = "export"
 
 # Thumbnail sibling objects are always WebP whatever the parent's format.
@@ -71,59 +76,72 @@ THUMB_EXTENSION = ".webp"
 # reject a key StorageService itself can mint.
 ALLOWED_IMAGE_EXTS = "jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif"
 
-# A bare UUID, with or without dashes — the shape of every key's first segment.
-# Match with ``.fullmatch`` against a single segment (callers split the key first).
+# A bare UUID, with or without dashes — the shape of every owner segment.
 USER_ID_SEGMENT_RE = re.compile(
     r"^[0-9a-f]{32}$|^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
 
 _CATEGORY_ALT = "|".join(sorted(CANONICAL_CATEGORIES))
 _FOLDER_ALT = "|".join(sorted(PREVIEW_FOLDERS))
+_PUBLIC_GROUP_ALT = "|".join(sorted(PUBLIC_GROUPS))
 _NAME = r"[0-9a-f]{32}"
+_SLUG = r"[^/\\]+"
 
-# Canonical two-segment keys, ``{user}/{category}/{name}.{ext}``, where the
-# category is one of the DB-referenced object kinds and the name is the UUID
-# hex of the minted object.
-_KEY_RE = re.compile(
+# --------------------------------------------------------------------------- #
+# Current layout (post ``users/`` restructure)
+# --------------------------------------------------------------------------- #
+_USERS_KEY_RE = re.compile(
+    rf"^{USERS_FOLDER}/(?P<user>[^/\\]+)/(?P<category>{_CATEGORY_ALT})/"
+    rf"(?P<name>{_NAME})\.(?:{ALLOWED_IMAGE_EXTS})$"
+)
+_USERS_THUMB_KEY_RE = re.compile(
+    rf"^{USERS_FOLDER}/(?P<user>[^/\\]+)/(?P<category>{_CATEGORY_ALT})/"
+    rf"(?P<name>{_NAME}){re.escape(THUMB_SUFFIX)}\.{THUMB_EXTENSION[1:]}$"
+)
+_USERS_NESTED_KEY_RE = re.compile(
+    rf"^{USERS_FOLDER}/(?P<user>[^/\\]+?)/(?P<folder>{_FOLDER_ALT})/(?P<sub>[^/\\]+?)/"
+    rf"(?P<name>{_NAME})\.(?:{ALLOWED_IMAGE_EXTS})$"
+)
+_USERS_EXPORT_KEY_RE = re.compile(
+    rf"^{USERS_FOLDER}/(?P<user>[^/\\]+)/{EXPORT_CATEGORY}/data\.json$"
+)
+_PUBLIC_KEY_RE = re.compile(
+    rf"^{PUBLIC_FOLDER}/(?P<group>{_PUBLIC_GROUP_ALT})/(?P<slug>{_SLUG})/"
+    rf"(?P<name>{_NAME})\.(?:{ALLOWED_IMAGE_EXTS})$"
+)
+_PUBLIC_THUMB_KEY_RE = re.compile(
+    rf"^{PUBLIC_FOLDER}/(?P<group>{_PUBLIC_GROUP_ALT})/(?P<slug>{_SLUG})/"
+    rf"(?P<name>{_NAME}){re.escape(THUMB_SUFFIX)}\.{THUMB_EXTENSION[1:]}$"
+)
+
+# --------------------------------------------------------------------------- #
+# Legacy layouts (pre-``users/`` restructure). Kept for the transition window:
+# existing objects still live there until the re-key migration moves them, and
+# the worker still serves them. Retire after the migration is verified.
+# --------------------------------------------------------------------------- #
+_LEGACY_KEY_RE = re.compile(
     rf"^(?P<user>[^/\\]+)/(?P<category>{_CATEGORY_ALT})/"
     rf"(?P<name>{_NAME})\.(?:{ALLOWED_IMAGE_EXTS})$"
 )
-# Thumbnail siblings, ``{stem}_thumb.webp``. Always .webp whatever the parent's
-# format — see THUMB_EXTENSION. Servable so this endpoint and the Worker
-# (infra/images-worker, which allows the same set) agree on what a valid key is.
-_THUMB_KEY_RE = re.compile(
+_LEGACY_THUMB_KEY_RE = re.compile(
     rf"^(?P<user>[^/\\]+)/(?P<category>{_CATEGORY_ALT})/"
     rf"(?P<name>{_NAME}){re.escape(THUMB_SUFFIX)}\.{THUMB_EXTENSION[1:]}$"
 )
-# Four-segment preview keys under the shared top-level folders,
-# ``{folder}/{user}/{sub}/{name}.{ext}``, where the ``sub`` segment is:
-#   tmp/{source}          - upload_temp_generated_image (social-import, batch,
-#                           photoshoot review flows) and the staged upload
-#                           (tmp/{user}/upload/...)
-#   generated/{image_type}- image_generation_agent.save_generated_image, i.e. a
-#                           try-on or outfit render the user asked to keep
-# The top-level folder means every temp preview in the bucket shares ONE common
-# prefix, so scripts/cleanup_temp_assets.py can list or clear the whole folder
-# in a single pass.
-_NESTED_KEY_RE = re.compile(
+# Top-level preview folders: ``{tmp|generated}/{user}/{sub}/{name}.{ext}``.
+_LEGACY_TOP_LEVEL_PREVIEW_KEY_RE = re.compile(
     rf"^(?P<folder>{_FOLDER_ALT})/(?P<user>[^/\\]+?)/(?P<sub>[^/\\]+?)/"
     rf"(?P<name>{_NAME})\.(?:{ALLOWED_IMAGE_EXTS})$"
 )
-# Pre-migration preview keys, ``{user}/{folder}/{sub}/{name}.{ext}``.
-# Accepted ONLY until scripts/migrate_temp_keys_layout.py has rewritten every
-# old key (delete this regex and the Worker's copy once the migration is
-# verified complete). Keeping it during the migration window means a stored
-# storage_path minted before the deploy keeps serving instead of 404ing.
+# Per-user preview folders: ``{user}/{tmp|generated}/{sub}/{name}.{ext}``.
 _LEGACY_NESTED_KEY_RE = re.compile(
     rf"^(?P<user>[^/\\]+?)/(?P<folder>{_FOLDER_ALT})/(?P<sub>[^/\\]+?)/"
     rf"(?P<name>{_NAME})\.(?:{ALLOWED_IMAGE_EXTS})$"
 )
-# Deterministic per-user data export, ``{user}/export/data.json``.
-_EXPORT_KEY_RE = re.compile(rf"^(?P<user>[^/\\]+)/{EXPORT_CATEGORY}/data\.json$")
+_LEGACY_EXPORT_KEY_RE = re.compile(rf"^(?P<user>[^/\\]+)/{EXPORT_CATEGORY}/data\.json$")
 
 
 def mint_key(user_id: str, category: str, ext: str) -> str:
-    """Mint a canonical ``{user_id}/{category}/{uuid4hex}.{ext}`` key.
+    """Mint a canonical ``users/{user_id}/{category}/{uuid4hex}.{ext}`` key.
 
     ``ext`` is derived from the sniffed content type (``EXTENSION_BY_MIME``);
     a leading ``.`` is normalized so callers may pass ``.png`` or ``png``.
@@ -133,44 +151,66 @@ def mint_key(user_id: str, category: str, ext: str) -> str:
     if category not in CANONICAL_CATEGORIES:
         raise ValueError(f"not a canonical storage category: {category!r}")
     ext = ext if ext.startswith(".") else f".{ext}"
-    return f"{user_id}/{category}/{uuid.uuid4().hex}{ext}"
+    return f"{USERS_FOLDER}/{user_id}/{category}/{uuid.uuid4().hex}{ext}"
 
 
 def mint_preview_key(folder: str, user_id: str, sub: str, ext: str) -> str:
-    """Mint a preview key ``{folder}/{user_id}/{sub}/{uuid4hex}.{ext}``.
+    """Mint a preview key ``users/{user_id}/{folder}/{sub}/{uuid4hex}.{ext}``.
 
     ``folder`` must be one of ``PREVIEW_FOLDERS`` (``tmp`` / ``generated``);
     ``sub`` is the source or image type (``social-import``, ``batch``,
     ``photoshoot``, ``upload``, ``outfit``, ``product``, ``try-on``, ...).
+    Previews are staging only — they must never be DB-referenced.
     """
     if folder not in PREVIEW_FOLDERS:
         raise ValueError(f"not a preview folder: {folder!r}")
     ext = ext if ext.startswith(".") else f".{ext}"
-    return f"{folder}/{user_id}/{sub}/{uuid.uuid4().hex}{ext}"
+    return f"{USERS_FOLDER}/{user_id}/{folder}/{sub}/{uuid.uuid4().hex}{ext}"
 
 
 def mint_export_key(user_id: str) -> str:
-    """Mint the deterministic per-user export key ``{user}/export/data.json``."""
-    return f"{user_id}/{EXPORT_CATEGORY}/data.json"
+    """Mint the deterministic per-user export key ``users/{user}/export/data.json``."""
+    return f"{USERS_FOLDER}/{user_id}/{EXPORT_CATEGORY}/data.json"
+
+
+def mint_public_key(group: str, slug: str, ext: str) -> str:
+    """Mint a public asset key ``public/{group}/{slug}/{uuid4hex}.{ext}``.
+
+    Public assets are owned by nobody and served without auth (banners,
+    landing-page images, blog art, static assets). ``group`` must be one of
+    ``PUBLIC_GROUPS``.
+    """
+    if group not in PUBLIC_GROUPS:
+        raise ValueError(f"not a public asset group: {group!r}")
+    ext = ext if ext.startswith(".") else f".{ext}"
+    return f"{PUBLIC_FOLDER}/{group}/{slug}/{uuid.uuid4().hex}{ext}"
 
 
 def thumb_key_for(storage_path: Optional[str]) -> Optional[str]:
     """Derive the thumbnail object key for a canonical ``storage_path``.
 
     Thumbnails are sibling objects named ``{stem}_thumb.webp`` (e.g.
-    ``u/items/abc.jpg`` -> ``u/items/abc_thumb.webp``), so the read path can
-    materialize a thumb URL from the durable ``storage_path`` with no schema
-    change and no per-object lookup. The extension is ALWAYS ``.webp``
+    ``users/u/items/abc.jpg`` -> ``users/u/items/abc_thumb.webp``), so the read
+    path can materialize a thumb URL from the durable ``storage_path`` with no
+    schema change and no per-object lookup. The extension is ALWAYS ``.webp``
     because that is what is actually stored there — see THUMB_EXTENSION.
 
-    Returns None for non-canonical keys (``tmp/`` previews, keys without an
-    extension, ``_thumb`` keys themselves) — those images are served
-    full-size.
+    Returns None for non-canonical keys (``tmp/``/``generated/`` previews,
+    keys without an extension, ``_thumb`` keys themselves, public assets) —
+    those images are served full-size. Both the current ``users/`` layout and
+    the legacy per-user layout are recognized so pre-migration rows keep
+    deriving thumbs during the transition.
     """
     if not storage_path:
         return None
     parts = storage_path.split("/")
-    if len(parts) < 2 or parts[1] not in CANONICAL_CATEGORIES:
+    # users/{user}/{category}/... (current) or {user}/{category}/... (legacy).
+    if len(parts) >= 3 and parts[0] == USERS_FOLDER:
+        if parts[2] not in CANONICAL_CATEGORIES:
+            return None
+    elif len(parts) >= 2 and parts[1] in CANONICAL_CATEGORIES:
+        pass  # legacy per-user canonical
+    else:
         return None
     name = parts[-1]
     if not name or THUMB_SUFFIX in name:
@@ -185,11 +225,13 @@ def thumb_key_for(storage_path: Optional[str]) -> Optional[str]:
 class KeyRef(NamedTuple):
     """Structural parse of a storage key (see ``parse_key``)."""
 
-    layout: str  # canonical | thumb | preview | legacy_preview | export
+    layout: str  # canonical | thumb | preview | export | public | legacy_*
     user: Optional[str] = None
     category: Optional[str] = None
     folder: Optional[str] = None
     sub: Optional[str] = None
+    group: Optional[str] = None
+    slug: Optional[str] = None
     name: Optional[str] = None
     ext: Optional[str] = None
 
@@ -197,8 +239,8 @@ class KeyRef(NamedTuple):
 def parse_key(key: Optional[str]) -> Optional[KeyRef]:
     """Parse a storage key into its structural parts, or None.
 
-    Returns a ``KeyRef`` for canonical / thumb / preview / legacy-preview /
-    export keys. Bare keys only — reduce a URL with ``key_from_path`` first.
+    Returns a ``KeyRef`` for canonical / thumb / preview / export / public /
+    legacy keys. Bare keys only — reduce a URL with ``key_from_path`` first.
     Unknown or malformed keys return None (never a partial guess).
     """
     if not key:
@@ -206,43 +248,125 @@ def parse_key(key: Optional[str]) -> Optional[KeyRef]:
     key = key.strip()
     if not key:
         return None
-    m = _EXPORT_KEY_RE.fullmatch(key)
-    if m:
-        return KeyRef(
-            layout="export", user=m.group("user"), category=EXPORT_CATEGORY,
-            name="data.json", ext="json",
-        )
-    for regex, layout, is_preview in (
-        (_KEY_RE, "canonical", False),
-        (_THUMB_KEY_RE, "thumb", False),
-        (_NESTED_KEY_RE, "preview", True),
-        (_LEGACY_NESTED_KEY_RE, "legacy_preview", True),
-    ):
-        m = regex.fullmatch(key)
-        if not m:
-            continue
+
+    def _build(m, layout, is_preview=False):
         d = m.groupdict()
+        if layout in ("export", "legacy_export"):
+            return KeyRef(
+                layout=layout, user=d["user"], category=EXPORT_CATEGORY,
+                name="data.json", ext="json",
+            )
         name = d["name"]
         ext = key.rpartition(".")[2]
         if is_preview:
             return KeyRef(
-                layout=layout, user=d["user"], folder=d["folder"],
+                layout=layout, user=d.get("user"), folder=d.get("folder"),
                 sub=d["sub"], name=name, ext=ext,
+            )
+        if layout == "public":
+            return KeyRef(
+                layout=layout, group=d["group"], slug=d["slug"],
+                name=name, ext=ext,
             )
         return KeyRef(
             layout=layout, user=d["user"], category=d.get("category"),
             name=name, ext=ext,
         )
+
+    for m in (_USERS_EXPORT_KEY_RE.fullmatch(key),):
+        if m:
+            return _build(m, "export")
+    for m in (
+        _USERS_KEY_RE.fullmatch(key),
+        _USERS_THUMB_KEY_RE.fullmatch(key),
+        _PUBLIC_KEY_RE.fullmatch(key),
+        _PUBLIC_THUMB_KEY_RE.fullmatch(key),
+    ):
+        if m:
+            layout = "public" if m.re is _PUBLIC_KEY_RE or m.re is _PUBLIC_THUMB_KEY_RE else (
+                "thumb" if m.re is _USERS_THUMB_KEY_RE else "canonical"
+            )
+            return _build(m, layout)
+    for m in (
+        _USERS_NESTED_KEY_RE.fullmatch(key),
+    ):
+        if m:
+            return _build(m, "preview", is_preview=True)
+    # Legacy layouts (transition window).
+    for m in (
+        _LEGACY_KEY_RE.fullmatch(key),
+        _LEGACY_THUMB_KEY_RE.fullmatch(key),
+    ):
+        if m:
+            return _build(m, "legacy_canonical" if m.re is _LEGACY_KEY_RE else "legacy_thumb")
+    for m in (
+        _LEGACY_TOP_LEVEL_PREVIEW_KEY_RE.fullmatch(key),
+        _LEGACY_NESTED_KEY_RE.fullmatch(key),
+    ):
+        if m:
+            return _build(m, "legacy_preview", is_preview=True)
+    m = _LEGACY_EXPORT_KEY_RE.fullmatch(key)
+    if m:
+        return _build(m, "legacy_export")
+    return None
+
+
+def migrate_key_to_users_layout(key: Optional[str]) -> Optional[str]:
+    """Map any legacy key shape to its ``users/`` home, or None.
+
+    Mapping is POSITION-BASED on the recognized legacy structures (the name
+    segment is not re-validated — a legacy key held in a DB row must resolve
+    to the object even when its name predates the 32-hex convention):
+    - ``{user}/{category}/...``        -> ``users/{user}/{category}/...``
+    - ``{user}/{tmp|generated}/{sub}/...`` -> ``users/{user}/{folder}/{sub}/...``
+    - ``{tmp|generated}/{user}/{sub}/...`` -> ``users/{user}/{folder}/{sub}/...``
+    - ``{user}/export/data.json``      -> ``users/{user}/export/data.json``
+
+    Already-current keys are returned unchanged:
+    - ``users/...`` and ``public/...`` pass through.
+    Anything unrecognized (external junk, two-segment keys) returns None —
+    callers treat that as "not ours".
+
+    This NEVER promotes a preview to a durable category — the re-key script's
+    promotion step (staging-only invariant) is separate.
+    """
+    if not key:
+        return None
+    candidate = key.strip()
+    if not candidate:
+        return None
+    parts = candidate.split("/")
+    # Already-current layouts pass through.
+    if parts[0] in (USERS_FOLDER, PUBLIC_FOLDER):
+        return candidate
+    # {user}/export/data.json (exactly 3 segments).
+    if len(parts) == 3 and parts[2] == "data.json" and parts[1] == EXPORT_CATEGORY:
+        return f"{USERS_FOLDER}/{parts[0]}/{parts[1]}/{parts[2]}"
+    # {user}/{category}/... (durable) — category is one of ours.
+    if len(parts) >= 3 and parts[1] in CANONICAL_CATEGORIES:
+        return f"{USERS_FOLDER}/{parts[0]}/{parts[1]}/{'/'.join(parts[2:])}"
+    # {user}/{tmp|generated}/{sub}/... or {tmp|generated}/{user}/{sub}/...
+    # Both are structurally unambiguous as BARE keys (callers reduce URLs via
+    # key_from_path first, which is where the UUID/bucket heuristics live), so
+    # the user segment is not re-validated — DB rows may hold legacy user ids
+    # that are not UUID-shaped.
+    if len(parts) >= 4 and parts[0] in PREVIEW_FOLDERS:
+        # top-level preview: tmp/{user}/sub/...
+        return f"{USERS_FOLDER}/{parts[1]}/{parts[0]}/{parts[2]}/{'/'.join(parts[3:])}"
+    if len(parts) >= 4 and parts[1] in PREVIEW_FOLDERS:
+        # per-user preview: {user}/tmp/sub/...
+        return f"{USERS_FOLDER}/{parts[0]}/{parts[1]}/{parts[2]}/{'/'.join(parts[3:])}"
     return None
 
 
 def key_from_path(value: Optional[str]) -> Optional[str]:
     """Extract the bucket object key from a storage key or a served URL.
 
-    Accepts a bare bucket key (``user/items/abc.png``) or a URL that embeds
-    one (a Supabase ``/storage/v1/object/public/<bucket>/<key>`` URL, or an
-    S3 presigned ``/<bucket>/<key>`` URL) and returns the key. Returns None
-    for empty/None input.
+    Accepts a bare bucket key (``users/u/items/abc.png`` or a legacy
+    ``u/items/abc.png``) or a URL that embeds one (a Supabase
+    ``/storage/v1/object/public/<bucket>/<key>`` URL, an S3 presigned
+    ``/<bucket>/<key>`` URL, or a worker-CDN ``/<key>`` path) and returns the
+    key. Returns None for empty/None input.
 
     Used by the download helpers so they only ever fetch known bucket keys
     via the S3 backend (SSRF-safe): a caller-provided string is reduced to
@@ -254,16 +378,15 @@ def key_from_path(value: Optional[str]) -> Optional[str]:
     upload time, so after repointing ``OBJECT_STORAGE_BUCKET`` at R2 an old
     Railway URL resolved to ``railway-bucket/{user}/avatars/x.png``. The real
     object then looks unreferenced, and ``storage_inventory.py --delete``
-    would delete users' avatars as orphans. Every key we mint either begins
-    with a user UUID (canonical ``{user}/{category}/...``) or with a
-    top-level ``tmp|generated`` folder whose SECOND segment is the user
-    UUID (preview keys), so a leading segment that is neither is a
-    path-style bucket name and is dropped whatever it is called.
-    Worker-mode CDN URLs (``IMAGE_SERVING_MODE=worker``) carry no bucket
-    segment: the path is the key, so a leading ``tmp|generated`` preview
-    folder or user UUID is returned as-is (the preview folder is never
-    dropped). A URL that reduces to none of our key shapes returns None —
-    it is never reshaped into a garbage key.
+    would delete users' avatars as orphans. A leading segment that is neither
+    a known namespace (``users``/``public``/``tmp``/``generated``) nor a user
+    UUID is a path-style bucket name and is dropped whatever it is called.
+
+    During the transition window this returns keys in the layout the URL
+    embeds (old URLs reduce to legacy keys, which still exist until the re-key
+    migration moves them). Once the migration is verified, apply
+    ``migrate_key_to_users_layout`` to the result so stale legacy keys resolve
+    to their ``users/`` home.
     """
     if not value:
         return None
@@ -277,7 +400,7 @@ def key_from_path(value: Optional[str]) -> Optional[str]:
             # Legacy Supabase public object URL:
             # /storage/v1/object/public/<bucket>/<key...> — pre-R2 rows
             # (item_images/support_tickets) still store this shape; the
-            # bucket segment is dropped to recover the R2 key.
+            # bucket segment is dropped to recover the key.
             return "/".join(parts[5:])
         if len(parts) >= 2 and parts[0] == settings.OBJECT_STORAGE_BUCKET:
             return "/".join(parts[1:])
@@ -295,19 +418,18 @@ def key_from_path(value: Optional[str]) -> Optional[str]:
         ):
             return "/".join(parts[1:])
         # Worker-mode CDN URL (IMAGE_SERVING_MODE=worker): the CDN serves
-        # keys directly at the path root with no bucket segment, so a
-        # leading top-level preview folder (``tmp|generated``) whose
-        # SECOND segment is the user UUID is PART of the key — return the
-        # path as-is or the preview folder is lost (observed: worker CDN
-        # ``tmp/{uuid}/batch/{hex}.webp`` URLs fell into the bucket-drop
-        # branch below and came back as ``{uuid}/batch/{hex}.webp``).
+        # keys directly at the path root with no bucket segment.
+        # users/... and public/... paths ARE the keys (current layout);
+        # top-level preview folders embed the user in the SECOND segment.
+        if len(parts) >= 2 and parts[0] in (USERS_FOLDER, PUBLIC_FOLDER):
+            return "/".join(parts)
         if (
             len(parts) >= 3
             and parts[0] in PREVIEW_FOLDERS
             and USER_ID_SEGMENT_RE.fullmatch(parts[1])
         ):
             return "/".join(parts)
-        # Worker-mode CDN URL for a canonical key: a leading user UUID
+        # Worker-mode CDN URL for a canonical legacy key: a leading user UUID
         # means the path IS the key (no bucket segment to drop).
         if (
             len(parts) >= 3
@@ -315,14 +437,14 @@ def key_from_path(value: Optional[str]) -> Optional[str]:
         ):
             return "/".join(parts)
         # Path-style URL from a bucket that is no longer the configured one
-        # (a pre-cutover URL persisted in the DB). Canonical keys begin with
-        # a user UUID, so a leading segment that is neither a preview
-        # folder nor a UUID is the bucket name. Only drop it when what
-        # remains still looks like one of our keys, so an unrelated
-        # external URL is never silently reshaped into a key.
+        # (a pre-cutover URL persisted in the DB). Legacy canonical keys begin
+        # with a user UUID, so a leading segment that is neither a known
+        # namespace nor a UUID is the bucket name. Only drop it when what
+        # remains still looks like one of our keys, so an unrelated external
+        # URL is never silently reshaped into a key.
         if (
             len(parts) >= 3
-            and parts[0] not in PREVIEW_FOLDERS
+            and parts[0] not in PREVIEW_FOLDERS | {USERS_FOLDER, PUBLIC_FOLDER}
             and not USER_ID_SEGMENT_RE.fullmatch(parts[0])
         ):
             if USER_ID_SEGMENT_RE.fullmatch(parts[1]):
@@ -344,23 +466,21 @@ def build_object_url(key: str) -> str:
 
 
 def is_owned_storage_key(storage_path: str, user_id: str) -> bool:
-    """Validate a canonical StorageService key and its user ownership.
+    """Validate a storage key and its user ownership.
+
+    Ownership is a pure structural rule: every ``users/{user_id}/...`` key is
+    owned by ``user_id`` (segment 1); ``public/...`` keys are owned by nobody
+    (never True here); legacy keys are owned by their embedded user. Preview
+    keys are owned exactly like canonical keys (the owner is still segment 1).
+    The export key is deliberately NOT user-owned for serving: it is fetched
+    only through the authenticated presigned path, never the worker.
 
     Do not use a prefix-only check: encoded separators are decoded by the
     framework before this function, and ``../`` or a user-id prefix trick must
-    never reach the presigner. Valid keys are the canonical two-segment form,
-    its ``_thumb.webp`` sibling, or the four-segment preview form under the
-    top-level ``tmp/`` and ``generated/`` folders (plus the pre-migration
-    ``{user}/{tmp|generated}/{type}`` form, see _LEGACY_NESTED_KEY_RE).
+    never reach the presigner.
 
     ``infra/images-worker/worker.js`` enforces this same allowlist at the edge;
     the two must stay in step.
-
-    Lives here rather than in ``app.api.v1.images`` because both the routes
-    (to decide whether a stored key may be re-minted) and the services (to
-    re-verify ownership of a key at deletion resolution time, A2-01) guard
-    against the same rule, and ``app/core`` is the one layer both may import
-    (ARCHITECTURE.md).
     """
     if not isinstance(storage_path, str) or not isinstance(user_id, str):
         return False
@@ -368,47 +488,44 @@ def is_owned_storage_key(storage_path: str, user_id: str) -> bool:
         return False
     if ".." in storage_path:
         return False
-    match = (
-        _KEY_RE.fullmatch(storage_path)
-        or _THUMB_KEY_RE.fullmatch(storage_path)
-        or _NESTED_KEY_RE.fullmatch(storage_path)
-        or _LEGACY_NESTED_KEY_RE.fullmatch(storage_path)
-    )
-    return bool(match and match.group("user") == user_id)
+    ref = parse_key(storage_path)
+    if ref is None:
+        return False
+    if ref.layout in ("public", "export"):
+        return False
+    return ref.user == user_id
 
 
 def is_preview_key(key: Optional[str]) -> bool:
-    """True when ``key`` lives in a preview folder (either layout).
+    """True when ``key`` lives in a preview folder (any layout).
 
-    Preview keys are ``{tmp|generated}/{user}/{source}/...`` (current
-    top-level layout) or ``{user}/{tmp|generated}/{source}/...`` (legacy
-    per-user layout); canonical keys are ``{user}/{category}/...`` where the
-    category is never ``tmp``/``generated``, so checking the first two
-    segments is exact for both layouts. Used by the item-create normalize
-    path and the preview-promotion repair script to decide whether a key
-    needs promotion before it can back a DB row (previews are never
-    DB-referenced and are cleaned up weekly).
+    Preview keys are ``users/{user}/{tmp|generated}/...`` (current) or the
+    legacy per-user / top-level ``tmp|generated`` shapes; canonical keys are
+    ``users/{user}/{category}/...`` where the category is never ``tmp`` /
+    ``generated``. Used by the item-create normalize path and the
+    preview-promotion repair script to decide whether a key needs promotion
+    before it can back a DB row (previews are never DB-referenced).
     """
-    if not key:
-        return False
-    parts = key.split("/", 2)
-    return parts[0] in PREVIEW_FOLDERS or (
-        len(parts) > 1 and parts[1] in PREVIEW_FOLDERS
-    )
+    ref = parse_key(key)
+    return ref is not None and ref.layout in ("preview", "legacy_preview")
+
+
+def is_public_key(key: Optional[str]) -> bool:
+    """True when ``key`` is a public (no-auth) asset under ``public/``."""
+    ref = parse_key(key)
+    return ref is not None and ref.layout == "public"
 
 
 def normalize_preview_key(key: str) -> str:
     """Map a legacy per-user preview key to the top-level-folder layout.
 
     Legacy layout: ``{user_id}/{tmp|generated}/{sub}/...``
-    Canonical:     ``{tmp|generated}/{user_id}/{sub}/...``
+    Top-level:     ``{tmp|generated}/{user_id}/{sub}/...``
 
-    Only keys whose SECOND segment is ``tmp`` or ``generated`` are rewritten
-    (canonical ``{user_id}/{category}/...`` keys never have a preview folder
-    in that position, so they pass through unchanged). Delete paths use this
-    so a stale legacy path still held in a DB row resolves to the object that
-    now lives under the shared top-level folder — after the migration script
-    has moved the bytes, the old key no longer exists.
+    This predates the ``users/`` restructure and is retained for the
+    transition window (the completed ``tmp`` layout migration and its callers).
+    New code should use ``migrate_key_to_users_layout``, which maps every
+    legacy shape straight to its ``users/`` home.
     """
     parts = key.split("/", 3)
     if len(parts) >= 3 and parts[1] in PREVIEW_FOLDERS:

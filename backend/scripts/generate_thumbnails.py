@@ -117,7 +117,16 @@ async def _amain() -> int:
     backend = get_storage_backend()
     try:
         print("Listing bucket keys...")
-        keys = await backend.list_keys(prefix=only_user_id)
+        # Current layout nests keys under users/{user_id}/...; the legacy
+        # layout used {user_id}/... directly. Match either prefix so the
+        # per-user scoping keeps working for both.
+        prefixes = [f"users/{only_user_id}"] if only_user_id else [""]
+        if only_user_id:
+            prefixes.append(only_user_id)
+        keys: list = []
+        for prefix in prefixes:
+            keys.extend(await backend.list_keys(prefix=prefix))
+        keys = list(dict.fromkeys(keys))  # dedupe across the two prefixes
         existing_thumbs = {
             key for key in keys if "_thumb" in key.split("/")[-1]
         }

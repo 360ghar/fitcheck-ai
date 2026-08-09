@@ -123,7 +123,7 @@ async def test_upload_temp_image_does_not_create_thumb():
 
     # tmp keys are not canonical -> no thumb upload.
     assert len(backend.upload_calls) == 1
-    assert result["storage_path"].startswith("tmp/user-1/")
+    assert result["storage_path"].startswith("users/user-1/tmp/")
 
 
 @pytest.mark.asyncio
@@ -136,9 +136,10 @@ async def test_promote_temp_image_to_item_creates_thumb():
             temp_storage_path="tmp/user-1/social-import/abc123.png",
         )
 
-    # Server-side copy (move) + thumb upload for the promoted items key.
+    # Server-side copy (move) + thumb upload for the promoted items key. The
+    # legacy tmp key is mapped to its users/ home before the move.
     assert backend.copy_calls == [
-        ("tmp/user-1/social-import/abc123.png", result["storage_path"])
+        ("users/user-1/tmp/social-import/abc123.png", result["storage_path"])
     ]
     thumb_uploads = [c["key"] for c in backend.upload_calls if "thumb" in c["key"]]
     assert thumb_uploads == [StorageService.thumb_key_for(result["storage_path"])]
@@ -155,9 +156,10 @@ async def test_delete_image_also_deletes_thumb():
             db=MagicMock(), storage_path="user-1/items/abc123.jpg"
         )
 
+    # The legacy canonical key is mapped to its users/ home before the delete.
     assert sorted(backend.delete_calls) == [
-        "user-1/items/abc123.jpg",
-        "user-1/items/abc123_thumb.webp",
+        "users/user-1/items/abc123.jpg",
+        "users/user-1/items/abc123_thumb.webp",
     ]
 
 
@@ -173,33 +175,35 @@ async def test_delete_multiple_images_expands_thumbs():
             ],
         )
 
+    # Legacy keys are mapped to their users/ home; tmp has no thumb sibling.
+    # Sorted: "items/..." sorts before "tmp/...".
     assert sorted(backend.delete_calls) == [
-        "tmp/user-1/social-import/x.png",  # tmp has no thumb; sorts first
-        "user-1/items/abc123.jpg",
-        "user-1/items/abc123_thumb.webp",
+        "users/user-1/items/abc123.jpg",
+        "users/user-1/items/abc123_thumb.webp",
+        "users/user-1/tmp/social-import/x.png",  # tmp has no thumb
     ]
 
 
 @pytest.mark.asyncio
-async def test_delete_normalizes_legacy_preview_keys():
-    """A legacy per-user preview key held in a DB row resolves to the top-level
-    layout on delete (storage_keys.normalize_preview_key) so a delete issued
-    after the migration script has moved the bytes still finds the object.
-    Canonical keys pass through unchanged."""
+async def test_delete_maps_legacy_preview_keys():
+    """A legacy per-user preview key held in a DB row resolves to its users/
+    home on delete (storage_keys.migrate_key_to_users_layout) so a delete
+    issued after the layout migration has moved the bytes still finds the
+    object. Canonical keys map to users/ too."""
     backend = FakeS3Backend()
     with patch("app.services.storage_service.get_storage_backend", return_value=backend):
         await StorageService.delete_multiple_images(
             db=MagicMock(),
             storage_paths=[
                 "user-1/tmp/social-import/x.png",  # legacy per-user layout
-                "user-1/items/abc123.jpg",  # canonical, untouched
+                "user-1/items/abc123.jpg",  # legacy canonical
             ],
         )
 
     assert sorted(backend.delete_calls) == [
-        "tmp/user-1/social-import/x.png",  # normalized to the top-level folder
-        "user-1/items/abc123.jpg",
-        "user-1/items/abc123_thumb.webp",
+        "users/user-1/items/abc123.jpg",
+        "users/user-1/items/abc123_thumb.webp",
+        "users/user-1/tmp/social-import/x.png",  # mapped to the users/ home
     ]
 
 
@@ -265,11 +269,13 @@ async def test_resolve_owned_storage_paths_includes_thumbs():
     result = await StorageService.resolve_owned_storage_paths(db, "user-1")
 
     assert result["item_ids"] == ["item-1"]
+    # Legacy fixture keys are mapped to their users/ home by the delete-path
+    # normalizer (migrate_key_to_users_layout).
     assert sorted(result["storage_paths"]) == [
-        "user-1/items/a.jpg",
-        "user-1/items/a_thumb.webp",
-        "user-1/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
-        "user-1/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
+        "users/user-1/items/a.jpg",
+        "users/user-1/items/a_thumb.webp",
+        "users/user-1/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+        "users/user-1/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
     ]
 
 

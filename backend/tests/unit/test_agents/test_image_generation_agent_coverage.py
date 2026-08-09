@@ -569,7 +569,7 @@ async def test_save_generated_image_success(fake_db):
         )
 
     assert result["image_url"] == "https://cdn.example/x.png"
-    assert result["storage_path"].startswith("generated/u1/outfit/")
+    assert result["storage_path"].startswith("users/u1/generated/outfit/")
     assert result["storage_path"].endswith(".png")
     upload.assert_awaited_once()
     call_kwargs = upload.await_args.kwargs

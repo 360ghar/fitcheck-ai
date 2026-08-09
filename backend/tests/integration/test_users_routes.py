@@ -964,7 +964,7 @@ async def test_export_user_data_returns_a_presigned_url_with_data_sections(monke
     result = await users_module.export_user_data(user_id=USER_ID, db=db)
 
     assert result["message"] == "OK"
-    assert result["data"]["export_url"] == f"https://presigned.example/{USER_ID}/export/data.json"
+    assert result["data"]["export_url"] == f"https://presigned.example/users/{USER_ID}/export/data.json"
     assert seen["content_type"] == "application/json"
     assert seen["cache_control"] == "60"
 
@@ -1003,8 +1003,8 @@ async def test_export_user_data_overwrites_the_same_key_and_returns_a_fresh_url_
     second = await users_module.export_user_data(user_id=USER_ID, db=db)
 
     assert seen["paths"] == [
-        f"{USER_ID}/export/data.json",
-        f"{USER_ID}/export/data.json",
+        f"users/{USER_ID}/export/data.json",
+        f"users/{USER_ID}/export/data.json",
     ]
     assert first["data"]["export_url"] != second["data"]["export_url"]
 
@@ -1087,4 +1087,4 @@ async def test_delete_current_user_anonymizes_tickets_and_purges_export_archive(
     assert db.calls.index(anonymize) < db.calls.index(
         ("delete", "users", None)
     ), "tickets must be anonymized before the users row"
-    assert f"{USER_ID}/export/data.json" in deleted_paths
+    assert f"users/{USER_ID}/export/data.json" in deleted_paths

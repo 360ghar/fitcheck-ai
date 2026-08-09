@@ -77,26 +77,43 @@ const AUTH_COOKIE_PREFIX = 'sb-'; // sb-<project-ref>-auth-token
 // Small on purpose: this is the window in which an expired token still works.
 const CLOCK_SKEW_SECONDS = 60;
 
-// Key allowlist, ported from backend/app/api/v1/images.py (_KEY_RE /
-// _NESTED_KEY_RE). Keep the two in sync: this Worker and the presigned endpoint
-// must not disagree about what a servable key is.
+// Key allowlist, ported from backend/app/core/storage_keys.py. Keep the two in
+// sync: this Worker and the presigned endpoint must not disagree about what a
+// servable key is. The extension set mirrors StorageService's
+// EXTENSION_BY_MIME: HEIC/TIFF/BMP uploads usually transcode to WebP but the
+// best-effort transcode can fail and store the original bytes, so those
+// extensions are servable too.
+//
+// Current layout (post `users/` restructure):
+//   users/{user_id}/{items|outfits|avatars|sources|feedback}/{name}.{ext}
+//   users/{user_id}/{tmp|generated}/{sub}/{name}.{ext}
+//   users/{user_id}/export/data.json
+//   public/{banners|landing|blog|static}/{slug}/{name}.{ext}
+// Ownership is a pure structural rule: segment 1 for `users/`, nobody for
+// `public/`. Legacy pre-restructure shapes below are served during the
+// transition window only; retire alongside storage_keys.py's legacy regexes
+// once the re-key migration is verified complete.
+const USERS_KEY_RE =
+  /^users\/[^/\\]+\/(?:items|outfits|avatars|sources|feedback)\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
+const USERS_PREVIEW_KEY_RE =
+  /^users\/[^/\\]+\/(?:tmp|generated)\/[^/\\]+\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
+// The per-user data export (`users/{user}/export/data.json`) is deliberately
+// NOT servable here: it is fetched only through the authenticated presigned
+// path, never the worker (mirrors storage_keys.is_owned_storage_key).
+const USERS_THUMB_KEY_RE =
+  /^users\/[^/\\]+\/(?:items|outfits|avatars|sources|feedback)\/[0-9a-f]{32}_thumb\.webp$/;
+const PUBLIC_KEY_RE =
+  /^public\/(?:banners|landing|blog|static)\/[^/\\]+\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
+const PUBLIC_THUMB_KEY_RE =
+  /^public\/(?:banners|landing|blog|static)\/[^/\\]+\/[0-9a-f]{32}_thumb\.webp$/;
+// Legacy pre-restructure keys: {user}/{category}/..., {tmp|generated}/{user}/...,
+// {user}/{tmp|generated}/..., {user}/export/data.json.
 const CANONICAL_KEY_RE =
-  /^[^/\\]+\/(?:items|outfits|avatars|sources|feedback)\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif)$/;
-// Preview keys under the shared top-level folders:
-//   {tmp|generated}/{user_id}/{sub}/{name}.{ext}
-// Top-level folder so scripts/cleanup_temp_assets.py can list/clear every
-// preview with one prefix (backend storage_service mints this shape).
+  /^[^/\\]+\/(?:items|outfits|avatars|sources|feedback)\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
 const NESTED_KEY_RE =
-  /^(?:tmp|generated)\/[^/\\]+\/[^/\\]+\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif)$/;
-// Pre-migration preview keys: {user_id}/{tmp|generated}/{sub}/{name}.{ext}.
-// Accepted ONLY until scripts/migrate_temp_keys_layout.py has rewritten every
-// old key; delete this alongside images.py's _LEGACY_NESTED_KEY_RE afterwards.
+  /^(?:tmp|generated)\/[^/\\]+\/[^/\\]+\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
 const LEGACY_NESTED_KEY_RE =
-  /^[^/\\]+\/(?:tmp|generated)\/[^/\\]+\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif)$/;
-// Thumbnail siblings: same layout, `_thumb.webp`. Always .webp regardless of the
-// parent's format (StorageService.THUMB_EXTENSION), because the read path derives
-// the thumb key from the parent key with no lookup, so the format has to be
-// predictable. Keep this in step with THUMB_EXTENSION if it ever changes.
+  /^[^/\\]+\/(?:tmp|generated)\/[^/\\]+\/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif|bmp|tif|tiff|heic|heif)$/;
 const CANONICAL_THUMB_KEY_RE =
   /^[^/\\]+\/(?:items|outfits|avatars|sources|feedback)\/[0-9a-f]{32}_thumb\.webp$/;
 
@@ -351,6 +368,12 @@ async function verifyToken(token, env) {
 
   let payload = null;
   if (header.alg === 'HS256') {
+    if (!env.SUPABASE_JWT_SECRET) {
+      // JWKS-only deployments omit the legacy secret (README); an HS256 token
+      // cannot be verified without it, so reject descriptively instead of
+      // crashing on undefined inside hmacVerifyKey.
+      return null;
+    }
     const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
     const key = await hmacVerifyKey(env.SUPABASE_JWT_SECRET);
     const ok = await crypto.subtle.verify('HMAC', key, base64urlToBytes(sigB64), data);
@@ -370,6 +393,11 @@ async function verifyToken(token, env) {
 // --------------------------------------------------------------------------
 function isServableKey(storagePath) {
   return (
+    USERS_KEY_RE.test(storagePath) ||
+    USERS_PREVIEW_KEY_RE.test(storagePath) ||
+    USERS_THUMB_KEY_RE.test(storagePath) ||
+    PUBLIC_KEY_RE.test(storagePath) ||
+    PUBLIC_THUMB_KEY_RE.test(storagePath) ||
     CANONICAL_KEY_RE.test(storagePath) ||
     NESTED_KEY_RE.test(storagePath) ||
     LEGACY_NESTED_KEY_RE.test(storagePath) ||
@@ -383,13 +411,33 @@ function isOwnedByUser(storagePath, userId) {
   if (/\\|\r|\n/.test(storagePath)) return false; // no encoded separators
   if (storagePath.includes('..')) return false; // no traversal
   if (!isServableKey(storagePath)) return false;
-  // Canonical keys and legacy per-user preview keys embed the owner in the
-  // FIRST segment; top-level tmp/generated preview keys embed it in the
-  // SECOND segment (mirrors images.py `_is_owned_by_user`).
+  // Public assets are owned by nobody and served without auth (banners,
+  // landing images, blog art, static) — the request handler short-circuits
+  // before JWT for `public/` keys, so this is only a safety net.
+  if (storagePath.startsWith('public/')) return true;
+  // Current `users/` layout: the owner is ALWAYS segment 1. Legacy shapes
+  // embed the owner in segment 0 (per-user canonical / per-user previews) or
+  // segment 1 (top-level tmp|generated previews).
+  if (storagePath.startsWith('users/')) {
+    return storagePath.split('/')[1] === userId;
+  }
   const owner = NESTED_KEY_RE.test(storagePath)
     ? storagePath.split('/')[1]
     : storagePath.split('/')[0];
   return owner === userId;
+}
+
+/** True when the key is a public (no-auth) asset under `public/`.
+ *
+ * The allowlist, not a prefix, decides: `public/anything/...` must not
+ * bypass the JWT check (the regexes pin the group to banners|landing|blog|
+ * static and the name to a 32-hex + image extension).
+ */
+function isPublicKey(storagePath) {
+  return (
+    typeof storagePath === 'string' &&
+    (PUBLIC_KEY_RE.test(storagePath) || PUBLIC_THUMB_KEY_RE.test(storagePath))
+  );
 }
 
 // --------------------------------------------------------------------------
@@ -412,11 +460,11 @@ function validateEnv(env) {
     );
   }
   if (!env.SUPABASE_JWT_SECRET) {
-    throw new Error(
-      'images-worker misconfigured: SUPABASE_JWT_SECRET is required — deploy ' +
-        'with `npx wrangler secret put SUPABASE_JWT_SECRET` (HS256 token ' +
-        'verification needs it)',
-    );
+    // Deliberately NOT an error: the secret is only used for legacy HS256
+    // tokens (README: "needed only for legacy HS256 tokens; ES256/RS256
+    // tokens verify against the project JWKS automatically"). A JWKS-only
+    // deployment keeps working without it; the HS256 branch in verifyToken
+    // rejects those tokens descriptively.
   }
   envValidated = true;
 }
@@ -454,7 +502,12 @@ function cacheControlFor(object, storagePath) {
   const immutableDefault = `public, max-age=${CACHE_TTL_SECONDS}, immutable`;
   const writeOnce =
     typeof storagePath === 'string' &&
-    (CANONICAL_KEY_RE.test(storagePath) || CANONICAL_THUMB_KEY_RE.test(storagePath));
+    (USERS_KEY_RE.test(storagePath) ||
+      USERS_THUMB_KEY_RE.test(storagePath) ||
+      PUBLIC_KEY_RE.test(storagePath) ||
+      PUBLIC_THUMB_KEY_RE.test(storagePath) ||
+      CANONICAL_KEY_RE.test(storagePath) ||
+      CANONICAL_THUMB_KEY_RE.test(storagePath));
   if (!writeOnce) return own || immutableDefault;
   if (!own) return immutableDefault;
   if (!isCacheable(own)) return own; // more restrictive wins
@@ -509,12 +562,17 @@ async function handleRequest(request, env, ctx) {
     return notFound();
   }
 
-  const token = getToken(request, env);
-  const payload = token ? await verifyToken(token, env) : null;
-  const userId = payload && payload.sub ? String(payload.sub) : null;
-  if (!isOwnedByUser(storagePath, userId)) {
-    // Indistinguishable 404: never reveal whether the object exists.
-    return notFound();
+  // Public assets (banners, landing, blog, static) are served without auth:
+  // they are owned by nobody and must be reachable by anonymous visitors.
+  // Everything else requires a valid, ownership-checked token.
+  if (!isPublicKey(storagePath)) {
+    const token = getToken(request, env);
+    const payload = token ? await verifyToken(token, env) : null;
+    const userId = payload && payload.sub ? String(payload.sub) : null;
+    if (!isOwnedByUser(storagePath, userId)) {
+      // Indistinguishable 404: never reveal whether the object exists.
+      return notFound();
+    }
   }
 
   const rangeHeader = request.headers.get('Range');

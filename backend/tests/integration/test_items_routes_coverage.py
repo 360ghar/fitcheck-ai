@@ -971,11 +971,13 @@ async def test_delete_item_removes_row_and_storage_paths(monkeypatch):
     assert result is None
     assert ("items", None) in db.deletes
     vector.delete_item.assert_awaited_once_with(ITEM_ID)
+    # Legacy fixture keys are mapped to their users/ home by the delete-path
+    # normalizer (migrate_key_to_users_layout).
     assert sorted(deleted_paths) == sorted([
-        "u/items/one.jpg",
-        "u/items/one_thumb.webp",
-        source_key,
-        f"{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
+        "users/u/items/one.jpg",
+        "users/u/items/one_thumb.webp",
+        f"users/{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+        f"users/{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
     ])
 
 
@@ -1368,6 +1370,8 @@ async def test_delete_item_image_deletes_storage_and_row(monkeypatch):
     )
 
     assert result["data"] == {"deleted": True}
+    # The route passes the stored path to delete_image verbatim; the legacy
+    # -> users/ mapping happens inside the real delete_image (not the fake).
     assert deleted == ["u/items/one.jpg"]
     assert ("item_images", None) in db.deletes
 
@@ -1492,13 +1496,15 @@ async def test_batch_delete_cleans_storage_and_embeddings(monkeypatch):
 
     assert result["data"]["deleted_count"] == 2
     vector.batch_delete.assert_awaited_once_with([ITEM_ID, OTHER_ITEM_ID])
+    # Legacy fixture keys are mapped to their users/ home by the delete-path
+    # normalizer (migrate_key_to_users_layout).
     assert sorted(deleted_paths) == sorted([
-        "u/items/one.jpg",
-        "u/items/one_thumb.webp",
-        "u/items/two.jpg",
-        "u/items/two_thumb.webp",
-        source_key,
-        f"{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
+        "users/u/items/one.jpg",
+        "users/u/items/one_thumb.webp",
+        "users/u/items/two.jpg",
+        "users/u/items/two_thumb.webp",
+        f"users/{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+        f"users/{USER_ID}/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
     ])
 
 

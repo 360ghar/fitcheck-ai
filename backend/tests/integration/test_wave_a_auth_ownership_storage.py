@@ -207,13 +207,15 @@ async def test_single_item_delete_cleans_source_and_item_images(monkeypatch):
     await items_module.delete_item(item_id=OWNED_ITEM_ID, user_id=USER_ID, db=db)
 
     # Source photo + both item images, each with its derived _thumb sibling.
+    # Legacy fixture keys are mapped to their users/ home by the delete-path
+    # normalizer (migrate_key_to_users_layout).
     assert sorted(deleted_paths) == [
-        "user-a/items/one.jpg",
-        "user-a/items/one_thumb.webp",
-        "user-a/items/two.png",
-        "user-a/items/two_thumb.webp",
-        "user-a/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
-        "user-a/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
+        "users/user-a/items/one.jpg",
+        "users/user-a/items/one_thumb.webp",
+        "users/user-a/items/two.png",
+        "users/user-a/items/two_thumb.webp",
+        "users/user-a/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+        "users/user-a/sources/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_thumb.webp",
     ]
     # The parent row is deleted.
     assert ("items", "delete", [("eq", "id", OWNED_ITEM_ID), ("eq", "user_id", USER_ID)]) in db.queries
@@ -243,9 +245,11 @@ async def test_single_outfit_delete_cleans_outfit_images(monkeypatch):
 
     await outfits_module.delete_outfit(outfit_id=OWNED_OUTFIT_ID, user_id=USER_ID, db=db)
 
+    # Legacy fixture keys are mapped to their users/ home by the delete-path
+    # normalizer (migrate_key_to_users_layout).
     assert sorted(deleted_paths) == [
-        "user-a/outfits/one.jpg",
-        "user-a/outfits/one_thumb.webp",
+        "users/user-a/outfits/one.jpg",
+        "users/user-a/outfits/one_thumb.webp",
     ]
     assert ("outfits", "delete", [("eq", "id", OWNED_OUTFIT_ID), ("eq", "user_id", USER_ID)]) in db.queries
 

@@ -47,25 +47,28 @@ def test_with_thumb_siblings_drops_falsy_and_duplicate_paths():
     paths = ["u1/items/a.png", "", "u1/items/a.png", "u1/items/b.png", None]
     expanded = _with_thumb_siblings(paths)
     # Falsy paths and the duplicate are dropped; each canonical path gets one
-    # _thumb sibling.
+    # _thumb sibling. Legacy fixture keys are mapped to their users/ home
+    # (migrate_key_to_users_layout) so deletes resolve the object where it
+    # now lives.
     assert expanded == [
-        "u1/items/a.png",
-        "u1/items/a_thumb.webp",
-        "u1/items/b.png",
-        "u1/items/b_thumb.webp",
+        "users/u1/items/a.png",
+        "users/u1/items/a_thumb.webp",
+        "users/u1/items/b.png",
+        "users/u1/items/b_thumb.webp",
     ]
 
 
 def test_with_thumb_siblings_never_derives_thumb_from_thumb():
     # A _thumb key itself has no sibling; it is passed through once.
     expanded = _with_thumb_siblings(["u1/items/a.png", "u1/items/a_thumb.webp"])
-    assert expanded == ["u1/items/a.png", "u1/items/a_thumb.webp"]
+    assert expanded == ["users/u1/items/a.png", "users/u1/items/a_thumb.webp"]
 
 
 def test_with_thumb_siblings_passes_thumbless_tmp_paths_through():
-    # tmp/ previews have no thumb sibling (thumb_key_for returns None).
+    # tmp/ previews have no thumb sibling (thumb_key_for returns None); the
+    # legacy top-level preview is mapped to its users/ home.
     assert _with_thumb_siblings(["tmp/u1/social-import/x.png"]) == [
-        "tmp/u1/social-import/x.png"
+        "users/u1/tmp/social-import/x.png"
     ]
 
 
@@ -307,7 +310,8 @@ async def test_delete_image_tolerates_thumb_delete_failure():
             db=MagicMock(), storage_path="u1/items/abc.png"
         )
     assert deleted is True
-    assert backend.deleted == ["u1/items/abc.png", "u1/items/abc_thumb.webp"]
+    # The legacy canonical key is mapped to its users/ home before the delete.
+    assert backend.deleted == ["users/u1/items/abc.png", "users/u1/items/abc_thumb.webp"]
 
 
 class _AlwaysFailingDeleteBackend:
@@ -333,8 +337,9 @@ async def test_delete_image_skips_thumb_for_non_canonical_key():
             db=MagicMock(), storage_path="tmp/u1/social-import/x.png"
         )
     assert deleted is True
-    # Only the object itself: tmp previews have no _thumb sibling.
-    assert backend.delete_calls == ["tmp/u1/social-import/x.png"]
+    # Only the object itself: tmp previews have no _thumb sibling. The legacy
+    # top-level preview is mapped to its users/ home before the delete.
+    assert backend.delete_calls == ["users/u1/tmp/social-import/x.png"]
 
 
 @pytest.mark.asyncio
@@ -388,13 +393,15 @@ async def test_resolve_owned_storage_paths_scopes_to_requested_ids():
     )
     assert result["item_ids"] == ["item-1", "item-2"]
     assert result["outfit_ids"] == ["outfit-1"]
-    # Sources from the parent rows + child image rows + derived thumbs.
-    assert "u1/sources/11111111111111111111111111111111.png" in result["storage_paths"]
-    assert "u1/sources/22222222222222222222222222222222.png" in result["storage_paths"]
-    assert "u1/sources/33333333333333333333333333333333.png" not in result["storage_paths"]
-    assert "u1/items/a.png" in result["storage_paths"]
-    assert "u1/items/c.png" not in result["storage_paths"]
-    assert "u1/items/a_thumb.webp" in result["storage_paths"]
+    # Sources from the parent rows + child image rows + derived thumbs. Legacy
+    # fixture keys are mapped to their users/ home by the delete-path
+    # normalizer (migrate_key_to_users_layout).
+    assert "users/u1/sources/11111111111111111111111111111111.png" in result["storage_paths"]
+    assert "users/u1/sources/22222222222222222222222222222222.png" in result["storage_paths"]
+    assert "users/u1/sources/33333333333333333333333333333333.png" not in result["storage_paths"]
+    assert "users/u1/items/a.png" in result["storage_paths"]
+    assert "users/u1/items/c.png" not in result["storage_paths"]
+    assert "users/u1/items/a_thumb.webp" in result["storage_paths"]
 
 
 @pytest.mark.asyncio
@@ -427,10 +434,13 @@ async def test_resolve_owned_storage_paths_unscoped_collects_everything():
     result = await StorageService.resolve_owned_storage_paths(db, user_id="u1")
     assert result["item_ids"] == ["item-1"]
     assert result["outfit_ids"] == ["outfit-1"]
-    assert "u1/sources/11111111111111111111111111111111.png" in result["storage_paths"]
-    assert "u1/items/a.png" in result["storage_paths"]
-    assert "u1/outfits/o.png" in result["storage_paths"]
-    assert "u1/items/a_thumb.webp" in result["storage_paths"]
+    # Legacy keys in the fixture are mapped to their users/ home by the
+    # delete-path normalizer (migrate_key_to_users_layout), so deletes always
+    # resolve the object where it now lives.
+    assert "users/u1/sources/11111111111111111111111111111111.png" in result["storage_paths"]
+    assert "users/u1/items/a.png" in result["storage_paths"]
+    assert "users/u1/outfits/o.png" in result["storage_paths"]
+    assert "users/u1/items/a_thumb.webp" in result["storage_paths"]
 
 
 @pytest.mark.asyncio
@@ -556,7 +566,7 @@ async def test_promote_temp_image_skips_thumb_when_download_empty():
         result = await StorageService.promote_temp_image_to_item(
             db=MagicMock(), user_id="u1", temp_storage_path="tmp/u1/photoshoot/x.png"
         )
-    assert result["storage_path"].startswith("u1/items/")
+    assert result["storage_path"].startswith("users/u1/items/")
     assert not any("_thumb" in c["key"] for c in backend.upload_calls)
 
 
@@ -606,8 +616,8 @@ async def test_delete_temp_objects_deletes_through_backend():
 
 @pytest.mark.asyncio
 async def test_upload_item_image_staged_writes_tmp_preview_path():
-    """stage=True keeps the object under tmp/{user}/upload/ so an item row
-    that is never created does not orphan a canonical object."""
+    """stage=True keeps the object under users/{user}/tmp/upload/ so an item
+    row that is never created does not orphan a canonical object."""
     backend = FakeS3Backend()
     with patch.object(storage_module, "get_storage_backend", return_value=backend):
         result = await StorageService.upload_item_image(
@@ -619,8 +629,8 @@ async def test_upload_item_image_staged_writes_tmp_preview_path():
             stage=True,
         )
     key = result["storage_path"]
-    assert key.startswith("tmp/u1/upload/")
-    assert len(key) > len("tmp/u1/upload/")
+    assert key.startswith("users/u1/tmp/upload/")
+    assert len(key) > len("users/u1/tmp/upload/")
     assert backend.upload_calls[0]["key"] == key
     # tmp previews never get a _thumb sibling (thumb_key_for returns None).
     assert len(backend.upload_calls) == 1
@@ -637,7 +647,7 @@ async def test_upload_item_image_unstaged_uses_canonical_items_path():
             filename="shirt.png",
             file_data=_valid_png_bytes(),
         )
-    assert result["storage_path"].startswith("u1/items/")
+    assert result["storage_path"].startswith("users/u1/items/")
 
 
 class _CopyFailsBackend(FakeS3Backend):
@@ -705,7 +715,7 @@ async def test_promote_temp_image_uses_passed_source_content_for_thumb():
             temp_storage_path="tmp/u1/photoshoot/x.png",
             source_content=_valid_png_bytes(),
         )
-    assert result["storage_path"].startswith("u1/items/")
+    assert result["storage_path"].startswith("users/u1/items/")
     # The thumb was uploaded from the passed bytes: no download happened.
     assert backend.download_keys == []
     assert any("_thumb" in c["key"] for c in backend.upload_calls)

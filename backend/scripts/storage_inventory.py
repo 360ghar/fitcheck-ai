@@ -228,13 +228,17 @@ def classify_category(key: str) -> str:
 
     Top-level preview folders (``tmp/{user}/{source}/...`` and
     ``generated/{user}/{type}/...``) -> FIRST segment.
-    Canonical layout (``{user_id}/{category}/{uuid}.{ext}``) and the legacy
-    per-user preview layout (``{user_id}/tmp|generated/{sub}/...``) -> second
-    segment.
+    ``users/`` layout (``users/{user}/{category}/...``) -> THIRD segment, and
+    ``users/{user}/tmp|generated/...`` -> ``tmp`` / ``generated``.
+    Canonical legacy layout (``{user_id}/{category}/{uuid}.{ext}``) and the
+    legacy per-user preview layout (``{user_id}/tmp|generated/{sub}/...``) ->
+    second segment.
     Oldest layout: ``{user_id}/{timestamp}/{prefix}_{uuid}{ext}`` -> infer from
     the filename prefix. Anything else is ``legacy-other``.
     """
     parts = key.split("/")
+    if parts and parts[0] == "users":
+        return parts[2] if len(parts) >= 3 and parts[2] in CATEGORY_KEYWORDS else "legacy-other"
     if parts and parts[0] in CATEGORY_KEYWORDS:
         return parts[0]
     if len(parts) >= 2:

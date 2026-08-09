@@ -124,6 +124,13 @@ This starts:
    download/share and reads one through a canvas). Only the `OBJECT_STORAGE_*`
    names are read; provider-specific names (`R2_*`, `AWS_*`) are not aliased.
 
+   Key layout: user content lives under `users/{user_id}/...` (private, owner
+   = segment 1), previews under `users/{user_id}/tmp|generated/...` (staging
+   only, never DB-referenced), and public no-auth assets under
+   `public/{group}/...` (`banners|landing|blog|static`). The single grammar
+   owner is `backend/app/core/storage_keys.py` (minters, `parse_key`,
+   `key_from_path`); `infra/images-worker/worker.js` mirrors the allowlist.
+
    Image serving is configured by (`backend/app/core/config.py`):
    - `OBJECT_STORAGE_PRESIGN_TTL` — presigned GET URL lifetime before it
      rotates on the next refetch (default `3600` seconds). URLs are

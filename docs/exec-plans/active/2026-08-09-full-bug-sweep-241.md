@@ -113,6 +113,36 @@ duplicated category vocabularies (storage_service `THUMB_CATEGORIES`,
 formats and parse round-trips; the pre-existing shape-pinning suites pass
 unchanged (zero behavior change). `worker.js` remains a documented mirror.
 
+## Post-sweep follow-up (2026-08-10): `users/` + `public/` bucket restructure
+
+Storage layout decision (user-approved): **private user content lives under
+`users/{user_id}/...` and public no-auth assets under `public/{group}/...`**.
+Ownership is a pure structural rule — segment 1 under `users/`, nobody under
+`public/` — so future public folders (banners, landing, blog, static) nest
+under `public/` with zero code change beyond the allowlist.
+
+- **Staging-only invariant:** `tmp/` and `generated/` are preview namespaces
+  and are NEVER DB-referenced — `storage_path` only ever points at
+  `items|outfits|avatars|sources|feedback`. The 13 legacy
+  `{user}/generated/product/...` rows (backfilled 2026-08-10) are promoted to
+  `users/{user}/items/...` by the re-key script instead of being re-keyed.
+- **Grammar:** `storage_keys.py` gained `mint_public_key`, the `users/`
+  layout regexes, `parse_key` `user_*`/`public` layouts, and the pure
+  `migrate_key_to_users_layout` mapper (position-based, name-lenient).
+  Legacy layouts stay servable during the transition window.
+- **Worker:** `users/` + `public/` allowlist; `public/` served WITHOUT a JWT
+  (anonymous by design); export keys still never servable. 61 tests pass.
+- **Migration:** `scripts/migrate_storage_layout_users.py` re-keys every
+  bucket object (copy → HEAD-verify → DB rewrite → post-verify → delete,
+  never delete-first) and rewrites `storage_path` in `item_images`,
+  `outfit_images`, `items.source_image_storage_path`,
+  `support_tickets.attachment_storage_paths`. Dry-run default; gated on
+  explicit operator approval before `--apply`.
+- **Follow-up commit** (after the live migration is verified): retire the
+  legacy regexes in `storage_keys.py`/`worker.js` and enable the
+  `migrate_key_to_users_layout` flip inside `key_from_path` so stale legacy
+  URLs in DB columns self-heal to their `users/` home.
+
 ## A3/A4 area status (backend AI/photoshoot + outfits/social slice)
 
 Implemented during this sweep (worker-scoped):

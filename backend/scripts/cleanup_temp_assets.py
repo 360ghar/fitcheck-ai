@@ -73,16 +73,20 @@ from app.services.object_storage import (  # noqa: E402
 )
 
 
-# Both layouts, one regex: the source segment is index 2 in each
-# (``tmp/{user}/{source}/...`` and ``{user}/tmp/{source}/...``).
+# All three layouts, one regex: the source segment is index 2 in the two
+# legacy shapes (``tmp/{user}/{source}/...`` and ``{user}/tmp/{source}/...``)
+# and index 3 in the current ``users/{user}/tmp/{source}/...`` layout.
 _TMP_KEY_RE = re.compile(
-    r"^(?:tmp/[^/\\]+/[^/\\]+|[^/\\]+/tmp/[^/\\]+)/"
+    r"^(?:tmp/[^/\\]+/[^/\\]+|[^/\\]+/tmp/[^/\\]+|"
+    r"users/[^/\\]+/tmp/[^/\\]+)/"
     r"[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif|avif)$"
 )
 
 
 def temp_source(key: str) -> str:
     """The source subfolder of a temp key (``photoshoot``, ``batch``, ...)."""
+    if key.startswith("users/"):
+        return key.split("/")[3]
     return key.split("/")[2]
 
 
