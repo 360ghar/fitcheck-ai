@@ -50,7 +50,10 @@ export default defineConfig({
     },
     {
       name: 'mobile-chromium',
-      use: { ...devices['iPhone 13'] },
+      // The iPhone 13 device descriptor defaults to the webkit engine
+      // (`defaultBrowserType`), which CI does not install — force chromium
+      // explicitly while keeping the device's viewport/UA/isMobile emulation.
+      use: { ...devices['iPhone 13'], browserName: 'chromium' },
       // Only the mobile journey on the phone project; keeps the desktop
       // journeys' selectors (sidebar, ⌘K) untouched.
       testMatch: /mobile\.e2e\.ts$/,
