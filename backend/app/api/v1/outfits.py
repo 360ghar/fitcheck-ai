@@ -547,8 +547,11 @@ async def get_public_outfit(
             items_summary = items_res.data or []
 
         # Private buckets: materialize fresh short-lived presigned URLs at read
-        # time so the share link never serves an expired stored URL.
-        await materialize_image_urls(outfit.get("outfit_images") or [])
+        # time so the share link never serves an expired stored URL. Forced
+        # presigned (even in worker mode): this endpoint is anonymous — a
+        # share-link visitor or a social crawler cannot present the app's JWT
+        # to the images Worker, so a stable Worker URL would 404 for them.
+        await materialize_image_urls(outfit.get("outfit_images") or [], presigned=True)
 
         public = {
             "id": outfit.get("id"),

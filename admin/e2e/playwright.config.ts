@@ -44,6 +44,16 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      // The mobile-shell journey is viewport-specific — it runs on the
+      // mobile project below instead.
+      testIgnore: /mobile\.e2e\.ts$/,
+    },
+    {
+      name: 'mobile-chromium',
+      use: { ...devices['iPhone 13'] },
+      // Only the mobile journey on the phone project; keeps the desktop
+      // journeys' selectors (sidebar, ⌘K) untouched.
+      testMatch: /mobile\.e2e\.ts$/,
     },
   ],
 })

@@ -535,7 +535,7 @@ class OutfitRepository {
   ///
   /// The API serves short-lived presigned URLs materialized from
   /// `storage_path` at read time; a cached URL expires after
-  /// OBJECT_STORAGE_PRESIGN_TTL (1h). Surfaces that render outfit images can
+  /// OBJECT_STORAGE_PRESIGN_TTL (default 7 days). Surfaces that render outfit images can
   /// call this when a load fails and retry with the fresh URL instead of
   /// showing a permanently broken tile. Returns null on any failure.
   Future<String?> remintImageUrl(String storagePath) async {

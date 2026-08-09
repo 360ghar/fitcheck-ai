@@ -105,6 +105,8 @@ export function UsersPage() {
       {
         accessorKey: 'email',
         header: t('columns.email'),
+        size: 240,
+        minSize: 220,
         cell: ({ row }) => (
           <Link
             to={`/users/${row.original.id}`}
@@ -118,6 +120,8 @@ export function UsersPage() {
       {
         accessorKey: 'full_name',
         header: t('columns.fullName'),
+        size: 200,
+        minSize: 160,
         cell: ({ row }) => row.original.full_name ?? '—',
       },
       {
@@ -125,6 +129,8 @@ export function UsersPage() {
         header: t('columns.role'),
         // Not in the backend sort_by whitelist (created_at|last_login_at|email|full_name)
         enableSorting: false,
+        size: 120,
+        minSize: 100,
         cell: ({ row }) => {
           const role = row.original.role
           return (
@@ -139,6 +145,8 @@ export function UsersPage() {
         header: t('columns.plan'),
         // Not in the backend sort_by whitelist
         enableSorting: false,
+        size: 140,
+        minSize: 110,
         cell: ({ row }) => {
           const plan = subscriptionPlan(row.original.subscription)
           const labelKey = planLabelKey(plan)
@@ -150,6 +158,8 @@ export function UsersPage() {
         header: t('columns.items'),
         // Not in the backend sort_by whitelist
         enableSorting: false,
+        size: 90,
+        minSize: 70,
         cell: ({ row }) => formatNumber(row.original.items_count ?? 0),
       },
       {
@@ -157,6 +167,8 @@ export function UsersPage() {
         header: t('columns.outfits'),
         // Not in the backend sort_by whitelist
         enableSorting: false,
+        size: 90,
+        minSize: 70,
         cell: ({ row }) => formatNumber(row.original.outfits_count ?? 0),
       },
       {
@@ -164,6 +176,8 @@ export function UsersPage() {
         header: t('columns.status'),
         // Not in the backend sort_by whitelist
         enableSorting: false,
+        size: 110,
+        minSize: 90,
         cell: ({ row }) => {
           const active = row.original.is_active === true
           return (
@@ -177,6 +191,8 @@ export function UsersPage() {
       {
         accessorKey: 'created_at',
         header: t('columns.createdAt'),
+        size: 160,
+        minSize: 130,
         cell: ({ row }) => formatDateValue(row.original.created_at),
       },
     ],
@@ -265,6 +281,7 @@ export function UsersPage() {
 
       <DataTable<AdminUserListItem>
         columns={columns}
+        pinnedColumnId="email"
         getRowId={(row) => row.id}
         onRowClick={(row) => navigate(`/users/${row.id}`)}
         {...(canWrite

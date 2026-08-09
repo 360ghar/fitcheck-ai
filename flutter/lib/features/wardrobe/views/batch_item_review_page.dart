@@ -43,14 +43,24 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
         child: SafeArea(
           child: Column(
             children: [
-              // Summary header
-              _buildSummaryHeader(context, tokens),
-
-              // Person-level include/exclude controls
-              _buildPersonControls(context, tokens),
-
-              // Use-case apply-to-all controls
-              _buildUseCaseSelector(context, tokens),
+              // Summary + person chips + use-case selector share one bounded
+              // scroll region: the Wraps can grow to 4-5 rows and, on short
+              // screens, would otherwise crowd the grid out. The bottom action
+              // bar below stays pinned.
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.35,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _buildSummaryHeader(context, tokens),
+                      _buildPersonControls(context, tokens),
+                      _buildUseCaseSelector(context, tokens),
+                    ],
+                  ),
+                ),
+              ),
 
               // Items grid
               Expanded(
@@ -357,8 +367,8 @@ class BatchItemReviewPage extends GetView<BatchExtractionController> {
     return Obx(
       () => GridView.builder(
         padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacing16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 190,
           crossAxisSpacing: AppConstants.spacing12,
           mainAxisSpacing: AppConstants.spacing12,
           childAspectRatio: 0.65,

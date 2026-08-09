@@ -1139,8 +1139,8 @@ class _WardrobePickerSheetState extends State<_WardrobePickerSheet> {
 
               return GridView.builder(
                 padding: const EdgeInsets.all(AppConstants.spacing16),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 190,
                   crossAxisSpacing: AppConstants.spacing12,
                   mainAxisSpacing: AppConstants.spacing12,
                   childAspectRatio: 0.75,

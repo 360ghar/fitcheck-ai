@@ -134,6 +134,8 @@ export function QuotasPage() {
         id: 'user',
         accessorFn: (row) => row.email ?? row.full_name ?? row.user_id,
         header: t('columns.email'),
+        size: 240,
+        minSize: 220,
         cell: ({ row }) => (
           <div className="min-w-0">
             <p className="truncate font-medium text-ink">{row.original.full_name ?? row.original.email ?? '—'}</p>
@@ -146,6 +148,8 @@ export function QuotasPage() {
       {
         accessorKey: 'plan_type',
         header: t('columns.plan'),
+        size: 140,
+        minSize: 110,
         cell: ({ row }) => {
           const plan = row.original.plan_type
           if (!plan) return '—'
@@ -159,12 +163,16 @@ export function QuotasPage() {
         id: 'used',
         accessorFn: usedCount,
         header: t('columns.used'),
+        size: 90,
+        minSize: 70,
         cell: ({ row }) => formatNumber(usedCount(row.original)),
         enableSorting: false,
       },
       {
         accessorKey: 'custom_daily_quota',
         header: t('columns.limit'),
+        size: 120,
+        minSize: 90,
         cell: ({ row }) => {
           const custom = row.original.custom_daily_quota
           return custom !== null && custom !== undefined ? (
@@ -182,6 +190,8 @@ export function QuotasPage() {
           return custom !== null && custom !== undefined ? Math.max(0, custom - usedCount(row)) : null
         },
         header: t('columns.remaining'),
+        size: 120,
+        minSize: 90,
         cell: ({ row }) => {
           const custom = row.original.custom_daily_quota
           if (custom === null || custom === undefined) return t('limit.none')
@@ -196,6 +206,8 @@ export function QuotasPage() {
       {
         id: 'override',
         header: t('columns.override'),
+        size: 160,
+        minSize: 130,
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
             {row.original.custom_daily_quota !== null &&

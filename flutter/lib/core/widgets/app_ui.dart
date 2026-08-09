@@ -90,7 +90,19 @@ class AppPageBackground extends StatelessWidget {
       color: tokens.isDarkMode
           ? AppCoreColors.backgroundDark
           : AppCoreColors.backgroundLight,
-      child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
+      // Phone layouts are unchanged (phones are already narrower than
+      // maxContentWidth) while tablets / desktop web are capped at a readable
+      // content width. Align top-center preserves existing top-aligned scroll
+      // behavior; scrollables still fill the available width.
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: AppConstants.maxContentWidth,
+          ),
+          child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
+        ),
+      ),
     );
   }
 }

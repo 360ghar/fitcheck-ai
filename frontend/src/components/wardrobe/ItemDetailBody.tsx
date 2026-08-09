@@ -427,7 +427,7 @@ export function ItemDetailBody({ item, editor, notice }: ItemDetailBodyProps) {
           {extraImages.length > 0 && (
             <div className="mt-xl">
               <p className="text-xs text-muted-foreground">More photos</p>
-              <div className="mt-sm grid grid-cols-3 gap-sm">
+              <div className="mt-sm grid grid-cols-2 xs:grid-cols-3 gap-sm">
                 {extraImages.map((image) => (
                   <div key={image.id} className="overflow-hidden rounded-md bg-card">
                     <ZoomableImage

@@ -348,7 +348,7 @@ export function RichTextEditor({
             </TabsTrigger>
           </TabsList>
 
-          <div className="flex items-center gap-1 rounded-md border border-border p-1">
+          <div className="flex items-center gap-1 overflow-x-auto rounded-md border border-border p-1">
             <ToolbarButton icon={<Undo className="size-4" />} label="Undo" onClick={handleUndo} />
             <ToolbarButton icon={<Redo className="size-4" />} label="Redo" onClick={handleRedo} />
             <div className="mx-1 h-4 w-px bg-border" />

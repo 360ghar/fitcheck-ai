@@ -501,7 +501,14 @@ class _CalendarPageState extends State<CalendarPage> {
         },
         child: StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
+            // Lift the dialog above the keyboard: AlertDialog does not pad
+            // viewInsets itself, so the Create/Save actions can be covered on
+            // small screens. Content is already scrollable.
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: AlertDialog(
             title: const Text('Add Event'),
             content: SingleChildScrollView(
               child: Column(
@@ -627,6 +634,7 @@ class _CalendarPageState extends State<CalendarPage> {
                     : const Text('Create'),
               )),
             ],
+              ),
           );
         },
       )),
@@ -657,7 +665,12 @@ class _CalendarPageState extends State<CalendarPage> {
         },
         child: StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
+            // Lift the dialog above the keyboard (same fix as the Add dialog).
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: AlertDialog(
             title: const Text('Edit Event'),
             content: SingleChildScrollView(
               child: Column(
@@ -766,6 +779,7 @@ class _CalendarPageState extends State<CalendarPage> {
                     : const Text('Save'),
               )),
             ],
+              ),
           );
         },
       )),

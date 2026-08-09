@@ -53,7 +53,15 @@ CREATE INDEX IF NOT EXISTS idx_blog_posts_keywords ON blog_posts USING GIN(keywo
 -- Enable RLS
 ALTER TABLE blog_posts ENABLE ROW LEVEL SECURITY;
 
+-- Re-runnable guards: Postgres has no CREATE TRIGGER / CREATE POLICY IF NOT
+-- EXISTS, so drop-then-create keeps the SQL-editor runbook idempotent (a
+-- partial or repeated application must not abort with 42710 "already
+-- exists" - same class as the 2026-08-08 extraction_jobs trigger failure).
+
 -- Policy: Anyone can read published posts
+DROP POLICY IF EXISTS "Anyone can read published blog posts"
+    ON blog_posts;
+
 CREATE POLICY "Anyone can read published blog posts"
     ON blog_posts
     FOR SELECT
@@ -61,11 +69,17 @@ CREATE POLICY "Anyone can read published blog posts"
 
 -- Policy: Only authenticated users with admin role can manage posts
 -- Note: Admin checks are handled at the application level
+DROP POLICY IF EXISTS "Authenticated users can read all blog posts"
+    ON blog_posts;
+
 CREATE POLICY "Authenticated users can read all blog posts"
     ON blog_posts
     FOR SELECT
     TO authenticated
     USING (true);
+
+DROP POLICY IF EXISTS "Authenticated users can manage blog posts"
+    ON blog_posts;
 
 CREATE POLICY "Authenticated users can manage blog posts"
     ON blog_posts
@@ -85,6 +99,10 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Re-runnable guard (see RLS section above)
+DROP TRIGGER IF EXISTS trigger_update_blog_posts_updated_at
+    ON blog_posts;
 
 CREATE TRIGGER trigger_update_blog_posts_updated_at
     BEFORE UPDATE ON blog_posts

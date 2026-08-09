@@ -816,7 +816,7 @@ export function BatchExtractionFlow({
           />
         ) : null}
 
-        <div className="flex-1 overflow-y-auto min-h-[400px] min-w-0">
+        <div className="flex-1 overflow-y-auto min-h-[min(400px,60svh)] min-w-0">
           {/* Step 1: Select Images */}
           {state.step === 'select' && (
             <div className="space-y-4">

@@ -185,7 +185,11 @@ class GenerateOutfitRequest(BaseModel):
     include_model: bool = True
     model_gender: str = "female"
     custom_prompt: Optional[str] = None
-    save_to_storage: bool = False
+    # URL-first by default: the generated render is persisted to object
+    # storage (generated/{user}/...) and returned as image_url; image_base64
+    # stays empty unless the storage write fails (fallback keeps renders
+    # usable). Legacy inline-base64 callers opt out explicitly.
+    save_to_storage: bool = True
     include_user_face: bool = True  # Use avatar for face consistency when available
     use_body_profile: bool = True   # Use body profile data if available
     # Upload flow ONLY: when True, the backend additionally resolves the
@@ -222,7 +226,8 @@ class GenerateProductImageRequest(BaseModel):
     background: str = "transparent"
     view_angle: str = "front"
     include_shadows: bool = False
-    save_to_storage: bool = False
+    # URL-first by default; see GenerateOutfitRequest.save_to_storage.
+    save_to_storage: bool = True
     reference_image: Optional[str] = Field(
         None,
         max_length=10_000_000,
@@ -377,7 +382,8 @@ class TryOnRequest(BaseModel):
     background: str = "studio white"
     pose: str = "standing front"
     lighting: str = "professional studio lighting"
-    save_to_storage: bool = False
+    # URL-first by default; see GenerateOutfitRequest.save_to_storage.
+    save_to_storage: bool = True
 
     _validate_image = field_validator("clothing_image")(_validate_optional_inline_image)
 

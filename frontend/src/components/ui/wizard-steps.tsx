@@ -95,6 +95,7 @@ export function WizardSteps({
                 canClick && 'cursor-pointer'
               )}
               aria-current={isCurrent ? 'step' : undefined}
+              aria-label={step.label}
             >
               <div
                 className={cn(
@@ -116,7 +117,10 @@ export function WizardSteps({
               </div>
               <span
                 className={cn(
-                  'mt-1 text-[10px] md:text-xs',
+                  // Labels hide below `xs` (375px): four circles + connectors
+                  // fit without horizontal scroll, and the button's aria-label
+                  // keeps the full step name for screen readers.
+                  'hidden xs:inline mt-1 text-[10px] md:text-xs',
                   isCurrent ? 'text-foreground font-medium' : 'text-muted-foreground'
                 )}
               >

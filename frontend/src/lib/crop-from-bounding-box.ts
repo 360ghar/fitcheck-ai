@@ -3,6 +3,8 @@
  * Used to show per-item previews immediately after extraction, before studio photos finish.
  */
 
+import { imageCrossOrigin } from './sessionCookie'
+
 export interface BoundingBoxPercent {
   x: number
   y: number
@@ -74,7 +76,10 @@ export function normalizeBoundingBoxPercent(
 function loadImage(source: string | Blob | File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
-    img.crossOrigin = 'anonymous'
+    // Worker-mode CDN URLs need the auth cookie (`use-credentials`); presigned
+    // R2 URLs and third-party/blob sources must stay `anonymous` (the R2 CORS
+    // policy has no Access-Control-Allow-Credentials).
+    img.crossOrigin = typeof source === 'string' ? imageCrossOrigin(source) : 'anonymous'
     img.onload = () => resolve(img)
     img.onerror = () => reject(new Error('Failed to load image for crop'))
 

@@ -119,6 +119,8 @@ export function IapTransactionsPage() {
       id: 'user',
       header: t('columns.user'),
       enableSorting: false,
+      size: 240,
+      minSize: 220,
       cell: ({ row }) => (
         <div className="flex min-w-0 flex-col">
           <Link
@@ -137,6 +139,8 @@ export function IapTransactionsPage() {
       id: 'platform',
       header: t('columns.platform'),
       enableSorting: false,
+      size: 110,
+      minSize: 90,
       cell: ({ row }) => {
         const platform = row.original.platform
         return (
@@ -150,6 +154,8 @@ export function IapTransactionsPage() {
       id: 'status',
       header: t('columns.status'),
       enableSorting: false,
+      size: 130,
+      minSize: 110,
       cell: ({ row }) => {
         const status = row.original.status ?? 'unknown'
         return <StatusBadge status={status} label={t(`status.${status}`, { defaultValue: status })} />
@@ -159,12 +165,16 @@ export function IapTransactionsPage() {
       id: 'plan_type',
       header: t('columns.plan'),
       enableSorting: false,
+      size: 130,
+      minSize: 110,
       cell: ({ row }) => row.original.plan_type ?? '—',
     },
     {
       id: 'amount',
       header: t('columns.amount'),
       enableSorting: false,
+      size: 100,
+      minSize: 80,
       cell: ({ row }) => (
         <span className="whitespace-nowrap tabular-nums">
           {typeof row.original.amount === 'number' ? formatMoney(row.original.amount) : '—'}
@@ -175,6 +185,8 @@ export function IapTransactionsPage() {
       id: 'transaction_id',
       header: t('columns.transactionId'),
       enableSorting: false,
+      size: 180,
+      minSize: 150,
       cell: ({ row }) => (
         <span className="font-mono text-xs text-muted-foreground">
           {row.original.transaction_id ?? '—'}
@@ -185,6 +197,8 @@ export function IapTransactionsPage() {
       id: 'created_at',
       header: t('columns.createdAt'),
       enableSorting: false,
+      size: 150,
+      minSize: 120,
       cell: ({ row }) => (
         <span className="whitespace-nowrap text-sm text-muted-foreground">
           {formatDate(row.original.created_at as string | null | undefined)}
@@ -345,14 +359,20 @@ export function IapTransactionsPage() {
                 {detail['user_id'] !== undefined ? (
                   <DetailRow
                     label={t('detail.userId')}
-                    value={<span className="font-mono">{displayString(detail['user_id'])}</span>}
+                    value={
+                      <span className="block truncate font-mono">
+                        {displayString(detail['user_id'])}
+                      </span>
+                    }
                   />
                 ) : null}
                 {detail['subscription_id'] !== undefined ? (
                   <DetailRow
                     label={t('detail.subscriptionId')}
                     value={
-                      <span className="font-mono">{displayString(detail['subscription_id'])}</span>
+                      <span className="block truncate font-mono">
+                        {displayString(detail['subscription_id'])}
+                      </span>
                     }
                   />
                 ) : null}
@@ -418,7 +438,7 @@ function DetailRow({
   return (
     <div className="flex items-baseline justify-between gap-3 border-b border-border/60 pb-2">
       <dt className="shrink-0 text-muted-foreground">{label}</dt>
-      <dd className="text-right font-medium">{value}</dd>
+      <dd className="min-w-0 truncate text-right font-medium">{value}</dd>
     </div>
   )
 }
@@ -446,7 +466,7 @@ function ReceiptMetadata({ detail }: { detail: Record<string, unknown> }) {
         {entries.map(([key, value]) => (
           <div key={key} className="flex items-baseline justify-between gap-3">
             <dt className="shrink-0 font-mono text-xs text-muted-foreground">{key}</dt>
-            <dd className="truncate text-right font-mono text-xs">{displayString(value) || '—'}</dd>
+            <dd className="min-w-0 truncate text-right font-mono text-xs">{displayString(value) || '—'}</dd>
           </div>
         ))}
       </dl>

@@ -128,16 +128,22 @@ class AppBottomNavigationBar extends StatelessWidget {
                                   : tokens.textSecondary,
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              item.label,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: isSelected
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
-                                color: isSelected
-                                    ? tokens.brandColor
-                                    : tokens.textSecondary,
+                            // Scale the label down on narrow surfaces
+                            // (~320px) instead of letting "Photoshoot" wrap
+                            // or clip inside its ~53px-wide Expanded slot.
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                item.label,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                  color: isSelected
+                                      ? tokens.brandColor
+                                      : tokens.textSecondary,
+                                ),
                               ),
                             ),
                           ],

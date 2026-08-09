@@ -115,6 +115,8 @@ export function SubscriptionsPage() {
       id: 'user',
       header: t('columns.user'),
       enableSorting: false,
+      size: 240,
+      minSize: 220,
       cell: ({ row }) => {
         const email = subscriptionUserEmail(row.original.user)
         return (
@@ -135,6 +137,8 @@ export function SubscriptionsPage() {
     {
       id: 'plan_type',
       header: t('columns.plan'),
+      size: 130,
+      minSize: 110,
       cell: ({ row }) => {
         const plan = row.original.plan_type
         return (
@@ -147,6 +151,8 @@ export function SubscriptionsPage() {
     {
       id: 'status',
       header: t('columns.status'),
+      size: 130,
+      minSize: 110,
       cell: ({ row }) => {
         const status = row.original.status ?? 'unknown'
         return <StatusBadge status={status} label={t(`status.${status}`, { defaultValue: status })} />
@@ -155,6 +161,8 @@ export function SubscriptionsPage() {
     {
       id: 'current_period_start',
       header: t('columns.period'),
+      size: 200,
+      minSize: 170,
       cell: ({ row }) => {
         const start = formatDate(row.original.current_period_start as string | null | undefined)
         const end = formatDate(row.original.current_period_end as string | null | undefined)
@@ -169,6 +177,8 @@ export function SubscriptionsPage() {
       id: 'cancel_at_period_end',
       header: t('columns.cancelAtPeriodEnd'),
       enableSorting: false,
+      size: 150,
+      minSize: 130,
       cell: ({ row }) => (
         <StatusBadge
           status={row.original.cancel_at_period_end ? 'cancelled' : 'active'}
@@ -184,6 +194,8 @@ export function SubscriptionsPage() {
       id: 'amount',
       header: t('columns.amount'),
       enableSorting: false,
+      size: 100,
+      minSize: 80,
       cell: ({ row }) => {
         const amount = row.original.amount
         return (
@@ -196,6 +208,8 @@ export function SubscriptionsPage() {
     {
       id: 'created_at',
       header: t('columns.createdAt'),
+      size: 150,
+      minSize: 120,
       cell: ({ row }) => (
         <span className="whitespace-nowrap text-sm text-muted-foreground">
           {formatDate(row.original.created_at as string | null | undefined)}
@@ -205,6 +219,8 @@ export function SubscriptionsPage() {
     {
       id: 'actions',
       enableSorting: false,
+      size: 130,
+      minSize: 100,
       cell: ({ row }) => {
         if (!can('subscriptions.refund')) return null
         return (
@@ -295,6 +311,7 @@ export function SubscriptionsPage() {
       <DataTable<AdminSubscriptionListItem>
         {...table.props}
         columns={columns}
+        pinnedColumnId="user"
         ariaLabel={t('title')}
         getRowId={(row) => row.id}
         onResetFilters={() => table.tableState.reset()}

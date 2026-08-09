@@ -385,6 +385,68 @@ async def test_materialize_worker_mode_without_base_falls_back_to_presigned(monk
     assert images[0]["image_url"] == "https://presigned.example/user-1/items/a.jpg"
 
 
+@pytest.mark.asyncio
+async def test_materialize_worker_mode_presigned_flag_forces_signed_urls(monkeypatch):
+    """Anonymous surfaces (public shared outfits) must stay presigned even in
+    worker mode: the Worker requires the app JWT, which a share-link visitor
+    or a social crawler cannot present. The ``presigned=True`` flag bypasses
+    ``serve_url`` and mints a signed URL whatever the serving mode."""
+    _presign(monkeypatch)
+    monkeypatch.setattr(images_module.settings, "IMAGE_SERVING_MODE", "worker")
+    monkeypatch.setattr(
+        images_module.settings, "IMAGE_CDN_BASE_URL", "https://images.fitcheckaiapp.com"
+    )
+    monkeypatch.setattr(images_module.settings, "THUMBNAIL_SERVING", False)
+
+    images = await images_module.materialize_image_urls([_img()], presigned=True)
+
+    assert images[0]["image_url"] == "https://presigned.example/user-1/items/a.jpg"
+    assert images[0]["thumbnail_url"] == images[0]["image_url"]
+
+
+@pytest.mark.asyncio
+async def test_materialize_worker_mode_without_flag_emits_cdn_urls(monkeypatch):
+    """The flag is opt-in: authenticated read paths still get stable Worker
+    URLs in worker mode (that is the point of the mode)."""
+    _presign(monkeypatch)
+    monkeypatch.setattr(images_module.settings, "IMAGE_SERVING_MODE", "worker")
+    monkeypatch.setattr(
+        images_module.settings, "IMAGE_CDN_BASE_URL", "https://images.fitcheckaiapp.com"
+    )
+    monkeypatch.setattr(images_module.settings, "THUMBNAIL_SERVING", False)
+
+    images = await images_module.materialize_image_urls([_img()])
+
+    assert images[0]["image_url"] == "https://images.fitcheckaiapp.com/user-1/items/a.jpg"
+
+
+@pytest.mark.asyncio
+async def test_materialize_parent_images_passes_presigned_through(monkeypatch):
+    """materialize_parent_images must forward the flag to every nested list
+    (parent images AND nested item images) — the public outfit endpoint
+    surfaces both through it."""
+    _presign(monkeypatch)
+    monkeypatch.setattr(images_module.settings, "IMAGE_SERVING_MODE", "worker")
+    monkeypatch.setattr(
+        images_module.settings, "IMAGE_CDN_BASE_URL", "https://images.fitcheckaiapp.com"
+    )
+
+    parents = [
+        {
+            "id": "o1",
+            "images": [_img()],
+            "items": [{"id": "i1", "images": [_img("user-1/items/b.jpg")]}],
+        }
+    ]
+    await images_module.materialize_parent_images(parents, presigned=True)
+
+    assert parents[0]["images"][0]["image_url"] == "https://presigned.example/user-1/items/a.jpg"
+    assert (
+        parents[0]["items"][0]["images"][0]["image_url"]
+        == "https://presigned.example/user-1/items/b.jpg"
+    )
+
+
 # --------------------------------------------------------------------------- #
 # _is_owned_by_user covers `generated/` previews
 # --------------------------------------------------------------------------- #

@@ -7,6 +7,7 @@
 
 import axios, { AxiosError } from 'axios';
 import { API_BASE_URL } from '@/lib/apiBaseUrl';
+import { unwrapGenerationResult } from '@/lib/unwrap-generation-result';
 import type { GeneratedImage, PhotoshootJobStatusResponse } from './photoshoot';
 
 // Create a separate axios instance for demo (no auth interceptors)
@@ -153,7 +154,8 @@ export async function demoExtractItems(
       { image: imageBase64 }
     );
 
-    return response.data.data;
+    // Response-shape immune: envelope, array wrapper, or bare result object.
+    return unwrapGenerationResult<DemoExtractItemsResult>(response.data);
   } catch (error) {
     throw getDemoError(error);
   }
@@ -191,7 +193,8 @@ export async function demoTryOn(
       }
     );
 
-    return response.data.data;
+    // Response-shape immune: envelope, array wrapper, or bare result object.
+    return unwrapGenerationResult<DemoTryOnResult>(response.data);
   } catch (error) {
     throw getDemoError(error);
   }
@@ -223,7 +226,8 @@ export async function demoPhotoshoot(
       }
     );
 
-    return response.data.data;
+    // Response-shape immune: envelope, array wrapper, or bare result object.
+    return unwrapGenerationResult<DemoPhotoshootStart>(response.data);
   } catch (error) {
     throw getDemoError(error);
   }
@@ -246,7 +250,8 @@ export async function getDemoPhotoshootStatus(
       `/api/v1/photoshoot/demo/${jobId}/status`,
       { signal }
     );
-    return response.data.data;
+    // Response-shape immune: envelope, array wrapper, or bare result object.
+    return unwrapGenerationResult<DemoPhotoshootStatus>(response.data);
   } catch (error) {
     throw getDemoError(error);
   }

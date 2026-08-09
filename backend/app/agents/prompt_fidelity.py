@@ -6,6 +6,19 @@ locks, sandwich structure, and minimal negative lists. Avoid long "think twice"
 meta-instructions — they waste context and do not improve weak model fidelity.
 """
 
+# Person workflows can receive several reference images at once (identity
+# photo, the original "as worn" upload, per-item garment shots). Weak models
+# sometimes spread those images across multiple figures - one person per
+# reference - which ships a multi-person render for a single-person request.
+# This lock binds every reference to ONE subject wearing the WHOLE outfit and
+# bans any second figure outright.
+SINGLE_PERSON_LOCK = """SINGLE PERSON LOCK (highest priority):
+- ALL reference images show the SAME single person - the main subject - wearing the outfit described below.
+- Output EXACTLY ONE person: no second person, no background figures, no group or double shot, no mannequin.
+- The one person wears ALL the outfit items together; never split the outfit across multiple people.
+- Ignore and discard any other person, face, or body visible in the reference images - never render or merge them.
+- Ignore any garment in the references that is not in the outfit described below."""
+
 # Short identity lock for person + reference image workflows
 IDENTITY_LOCK = """IDENTITY LOCK (highest priority):
 - Same person as the reference image. Do not redesign the face.
@@ -17,7 +30,8 @@ IDENTITY_LOCK = """IDENTITY LOCK (highest priority):
 # Ultra-short negatives (weak models handle 5–8 better than long essays)
 SHORT_NEGATIVES = (
     "AVOID: different person, face morph, beauty filter, plastic skin, "
-    "wrong age, wrong ethnicity, extra limbs, distorted hands, watermark, text"
+    "wrong age, wrong ethnicity, extra limbs, distorted hands, watermark, "
+    "text, second person, group shot"
 )
 
 # Outfit fidelity when inventory is provided
@@ -35,8 +49,12 @@ PHOTOSHOOT_FIDELITY_APPENDIX = f"""{IDENTITY_LOCK}
 
 Output one photoreal image of THIS exact person. Face must stay clearly visible."""
 
-# Compact block for outfit/try-on prompts that already include inventory
-PERSON_REFERENCE_FIDELITY = f"""{IDENTITY_LOCK}
+# Compact block for outfit/try-on prompts that already include inventory.
+# SINGLE_PERSON_LOCK leads: a weak model must know there is exactly one
+# subject before it sees the identity/outfit constraints.
+PERSON_REFERENCE_FIDELITY = f"""{SINGLE_PERSON_LOCK}
+
+{IDENTITY_LOCK}
 
 {OUTFIT_LOCK}
 

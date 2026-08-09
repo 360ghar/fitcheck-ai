@@ -93,6 +93,12 @@ REQUIRED_COLUMNS = (
     # Wardrobe enrichment (recommendations/categorization)
     ("items", "material"),
     ("item_images", "storage_path"),
+    # Item source-photo reference (migration 019): the API sends both columns
+    # on every item insert, so a hosted DB without them fails every
+    # POST /items with PGRST204 at request time (observed 2026-08-08 as an
+    # opaque 500), so readiness fails closed until 019 is applied.
+    ("items", "source_image_url"),
+    ("items", "source_image_storage_path"),
     # Sharing + enhanced outfit metadata
     ("outfits", "is_public"),
     ("outfit_images", "storage_path"),

@@ -49,7 +49,9 @@ export function DeploymentStatus() {
             )}
             aria-hidden="true"
           />
-          {t(labelKey)}
+          {/* Text label hidden below `sm` — icon + dot only at 320px (tooltip
+              still carries the full label on hover/focus). */}
+          <span className="hidden sm:inline">{t(labelKey)}</span>
         </span>
       </TooltipTrigger>
       <TooltipContent>{t(labelKey)}</TooltipContent>

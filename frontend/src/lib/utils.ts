@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { imageFetchOptions } from './sessionCookie';
 
 /**
  * Merge Tailwind CSS classes with proper precedence
@@ -104,7 +105,7 @@ export function fileToBase64(file: File): Promise<string> {
  * Download a file from a URL
  */
 export async function downloadFile(url: string, filename: string): Promise<void> {
-  const response = await fetch(url);
+  const response = await fetch(url, imageFetchOptions(url));
   const blob = await response.blob();
   const downloadUrl = window.URL.createObjectURL(blob);
   const link = document.createElement('a');

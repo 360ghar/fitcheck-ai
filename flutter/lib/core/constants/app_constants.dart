@@ -62,4 +62,11 @@ class AppConstants {
   // Debounce durations
   static const Duration searchDebounceDuration = Duration(milliseconds: 300);
   static const Duration filterDebounceDuration = Duration(milliseconds: 150);
+
+  // Layout
+  /// Max content width for phone-first layouts on tablets / desktop web.
+  /// Pages (shell tabs and subpages) are centered and capped at this width so
+  /// cards and grids do not stretch edge-to-edge on large screens. Phones are
+  /// already narrower than this, so the cap is a no-op there.
+  static const double maxContentWidth = 720;
 }

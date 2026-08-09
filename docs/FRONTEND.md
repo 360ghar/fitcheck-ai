@@ -218,10 +218,16 @@ only, `font-display: swap`, both preloaded from `index.html` (Manrope carries
 
 Image URLs are served from the private S3-compatible bucket (R2 since the 2026-08-05 egress RCA) in one of two modes, driven by backend config:
 
-- **Presigned mode (default):** URLs are **short-lived presigned GET URLs** (~1h, `OBJECT_STORAGE_PRESIGN_TTL=3600`) that **rotate on every read** (the signature is in the query string) — they defeat browser HTTP caching, so treat them as ephemeral: re-fetch from the backend as needed. This is why the egress RCA added worker mode.
+- **Presigned mode (default):** URLs are **short-lived presigned GET URLs** (~7 days, `OBJECT_STORAGE_PRESIGN_TTL=604800`) that **rotate on every read** (the signature is in the query string) — they defeat browser HTTP caching, so treat them as ephemeral: re-fetch from the backend as needed. This is why the egress RCA added worker mode.
 - **Worker mode (`IMAGE_SERVING_MODE=worker`):** URLs are **stable and path-only** (`https://<IMAGE_CDN_BASE_URL>/{storage_path}`) with `Cache-Control: public, max-age=86400, immutable`, so the browser HTTP cache and the Cloudflare edge cache both hit. Fetching an image with the app's bearer token in the `Authorization` header is safe here (presigned S3 URLs must NOT carry one — only one auth mechanism is allowed; `authHeadersForUrl` in `flutter/lib/core/widgets/app_network_image.dart` handles this).
 
 The DB stores a bucket key, not a URL, so the backend materializes a fresh URL at read time. Grid/list tiles should use `thumbnail_url` when the backend returns one (`THUMBNAIL_SERVING=true` serves `_thumb` siblings). `<img>` tiles use `loading="lazy" decoding="async"` (done across wardrobe/calendar/dashboard/photoshoot surfaces 2026-08-05).
+
+The session-cached user's `avatar_url` is the one image URL the client persists across reads (auth store), so it goes dead after ~1h. Since 2026-08-09 the authenticated shell (`AppLayout` → `hooks/useUserRefresh.ts`) re-reads `/users/me` on mount, every route change, tab refocus, and a 50-min-guard poll — `/users/me` re-materializes the avatar URL server-side, so the Try On thumbnail (and sidebar/dashboard/profile avatars) heal before expiry. Mobile equivalent still tracked as TD-090.
+
+### AI generation responses are URL-first (since 2026-08-09)
+
+`/ai/try-on`, `/ai/generate-outfit` and `/ai/generate-product-image` persist the render by default (`save_to_storage` defaults to `true` on the backend and in `api/ai.ts`) and return `image_url` + `storage_path` with `image_base64` empty — the multi-MB inline base64 payload no longer rides API responses (egress + memory). The legacy inline path stays available (`save_to_storage: false`) and is also the automatic fallback when the storage write fails (`image_url` comes back empty, so `image_url || data:image/png;base64,...` still renders). The returned URL is a presigned URL (~1h) — fine for the one-shot result screen; saved renders are not DB-referenced (TD-070).
 
 ### Error copy — never render raw backend bodies
 

@@ -154,7 +154,7 @@ App Store Connect rejects uploads with a `MinimumOSVersion` below 15.0 starting 
 
 Image URLs are served from the private S3-compatible bucket (R2 since the 2026-08-05 egress RCA) in one of two modes, driven by backend config:
 
-- **Presigned mode (default):** URLs are **short-lived presigned GET URLs** (~1h, `OBJECT_STORAGE_PRESIGN_TTL=3600`) that **rotate on every read** (the signature is in the query string) — they defeat disk caching, so treat them as ephemeral and re-fetch as needed.
+- **Presigned mode (default):** URLs are **short-lived presigned GET URLs** (~7 days, `OBJECT_STORAGE_PRESIGN_TTL=604800`) that **rotate on every read** (the signature is in the query string) — they defeat disk caching, so treat them as ephemeral and re-fetch as needed.
 - **Worker mode (`IMAGE_SERVING_MODE=worker`):** URLs are **stable and path-only** with `Cache-Control: public, max-age=86400, immutable`, so `CachedNetworkImage`'s disk cache and the Cloudflare edge cache both hit.
 
 Use `AppNetworkImage` (`core/widgets/app_network_image.dart`) instead of raw

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { usePhotoshoot } from '@/stores/photoshootStore';
 import { useToast } from '@/components/ui/use-toast';
+import { imageFetchOptions } from '@/lib/sessionCookie';
 
 // Transparent 1x1 pixel as placeholder for missing images
 const PLACEHOLDER_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -40,8 +41,9 @@ export function PhotoshootResultsStep() {
     if (!src) return false
 
     try {
-      // Convert base64 to blob
-      const response = await fetch(src);
+      // Convert base64 to blob. Worker-mode CDN URLs need the auth cookie
+      // (`credentials: 'include'`); presigned R2 URLs must stay credential-free.
+      const response = await fetch(src, imageFetchOptions(src));
       const blob = await response.blob();
 
       // Create download link

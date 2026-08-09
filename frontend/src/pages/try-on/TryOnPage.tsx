@@ -10,6 +10,7 @@ import { Download, Upload, RefreshCw, Loader2, Sparkles, X, Camera } from 'lucid
 import { useAuthStore, useCurrentUser, useUserAvatar } from '@/stores/authStore';
 import { useJobUiStore } from '@/stores/jobUiStore';
 import { generateTryOn, TryOnOptions, TryOnResult } from '@/api/ai';
+import { getPresignedUrl } from '@/api/images';
 import { uploadAvatar } from '@/api/users';
 import { tryOnUsedKey } from '@/lib/activation';
 import { fileToReplayablePreview } from '@/lib/replayable-preview';
@@ -32,6 +33,7 @@ import { ZoomableImage } from '@/components/ui/zoomable-image';
 import { WizardSteps } from '@/components/ui/wizard-steps';
 import { GeneratingSurface } from '@/components/jobs';
 import { cn } from '@/lib/utils';
+import { imageFetchOptions } from '@/lib/sessionCookie';
 
 type TryOnStep = 'upload' | 'options' | 'generating' | 'result';
 
@@ -76,6 +78,31 @@ const STEPS = [
  */
 let tryOnRunSeq = 0;
 
+/**
+ * Latest completed try-on result by run id — module-level (like
+ * tryOnRunSeq), so a REMOUNTED page (navigation away and back, HMR) can still
+ * land a response that resolved on the unmounted instance. Without this, the
+ * live instance's unwedge effect bounces the user back to Options with no
+ * result and no error — a silent failure that outlived every response-shape
+ * fix. Guarded by run id: a stale result for an abandoned run never lands.
+ */
+let lastTryOnResult: { runId: number; result: TryOnResult } | null = null;
+
+/**
+ * Resolve the best renderable source for a try-on result. URL-first (the
+ * backend persists to object storage); base64 only as the storage-failure
+ * fallback. Returns null when the response carries NEITHER — the provider
+ * returned an empty image, which must surface as a visible error, never as a
+ * silent broken result. Null-safe: an unusable/malformed result must never
+ * throw into the generation catch.
+ */
+function resolveResultSrc(result: TryOnResult | null | undefined): string | null {
+  if (!result) return null;
+  if (result.image_url) return result.image_url;
+  if (result.image_base64) return `data:image/png;base64,${result.image_base64}`;
+  return null;
+}
+
 export default function TryOnPage() {
   const userAvatar = useUserAvatar();
   const setUser = useAuthStore((s) => s.setUser);
@@ -106,6 +133,14 @@ export default function TryOnPage() {
   const tryOnElapsed = useElapsedSeconds(isGenerating);
   const [result, setResult] = useState<TryOnResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Result-image self-heal: the backend's image_url is a short-lived
+  // presigned URL, so a result rendered long after generation (or after an
+  // expired-URL moment) can fail to load. On error we re-mint ONCE via
+  // /images/presigned using the durable storage_path; if that still fails the
+  // image is shown as a visible error card instead of a silent broken image.
+  const [resultImageSrc, setResultImageSrc] = useState<string | null>(null);
+  const [resultImageError, setResultImageError] = useState(false);
+  const resultSrcRemintRef = useRef(false);
   const previewUrlRef = useRef<string | null>(null);
   // Uploading = client sending bytes (real % from axios progress, else
   // indeterminate); Processing = server has the file, we're just waiting.
@@ -138,9 +173,20 @@ export default function TryOnPage() {
     }
     if (!isRequestInFlight && isGenerating && step === 'generating') {
       // The job was retired without this instance resolving it: cancelled, or
-      // the response landed on a previous mount. Unwedge instead of spinning.
-      // The options step requires a clothing preview, which a fresh mount does
-      // not have — land on upload rather than a blank options card.
+      // the response landed on a previous mount. If a result exists for the
+      // CURRENT run (module-level), land it — a remounted page must never
+      // silently bounce to Options with the render lost.
+      const landed = lastTryOnResult;
+      if (landed && landed.runId === tryOnRunSeq) {
+        setIsGenerating(false);
+        setResult(landed.result);
+        setStep('result');
+        return;
+      }
+      // No result for this run: genuinely cancelled/failed. Unwedge instead
+      // of spinning. The options step requires a clothing preview, which a
+      // fresh mount does not have — land on upload rather than a blank
+      // options card.
       setIsGenerating(false);
       setStep(clothingPreview ? 'options' : 'upload');
     }
@@ -213,6 +259,9 @@ export default function TryOnPage() {
     setIsGenerating(true);
     setStep('generating');
     setError(null);
+    setResultImageSrc(null);
+    setResultImageError(false);
+    resultSrcRemintRef.current = false;
     setJob({
       id: 'try-on',
       label: 'Generating try-on…',
@@ -226,10 +275,23 @@ export default function TryOnPage() {
         style,
         background,
         pose,
+        // URL-first: the backend persists the render to object storage and
+        // returns image_url (base64 inline only as a storage-failure fallback).
+        save_to_storage: true,
       };
 
       const tryOnResult = await generateTryOn(clothingFileRef.current, options);
       if (tryOnRunSeq !== runId) return;
+      if (!resolveResultSrc(tryOnResult)) {
+        // Provider returned no image payload at all: an empty result must be
+        // a visible failure (with retry), never a silent broken result screen.
+        setError('The generated image came back empty. Please try again.');
+        setStep('options');
+        return;
+      }
+      // Publish before the step transition so a remount racing this response
+      // can still land the render (see the unwedge effect).
+      lastTryOnResult = { runId, result: tryOnResult };
       setResult(tryOnResult);
       setStep('result');
       try {
@@ -277,6 +339,9 @@ export default function TryOnPage() {
     setClothingPreview(null);
     setClothingDescription('');
     setResult(null);
+    setResultImageSrc(null);
+    setResultImageError(false);
+    resultSrcRemintRef.current = false;
     setError(null);
     setStep('upload');
   };
@@ -284,12 +349,14 @@ export default function TryOnPage() {
   const handleDownload = async () => {
     if (!result) return;
 
-    const src = result.image_url || `data:image/png;base64,${result.image_base64}`;
+    const src = resultImageSrc ?? resolveResultSrc(result);
+    if (!src) return;
     try {
       // Fetch → blob → object URL so a cross-origin `image_url` (Supabase
       // storage) actually downloads instead of the browser navigating to the
-      // image (the `download` attribute is ignored cross-origin).
-      const response = await fetch(src);
+      // image (the `download` attribute is ignored cross-origin). Worker-mode
+      // CDN URLs need the auth cookie; presigned URLs must stay credential-free.
+      const response = await fetch(src, imageFetchOptions(src));
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -312,6 +379,30 @@ export default function TryOnPage() {
     setResult(null);
     void handleGenerate();
   };
+
+  const handleResultImageError = useCallback(() => {
+    if (!result) return;
+    if (resultImageError) return;
+    // One self-heal per result: the URL we got is a short-lived presigned
+    // URL, so a load failure may just mean it expired. Re-mint from the
+    // durable storage_path and let the <img> retry with the fresh URL.
+    if (result.storage_path && !resultSrcRemintRef.current) {
+      resultSrcRemintRef.current = true;
+      void getPresignedUrl(result.storage_path)
+        .then((fresh) => {
+          if (fresh) {
+            setResultImageSrc(fresh);
+          } else {
+            setResultImageError(true);
+          }
+        })
+        .catch(() => setResultImageError(true));
+      return;
+    }
+    // No storage_path to re-mint from, or the re-minted URL also failed:
+    // surface a visible error instead of a silent broken image.
+    setResultImageError(true);
+  }, [result, resultImageError]);
 
 
   return (
@@ -573,11 +664,25 @@ export default function TryOnPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
-              <ZoomableImage
-                src={result.image_url || `data:image/png;base64,${result.image_base64}`}
-                alt="Try-on result"
-                className="w-full max-h-[50vh] md:max-h-[600px] object-contain rounded-lg bg-muted"
-              />
+              {resultImageError ? (
+                <div className="flex flex-col items-center gap-3 rounded-lg bg-destructive/10 border border-destructive/30 p-6 text-center">
+                  <p className="text-sm text-destructive font-medium">
+                    Couldn&apos;t load the generated image. The link may have expired — try
+                    regenerating for a fresh one.
+                  </p>
+                  <Button variant="outline" size="sm" onClick={handleRegenerate}>
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                    Regenerate
+                  </Button>
+                </div>
+              ) : (
+                <ZoomableImage
+                  src={resultImageSrc ?? resolveResultSrc(result) ?? undefined}
+                  alt="Try-on result"
+                  className="w-full max-h-[50vh] md:max-h-[600px] object-contain rounded-lg bg-muted"
+                  onError={handleResultImageError}
+                />
+              )}
             </CardContent>
           </Card>
 

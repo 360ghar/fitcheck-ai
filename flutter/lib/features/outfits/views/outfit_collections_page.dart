@@ -206,8 +206,8 @@ class _OutfitCollectionsPageState extends State<OutfitCollectionsPage> {
 
   Widget _buildCollectionsGrid() {
     return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 190,
         mainAxisSpacing: AppConstants.spacing12,
         crossAxisSpacing: AppConstants.spacing12,
         childAspectRatio: 1.0,

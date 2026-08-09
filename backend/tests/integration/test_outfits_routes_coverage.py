@@ -36,6 +36,7 @@ from uuid import UUID
 import pytest
 
 from app.api.v1 import outfits as outfits_module
+from app.api.v1 import images as images_module
 from app.api.v1.deps import get_active_user_id
 from app.core.exceptions import (
     CollectionNotFoundError,
@@ -806,6 +807,47 @@ async def test_get_public_outfit_returns_public_view_and_increments_views():
     assert result["data"]["items"][0]["id"] == ITEM_ID
     update = [u for u in db.updates if u[0] == "shared_outfits"][0]
     assert update[1]["view_count"] == 4
+
+
+@pytest.mark.asyncio
+async def test_get_public_outfit_forces_presigned_urls_in_worker_mode(monkeypatch):
+    """The public endpoint is anonymous, so in IMAGE_SERVING_MODE=worker it
+    must still emit short-lived signed URLs — a stable Worker URL would 404
+    for share-link visitors and social crawlers that cannot present the app
+    JWT (the same rule as cross-user avatars)."""
+    monkeypatch.setattr(images_module.settings, "IMAGE_SERVING_MODE", "worker")
+    monkeypatch.setattr(
+        images_module.settings, "IMAGE_CDN_BASE_URL", "https://images.fitcheckaiapp.com"
+    )
+
+    db = _OutfitsFakeDB(
+        {
+            "outfits": [
+                _outfit_row(
+                    is_public=True,
+                    item_ids=[],
+                    outfit_images=[
+                        {
+                            "image_url": "https://stale/o.jpg",
+                            "thumbnail_url": "https://stale/o.jpg",
+                            "storage_path": (
+                                f"{USER_ID}/outfits/"
+                                "0123456789abcdef0123456789abcdef.webp"
+                            ),
+                        }
+                    ],
+                )
+            ],
+            "shared_outfits": [],
+        }
+    )
+    result = await outfits_module.get_public_outfit(outfit_id=UUID(OUTFIT_ID), db=db)
+
+    images = result["data"]["images"]
+    assert len(images) == 1
+    # Signed URL, NOT the stable worker URL.
+    assert images[0]["image_url"].startswith("https://presigned.example/")
+    assert not images[0]["image_url"].startswith("https://images.fitcheckaiapp.com/")
 
 
 @pytest.mark.asyncio

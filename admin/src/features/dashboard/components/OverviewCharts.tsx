@@ -35,7 +35,10 @@ export function OverviewCharts({ signups, activeUsers, aiJobs, labels }: Overvie
   ]
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    // [&>*]:min-w-0 — grid items default to min-width:auto; recharts'
+    // ResponsiveContainer then forces the track to its max-content width
+    // (measured 369px vs 358px available on a 390px phone).
+    <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
       <div className="h-40 w-full" role="img" aria-label={`${labels.signups} & ${labels.activeUsers}`}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={usageBars} margin={{ top: 4, right: 4, bottom: 0, left: -22 }}>

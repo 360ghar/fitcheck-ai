@@ -3175,7 +3175,7 @@
             "type": "string"
           },
           "save_to_storage": {
-            "default": false,
+            "default": true,
             "title": "Save To Storage",
             "type": "boolean"
           },
@@ -3271,7 +3271,7 @@
             "title": "Reference Storage Path"
           },
           "save_to_storage": {
-            "default": false,
+            "default": true,
             "title": "Save To Storage",
             "type": "boolean"
           },
@@ -5844,7 +5844,7 @@
             "type": "string"
           },
           "save_to_storage": {
-            "default": false,
+            "default": true,
             "title": "Save To Storage",
             "type": "boolean"
           },
@@ -11704,6 +11704,26 @@
         ]
       }
     },
+    "/api/v1/health": {
+      "get": {
+        "description": "Compatibility alias for probes configured against /api/v1/health.\n\nThe canonical liveness endpoint is /health. Probes pointed at\n/api/v1/health produced 404 noise (observed 2026-08-07); serve the same\ncheap payload instead. Operators should still fix the probe path - this\nonly makes a misconfiguration harmless.",
+        "operationId": "health_check_api_v1_api_v1_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health Check Api V1",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
     "/api/v1/images/presigned": {
       "get": {
         "description": "Return a fresh client-fetchable URL for a caller-owned object.\n\nThe ``storage_path`` must be scoped to the authenticated user (key layout\nprefix ``{user_id}/``). A request for another user's object returns 404 so\nobject existence is never revealed across users.\n\nRouted through ``serve_url``, so the URL matches whatever the list/read paths\nare emitting in the current ``IMAGE_SERVING_MODE``. Minting a presigned URL\nhere regardless would hand clients an uncacheable URL for an object every\nother surface serves from the cacheable Worker origin \u2014 the response name is\nhistorical, the contract is \"a URL you can fetch now\".",
@@ -13808,6 +13828,7 @@
     },
     "/api/v1/outfits/{outfit_id}": {
       "delete": {
+        "description": "Delete an outfit and best-effort remove its images from storage.",
         "operationId": "delete_outfit_api_v1_outfits__outfit_id__delete",
         "parameters": [
           {
@@ -17066,7 +17087,10 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Health Check"
+        "summary": "Health Check",
+        "tags": [
+          "Health"
+        ]
       }
     },
     "/ready": {

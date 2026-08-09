@@ -389,6 +389,12 @@ _MISSING_SCHEMA_MARKERS = ("pgrst205", "42703", "pgrst204")
 # CHECK-violation marker for the extraction_jobs.generation_batch_size bound
 # (016 allows <=10; 023/029 raise it to <=50/<=100 to match the API cap).
 _CHECK_VIOLATION_MARKERS = ("23514", "valid_batch_size")
+# Value-too-long marker for the items/item_images VARCHAR width bound (001
+# declares image_url VARCHAR(500); migration 036 widens it to TEXT). PostgREST
+# surfaces SQLSTATE 22001 as "value too long for type character varying" -
+# observed 2026-08-08 on POST /items after presigned-URL re-mints started
+# producing URLs longer than 500 chars while 036 was still unapplied.
+_VALUE_TOO_LONG_MARKERS = ("22001", "value too long for type character varying")
 
 
 def is_missing_table_or_column(error: Exception) -> bool:
@@ -424,6 +430,46 @@ def job_persistence_migration_hint(table: str, error: Exception) -> str:
             "cap (migrations 023/029 not applied; the boot probe logs the "
             "exact bound). Apply 023_durable_job_state.sql / "
             "029_pr9_hardening.sql on hosted Supabase."
+        )
+    return ""
+
+
+def items_schema_migration_hint(error: Exception) -> str:
+    """Operator-facing log hint for item-write migration gaps.
+
+    Covers the two hosted-Supabase gaps that make item writes fail
+    deterministically while the hosted schema is behind the repo:
+
+    - ``items.source_image_url`` / ``items.source_image_storage_path`` are
+      absent (migration 019 not applied): the API sends both columns on
+      every item insert, so PostgREST rejects the payload with
+      PGRST204/42703 (observed 2026-08-08 as an opaque 500 "Create item
+      error" on POST /items).
+    - ``item_images.image_url`` is still VARCHAR(500) (migration 036 not
+      applied): presigned/R2 URLs longer than 500 chars are rejected with
+      22001 "value too long for type character varying".
+
+    Returns "" when the error is not one of these classes.
+
+    LOGS ONLY — never put this string in a client-facing error message.
+    """
+    text = str(error).lower()
+    if is_missing_table_or_column(error):
+        return (
+            "Item write rejected: 'items' or its columns are missing from "
+            "the hosted schema (migration 019_add_item_source_image.sql not "
+            "applied - items.source_image_url / "
+            "items.source_image_storage_path absent). Apply it (plus any "
+            "other pending migrations) to restore item create/update."
+        )
+    if any(marker in text for marker in _VALUE_TOO_LONG_MARKERS):
+        return (
+            "Item write rejected: an image URL exceeds the column width "
+            "(SQLSTATE 22001 'value too long for type character varying' on "
+            "item_images.image_url, which is VARCHAR(500); migration "
+            "036_widen_image_url_columns.sql widens it to TEXT and is not "
+            "applied). Apply 036_widen_image_url_columns.sql on hosted "
+            "Supabase."
         )
     return ""
 

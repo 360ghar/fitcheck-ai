@@ -122,13 +122,17 @@ class Settings(BaseSettings):
     OBJECT_STORAGE_ACCESS_KEY_ID: str = ""
     OBJECT_STORAGE_SECRET_ACCESS_KEY: str = ""
     OBJECT_STORAGE_BUCKET: str = ""
-    # Presigned GET URL lifetime for served images (seconds). Short-lived URLs
-    # (default 3600s / 1h) keep the bucket private while giving the web/mobile
-    # clients a long enough window that a cached list or an open tab still
-    # renders before the URL rotates on the next refetch. Railway allows up to
-    # 90 days; keep this moderate — it is the access window for anyone holding
-    # the URL.
-    OBJECT_STORAGE_PRESIGN_TTL: int = 3600
+    # Presigned GET URL lifetime for served images (seconds). 604800 (7 days)
+    # is the maximum both AWS S3 and Cloudflare R2 accept for a presigned
+    # URL, and is the interim value from the 2026-08-09 broken-image RCA: 1h
+    # was shorter than real client caches (Flutter in-memory models, open web
+    # tabs, DB-persisted values), so any URL held past the TTL rendered a
+    # broken tile with no cache to fall back on. 7 days shrinks that window to
+    # near-zero until IMAGE_SERVING_MODE=worker lands (stable URLs make the
+    # TTL irrelevant for read paths). Trade-off: the URL is the access window
+    # for anyone holding it — acceptable because keys are unguessable and URLs
+    # are only ever issued by ownership-checked responses.
+    OBJECT_STORAGE_PRESIGN_TTL: int = 604800
 
     # ==========================================================================
     # Image serving (egress control)

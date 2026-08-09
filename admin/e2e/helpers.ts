@@ -127,6 +127,9 @@ export async function mockApi(page: Page, options: MockApiOptions = {}): Promise
     if (method === 'GET' && path === '/api/v1/admin/dashboards/referrals') {
       return respondJson(route, dashboardFixtures.referrals)
     }
+    if (method === 'GET' && path === '/api/v1/admin/dashboards/trends') {
+      return respondJson(route, dashboardFixtures.trends)
+    }
     // Dashboard "Recent admin activity" panel (page 1, page_size 8).
     if (method === 'GET' && path === '/api/v1/admin/audit') {
       return respondJson(route, {

@@ -173,7 +173,7 @@ def _fmt_bytes(value: int) -> str:
 # Default grace window (hours) before an orphan object is considered deletable.
 # Temp/generated images (``{user_id}/tmp/{source}/...`` from photoshoot / batch /
 # social-import / ``save_generated_image``) are NEVER referenced by any DB row:
-# they are served only via short-lived presigned GET URLs (default 1h TTL). The
+# they are served only via short-lived presigned GET URLs (default 7-day TTL). The
 # orphan math (``bucket_keys - db_keys``) therefore flags every temp image as
 # an orphan, including one a user is actively previewing. The grace window must
 # exceed the presign TTL so an in-flight preview is never deleted out from under

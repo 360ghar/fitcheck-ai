@@ -1882,6 +1882,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health Check Api V1
+         * @description Compatibility alias for probes configured against /api/v1/health.
+         *
+         *     The canonical liveness endpoint is /health. Probes pointed at
+         *     /api/v1/health produced 404 noise (observed 2026-08-07); serve the same
+         *     cheap payload instead. Operators should still fix the probe path - this
+         *     only makes a misconfiguration harmless.
+         */
+        get: operations["health_check_api_v1_api_v1_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/images/presigned": {
         parameters: {
             query?: never;
@@ -2498,7 +2523,10 @@ export interface paths {
         /** Update Outfit */
         put: operations["update_outfit_api_v1_outfits__outfit_id__put"];
         post?: never;
-        /** Delete Outfit */
+        /**
+         * Delete Outfit
+         * @description Delete an outfit and best-effort remove its images from storage.
+         */
         delete: operations["delete_outfit_api_v1_outfits__outfit_id__delete"];
         options?: never;
         head?: never;
@@ -5158,7 +5186,7 @@ export interface components {
             pose: string;
             /**
              * Save To Storage
-             * @default false
+             * @default true
              */
             save_to_storage: boolean;
             /**
@@ -5217,7 +5245,7 @@ export interface components {
             reference_storage_path?: string | null;
             /**
              * Save To Storage
-             * @default false
+             * @default true
              */
             save_to_storage: boolean;
             /** Sub Category */
@@ -6135,7 +6163,7 @@ export interface components {
             pose: string;
             /**
              * Save To Storage
-             * @default false
+             * @default true
              */
             save_to_storage: boolean;
             /**
@@ -9323,6 +9351,26 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    health_check_api_v1_api_v1_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

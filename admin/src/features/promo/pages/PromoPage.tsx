@@ -173,6 +173,8 @@ export function PromoPage() {
       id: 'code',
       header: t('columns.code'),
       enableSorting: false,
+      size: 180,
+      minSize: 150,
       cell: ({ row }) => (
         <span className="font-mono text-sm font-semibold tracking-wide">{row.original.code}</span>
       ),
@@ -181,6 +183,8 @@ export function PromoPage() {
       id: 'discount',
       header: t('columns.discount'),
       enableSorting: false,
+      size: 120,
+      minSize: 90,
       cell: ({ row }) => (
         <span className="whitespace-nowrap">{t('discount.months', { months: row.original.months })}</span>
       ),
@@ -189,6 +193,8 @@ export function PromoPage() {
       id: 'plan_type',
       header: t('columns.plan'),
       enableSorting: false,
+      size: 140,
+      minSize: 110,
       cell: ({ row }) => (
         <span className="rounded-full bg-surface-card px-2.5 py-0.5 text-xs font-medium">
           {t(`plans.${row.original.plan_type}`, { defaultValue: row.original.plan_type })}
@@ -199,6 +205,8 @@ export function PromoPage() {
       id: 'active',
       header: t('columns.active'),
       enableSorting: false,
+      size: 120,
+      minSize: 100,
       cell: ({ row }) => (
         <StatusBadge
           status={row.original.active ? 'active' : 'disabled'}
@@ -210,6 +218,8 @@ export function PromoPage() {
       id: 'redemptions_count',
       header: t('columns.redemptions'),
       enableSorting: false,
+      size: 140,
+      minSize: 110,
       cell: ({ row }) => (
         <span className="tabular-nums">
           {row.original.redemptions_count}
@@ -223,6 +233,8 @@ export function PromoPage() {
       id: 'expires_at',
       header: t('columns.expires'),
       enableSorting: false,
+      size: 140,
+      minSize: 110,
       cell: ({ row }) => (
         <span className="whitespace-nowrap text-sm text-muted-foreground">
           {row.original.expires_at ? formatDate(row.original.expires_at) : '—'}
@@ -233,6 +245,8 @@ export function PromoPage() {
       id: 'created_at',
       header: t('columns.createdAt'),
       enableSorting: false,
+      size: 140,
+      minSize: 110,
       cell: ({ row }) => (
         <span className="whitespace-nowrap text-sm text-muted-foreground">
           {formatDate(row.original.created_at)}
@@ -242,6 +256,8 @@ export function PromoPage() {
     {
       id: 'actions',
       enableSorting: false,
+      size: 130,
+      minSize: 100,
       cell: ({ row }) => {
         if (!canManage) return null
         return (
@@ -396,7 +412,7 @@ export function PromoPage() {
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="months"

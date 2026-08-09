@@ -22,6 +22,49 @@ void main() {
     },
   );
 
+  group('extractDataMap response-shape tolerance', () {
+    test('unwraps the canonical envelope', () {
+      expect(
+        TryOnController.extractDataMap({
+          'data': {'image_url': 'https://cdn.test/x.webp'},
+          'message': 'OK',
+        }),
+        {'image_url': 'https://cdn.test/x.webp'},
+      );
+    });
+
+    test('unwraps an array-of-envelope (observed production shape)', () {
+      expect(
+        TryOnController.extractDataMap([
+          {'data': {'image_url': 'https://cdn.test/x.webp'}, 'message': 'OK'},
+        ]),
+        {'image_url': 'https://cdn.test/x.webp'},
+      );
+    });
+
+    test('unwraps an array-of-result', () {
+      expect(
+        TryOnController.extractDataMap([
+          {'image_url': 'https://cdn.test/x.webp'},
+        ]),
+        {'image_url': 'https://cdn.test/x.webp'},
+      );
+    });
+
+    test('passes a bare result object through', () {
+      expect(
+        TryOnController.extractDataMap({'image_url': 'https://cdn.test/x.webp'}),
+        {'image_url': 'https://cdn.test/x.webp'},
+      );
+    });
+
+    test('returns an empty map for unusable payloads', () {
+      expect(TryOnController.extractDataMap(null), <String, dynamic>{});
+      expect(TryOnController.extractDataMap([]), <String, dynamic>{});
+      expect(TryOnController.extractDataMap('nope'), <String, dynamic>{});
+    });
+  });
+
   testWidgets('downloads a base64 result through the gallery saver', (
     tester,
   ) async {

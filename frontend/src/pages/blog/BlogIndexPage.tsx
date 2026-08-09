@@ -96,7 +96,7 @@ export default function BlogIndexPage() {
                     : 'Discover how AI is transforming wardrobe management and get expert style advice'}
                 </p>
 
-                <form onSubmit={handleSearchSubmit} className="mx-auto flex max-w-xl gap-2" role="search">
+                <form onSubmit={handleSearchSubmit} className="mx-auto flex max-w-xl flex-col gap-2 sm:flex-row" role="search">
                   <label htmlFor="blog-search" className="sr-only">Search blog posts</label>
                   <input
                     id="blog-search"
@@ -108,14 +108,16 @@ export default function BlogIndexPage() {
                     placeholder="Search articles…"
                     className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                   />
-                  <button type="submit" className="rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary-pressed">
-                    Search
-                  </button>
-                  {searchQuery && (
-                    <button type="button" onClick={handleClearSearch} className="rounded-lg border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">
-                      Clear
+                  <div className="flex gap-2">
+                    <button type="submit" className="flex-1 rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary-pressed sm:flex-none">
+                      Search
                     </button>
-                  )}
+                    {searchQuery && (
+                      <button type="button" onClick={handleClearSearch} className="flex-1 rounded-lg border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 sm:flex-none dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </form>
 
                 {/* Category Pills — the container is always rendered, but its

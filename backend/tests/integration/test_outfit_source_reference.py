@@ -299,6 +299,14 @@ async def test_query_failure_returns_none(stub_download):
 # =============================================================================
 
 
+# A real 1x1 PNG: provider responses are validated (strict base64 + magic-byte
+# sniff) before they are stored, so fake payloads must actually be images.
+_TINY_PNG_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8"
+    "z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
+
 class _FakeImageResponse:
     def __init__(self, image_b64: str):
         self.images = [image_b64] if image_b64 else []
@@ -311,9 +319,9 @@ def _make_agent() -> Any:
 
     fake_ai_service = AsyncMock()
     fake_ai_service.generate_image = AsyncMock(
-        return_value=_FakeImageResponse("ZmFrZQ==")
+        return_value=_FakeImageResponse(_TINY_PNG_B64)
     )
-    fake_ai_service.chat = AsyncMock(return_value=_FakeImageResponse("ZmFrZQ=="))
+    fake_ai_service.chat = AsyncMock(return_value=_FakeImageResponse(_TINY_PNG_B64))
     fake_ai_service.get_image_gen_model = lambda: "fake-image-model"
     return ImageGenerationAgent(ai_service=fake_ai_service)
 
@@ -372,6 +380,11 @@ async def test_avatar_branch_sends_source_photo_between_avatar_and_garments():
     assert "SOURCE PHOTO LOCK" in prompt
     assert "appearance reference: IMAGE 3" in prompt
     assert "appearance reference: IMAGE 4" in prompt
+    # All references are one main subject wearing the whole outfit; a second
+    # person is banned and the lock precedes the identity lock.
+    assert "SINGLE PERSON LOCK" in prompt
+    assert "ALL reference images show the SAME single person" in prompt
+    assert prompt.index("SINGLE PERSON LOCK") < prompt.index("IDENTITY LOCK")
     # Identity lock still precedes the source-photo lock and garment lock.
     assert prompt.index("IDENTITY LOCK") < prompt.index("SOURCE PHOTO LOCK")
     assert prompt.index("SOURCE PHOTO LOCK") < prompt.index("GARMENT REFERENCE LOCK")
@@ -417,9 +430,10 @@ async def test_flat_lay_branch_carries_source_photo():
 
 
 @pytest.mark.asyncio
-async def test_absent_source_photo_leaves_prompt_byte_identical():
+async def test_absent_source_photo_leaves_no_source_scaffolding():
     """source_photo_base64=None (every caller except the upload flow) must not
-    change the prompt or the image list at all - no scaffolding leaks in."""
+    leak any source-photo scaffolding into the prompt or the image list — the
+    only avatar-branch additions are the single-person locks."""
     agent = _make_agent()
 
     await agent.generate_outfit(

@@ -562,7 +562,6 @@ def test_parse_chat_response_multimodal_content_and_message_images():
                 ],
                 "images": [
                     {"type": "image_url", "image_url": {"url": "data:image/png;base64,BBBB"}},
-                    {"type": "image_url", "image_url": {"url": "https://cdn.example.com/x.png"}},
                     {"type": "other"},
                 ],
             },
@@ -571,31 +570,42 @@ def test_parse_chat_response_multimodal_content_and_message_images():
     }
     result = service._parse_chat_response(data, "model", "https://provider.example.com")
     assert result.text == "here"
-    assert result.images == ["AAAA", "QkJD", "BBBB", "https://cdn.example.com/x.png"]
+    assert result.images == ["AAAA", "QkJD", "BBBB"]
     assert result.usage == {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}
     assert result.provider == "https://provider.example.com"
 
 
-def test_parse_chat_response_data_url_without_base64_segment_appends_raw():
+def test_parse_chat_response_data_url_without_base64_segment_raises_hard_error():
+    """A data URL without a base64 segment is not an image payload; appending
+    it raw shipped garbage as image_base64 (every consumer fails on it)."""
     service = AIProviderService(_make_config())
     data = {
         "choices": [{"message": {
             "content": [{"type": "image_url", "image_url": {"url": "data:image/png,RAW"}}],
         }}],
     }
-    result = service._parse_chat_response(data, "model")
-    assert result.images == ["data:image/png,RAW"]
+    with pytest.raises(AIServiceError) as exc_info:
+        service._parse_chat_response(data, "model")
+    assert exc_info.value.retryable is False
+    assert exc_info.value.error_kind == "hard"
+    assert "non-inline image" in str(exc_info.value)
 
 
-def test_parse_chat_response_plain_url_content_part_appends_url():
+def test_parse_chat_response_plain_url_content_part_raises_hard_error():
+    """A hosted URL in a chat-style response is not base64; shipping it as
+    image_base64 made every downstream consumer fail on garbage (the
+    /images/generations path fetches hosted URLs instead)."""
     service = AIProviderService(_make_config())
     data = {
         "choices": [{"message": {
             "content": [{"type": "image_url", "image_url": {"url": "https://cdn.example.com/x.png"}}],
         }}],
     }
-    result = service._parse_chat_response(data, "model")
-    assert result.images == ["https://cdn.example.com/x.png"]
+    with pytest.raises(AIServiceError) as exc_info:
+        service._parse_chat_response(data, "model")
+    assert exc_info.value.retryable is False
+    assert exc_info.value.error_kind == "hard"
+    assert "non-inline image" in str(exc_info.value)
 
 
 def test_parse_chat_response_other_content_part_types_are_skipped():
@@ -614,7 +624,8 @@ def test_parse_chat_response_other_content_part_types_are_skipped():
     assert result.images is None
 
 
-def test_parse_chat_response_message_images_data_url_without_base64():
+def test_parse_chat_response_message_images_data_url_without_base64_raises_hard_error():
+    """Non-base64 data URLs in message.images are rejected, not appended raw."""
     service = AIProviderService(_make_config())
     data = {
         "choices": [{"message": {
@@ -622,8 +633,11 @@ def test_parse_chat_response_message_images_data_url_without_base64():
             "images": [{"type": "image_url", "image_url": {"url": "data:image/png,RAW"}}],
         }}],
     }
-    result = service._parse_chat_response(data, "model")
-    assert result.images == ["data:image/png,RAW"]
+    with pytest.raises(AIServiceError) as exc_info:
+        service._parse_chat_response(data, "model")
+    assert exc_info.value.retryable is False
+    assert exc_info.value.error_kind == "hard"
+    assert "non-inline image" in str(exc_info.value)
 
 
 def test_parse_chat_response_message_images_only_extracts_images():

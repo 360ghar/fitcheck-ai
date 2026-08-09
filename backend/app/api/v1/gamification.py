@@ -291,7 +291,7 @@ async def get_leaderboard(
                     "username": _display_name(profile),
                     # `users.avatar_url` stores the presigned URL captured at
                     # upload time, so it is dead after OBJECT_STORAGE_PRESIGN_TTL
-                    # (1h) and must be re-materialized on every read — every
+                    # and must be re-materialized on every read — every
                     # leaderboard face was a broken image before this.
                     # presigned=True is required: these are OTHER users' keys and
                     # the Worker's ownership rule (first path segment == token

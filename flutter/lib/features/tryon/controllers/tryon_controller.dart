@@ -413,7 +413,7 @@ class TryOnController extends GetxController {
           }),
         );
 
-        final data = _extractDataMap(response.data);
+        final data = extractDataMap(response.data);
         final avatar = data['avatar_url']?.toString();
         if (avatar == null || avatar.isEmpty) {
           throw Exception('Avatar upload failed');
@@ -498,7 +498,7 @@ class TryOnController extends GetxController {
         ),
       );
 
-      final result = _extractDataMap(response.data);
+      final result = extractDataMap(response.data);
       final imageUrl = result['image_url']?.toString();
       final imageBase64 = result['image_base64']?.toString();
       generatedImageUrl.value = imageUrl ?? '';
@@ -560,7 +560,9 @@ class TryOnController extends GetxController {
       'background': background,
       'pose': pose,
       'lighting': 'professional studio lighting',
-      'save_to_storage': false,
+      // URL-first: the backend persists the render and returns image_url;
+      // the inline base64 fallback only appears if the storage write fails.
+      'save_to_storage': true,
     };
   }
 
@@ -588,12 +590,26 @@ class TryOnController extends GetxController {
     _cleanupTempFiles();
   }
 
-  Map<String, dynamic> _extractDataMap(dynamic payload) {
-    if (payload is Map<String, dynamic>) {
-      final data = payload['data'];
+  /// Normalize an API response payload to its result map.
+  ///
+  /// Accepts the canonical envelope (`{"data": {...}}`), the bare result
+  /// object, and an ARRAY wrapper (`[{"data": {...}}]` / `[{...}]`) — some
+  /// deployments have been observed returning array-wrapped generation
+  /// results, which would otherwise surface as an empty map and a bogus
+  /// "No image returned from server" error.
+  @visibleForTesting
+  static Map<String, dynamic> extractDataMap(dynamic payload) {
+    dynamic candidate = payload;
+    if (payload is List) {
+      candidate = payload.isNotEmpty ? payload.first : null;
+    }
+    if (candidate is Map<String, dynamic>) {
+      final data = candidate['data'];
       if (data is Map<String, dynamic>) {
         return data;
       }
+      // Bare result object (no envelope).
+      return candidate;
     }
     return <String, dynamic>{};
   }

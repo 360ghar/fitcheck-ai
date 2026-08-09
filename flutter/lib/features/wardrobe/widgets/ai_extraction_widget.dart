@@ -900,8 +900,8 @@ class _AIExtractionWidgetState extends State<AIExtractionWidget>
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 190,
             mainAxisSpacing: AppConstants.spacing12,
             crossAxisSpacing: AppConstants.spacing12,
             childAspectRatio: 1,

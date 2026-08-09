@@ -196,13 +196,16 @@ class _PhotoshootGeneratingStepState extends State<PhotoshootGeneratingStep>
                       ),
                 ),
                 const SizedBox(height: 8),
-                GridView.count(
-                  crossAxisCount: 2,
+                GridView(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
-                  childAspectRatio: 3 / 4,
+                  gridDelegate:
+                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 190,
+                        mainAxisSpacing: 8,
+                        crossAxisSpacing: 8,
+                        childAspectRatio: 3 / 4,
+                      ),
                   children: slots,
                 ),
               ],

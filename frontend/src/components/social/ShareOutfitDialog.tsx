@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { imageFetchOptions } from '@/lib/sessionCookie'
 import {
   Share2,
   Link as LinkIcon,
@@ -200,7 +201,10 @@ export function ShareOutfitDialog({
       // The `download` attribute is ignored for cross-origin URLs (Supabase
       // storage is cross-origin), so a plain anchor click would NAVIGATE the
       // app tab to the raw image. Fetch it as a blob and download that instead.
-      const resp = await fetch(primary.image_url)
+      // Worker-mode CDN URLs need the auth cookie (`credentials: 'include'`);
+      // presigned R2 URLs must stay credential-free (no ACA-Credentials on
+      // the bucket CORS policy).
+      const resp = await fetch(primary.image_url, imageFetchOptions(primary.image_url))
       if (!resp.ok) throw new Error('Image fetch failed')
       const blob = await resp.blob()
       const url = URL.createObjectURL(blob)
@@ -243,8 +247,8 @@ export function ShareOutfitDialog({
         <div className="space-y-6">
           {/* Outfit preview */}
           {outfit && (
-            <div className="flex gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="w-32 h-32 rounded-lg overflow-hidden bg-white dark:bg-gray-700 flex-shrink-0">
+            <div className="flex flex-col xs:flex-row gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="w-24 h-24 xs:w-32 xs:h-32 rounded-lg overflow-hidden bg-white dark:bg-gray-700 flex-shrink-0">
                 {outfit.images?.length ? (
                   <ZoomableImage
                     src={(outfit.images.find((img) => img.is_primary) || outfit.images[0]).image_url}
@@ -287,7 +291,10 @@ export function ShareOutfitDialog({
 
           <Tabs defaultValue="social" className="w-full">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="social">Social Media</TabsTrigger>
+              <TabsTrigger value="social">
+                <span className="hidden xs:inline">Social Media</span>
+                <span className="xs:hidden">Social</span>
+              </TabsTrigger>
               <TabsTrigger value="link">Share Link</TabsTrigger>
               <TabsTrigger value="options">Options</TabsTrigger>
             </TabsList>

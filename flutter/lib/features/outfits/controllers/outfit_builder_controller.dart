@@ -237,8 +237,14 @@ class OutfitBuilderController extends GetxController {
         background: 'studio white',
       );
 
-      generatedImageUrl.value =
-          result.imageUrl ?? 'data:image/png;base64,${result.imageBase64}';
+      // URL-first: the backend persists renders by default. On a storage
+      // write failure the backend returns an EMPTY image_url (not null) with
+      // the inline base64 fallback, so treat empty as missing — Dart's `??`
+      // only covers null.
+      final url = result.imageUrl ?? '';
+      generatedImageUrl.value = url.isNotEmpty
+          ? url
+          : 'data:image/png;base64,${result.imageBase64}';
 
       ErrorHandler.showSuccess('Outfit visualization generated', title: 'Success');
     } catch (e) {

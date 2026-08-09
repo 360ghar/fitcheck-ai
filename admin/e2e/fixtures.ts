@@ -4,6 +4,7 @@ import {
   adminOverviewFixture,
   adminReferralsFixture,
   adminTopUsersFixture,
+  adminTrendsFixture,
 } from '../src/test/msw/handlers/dashboard'
 import { adminSearchFixture } from '../src/test/msw/handlers/search'
 import {
@@ -31,6 +32,7 @@ export const dashboardFixtures = {
   overview: adminOverviewFixture,
   topUsers: adminTopUsersFixture,
   referrals: adminReferralsFixture,
+  trends: adminTrendsFixture,
 }
 
 export const searchFixtures = adminSearchFixture

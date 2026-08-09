@@ -4,7 +4,7 @@ Delete temporary generated previews (the ``tmp/`` folder) from the bucket.
 
 Temp previews — photoshoot, batch-extraction and social-import generated
 images — are NEVER referenced by any DB row and are served only via
-short-lived presigned GET URLs (``OBJECT_STORAGE_PRESIGN_TTL``, default 1h).
+short-lived presigned GET URLs (``OBJECT_STORAGE_PRESIGN_TTL``, default 7 days).
 Once the generating job finishes (or the review flow ends), the user can no
 longer see them, and the objects just sit in the bucket forever. This script
 is the manual weekly cleanup: list every temp object, report it, and with

@@ -127,8 +127,8 @@ class PhotoshootResultsStep extends GetView<PhotoshootController> {
               padding: const EdgeInsets.symmetric(
                 horizontal: AppConstants.spacing16,
               ),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 190,
                 crossAxisSpacing: AppConstants.spacing12,
                 mainAxisSpacing: AppConstants.spacing12,
                 childAspectRatio: 0.75,

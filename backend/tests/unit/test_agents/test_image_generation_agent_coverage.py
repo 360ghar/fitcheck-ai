@@ -28,15 +28,22 @@ from app.services.ai_settings_service import AISettingsService
 from app.utils.background_removal import STATUS_MATTED, MatteResult
 from app.utils.parallel import ParallelResult
 
+# A real 1x1 PNG: provider responses are validated (strict base64 + magic-byte
+# sniff) before they are stored, so fake payloads must actually be images.
+_TINY_PNG_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8"
+    "z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
 
 class _FakeImageResponse:
-    def __init__(self, image_b64="ZmFrZQ=="):
+    def __init__(self, image_b64=_TINY_PNG_B64):
         self.images = [image_b64] if image_b64 else []
         self.model = "fake-model"
         self.provider = "fake-provider"
 
 
-def _make_agent(image_b64="ZmFrZQ==") -> ImageGenerationAgent:
+def _make_agent(image_b64=_TINY_PNG_B64) -> ImageGenerationAgent:
     fake_ai_service = AsyncMock()
     fake_ai_service.generate_image = AsyncMock(return_value=_FakeImageResponse(image_b64))
     fake_ai_service.chat = AsyncMock(return_value=_FakeImageResponse(image_b64))
@@ -416,7 +423,9 @@ async def test_generate_variations_default_styles_runs_all():
             results = await agent.generate_variations(items=[_item("tee", "tops")])
 
     assert len(results) == 3
-    assert all(result.image_base64 == "ZmFrZQ==" for result in results)
+    # Default variation styles are not matted, so each result is the
+    # validated provider payload (the run_image_op guard above is defensive).
+    assert all(result.image_base64 == _TINY_PNG_B64 for result in results)
 
 
 @pytest.mark.asyncio
@@ -561,6 +570,78 @@ async def test_save_generated_image_error_returns_empty(fake_db):
             generated, user_id="u1", image_type="product", db=fake_db
         )
     assert result == {"image_url": "", "storage_path": ""}
+
+
+@pytest.mark.asyncio
+async def test_save_generated_image_empty_base64_never_uploads(fake_db):
+    """A 0-byte object is worse than no save: the S3 PUT succeeds and the
+    returned presigned URL serves nothing while still suppressing the endpoint's
+    base64 fallback (image_url is truthy) — the exact "generated but nothing
+    shows anywhere" class. Refuse before the upload."""
+    generated = GeneratedImage("", "p", "m", "prov")
+    upload = AsyncMock()
+    with patch("app.services.storage_service.StorageService.upload_file", new=upload):
+        result = await save_generated_image(
+            generated, user_id="u1", image_type="outfit", db=fake_db
+        )
+    assert result == {"image_url": "", "storage_path": ""}
+    upload.assert_not_called()
+
+
+# =============================================================================
+# _validated_image
+# =============================================================================
+
+
+def test_validated_image_rejects_empty_payload_as_retryable():
+    agent = _make_agent()
+    with pytest.raises(AIServiceError) as exc_info:
+        agent._validated_image("", "try-on")
+    assert exc_info.value.retryable is True
+
+
+def test_validated_image_rejects_hosted_url_and_garbage_as_hard():
+    agent = _make_agent()
+    for payload in [
+        "https://cdn.example/img.png",
+        "data:image/png;base64,Zm9v",
+        "definitely not base64!!!",
+    ]:
+        with pytest.raises(AIServiceError) as exc_info:
+            agent._validated_image(payload, "try-on")
+        assert exc_info.value.retryable is False
+        assert "undecodable image data" in str(exc_info.value)
+
+
+def test_validated_image_strips_whitespace_and_returns_payload():
+    agent = _make_agent()
+    wrapped = f"  {_TINY_PNG_B64[:12]}\n{_TINY_PNG_B64[12:48]}\t{_TINY_PNG_B64[48:]}"
+    assert agent._validated_image(wrapped, "try-on") == _TINY_PNG_B64
+
+
+def test_validated_image_rejects_whitespace_only_payload_as_retryable():
+    agent = _make_agent()
+    with pytest.raises(AIServiceError) as exc_info:
+        agent._validated_image("  \n\t ", "try-on")
+    assert exc_info.value.retryable is True
+
+
+def test_validated_image_rejects_non_image_bytes_as_retryable():
+    """Valid base64 that is NOT an image (e.g. a 200 HTML error page from the
+    provider or a fetched asset) must not be stored as a broken object."""
+    import base64 as _b64
+
+    agent = _make_agent()
+    html = _b64.b64encode(b"<html><body>proxy error</body></html>").decode()
+    with pytest.raises(AIServiceError) as exc_info:
+        agent._validated_image(html, "try-on")
+    assert exc_info.value.retryable is True
+    assert "non-image data" in str(exc_info.value)
+
+
+def test_validated_image_accepts_real_png():
+    agent = _make_agent()
+    assert agent._validated_image(_TINY_PNG_B64, "try-on") == _TINY_PNG_B64
 
 
 # =============================================================================

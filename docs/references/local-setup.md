@@ -96,6 +96,16 @@ This starts:
    `002_user_profile_trigger.sql`). Do not skip any: the backend treats a
    partial schema as broken (`GET /ready` fails closed on missing
    tables/columns).
+3. Every migration is **re-runnable**: a partial or repeated application
+   must not abort. Postgres has no `CREATE TRIGGER/POLICY IF NOT EXISTS` or
+   `ADD CONSTRAINT IF NOT EXISTS`, so each file guards those statements with
+   drop-then-create / drop-then-add (`DROP TRIGGER|POLICY|CONSTRAINT IF
+   EXISTS …` before the `CREATE`/`ADD`) and seed `INSERT`s use
+   `ON CONFLICT … DO NOTHING`. If an apply run aborts partway (e.g. a
+   `42710 duplicate object` error from a pre-fix file), fix or finish the
+   file, then re-run every not-yet-applied file in order — re-running an
+   already-applied file is safe. (Regression-checked 2026-08-08: all 43
+   files applied twice in sequence on a scratch Postgres 17.)
 3. File storage does **not** live in Supabase. Uploads go to a private
    S3-compatible object-storage bucket (Cloudflare R2) configured by the
    `OBJECT_STORAGE_*` vars in `backend/.env.example`

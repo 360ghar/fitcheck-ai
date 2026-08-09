@@ -19,6 +19,7 @@ import { JobPill } from '@/components/jobs'
 import { Button } from '@/components/ui/button'
 import { Link } from 'react-router-dom'
 import { Plus } from 'lucide-react'
+import { useUserRefresh } from '@/hooks/useUserRefresh'
 
 function AppLayoutContent() {
   const { isCollapsed } = useSidebar()
@@ -77,6 +78,11 @@ function AppLayoutContent() {
 }
 
 export default function AppLayout() {
+  // Keep the session-cached user (and its expiring presigned avatar URL)
+  // fresh: re-reads /users/me on mount, navigation, tab focus, and a 50-min
+  // guard. The Try On page's profile thumbnail is one of the surfaces this
+  // heals — see hooks/useUserRefresh.ts.
+  useUserRefresh();
   return (
     <SidebarProvider>
       <AppLayoutContent />

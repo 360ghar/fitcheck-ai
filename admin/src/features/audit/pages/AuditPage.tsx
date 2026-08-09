@@ -101,6 +101,8 @@ export function AuditPage() {
         // Backend /admin/audit exposes no sort_by param (sort_dir only) —
         // no column is server-sortable.
         enableSorting: false,
+        size: 170,
+        minSize: 140,
         cell: ({ row }) => (
           <span className="whitespace-nowrap text-muted-foreground">
             {formatDateTimeValue(row.original.created_at)}
@@ -111,35 +113,47 @@ export function AuditPage() {
         accessorKey: 'actor',
         header: t('columns.actor'),
         enableSorting: false,
+        size: 220,
+        minSize: 180,
         cell: ({ row }) => auditActorEmail(row.original) ?? '—',
       },
       {
         accessorKey: 'action',
         header: t('columns.action'),
         enableSorting: false,
+        size: 140,
+        minSize: 110,
         cell: ({ row }) => <Badge variant="default">{row.original.action}</Badge>,
       },
       {
         accessorKey: 'entity_type',
         header: t('columns.entityType'),
         enableSorting: false,
+        size: 140,
+        minSize: 110,
         cell: ({ row }) => row.original.entity_type,
       },
       {
         accessorKey: 'entity_id',
         header: t('columns.entityId'),
         enableSorting: false,
+        size: 140,
+        minSize: 110,
         cell: ({ row }) => row.original.entity_id ?? '—',
       },
       {
         accessorKey: 'ip',
         header: t('columns.ip'),
         enableSorting: false,
+        size: 130,
+        minSize: 100,
         cell: ({ row }) => row.original.ip ?? '—',
       },
       {
         id: 'payload',
         header: '',
+        size: 110,
+        minSize: 90,
         cell: ({ row }) => (
           <Button
             variant="ghost"

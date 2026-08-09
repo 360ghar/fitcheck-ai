@@ -6,6 +6,8 @@
  * logout redirects) live in a single, testable module.
  */
 
+import { setAuthSessionCookie, clearAuthSessionCookie } from './sessionCookie';
+
 const TOKEN_STORAGE_KEY = 'fitcheck_auth_tokens';
 const AUTH_STORAGE_KEY = 'fitcheck-auth-storage';
 const USER_STORAGE_KEY = 'fitcheck_user';
@@ -62,12 +64,17 @@ export function getTokens(): AuthTokens | null {
 export function setTokens(tokens: AuthTokens): void {
   localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokens));
   syncPersistedTokens(tokens);
+  // Worker-mode image serving reads the access token from the
+  // `sb-<ref>-auth-token` cookie (TD-068); keep it in sync on every write so
+  // an app left open across a token rotation never presents an expired one.
+  setAuthSessionCookie(tokens.access_token);
 }
 
 export function clearTokens(): void {
   localStorage.removeItem(TOKEN_STORAGE_KEY);
   localStorage.removeItem(AUTH_STORAGE_KEY);
   localStorage.removeItem(USER_STORAGE_KEY);
+  clearAuthSessionCookie();
 }
 
 export function getAccessToken(): string | null {

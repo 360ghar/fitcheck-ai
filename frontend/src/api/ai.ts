@@ -7,6 +7,7 @@
 import { apiClient } from './client';
 import { logger } from '../lib/logger';
 import { ENDPOINTS } from '@/lib/endpoints';
+import { unwrapGenerationResult } from '@/lib/unwrap-generation-result';
 import type { AxiosRequestConfig } from 'axios';
 
 // =============================================================================
@@ -344,7 +345,7 @@ export async function generateOutfit(
     include_model: options.include_model ?? true,
     model_gender: options.model_gender ?? 'female',
     custom_prompt: options.custom_prompt,
-    save_to_storage: options.save_to_storage ?? false,
+    save_to_storage: options.save_to_storage ?? true,
     include_user_face: options.include_user_face ?? true,
     use_body_profile: options.use_body_profile ?? true,
     use_source_photo: options.useSourcePhoto ?? false,
@@ -355,7 +356,7 @@ export async function generateOutfit(
     _skipTransportRetry: true,
   } as AxiosRequestConfig & { _skipTransportRetry?: boolean });
 
-  return response.data.data;
+  return unwrapGenerationResult<GeneratedOutfit>(response.data);
 }
 
 /**
@@ -442,14 +443,14 @@ export async function generateProductImage(
       background: options.background ?? 'white',
       view_angle: options.view_angle ?? 'front',
       include_shadows: options.include_shadows ?? false,
-      save_to_storage: options.save_to_storage ?? false,
+      save_to_storage: options.save_to_storage ?? true,
     },
     // AI generation can be wrapped in withRetry by callers; keep transport
     // retry out so the two layers cannot multiply (see generateOutfit).
     { _skipTransportRetry: true } as AxiosRequestConfig & { _skipTransportRetry?: boolean }
   );
 
-  return response.data.data;
+  return unwrapGenerationResult<GeneratedProductImage>(response.data);
 }
 
 /**
@@ -475,14 +476,14 @@ export async function generateTryOn(
       background: options.background ?? 'studio white',
       pose: options.pose ?? 'standing front',
       lighting: options.lighting ?? 'professional studio lighting',
-      save_to_storage: options.save_to_storage ?? false,
+      save_to_storage: options.save_to_storage ?? true,
     },
     // AI generation can be wrapped in withRetry by callers; keep transport
     // retry out so the two layers cannot multiply (see generateOutfit).
     { _skipTransportRetry: true } as AxiosRequestConfig & { _skipTransportRetry?: boolean }
   );
 
-  return response.data.data;
+  return unwrapGenerationResult<TryOnResult>(response.data);
 }
 
 // =============================================================================

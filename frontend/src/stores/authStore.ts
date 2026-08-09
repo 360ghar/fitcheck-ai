@@ -36,6 +36,14 @@ interface AuthState {
   clearError: () => void;
   setUser: (user: User | null) => void;
   setHasHydrated: (hydrated: boolean) => void;
+  /**
+   * Re-read the user from the server. Needed because `avatar_url` is a
+   * presigned URL that expires after the backend's OBJECT_STORAGE_PRESIGN_TTL
+   * (1h): the value captured at rehydration goes dead mid-session, and
+   * /users/me re-materializes a fresh one. Coalesced through the request
+   * cache; failures keep the existing user.
+   */
+  refreshUser: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   handleOAuthCallback: () => Promise<AuthResponse & { is_new_user: boolean }>;
 }
@@ -199,6 +207,31 @@ export const useAuthStore = create<AuthState>()(
           authApi.storeUser(user);
         } else {
           authApi.clearUser();
+        }
+      },
+
+      // Refresh user from the server (fresh avatar URL, profile fields).
+      // Same request-cache key as rehydration, so shell-level refreshes
+      // coalesce with it: at most one /users/me per freshness window.
+      refreshUser: async () => {
+        const { tokens } = get();
+        if (!tokens?.access_token) return;
+        const tokenAtCall = tokens.access_token;
+        try {
+          const freshUser = await request(
+            `users:me:${tokenAtCall}`,
+            () => getCurrentUser(),
+            { label: 'authStore.refreshUser' }
+          );
+          // Drop the response if the session changed mid-flight (logout /
+          // re-login) — never overwrite a newer session's user.
+          if (get().tokens?.access_token !== tokenAtCall) return;
+          set({ user: freshUser });
+          authApi.storeUser(freshUser);
+        } catch (error) {
+          // Never clobber a valid user with a failed refresh; a stale
+          // presigned avatar URL is cosmetic and the next trigger retries.
+          logger.warn('[auth] user refresh failed; keeping cached user', error);
         }
       },
 

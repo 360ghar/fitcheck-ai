@@ -18,7 +18,12 @@ export function PageHeader({ title, description, actions, className }: PageHeade
         <h1 className="text-2xl font-bold tracking-tight text-ink">{title}</h1>
         {description ? <p className="max-w-2xl text-sm text-muted-foreground">{description}</p> : null}
       </div>
-      {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+      {/* min-w-0: actions can exceed the viewport (tab pills, button rows);
+          without it the wrapper's min-width:auto blows the page out on
+          mobile instead of wrapping/shrinking. */}
+      {actions ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>
+      ) : null}
     </div>
   )
 }

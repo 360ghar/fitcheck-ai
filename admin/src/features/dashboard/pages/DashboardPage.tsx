@@ -197,7 +197,10 @@ export function DashboardPage() {
 
       {/* Main row: trends (2/3) + tabbed top users (1/3) */}
       <div className="grid gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
+        {/* min-w-0: grid items default to min-width:auto, so the charts' and
+            activity rows' max-content width would blow the track out on
+            narrow viewports (measured 595px vs 358px available). */}
+        <Card className="min-w-0 xl:col-span-2">
           <CardHeader dense>
             <CardTitle className="text-sm">{t('charts.title')}</CardTitle>
           </CardHeader>
@@ -250,7 +253,7 @@ export function DashboardPage() {
 
       {/* Bottom row: referrals (1/3) + recent admin activity (2/3) */}
       <div className="grid gap-4 xl:grid-cols-3">
-        <Card>
+        <Card className="min-w-0">
           <CardHeader dense>
             <CardTitle className="text-sm">{t('referrals.title')}</CardTitle>
           </CardHeader>
@@ -277,7 +280,7 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="xl:col-span-2">
+        <Card className="min-w-0 xl:col-span-2">
           <CardHeader dense className="flex-row items-center justify-between">
             <CardTitle className="text-sm">{t('activity.title')}</CardTitle>
             <Link
@@ -397,7 +400,7 @@ function TopUsersCard({
   const rows = data ? activeTab.rows(data) : []
 
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader dense className="flex-row items-center justify-between gap-2">
         <CardTitle className="flex items-center gap-2 text-sm">
           <Trophy className="size-4 text-muted-foreground" aria-hidden="true" />

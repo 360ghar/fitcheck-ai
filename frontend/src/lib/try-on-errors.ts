@@ -11,6 +11,11 @@ import { getApiError, isAxiosLike, RATE_LIMIT_EXCEEDED } from '@/lib/errors';
 
 export function getTryOnErrorMessage(error: unknown): string {
   const apiError = getApiError(error);
+  // A 200 whose body carried no usable result (wrapper-shape drift between
+  // deployments): the request succeeded but there is nothing to show.
+  if (apiError.code === 'UNEXPECTED_RESPONSE_FORMAT') {
+    return 'The server returned an unexpected response format. Please try again.';
+  }
   // The user's own plan limit — the global interceptor opens the upgrade
   // prompt for this; the inline copy just states the wall.
   if (apiError.code === RATE_LIMIT_EXCEEDED) {

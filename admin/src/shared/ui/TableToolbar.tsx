@@ -166,7 +166,7 @@ export function TableToolbar({
               ) : null}
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-80">
+          <PopoverContent align="start" className="w-[min(80vw,20rem)]">
             <div className="space-y-4">
               {filters.map((filter) => (
                 <div key={filter.key} className="space-y-1.5">
@@ -190,7 +190,7 @@ export function TableToolbar({
               ))}
               {dateFilters.length > 0 ? (
                 <div className="space-y-1.5">
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {dateFilters.map((filter) => (
                       <div key={filter.key} className="space-y-1.5">
                         <label

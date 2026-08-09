@@ -337,8 +337,8 @@ class _WardrobeContentState extends State<WardrobeContent> {
 
   Widget _buildItemsGrid() {
     return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 140,
         mainAxisSpacing: AppConstants.spacing12,
         crossAxisSpacing: AppConstants.spacing12,
         childAspectRatio: 0.78,
@@ -851,7 +851,6 @@ class _WardrobeContentState extends State<WardrobeContent> {
 
     Get.bottomSheet(
       Container(
-        padding: const EdgeInsets.all(AppConstants.spacing24),
         decoration: BoxDecoration(
           color: tokens.cardColor,
           borderRadius: const BorderRadius.vertical(
@@ -859,121 +858,148 @@ class _WardrobeContentState extends State<WardrobeContent> {
           ),
           border: Border.all(color: tokens.cardBorderColor),
         ),
+        // isScrollControlled + scrollable content fix the audit failure: the
+        // filter stack (~700px of chips + text field + actions) overflows the
+        // default 9/16-height sheet cap. Keyboard insets need no extra padding
+        // here: GetX 4.7.3's GetModalBottomSheetRoute already wraps the sheet
+        // in Padding(viewInsets.bottom) (bottomsheet.dart buildPage), so
+        // padding the insets a second time inside collapses the viewport on
+        // small screens (verified empirically + in GetX source).
         child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Filters', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: AppConstants.spacing16),
-              Text(
-                'Category',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: AppConstants.spacing8),
-              Obx(
-                () => Wrap(
-                  spacing: AppConstants.spacing8,
-                  runSpacing: AppConstants.spacing8,
-                  children: Category.values.map((category) {
-                    final isSelected = controller.selectedCategories.contains(
-                      category,
-                    );
-                    return FilterChip(
-                      label: Text(category.displayName),
-                      selected: isSelected,
-                      onSelected: (_) =>
-                          controller.toggleCategoryFilter(category),
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(height: AppConstants.spacing16),
-              Text(
-                'Use Case',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: AppConstants.spacing8),
-              Obx(
-                () => Wrap(
-                  spacing: AppConstants.spacing8,
-                  runSpacing: AppConstants.spacing8,
-                  children: [
-                    ChoiceChip(
-                      label: const Text('All'),
-                      selected: controller.selectedOccasion.value.isEmpty,
-                      onSelected: (_) => controller.setOccasionFilter(''),
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(AppConstants.spacing24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Filters',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: AppConstants.spacing16),
+                  Text(
+                    'Category',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
-                    ...UseCases.defaults.map((useCase) {
-                      final isSelected =
-                          controller.selectedOccasion.value == useCase;
-                      return ChoiceChip(
-                        label: Text(UseCases.displayLabel(useCase)),
-                        selected: isSelected,
-                        onSelected: (_) =>
-                            controller.setOccasionFilter(useCase),
-                      );
-                    }),
+                  ),
+                  const SizedBox(height: AppConstants.spacing8),
+                  Obx(
+                    () => Wrap(
+                      spacing: AppConstants.spacing8,
+                      runSpacing: AppConstants.spacing8,
+                        children: Category.values.map((category) {
+                          final isSelected = controller.selectedCategories
+                              .contains(category);
+                          return FilterChip(
+                            label: Text(category.displayName),
+                            selected: isSelected,
+                            onSelected: (_) =>
+                                controller.toggleCategoryFilter(category),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.spacing16),
+                    Text(
+                      'Use Case',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.spacing8),
+                    Obx(
+                      () => Wrap(
+                        spacing: AppConstants.spacing8,
+                        runSpacing: AppConstants.spacing8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('All'),
+                            selected:
+                                controller.selectedOccasion.value.isEmpty,
+                            onSelected: (_) =>
+                                controller.setOccasionFilter(''),
+                          ),
+                          ...UseCases.defaults.map((useCase) {
+                            final isSelected =
+                                controller.selectedOccasion.value == useCase;
+                            return ChoiceChip(
+                              label: Text(UseCases.displayLabel(useCase)),
+                              selected: isSelected,
+                              onSelected: (_) =>
+                                  controller.setOccasionFilter(useCase),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.spacing8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: customUseCaseController,
+                            decoration: const InputDecoration(
+                              labelText: 'Custom use case',
+                              hintText: 'e.g., brunch',
+                              border: OutlineInputBorder(),
+                            ),
+                            onSubmitted: (_) {
+                              final value = UseCases.normalize(
+                                customUseCaseController.text,
+                              );
+                              controller.setOccasionFilter(value);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: AppConstants.spacing8),
+                        OutlinedButton(
+                          onPressed: () {
+                            final value = UseCases.normalize(
+                              customUseCaseController.text,
+                            );
+                            controller.setOccasionFilter(value);
+                          },
+                          child: const Text('Set'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppConstants.spacing24),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            controller.clearAllFilters();
+                            Get.back();
+                          },
+                          child: const Text('Clear All'),
+                        ),
+                        const Spacer(),
+                        ElevatedButton(
+                          onPressed: () => Get.back(),
+                          child: const Text('Apply'),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: AppConstants.spacing8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: customUseCaseController,
-                      decoration: const InputDecoration(
-                        labelText: 'Custom use case',
-                        hintText: 'e.g., brunch',
-                        border: OutlineInputBorder(),
-                      ),
-                      onSubmitted: (_) {
-                        final value = UseCases.normalize(
-                          customUseCaseController.text,
-                        );
-                        controller.setOccasionFilter(value);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: AppConstants.spacing8),
-                  OutlinedButton(
-                    onPressed: () {
-                      final value = UseCases.normalize(
-                        customUseCaseController.text,
-                      );
-                      controller.setOccasionFilter(value);
-                    },
-                    child: const Text('Set'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppConstants.spacing24),
-              Row(
-                children: [
-                  TextButton(
-                    onPressed: () {
-                      controller.clearAllFilters();
-                      Get.back();
-                    },
-                    child: const Text('Clear All'),
-                  ),
-                  const Spacer(),
-                  ElevatedButton(
-                    onPressed: () => Get.back(),
-                    child: const Text('Apply'),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
-      ),
-    ).then((_) => customUseCaseController.dispose());
+      isScrollControlled: true,
+    ).then((_) {
+      // Dispose after the sheet's exit transition finishes: disposing here
+      // immediately trips a debug assert because the closing animation still
+      // rebuilds the TextField (TextEditingController used after being
+      // disposed). The route's reverse animation is ~200ms.
+      Future.delayed(
+        const Duration(milliseconds: 350),
+        customUseCaseController.dispose,
+      );
+    });
   }
 
   void _showSortBottomSheet() {

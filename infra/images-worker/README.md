@@ -53,19 +53,23 @@ to `IMAGE_SERVING_MODE=worker`.
    `fetch()`es image URLs to build Blobs (download / share) and reads one through
    a canvas. Plain `<img>` rendering needs no CORS and works regardless.
 
-## Cross-user images stay presigned
+## Cross-user / anonymous images stay presigned
 
 The ownership rule means the Worker can only ever serve the **caller's own**
-objects. Two surfaces legitimately need someone else's image and therefore must
-NOT use worker URLs:
+objects. Three surfaces legitimately need an image the caller is not the owner
+of, or have no caller at all, and therefore must NOT use worker URLs:
 
-- the gamification leaderboard (other users' avatars), and
-- AI provider callbacks (a provider cannot present the app's JWT).
+- the gamification leaderboard (other users' avatars),
+- AI provider callbacks (a provider cannot present the app's JWT), and
+- the **public shared-outfit page** (`GET /api/v1/outfits/public/{id}`) —
+  anonymous share-link visitors and social crawlers cannot present a JWT, and
+  the endpoint is the `og:image` source for share previews.
 
-Both go through `images.materialize_avatar_url(..., presigned=True)`, which
-forces a signed URL regardless of `IMAGE_SERVING_MODE`. If you add another
-cross-user image surface, it needs the same treatment — otherwise it silently
-renders nothing after the worker-mode flip.
+The first two go through `images.materialize_avatar_url(..., presigned=True)`.
+The third is covered by the `presigned=True` flag on
+`materialize_image_urls` (forced at the public route). If you add another
+cross-user or anonymous image surface, it needs the same treatment — otherwise
+it silently renders nothing after the worker-mode flip.
 
 ## Tests
 

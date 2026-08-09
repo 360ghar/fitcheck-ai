@@ -124,28 +124,33 @@ class _SplashPageState extends State<SplashPage>
           child: AnimatedBuilder(
             animation: _controller,
             builder: (context, child) {
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Animated letters
-                  ...List.generate(_titleText.length, (index) {
-                    final letter = _titleText[index];
-                    final animation = _letterAnimations[index];
+              // 10 letters at fontSize 52 + cursor exceed ~300px; scale the
+              // whole word down on very narrow surfaces instead of overflowing.
+              return FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Animated letters
+                    ...List.generate(_titleText.length, (index) {
+                      final letter = _titleText[index];
+                      final animation = _letterAnimations[index];
 
-                    return _AnimatedLetter(
-                      letter: letter,
-                      animation: animation,
-                      primaryColor: primaryColor,
-                      secondaryColor: secondaryColor,
-                      accentColor: accentColor,
-                      index: index,
-                    );
-                  }),
+                      return _AnimatedLetter(
+                        letter: letter,
+                        animation: animation,
+                        primaryColor: primaryColor,
+                        secondaryColor: secondaryColor,
+                        accentColor: accentColor,
+                        index: index,
+                      );
+                    }),
 
-                  // Typing cursor
-                  _buildCursor(_cursorAnimation, accentColor),
-                ],
+                    // Typing cursor
+                    _buildCursor(_cursorAnimation, accentColor),
+                  ],
+                ),
               );
             },
           ),

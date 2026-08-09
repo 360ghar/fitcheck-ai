@@ -372,7 +372,10 @@ def _outfit_request(**overrides):
 
 @pytest.mark.asyncio
 async def test_generate_outfit_happy_path(monkeypatch):
-    request = _outfit_request()
+    # Legacy inline path, pinned explicitly: save_to_storage now defaults to
+    # True (URL-first), so the base64 assertions below only hold when the
+    # caller opts out of persistence.
+    request = _outfit_request(save_to_storage=False)
     items = [item.model_dump() for item in request.items]
     agent, gen = _fake_agent(monkeypatch, "generate_outfit", result=_outfit_result())
     monkeypatch.setattr(
@@ -389,6 +392,61 @@ async def test_generate_outfit_happy_path(monkeypatch):
     assert result["data"]["image_url"] is None
     gen.assert_awaited_once()
     assert gen.await_args.kwargs["items"] == items
+
+
+@pytest.mark.asyncio
+async def test_generate_outfit_url_first_by_default(monkeypatch):
+    """Pins the URL-first default: no flag means persist and return the URL.
+
+    The multi-MB inline base64 payload must never ride the API response when
+    the render is stored (egress + memory budget; see the R2 egress RCA).
+    """
+    request = _outfit_request()
+    items = [item.model_dump() for item in request.items]
+    _fake_agent(monkeypatch, "generate_outfit", result=_outfit_result())
+    monkeypatch.setattr(
+        ai_module,
+        "resolve_outfit_item_references",
+        AsyncMock(return_value=(items, {"items": 1, "resolved": 0})),
+    )
+    monkeypatch.setattr(
+        ai_module,
+        "save_generated_image",
+        AsyncMock(return_value={"image_url": "https://cdn.example/o.jpg", "storage_path": "p"}),
+    )
+    _patch_rate_limit(monkeypatch)
+
+    result = await ai_module.generate_outfit(request=request, user_id=USER_ID, db=FakeDB())
+
+    assert result["data"]["image_base64"] == ""
+    assert result["data"]["image_url"] == "https://cdn.example/o.jpg"
+    assert result["data"]["storage_path"] == "p"
+    assert ai_module.save_generated_image.await_args.kwargs["image_type"] == "outfit"
+
+
+@pytest.mark.asyncio
+async def test_generate_outfit_save_failure_falls_back_to_inline(monkeypatch):
+    """A failed storage write must not blank the response: the inline base64
+    fallback (empty image_url is falsy) keeps the render usable."""
+    request = _outfit_request()
+    items = [item.model_dump() for item in request.items]
+    _fake_agent(monkeypatch, "generate_outfit", result=_outfit_result())
+    monkeypatch.setattr(
+        ai_module,
+        "resolve_outfit_item_references",
+        AsyncMock(return_value=(items, {"items": 1, "resolved": 0})),
+    )
+    monkeypatch.setattr(
+        ai_module,
+        "save_generated_image",
+        AsyncMock(return_value={"image_url": "", "storage_path": ""}),
+    )
+    _patch_rate_limit(monkeypatch)
+
+    result = await ai_module.generate_outfit(request=request, user_id=USER_ID, db=FakeDB())
+
+    assert result["data"]["image_base64"] == "img-b64"
+    assert result["data"]["image_url"] == ""
 
 
 @pytest.mark.asyncio
@@ -640,7 +698,8 @@ def _product_request(**overrides):
 
 @pytest.mark.asyncio
 async def test_generate_product_image_happy_path(monkeypatch):
-    request = _product_request()
+    # Legacy inline path, pinned explicitly (save_to_storage defaults True).
+    request = _product_request(save_to_storage=False)
     _fake_agent(monkeypatch, "generate_product_image", result=_outfit_result())
     _patch_rate_limit(monkeypatch)
 
@@ -650,6 +709,26 @@ async def test_generate_product_image_happy_path(monkeypatch):
     assert result["data"]["image_base64"] == "img-b64"
     gen = ai_module.get_image_generation_agent.return_value.generate_product_image
     assert gen.await_args.kwargs["reference_image"] is None
+
+
+@pytest.mark.asyncio
+async def test_generate_product_image_url_first_by_default(monkeypatch):
+    """Pins the URL-first default (no flag) for product renders."""
+    request = _product_request()
+    _fake_agent(monkeypatch, "generate_product_image", result=_outfit_result())
+    monkeypatch.setattr(
+        ai_module,
+        "save_generated_image",
+        AsyncMock(return_value={"image_url": "https://cdn.example/p.jpg", "storage_path": "p"}),
+    )
+    _patch_rate_limit(monkeypatch)
+
+    result = await ai_module.generate_product_image(request=request, user_id=USER_ID, db=FakeDB())
+
+    assert result["data"]["image_base64"] == ""
+    assert result["data"]["image_url"] == "https://cdn.example/p.jpg"
+    assert result["data"]["storage_path"] == "p"
+    assert ai_module.save_generated_image.await_args.kwargs["image_type"] == "product"
 
 
 @pytest.mark.asyncio
@@ -770,7 +849,9 @@ async def test_generate_try_on_rejects_foreign_avatar_storage_path():
 @pytest.mark.asyncio
 async def test_generate_try_on_happy_path_with_stored_avatar(monkeypatch):
     db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url="http://stored/avatar.jpg")]})
-    request = _try_on_request()
+    # save_to_storage defaults True (URL-first); this test pins the legacy
+    # inline path, so opt out explicitly.
+    request = _try_on_request(save_to_storage=False)
     _fake_agent(monkeypatch, "generate_try_on", result=_outfit_result())
     monkeypatch.setattr(
         ai_module, "materialize_avatar_url", AsyncMock(return_value="https://fresh.example/a.jpg")
@@ -789,7 +870,7 @@ async def test_generate_try_on_happy_path_with_stored_avatar(monkeypatch):
 @pytest.mark.asyncio
 async def test_generate_try_on_happy_path_with_avatar_storage_path(monkeypatch):
     db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url=None)]})
-    request = _try_on_request(avatar_storage_path=OWNED_AVATAR)
+    request = _try_on_request(avatar_storage_path=OWNED_AVATAR, save_to_storage=False)
     _fake_agent(monkeypatch, "generate_try_on", result=_outfit_result())
     _patch_get_public_url(monkeypatch)
     _patch_rate_limit(monkeypatch)
@@ -816,7 +897,7 @@ async def test_generate_try_on_bad_gateway_when_avatar_url_empty(monkeypatch):
 @pytest.mark.asyncio
 async def test_generate_try_on_with_inline_clothing_image(monkeypatch):
     db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url="http://stored/a.jpg")]})
-    request = _try_on_request(clothing_image=INLINE_IMAGE)
+    request = _try_on_request(clothing_image=INLINE_IMAGE, save_to_storage=False)
     _fake_agent(monkeypatch, "generate_try_on", result=_outfit_result())
     monkeypatch.setattr(
         ai_module, "materialize_avatar_url", AsyncMock(return_value="https://fresh.example/a.jpg")
@@ -850,6 +931,36 @@ async def test_generate_try_on_saves_to_storage(monkeypatch):
 
     assert result["data"]["image_base64"] == ""
     assert result["data"]["image_url"] == "https://cdn.example/t.jpg"
+    assert ai_module.save_generated_image.await_args.kwargs["image_type"] == "try-on"
+
+
+@pytest.mark.asyncio
+async def test_generate_try_on_url_first_by_default(monkeypatch):
+    """Pins the URL-first default (no flag) for try-on renders.
+
+    This is the fix for the web "Try My Look" blank result: without
+    persistence the multi-MB inline base64 rode the API response. The default
+    now persists and returns the presigned URL instead.
+    """
+    db = FakeDB(rows={"users": [user_row(id=USER_ID, avatar_url="http://stored/a.jpg")]})
+    request = _try_on_request()
+    _fake_agent(monkeypatch, "generate_try_on", result=_outfit_result())
+    _patch_get_public_url(monkeypatch)
+    monkeypatch.setattr(
+        ai_module, "materialize_avatar_url", AsyncMock(return_value="https://fresh.example/a.jpg")
+    )
+    monkeypatch.setattr(
+        ai_module,
+        "save_generated_image",
+        AsyncMock(return_value={"image_url": "https://cdn.example/t.jpg", "storage_path": "p"}),
+    )
+    _patch_rate_limit(monkeypatch)
+
+    result = await ai_module.generate_try_on(request=request, user_id=USER_ID, db=db)
+
+    assert result["data"]["image_base64"] == ""
+    assert result["data"]["image_url"] == "https://cdn.example/t.jpg"
+    assert result["data"]["storage_path"] == "p"
     assert ai_module.save_generated_image.await_args.kwargs["image_type"] == "try-on"
 
 

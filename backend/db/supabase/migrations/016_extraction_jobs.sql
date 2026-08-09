@@ -42,6 +42,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Re-runnable guards: Postgres has no CREATE TRIGGER / CREATE POLICY IF NOT
+-- EXISTS, so drop-then-create keeps the SQL-editor runbook idempotent (a
+-- partial or repeated application must not abort with 42710 "already
+-- exists" - observed 2026-08-08: re-running this migration aborted on the
+-- trigger after a prior partial application).
+DROP TRIGGER IF EXISTS extraction_jobs_updated_at
+    ON extraction_jobs;
+
 CREATE TRIGGER extraction_jobs_updated_at
     BEFORE UPDATE ON extraction_jobs
     FOR EACH ROW
@@ -51,24 +59,36 @@ CREATE TRIGGER extraction_jobs_updated_at
 ALTER TABLE extraction_jobs ENABLE ROW LEVEL SECURITY;
 
 -- Users can only see their own jobs
+DROP POLICY IF EXISTS extraction_jobs_select_own
+    ON extraction_jobs;
+
 CREATE POLICY extraction_jobs_select_own
     ON extraction_jobs
     FOR SELECT
     USING (auth.uid() = user_id);
 
 -- Users can only insert their own jobs
+DROP POLICY IF EXISTS extraction_jobs_insert_own
+    ON extraction_jobs;
+
 CREATE POLICY extraction_jobs_insert_own
     ON extraction_jobs
     FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
 -- Users can only update their own jobs
+DROP POLICY IF EXISTS extraction_jobs_update_own
+    ON extraction_jobs;
+
 CREATE POLICY extraction_jobs_update_own
     ON extraction_jobs
     FOR UPDATE
     USING (auth.uid() = user_id);
 
 -- Users can only delete their own jobs
+DROP POLICY IF EXISTS extraction_jobs_delete_own
+    ON extraction_jobs;
+
 CREATE POLICY extraction_jobs_delete_own
     ON extraction_jobs
     FOR DELETE

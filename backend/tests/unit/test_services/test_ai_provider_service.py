@@ -888,6 +888,101 @@ def test_malformed_nested_chat_payload_is_controlled_non_retryable_error(payload
     assert exc_info.value.error_kind == "hard"
 
 
+def test_parse_chat_response_empty_data_url_image_is_dropped():
+    """A data URL with nothing after the comma (``data:...;base64,``) must not
+    become an empty-string image: it would sail through as a 200 with an
+    unloadable result. Dropped here, the agent's no-images guard raises
+    retryable and the caller's retry/fallback round gets a chance."""
+    service = AIProviderService(_make_config())
+    result = service._parse_chat_response(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": "data:image/png;base64,"}}
+                        ],
+                        "images": [],
+                    },
+                    "finish_reason": "stop",
+                }
+            ]
+        },
+        "model",
+    )
+    assert result.images is None
+
+
+def test_parse_chat_response_message_images_empty_data_url_is_dropped():
+    service = AIProviderService(_make_config())
+    result = service._parse_chat_response(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "content": "ok",
+                        "images": [
+                            {"type": "image_url", "image_url": {"url": "data:image/png;base64,"}}
+                        ],
+                    },
+                    "finish_reason": "stop",
+                }
+            ]
+        },
+        "model",
+    )
+    assert result.images is None
+
+
+def test_parse_chat_response_hosted_image_url_raises_hard_error():
+    """A hosted URL in a chat-style response is not base64; shipping it as
+    image_base64 makes every downstream consumer (save, data-URL render) fail
+    on garbage. Must raise a clear non-retryable error — the /images/generations
+    path fetches hosted URLs; chat style must carry inline base64."""
+    service = AIProviderService(_make_config())
+    with pytest.raises(AIServiceError) as exc_info:
+        service._parse_chat_response(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": [
+                                {"type": "image_url", "image_url": {"url": "https://cdn.example/img.png"}}
+                            ],
+                            "images": [],
+                        },
+                        "finish_reason": "stop",
+                    }
+                ]
+            },
+            "model",
+        )
+    assert exc_info.value.retryable is False
+    assert exc_info.value.error_kind == "hard"
+    assert "non-inline image" in str(exc_info.value)
+
+
+def test_parse_chat_response_keeps_valid_inline_base64_image():
+    service = AIProviderService(_make_config())
+    result = service._parse_chat_response(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": "data:image/png;base64,Zm9vYmFy"}}
+                        ],
+                        "images": [],
+                    },
+                    "finish_reason": "stop",
+                }
+              ]
+        },
+        "model",
+    )
+    assert result.images == ["Zm9vYmFy"]
+
+
 @pytest.mark.asyncio
 async def test_chat_truncated_structured_output_raises_instead_of_silent_empty():
     """A strict-JSON response cut off at max_tokens (finish_reason=length) is

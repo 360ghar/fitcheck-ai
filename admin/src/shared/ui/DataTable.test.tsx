@@ -185,6 +185,69 @@ describe('DataTable', () => {
     expect(liveRegion).toHaveClass('sr-only')
     expect(liveRegion).toHaveTextContent('Showing 1 to 20 of 45 rows.')
   })
+
+  it('freezes the first column by default', () => {
+    const { container } = renderWithProviders(
+      <DataTable {...base} data={rows} total={45} />,
+    )
+    const headerCells = container.querySelectorAll('thead th')
+    expect(headerCells[0]).toHaveClass('sticky')
+    expect(headerCells[1]).not.toHaveClass('sticky')
+    const bodyCells = container.querySelectorAll('tbody tr')[0]?.querySelectorAll('td') ?? []
+    expect(bodyCells[0]).toHaveClass('sticky')
+    expect(bodyCells[1]).not.toHaveClass('sticky')
+  })
+
+  it('freezes the requested column when pinnedColumnId is provided', () => {
+    const { container } = renderWithProviders(
+      <DataTable {...base} data={rows} total={45} pinnedColumnId="status" />,
+    )
+    const headerCells = container.querySelectorAll('thead th')
+    expect(headerCells[0]).not.toHaveClass('sticky')
+    expect(headerCells[1]).toHaveClass('sticky')
+    const bodyCells = container.querySelectorAll('tbody tr')[0]?.querySelectorAll('td') ?? []
+    expect(bodyCells[0]).not.toHaveClass('sticky')
+    expect(bodyCells[1]).toHaveClass('sticky')
+  })
+
+  it('keeps the selection checkbox unfrozen when a column is pinned', () => {
+    const { container } = renderWithProviders(
+      <DataTable
+        {...base}
+        data={rows}
+        total={45}
+        pinnedColumnId="status"
+        getRowId={(row) => row.id}
+        bulkActions={() => <button type="button">Bulk action</button>}
+      />,
+    )
+    const headerCells = container.querySelectorAll('thead th')
+    // [selection checkbox, name, status]
+    expect(headerCells[0]).not.toHaveClass('sticky')
+    expect(headerCells[2]).toHaveClass('sticky')
+  })
+
+  it('truncates header labels so long names cannot widen columns', () => {
+    const { container } = renderWithProviders(
+      <DataTable {...base} data={rows} total={45} />,
+    )
+    const headerSpans = container.querySelectorAll('thead th span')
+    expect(headerSpans.length).toBeGreaterThan(0)
+    for (const span of headerSpans) {
+      expect(span).toHaveClass('truncate')
+    }
+  })
+
+  it('collapses non-adjacent page buttons below sm', () => {
+    renderWithProviders(<DataTable {...base} data={rows} total={500} page={13} />)
+    const page1 = screen.getByRole('button', { name: 'Page 1' })
+    expect(page1).toHaveClass('hidden')
+    expect(page1).toHaveClass('sm:inline-flex')
+    const current = screen.getByRole('button', { name: 'Page 13' })
+    expect(current).not.toHaveClass('hidden')
+    const last = screen.getByRole('button', { name: 'Page 25' })
+    expect(last).toHaveClass('hidden')
+  })
 })
 
 describe('getPageNumbers', () => {

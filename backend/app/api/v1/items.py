@@ -25,6 +25,7 @@ from app.core.exceptions import (
     ValidationError,
     StorageServiceError,
     DatabaseError,
+    SchemaNotInitializedError,
     UnsupportedMediaTypeError,
     RateLimitError,
 )
@@ -43,7 +44,12 @@ from app.services.ai_service import AIService
 from app.services.ai_settings_service import AISettingsService
 from app.services.storage_service import MAX_FILE_SIZE, StorageService
 from app.services.vector_service import get_vector_service
-from app.utils.db import execute_with_reconnect, jsonb_contains, safe_search_term
+from app.utils.db import (
+    execute_with_reconnect,
+    items_schema_migration_hint,
+    jsonb_contains,
+    safe_search_term,
+)
 from app.utils.parallel import parallel_with_retry
 from app.api.v1.images import materialize_parent_images
 
@@ -220,7 +226,7 @@ async def upload_item_images(
     except (UnsupportedMediaTypeError, StorageServiceError):
         raise
     except Exception as e:
-        logger.error("Upload error", user_id=user_id, file_count=len(files), error=str(e))
+        logger.error(f"Upload error ({type(e).__name__}): {e}", user_id=user_id, file_count=len(files), error=str(e))
         raise StorageServiceError("Failed to upload images")
 
 
@@ -357,7 +363,26 @@ async def create_item(
     except (ItemNotFoundError, ValidationError, StorageServiceError, DatabaseError):
         raise
     except Exception as e:
-        logger.error("Create item error", user_id=user_id, item_name=item.name, error=str(e))
+        # A hosted-schema gap (migrations 019/036 not applied) must never
+        # surface as an opaque 500: log the actionable hint (LOGS ONLY,
+        # exception type in the message text because Railway's plain-text
+        # drain does not render structured `extra` fields) and raise the
+        # friendly 503, matching the job-persistence migration-gap policy.
+        hint = items_schema_migration_hint(e)
+        if hint:
+            logger.error(
+                f"Create item error ({type(e).__name__}): {hint}",
+                user_id=user_id,
+                item_name=item.name,
+                error=str(e),
+            )
+            raise SchemaNotInitializedError() from e
+        logger.error(
+            f"Create item error ({type(e).__name__}): {e}",
+            user_id=user_id,
+            item_name=item.name,
+            error=str(e),
+        )
         raise DatabaseError("Failed to create item", operation="insert")
 
 
@@ -525,7 +550,7 @@ async def list_items(
     except (ItemNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
-        logger.error("List items error", user_id=user_id, page=page, error=str(e))
+        logger.error(f"List items error ({type(e).__name__}): {e}", user_id=user_id, page=page, error=str(e))
         raise DatabaseError("Failed to fetch items", operation="select")
 
 
@@ -568,7 +593,7 @@ async def get_item(
         # builder drift or a proxy answering 406) must 404, never 500.
         if getattr(e, "code", None) == "PGRST116":
             raise ItemNotFoundError(item_id=item_id_str) from e
-        logger.error("Get item error", item_id=str(item_id), user_id=user_id, error=str(e))
+        logger.error(f"Get item error ({type(e).__name__}): {e}", item_id=str(item_id), user_id=user_id, error=str(e))
         raise DatabaseError("Failed to fetch item", operation="select")
 
 
@@ -661,7 +686,7 @@ async def update_item(
     except (ItemNotFoundError, ValidationError, StorageServiceError, DatabaseError):
         raise
     except Exception as e:
-        logger.error("Update item error", item_id=str(item_id), user_id=user_id, error=str(e))
+        logger.error(f"Update item error ({type(e).__name__}): {e}", item_id=str(item_id), user_id=user_id, error=str(e))
         raise DatabaseError("Failed to update item", operation="update")
 
 
@@ -718,7 +743,7 @@ async def delete_item(
     except (ItemNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
-        logger.error("Delete item error", item_id=str(item_id), user_id=user_id, error=str(e))
+        logger.error(f"Delete item error ({type(e).__name__}): {e}", item_id=str(item_id), user_id=user_id, error=str(e))
         raise DatabaseError("Failed to delete item", operation="delete")
 
 
@@ -747,7 +772,7 @@ async def toggle_favorite(
     except (ItemNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
-        logger.error("Toggle favorite error", item_id=str(item_id), user_id=user_id, error=str(e))
+        logger.error(f"Toggle favorite error ({type(e).__name__}): {e}", item_id=str(item_id), user_id=user_id, error=str(e))
         raise DatabaseError("Failed to toggle favorite", operation="update")
 
 
@@ -776,7 +801,7 @@ async def mark_worn(
     except (ItemNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
-        logger.error("Mark worn error", item_id=str(item_id), user_id=user_id, error=str(e))
+        logger.error(f"Mark worn error ({type(e).__name__}): {e}", item_id=str(item_id), user_id=user_id, error=str(e))
         raise DatabaseError("Failed to update wear count", operation="update")
 
 
@@ -841,7 +866,7 @@ async def upload_item_image(
     except ValueError as e:
         raise ValidationError(str(e), details={"field": "file"})
     except Exception as e:
-        logger.error("Upload item image error", item_id=str(item_id), user_id=user_id, error=str(e))
+        logger.error(f"Upload item image error ({type(e).__name__}): {e}", item_id=str(item_id), user_id=user_id, error=str(e))
         raise StorageServiceError("Failed to upload item image")
 
 
@@ -884,7 +909,7 @@ async def delete_item_image(
     except (ItemNotFoundError, ImageNotFoundError, ValidationError, StorageServiceError, DatabaseError):
         raise
     except Exception as e:
-        logger.error("Delete item image error", item_id=str(item_id), image_id=str(image_id), user_id=user_id, error=str(e))
+        logger.error(f"Delete item image error ({type(e).__name__}): {e}", item_id=str(item_id), image_id=str(image_id), user_id=user_id, error=str(e))
         raise DatabaseError("Failed to delete item image", operation="delete")
 
 
@@ -944,7 +969,7 @@ async def batch_delete_items(
     except (ItemNotFoundError, ValidationError, StorageServiceError, DatabaseError):
         raise
     except Exception as e:
-        logger.error("Batch delete items error", user_id=user_id, item_count=len(item_ids), error=str(e))
+        logger.error(f"Batch delete items error ({type(e).__name__}): {e}", user_id=user_id, item_count=len(item_ids), error=str(e))
         raise DatabaseError("Failed to batch delete items", operation="delete")
 
 
@@ -1040,7 +1065,7 @@ async def get_item_stats(
     except (ValidationError, DatabaseError):
         raise
     except Exception as e:
-        logger.error("Item stats error", user_id=user_id, error=str(e))
+        logger.error(f"Item stats error ({type(e).__name__}): {e}", user_id=user_id, error=str(e))
         raise DatabaseError("Failed to fetch item stats", operation="select")
 
 
@@ -1069,7 +1094,7 @@ async def get_items_by_category(
     except (ValidationError, DatabaseError):
         raise
     except Exception as e:
-        logger.error("Items by category error", user_id=user_id, category=cat, error=str(e))
+        logger.error(f"Items by category error ({type(e).__name__}): {e}", user_id=user_id, category=cat, error=str(e))
         raise DatabaseError("Failed to fetch items", operation="select")
 
 
@@ -1098,7 +1123,7 @@ async def search_items(
     except (ValidationError, DatabaseError):
         raise
     except Exception as e:
-        logger.error("Search items error", user_id=user_id, query=q, error=str(e))
+        logger.error(f"Search items error ({type(e).__name__}): {e}", user_id=user_id, query=q, error=str(e))
         raise DatabaseError("Failed to search items", operation="select")
 
 
@@ -1177,7 +1202,7 @@ async def categorize_item(
     except (ItemNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
-        logger.error("Categorize item error", item_id=str(item_id), user_id=user_id, error=str(e))
+        logger.error(f"Categorize item error ({type(e).__name__}): {e}", item_id=str(item_id), user_id=user_id, error=str(e))
         raise DatabaseError("Failed to categorize item", operation="update")
 
 
@@ -1224,7 +1249,7 @@ async def update_item_categories(
     except (ItemNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
-        logger.error("Update item categories error", item_id=str(item_id), user_id=user_id, error=str(e))
+        logger.error(f"Update item categories error ({type(e).__name__}): {e}", item_id=str(item_id), user_id=user_id, error=str(e))
         raise DatabaseError("Failed to update item categories", operation="update")
 
 
@@ -1653,7 +1678,7 @@ async def _fallback_duplicate_check(
             "message": "Fallback text-based duplicate check"
         }
     except Exception as e:
-        logger.error("Fallback duplicate check error", error=str(e))
+        logger.error(f"Fallback duplicate check error ({type(e).__name__}): {e}", error=str(e))
         return {
             "data": {
                 "has_duplicates": False,

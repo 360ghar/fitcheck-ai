@@ -118,7 +118,7 @@ export default function Navbar() {
                 <Menu className="w-5 h-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[300px] bg-background sm:w-[360px]">
+            <SheetContent side="right" className="w-[85vw] max-w-[300px] bg-background sm:max-w-[360px]">
               <SheetTitle className="sr-only">Navigation menu</SheetTitle>
               <div className="flex flex-col gap-5 mt-6">
                 {navLinks.map((link) =>

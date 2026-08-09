@@ -444,8 +444,8 @@ class _OutfitDetailPageState extends State<OutfitDetailPage> {
           child: GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 90,
               mainAxisSpacing: AppConstants.spacing8,
               crossAxisSpacing: AppConstants.spacing8,
               childAspectRatio: 0.75,

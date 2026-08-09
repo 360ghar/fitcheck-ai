@@ -84,6 +84,12 @@ export interface DataTableProps<TData, TValue = unknown> {
   getRowId?: (row: TData, index: number) => string
   /** Renders the bulk-action toolbar when rows are selected */
   bulkActions?: (selectedRows: TData[]) => React.ReactNode
+  /**
+   * Column id to freeze on the left edge while the table scrolls
+   * horizontally (e.g. the user column on narrow viewports). Defaults to
+   * the first visible column when omitted.
+   */
+  pinnedColumnId?: string
   /** Custom empty state (default: themed EmptyState) */
   emptyState?: React.ReactNode
   /** Called by the default empty state's "clear filters" action */
@@ -131,6 +137,7 @@ export function DataTable<TData, TValue = unknown>({
   onRowClick,
   getRowId,
   bulkActions,
+  pinnedColumnId,
   emptyState,
   onResetFilters,
   virtualizeThreshold = 200,
@@ -210,6 +217,10 @@ export function DataTable<TData, TValue = unknown>({
 
   const rows = table.getRowModel().rows
   const visibleColumns = table.getVisibleLeafColumns()
+  // Column frozen on the left edge during horizontal scroll — the first
+  // visible column by default, or the page's identity column when
+  // `pinnedColumnId` is set (e.g. email/user on Users/Subscriptions).
+  const frozenColumnId = pinnedColumnId ?? visibleColumns[0]?.id
   const selectedRows = bulkActions
     ? table.getSelectedRowModel().rows.map((row) => row.original)
     : []
@@ -268,11 +279,11 @@ export function DataTable<TData, TValue = unknown>({
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 py-2">
         {bulkActions && selectedRows.length > 0 ? (
-          <div className="flex min-w-0 flex-1 items-center gap-3 rounded-md border border-border bg-surface-card px-3 py-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border bg-surface-card px-3 py-2">
             <span className="text-sm font-medium text-muted-foreground">
               {t('selected', { count: selectedRows.length })}
             </span>
-            <div className="flex items-center gap-2">{bulkActions(selectedRows)}</div>
+            <div className="flex flex-wrap items-center gap-2">{bulkActions(selectedRows)}</div>
             <Button
               variant="ghost"
               size="icon"
@@ -361,8 +372,8 @@ export function DataTable<TData, TValue = unknown>({
           <thead className="sticky top-0 z-20 bg-background">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id} className="border-b border-border">
-                {headerGroup.headers.map((header, index) => {
-                  const isFirst = index === 0
+                {headerGroup.headers.map((header) => {
+                  const isFrozen = header.column.id === frozenColumnId
                   const sorted = header.column.getIsSorted()
                   const sortable = header.column.getCanSort()
                   return (
@@ -377,28 +388,34 @@ export function DataTable<TData, TValue = unknown>({
                       }
                       className={cn(
                         'h-11 whitespace-nowrap px-3 text-left align-middle text-xs font-semibold uppercase tracking-wide text-muted-foreground',
-                        isFirst && frozenCellClass,
+                        isFrozen && frozenCellClass,
                       )}
                       style={{ width: header.getSize() }}
                     >
-                      {sortable ? (
-                        <button
-                          type="button"
-                          onClick={() => handleSortClick(header.column.id)}
-                          className="inline-flex items-center gap-1 rounded-md px-1 py-1 font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                        >
-                          {flexRender(header.column.columnDef.header, header.getContext())}
-                          {sorted === 'asc' ? (
-                            <ArrowUp className="size-3.5 text-primary" aria-hidden="true" />
-                          ) : sorted === 'desc' ? (
-                            <ArrowDown className="size-3.5 text-primary" aria-hidden="true" />
-                          ) : (
-                            <ArrowUpDown className="size-3.5 opacity-40" aria-hidden="true" />
-                          )}
-                        </button>
-                      ) : (
-                        flexRender(header.column.columnDef.header, header.getContext())
-                      )}
+                      <div className="flex max-w-full items-center gap-1">
+                        {sortable ? (
+                          <button
+                            type="button"
+                            onClick={() => handleSortClick(header.column.id)}
+                            className="inline-flex min-w-0 items-center gap-1 rounded-md px-1 py-1 font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                          >
+                            <span className="truncate">
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                            </span>
+                            {sorted === 'asc' ? (
+                              <ArrowUp className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+                            ) : sorted === 'desc' ? (
+                              <ArrowDown className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+                            ) : (
+                              <ArrowUpDown className="size-3.5 shrink-0 opacity-40" aria-hidden="true" />
+                            )}
+                          </button>
+                        ) : (
+                          <span className="truncate">
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                          </span>
+                        )}
+                      </div>
                     </th>
                   )
                 })}
@@ -433,6 +450,7 @@ export function DataTable<TData, TValue = unknown>({
                         row={row}
                         rowHeightClass={rowHeightClass}
                         onRowClick={onRowClick}
+                        frozenCellId={frozenColumnId}
                         frozenCellClass={frozenCellClass}
                         style={{
                           position: 'absolute',
@@ -450,6 +468,7 @@ export function DataTable<TData, TValue = unknown>({
                       row={row}
                       rowHeightClass={rowHeightClass}
                       onRowClick={onRowClick}
+                      frozenCellId={frozenColumnId}
                       frozenCellClass={frozenCellClass}
                     />
                   ))}
@@ -522,6 +541,7 @@ interface TableRowContentProps<TData> {
   row: Row<TData>
   rowHeightClass: string
   onRowClick: ((row: TData) => void) | undefined
+  frozenCellId: string | undefined
   frozenCellClass: string
   style?: React.CSSProperties
 }
@@ -530,6 +550,7 @@ function TableRowContent<TData>({
   row,
   rowHeightClass,
   onRowClick,
+  frozenCellId,
   frozenCellClass,
   style,
 }: TableRowContentProps<TData>) {
@@ -555,10 +576,10 @@ function TableRowContent<TData>({
       tabIndex={clickable ? 0 : undefined}
       style={style}
     >
-      {row.getVisibleCells().map((cell, index) => (
+      {row.getVisibleCells().map((cell) => (
         <td
           key={cell.id}
-          className={cn(rowHeightClass, 'px-3 align-middle', index === 0 && frozenCellClass)}
+          className={cn(rowHeightClass, 'px-3 align-middle', cell.column.id === frozenCellId && frozenCellClass)}
         >
           {flexRender(cell.column.columnDef.cell, cell.getContext())}
         </td>
@@ -590,7 +611,11 @@ function PaginationControls({ page, pageCount, onPageChange }: PaginationControl
       </Button>
       {pages.map((item, index) =>
         item === 'ellipsis' ? (
-          <span key={`ellipsis-${index}`} className="px-1 text-sm text-muted-foreground" aria-hidden="true">
+          <span
+            key={`ellipsis-${index}`}
+            className="hidden px-1 text-sm text-muted-foreground sm:inline"
+            aria-hidden="true"
+          >
             …
           </span>
         ) : (
@@ -598,7 +623,14 @@ function PaginationControls({ page, pageCount, onPageChange }: PaginationControl
             key={item}
             variant={item === page ? 'primary' : 'outline'}
             size="icon"
-            className="size-9"
+            // Below `sm` keep only the current page and its neighbours so the
+            // control fits a 320px viewport next to the page-size select.
+            className={cn(
+              'size-9',
+              item === page || item === page - 1 || item === page + 1
+                ? undefined
+                : 'hidden sm:inline-flex',
+            )}
             onClick={() => onPageChange?.(item)}
             aria-current={item === page ? 'page' : undefined}
             aria-label={t('pagination.page', { page: item })}

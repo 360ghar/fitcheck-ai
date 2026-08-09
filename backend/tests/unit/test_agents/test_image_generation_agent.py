@@ -10,12 +10,19 @@ Covers two reference-image paths:
   reproduces the real garments instead of inventing lookalikes.
 """
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.agents.image_generation_agent import ImageGenerationAgent
 from app.core.exceptions import AIServiceError
+
+# A real 1x1 PNG: provider responses are validated (strict base64 + magic-byte
+# sniff) before they are stored, so fake payloads must actually be images.
+_TINY_PNG_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8"
+    "z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
 
 
 def _make_agent() -> ImageGenerationAgent:
@@ -23,9 +30,9 @@ def _make_agent() -> ImageGenerationAgent:
     # fixed response. We never hit a real provider in these tests.
     fake_ai_service = AsyncMock()
     fake_ai_service.generate_image = AsyncMock(
-        return_value=_FakeImageResponse("ZmFrZQ==")
+        return_value=_FakeImageResponse(_TINY_PNG_B64)
     )
-    fake_ai_service.chat = AsyncMock(return_value=_FakeImageResponse("ZmFrZQ=="))
+    fake_ai_service.chat = AsyncMock(return_value=_FakeImageResponse(_TINY_PNG_B64))
     fake_ai_service.get_image_gen_model = lambda: "fake-image-model"
     return ImageGenerationAgent(ai_service=fake_ai_service)
 
@@ -175,14 +182,22 @@ async def test_outfit_sends_avatar_plus_numbered_garment_references():
     assert "IDENTITY LOCK" in prompt
     assert "KEEP UNCHANGED" in prompt
     assert prompt.index("IDENTITY LOCK") < prompt.index("GARMENT REFERENCE LOCK")
+    # Every reference is bound to ONE main subject wearing the whole outfit;
+    # a second person is banned outright and the lock leads the identity lock.
+    assert "SINGLE PERSON LOCK" in prompt
+    assert "ALL reference images show the SAME single person" in prompt
+    assert "no second person" in prompt
+    assert prompt.index("SINGLE PERSON LOCK") < prompt.index("IDENTITY LOCK")
+    assert prompt.index("SINGLE PERSON LOCK") < prompt.index("GARMENT REFERENCE LOCK")
     # Never hits the single-reference provider helper.
     agent.ai_service.generate_image.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_outfit_with_avatar_and_no_item_references_is_unchanged():
-    """Legacy clients that send no item_ids get exactly the previous prompt and
-    a single avatar image - no garment scaffolding leaks in."""
+async def test_outfit_with_avatar_and_no_item_references_keeps_legacy_header():
+    """Legacy clients that send no item_ids get the pre-existing header and a
+    single avatar image - no garment scaffolding leaks in. Only the
+    single-person fix is layered on top."""
     agent = _make_agent()
 
     await agent.generate_outfit(
@@ -194,15 +209,17 @@ async def test_outfit_with_avatar_and_no_item_references_is_unchanged():
     assert [part["type"] for part in content] == ["image_url", "text"]
 
     prompt = content[1]["text"]
-    # Byte-for-byte the pre-existing prompt, blank lines included: the header
-    # sits directly above TASK with no blank line, exactly as before garment
-    # references existed. Anything else is an unintended prompt regression on
+    # The first header line and the task line are byte-identical to the
+    # pre-existing prompt; the main-subject line and SINGLE PERSON LOCK are
+    # the only additions. Anything else is an unintended prompt regression on
     # the one path that already works in production.
     assert prompt.startswith(
         "REFERENCE IMAGE = person identity (source of truth for face/body/hair/skin).\n"
-        "TASK: Photoreal fashion photo of that same person wearing the outfit below.\n\n"
-        "IDENTITY LOCK (highest priority):"
+        "The person reference is the main subject - if it shows other people, render only this person.\n"
+        "TASK: Photoreal fashion photo of that same single person wearing the outfit below.\n\n"
+        "SINGLE PERSON LOCK (highest priority):"
     )
+    assert "IDENTITY LOCK (highest priority):" in prompt
     assert "GARMENT REFERENCE LOCK" not in prompt
     assert "IMAGE 2" not in prompt
     assert "appearance reference" not in prompt
@@ -421,15 +438,41 @@ async def test_try_on_is_not_matted():
 
 
 @pytest.mark.asyncio
-async def test_matte_failure_returns_the_original_image_untouched():
-    """The matte is best-effort: undecodable bytes must pass straight through."""
-    agent = _agent_returning("ZmFrZQ==")
+async def test_try_on_prompt_forbids_a_second_person():
+    """Try-on inherits PERSON_REFERENCE_FIDELITY, so the single-person lock
+    must lead its prompt too: one subject, one garment, never a group."""
+    agent = _make_agent()
 
-    result = await agent.generate_product_image(
-        item_description="black crew-neck t-shirt", category="tops"
+    await agent.generate_try_on(
+        user_avatar_base64="ZmFrZQ==", clothing_image_base64="ZmFrZQ=="
     )
 
-    assert result.image_base64 == "ZmFrZQ=="
+    content = _captured_chat_content(agent)
+    assert [part["type"] for part in content] == ["image_url", "image_url", "text"]
+    prompt = content[2]["text"]
+    assert "SINGLE PERSON LOCK" in prompt
+    assert "Output EXACTLY ONE person" in prompt
+    assert "no second person" in prompt
+    assert prompt.index("SINGLE PERSON LOCK") < prompt.index("IDENTITY LOCK")
+
+
+@pytest.mark.asyncio
+async def test_matte_failure_returns_the_original_image_untouched():
+    """The matte is best-effort: an executor failure must pass the original
+    through untouched. (Garbage provider payloads no longer reach the matte —
+    _validated_image rejects them before they are stored.)"""
+    source = _product_shot_b64()
+    agent = _agent_returning(source)
+
+    with patch(
+        "app.agents.image_generation_agent.run_image_op",
+        new=AsyncMock(side_effect=RuntimeError("executor down")),
+    ):
+        result = await agent.generate_product_image(
+            item_description="black crew-neck t-shirt", category="tops"
+        )
+
+    assert result.image_base64 == source
 
 
 # =============================================================================

@@ -22,11 +22,11 @@ export default function Hero() {
             </p>
 
             {/* Real plan numbers — the GEO "statistics" lever (no fabricated claims) */}
-            <div className="mt-8 grid grid-cols-3 gap-3 max-w-md">
+            <div className="mt-8 grid grid-cols-3 gap-2 max-w-md">
               {[
-                { value: '50', label: 'AI extractions / month free' },
-                { value: '10', label: 'Photoshoot images / day free' },
-                { value: '1,000', label: 'Visualizations / month on Pro' },
+                { value: '50', label: 'AI extractions / month' },
+                { value: '10', label: 'Photoshoot images / day' },
+                { value: '1,000', label: 'Visualizations / month' },
               ].map((stat) => (
                 <div
                   key={stat.label}

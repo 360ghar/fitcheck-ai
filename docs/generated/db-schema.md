@@ -1,6 +1,6 @@
 # Database schema (generated)
 
-Generated: 2026-08-07
+Generated: 2026-08-09
 
 Source: `backend/db/supabase/migrations/`.
 Regenerate: `python scripts/generate_db_schema_doc.py`.
@@ -165,6 +165,7 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `003_remove_puter_add_ai_settings.sql` → `user_ai_settings`
 - `004_add_user_gender.sql` → `users`
 - `004_add_user_gender.sql` → `users`
+- `004_add_user_gender.sql` → `users`
 - `005_waitlist.sql` → `waitlist`
 - `006_add_embedding_columns.sql` → `user_ai_settings`
 - `006_add_embedding_columns.sql` → `user_ai_settings`
@@ -176,6 +177,7 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `009_support_tickets.sql` → `support_tickets`
 - `010_photoshoot_generator.sql` → `subscription_usage`
 - `010_photoshoot_generator.sql` → `subscription_usage`
+- `011_shared_outfits_unique_constraint.sql` → `shared_outfits`
 - `011_shared_outfits_unique_constraint.sql` → `shared_outfits`
 - `012_social_import_pipeline.sql` → `social_import_jobs`
 - `012_social_import_pipeline.sql` → `social_import_photos`

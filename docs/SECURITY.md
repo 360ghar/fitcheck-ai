@@ -36,7 +36,7 @@ Last updated: 2026-08-08
 
 The bucket is private — there are no public object URLs. The DB stores the bucket
 key (`storage_path`), never a URL. Read paths materialize a **short-lived presigned
-GET URL** (default 1h, `OBJECT_STORAGE_PRESIGN_TTL=3600`) at serve time; clients must treat image URLs as
+GET URL** (default 7 days, `OBJECT_STORAGE_PRESIGN_TTL=604800`) at serve time; clients must treat image URLs as
 ephemeral and re-fetch as needed. The download path (`download_to_base64` /
 `download_and_downscale_to_base64`) is **SSRF-safe**: it reduces a caller-supplied
 string to a known bucket key via `key_from_path`

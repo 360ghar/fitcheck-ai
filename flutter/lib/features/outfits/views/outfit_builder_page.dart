@@ -708,7 +708,11 @@ class _OutfitBuilderPageState extends State<OutfitBuilderPage> {
           right: AppConstants.spacing16,
           top: AppConstants.spacing12,
           bottom:
-              AppConstants.spacing12 + MediaQuery.of(context).padding.bottom,
+              AppConstants.spacing12 +
+              MediaQuery.of(context).padding.bottom +
+              // Keep the sticky bar clear of the keyboard while a field is
+              // focused (padding.bottom alone is consumed by the keyboard).
+              MediaQuery.of(context).viewInsets.bottom,
         ),
         decoration: BoxDecoration(
           color: tokens.cardColor,

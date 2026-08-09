@@ -148,8 +148,8 @@ class PhotoshootConfigureStep extends GetView<PhotoshootController> {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 130,
         crossAxisSpacing: AppConstants.spacing8,
         mainAxisSpacing: AppConstants.spacing8,
         childAspectRatio: 1.1,

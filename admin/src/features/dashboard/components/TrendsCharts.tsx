@@ -87,7 +87,9 @@ export function TrendsCharts({ signups, jobs, paid, active, labels }: TrendsChar
   const paidByDay = useMemo(() => pivotPaidRows(paid), [paid])
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    // [&>*]:min-w-0 — see OverviewCharts: ResponsiveContainer grid items
+    // must be shrinkable or the track blows out on narrow viewports.
+    <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
       <ChartCard title={labels.signups}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={signups} margin={{ top: 4, right: 4, bottom: 0, left: -22 }}>

@@ -64,6 +64,8 @@ export function PostsPage() {
       id: 'post',
       header: t('columns.post'),
       enableSorting: false,
+      size: 300,
+      minSize: 240,
       cell: ({ row }) => (
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-surface-card text-lg">
@@ -87,6 +89,8 @@ export function PostsPage() {
       id: 'category',
       header: t('columns.category'),
       enableSorting: false,
+      size: 140,
+      minSize: 110,
       cell: ({ row }) => (
         <span className="rounded-full bg-surface-card px-2.5 py-0.5 text-xs font-medium">
           {row.original.category || '—'}
@@ -97,6 +101,8 @@ export function PostsPage() {
       id: 'status',
       header: t('columns.status'),
       enableSorting: false,
+      size: 130,
+      minSize: 110,
       cell: ({ row }) => (
         <StatusBadge
           status={row.original.is_published ? 'published' : 'draft'}
@@ -108,6 +114,8 @@ export function PostsPage() {
       id: 'date',
       header: t('columns.date'),
       enableSorting: false,
+      size: 120,
+      minSize: 100,
       cell: ({ row }) => (
         <span className="whitespace-nowrap text-sm text-muted-foreground">
           {formatDate(row.original.date)}
@@ -118,6 +126,8 @@ export function PostsPage() {
       id: 'updated',
       header: t('columns.updated'),
       enableSorting: false,
+      size: 120,
+      minSize: 100,
       cell: ({ row }) => (
         <span className="whitespace-nowrap text-sm text-muted-foreground">
           {formatDate(row.original.updated_at)}
@@ -127,6 +137,8 @@ export function PostsPage() {
     {
       id: 'actions',
       enableSorting: false,
+      size: 130,
+      minSize: 100,
       cell: ({ row }) => (
         <div className="flex items-center justify-end gap-1">
           <Button asChild variant="ghost" size="sm" aria-label={t('rowActions.edit')}>

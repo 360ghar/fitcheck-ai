@@ -89,8 +89,16 @@ export function TrendsPage() {
         title={t('trends.title')}
         description={t('trends.description')}
         actions={
-          <Tabs value={String(days)} onValueChange={(value) => setDays(parseDays(value))}>
-            <TabsList className="h-8">
+          <Tabs
+            value={String(days)}
+            onValueChange={(value) => setDays(parseDays(value))}
+            // min-w-0 + flex: the Tabs root is a flex item in the PageHeader
+            // actions row; as a flex container itself, its list item below
+            // can shrink to the available width and scroll instead of
+            // forcing the row (four nowrap pills ≈ 391px) past a 390px phone.
+            className="flex min-w-0"
+          >
+            <TabsList className="h-8 min-w-0 overflow-x-auto">
               <TabsTrigger value="7" className="px-3 py-1 text-xs">
                 {t('trends.last7Days')}
               </TabsTrigger>

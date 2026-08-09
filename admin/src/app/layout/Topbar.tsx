@@ -44,6 +44,17 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         )}
       </Button>
 
+      {/* Mobile-only icon trigger — ⌘K doesn't exist on touch devices */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="sm:hidden"
+        onClick={() => setCommandOpen(true)}
+        aria-label={t('topbar.search.hint')}
+      >
+        <Search aria-hidden="true" />
+      </Button>
+
       <button
         type="button"
         onClick={() => setCommandOpen(true)}

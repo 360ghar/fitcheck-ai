@@ -3,7 +3,7 @@
 THE BUG THIS PINS (live on production before 2026-08-05):
 ``users.avatar_url`` is written at upload time with the LIVE presigned URL
 (``users.py`` stores whatever ``StorageService.upload_avatar`` returned), so the
-stored string is dead once ``OBJECT_STORAGE_PRESIGN_TTL`` (1h) elapses.
+stored string is dead once ``OBJECT_STORAGE_PRESIGN_TTL`` elapses.
 ``/users/me`` re-materializes it; ``/gamification/leaderboard`` returned
 ``profile.get("avatar_url")`` RAW. Every leaderboard face whose avatar was
 uploaded more than an hour earlier was therefore a broken image.

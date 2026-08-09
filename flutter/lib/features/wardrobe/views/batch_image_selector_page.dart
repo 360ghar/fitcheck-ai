@@ -645,7 +645,9 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
     SocialImportJobData job,
   ) {
     return Center(
-      child: Padding(
+      // The spinner + stats card + URL + cancel stack is ~500px tall and
+      // overflows the Expanded region on short screens; scroll it instead.
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppConstants.spacing24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1723,8 +1725,8 @@ class BatchImageSelectorPage extends GetView<BatchExtractionController> {
     return Obx(
       () => GridView.builder(
         padding: const EdgeInsets.all(AppConstants.spacing16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 4,
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 100,
           crossAxisSpacing: AppConstants.spacing8,
           mainAxisSpacing: AppConstants.spacing8,
         ),

@@ -11,6 +11,7 @@ Features:
 """
 
 import base64
+import binascii
 import re
 import uuid
 from typing import Any, Dict, List, Optional
@@ -40,6 +41,7 @@ from app.utils.background_removal import (
 from app.utils.image_processing import (
     EXTENSION_BY_MIME,
     sniff_image_mime,
+    sniff_image_mime_from_magic,
 )
 from app.utils.parallel import parallel_with_retry
 
@@ -183,6 +185,57 @@ class ImageGenerationAgent:
         return image_base64
 
     @staticmethod
+    def _validated_image(image_base64: str, context: str) -> str:
+        """Validate a provider image payload before it is stored or shipped.
+
+        Providers return the image as base64 — or, for some chat-style
+        responses, an EMPTY string or a hosted URL masquerading as base64.
+        Without validation those sail through as a 200 that renders nothing:
+        ``save_generated_image`` uploads 0 bytes (a broken object) and the
+        response carries ``image_base64: ""`` with a URL to nothing — the
+        exact "try-on returns but no image shows anywhere" failure class.
+
+        Empty payloads raise RETRYABLE (a transient silent refusal, nothing
+        generated, nothing to double-bill); undecodable/garbage payloads
+        (URLs, data-URL prefixes, non-base64 text) raise permanent — retrying
+        a contract mismatch fails identically; VALID base64 that is not an
+        image (HTML error pages, fetched non-image assets) raises RETRYABLE —
+        a gateway-served blob is usually transient. Strict decode
+        (validate=True) after stripping whitespace, because a lenient decode
+        silently turns ``https://...`` into garbage bytes, and a magic-byte
+        sniff because any bytes decode to *something*.
+        """
+        payload = re.sub(r"\s+", "", image_base64 or "")
+        if not payload:
+            raise AIServiceError(
+                f"AI returned an empty image for {context}", retryable=True
+            )
+        try:
+            decoded = base64.b64decode(payload, validate=True)
+        except (binascii.Error, ValueError) as e:
+            raise AIServiceError(
+                f"AI returned undecodable image data for {context} "
+                f"(expected inline base64, got: {payload[:40]!r})",
+                retryable=False,
+            ) from e
+        if not decoded:
+            raise AIServiceError(
+                f"AI returned empty image data for {context}", retryable=True
+            )
+        # The bytes must actually BE an image. A provider that 200s with an
+        # HTML error page — or a fetched asset URL serving non-image bytes —
+        # is otherwise valid base64 and would be stored as a broken object
+        # that renders nothing. Retryable: a gateway-served HTML blob is
+        # usually transient and the caller's retry/fallback round may recover.
+        if not sniff_image_mime_from_magic(decoded[:32]):
+            raise AIServiceError(
+                f"AI returned non-image data for {context} "
+                f"(first bytes: {decoded[:16]!r})",
+                retryable=True,
+            )
+        return payload
+
+    @staticmethod
     async def _matte(generated: "GeneratedImage", *, context: str) -> "GeneratedImage":
         """Cut the white backdrop out of a freshly generated image.
 
@@ -300,13 +353,22 @@ class ImageGenerationAgent:
         """Numbered map of what each inline image is.
 
         Without this the model has to guess which image is which garment.
-        Returns the pre-existing single-line person header verbatim when there
-        are no garment references, so the prompt that works today is
-        unchanged for clients that send no item_ids.
+        Returns the pre-existing single-line person header (plus a one-line
+        main-subject note) when there are no garment references, so the prompt
+        that works today is unchanged apart from the single-person fix for
+        clients that send no item_ids.
         """
         if not image_numbers and not source_photo:
             if person_image:
-                return "REFERENCE IMAGE = person identity (source of truth for face/body/hair/skin)."
+                # First line stays byte-identical for legacy clients; the
+                # second line binds the avatar to ONE main subject so a group
+                # photo used as a profile picture cannot leak extra people in.
+                return (
+                    "REFERENCE IMAGE = person identity (source of truth for "
+                    "face/body/hair/skin).\n"
+                    "The person reference is the main subject - if it shows "
+                    "other people, render only this person."
+                )
             return ""
 
         lines = ["REFERENCE IMAGES (in order):"]
@@ -314,6 +376,11 @@ class ImageGenerationAgent:
             lines.append(
                 "- IMAGE 1 = the person: identity source of truth "
                 "(face, body, hair, skin). Not a garment."
+            )
+            lines.append(
+                "- ALL reference images show the SAME single person (the main "
+                "subject) wearing the entire outfit; ignore and discard any "
+                "other person or item they contain."
             )
         if source_photo:
             # The uploaded photo sits directly after the person reference (if
@@ -431,7 +498,7 @@ class ImageGenerationAgent:
                 extra "as worn" reference so the render reproduces the real
                 fit, draping, and layering of the garments; it is never an
                 identity source. Absent -> the pre-existing reference-only
-                behavior, byte for byte.
+                behavior (avatar flows still carry the single-person locks).
 
         Returns:
             GeneratedImage with the result
@@ -516,8 +583,8 @@ class ImageGenerationAgent:
         garment_block = f"\n{GARMENT_REFERENCE_LOCK}\n" if garment_images else ""
         # The "as worn" lock rides above the per-item garment lock: the source
         # photo shows how the pieces combine, which isolated product shots
-        # cannot. Empty string when absent, so the templates below stay
-        # byte-identical to the pre-source-photo prompts.
+        # cannot. Empty string when absent, so the templates below are
+        # unchanged when no source photo is sent.
         source_photo_block = f"\n{SOURCE_PHOTO_REFERENCE_LOCK}\n" if uses_source_photo else ""
         # Only warn about collaging reference images when references exist -
         # otherwise the line names inputs the model was never given.
@@ -582,16 +649,16 @@ Composition: ONE single flat lay photograph of these garments arranged together 
             # only) follows it as the "as worn" appearance source, then the
             # garment images; the text inventory still identifies every item
             # and is the only source for items with no image. PERSON_REFERENCE_
-            # FIDELITY stays ahead of the garment block so IDENTITY_LOCK keeps
-            # top priority.
+            # FIDELITY stays ahead of the garment block so the single-person
+            # and identity locks keep top priority.
             # A multi-line reference map wants a blank line before TASK; the
-            # single-line legacy header sat directly above it, and keeping that
-            # exact spacing means a client sending no item_ids gets byte-for-byte
-            # the prompt that works today.
+            # legacy header keeps sitting directly above it with no blank line,
+            # so a client sending no item_ids gets the pre-existing spacing —
+            # the only avatar-branch changes are the single-person additions.
             person_header = reference_map + (
                 "\n\n" if (image_numbers or uses_source_photo) else "\n"
             )
-            base_prompt = f"""{person_header}TASK: Photoreal fashion photo of that same person wearing the outfit below.
+            base_prompt = f"""{person_header}TASK: Photoreal fashion photo of that same single person wearing the outfit below.
 
 {PERSON_REFERENCE_FIDELITY}
 {source_photo_block}{garment_block}
@@ -926,7 +993,7 @@ Specs:
                 )
 
             return GeneratedImage(
-                image_base64=response.images[0],
+                image_base64=self._validated_image(response.images[0], context),
                 prompt=prompt,
                 model=response.model,
                 provider=response.provider,
@@ -971,7 +1038,7 @@ Specs:
                 raise AIServiceError("AI generated no images", retryable=True)
 
             return GeneratedImage(
-                image_base64=response.images[0],
+                image_base64=self._validated_image(response.images[0], "image generation"),
                 prompt=prompt,
                 model=response.model,
                 provider=response.provider,
@@ -1074,7 +1141,7 @@ Output one cohesive image of THIS same person wearing that exact garment."""
                 raise AIServiceError("AI generated no images for try-on", retryable=True)
 
             return GeneratedImage(
-                image_base64=response.images[0],
+                image_base64=self._validated_image(response.images[0], "try-on"),
                 prompt=prompt,
                 model=response.model,
                 provider=response.provider,
@@ -1128,9 +1195,23 @@ async def save_generated_image(
     if not db:
         return {"image_url": "", "storage_path": ""}
 
+    # Never upload a 0-byte object: an empty base64 decodes to b"" and the
+    # S3 PUT succeeds, leaving a "successful" save whose presigned URL serves
+    # nothing — the image_url is truthy so the endpoint's base64 fallback is
+    # suppressed and the client gets a broken image with no way to notice.
+    if not generated.image_base64 or not generated.image_base64.strip():
+        logger.warning(
+            "Refusing to save an empty generated image",
+            user_id=user_id,
+            image_type=image_type,
+        )
+        return {"image_url": "", "storage_path": ""}
+
     try:
         # Decode base64 image
         image_data = base64.b64decode(generated.image_base64)
+        if not image_data:
+            return {"image_url": "", "storage_path": ""}
 
         # Normalize to the storage compression profile (WebP q82 @ 2048px,
         # keep-smaller) so user-saved renders cost the same per byte as every

@@ -141,6 +141,8 @@ export function FeedbackPage() {
     {
       id: 'subject',
       header: t('columns.subject'),
+      size: 280,
+      minSize: 240,
       cell: ({ row }) => (
         <div className="flex min-w-0 flex-col">
           <span className="truncate font-medium">{row.original.subject ?? '—'}</span>
@@ -154,6 +156,8 @@ export function FeedbackPage() {
       id: 'user',
       header: t('columns.user'),
       enableSorting: false,
+      size: 220,
+      minSize: 180,
       cell: ({ row }) => {
         const email = userEmail(row.original.user)
         return row.original.user_id ? (
@@ -174,6 +178,8 @@ export function FeedbackPage() {
       id: 'category',
       header: t('columns.category'),
       enableSorting: false,
+      size: 130,
+      minSize: 110,
       cell: ({ row }) => {
         const category = row.original.category ?? 'unknown'
         return (
@@ -187,6 +193,8 @@ export function FeedbackPage() {
       id: 'status',
       header: t('columns.status'),
       enableSorting: false,
+      size: 130,
+      minSize: 110,
       cell: ({ row }) => {
         const status = row.original.status ?? 'unknown'
         return <StatusBadge status={status} label={t(`status.${status}`, { defaultValue: status })} />
@@ -196,6 +204,8 @@ export function FeedbackPage() {
       id: 'created_at',
       header: t('columns.createdAt'),
       enableSorting: false,
+      size: 160,
+      minSize: 130,
       cell: ({ row }) => (
         <span className="whitespace-nowrap text-sm text-muted-foreground">
           {formatDateTime(row.original.created_at as string | null | undefined)}

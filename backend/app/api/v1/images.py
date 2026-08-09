@@ -161,7 +161,9 @@ async def materialize_avatar_url(
     return await serve_url(key)
 
 
-async def materialize_image_urls(images: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+async def materialize_image_urls(
+    images: List[Dict[str, Any]], *, presigned: bool = False
+) -> List[Dict[str, Any]]:
     """Regenerate fresh image URLs from ``storage_path`` (read-time materialization).
 
     The DB stores the durable ``storage_path``; the public ``image_url`` is
@@ -179,6 +181,13 @@ async def materialize_image_urls(images: List[Dict[str, Any]]) -> List[Dict[str,
     returns 404, not a fallback. Images without a ``storage_path`` (legacy
     Supabase public URLs) are left untouched. The Flutter-compat ``url``
     field, when present, is kept in sync with the fresh URLs.
+
+    ``presigned=True`` forces short-lived signed URLs even in ``worker`` mode
+    (mirrors ``materialize_avatar_url(..., presigned=True)``). Required for
+    ANONYMOUS surfaces that cannot present the app's JWT to the Worker — the
+    public shared-outfit endpoint, whose images render for share-link
+    visitors and social crawlers. Without the flag, worker-mode URLs on that
+    endpoint would 404 for every anonymous viewer.
 
     This is a shared helper for the items/outfits read paths (which surface
     image URLs) and lives here so the serving logic stays in one place.
@@ -201,12 +210,18 @@ async def materialize_image_urls(images: List[Dict[str, Any]]) -> List[Dict[str,
         thumb_key = StorageService.thumb_key_for(storage_path) if thumbnails_on else None
         jobs.append((img, storage_path, thumb_key))
 
+    def _mint_one(key: str):
+        """Mint a URL for ``key`` in the caller's requested serving mode."""
+        if presigned:
+            return StorageService.get_public_url(key)
+        return serve_url(key)
+
     # Phase 2: mint all URLs concurrently. return_exceptions keeps one failing
     # key from aborting the whole batch; the per-image skip below mirrors the
     # old sequential try/except semantics.
     urls = await asyncio.gather(
         *(
-            serve_url(key)
+            _mint_one(key)
             for _img, storage_path, thumb_key in jobs
             for key in (storage_path, thumb_key)
             if key is not None
@@ -237,22 +252,27 @@ async def materialize_image_urls(images: List[Dict[str, Any]]) -> List[Dict[str,
     return images
 
 
-async def materialize_parent_images(parents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+async def materialize_parent_images(
+    parents: List[Dict[str, Any]], *, presigned: bool = False
+) -> List[Dict[str, Any]]:
     """Materialize presigned URLs for a list of parent rows' ``images`` lists.
 
     Convenience wrapper for read handlers that normalize a list of items/outfits
     (each carrying an ``images`` list) and may also carry nested ``items`` whose
-    own ``images`` should be refreshed too.
+    own ``images`` should be refreshed too. ``presigned`` is passed through to
+    :func:`materialize_image_urls` (see its docstring for when to force it).
     """
     async def _materialize_one(parent: Dict[str, Any]) -> None:
         if not isinstance(parent, dict):
             return
-        await materialize_image_urls(parent.get("images") or [])
+        await materialize_image_urls(parent.get("images") or [], presigned=presigned)
         nested_items = parent.get("items")
         if isinstance(nested_items, list):
             for nested in nested_items:
                 if isinstance(nested, dict):
-                    await materialize_image_urls(nested.get("images") or [])
+                    await materialize_image_urls(
+                        nested.get("images") or [], presigned=presigned
+                    )
     await asyncio.gather(*(_materialize_one(p) for p in (parents or [])))
     return parents
 

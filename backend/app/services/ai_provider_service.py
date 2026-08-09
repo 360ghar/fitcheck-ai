@@ -1015,6 +1015,35 @@ class AIProviderService:
             )
             raise AIServiceError(f"AI request failed: {error_message}", retryable=False)
 
+    @staticmethod
+    def _append_chat_image(images: List[str], url: str) -> None:
+        """Append an inline image payload from a chat-style response part.
+
+        Only inline base64 is accepted. Two failure classes are rejected here
+        instead of shipping as ``image_base64``:
+
+        * an EMPTY data URL (``data:...;base64,`` with nothing after the
+          comma) would become an empty-string image that sails through as a
+          200 with an unloadable result (the "generation succeeded but no
+          image shows" class);
+        * a hosted (non-data) URL is not base64 at all — every downstream
+          consumer (save, data-URL render) fails on it. Hosted URLs ARE
+          fetched by the /images/generations path
+          (``_generate_image_via_images_api``); chat-style responses must
+          carry inline base64.
+        """
+        if url.startswith("data:") and ";base64," in url:
+            payload = url.split(";base64,", 1)[1]
+            if payload.strip():
+                images.append(payload)
+            return
+        raise AIServiceError(
+            "AI provider returned a non-inline image in a chat-style response "
+            f"(expected inline base64, got: {url[:60]!r})",
+            retryable=False,
+            error_kind="hard",
+        )
+
     def _parse_chat_response(
         self, data: Dict[str, Any], model: str, provider_url: Optional[str] = None
     ) -> AIResponse:
@@ -1077,15 +1106,7 @@ class AIProviderService:
                         url = image_url.get("url", "")
                         if not isinstance(url, str):
                             malformed("image URL is invalid")
-                        # Extract base64 from data URL if present
-                        if url.startswith("data:"):
-                            # Format: data:image/png;base64,<data>
-                            if ";base64," in url:
-                                images.append(url.split(";base64,", 1)[1])
-                            else:
-                                images.append(url)
-                        else:
-                            images.append(url)
+                        self._append_chat_image(images, url)
                     elif part.get("type") == "image":
                         # Alternative format with inline_data
                         inline_data = part.get("inline_data", {})
@@ -1113,13 +1134,7 @@ class AIProviderService:
                     url = image_url.get("url", "")
                     if not isinstance(url, str):
                         malformed("image URL is invalid")
-                    if url.startswith("data:"):
-                        if ";base64," in url:
-                            images.append(url.split(";base64,", 1)[1])
-                        else:
-                            images.append(url)
-                    else:
-                        images.append(url)
+                    self._append_chat_image(images, url)
 
             if content is None and not message_images:
                 malformed("message has no content or images")
