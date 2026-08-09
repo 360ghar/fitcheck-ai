@@ -131,7 +131,6 @@ def test_storage_reference_paths_are_reduced_to_known_bucket_keys(monkeypatch):
     therefore reduced to a path that is looked up in the bucket, never fetched
     from the attacker's host.
     """
-    monkeypatch.setattr(storage_module.settings, "SUPABASE_STORAGE_BUCKET", "items")
     monkeypatch.setattr(storage_module.settings, "OBJECT_STORAGE_BUCKET", "bucket")
 
     # Supabase public object URL -> key (bucket segment dropped).

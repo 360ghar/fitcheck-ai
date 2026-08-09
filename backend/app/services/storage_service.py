@@ -5,8 +5,9 @@ outfit images, user avatars, source photos, feedback attachments, and temporary
 generated images.
 
 The service keeps the same public method signatures and return shapes as the
-Supabase Storage implementation so callers change as little as possible; the
-internals talk to ``S3StorageBackend`` (see ``app/services/object_storage.py``).
+legacy Supabase Storage implementation so callers change as little as
+possible; the internals talk to ``S3StorageBackend`` (see
+``app/services/object_storage.py``).
 Image URLs returned by uploads are SHORT-LIVED presigned GET URLs; every read
 path re-materializes them (``images.serve_url``), and the DB stores the
 ``storage_path`` (bucket key) as the durable reference, never a URL.
@@ -49,14 +50,6 @@ from app.services.object_storage import (
 
 logger = get_context_logger(__name__)
 
-
-# Legacy bucket names (fallbacks). With the S3 backend the single configured
-# bucket (OBJECT_STORAGE_BUCKET) is used for every upload; these are kept for
-# backward compatibility with callers that still reference a bucket name.
-BUCKET_ITEMS = "items"
-BUCKET_OUTFITS = "outfits"
-BUCKET_AVATARS = "avatars"
-BUCKET_FEEDBACK = "feedback"
 
 # Allowed file extensions
 ALLOWED_IMAGE_EXTENSIONS = {
@@ -443,10 +436,11 @@ class StorageService:
             parsed = urlparse(candidate)
             parts = [part for part in parsed.path.split("/") if part]
             if len(parts) >= 5 and parts[:4] == ["storage", "v1", "object", "public"]:
-                # Supabase public object URL: /storage/v1/object/public/<bucket>/<key...>
+                # Legacy Supabase public object URL:
+                # /storage/v1/object/public/<bucket>/<key...> — pre-R2 rows
+                # (item_images/support_tickets) still store this shape; the
+                # bucket segment is dropped to recover the R2 key.
                 return "/".join(parts[5:])
-            if len(parts) >= 2 and parts[0] == settings.SUPABASE_STORAGE_BUCKET:
-                return "/".join(parts[1:])
             if len(parts) >= 2 and parts[0] == settings.OBJECT_STORAGE_BUCKET:
                 return "/".join(parts[1:])
             # Top-level preview folders (``tmp/`` and ``generated/`` — see

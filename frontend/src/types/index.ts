@@ -520,7 +520,7 @@ export interface DetectedItem {
   /** Object-URL preview of the uploaded photo this item came from */
   sourcePreviewUrl?: string;
   /**
-   * Persisted original source photo (Supabase Storage URL + path) that this
+   * Persisted original source photo (object-storage URL + path) that this
    * item was extracted from. Surfaced from the batch SSE payload so the save
    * step can persist it on the item - the outfit-generation upload flow then
    * uses it as an "as worn" reference.

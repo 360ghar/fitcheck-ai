@@ -342,7 +342,7 @@ class BatchExtractionService:
             if await self._skip_due_to_capacity(job, image_id):
                 return []
 
-            # Persist the source photo to Supabase Storage BEFORE the vision
+            # Persist the source photo to object storage (R2) BEFORE the vision
             # call. The returned URL is attached to every item detected in
             # this photo so the generation phase can re-fetch it as a
             # reference image (full image + bbox) for accurate reproduction.
@@ -569,7 +569,7 @@ class BatchExtractionService:
         image_id: str,
         image_base64: str,
     ) -> Optional[Dict[str, str]]:
-        """Upload the original source photo to Supabase Storage.
+        """Upload the original source photo to object storage (R2).
 
         Returns {image_url, storage_path} on success, or None on decode/upload
         failure. Best-effort: callers degrade to text-only generation.

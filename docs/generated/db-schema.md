@@ -1,6 +1,6 @@
 # Database schema (generated)
 
-Generated: 2026-08-09
+Generated: 2026-08-10
 
 Source: `backend/db/supabase/migrations/`.
 Regenerate: `python scripts/generate_db_schema_doc.py`.
@@ -65,6 +65,8 @@ This is an orientation index for agents, not a substitute for reading migrations
 - `044_atomic_counters_and_item_images.sql`
 - `045_shared_outfit_atomicity.sql`
 - `046_seed_ai_settings_and_harden_storage_buckets.sql`
+- `047_items_client_request_id.sql`
+- `048_drop_legacy_supabase_buckets.sql`
 
 ## Tables (CREATE TABLE)
 
@@ -173,6 +175,7 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `005_waitlist.sql` → `waitlist`
 - `006_add_embedding_columns.sql` → `user_ai_settings`
 - `006_add_embedding_columns.sql` → `user_ai_settings`
+- `007_subscriptions_and_referrals.sql` → `referral_redemptions`
 - `007_subscriptions_and_referrals.sql` → `users`
 - `007_subscriptions_and_referrals.sql` → `subscriptions`
 - `007_subscriptions_and_referrals.sql` → `subscription_usage`
@@ -232,6 +235,8 @@ These columns are added after their table's CREATE TABLE and are required (NOT N
 - `038_audit_events.sql` → `audit_events`
 - `042_outfit_wear_history.sql` → `outfit_wear_history`
 - `045_shared_outfit_atomicity.sql` → `shared_outfits`
+- `047_items_client_request_id.sql` → `items`
+- `047_items_client_request_id.sql` → `outfit_images`
 
 ## Related
 

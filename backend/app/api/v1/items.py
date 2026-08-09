@@ -266,7 +266,7 @@ async def upload_item_images(
     user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
-    """Upload one or more images to Supabase Storage for later item creation."""
+    """Upload one or more images to object storage for later item creation."""
     # Outside the try: the catch-all below would turn this into a 500. Without
     # a count cap, N unbounded files are read concurrently and all held at once.
     if len(files) > MAX_UPLOAD_FILES:

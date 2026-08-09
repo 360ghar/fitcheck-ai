@@ -112,8 +112,10 @@ This starts:
    (`OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION` (keep `auto`),
    `OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`,
    `OBJECT_STORAGE_BUCKET`). There is no `SUPABASE_STORAGE_BUCKET` setup step:
-   create the R2 bucket, an S3 API token, and a CORS policy on the bucket
-   allowing your web origins (the frontend `fetch()`es image URLs for
+   the legacy Supabase Storage buckets are not created by migration 001 anymore
+   and migration 048 drops them on existing environments (rerunnable, storage
+   schema guarded). Create the R2 bucket, an S3 API token, and a CORS policy on
+   the bucket allowing your web origins (the frontend `fetch()`es image URLs for
    download/share and reads one through a canvas). Only the `OBJECT_STORAGE_*`
    names are read; provider-specific names (`R2_*`, `AWS_*`) are not aliased.
 

@@ -2082,7 +2082,7 @@ export interface paths {
         put?: never;
         /**
          * Upload Item Images
-         * @description Upload one or more images to Supabase Storage for later item creation.
+         * @description Upload one or more images to object storage for later item creation.
          */
         post: operations["upload_item_images_api_v1_items_upload_post"];
         delete?: never;

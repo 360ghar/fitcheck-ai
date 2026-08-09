@@ -13,7 +13,7 @@
 BEGIN;
 
 ALTER TABLE public.items
-    ADD COLUMN client_request_id TEXT;
+    ADD COLUMN IF NOT EXISTS client_request_id TEXT;
 
 -- One idempotency key per user. Partial so historical rows (NULL keys) never
 -- collide; the create endpoint only replays rows that are not deleted.
@@ -22,7 +22,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS items_user_client_request_id_key
     WHERE client_request_id IS NOT NULL;
 
 ALTER TABLE public.outfit_images
-    ADD COLUMN client_request_id TEXT;
+    ADD COLUMN IF NOT EXISTS client_request_id TEXT;
 
 -- outfit_images has no user_id column; outfit_id is already user-scoped
 -- (outfits.user_id), so the key is unique per outfit.

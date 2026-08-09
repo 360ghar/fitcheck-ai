@@ -528,7 +528,7 @@ Method: 11 parallel read-only audit agents (one per area), each finding backed b
 - `scripts/check_migrations.py` guard exists.
 - A3 wave: PGRST202 fallback for 044/045 RPCs, `maybe_single()`, `asyncio.to_thread()`, `VectorStoreError`→503, share-flow 045 RPC delegation — all present; not re-reported.
 - A4 wave: all admin routes gated (`require_admin`/`require_permission`); promo-code CRUD gated by `content.write` per the admin-panel spec.
-- Migrations 034/035/036/042/044/046 contracts match their call sites; 046 private-bucket flip leaves no Supabase-Storage read paths.
+- Migrations 034/035/036/042/044/046 contracts match their call sites; the legacy Supabase Storage buckets are dropped by migration 048 (046 no longer flips them private), and `key_from_path` still rescues pre-R2 `/storage/v1/object/public/` URLs to R2 keys for the 36 live `item_images` rows + 1 support attachment that still store that shape.
 
 ## Caveats
 

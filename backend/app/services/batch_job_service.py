@@ -146,7 +146,7 @@ class BatchImageData:
     image_id: str
     image_base64: str
     filename: Optional[str] = None
-    # Persisted source photo (Supabase Storage URL + path). Set once before
+    # Persisted source photo (object-storage URL + path). Set once before
     # extraction runs so every item detected in this photo can carry the same
     # reference for product-image generation. The in-memory base64 is dropped
     # after extraction (release_image_payloads); the URL survives.

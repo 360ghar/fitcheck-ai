@@ -39,6 +39,28 @@ Baseline: backend pytest 3674 passed / 99.82% cov; frontend vitest 269 passed (p
 - Referral/promo anon SELECT policies are intentional ("campaign links meant to be shared") — only FOR ALL policies are scoped.
 - Findings with Confidence: Medium get the bounded fix only when the code path is confirmed during implementation; otherwise the finding is documented in this plan with the evidence and left for a follow-up (no speculative changes).
 
+## Post-sweep follow-up (2026-08-10): drop legacy Supabase Storage buckets
+
+Storage is R2-only. Migration 001 no longer creates the legacy Supabase Storage
+buckets (`fitcheck-images`/`items`/`outfits`/`avatars`); migration 046 no
+longer flips them private; the new migration `048_drop_legacy_supabase_buckets.sql`
+drops the inert bucket rows from environments that still have them (guarded by
+`to_regclass('storage.buckets')`, rerunnable). Migration 047's two
+`ADD COLUMN` statements gained `IF NOT EXISTS` so the 043–048 set is fully
+rerunnable.
+
+Backend code dropped the `SUPABASE_STORAGE_BUCKET` setting/env var and the dead
+`BUCKET_ITEMS/OUTFITS/AVATARS/FEEDBACK` constants. The bucket-agnostic legacy
+rescue stays: `key_from_path` still reduces `/storage/v1/object/public/<bucket>/<key>`
+URLs to R2 keys because **36 `item_images.image_url` rows and 1
+`support_tickets.attachment_urls` entry (live check, 2026-08-10) still store
+that shape** with a NULL `storage_path`; `scripts/backfill_storage_paths.py`
+is the durable fix for those rows.
+
+Apply order on existing envs: migrations 043 → 048 (043–045 unchanged; 046
+RPC-only now; 047 rerunnable; 048 drops buckets). Verify with
+`python3 scripts/check_migrations.py`.
+
 ## A3/A4 area status (backend AI/photoshoot + outfits/social slice)
 
 Implemented during this sweep (worker-scoped):

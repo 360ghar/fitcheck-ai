@@ -193,7 +193,6 @@ def test_key_from_path_whitespace_only_returns_none():
 
 
 def test_key_from_path_resolves_legacy_preview_url(monkeypatch):
-    monkeypatch.setattr("app.services.storage_service.settings.SUPABASE_STORAGE_BUCKET", "items")
     monkeypatch.setattr("app.services.storage_service.settings.OBJECT_STORAGE_BUCKET", "bucket")
     user = str(uuid.uuid4())
     # A path-style URL from a bucket that is no longer the configured one,

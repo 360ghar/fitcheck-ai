@@ -80,7 +80,6 @@ async def test_get_public_url_returns_presigned_url():
 
 
 def test_key_from_path_handles_supabase_url_bare_key_and_s3_presigned_url(monkeypatch):
-    monkeypatch.setattr("app.services.storage_service.settings.SUPABASE_STORAGE_BUCKET", "items")
     monkeypatch.setattr("app.services.storage_service.settings.OBJECT_STORAGE_BUCKET", "bucket")
 
     # Supabase public object URL -> key (bucket segment dropped).

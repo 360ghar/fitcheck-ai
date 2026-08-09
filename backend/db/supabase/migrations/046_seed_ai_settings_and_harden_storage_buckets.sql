@@ -1,19 +1,17 @@
--- FitCheck AI - Seed user_ai_settings inside reserve_ai_usage + harden buckets
+-- FitCheck AI - Seed user_ai_settings inside reserve_ai_usage
 --
--- 1. reserve_ai_usage returned reserved=FALSE for users with no
---    user_ai_settings row: the conditional UPDATE matched zero rows, so a
---    brand-new (or never-provisioned) user could never pass an AI admission
---    check even with quota available. The RPC now seeds the row with
---    INSERT ... ON CONFLICT (user_id) DO NOTHING before the admission
---    UPDATE. Idempotent, and the function signature is unchanged, so the
---    quota-RPC probes in app/utils/db.py keep working.
+-- reserve_ai_usage returned reserved=FALSE for users with no
+-- user_ai_settings row: the conditional UPDATE matched zero rows, so a
+-- brand-new (or never-provisioned) user could never pass an AI admission
+-- check even with quota available. The RPC now seeds the row with
+-- INSERT ... ON CONFLICT (user_id) DO NOTHING before the admission
+-- UPDATE. Idempotent, and the function signature is unchanged, so the
+-- quota-RPC probes in app/utils/db.py keep working.
 --
--- 2. Migration 001 inserted the pre-R2 storage buckets with public=true
---    (fitcheck-images/items/outfits/avatars). R2 is the serving path now,
---    so nothing must be readable from Supabase Storage without the worker's
---    per-object authorization. The buckets are kept (do not delete them)
---    but flipped to private. Safe: no app path reads these buckets via
---    Supabase Storage URLs anymore.
+-- Storage note: migration 001 previously created pre-R2 Supabase Storage
+-- buckets (fitcheck-images/items/outfits/avatars). R2 is the serving path now;
+-- 001 no longer creates them and migration 048 drops them on environments
+-- that already have them. Nothing here touches the storage schema anymore.
 --
 -- RPC redefinition style follows 026/031/033: REVOKE the old grants, CREATE
 -- OR REPLACE, then GRANT service_role only (the backend calls these RPCs
@@ -99,11 +97,7 @@ REVOKE EXECUTE ON FUNCTION public.reserve_ai_usage(UUID, TEXT, INTEGER, INTEGER)
 GRANT EXECUTE ON FUNCTION public.reserve_ai_usage(UUID, TEXT, INTEGER, INTEGER)
     TO service_role;
 
--- Pre-R2 legacy buckets are no longer a serving path; keep the buckets (the
--- corpus history and any tooling references them) but make them private so
--- nothing is publicly readable from Supabase Storage.
-UPDATE storage.buckets
-SET public = false
-WHERE id IN ('fitcheck-images', 'items', 'outfits', 'avatars');
+-- Legacy pre-R2 Supabase Storage buckets are dropped by migration 048
+-- (storage schema guarded); this migration no longer touches them.
 
 COMMIT;

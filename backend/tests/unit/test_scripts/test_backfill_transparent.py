@@ -48,59 +48,64 @@ def _load_script():
 
 bf = _load_script()
 
-BUCKET = "fitcheck-images"
-
 
 # --------------------------------------------------------------------------- #
 # object key recovery
 # --------------------------------------------------------------------------- #
 class TestStorageKeyRecovery:
     def test_plain_public_url(self):
-        url = f"https://proj.supabase.co/storage/v1/object/public/{BUCKET}/user-1/20260101/item_abc123.jpg"
-        assert bf.storage_key_from_public_url(url, BUCKET) == "user-1/20260101/item_abc123.jpg"
+        url = "https://proj.supabase.co/storage/v1/object/public/fitcheck-images/user-1/20260101/item_abc123.jpg"
+        assert bf.storage_key_from_public_url(url) == "user-1/20260101/item_abc123.jpg"
 
     def test_strips_query_string(self):
         """A previous BUST_CACHE=1 run stamps `?v=<epoch>`; the key is unchanged."""
-        url = f"https://proj.supabase.co/storage/v1/object/public/{BUCKET}/user-1/x.webp?v=1785000000"
-        assert bf.storage_key_from_public_url(url, BUCKET) == "user-1/x.webp"
+        url = "https://proj.supabase.co/storage/v1/object/public/fitcheck-images/user-1/x.webp?v=1785000000"
+        assert bf.storage_key_from_public_url(url) == "user-1/x.webp"
 
     def test_strips_fragment(self):
-        url = f"https://proj.supabase.co/storage/v1/object/public/{BUCKET}/user-1/x.webp#frag"
-        assert bf.storage_key_from_public_url(url, BUCKET) == "user-1/x.webp"
+        url = "https://proj.supabase.co/storage/v1/object/public/fitcheck-images/user-1/x.webp#frag"
+        assert bf.storage_key_from_public_url(url) == "user-1/x.webp"
 
     @pytest.mark.parametrize("url", [None, "", "https://example.com/not-supabase/x.jpg"])
     def test_unrecoverable_urls_return_none(self, url):
-        assert bf.storage_key_from_public_url(url, BUCKET) is None
+        assert bf.storage_key_from_public_url(url) is None
 
-    def test_wrong_bucket_is_not_matched(self):
+    def test_any_bucket_segment_is_dropped(self):
+        """The legacy Supabase URL shape is bucket-agnostic: the bucket segment
+        (pre-R2 `fitcheck-images`, or any other name) is dropped so live rows
+        that still store this shape are rescued to their R2 key."""
         url = "https://proj.supabase.co/storage/v1/object/public/other-bucket/user-1/x.jpg"
-        assert bf.storage_key_from_public_url(url, BUCKET) is None
+        assert bf.storage_key_from_public_url(url) == "user-1/x.jpg"
+
+    def test_missing_key_segment_is_unresolvable(self):
+        url = "https://proj.supabase.co/storage/v1/object/public/fitcheck-images"
+        assert bf.storage_key_from_public_url(url) is None
 
     def test_storage_path_wins_when_present(self):
         row = {
             "storage_path": "user-1/20260101/item_abc.jpg",
-            "image_url": f"https://p.supabase.co/storage/v1/object/public/{BUCKET}/DIFFERENT/key.jpg",
+            "image_url": "https://p.supabase.co/storage/v1/object/public/fitcheck-images/DIFFERENT/key.jpg",
         }
-        assert bf.resolve_storage_key(row, BUCKET) == "user-1/20260101/item_abc.jpg"
+        assert bf.resolve_storage_key(row) == "user-1/20260101/item_abc.jpg"
 
     def test_null_storage_path_falls_back_to_url(self):
         """`storage_path` was retrofitted with ADD COLUMN IF NOT EXISTS, so rows
         written before that migration are NULL and must still be processable."""
         row = {
             "storage_path": None,
-            "image_url": f"https://p.supabase.co/storage/v1/object/public/{BUCKET}/user-9/old.jpg",
+            "image_url": "https://p.supabase.co/storage/v1/object/public/fitcheck-images/user-9/old.jpg",
         }
-        assert bf.resolve_storage_key(row, BUCKET) == "user-9/old.jpg"
+        assert bf.resolve_storage_key(row) == "user-9/old.jpg"
 
     def test_blank_storage_path_falls_back_to_url(self):
         row = {
             "storage_path": "   ",
-            "image_url": f"https://p.supabase.co/storage/v1/object/public/{BUCKET}/user-9/old.jpg",
+            "image_url": "https://p.supabase.co/storage/v1/object/public/fitcheck-images/user-9/old.jpg",
         }
-        assert bf.resolve_storage_key(row, BUCKET) == "user-9/old.jpg"
+        assert bf.resolve_storage_key(row) == "user-9/old.jpg"
 
     def test_neither_available_is_unresolvable(self):
-        assert bf.resolve_storage_key({"storage_path": None, "image_url": None}, BUCKET) is None
+        assert bf.resolve_storage_key({"storage_path": None, "image_url": None}) is None
 
 
 class TestVersionStamp:
@@ -266,7 +271,6 @@ class _FakeDb:
 
 def _cfg():
     return bf.Config(
-        bucket=BUCKET,
         dry_run=False,
         cache_control=60,
         bust_cache=False,

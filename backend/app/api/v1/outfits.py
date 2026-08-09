@@ -4,7 +4,7 @@ Outfits API routes.
 Implements outfit CRUD and a lightweight generation-tracking flow.
 
 AI image generation is performed server-side via the AI provider service. The backend
-stores generated images in Supabase Storage and records metadata for retrieval.
+stores generated images in object storage (R2) and records metadata for retrieval.
 """
 
 import asyncio
