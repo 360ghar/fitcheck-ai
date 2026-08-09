@@ -61,6 +61,22 @@ Apply order on existing envs: migrations 043 → 048 (043–045 unchanged; 046
 RPC-only now; 047 rerunnable; 048 drops buckets). Verify with
 `python3 scripts/check_migrations.py`.
 
+## Post-sweep follow-up (2026-08-10): all 49 migrations re-runnable
+
+Audited all 49 migration files for re-runnability. 47 already were; two had a
+real rerun defect: `014_add_user_dob.sql` and `015_drop_date_of_birth.sql`
+both run a top-level backfill `UPDATE ... SET birth_date = date_of_birth`,
+and since 015 itself drops `date_of_birth`, any rerun (or in-sequence
+double-apply) hit `42703 column does not exist`. Both backfills are now inside
+`DO $$` blocks guarded by a column-existence check. The remaining bare
+top-level `UPDATE`s that were only *accidentally* no-ops (010, 018, 027, 045)
+are wrapped in `DO $$` blocks too, so the contract is uniform: no migration
+contains top-level `UPDATE`/`DELETE` outside a `$$` body. The contract test
+`test_migrations_rerunnable.py` gained rules for top-level `UPDATE ... SET`
+and `DELETE FROM` (span-aware, so function bodies are exempt), which fail on
+this bug class instead of letting it through (the checker previously never
+inspected DML).
+
 ## A3/A4 area status (backend AI/photoshoot + outfits/social slice)
 
 Implemented during this sweep (worker-scoped):

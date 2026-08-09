@@ -19,10 +19,23 @@ ALTER TABLE public.users
   ADD COLUMN IF NOT EXISTS date_of_birth DATE;
 
 -- Backfill canonical birth_date from legacy date_of_birth when needed.
-UPDATE public.users
-SET birth_date = date_of_birth
-WHERE birth_date IS NULL
-  AND date_of_birth IS NOT NULL;
+-- Guarded by a column-existence check so the file stays re-runnable after
+-- migration 015 drops date_of_birth (a rerun would otherwise hit 42703).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'users'
+      AND column_name = 'date_of_birth'
+  ) THEN
+    UPDATE public.users
+    SET birth_date = date_of_birth
+    WHERE birth_date IS NULL
+      AND date_of_birth IS NOT NULL;
+  END IF;
+END;
+$$;
 
 DO $$
 BEGIN

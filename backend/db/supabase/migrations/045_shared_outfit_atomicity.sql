@@ -54,9 +54,15 @@ BEGIN;
 ALTER TABLE public.shared_outfits
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
 
-UPDATE public.shared_outfits
-SET updated_at = created_at
-WHERE updated_at IS NULL;
+-- Natural no-op on rerun (updated_at is backfilled once); wrapped in a DO
+-- block to keep top-level DML out of the migration (re-runnability contract).
+DO $$
+BEGIN
+  UPDATE public.shared_outfits
+  SET updated_at = created_at
+  WHERE updated_at IS NULL;
+END;
+$$;
 
 -- =============================================================================
 -- RPC: set_primary_outfit_image
