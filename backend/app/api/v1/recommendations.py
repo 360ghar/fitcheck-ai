@@ -344,16 +344,21 @@ def _get_primary_image_url(item: Dict[str, Any]) -> Optional[str]:
     return (primary or {}).get("thumbnail_url") or (primary or {}).get("image_url")
 
 
-async def _materialize_item_images(items: List[Dict]) -> List[Dict]:
+async def _materialize_item_images(
+    items: List[Dict], owner_user_id: Optional[str] = None
+) -> List[Dict]:
     """Regenerate fresh short-lived presigned URLs for each row's nested images.
 
     Private buckets store durable ``storage_path`` keys, never URLs; every read
     path that surfaces ``image_url`` must materialize at read time (same
     contract as the items/outfits list endpoints). Legacy rows without
-    ``storage_path`` keep their stored URL.
+    ``storage_path`` keep their stored URL unless ``owner_user_id`` enables the
+    URL-derivation fallback (see materialize_image_urls).
     """
     for item in items or []:
-        await materialize_image_urls(item.get("item_images") or [])
+        await materialize_image_urls(
+            item.get("item_images") or [], owner_user_id=owner_user_id
+        )
     return items
 
 
@@ -504,7 +509,7 @@ async def match_items(
     )
     sources = [
         _prepare_item_for_response(i)
-        for i in await _materialize_item_images(sources_res.data or [])
+        for i in await _materialize_item_images(sources_res.data or [], owner_user_id=user_id)
     ]
     if not sources:
         raise ItemNotFoundError()
@@ -534,7 +539,7 @@ async def match_items(
     candidates_res = await asyncio.to_thread(candidates_q.limit(500).execute)
     candidates = [
         _prepare_item_for_response(i)
-        for i in await _materialize_item_images(candidates_res.data or [])
+        for i in await _materialize_item_images(candidates_res.data or [], owner_user_id=user_id)
     ]
 
     matches: List[Dict[str, Any]] = []
@@ -613,7 +618,7 @@ async def complete_look(
     )
     seeds = [
         _prepare_item_for_response(i)
-        for i in await _materialize_item_images(seed_res.data or [])
+        for i in await _materialize_item_images(seed_res.data or [], owner_user_id=user_id)
     ]
     if not seeds:
         raise ItemNotFoundError()
@@ -674,7 +679,7 @@ async def personalized(
     )
     items_fav = [
         _prepare_item_for_response(i)
-        for i in await _materialize_item_images(items_fav_res.data or [])
+        for i in await _materialize_item_images(items_fav_res.data or [], owner_user_id=user_id)
     ]
 
     items_least_res = await asyncio.to_thread(
@@ -688,7 +693,7 @@ async def personalized(
     )
     items_least = [
         _prepare_item_for_response(i)
-        for i in await _materialize_item_images(items_least_res.data or [])
+        for i in await _materialize_item_images(items_least_res.data or [], owner_user_id=user_id)
     ]
 
     logger.debug(
@@ -924,7 +929,7 @@ async def astrology_recommendations(
         )
         items = [
             _prepare_item_for_response(i)
-            for i in await _materialize_item_images(items_res.data or [])
+            for i in await _materialize_item_images(items_res.data or [], owner_user_id=user_id)
         ]
     except Exception:
         # Keep astrology colors usable even if related tables/columns are incomplete.
@@ -1011,7 +1016,7 @@ async def similar_items(
                 match_ids = [m["item_id"] for m in matches if m.get("item_id")]
                 if match_ids:
                     items_res = await asyncio.to_thread(db.table("items").select("*, item_images(*)").in_("id", match_ids).execute)
-                    materialized = await _materialize_item_images(items_res.data or [])
+                    materialized = await _materialize_item_images(items_res.data or [], owner_user_id=user_id)
                     by_id = {r["id"]: r for r in materialized}
                     results = [
                         _build_similar_item_response(m, by_id[m["item_id"]])
@@ -1062,7 +1067,8 @@ async def similar_items(
                 .neq("id", item_id)
                 .limit(200)
                 .execute
-            )).data or []
+            )).data or [],
+            owner_user_id=user_id,
         )
         src_colors = set((source.data.get("colors") or []))
         scored = []

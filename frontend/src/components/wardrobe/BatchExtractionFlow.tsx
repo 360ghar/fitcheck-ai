@@ -601,7 +601,17 @@ export function BatchExtractionFlow({
           uploadedImage = upload.images?.[0];
         } else if (generatedUrl) {
           // Remote studio photo already persisted: reference it directly.
-          uploadedImage = { image_url: generatedUrl };
+          // Carry the durable bucket key (generated_image_storage_path) so the
+          // backend can promote the preview object to a canonical item path on
+          // create — the read path can then re-mint fresh URLs. Without the
+          // key, the short-lived presigned URL would be persisted as the
+          // durable reference and the tile would 403 at TTL (2026-08-09
+          // closet-image RCA follow-up).
+          uploadedImage = {
+            image_url: generatedUrl,
+            thumbnail_url: generatedUrl,
+            storage_path: item.generatedImageStoragePath,
+          };
         } else {
           throw new Error('No image available for item');
         }

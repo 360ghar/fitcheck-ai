@@ -99,6 +99,7 @@ async def test_persisted_payload_builds_item_rows_without_base64():
             "source_image_url": None,
             "source_image_storage_path": None,
             "generated_image_url": "https://cdn/x.png",
+            "generated_image_storage_path": None,
             "generation_error": None,
         }
     ]

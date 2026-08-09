@@ -76,6 +76,47 @@ code, the repair tooling, the interim TTL bump, and the cutover runbook.
 - Worker README updated: "Cross-user / anonymous images stay presigned" now
   lists the public shared-outfit page.
 
+### Backend follow-up — batch-save write path + read-path re-mint (same day)
+
+The Aug-9 user report (3 items with `storage_path: null` + 1h URLs under
+`tmp/{user}/batch/`) exposed a second writer of broken rows: the web batch
+save treated a non-data-URL `generatedImageUrl` as "already persisted" and
+posted it as the durable reference with no `storage_path`. Fixed at both ends:
+
+- **Write path** — `batch_job_service`/`batch_extraction_service` now carry
+  `generated_image_storage_path` (the durable `tmp/{user}/batch/...` key)
+  through the job model, the persisted payload, the SSE
+  `item_generation_complete` event (which now also ships
+  `generated_image_url`), and the status API. The web save sends
+  `storage_path` with the URL (`frontend/src/components/wardrobe/
+  BatchExtractionFlow.tsx`); `create_item` normalizes every image row via
+  `_normalize_create_image_row` (`backend/app/api/v1/items.py`): a preview
+  key owned by the caller is **promoted** to a canonical `{user}/items/...`
+  object (`StorageService.promote_temp_image_to_item`, which now derives the
+  extension from the source key so `.webp` temp objects stay `.webp`), a
+  URL-only reference gets its key derived, canonical owned keys get fresh
+  URLs, and a cross-user key is rejected with 400.
+- **Read path** — `materialize_image_urls`/`materialize_parent_images`
+  gained `owner_user_id`; when an authenticated handler passes it, rows with
+  a NULL `storage_path` have the key derived from the stored URL and re-minted
+  (only when `_is_owned_by_user`), and item `source_image_url` is re-minted
+  from `source_image_storage_path` (or the derived key). Threaded through
+  every authenticated read surface: items (list/get/update/by-category/
+  search/update-categories/check-duplicates/find-similar/fallback), outfits
+  (list/available-items/get/update/add/remove/recently-worn/favorites/weather),
+  dashboard + outfit-of-the-day, and all 9 recommendations call sites. The
+  public shared-outfit endpoint stays anonymous + forced presigned (no re-mint
+  without an ownership context).
+- **Repair script** `backend/scripts/promote_preview_item_images.py`
+  (dry-run default, `--apply`, JSONL audit): scans `item_images` rows whose
+  `storage_path` is NULL or still a preview key (via the shared
+  `is_preview_key` predicate in `app/core/storage_keys.py`), derives the key
+  from the stored URL, verifies the preview key's owner matches the parent
+  item's user, promotes the temp object to a canonical item object, and
+  writes back `storage_path` + fresh URLs. This is the step
+  `backfill_storage_paths.py` deliberately refuses (it skips `tmp/` keys);
+  it must run BEFORE the weekly temp cleanup deletes the objects.
+
 ### Docs
 
 - This plan; tech-debt-tracker updated (TD-068 resolved, TD-071 note).
@@ -90,21 +131,30 @@ code, the repair tooling, the interim TTL bump, and the cutover runbook.
    MISSING list — rows whose key has no object in R2 are genuinely lost (the
    object never existed or was purged) and cannot be recovered by URL work;
    decide per item (re-upload or accept the placeholder tile).
-3. **Deploy the Worker** —
+2b. **Promote preview-keyed rows (2026-08-09 batch-save damage)** — run
+   BEFORE the weekly temp cleanup deletes the objects:
+   `python scripts/promote_preview_item_images.py` (dry-run, review the
+   samples), then `--apply`. This promotes each `tmp/{user}/batch/...` object
+   to a canonical `{user}/items/...` object and writes the durable
+   `storage_path`; the rows then self-heal via the read-path re-mint.
+3. **Deploy the backend + web** (write/read-path fix, promote script). The
+   web save fix only protects items saved after deploy; pre-existing broken
+   rows are repaired by step 2b.
+4. **Deploy the Worker** —
    `cd infra/images-worker && npx wrangler secret put SUPABASE_URL &&
    npx wrangler secret put SUPABASE_JWT_SECRET && npx wrangler deploy`.
    Add the `images.fitcheckaiapp.com` custom-domain route in the Cloudflare
-   dashboard if not covered by `[routes]`. Confirm DNS resolves before step 4.
-4. **Flip serving mode** — Railway: `IMAGE_SERVING_MODE=worker` +
+   dashboard if not covered by `[routes]`. Confirm DNS resolves before step 5.
+5. **Flip serving mode** — Railway: `IMAGE_SERVING_MODE=worker` +
    `IMAGE_CDN_BASE_URL=https://images.fitcheckaiapp.com`; redeploy.
-5. **Verify** (from `infra/images-worker/README.md`): backend list endpoint
+6. **Verify** (from `infra/images-worker/README.md`): backend list endpoint
    returns `image_url` starting with the CDN base; `curl -sI
    https://images.fitcheckaiapp.com/<user>/items/<name> -H "Authorization:
    Bearer <token>"` → 200 then `cf-cache-status: HIT` on repeat; no token →
    404; another user's path → 404; the public share page still renders (it is
    forced presigned); the leaderboard still renders other users' avatars
    (presigned by design).
-6. **Rollback** — flip `IMAGE_SERVING_MODE` back to `presigned`. The presigned
+7. **Rollback** — flip `IMAGE_SERVING_MODE` back to `presigned`. The presigned
    read path is unchanged; no client change is needed to revert.
 
 ## Non-goals
@@ -136,14 +186,37 @@ code, the repair tooling, the interim TTL bump, and the cutover runbook.
 - [x] Backend pytest (changed modules), ruff clean; frontend lint + tsc +
       full vitest (256) green; worker `npm test` green.
 
+Follow-up (batch-save write path + read-path re-mint, same day):
+- [x] Batch payloads/SSE carry `generated_image_storage_path`; the web save
+      posts it with the image reference; `create_item` promotes preview keys,
+      derives keys from URL-only references, rejects cross-user keys (400).
+- [x] `materialize_image_urls`/`materialize_parent_images` re-mint
+      URL-derived keys and `source_image_url` on authenticated reads only;
+      every authenticated items/outfits/dashboard/recommendations read path
+      passes the owner.
+- [x] `promote_preview_item_images.py` reports in dry-run and promotes +
+      writes rows + audit in `--apply`; preview-owner validation against the
+      parent item's user; uses the shared `is_preview_key` predicate.
+- [x] Backend pytest (3660) + ruff clean; frontend lint + vitest (263) +
+      build green; architecture + docs structure checks green.
+
 ## Context / links
 
 - Related docs: `docs/exec-plans/active/2026-08-05-railway-egress-rca.md`
   (Phase 2 = this cutover), `2026-08-08-item-outfit-image-rca.md` (Flutter
   re-mint), `docs/exec-plans/completed/2026-08-04-railway-bucket-migration-contract.md`
   (legacy rows), `docs/SECURITY.md`, `docs/BACKEND.md`
-- Related code: `backend/app/api/v1/images.py`, `backend/app/api/v1/outfits.py`,
-  `backend/scripts/backfill_storage_paths.py`, `backend/app/core/config.py`,
+- Related code: `backend/app/api/v1/images.py`, `backend/app/api/v1/items.py`,
+  `backend/app/api/v1/outfits.py`, `backend/app/api/v1/users.py`,
+  `backend/app/api/v1/recommendations.py`,
+  `backend/app/services/batch_job_service.py`,
+  `backend/app/services/batch_extraction_service.py`,
+  `backend/app/core/storage_keys.py`,
+  `backend/scripts/backfill_storage_paths.py`,
+  `backend/scripts/promote_preview_item_images.py`,
+  `frontend/src/components/wardrobe/BatchExtractionFlow.tsx`,
+  `frontend/src/hooks/useBatchExtraction.ts`, `frontend/src/types/index.ts`,
+  `backend/app/core/config.py`,
   `frontend/src/lib/sessionCookie.ts`, `frontend/src/lib/auth.ts`,
   `frontend/src/lib/utils.ts`, `frontend/src/components/social/ShareOutfitDialog.tsx`,
   `frontend/src/pages/photoshoot/components/PhotoshootResultsStep.tsx`,
@@ -157,6 +230,7 @@ code, the repair tooling, the interim TTL bump, and the cutover runbook.
 | Date | Note |
 |------|------|
 | 2026-08-09 | RCA complete (DNS check, read-path audit, cutover-blocker found); plan approved; all code + tests shipped |
+| 2026-08-09 | Follow-up shipped: web batch save write-path fix (storage_path + promote-on-create), read-path re-mint fallback (`owner_user_id` threading), `promote_preview_item_images.py` repair script; backend 3660 + frontend 263 tests green |
 
 ## Decision log
 
@@ -165,6 +239,8 @@ code, the repair tooling, the interim TTL bump, and the cutover runbook.
 | 2026-08-09 | Interim TTL 3600 → 604800 (7 days) | 1h is shorter than real client caches; 7d (the S3/R2 presigned-URL maximum) shrinks the broken window to near-zero at zero code risk while worker mode rolls out. URLs are unguessable and ownership-checked, so the longer access window is acceptable; TTL becomes irrelevant once worker mode is live |
 | 2026-08-09 | Fix the public share endpoint in-repo before the flip instead of documenting it | It would have broken every share link + og:image after `IMAGE_SERVING_MODE=worker`; forcing presigned matches the established avatar rule |
 | 2026-08-09 | Web cookie is set from `setTokens`/`clearTokens`, not a supabase-js `onAuthStateChange` | The web's auth is the custom localStorage token store (supabase-js is used only for OAuth); the token store's write/clear points are the single source of truth and cover login/register/refresh/restore/logout |
+| 2026-08-09 | Batch-save generated images are promoted on create (server-side copy) instead of persisted under `tmp/` | `tmp/` previews are deleted by the weekly cleanup and never DB-referenced; the social-import save flow already uses promote-on-save, and `create_item` now mirrors it — the DB row's durable key always points at a canonical object the read path can re-mint |
+| 2026-08-09 | Read-path re-mint fallback is scoped to authenticated handlers (`owner_user_id`) | A cross-user key must never yield a fresh presigned URL for another user's object; anonymous surfaces (public shared outfits) keep stored URLs / forced presigned |
 | 2026-08-09 | Credentials attach by host + presign detection, not unconditionally | R2's CORS policy has no `Access-Control-Allow-Credentials`; a credentialed fetch to a presigned URL is rejected by the browser. Only our worker host gets `credentials: 'include'` / `use-credentials` |
 
 ## Verification

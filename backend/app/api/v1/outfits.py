@@ -402,8 +402,8 @@ async def list_outfits(
         # storage_path at read time (the DB stores keys, not URLs) for both the
         # outfit images and the nested item images.
         await asyncio.gather(
-            materialize_parent_images(outfits),
-            materialize_parent_images(list(items_map.values())),
+            materialize_parent_images(outfits, owner_user_id=user_id),
+            materialize_parent_images(list(items_map.values()), owner_user_id=user_id),
         )
 
         # Attach items to each outfit
@@ -453,7 +453,7 @@ async def available_items(
             images = row.get("item_images") or []
             # Private buckets: materialize a fresh presigned URL per row from
             # storage_path so picker grids never render stale/expired URLs.
-            await materialize_image_urls(images)
+            await materialize_image_urls(images, owner_user_id=user_id)
             primary = next((i for i in images if i.get("is_primary")), images[0] if images else None)
             items.append(
                 {
@@ -482,7 +482,7 @@ async def get_outfit(
         if not outfit:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
         # Private buckets: materialize fresh presigned URLs at read time.
-        outfit = (await materialize_parent_images([outfit]))[0]
+        outfit = (await materialize_parent_images([outfit], owner_user_id=user_id))[0]
         return {"data": outfit, "message": "OK"}
 
     except OutfitNotFoundError:
@@ -611,7 +611,7 @@ async def update_outfit(
         if not outfit:
             raise DatabaseError("Failed to fetch updated outfit", operation="select")
         # Private buckets: materialize fresh presigned URLs at read time.
-        outfit = (await materialize_parent_images([outfit]))[0]
+        outfit = (await materialize_parent_images([outfit], owner_user_id=user_id))[0]
         return {"data": outfit, "message": "Updated"}
 
     except (OutfitNotFoundError, ValidationError, DatabaseError):
@@ -1202,7 +1202,7 @@ async def add_item_to_outfit(
             current = _fetch_outfit(db=db, user_id=user_id, outfit_id=outfit_id_str)
             if current:
                 # Private buckets: materialize fresh presigned URLs at read time.
-                current = (await materialize_parent_images([current]))[0]
+                current = (await materialize_parent_images([current], owner_user_id=user_id))[0]
             return {"data": current or {"id": outfit_id_str, "item_ids": item_ids, "images": []}, "message": "OK"}
         item_ids.append(item_id)
 
@@ -1215,7 +1215,7 @@ async def add_item_to_outfit(
         if not updated:
             raise DatabaseError("Failed to fetch updated outfit", operation="select")
         # Private buckets: materialize fresh presigned URLs at read time.
-        updated = (await materialize_parent_images([updated]))[0]
+        updated = (await materialize_parent_images([updated], owner_user_id=user_id))[0]
         return {"data": updated, "message": "Updated"}
     except (OutfitNotFoundError, ItemNotFoundError, DatabaseError):
         raise
@@ -1250,7 +1250,7 @@ async def remove_item_from_outfit(
             current = _fetch_outfit(db=db, user_id=user_id, outfit_id=outfit_id_str)
             if current:
                 # Private buckets: materialize fresh presigned URLs at read time.
-                current = (await materialize_parent_images([current]))[0]
+                current = (await materialize_parent_images([current], owner_user_id=user_id))[0]
             return {"data": current or {"id": outfit_id_str, "item_ids": item_ids, "images": []}, "message": "OK"}
 
         new_item_ids = [i for i in item_ids if i != item_id_str]
@@ -1269,7 +1269,7 @@ async def remove_item_from_outfit(
         if not updated:
             raise DatabaseError("Failed to fetch updated outfit", operation="select")
         # Private buckets: materialize fresh presigned URLs at read time.
-        updated = (await materialize_parent_images([updated]))[0]
+        updated = (await materialize_parent_images([updated], owner_user_id=user_id))[0]
         return {"data": updated, "message": "Updated"}
     except (OutfitNotFoundError, ValidationError, DatabaseError):
         raise
@@ -1622,7 +1622,7 @@ async def recently_worn(
         )
         outfits = [_normalize_outfit_images(o) for o in (res.data or [])]
         # Private buckets: materialize fresh presigned URLs at read time.
-        outfits = await materialize_parent_images(outfits)
+        outfits = await materialize_parent_images(outfits, owner_user_id=user_id)
         return {"data": {"outfits": outfits}, "message": "OK"}
     except Exception as e:
         logger.error("Recently worn outfits error", user_id=user_id, limit=limit, error=str(e))
@@ -1646,7 +1646,7 @@ async def favorites(
         )
         outfits = [_normalize_outfit_images(o) for o in (res.data or [])]
         # Private buckets: materialize fresh presigned URLs at read time.
-        outfits = await materialize_parent_images(outfits)
+        outfits = await materialize_parent_images(outfits, owner_user_id=user_id)
         return {"data": {"outfits": outfits}, "message": "OK"}
     except Exception as e:
         logger.error("Favorite outfits error", user_id=user_id, error=str(e))
@@ -1679,7 +1679,7 @@ async def weather_suggestions(
         outfits = outfits_res.data or []
         outfits = [_normalize_outfit_images(o) for o in outfits]
         # Private buckets: materialize fresh presigned URLs at read time.
-        outfits = await materialize_parent_images(outfits)
+        outfits = await materialize_parent_images(outfits, owner_user_id=user_id)
 
         tagged = [
             o

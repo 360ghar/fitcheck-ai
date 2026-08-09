@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from supabase import Client
 
 from app.core.logging_config import get_context_logger
+from app.core.storage_keys import is_preview_key
 from app.core.exceptions import (
     AIServiceError,
     ItemNotFoundError,
@@ -51,7 +52,7 @@ from app.utils.db import (
     safe_search_term,
 )
 from app.utils.parallel import parallel_with_retry
-from app.api.v1.images import materialize_parent_images
+from app.api.v1.images import _is_owned_by_user, materialize_parent_images
 
 logger = get_context_logger(__name__)
 
@@ -118,6 +119,84 @@ def _normalize_item_images(item: Dict[str, Any]) -> Dict[str, Any]:
         images = item.get("images")
     item["images"] = images or []
     return item
+
+
+async def _normalize_create_image_row(img, db, user_id: str) -> Dict[str, Any]:
+    """Normalize a client-supplied image reference into a durable DB row.
+
+    Clients historically stored the AI pipeline's SHORT-LIVED presigned URL as
+    ``image_url`` with a NULL ``storage_path`` (the web batch save's
+    "remote studio photo already persisted" branch); read paths can only
+    re-mint from the durable key, so the tile 403'd at TTL with no recovery —
+    the 2026-08-09 closet-image RCA follow-up. Every image reference is
+    therefore normalized here:
+
+    - preview key owned by the caller (``tmp/...``, ``generated/...``, legacy
+      ``{user}/tmp/...``) -> promoted to a canonical ``{user}/items/...``
+      object (server-side copy, see ``promote_temp_image_to_item``) and fresh
+      URLs minted, so the reference survives the weekly temp cleanup;
+    - canonical key owned by the caller -> kept, URLs left as supplied (they
+      were minted at upload time);
+    - no ``storage_path`` but ``image_url`` reduces to an owned key -> the key
+      is derived (same rule as ``materialize_image_urls``) and promoted/stored;
+    - a key that is NOT owned by the caller -> 400: persisting it would make
+      every read path re-mint fresh presigned URLs for another user's object;
+    - anything else (external/junk URL, e.g. an OAuth picture) -> legacy
+      passthrough unchanged (no key to promote or re-mint from).
+
+    Returns the row dict to insert (``image_url``/``thumbnail_url``/
+    ``storage_path`` plus id/item_id/is_primary/width/height/created_at are
+    added by the caller).
+    """
+    storage_path = getattr(img, "storage_path", None)
+    image_url = getattr(img, "image_url", None) or ""
+    thumbnail_url = getattr(img, "thumbnail_url", None)
+
+    if not storage_path:
+        derived = StorageService.key_from_path(image_url)
+        if derived and _is_owned_by_user(derived, user_id):
+            # The URL embeds the key (a presigned ``/<bucket>/<key>`` URL);
+            # use the key as the durable reference and mint fresh URLs.
+            storage_path = derived
+            image_url = ""
+            thumbnail_url = None
+    elif not _is_owned_by_user(storage_path, user_id):
+        raise ValidationError(
+            "image storage_path must reference the caller's own objects",
+            details={"field": "images.storage_path"},
+        )
+
+    if not storage_path:
+        # Nothing we can key or promote (external URL or absent image).
+        return {
+            "image_url": image_url,
+            "thumbnail_url": thumbnail_url,
+            "storage_path": None,
+        }
+
+    if is_preview_key(storage_path):
+        # Preview key (tmp/generated, either layout): promote to a canonical
+        # item object so the reference survives the weekly temp cleanup.
+        promoted = await StorageService.promote_temp_image_to_item(
+            db=db,
+            user_id=user_id,
+            temp_storage_path=storage_path,
+            filename_hint="generated.png",
+        )
+        return {
+            "image_url": promoted["image_url"],
+            "thumbnail_url": promoted["thumbnail_url"],
+            "storage_path": promoted["storage_path"],
+        }
+
+    # Canonical owned key: fresh URLs for the create response (local signing,
+    # no network round trip) so the caller never receives a stale URL.
+    fresh_url = await StorageService.get_public_url(storage_path)
+    return {
+        "image_url": fresh_url,
+        "thumbnail_url": fresh_url,
+        "storage_path": storage_path,
+    }
 
 
 # ============================================================================
@@ -288,23 +367,24 @@ async def create_item(
         if not row:
             raise DatabaseError("Failed to create item", operation="insert")
 
-        # Insert images in a single batch (URLs already uploaded)
+        # Insert images in a single batch. Each reference is normalized first:
+        # preview (tmp/generated) keys are promoted to canonical item objects
+        # and URL-only references get their key derived, so a row never stores
+        # a short-lived presigned URL as its durable image reference.
         images: List[Dict[str, Any]] = []
         if item.images:
             image_rows = []
             for img in item.images:
                 img_id = str(uuid.uuid4())
-                img_row = {
+                img_row = await _normalize_create_image_row(img, db, user_id)
+                img_row.update({
                     "id": img_id,
                     "item_id": item_id,
-                    "image_url": img.image_url,
-                    "thumbnail_url": img.thumbnail_url,
-                    "storage_path": getattr(img, "storage_path", None),
                     "is_primary": bool(img.is_primary),
                     "width": img.width,
                     "height": img.height,
                     "created_at": now,
-                }
+                })
                 image_rows.append(img_row)
 
             # Single batch insert for all images
@@ -527,8 +607,10 @@ async def list_items(
         )
         items = [_normalize_item_images(i) for i in (res.data or [])]
         # Private buckets: materialize fresh short-lived presigned URLs from
-        # storage_path at read time (the DB stores keys, not URLs).
-        items = await materialize_parent_images(items)
+        # storage_path at read time (the DB stores keys, not URLs). The owner
+        # enables the URL-derivation fallback for legacy rows whose image_url
+        # is the only key carrier (see materialize_image_urls).
+        items = await materialize_parent_images(items, owner_user_id=user_id)
 
         total_pages = max(1, (total + page_size - 1) // page_size)
         return {
@@ -583,7 +665,7 @@ async def get_item(
             raise ItemNotFoundError(item_id=item_id_str)
         item = _normalize_item_images(result.data)
         # Private buckets: materialize fresh presigned URLs at read time.
-        item = (await materialize_parent_images([item]))[0]
+        item = (await materialize_parent_images([item], owner_user_id=user_id))[0]
         return {"data": item, "message": "OK"}
     except (ItemNotFoundError, ValidationError, DatabaseError):
         raise
@@ -680,7 +762,7 @@ async def update_item(
         # Private buckets: materialize fresh presigned URLs at read time so the
         # update response never carries a stale/expired URL.
         item = _normalize_item_images(item or {})
-        item = (await materialize_parent_images([item]))[0]
+        item = (await materialize_parent_images([item], owner_user_id=user_id))[0]
         return {"data": item, "message": "Updated"}
 
     except (ItemNotFoundError, ValidationError, StorageServiceError, DatabaseError):
@@ -1089,7 +1171,7 @@ async def get_items_by_category(
         )
         items = [_normalize_item_images(i) for i in (res.data or [])]
         # Private buckets: materialize fresh presigned URLs at read time.
-        items = await materialize_parent_images(items)
+        items = await materialize_parent_images(items, owner_user_id=user_id)
         return {"data": {"items": items}, "message": "OK"}
     except (ValidationError, DatabaseError):
         raise
@@ -1118,7 +1200,7 @@ async def search_items(
         )
         items = [_normalize_item_images(i) for i in (res.data or [])]
         # Private buckets: materialize fresh presigned URLs at read time.
-        items = await materialize_parent_images(items)
+        items = await materialize_parent_images(items, owner_user_id=user_id)
         return {"data": {"items": items}, "message": "OK"}
     except (ValidationError, DatabaseError):
         raise
@@ -1244,7 +1326,7 @@ async def update_item_categories(
         )
         # Private buckets: materialize fresh presigned URLs at read time.
         item = _normalize_item_images((item.data if item else None) or {})
-        item = (await materialize_parent_images([item]))[0]
+        item = (await materialize_parent_images([item], owner_user_id=user_id))[0]
         return {"data": item, "message": "Updated"}
     except (ItemNotFoundError, ValidationError, DatabaseError):
         raise
@@ -1415,7 +1497,7 @@ async def check_duplicates(
             _normalize_item_images(item) for item in (items_result.data or [])
         ]
         # Private buckets: materialize fresh presigned URLs at read time.
-        await materialize_parent_images(normalized_items)
+        await materialize_parent_images(normalized_items, owner_user_id=user_id)
         items_by_id = {item["id"]: item for item in normalized_items}
 
         # Build duplicate response with details
@@ -1582,7 +1664,7 @@ async def find_similar_items(
             _normalize_item_images(item) for item in (items_result.data or [])
         ]
         # Private buckets: materialize fresh presigned URLs at read time.
-        await materialize_parent_images(normalized_items)
+        await materialize_parent_images(normalized_items, owner_user_id=user_id)
         items_by_id = {item["id"]: item for item in normalized_items}
 
         # Build response with scores
@@ -1640,7 +1722,7 @@ async def _fallback_duplicate_check(
 
         rows = [_normalize_item_images(item) for item in (items_result.data or [])]
         # Private buckets: materialize fresh presigned URLs at read time.
-        await materialize_parent_images(rows)
+        await materialize_parent_images(rows, owner_user_id=user_id)
 
         duplicates = []
         for item in rows:

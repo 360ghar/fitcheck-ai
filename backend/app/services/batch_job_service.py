@@ -180,6 +180,13 @@ class DetectedItemData:
     source_image_storage_path: Optional[str] = None
     generated_image_base64: Optional[str] = None
     generated_image_url: Optional[str] = None
+    # Durable bucket key of the generated studio photo (``tmp/{user}/batch/...``
+    # at generation time). Surfaced alongside ``generated_image_url`` so the
+    # save flow can persist a re-materializable key instead of the short-lived
+    # presigned URL — the web batch save previously stored the URL with a NULL
+    # ``storage_path`` and the read path could never re-mint it (2026-08-09
+    # closet-image RCA follow-up).
+    generated_image_storage_path: Optional[str] = None
     generation_error: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -205,6 +212,7 @@ class DetectedItemData:
             "source_image_storage_path": self.source_image_storage_path,
             "generated_image_base64": self.generated_image_base64,
             "generated_image_url": self.generated_image_url,
+            "generated_image_storage_path": self.generated_image_storage_path,
             "generation_error": self.generation_error,
         }
 
@@ -326,6 +334,7 @@ class BatchJobService:
                     source_image_url=raw.get("source_image_url"),
                     source_image_storage_path=raw.get("source_image_storage_path"),
                     generated_image_url=raw.get("generated_image_url"),
+                    generated_image_storage_path=raw.get("generated_image_storage_path"),
                     generation_error=raw.get("generation_error"),
                 )
                 items.append(item)
@@ -817,6 +826,7 @@ class BatchJobService:
                         source_image_storage_path=raw.get("source_image_storage_path"),
                         generated_image_base64=raw.get("generated_image_base64"),
                         generated_image_url=raw.get("generated_image_url"),
+                        generated_image_storage_path=raw.get("generated_image_storage_path"),
                         generation_error=raw.get("generation_error"),
                     )
                 )
@@ -846,6 +856,7 @@ class BatchJobService:
         temp_id: str,
         generated_image_base64: Optional[str] = None,
         generated_image_url: Optional[str] = None,
+        generated_image_storage_path: Optional[str] = None,
         error: Optional[str] = None,
     ) -> None:
         """Update item with generation result."""
@@ -862,6 +873,7 @@ class BatchJobService:
                             item.status = "generated"
                             item.generated_image_base64 = generated_image_base64
                             item.generated_image_url = generated_image_url
+                            item.generated_image_storage_path = generated_image_storage_path
                             job.generation_completed.add(temp_id)
                         _store.mark_dirty(job)
                         break

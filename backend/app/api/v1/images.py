@@ -162,7 +162,7 @@ async def materialize_avatar_url(
 
 
 async def materialize_image_urls(
-    images: List[Dict[str, Any]], *, presigned: bool = False
+    images: List[Dict[str, Any]], *, presigned: bool = False, owner_user_id: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """Regenerate fresh image URLs from ``storage_path`` (read-time materialization).
 
@@ -181,6 +181,15 @@ async def materialize_image_urls(
     returns 404, not a fallback. Images without a ``storage_path`` (legacy
     Supabase public URLs) are left untouched. The Flutter-compat ``url``
     field, when present, is kept in sync with the fresh URLs.
+
+    ``owner_user_id`` enables the URL-derivation fallback: rows written by
+    the web batch save before 2026-08-09 stored the short-lived presigned URL
+    with a NULL ``storage_path`` (the read path could never re-mint it and
+    the tile 403'd at TTL). When the caller is authenticated, the key is
+    derived from the stored URL and re-minted — but ONLY when the derived key
+    is owned by the caller (``_is_owned_by_user``): re-minting a cross-user
+    key would hand out a fresh presigned URL for an object the caller does
+    not own. Anonymous surfaces pass no owner and keep the legacy behavior.
 
     ``presigned=True`` forces short-lived signed URLs even in ``worker`` mode
     (mirrors ``materialize_avatar_url(..., presigned=True)``). Required for
@@ -205,6 +214,14 @@ async def materialize_image_urls(
         if not isinstance(img, dict):
             continue
         storage_path = img.get("storage_path")
+        if not storage_path and owner_user_id:
+            # Legacy/regression rows without a durable key carry the key
+            # embedded in the stored URL (a presigned ``/<bucket>/<key>``
+            # URL). Derive it and re-mint so the tile renders again — but
+            # only when the derived key is owned by the requesting user.
+            derived = StorageService.key_from_path(img.get("image_url"))
+            if derived and _is_owned_by_user(derived, owner_user_id):
+                storage_path = derived
         if not storage_path:
             continue
         thumb_key = StorageService.thumb_key_for(storage_path) if thumbnails_on else None
@@ -252,8 +269,36 @@ async def materialize_image_urls(
     return images
 
 
+async def _remint_parent_source_url(
+    parent: Dict[str, Any], *, presigned: bool, owner_user_id: str
+) -> None:
+    """Re-mint an item row's ``source_image_url`` from its durable key.
+
+    ``items.source_image_url`` is written at create time with the LIVE
+    presigned URL (the batch save passes the job's URL through), so the stored
+    value dies as soon as ``OBJECT_STORAGE_PRESIGN_TTL`` elapses. The durable
+    key lives in ``source_image_storage_path``; every authenticated read
+    re-mints from it — or, for rows that predate the key column, from the key
+    embedded in the stored URL. Both are accepted ONLY when the key is owned
+    by the requesting user (same rule as the ``materialize_image_urls``
+    derivation): a crafted cross-user key must never yield a fresh presigned
+    URL for another user's object. Anonymous surfaces (public shared outfits)
+    never re-mint — source photos are not rendered there and re-minting
+    without an ownership context is unsafe.
+    """
+    path = parent.get("source_image_storage_path") or StorageService.key_from_path(
+        parent.get("source_image_url")
+    )
+    if not path or not _is_owned_by_user(path, owner_user_id):
+        return
+    if presigned:
+        parent["source_image_url"] = await StorageService.get_public_url(path)
+    else:
+        parent["source_image_url"] = await serve_url(path)
+
+
 async def materialize_parent_images(
-    parents: List[Dict[str, Any]], *, presigned: bool = False
+    parents: List[Dict[str, Any]], *, presigned: bool = False, owner_user_id: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """Materialize presigned URLs for a list of parent rows' ``images`` lists.
 
@@ -261,18 +306,32 @@ async def materialize_parent_images(
     (each carrying an ``images`` list) and may also carry nested ``items`` whose
     own ``images`` should be refreshed too. ``presigned`` is passed through to
     :func:`materialize_image_urls` (see its docstring for when to force it).
+    ``owner_user_id`` is passed through as well and additionally enables the
+    ``source_image_url`` re-mint on item rows (see
+    :func:`_remint_parent_source_url`); authenticated read handlers pass their
+    ``user_id``, anonymous surfaces pass nothing.
     """
     async def _materialize_one(parent: Dict[str, Any]) -> None:
         if not isinstance(parent, dict):
             return
-        await materialize_image_urls(parent.get("images") or [], presigned=presigned)
+        await materialize_image_urls(
+            parent.get("images") or [], presigned=presigned, owner_user_id=owner_user_id
+        )
+        # Item rows persist the source photo as a presigned URL at create time;
+        # re-mint it from the durable key on every authenticated read.
+        if owner_user_id:
+            await _remint_parent_source_url(parent, presigned=presigned, owner_user_id=owner_user_id)
         nested_items = parent.get("items")
         if isinstance(nested_items, list):
             for nested in nested_items:
                 if isinstance(nested, dict):
                     await materialize_image_urls(
-                        nested.get("images") or [], presigned=presigned
+                        nested.get("images") or [], presigned=presigned, owner_user_id=owner_user_id
                     )
+                    if owner_user_id:
+                        await _remint_parent_source_url(
+                            nested, presigned=presigned, owner_user_id=owner_user_id
+                        )
     await asyncio.gather(*(_materialize_one(p) for p in (parents or [])))
     return parents
 

@@ -17,6 +17,7 @@ One copy makes that class of divergence impossible.
 """
 
 import re
+from typing import Optional
 
 # A bare UUID, with or without dashes — the shape of every key's first segment.
 # Match with ``.fullmatch`` against a single segment (callers split the key first).
@@ -30,6 +31,26 @@ USER_ID_SEGMENT_RE = re.compile(
 # layout is ``tmp/{user_id}/...`` / ``generated/{user_id}/...`` so every
 # preview shares ONE common prefix (listable/clearable in a single pass).
 _PREVIEW_FOLDER_SEGMENTS = frozenset({"tmp", "generated"})
+
+
+def is_preview_key(key: Optional[str]) -> bool:
+    """True when ``key`` lives in a preview folder (either layout).
+
+    Preview keys are ``{tmp|generated}/{user}/{source}/...`` (current
+    top-level layout) or ``{user}/{tmp|generated}/{source}/...`` (legacy
+    per-user layout); canonical keys are ``{user}/{category}/...`` where the
+    category is never ``tmp``/``generated``, so checking the first two
+    segments is exact for both layouts. Used by the item-create normalize
+    path and the preview-promotion repair script to decide whether a key
+    needs promotion before it can back a DB row (previews are never
+    DB-referenced and are cleaned up weekly).
+    """
+    if not key:
+        return False
+    parts = key.split("/", 2)
+    return parts[0] in _PREVIEW_FOLDER_SEGMENTS or (
+        len(parts) > 1 and parts[1] in _PREVIEW_FOLDER_SEGMENTS
+    )
 
 
 def normalize_preview_key(key: str) -> str:

@@ -1280,8 +1280,6 @@ class StorageService:
         promoted object (tmp objects never carry one). Best-effort thumb: a
         failure only costs the variant, never the promotion.
         """
-        ext = os.path.splitext(filename_hint)[1].lower() or ".png"
-        new_path = StorageService._build_key(user_id, "items", ext)
         # Legacy per-user preview keys ({user_id}/tmp/{sub}/... held in DB rows
         # from before the temp-key migration) are normalized to the shared
         # top-level layout before the move, mirroring the delete paths (see
@@ -1290,6 +1288,16 @@ class StorageService:
         # NoSuchKey. Idempotent for canonical keys, so a fresh
         # tmp/{user_id}/{sub}/... path passes through unchanged.
         source_path = normalize_preview_key(temp_storage_path)
+        # The extension comes from the SOURCE key, not the hint: temp objects
+        # are sniffed at upload time (upload_temp_generated_image re-derives
+        # the real format from the bytes), so ``tmp/.../abc.webp`` really is
+        # WebP and must not be re-keyed as ``.png`` — a key that claims a
+        # format the body does not have is the exact mismatch this module
+        # removed from thumbnails. ``filename_hint`` is only a fallback for
+        # keys with no extension.
+        src_ext = os.path.splitext(source_path)[1].lower()
+        ext = src_ext or os.path.splitext(filename_hint)[1].lower() or ".png"
+        new_path = StorageService._build_key(user_id, "items", ext)
         await StorageService.move_image(
             db=db,
             old_path=source_path,

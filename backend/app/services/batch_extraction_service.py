@@ -780,6 +780,7 @@ class BatchExtractionService:
                 # still returns the image. Best-effort: a failed upload
                 # degrades to base64-only delivery, exactly like photoshoot.
                 image_url = None
+                image_storage_path = None
                 if getattr(job, "persistence_db", None) is not None:
                     try:
                         raw = (
@@ -794,6 +795,13 @@ class BatchExtractionService:
                             source="batch",
                         )
                         image_url = upload.get("image_url")
+                        # The durable bucket key (``tmp/{user}/batch/...``).
+                        # Surfaced with the URL so save flows can persist a
+                        # re-materializable key instead of the short-lived
+                        # presigned URL (2026-08-09 closet-image RCA follow-up:
+                        # the web save stored the URL with a NULL storage_path
+                        # and the read path could never re-mint it).
+                        image_storage_path = upload.get("storage_path")
                     except Exception as upload_error:
                         logger.warning(
                             "Generated image upload failed; keeping base64 in memory",
@@ -809,6 +817,7 @@ class BatchExtractionService:
                     item.temp_id,
                     generated_image_base64=image_base64,
                     generated_image_url=image_url,
+                    generated_image_storage_path=image_storage_path,
                 )
 
                 await BatchJobService.broadcast_event(job.job_id, "item_generation_complete", {
@@ -816,6 +825,8 @@ class BatchExtractionService:
                     "temp_id": item.temp_id,
                     "image_id": item.image_id,
                     "generated_image_base64": image_base64,
+                    "generated_image_url": image_url,
+                    "generated_image_storage_path": image_storage_path,
                     "completed_count": len(job.generation_completed),
                     "total_items": job.total_items,
                     "timestamp": utcnow_iso(),

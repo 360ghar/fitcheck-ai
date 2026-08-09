@@ -553,6 +553,14 @@ export interface DetectedItem {
   status: DetectedItemStatus;
   /** Generated product image URL (data URL or blob URL) */
   generatedImageUrl?: string;
+  /**
+   * Durable bucket key of the generated studio photo (surfaced alongside
+   * generatedImageUrl since the backend ships it in batch payloads). The save
+   * step passes it through to the item so the backend can promote the preview
+   * object to a canonical item path instead of persisting the short-lived
+   * presigned URL.
+   */
+  generatedImageStoragePath?: string;
   /** Generation error message if failed */
   generationError?: string;
   /** User-editable name for the item */
@@ -822,6 +830,8 @@ export interface ItemGenerationCompleteData {
   temp_id: string;
   image_id: string;
   generated_image_base64: string;
+  generated_image_url?: string;
+  generated_image_storage_path?: string;
   completed_count: number;
   total_items: number;
   timestamp: string;

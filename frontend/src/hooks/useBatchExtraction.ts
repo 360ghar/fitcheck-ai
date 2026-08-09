@@ -129,6 +129,7 @@ function convertToDetectedItem(
     status: string;
     generated_image_base64?: string;
     generated_image_url?: string;
+    generated_image_storage_path?: string;
     generation_error?: string;
     occasion_tags?: string[];
     source_image_url?: string;
@@ -168,6 +169,7 @@ function convertToDetectedItem(
       (apiItem.generated_image_base64
         ? `data:image/png;base64,${apiItem.generated_image_base64}`
         : undefined),
+    generatedImageStoragePath: apiItem.generated_image_storage_path,
     generationError: apiItem.generation_error,
     name: generateItemName({
       colors: apiItem.colors,
@@ -280,6 +282,7 @@ function sameDetectedItems(a: DetectedItem[], b: DetectedItem[]): boolean {
       x.detailedDescription !== y.detailedDescription ||
       x.status !== y.status ||
       x.generatedImageUrl !== y.generatedImageUrl ||
+      x.generatedImageStoragePath !== y.generatedImageStoragePath ||
       x.generationError !== y.generationError ||
       x.name !== y.name ||
       (x.tags || []).join(',') !== (y.tags || []).join(',') ||

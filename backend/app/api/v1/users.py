@@ -1052,19 +1052,22 @@ def _primary_storage_path(images: List[Dict]) -> Optional[str]:
     return (primary or {}).get("storage_path")
 
 
-async def _build_recent_activity(items: List[Dict], outfits: List[Dict]) -> List[Dict[str, Any]]:
+async def _build_recent_activity(
+    items: List[Dict], outfits: List[Dict], owner_user_id: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """Build combined recent activity list from items and outfits.
 
     Rows carry nested ``item_images`` / ``outfit_images``; their ``storage_path``
     is materialized into a fresh short-lived presigned URL here so activity
     thumbnails never render an expired URL. Rows without ``storage_path``
-    (legacy) keep their stored URL.
+    (legacy) keep their stored URL unless ``owner_user_id`` enables the
+    URL-derivation fallback (see materialize_image_urls).
     """
     activity: List[Dict[str, Any]] = []
 
     for it in items:
         images = it.get("item_images") or []
-        await materialize_image_urls(images)
+        await materialize_image_urls(images, owner_user_id=owner_user_id)
         activity.append({
             "type": "item_created",
             "description": f"Added {it.get('name')}",
@@ -1075,7 +1078,7 @@ async def _build_recent_activity(items: List[Dict], outfits: List[Dict]) -> List
 
     for o in outfits:
         images = o.get("outfit_images") or []
-        await materialize_image_urls(images)
+        await materialize_image_urls(images, owner_user_id=owner_user_id)
         activity.append({
             "type": "outfit_created",
             "description": f"Created {o.get('name')}",
@@ -1136,7 +1139,7 @@ async def _get_outfit_of_the_day(user_id: str, db: Client) -> Optional[Dict[str,
         # short-lived presigned URL is regenerated at read time (same contract
         # as the items/outfits list endpoints) — the stored image_url would be
         # stale/expired and render a broken card image.
-        await materialize_image_urls(images)
+        await materialize_image_urls(images, owner_user_id=user_id)
         primary = next((i for i in images if i.get("is_primary")), images[0] if images else None)
         return {
             "id": o.get("id"),
@@ -1235,7 +1238,11 @@ async def get_dashboard(
         # Activity materialization, weather and outfit-of-the-day are
         # independent of each other; run them concurrently.
         recent_activity, weather_based, outfit_of_the_day = await asyncio.gather(
-            _build_recent_activity(recent_items.data or [], recent_outfits.data or []),
+            _build_recent_activity(
+                recent_items.data or [],
+                recent_outfits.data or [],
+                owner_user_id=user_id,
+            ),
             _get_weather_suggestion(user_id, d),
             _get_outfit_of_the_day(user_id, d),
         )
