@@ -97,10 +97,10 @@ async def _resolve_location(
             db.table("user_settings")
             .select("default_location")
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if settings_row.data and settings_row.data.get("default_location"):
+        if settings_row and settings_row.data and settings_row.data.get("default_location"):
             return str(settings_row.data["default_location"])
     except Exception:
         pass

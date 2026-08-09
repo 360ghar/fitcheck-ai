@@ -141,3 +141,189 @@ Migration status on hosted Supabase, per the in-repo records
 
 Also: set Railway env `AI_ENCRYPTION_KEY` + the five Stripe vars; optional
 paid-tier Gemini key.
+
+## Second follow-up window (2026-08-07 21:09 – 2026-08-08 18:49 UTC)
+
+A new log window triaged after the first follow-up pass. Verdict: **the ops
+checklist above was still not executed** — every boot still logs the
+`AI_ENCRYPTION_KEY` / Stripe config gaps, photoshoot 503s continue at the
+same rate, and one genuinely new item-write defect (opaque 500s) surfaced.
+
+| # | Log signature | Root cause | Fix |
+|---|---------------|------------|-----|
+| 1 | `POST /subscription/checkout` + `/portal` 503 ×10+ (21:09 → 16:04) | `_stripe_billing_configured()` still false — Railway env still missing `STRIPE_SECRET_KEY` + the four `STRIPE_*_PRICE_ID` vars. Fail-closed by design (`BILLING_NOT_CONFIGURED`). | Ops only (checklist below). |
+| 2 | `POST /photoshoot/generate` 503 ×30+ with `AI job persistence is unavailable: 'photoshoot_jobs' … 016/023/035 not applied` (22:48 → 16:45) | Hosted Supabase still missing the durable-job schema (at minimum 035; 036/039/041/042 still pending per the table above). Code already returns the friendly retryable 503 + logs the hint — correct. | Ops only: apply pending migrations. |
+| 3 | `PUT /api/v1/ai/settings` 503 ×3 (13:49:18) | `AI_ENCRYPTION_KEY` still empty → fail-closed `AIServiceError` when saving a user AI-provider key. | Ops only: set `AI_ENCRYPTION_KEY`. |
+| 4 | `POST /api/v1/items` 500 ×2 (15:46:12, ~1.1s/1.4s, `Create item error`) | Opaque: the real exception lives only in the structured `error=` field, which Railway's plain-text drain drops, and no "pooled connection, rebuilding" warnings preceded the 500s — so this is **not** the gateway-blip class. Deterministic PostgREST rejection is the fit: `create_item` always sends `items.source_image_url` / `source_image_storage_path` (migration 019, absent from 001) → PGRST204/42703; or a presigned/R2 URL >500 chars against the un-widened `item_images.image_url VARCHAR(500)` (migration 036 pending) → 22001. Both are the same schema-drift theme. | **Code (this commit)**: migration-gap detection in `create_item` → friendly 503 + hint in plain-text-visible log; readiness now fails closed on the 019 columns. Ops: apply migrations. |
+
+### Code changes (this commit)
+
+1. `backend/app/utils/db.py` — new `items_schema_migration_hint(error)` (LOGS
+   ONLY): names migration 019 for PGRST205/42703/PGRST204 on item writes and
+   migration 036 for SQLSTATE 22001 (value too long for
+   `item_images.image_url`). Mirrors `job_persistence_migration_hint`.
+2. `backend/app/api/v1/items.py` — `create_item` catch-all: on a schema gap,
+   log the hint with the exception type in the message text (plain-text-drain
+   safe) and raise `SchemaNotInitializedError` → friendly **503**
+   `SCHEMA_NOT_INITIALIZED` instead of an opaque 500; all other unexpected
+   errors keep the 500 `DATABASE_ERROR` but now log
+   `Create item error (Type): …` so the cause survives the drain. The sibling
+   catch-alls (upload, get/update/delete, item-image add/delete, categorize,
+   update-categories) get the same exception-type-in-message logging.
+3. `backend/app/main.py` — `REQUIRED_COLUMNS` gains
+   `("items", "source_image_url")` and `("items", "source_image_storage_path")`
+   so a missing 019 fails `/ready` with a clear boot log (same enforcement as
+   `photoshoot_jobs.image_failures`).
+4. Tests — `backend/tests/integration/test_items_schema_gap.py` (new, 7 cases:
+   hint unit cases for 019/036/non-gap; create_item PGRST204/PGRST205 →
+   503 with hint in logs and no raw DB text to the client; 22001 → 503 with
+   the 036 hint; non-migration error → 500 with exception type in logs).
+
+### Tests
+
+```bash
+cd backend && source .venv/bin/activate
+python -m pytest tests/integration/test_items_schema_gap.py tests/integration/test_items_routes_coverage.py tests/integration/test_wave_b_hardening.py tests/unit/test_core/test_config_health.py -q
+python -m pytest -q          # full suite (3628 passed, 4 skipped, 2026-08-09)
+ruff check app/utils/db.py app/api/v1/items.py app/main.py tests/integration/test_items_schema_gap.py
+```
+
+### Ops checklist (RE-EMPHASIS — still not executed as of 2026-08-08)
+
+The window proves the apply-before-deploy discipline is still broken. Do all
+of the following before the next backend deploy:
+
+1. **Apply all pending migrations in order** in the Supabase SQL editor
+   (each is idempotent): at minimum **016, 019, 023, 035, 036, 039, 041
+   (re-apply), 042**; run anything else from 016→042 not yet applied. After
+   applying, run `NOTIFY pgrst, 'reload schema';`.
+2. **Verify** in the SQL editor:
+   `SELECT image_failures FROM photoshoot_jobs LIMIT 1;`
+   `SELECT source_image_url FROM items LIMIT 1;`
+   `SELECT length(image_url) FROM item_images ORDER BY 1 DESC LIMIT 1;`
+3. **Railway env**: `AI_ENCRYPTION_KEY=$(openssl rand -hex 32)`,
+   `STRIPE_SECRET_KEY`, `STRIPE_PLUS_MONTHLY_PRICE_ID`,
+   `STRIPE_PLUS_YEARLY_PRICE_ID`, `STRIPE_PRO_MONTHLY_PRICE_ID`,
+   `STRIPE_PRO_YEARLY_PRICE_ID` (create the four Stripe prices first).
+4. **Railway healthcheck path** → `/health`.
+
+### Follow-up: all migrations made re-runnable (2026-08-08, evening)
+
+The first apply attempt aborted with
+`ERROR: 42710: trigger "extraction_jobs_updated_at" for relation
+"extraction_jobs" already exists` — migration 016 had a plain `CREATE
+TRIGGER`/`CREATE POLICY` with no drop guard, so re-running it after a prior
+partial application failed (the hosted DB already had the table + trigger).
+Postgres has no `CREATE TRIGGER/POLICY IF NOT EXISTS` and no `ADD CONSTRAINT
+IF NOT EXISTS`, so every file was audited (script: drop-guard per
+`CREATE POLICY|TRIGGER`/`ADD CONSTRAINT`, `ON CONFLICT` on top-level
+`INSERT`s; 43 files) and the four unguarded files were fixed:
+
+| File | Fix |
+|------|-----|
+| `016_extraction_jobs.sql` | `DROP TRIGGER IF EXISTS extraction_jobs_updated_at` + `DROP POLICY IF EXISTS` ×4 before the creates (the 42710 failure) |
+| `017_blog_posts.sql` | `DROP POLICY IF EXISTS` ×3 + `DROP TRIGGER IF EXISTS trigger_update_blog_posts_updated_at` |
+| `004_add_user_gender.sql` | `DROP CONSTRAINT IF EXISTS users_gender_check` before `ADD CONSTRAINT` |
+| `011_shared_outfits_unique_constraint.sql` | `DROP CONSTRAINT IF EXISTS shared_outfits_outfit_user_unique` before `ADD CONSTRAINT` |
+
+All other files already guarded (001 policies/triggers/storage-insert, 007/008
+backfill `ON CONFLICT`, 002/014 DO-block constraint guards, 023 drop-then-
+create, 027/029/030 constraint drops). Verified by applying **all 43
+migrations twice in sequence** on a scratch PostgreSQL 17 with a stubbed
+Supabase env (auth/storage schemas + anon/authenticated/service_role): both
+passes clean, no duplicated seed rows, `valid_batch_size` keeps the 029
+bound (<=100), triggers/policies exist exactly once. The operator can now
+re-run any not-yet-applied migration in order without the 42710 abort;
+`docs/references/local-setup.md` documents the re-runnability contract.
+
+## Third follow-up window (2026-08-08 22:50 – 2026-08-09 04:45 UTC) — new defect found
+
+A fresh log window was triaged after the second follow-up pass. Verdict:
+**the ops checklist was still not executed** (photoshoot 503s + config gaps
+continue at the same rate), the Agnes 400 and token-refresh entries are
+known by-design behaviors, and ONE genuinely new code defect surfaced —
+`GET /items/{id}` 500s for missing/not-owned items.
+
+| # | Log signature | Root cause | Fix |
+|---|---------------|------------|-----|
+| 1 | `POST /photoshoot/generate` 503 ×30+ (22:50 → 03:26, `AI job persistence is unavailable … 016/023/035 not applied`) | Hosted Supabase still missing 016/023/035. The hint text in the logs proves the code-side handling (friendly retryable 503 + operator hint + readiness fail-closed on `photoshoot_jobs.image_failures`) is deployed and correct. | Ops only: apply pending migrations (checklist below). |
+| 2 | Every boot (23:59 → 03:56): `AI_ENCRYPTION_KEY - Empty in production`; `STRIPE_SECRET_KEY` + four `STRIPE_*_PRICE_ID` missing | Railway env gaps (same as second window #1/#3). Fail-closed at request time by design. | Ops only: set the five env vars (+ `AI_ENCRYPTION_KEY`). |
+| 3 | 03:26:50 `Image generation request failed (status=400, model=agnes-image-2.1-flash): Unable to generate this content` → `Generation failed for item item-29851209` | Provider content-policy refusal; classified non-retryable since 08-03, fallback only cross-host since 08-05. The item is recorded failed with the error; no retry storm. | By design. No code change. |
+| 4 | 04:32:57 `Token refresh failed` (single event) | Generic backend refresh failure (not "already used") — an expired/revoked refresh token from one client. Single-flight (web + Flutter) and backend dedup are live (TD-084). Client bounces to login by design. | By design. No code change. |
+| 5 | 04:44–04:45 `Get item error` → `GET /api/v1/items/{id}` 500 ×12 (4 distinct item IDs × 3 retries, ~160–550 ms each, no reconnect warnings, no other endpoint failing) | **NEW CODE DEFECT.** postgrest-py 2.31.0's `.single().execute()` RAISES `APIError` (406/PGRST116) when the query matches zero rows, so `get_item`'s `if not result.data: raise ItemNotFoundError` branch was dead code: a deleted or not-owned item (`eq user_id` filters it out) 500'd instead of 404ing. The fast, per-item, deterministic signature (vs. the slower rebuild-retry connection class) fits exactly. The test suite's `FakeDB` emulates `maybe_single` semantics for both builders, so the suite passed while production 500'd — the fake diverges from the real client exactly where the bug lived. Same dead-check shape at ~60 `.single()` call sites. | **Fixed (this pass)** — sweep `.single()` → `.maybe_single()` across items/outfits/shared-outfits/blog/calendar/weather/recommendations/ai/users + services (outfit delete, batch avatar, photoshoot usage, subscription usage records) so zero rows take the intended not-found/None/default path; `get_item` additionally maps a structured PGRST116 to 404 as belt-and-suspenders. `deps.get_current_user` deliberately KEEPS `.single()`: it depends on the PGRST116 raise for OAuth profile auto-provisioning. Regression test `test_get_item_maps_pgrst116_to_not_found` simulates the real client. Test fakes gained `maybe_single` aliases. |
+
+### Code changes (this commit)
+
+1. `.single()` → `.maybe_single()` + zero-row guards (`not result or not result.data`) at every call site whose `if not X.data` branch was dead:
+   - `api/v1/items.py` — get/update/delete/favorite/wear/image add+delete/categorize/categories/similar (13 sites); `get_item` also maps PGRST116 → `ItemNotFoundError`.
+   - `api/v1/outfits.py` — collection ownership + refetch, `_fetch_outfit`, public outfit, update/share/duplicate, add/remove item, generation status, image upload/delete, favorite/wear/wear-history (20 sites); collection refetch misses now 404 (`CollectionNotFoundError`) instead of 500.
+   - `api/v1/shared_outfits.py` (feedback), `api/v1/blog.py` (slug), `api/v1/calendar.py` (disconnect/update/delete/assign + no-change refetch), `api/v1/weather.py` (`_resolve_location`), `api/v1/recommendations.py` (birth profile ×2, weather/astrology settings, similar, style), `api/v1/ai.py` (avatar fetch ×2, generate_outfit, try-on), `api/v1/users.py` (get/upsert body profile — first-time create previously 500'd), `services/outfit_service.py` (delete load), `services/batch_extraction_service.py` (avatar), `services/photoshoot_service.py` (daily usage), `services/subscription_service.py` (usage record select + reload).
+   - `deps.py` `get_current_user` intentionally unchanged (PGRST116 raise is the designed missing-profile signal).
+2. Tests — `test_get_item_maps_pgrst116_to_not_found` (real-client regression: PGRST116 → 404); test fakes/helpers updated to the `maybe_single` chain (`_error_db`, `_RefetchEmptyDB` expectation now `CollectionNotFoundError`, blog/astrology/phase2e/wave-a/outfits-models/users/subscription mocks).
+
+### Self-review pass (same window) — two latent defects found and fixed
+
+Reviewing the sweep (2026-08-09) surfaced two defects that the test harness
+had been masking, plus one commit-hygiene error:
+
+1. **`add_collection_outfit` was half-converted** (`outfits.py`): the
+   membership probe used `.maybe_single()` but still read
+   `if not membership.data` without the `not membership` guard. With the
+   real client (bare `None` on zero rows) a FIRST-time add to a collection
+   would 500 (AttributeError) instead of upserting. The pre-existing local
+   fake override (`builder._bare_none = False`) made `maybe_single` return a
+   falsy *response object* instead of bare `None`, so the suite passed.
+   Fixed the guard and **removed the override** (the shared FakeDB's
+   `maybe_single` already mirrors the real client). A follow-up scan across
+   every `maybe_single` assignment in `app/` (113 call sites) found one
+   further unguarded access — pre-existing, not sweep-introduced:
+   `users.py` avatar-replace reads `row.data` before checking `row`, so a
+   missing row hit AttributeError (swallowed by the local try/except, then
+   the old avatar leaked). Guard fixed in the same pass. A committed-tree
+   audit additionally caught one dropped hunk: `find_similar_items`' source
+   fetch was converted in the working tree but a split-staging bug left
+   `.single()` in the commit — the hardened FakeDB exposed it
+   (`test_find_similar_raises_not_found`), and the hunk is now in the
+   commit.
+2. **Shared FakeDB `.single()` fidelity** (`tests/utils/fake_db.py`):
+   `single()` returned a falsy result on zero rows, while the real client
+   raises (406/PGRST116). That divergence is what let the original dead
+   `if not result.data` guards ship. `FakeDB.single()` now raises
+   `PGRST116Error` (code `PGRST116`, 406) on zero rows, matching
+   postgrest-py; only `maybe_single()` returns `None`. No test currently
+   exercises `single()` on the shared fake (deps.py keeps it and catches
+   the raise by design), so a future misuse fails loudly instead of
+   silently passing.
+3. **Commit hygiene**: the fix commit initially included the user's
+   UNCOMMITTED `get_public_outfit` `presigned=True` change (code + test +
+   import) via whole-file staging. Worse, that hunk referenced a
+   `presigned` kwarg that only exists in the user's uncommitted
+   `images.py`, so the committed tree's public share-link endpoint would
+   have TypeError'd. The commit was amended to exclude it; the user's
+   change remains uncommitted in the working tree.
+
+Also corrected from the first write-up: the 6 image-agent test failures
+seen during the sweep were NOT caused by the uncommitted `models/ai.py`
+`save_to_storage=True` flip. Re-running the identical source tree after
+the harness fixes gives **3660 passed, 0 failed** with `models/ai.py`
+still flipped; the failures were a stale pytest assertion-rewrite cache
+artifact and do not reproduce.
+
+### Tests
+
+```bash
+cd backend && source .venv/bin/activate
+python -m pytest -q   # 3660 passed, 0 failed, 4 skipped (99.89% coverage)
+ruff check app/ tests/
+```
+
+### Ops checklist (THIRD re-emphasis — still not executed as of 2026-08-09 04:45)
+
+1. Apply pending migrations in order on hosted Supabase (016, 019, 023, 035, 036, 039, 041 re-apply, 042; everything 016→042 not yet applied), then `NOTIFY pgrst, 'reload schema';`.
+2. Railway env: `AI_ENCRYPTION_KEY=$(openssl rand -hex 32)`, `STRIPE_SECRET_KEY`, the four `STRIPE_*_PRICE_ID` vars; healthcheck path → `/health`.
+3. Deploy HEAD (this fix + the uncommitted 08-08 hardening once it is verified/committed).
+
+### Deferred debt
+
+- The uncommitted 08-08 evening hardening (item-write schema-gap 503s, migration re-runnability, exception-type logging, and the `get_public_outfit` presigned-URL + images.py `presigned` kwarg work) still awaits verification + commit. NOTE: the pending `get_public_outfit`/`images.py` presigned change is internally consistent and required together — the public share-link endpoint currently serves worker-mode URLs that 404 for anonymous viewers until both land.
+- TD-043 (async Supabase client) remains the full fix for pooled-connection outages.

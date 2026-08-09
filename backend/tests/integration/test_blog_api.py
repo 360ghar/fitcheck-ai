@@ -121,13 +121,13 @@ async def test_categories_sorted_unique_and_cached():
 
 @pytest.mark.asyncio
 async def test_get_post_sets_cache_header():
-    # get_post uses `.single()` and expects a row DICT (not a list) back.
+    # get_post uses `.maybe_single()` and expects a row DICT (not a list) back.
     single_result = Mock()
     single_result.data = _post_row("some-post")
     query = Mock()
     query.select.return_value = query
     query.eq.return_value = query
-    query.single.return_value = query
+    query.maybe_single.return_value = query
     query.execute.return_value = single_result
     db = Mock()
     db.table.return_value = query
@@ -153,7 +153,7 @@ async def test_get_post_missing_is_not_cacheable():
     query = Mock()
     query.select.return_value = query
     query.eq.return_value = query
-    query.single.return_value = query
+    query.maybe_single.return_value = query
     query.execute.return_value = single_result
     db = Mock()
     db.table.return_value = query

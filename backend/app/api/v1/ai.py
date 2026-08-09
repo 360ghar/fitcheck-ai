@@ -104,7 +104,7 @@ async def _provider_ready_avatar_url(avatar_url: str) -> str:
 async def _fetch_user_avatar_base64(user_id: str, db: Client) -> Optional[str]:
     """Best-effort avatar fetch for profile-aware extraction and generation."""
     try:
-        user_result = await asyncio.to_thread(db.table("users").select("avatar_url").eq("id", user_id).single().execute)
+        user_result = await asyncio.to_thread(db.table("users").select("avatar_url").eq("id", user_id).maybe_single().execute)
         if not user_result or not user_result.data:
             return None
 
@@ -270,11 +270,11 @@ async def generate_outfit(
                     db.table("users")
                     .select("avatar_url, body_profile_id")
                     .eq("id", user_id)
-                    .single()
+                    .maybe_single()
                     .execute
                 )
 
-                if user_result.data and user_result.data.get("avatar_url"):
+                if user_result and user_result.data and user_result.data.get("avatar_url"):
                     avatar_url = user_result.data["avatar_url"]
                     try:
                         avatar_base64 = await StorageService.download_to_base64(
@@ -297,17 +297,17 @@ async def generate_outfit(
                 # Fetch body profile if available and requested
                 if request.use_body_profile:
                     body_profile_id = (
-                        user_result.data.get("body_profile_id") if user_result.data else None
+                        user_result.data.get("body_profile_id") if user_result and user_result.data else None
                     )
                     if body_profile_id:
                         bp_result = await asyncio.to_thread(
                             db.table("body_profiles")
                             .select("height_cm, weight_kg, body_shape, skin_tone")
                             .eq("id", body_profile_id)
-                            .single()
+                            .maybe_single()
                             .execute
                         )
-                        if bp_result.data:
+                        if bp_result and bp_result.data:
                             body_profile = bp_result.data
 
             # Get generation agent
@@ -527,7 +527,7 @@ async def generate_try_on(
     """
     try:
         # 1. Fetch user's avatar_url from database
-        user_result = await asyncio.to_thread(db.table("users").select("avatar_url").eq("id", user_id).single().execute)
+        user_result = await asyncio.to_thread(db.table("users").select("avatar_url").eq("id", user_id).maybe_single().execute)
         if not user_result or not user_result.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

@@ -162,12 +162,12 @@ def _patch_vector_service(monkeypatch) -> Mock:
 def _error_db(error: Exception) -> Mock:
     """A db whose first select chain raises `error` on execute.
 
-    The handlers' existence checks build `.select(...).eq(...).eq(...).single()
-    .execute`; chained MagicMock method calls nest, so the second `.eq()` lives
-    on `eq.return_value.eq.return_value`.
+    The handlers' existence checks build `.select(...).eq(...).eq(...)
+    .maybe_single().execute`; chained MagicMock method calls nest, so the
+    second `.eq()` lives on `eq.return_value.eq.return_value`.
     """
     db = Mock()
-    db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.side_effect = error
+    db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.side_effect = error
     return db
 
 
@@ -650,6 +650,36 @@ async def test_get_item_wraps_unexpected_errors(monkeypatch):
         await items_module.get_item(item_id=ITEM_ID, user_id=USER_ID, db=Mock())
 
 
+@pytest.mark.asyncio
+async def test_get_item_maps_pgrst116_to_not_found(monkeypatch):
+    """Real-client regression for the 2026-08-09 production 500 burst.
+
+    postgrest-py's ``single()`` RAISES APIError (406/PGRST116) when the
+    query matches zero rows, so a deleted or not-owned item 500'd instead of
+    404ing. The handler now uses ``maybe_single()`` and, as belt-and-
+    suspenders, maps a structured PGRST116 to ItemNotFoundError.
+    """
+    from postgrest.exceptions import APIError as PostgrestAPIError
+
+    monkeypatch.setattr(
+        items_module,
+        "execute_with_reconnect",
+        AsyncMock(
+            side_effect=PostgrestAPIError(
+                {
+                    "code": "PGRST116",
+                    "message": "JSON object requested, multiple (or no) rows returned",
+                    "details": None,
+                    "hint": None,
+                }
+            )
+        ),
+    )
+
+    with pytest.raises(ItemNotFoundError):
+        await items_module.get_item(item_id=ITEM_ID, user_id=USER_ID, db=Mock())
+
+
 # ============================================================================
 # PUT /items/{item_id}
 # ============================================================================
@@ -767,7 +797,7 @@ async def test_update_item_raises_not_found_when_the_refresh_read_misses():
     """The update succeeds but the follow-up refresh read returns nothing:
     the handler reports ItemNotFoundError (row vanished mid-update)."""
     db = Mock()
-    select_execute = db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute
+    select_execute = db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute
     select_execute.side_effect = [
         SimpleNamespace(data={"id": ITEM_ID}),  # existence check
         SimpleNamespace(data=None),  # refresh read

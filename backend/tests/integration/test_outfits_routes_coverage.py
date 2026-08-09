@@ -21,11 +21,10 @@ model, so a tiny local subclass adds them without touching ``tests/utils``:
 
 * ``contains`` (for ``jsonb_contains`` on the ``tags`` filter);
 * ``not_.is_`` (``recently_worn``);
-* ``maybe_single`` returning a response object with ``data=None`` on zero
-  rows so BOTH branches of ``add_collection_outfit``'s
-  ``if not membership.data`` are reachable (the shared fake mirrors real
-  postgrest-py, which returns a bare ``None`` there - see the app-bug note
-  in ``test_add_collection_outfit_upserts_a_new_member``).
+* ``maybe_single`` — inherited from the shared FakeDB, which mirrors real
+  postgrest-py (bare ``None`` on zero rows). The route guards
+  (``not result or not result.data``) handle that form; see the app-bug
+  note in ``test_add_collection_outfit_upserts_a_new_member``.
 """
 
 import inspect
@@ -113,13 +112,6 @@ class _OutfitsFakeDB(FakeDB):
                 return not_builder._builder
 
             not_builder.is_ = _is_
-
-        def _maybe_single():
-            builder._single = True
-            builder._bare_none = False
-            return builder
-
-        builder.maybe_single = _maybe_single
 
         # PostgREST's `return=representation` updates echo the merged rows
         # back AND the change is committed; the shared fake persists the
@@ -1223,12 +1215,14 @@ async def test_update_collection_raises_when_missing():
 
 
 @pytest.mark.asyncio
-async def test_update_collection_raises_database_error_when_refetch_misses():
+async def test_update_collection_raises_not_found_when_refetch_misses():
+    """The collection vanishes between the ownership check and the refetch:
+    the handler reports 404 (CollectionNotFoundError), not a 500."""
     db = _RefetchEmptyDB(
         {"outfit_collections": [_collection_row()], "outfits": [_outfit_row()]}
     )
 
-    with pytest.raises(DatabaseError):
+    with pytest.raises(CollectionNotFoundError):
         await outfits_module.update_collection(
             collection_id=UUID(COLLECTION_ID),
             update=OutfitCollectionUpdate(name="Evening"),

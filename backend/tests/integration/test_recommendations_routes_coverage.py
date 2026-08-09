@@ -89,6 +89,10 @@ class _FlakyQuery:
         self._single = True
         return self
 
+    def maybe_single(self) -> "_FlakyQuery":
+        self._single = True
+        return self
+
     def limit(self, _n: int) -> "_FlakyQuery":
         return self
 

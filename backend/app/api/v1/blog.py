@@ -150,11 +150,11 @@ async def get_post(
             .select("*")
             .eq("slug", slug)
             .eq("is_published", True)
-            .single()
+            .maybe_single()
             .execute
         )
 
-        if not result.data:
+        if not result or not result.data:
             raise NotFoundError(
                 message=f"Blog post '{slug}' not found",
                 resource_type="blog_post",

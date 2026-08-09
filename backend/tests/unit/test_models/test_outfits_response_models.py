@@ -73,7 +73,7 @@ def _make_db_for_get_outfit(outfit_row, item_rows=None):
     def table_side_effect(name):
         m = Mock()
         if name == "outfits":
-            m.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value.data = outfit_row
+            m.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = outfit_row
         elif name == "items":
             m.select.return_value.in_.return_value.execute.return_value.data = item_rows or []
         return m

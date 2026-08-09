@@ -138,7 +138,7 @@ async def test_get_or_create_usage_record_uses_insert_only_upsert_and_reloads():
     # First select: no row. Upsert: no-op. Re-select: the (already
     # incremented) authoritative row.
     chain = (
-        db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value
+        db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value
     )
     chain.execute.side_effect = [Mock(data=None), result]
 

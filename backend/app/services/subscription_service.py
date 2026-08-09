@@ -883,12 +883,12 @@ class SubscriptionService:
                 .select("*")
                 .eq("user_id", user_id)
                 .eq("period_start", period_start.isoformat())
-                .single()
+                .maybe_single()
                 .execute(),
                 db,
                 extra={"operation": "get_or_create_usage_record_reload", "user_id": user_id},
             )
-            if not result.data:
+            if not result or not result.data:
                 raise DatabaseError("Failed to create usage record")
             return result.data
 
@@ -898,13 +898,13 @@ class SubscriptionService:
                 .select("*")
                 .eq("user_id", user_id)
                 .eq("period_start", period_start.isoformat())
-                .single()
+                .maybe_single()
                 .execute(),
                 db,
                 extra={"operation": "get_or_create_usage_record", "user_id": user_id},
             )
 
-            if result.data:
+            if result and result.data:
                 return result.data
 
             # Create new usage record for this period

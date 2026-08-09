@@ -86,10 +86,10 @@ async def _insert_share_feedback(
             db.table("shared_outfits")
             .select("id, allow_feedback, expires_at")
             .eq("id", share_id_str)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not share.data:
+        if not share or not share.data:
             raise SharedOutfitNotFoundError(share_id=share_id_str)
 
         if share.data.get("allow_feedback") is False:

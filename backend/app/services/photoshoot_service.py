@@ -265,13 +265,13 @@ class PhotoshootService:
                 .select("*")
                 .eq("user_id", user_id)
                 .eq("period_start", period_start.isoformat())
-                .single()
+                .maybe_single()
                 .execute(),
                 db,
                 extra={"operation": "get_daily_usage", "user_id": user_id},
             )
 
-            return result.data or {}
+            return (result.data if result else None) or {}
 
         except Exception as e:
             logger.error(f"Error getting daily usage for user {user_id}: {e}")

@@ -270,10 +270,10 @@ async def disconnect_calendar(
             .select("id")
             .eq("id", connection_id)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not existing.data:
+        if not existing or not existing.data:
             raise NotFoundError(
                 message="Calendar connection not found",
                 resource_type="calendar_connection",
@@ -465,10 +465,10 @@ async def update_calendar_event(
             .select("id")
             .eq("id", event_id)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not existing.data:
+        if not existing or not existing.data:
             raise CalendarEventNotFoundError(event_id=event_id)
 
         # Build update dict with only provided fields
@@ -496,10 +496,13 @@ async def update_calendar_event(
                 db.table("calendar_events")
                 .select("*")
                 .eq("id", event_id)
-                .single()
+                .maybe_single()
                 .execute
             )
-            return {"data": {"event": result.data}, "message": "No changes"}
+            event_row = result.data if result else None
+            if not event_row:
+                raise CalendarEventNotFoundError(event_id=event_id)
+            return {"data": {"event": event_row}, "message": "No changes"}
 
         now = utcnow_iso()
         update_data["updated_at"] = now
@@ -553,10 +556,10 @@ async def delete_calendar_event(
             .select("id")
             .eq("id", event_id)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not existing.data:
+        if not existing or not existing.data:
             raise CalendarEventNotFoundError(event_id=event_id)
 
         # Delete the event
@@ -599,10 +602,10 @@ async def assign_outfit_to_event(
             .select("id")
             .eq("id", event_id)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not existing.data:
+        if not existing or not existing.data:
             raise CalendarEventNotFoundError(event_id=event_id)
 
         now = utcnow_iso()

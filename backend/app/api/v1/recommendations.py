@@ -243,10 +243,10 @@ def _get_user_birth_profile(db: Client, user_id: str) -> Tuple[Dict[str, Any], b
             db.table("users")
             .select("birth_date, birth_time, birth_place")
             .eq("id", user_id)
-            .single()
+            .maybe_single()
             .execute()
         )
-        if row.data:
+        if row and row.data:
             return (
                 {c: row.data.get(c) for c in ("birth_date", "birth_time", "birth_place") if c in row.data},
                 False,
@@ -261,10 +261,10 @@ def _get_user_birth_profile(db: Client, user_id: str) -> Tuple[Dict[str, Any], b
                 db.table("users")
                 .select(column)
                 .eq("id", user_id)
-                .single()
+                .maybe_single()
                 .execute()
             )
-            if row.data and column in row.data:
+            if row and row.data and column in row.data:
                 profile[column] = row.data.get(column)
         except Exception as e:
             missing_col = _extract_missing_users_column(e)
@@ -740,8 +740,8 @@ async def weather_recommendations(
     # Prefer user settings default_location when location isn't provided
     if not location:
         try:
-            settings_row = await asyncio.to_thread(db.table("user_settings").select("default_location").eq("user_id", user_id).single().execute)
-            location = settings_row.data.get("default_location") if settings_row.data else None
+            settings_row = await asyncio.to_thread(db.table("user_settings").select("default_location").eq("user_id", user_id).maybe_single().execute)
+            location = settings_row.data.get("default_location") if settings_row and settings_row.data else None
         except Exception:
             location = None
 
@@ -861,10 +861,10 @@ async def astrology_recommendations(
             db.table("user_settings")
             .select("timezone")
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        settings_timezone = (settings_row.data or {}).get("timezone")
+        settings_timezone = (settings_row.data or {}).get("timezone") if settings_row else None
     except Exception:
         settings_timezone = None
 
@@ -978,8 +978,8 @@ async def similar_items(
     user_id: str = Depends(get_active_user_id),
     db: Client = Depends(get_db),
 ):
-    source = await asyncio.to_thread(db.table("items").select("*").eq("id", item_id).eq("user_id", user_id).single().execute)
-    if not source.data:
+    source = await asyncio.to_thread(db.table("items").select("*").eq("id", item_id).eq("user_id", user_id).maybe_single().execute)
+    if not source or not source.data:
         raise ItemNotFoundError(item_id=item_id)
 
     # Vector search best-effort
@@ -1104,8 +1104,8 @@ async def style_analysis(
     db: Client = Depends(get_db),
 ):
     item_id_str = str(item_id)
-    item = await asyncio.to_thread(db.table("items").select("*").eq("id", item_id_str).eq("user_id", user_id).single().execute)
-    if not item.data:
+    item = await asyncio.to_thread(db.table("items").select("*").eq("id", item_id_str).eq("user_id", user_id).maybe_single().execute)
+    if not item or not item.data:
         raise ItemNotFoundError(item_id=item_id_str)
 
     tags = [str(t).lower() for t in (item.data.get("tags") or [])]

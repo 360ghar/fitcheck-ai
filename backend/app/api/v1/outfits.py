@@ -128,10 +128,10 @@ async def _owned_collection_or_404(db: Client, collection_id: str, user_id: str)
         .select("id")
         .eq("id", collection_id)
         .eq("user_id", user_id)
-        .single()
+        .maybe_single()
         .execute
     )
-    if not existing.data:
+    if not existing or not existing.data:
         raise CollectionNotFoundError(collection_id=collection_id)
 
 
@@ -200,10 +200,10 @@ def _fetch_outfit(
         .select("*, outfit_images(*)")
         .eq("id", outfit_id)
         .eq("user_id", user_id)
-        .single()
+        .maybe_single()
         .execute()
     )
-    if not result.data:
+    if not result or not result.data:
         return None
 
     outfit = _normalize_outfit_images(result.data)
@@ -508,10 +508,10 @@ async def get_public_outfit(
             .select("id,name,description,style,season,occasion,tags,is_public,created_at,updated_at,item_ids,outfit_images(*)")
             .eq("id", outfit_id_str)
             .eq("is_public", True)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not result.data:
+        if not result or not result.data:
             raise NotFoundError(
                 "Shared outfit not found",
                 resource_type="shared_outfit",
@@ -581,8 +581,8 @@ async def update_outfit(
 ):
     try:
         outfit_id_str = str(outfit_id)
-        existing = await asyncio.to_thread(db.table("outfits").select("id").eq("id", outfit_id_str).eq("user_id", user_id).single().execute)
-        if not existing.data:
+        existing = await asyncio.to_thread(db.table("outfits").select("id").eq("id", outfit_id_str).eq("user_id", user_id).maybe_single().execute)
+        if not existing or not existing.data:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
 
         update_dict = update.model_dump(exclude_unset=True)
@@ -636,10 +636,10 @@ async def share_outfit(
             .select("id")
             .eq("id", outfit_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not existing.data:
+        if not existing or not existing.data:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
 
         now = _now()
@@ -814,16 +814,17 @@ async def update_collection(
                 outfit_ids=[str(i) for i in outfit_ids],
             )
 
-        row = (await asyncio.to_thread(
+        row_res = await asyncio.to_thread(
             db.table("outfit_collections")
             .select("*")
             .eq("id", collection_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
-        )).data
+        )
+        row = row_res.data if row_res else None
         if not row:
-            raise DatabaseError("Failed to fetch collection", operation="select")
+            raise CollectionNotFoundError(collection_id=collection_id_str)
 
         row["outfit_count"] = await _collection_count(db, collection_id_str)
         row["outfit_ids"] = (
@@ -857,14 +858,17 @@ async def replace_collection_outfits(
             outfit_ids=[str(i) for i in (request.outfit_ids or [])],
         )
 
-        row = (await asyncio.to_thread(
+        row_res = await asyncio.to_thread(
             db.table("outfit_collections")
             .select("*")
             .eq("id", collection_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
-        )).data
+        )
+        row = row_res.data if row_res else None
+        if not row:
+            raise CollectionNotFoundError(collection_id=collection_id_str)
         row["outfit_count"] = await _collection_count(db, collection_id_str)
         row["outfit_ids"] = await _collection_member_ids(db, collection_id_str)
         return {"data": row, "message": "Updated"}
@@ -892,10 +896,10 @@ async def add_collection_outfit(
             .select("id")
             .eq("id", request.outfit_id)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not outfit.data:
+        if not outfit or not outfit.data:
             raise ValidationError("Outfit not found", details={"outfit_id": request.outfit_id})
 
         membership = await asyncio.to_thread(
@@ -906,7 +910,7 @@ async def add_collection_outfit(
             .maybe_single()
             .execute
         )
-        if not membership.data:
+        if not membership or not membership.data:
             # Upsert (not insert): two concurrent add/retry requests can both
             # pass the membership read above, and the junction PK conflict
             # would otherwise 500 one of them. The upsert is idempotent.
@@ -1000,10 +1004,10 @@ async def toggle_favorite(
             .select("is_favorite")
             .eq("id", outfit_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not existing.data:
+        if not existing or not existing.data:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
         new_value = not bool(existing.data.get("is_favorite", False))
         await asyncio.to_thread(db.table("outfits").update({"is_favorite": new_value, "updated_at": _now()}).eq("id", outfit_id_str).execute)
@@ -1028,10 +1032,10 @@ async def mark_worn(
             .select("worn_count")
             .eq("id", outfit_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not existing.data:
+        if not existing or not existing.data:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
 
         current = int(existing.data.get("worn_count") or 0)
@@ -1078,10 +1082,10 @@ async def get_wear_history(
             .select("id")
             .eq("id", outfit_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not outfit.data:
+        if not outfit or not outfit.data:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
 
         # Get wear history
@@ -1126,10 +1130,10 @@ async def duplicate_outfit(
             .select("*")
             .eq("id", outfit_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not existing.data:
+        if not existing or not existing.data:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
 
         now = _now()
@@ -1179,15 +1183,15 @@ async def add_item_to_outfit(
             .select("id,item_ids")
             .eq("id", outfit_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not outfit.data:
+        if not outfit or not outfit.data:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
 
         item_id = request.item_id
-        item = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id).eq("user_id", user_id).single().execute)
-        if not item.data:
+        item = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id).eq("user_id", user_id).maybe_single().execute)
+        if not item or not item.data:
             raise ItemNotFoundError(item_id=item_id)
 
         item_ids = list(outfit.data.get("item_ids") or [])
@@ -1232,10 +1236,10 @@ async def remove_item_from_outfit(
             .select("id,item_ids")
             .eq("id", outfit_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not outfit.data:
+        if not outfit or not outfit.data:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
 
         item_ids = [str(i) for i in (outfit.data.get("item_ids") or [])]
@@ -1291,8 +1295,8 @@ async def start_generation(
     """
     try:
         outfit_id_str = str(outfit_id)
-        outfit = await asyncio.to_thread(db.table("outfits").select("id").eq("id", outfit_id_str).eq("user_id", user_id).single().execute)
-        if not outfit.data:
+        outfit = await asyncio.to_thread(db.table("outfits").select("id").eq("id", outfit_id_str).eq("user_id", user_id).maybe_single().execute)
+        if not outfit or not outfit.data:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
 
         generation_id = str(uuid.uuid4())
@@ -1340,10 +1344,10 @@ async def get_generation_status(
             .select("*")
             .eq("id", generation_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not result.data:
+        if not result or not result.data:
             raise NotFoundError(
                 "Generation not found",
                 resource_type="generation",
@@ -1387,8 +1391,8 @@ async def upload_outfit_image(
     """Upload an outfit image and create an outfit_images record."""
     try:
         outfit_id_str = str(outfit_id)
-        outfit = await asyncio.to_thread(db.table("outfits").select("id").eq("id", outfit_id_str).eq("user_id", user_id).single().execute)
-        if not outfit.data:
+        outfit = await asyncio.to_thread(db.table("outfits").select("id").eq("id", outfit_id_str).eq("user_id", user_id).maybe_single().execute)
+        if not outfit or not outfit.data:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
 
         if not file.content_type or not file.content_type.startswith("image/"):
@@ -1467,12 +1471,12 @@ async def delete_outfit_image(
             .select("id")
             .eq("id", outfit_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute(),
             db,
             extra={"operation": "delete_outfit_image.load_outfit", "outfit_id": outfit_id_str},
         )
-        if not outfit.data:
+        if not outfit or not outfit.data:
             raise OutfitNotFoundError(outfit_id=outfit_id_str)
 
         img = await execute_with_reconnect(
@@ -1480,12 +1484,12 @@ async def delete_outfit_image(
             .select("id, storage_path")
             .eq("id", image_id_str)
             .eq("outfit_id", outfit_id_str)
-            .single()
+            .maybe_single()
             .execute(),
             db,
             extra={"operation": "delete_outfit_image.load_image", "outfit_id": outfit_id_str, "image_id": image_id_str},
         )
-        if not img.data:
+        if not img or not img.data:
             raise ImageNotFoundError(image_id=image_id_str)
 
         storage_path = img.data.get("storage_path")

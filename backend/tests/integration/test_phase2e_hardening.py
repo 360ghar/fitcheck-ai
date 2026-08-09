@@ -181,7 +181,7 @@ async def test_shared_outfit_feedback_is_ip_rate_limited():
     limit = ip_rate_limit.AUTH_RATE_LIMITS["shared outfit feedback"]
     share_id = "11111111-1111-1111-1111-111111111111"
     db = Mock()
-    db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+    db.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = (
         SimpleNamespace(data={"id": share_id, "allow_feedback": True, "expires_at": None})
     )
     db.table.return_value.insert.return_value.execute.return_value = SimpleNamespace(
@@ -422,6 +422,9 @@ class _BirthProfileQuery:
         return self
 
     def single(self, *_a, **_k):
+        return self
+
+    def maybe_single(self, *_a, **_k):
         return self
 
     def execute(self):

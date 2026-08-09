@@ -454,7 +454,7 @@ class BatchExtractionService:
                 self.db.table("users")
                 .select("avatar_url")
                 .eq("id", self.user_id)
-                .single()
+                .maybe_single()
                 .execute
             )
             if not user_result or not user_result.data:

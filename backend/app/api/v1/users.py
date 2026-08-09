@@ -631,7 +631,7 @@ async def upload_avatar(
             row = await asyncio.to_thread(
                 db.table("users").select("avatar_url").eq("id", user_id).maybe_single().execute
             )
-            old_avatar_url = (row.data or {}).get("avatar_url") if row.data else None
+            old_avatar_url = (row.data or {}).get("avatar_url") if row and row.data else None
         except Exception as e:
             logger.warning("Failed to read current avatar before replace", user_id=user_id, error=str(e))
 
@@ -937,10 +937,10 @@ async def get_body_profile(
             .order("is_default", desc=True)
             .order("created_at", desc=True)
             .limit(1)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not result.data:
+        if not result or not result.data:
             raise BodyProfileNotFoundError()
 
         profile = BodyProfile.model_validate(result.data)
@@ -966,12 +966,12 @@ async def upsert_body_profile(
             .order("is_default", desc=True)
             .order("created_at", desc=True)
             .limit(1)
-            .single()
+            .maybe_single()
             .execute
         )
 
         now = _now()
-        if not existing.data:
+        if not existing or not existing.data:
             # Creating requires full payload; validate via BodyProfileCreate
             create = BodyProfileCreate(**update_data.model_dump(exclude_unset=True))
             insert = {

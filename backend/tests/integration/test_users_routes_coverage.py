@@ -839,7 +839,7 @@ async def test_delete_body_profile_generic_error_raises_database_error():
 @pytest.mark.asyncio
 async def test_get_body_profile_generic_error_raises_database_error():
     db = Mock()
-    db.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.limit.return_value.single.return_value.execute.side_effect = ValueError("boom")
+    db.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.limit.return_value.maybe_single.return_value.execute.side_effect = ValueError("boom")
 
     with pytest.raises(DatabaseError, match="Failed to fetch body profile"):
         await users_module.get_body_profile(user_id=USER_ID, db=db)
@@ -858,7 +858,7 @@ async def test_get_body_profile_raises_when_missing():
 @pytest.mark.asyncio
 async def test_upsert_body_profile_raises_when_insert_echoes_no_row():
     db = Mock()
-    db.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.limit.return_value.single.return_value.execute.return_value = SimpleNamespace(data=None)
+    db.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.limit.return_value.maybe_single.return_value.execute.return_value = SimpleNamespace(data=None)
     db.table.return_value.insert.return_value.execute.return_value = SimpleNamespace(data=[])
 
     with pytest.raises(DatabaseError, match="Failed to create body profile"):
@@ -897,7 +897,7 @@ async def test_upsert_body_profile_update_makes_default_and_links_user():
 @pytest.mark.asyncio
 async def test_upsert_body_profile_raises_when_update_echoes_no_row():
     db = Mock()
-    db.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.limit.return_value.single.return_value.execute.return_value = SimpleNamespace(data=body_profile_row())
+    db.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.limit.return_value.maybe_single.return_value.execute.return_value = SimpleNamespace(data=body_profile_row())
     db.table.return_value.update.return_value.eq.return_value.execute.return_value = SimpleNamespace(data=[])
 
     with pytest.raises(DatabaseError, match="Failed to update body profile"):
@@ -909,7 +909,7 @@ async def test_upsert_body_profile_raises_when_update_echoes_no_row():
 @pytest.mark.asyncio
 async def test_upsert_body_profile_generic_error_raises_database_error():
     db = Mock()
-    db.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.limit.return_value.single.return_value.execute.side_effect = ValueError("boom")
+    db.table.return_value.select.return_value.eq.return_value.order.return_value.order.return_value.limit.return_value.maybe_single.return_value.execute.side_effect = ValueError("boom")
 
     with pytest.raises(DatabaseError, match="Failed to save body profile"):
         await users_module.upsert_body_profile(

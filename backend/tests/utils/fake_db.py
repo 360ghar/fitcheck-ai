@@ -31,6 +31,23 @@ class FakeResult:
         self.count = count
 
 
+class PGRST116Error(RuntimeError):
+    """Mirror of postgrest-py's zero-row ``.single()`` failure.
+
+    The real client RAISES ``APIError`` (406/PGRST116) when ``.single()``
+    matches zero rows; it never returns a falsy result. Returning
+    ``FakeResult(data=None)`` instead is exactly the divergence that made the
+    dead ``if not result.data`` guards (2026-08-09 GET /items/{id} 500 burst)
+    pass the suite while production 500'd. Only ``maybe_single()`` may return
+    ``None`` for a zero-row select.
+    """
+
+    def __init__(self):
+        super().__init__("JSON object requested, multiple (or no) rows returned")
+        self.code = "PGRST116"
+        self.http_status = 406
+
+
 def _split_predicates(expr: str) -> List[str]:
     """Split an or_ expression on top-level commas (ignores parens).
 
@@ -332,7 +349,12 @@ class FakeBuilder:
                 # zero-row `.maybe_single().execute()`; app code handles that
                 # via `maybe_single_data(result)`.
                 return None
-            return FakeResult(data=rows[0] if rows else None, count=count)
+            if not rows:
+                # Fidelity with the real client: `.single()` raises (PGRST116)
+                # on zero rows instead of returning a falsy result — the
+                # divergence that used to mask dead not-found branches.
+                raise PGRST116Error()
+            return FakeResult(data=rows[0], count=count)
         return FakeResult(data=rows, count=count)
 
 

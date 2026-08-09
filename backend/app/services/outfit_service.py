@@ -37,12 +37,12 @@ async def delete_outfit(db: Any, *, user_id: str, outfit_id: str) -> None:
         .select("id")
         .eq("id", outfit_id_str)
         .eq("user_id", user_id)
-        .single()
+        .maybe_single()
         .execute(),
         db,
         extra={"operation": "delete_outfit.load", "outfit_id": outfit_id_str},
     )
-    if not existing.data:
+    if not existing or not existing.data:
         raise OutfitNotFoundError(outfit_id=outfit_id_str)
 
     # Collect owned outfit-image storage paths (with _thumb siblings)

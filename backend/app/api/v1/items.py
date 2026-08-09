@@ -537,20 +537,24 @@ async def get_item(
 ):
     try:
         item_id_str = str(item_id)
+        # maybe_single (not single): postgrest-py's single() RAISES APIError
+        # (406/PGRST116) when the query matches zero rows, so the not-found
+        # branch below was dead code and a deleted or not-owned item 500'd
+        # instead of 404ing (observed 2026-08-09 on GET /items/{id}).
         result = await execute_with_reconnect(
             lambda d: (
                 d.table("items")
                 .select("*, item_images(*)")
                 .eq("id", item_id_str)
                 .eq("user_id", user_id)
-                .single()
+                .maybe_single()
                 .execute()
             ),
             db,
             extra={"operation": "get_item", "user_id": user_id, "item_id": item_id_str},
             max_retries=2,
         )
-        if not result.data:
+        if not result or not result.data:
             raise ItemNotFoundError(item_id=item_id_str)
         item = _normalize_item_images(result.data)
         # Private buckets: materialize fresh presigned URLs at read time.
@@ -559,6 +563,11 @@ async def get_item(
     except (ItemNotFoundError, ValidationError, DatabaseError):
         raise
     except Exception as e:
+        # Belt-and-suspenders for the single -> maybe_single migration: a
+        # missing/not-owned row surfacing as a structured PGRST116 (e.g. a
+        # builder drift or a proxy answering 406) must 404, never 500.
+        if getattr(e, "code", None) == "PGRST116":
+            raise ItemNotFoundError(item_id=item_id_str) from e
         logger.error("Get item error", item_id=str(item_id), user_id=user_id, error=str(e))
         raise DatabaseError("Failed to fetch item", operation="select")
 
@@ -572,8 +581,8 @@ async def update_item(
 ):
     try:
         item_id_str = str(item_id)
-        existing = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).single().execute)
-        if not existing.data:
+        existing = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).maybe_single().execute)
+        if not existing or not existing.data:
             raise ItemNotFoundError(item_id=item_id_str)
 
         update_dict = update.model_dump(exclude_unset=True)
@@ -595,7 +604,7 @@ async def update_item(
             .select("*, item_images(*)")
             .eq("id", item_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
         if not item_result or not item_result.data:
@@ -665,8 +674,8 @@ async def delete_item(
     """Delete an item (hard delete)."""
     try:
         item_id_str = str(item_id)
-        existing = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).single().execute)
-        if not existing.data:
+        existing = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).maybe_single().execute)
+        if not existing or not existing.data:
             raise ItemNotFoundError(item_id=item_id_str)
 
         # Collect the owned storage paths (the source photo + every item image,
@@ -726,8 +735,8 @@ async def toggle_favorite(
 ):
     try:
         item_id_str = str(item_id)
-        existing = await asyncio.to_thread(db.table("items").select("is_favorite").eq("id", item_id_str).eq("user_id", user_id).single().execute)
-        if not existing.data:
+        existing = await asyncio.to_thread(db.table("items").select("is_favorite").eq("id", item_id_str).eq("user_id", user_id).maybe_single().execute)
+        if not existing or not existing.data:
             raise ItemNotFoundError(item_id=item_id_str)
         new_value = not bool(existing.data.get("is_favorite", False))
         result = await asyncio.to_thread(db.table("items").update({"is_favorite": new_value, "updated_at": _now()}).eq("id", item_id_str).execute)
@@ -755,10 +764,10 @@ async def mark_worn(
             .select("usage_times_worn")
             .eq("id", item_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not existing.data:
+        if not existing or not existing.data:
             raise ItemNotFoundError(item_id=item_id_str)
         current = int(existing.data.get("usage_times_worn", 0))
         update = {"usage_times_worn": current + 1, "usage_last_worn": _now(), "updated_at": _now()}
@@ -787,8 +796,8 @@ async def upload_item_image(
     """Upload an additional image for an existing item."""
     try:
         item_id_str = str(item_id)
-        item = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).single().execute)
-        if not item.data:
+        item = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).maybe_single().execute)
+        if not item or not item.data:
             raise ItemNotFoundError(item_id=item_id_str)
 
         if not file.content_type or not file.content_type.startswith("image/"):
@@ -852,15 +861,15 @@ async def delete_item_image(
             .select("id, storage_path")
             .eq("id", image_id_str)
             .eq("item_id", item_id_str)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not img.data:
+        if not img or not img.data:
             raise ImageNotFoundError(image_id=image_id_str)
 
         # Ensure the item belongs to the current user
-        item = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).single().execute)
-        if not item.data:
+        item = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).maybe_single().execute)
+        if not item or not item.data:
             raise ItemNotFoundError(item_id=item_id_str)
 
         storage_path = img.data.get("storage_path")
@@ -1116,10 +1125,10 @@ async def categorize_item(
             .select("*")
             .eq("id", item_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
-        if not item.data:
+        if not item or not item.data:
             raise ItemNotFoundError(item_id=item_id_str)
 
         row = item.data
@@ -1182,8 +1191,8 @@ async def update_item_categories(
     """Update item category-related fields (user override)."""
     try:
         item_id_str = str(item_id)
-        existing = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).single().execute)
-        if not existing.data:
+        existing = await asyncio.to_thread(db.table("items").select("id").eq("id", item_id_str).eq("user_id", user_id).maybe_single().execute)
+        if not existing or not existing.data:
             raise ItemNotFoundError(item_id=item_id_str)
 
         update = request.model_dump(exclude_unset=True)
@@ -1205,11 +1214,11 @@ async def update_item_categories(
             .select("*, item_images(*)")
             .eq("id", item_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
         # Private buckets: materialize fresh presigned URLs at read time.
-        item = _normalize_item_images(item.data or {})
+        item = _normalize_item_images((item.data if item else None) or {})
         item = (await materialize_parent_images([item]))[0]
         return {"data": item, "message": "Updated"}
     except (ItemNotFoundError, ValidationError, DatabaseError):
@@ -1480,11 +1489,11 @@ async def find_similar_items(
             .select("*")
             .eq("id", item_id_str)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute
         )
 
-        if not item_result.data:
+        if not item_result or not item_result.data:
             raise ItemNotFoundError(item_id=item_id_str)
 
         source_item = item_result.data

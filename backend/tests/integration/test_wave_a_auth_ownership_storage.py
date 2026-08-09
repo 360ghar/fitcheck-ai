@@ -562,6 +562,9 @@ class _UserDB:
             def single(self):
                 return self
 
+            def maybe_single(self):
+                return self
+
             def execute(self):
                 data = {"avatar_url": outer.avatar_url} if outer.avatar_url else {}
                 return SimpleNamespace(data=data)

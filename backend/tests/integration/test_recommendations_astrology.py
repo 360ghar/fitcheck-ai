@@ -43,6 +43,10 @@ class _FakeQuery:
         self._single = True
         return self
 
+    def maybe_single(self) -> "_FakeQuery":
+        self._single = True
+        return self
+
     def limit(self, value: int) -> "_FakeQuery":
         self._limit = value
         return self
