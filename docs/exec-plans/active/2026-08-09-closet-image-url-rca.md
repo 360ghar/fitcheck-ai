@@ -132,10 +132,11 @@ posted it as the durable reference with no `storage_path`. Fixed at both ends:
    object never existed or was purged) and cannot be recovered by URL work;
    decide per item (re-upload or accept the placeholder tile).
 2b. **Promote preview-keyed rows (2026-08-09 batch-save damage)** — run
-   BEFORE the weekly temp cleanup deletes the objects:
-   `python scripts/promote_preview_item_images.py` (dry-run, review the
-   samples), then `--apply`. This promotes each `tmp/{user}/batch/...` object
-   to a canonical `{user}/items/...` object and writes the durable
+   BEFORE the weekly temp cleanup deletes the objects (from the repo root,
+   so the audit lands in `backend/logs/`):
+   `python backend/scripts/promote_preview_item_images.py` (dry-run, review
+   the samples), then `--apply`. This promotes each `tmp/{user}/batch/...`
+   object to a canonical `{user}/items/...` object and writes the durable
    `storage_path`; the rows then self-heal via the read-path re-mint.
 3. **Deploy the backend + web** (write/read-path fix, promote script). The
    web save fix only protects items saved after deploy; pre-existing broken
